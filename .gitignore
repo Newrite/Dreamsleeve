@@ -1,0 +1,16 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+docs
+Dreamsleeve.Client.Dev/Debug
+Dreamsleeve.Client.Dev/Release
+Dreamsleeve.Client.Dev/x64
+Dreamsleeve.Client.Core/x64
+Dreamsleeve.Client.Core/Debug
+Dreamsleeve.Client.Core/Release
+.idea
+.ai
+Debug
+Release

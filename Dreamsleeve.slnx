@@ -1,0 +1,13 @@
+<Solution>
+  <Project Path="Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
+  <Project Path="Dreamsleeve.Client.Core/Dreamsleeve.Client.Core.vcxproj">
+    <Platform Project="Win32" />
+  </Project>
+  <Project Path="Dreamsleeve.Client.Dev/Dreamsleeve.Client.Dev.vcxproj">
+    <Platform Project="Win32" />
+  </Project>
+  <Project Path="Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />
+  <Project Path="Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
+  <Project Path="Dreamsleeve.Server.Infrastructure/Dreamsleeve.Server.Infrastructure.fsproj" />
+  <Project Path="Dreamsleeve.Server/Dreamsleeve.Server.fsproj" />
+</Solution>
