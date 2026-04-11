@@ -10,6 +10,9 @@ Dreamsleeve.Client.Dev/x64
 Dreamsleeve.Client.Core/x64
 Dreamsleeve.Client.Core/Debug
 Dreamsleeve.Client.Core/Release
+Dreamsleeve.Client/x64
+Dreamsleeve.Client/Debug
+Dreamsleeve.Client/Release
 .idea
 .ai
 Debug
