@@ -1,7 +1,2 @@
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
-
-int main(int argc, char* argv[])
-{
-    
-    return 0;
-}
