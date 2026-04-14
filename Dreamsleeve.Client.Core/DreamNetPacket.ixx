@@ -1,7 +1,6 @@
 ﻿module;
 
 #include <enet/enet.h>
-#include <spdlog/spdlog.h>
 
 export module DreamNet.Packet;
 
@@ -99,6 +98,13 @@ export struct ENetPacketPtrDeleter
 
 export using ENetPacketPtr = std::unique_ptr<ENetPacket, ENetPacketPtrDeleter>;
 
+export struct IPacketUserData
+{
+    virtual ~IPacketUserData() = default;
+};
+
+export using IPacketUserDataPtr = std::unique_ptr<IPacketUserData>;
+
 export class DreamNetPacket
 {
 public:
@@ -113,25 +119,23 @@ public:
         CreateFailed,
     };
     
-    DreamNetPacket(const DreamNetPacket& other) = delete;
-    DreamNetPacket(DreamNetPacket&& other) noexcept = default;
-    DreamNetPacket& operator=(const DreamNetPacket& other) = delete;
+    DreamNetPacket(const DreamNetPacket& other)                = delete;
+    DreamNetPacket(DreamNetPacket&& other) noexcept            = default;
+    DreamNetPacket& operator=(const DreamNetPacket& other)     = delete;
     DreamNetPacket& operator=(DreamNetPacket&& other) noexcept = default;
-    ~DreamNetPacket() = default;
+    ~DreamNetPacket()                                          = default;
     
-    [[nodiscard]] static std::expected<DreamNetPacket, Error> TryFromSpan(const DataBytes bytes, const PacketFlag flags = PacketFlag::Reliable)
+    static std::expected<DreamNetPacket, Error> TryFromSpan(const DataBytes bytes, const PacketFlag flags = PacketFlag::Reliable)
     {
         const auto isValidFlags = PacketFlags::IsValidPacketFlags(flags);
         
         if (!isValidFlags)
         {
-            spdlog::warn("DreamNetPacket::TryFromSpan: Invalid Packet Flags");
             return std::unexpected(Error::InvalidFlags);
         }
         
         if (!isValidFlags || PacketFlags::HasFlag(flags, PacketFlag::NoAllocate))
         {
-            spdlog::warn("DreamNetPacket::TryFromSpan: NoAllocate flag not supported with TryFromSpan");
             return std::unexpected(Error::InvalidFlags);
         }
 
@@ -143,19 +147,18 @@ public:
 
         if (packet == nullptr)
         {
-            spdlog::warn("DreamNetPacket::TryFromSpan: Failed create packet");
             return std::unexpected(Error::CreateFailed);
         }
         
-        return DreamNetPacket(packet);
+        return DreamNetPacket(ENetPacketPtr{packet});
     }
     
-    [[nodiscard]] static std::expected<DreamNetPacket, Error> TryFromSpan(const DataSpan span, const PacketFlag flags = PacketFlag::Reliable)
+    static std::expected<DreamNetPacket, Error> TryFromSpan(const DataSpan span, const PacketFlag flags = PacketFlag::Reliable)
     {
         return TryFromSpan(std::as_bytes(span), flags);
     }
     
-    [[nodiscard]] static std::expected<DreamNetPacket, Error> TryAdoptNative(ENetPacket* packet)
+    static std::expected<DreamNetPacket, Error> TryAdoptNative(ENetPacket* packet)
     {
         if (!packet)
         {
@@ -164,24 +167,23 @@ public:
         
         if (!PacketFlags::IsValidPacketFlags(packet->flags))
         {
-            spdlog::warn("DreamNetPacket::TryAdoptNative: Invalid Packet Flags");
             return std::unexpected(Error::InvalidFlags);
         }
         
-        return DreamNetPacket(packet);
+        return DreamNetPacket(ENetPacketPtr{packet});
     }
     
-    [[nodiscard]] bool IsValid() const noexcept
+    bool IsValid() const noexcept
     {
         return packet ? true : false;
     }
     
-    [[nodiscard]] ENetPacket* Native() const noexcept
+    ENetPacket* Native() const noexcept
     {
         return packet.get();
     }
     
-    [[nodiscard]] PacketFlag Flags() const noexcept
+    PacketFlag Flags() const noexcept
     {
         if (packet)
         {
@@ -191,7 +193,7 @@ public:
         return PacketFlag::None;
     }
     
-    [[nodiscard]] std::size_t Size() const noexcept
+    std::size_t Size() const noexcept
     {
         if (packet)
         {
@@ -201,7 +203,7 @@ public:
         return 0;
     }
     
-    [[nodiscard]] DataSpan Data() const noexcept
+    DataSpan Data() const noexcept
     {
         const auto dataSize = Size();
         if (packet && dataSize > 0)
@@ -212,13 +214,57 @@ public:
         return DataSpan{};
     }
     
-    [[nodiscard]] DataBytes DataBytesView() const noexcept
+    DataBytes DataBytesView() const noexcept
     {
         return std::as_bytes(Data());
     }
+    
+    template <typename T, typename... Args>
+    T& EmplaceUserData(Args&&... args)
+    {
+        auto data = std::make_unique<T>(std::forward<Args>(args)...);
+        T& ref = *data;
+        userData = std::move(data);
+        return ref;
+    }
+
+    template <typename T>
+    T* TryGetUserData() noexcept
+    {
+        if (!userData) return nullptr;
+        return dynamic_cast<T*>(userData.get());
+    }
+
+    template <typename T>
+    const T* TryGetUserData() const noexcept
+    {
+        if (!userData) return nullptr;
+        return dynamic_cast<const T*>(userData.get());
+    }
+
+    bool HasUserData() const noexcept
+    {
+        return userData ? true : false;
+    }
+
+    void ClearUserData() noexcept
+    {
+        userData.reset();
+    }
+
+    IPacketUserData* RawUserData() noexcept
+    {
+        return userData.get();
+    }
+
+    const IPacketUserData* RawUserData() const noexcept
+    {
+        return userData.get();
+    }
 
 private:
-    explicit DreamNetPacket(ENetPacket* packet) : packet(ENetPacketPtr{packet}) {}
+    explicit DreamNetPacket(ENetPacketPtr packet) : packet(std::move(packet)) {}
     
     ENetPacketPtr packet;
+    IPacketUserDataPtr userData = nullptr;
 };

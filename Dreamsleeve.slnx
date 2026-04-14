@@ -4,6 +4,8 @@
   <Project Path="Dreamsleeve.Client.Dev/Dreamsleeve.Client.Dev.vcxproj" />
   <Project Path="Dreamsleeve.Client.Tests/Dreamsleeve.Client.Tests.vcxproj" />
   <Project Path="Dreamsleeve.Client/Dreamsleeve.Client.vcxproj" />
+  <Project Path="Dreamsleeve.Protocol.Dotnet/Dreamsleeve.Protocol.Dotnet.csproj" />
+  <Project Path="Dreamsleeve.Protocol.Native/Dreamsleeve.Protocol.Native.vcxproj" />
   <Project Path="Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />
   <Project Path="Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
   <Project Path="Dreamsleeve.Server.Infrastructure/Dreamsleeve.Server.Infrastructure.fsproj" />

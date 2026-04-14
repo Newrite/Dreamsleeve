@@ -1,9 +1,17 @@
-﻿{
+{
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "dependencies": [
     "enet",
     "spdlog",
     "glaze",
-    "doctest"
-  ]
+    "doctest",
+    "protobuf"
+  ],
+  "overrides": [
+    {
+      "name": "protobuf",
+      "version": "6.33.4"
+    }
+  ],
+  "builtin-baseline": "b21ff8f3cadbd8e0b175b49be2dd9202f1f208f4"
 }

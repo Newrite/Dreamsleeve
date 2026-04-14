@@ -20,15 +20,14 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{8501DF67-6FFB-4DED-B03E-AEC6FDD249A7}</ProjectGuid>
+    <ProjectGuid>{E6D70AAF-CB23-4614-9243-69598A8BA104}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>Dreamslee.Client.Core</RootNamespace>
+    <RootNamespace>Dreamsleeve.Protocol.Native</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup>
     <PreferredToolArchitecture>x64</PreferredToolArchitecture>
-    <RootNamespace>Dreamsleeve.Client.Core</RootNamespace>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
@@ -56,8 +55,11 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
-  <PropertyGroup>
-    <AllProjectBMIsArePublic>true</AllProjectBMIsArePublic>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgManifestRoot>$(MSBuildProjectDirectory)\..</VcpkgManifestRoot>
+    <VcpkgTriplet Condition="'$(Platform)' == 'x64'">x64-windows-static-md</VcpkgTriplet>
+    <VcpkgTriplet Condition="'$(Platform)' == 'Win32'">x86-windows-static-md</VcpkgTriplet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -93,15 +95,10 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
-  <PropertyGroup Label="Vcpkg">
-    <VcpkgEnableManifest>true</VcpkgEnableManifest>
-    <VcpkgManifestRoot>$(MSBuildProjectDirectory)\..</VcpkgManifestRoot>
-    <VcpkgTriplet Condition="'$(Platform)' == 'x64'">x64-windows-static-md</VcpkgTriplet>
-    <VcpkgTriplet Condition="'$(Platform)' == 'Win32'">x86-windows-static-md</VcpkgTriplet>
-  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -116,6 +113,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -130,6 +128,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -148,6 +147,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -164,18 +164,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="DreamNetAddress.ixx" />
-    <ClCompile Include="DreamNetHost.ixx" />
-    <ClCompile Include="DreamNetEvent.ixx" />
-    <ClCompile Include="DreamNetPacket.ixx" />
-    <ClCompile Include="DreamNetPeer.ixx" />
-    <ClCompile Include="DreamNetRuntime.ixx" />
+    <ClCompile Include="Dreamsleeve.Protocol.Native.ixx" />
+    <ClCompile Include="network.pb.cc" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Dreamsleeve.Protocol.Native\Dreamsleeve.Protocol.Native.vcxproj">
-      <Project>{e6d70aaf-cb23-4614-9243-69598a8ba104}</Project>
-      <Name>Dreamsleeve.Protocol.Native</Name>
-    </ProjectReference>
+    <ClInclude Include="network.pb.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
