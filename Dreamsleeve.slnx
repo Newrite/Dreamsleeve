@@ -2,6 +2,7 @@
   <Project Path="Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
   <Project Path="Dreamsleeve.Client.Core/Dreamsleeve.Client.Core.vcxproj" />
   <Project Path="Dreamsleeve.Client.Dev/Dreamsleeve.Client.Dev.vcxproj" />
+  <Project Path="Dreamsleeve.Client.Tests/Dreamsleeve.Client.Tests.vcxproj" />
   <Project Path="Dreamsleeve.Client/Dreamsleeve.Client.vcxproj" />
   <Project Path="Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />
   <Project Path="Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
