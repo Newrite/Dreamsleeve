@@ -26,7 +26,12 @@ public:
         FormatFailed
     };
     
-    static std::expected<DreamNetAddress, Error> TryParseIp(IpStrView hostIp, Port port)
+    static DreamNetAddress FromNative(const ENetAddress address) noexcept
+    {
+        return DreamNetAddress(address);
+    }
+    
+    static std::expected<DreamNetAddress, Error> TryParseIp(const IpStrView hostIp, const Port port)
     {
         IpStr owned{hostIp};
         ENetAddress address{};
@@ -39,7 +44,7 @@ public:
         
         return DreamNetAddress{address};
     }
-    static std::expected<DreamNetAddress, Error> TryResolveHost(HostNameView hostName, Port port)
+    static std::expected<DreamNetAddress, Error> TryResolveHost(const HostNameView hostName, const Port port)
     {
         HostName owned{hostName};
         ENetAddress address{};
@@ -53,12 +58,12 @@ public:
         return DreamNetAddress{address};
     }
 
-    static DreamNetAddress Loopback(Port port)
+    static DreamNetAddress Loopback(const Port port)
     {
         return TryParseIp(LoopbackIp, port).value();
     }
     
-    static DreamNetAddress Any(Port port) noexcept
+    static DreamNetAddress Any(const Port port) noexcept
     {
         ENetAddress address;
         address.port = port;
@@ -66,7 +71,7 @@ public:
         return DreamNetAddress{address};
     }
     
-    static DreamNetAddress Broadcast(Port port) noexcept
+    static DreamNetAddress Broadcast(const Port port) noexcept
     {
         ENetAddress address;
         address.port = port;
@@ -118,3 +123,5 @@ private:
 
     ENetAddress address{};
 };
+
+export using DreamNetAddressPtr = std::unique_ptr<DreamNetAddress>;

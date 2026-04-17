@@ -173,19 +173,25 @@ public:
         return DreamNetPacket(ENetPacketPtr{packet});
     }
     
-    bool IsValid() const noexcept
+    inline bool IsValid() const noexcept
     {
         return packet ? true : false;
     }
     
-    ENetPacket* Native() const noexcept
+    inline ENetPacket* Native() const noexcept
     {
         return packet.get();
     }
     
+    inline [[nodiscard]] ENetPacket* ReleaseNative() noexcept
+    {
+        userData.reset();
+        return packet.release();
+    }
+    
     PacketFlag Flags() const noexcept
     {
-        if (packet)
+        if (IsValid())
         {
             return static_cast<PacketFlag>(packet->flags);
         }
@@ -195,7 +201,7 @@ public:
     
     std::size_t Size() const noexcept
     {
-        if (packet)
+        if (IsValid())
         {
             return packet->dataLength;
         }
@@ -206,7 +212,7 @@ public:
     DataSpan Data() const noexcept
     {
         const auto dataSize = Size();
-        if (packet && dataSize > 0)
+        if (IsValid() && dataSize > 0)
         {
             return DataSpan(packet->data, dataSize);
         }
@@ -268,3 +274,5 @@ private:
     ENetPacketPtr packet;
     IPacketUserDataPtr userData = nullptr;
 };
+
+export using DreamNetPacketPtr = std::unique_ptr<DreamNetPacket>;

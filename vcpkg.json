@@ -10,7 +10,7 @@
   "overrides": [
     {
       "name": "protobuf",
-      "version": "6.33.4"
+      "version": "6.33.4#1"
     }
   ],
   "builtin-baseline": "b21ff8f3cadbd8e0b175b49be2dd9202f1f208f4"

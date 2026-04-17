@@ -6,6 +6,19 @@ export module DreamNet.Host;
 
 import std;
 
+export struct EnetHostDeleter
+{
+    void operator()(ENetHost* host) const noexcept
+    {
+        if (host != nullptr)
+        {
+            enet_host_destroy(host);
+        }
+    }
+};
+
+export using EnetHostPtr = std::unique_ptr<ENetHost, EnetHostDeleter>;
+
 export class DreamNetHost
 {
 public:
@@ -13,19 +26,6 @@ public:
     {
         EnetHostCreationError,
     };
-    
-    struct EnetHostDeleter
-    {
-        void operator()(ENetHost* host) const noexcept
-        {
-            if (host != nullptr)
-            {
-                enet_host_destroy(host);
-            }
-        }
-    };
-
-    using EnetHostPtr = std::unique_ptr<ENetHost, EnetHostDeleter>;
     
     static std::expected<DreamNetHost, Error> TryCreate()
     {
@@ -38,6 +38,16 @@ public:
         }
         
         return DreamNetHost(std::move(enetHost));
+    }
+    
+    ENetHost* Native() const noexcept
+    {
+        return enetHost.get();
+    }
+    
+    inline bool IsValid() const noexcept
+    {
+        return enetHost ? true : false;
     }
     
 private:

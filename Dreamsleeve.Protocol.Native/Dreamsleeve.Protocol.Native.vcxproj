@@ -165,10 +165,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Dreamsleeve.Protocol.Native.ixx" />
-    <ClCompile Include="network.pb.cc" />
+    <ClCompile Include="**\*.pb.cc" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="network.pb.h" />
+    <ClInclude Include="**\*.pb.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
