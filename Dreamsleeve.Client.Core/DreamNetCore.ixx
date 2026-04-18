@@ -18,6 +18,7 @@ export using Port             = std::uint16_t;
 export using BandwidthLimit   = enet_uint32;
 export using DisconnectReason = Protocol::Network::DisconnectReason;
 export using ChannelId        = enet_uint8;
+export using ChannelLimit     = size_t;
 export using PingIntervalMs   = enet_uint32;
 export using TimeOutMs        = enet_uint32;
 

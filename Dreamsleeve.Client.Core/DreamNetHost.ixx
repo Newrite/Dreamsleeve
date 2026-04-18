@@ -82,7 +82,7 @@ export struct HostBandwidthLimitConfig final
 export struct HostRuntimeConfig final
 {
     std::optional<HostBandwidthLimitConfig> bandwidthLimit;
-    std::optional<size_t>                   channelLimit;
+    std::optional<ChannelLimit>             channelLimit;
 
     static constexpr HostRuntimeConfig Defaults() noexcept
     {
@@ -98,7 +98,7 @@ export struct HostInfo final
 {
     DreamNetAddress address;
     size_t          peerCount;
-    size_t          channelLimit;
+    ChannelLimit    channelLimit;
     enet_uint32     incomingBandwidth;
     enet_uint32     outgoingBandwidth;
 };
