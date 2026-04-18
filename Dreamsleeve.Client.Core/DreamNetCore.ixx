@@ -52,7 +52,8 @@ export enum class DreamNetErrorCode : std::uint16_t
     InvalidTimeoutConfig,
     InvalidThrottleConfig,
     InvalidPingInterval,
-    FailedENetInitialize
+    FailedENetInitialize,
+    FailedCreateConnect,
 };
 
 export struct DreamNetError final

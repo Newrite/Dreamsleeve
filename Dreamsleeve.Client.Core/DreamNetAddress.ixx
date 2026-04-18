@@ -111,6 +111,14 @@ public:
         
         return HostName{buffer.data()};
     }
+    
+    std::string ToString() const
+    {
+        auto hostStr = ToHostString();
+        auto ipStr       = ToIpString();
+        return std::format("Host: {} Ip: {}", 
+            hostStr ? hostStr.value() : "", ipStr ? ipStr.value() : "");
+    }
 
     const ENetAddress& Native() const noexcept
     {

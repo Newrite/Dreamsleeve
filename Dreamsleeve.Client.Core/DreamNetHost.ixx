@@ -178,9 +178,7 @@ public:
                 "Cannot broadcast invalid DreamNetPacket");
         }
 
-        auto nativePacket = packet.ReleaseNative();
-        
-        enet_host_broadcast(Native(), channelId, nativePacket);
+        enet_host_broadcast(Native(), channelId, packet.ReleaseNative());
         return {};
     }
     
@@ -209,13 +207,42 @@ public:
         return BroadcastPushPacketSpan(std::as_bytes(data), channelId, flags);
     }
     
+    DreamNetPeer::Result Connect(const DreamNetAddress& address, size_t channelCount, enet_uint32 data = 0)
+    {
+        if (!IsValid()) 
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidHost, 
+                "Can't create connect, host invalid");
+        
+        auto& nativeAddress = address.Native();
+        auto nativePeer = enet_host_connect(Native(), std::addressof(nativeAddress), channelCount, data);
+        
+        if (!nativePeer)
+        {
+            auto message = 
+                std::format("Peer is null when try create connect with address: {}", address.ToString());
+            return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateConnect, message);
+        }
+        
+        auto peer = DreamNetPeer::TryFromNative(nativePeer);
+        if (!peer)
+        {
+            return DreamNetError::WrapUnexpected(
+                DreamNetErrorCode::InvalidPeer, 
+                std::move(peer.error()), 
+                "Can't configure DreamNetPeer after success create connect peer with address: {}", address.ToString());
+        }
+        
+        return peer.value();
+    }
+    
     void FlushPackets() noexcept
     {
         if (!IsValid()) return;
         enet_host_flush(Native());
     }
     
-    ENetHost* Native() const noexcept
+    inline ENetHost* Native() const noexcept
     {
         return enetHost.get();
     }
