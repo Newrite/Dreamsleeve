@@ -64,13 +64,64 @@ export struct ServerConfig final : NetConfig
 
 export using ClientConfig = NetConfig;
 
+export struct HostBandwidthLimitConfig final
+{
+    BandwidthLimit incoming;
+    BandwidthLimit outgoing;
+
+    static constexpr HostBandwidthLimitConfig Unlimited() noexcept
+    {
+        return
+        {
+            .incoming = 0,
+            .outgoing = 0,
+        };
+    }
+};
+
+export struct HostRuntimeConfig final
+{
+    std::optional<HostBandwidthLimitConfig> bandwidthLimit;
+    std::optional<size_t>                   channelLimit;
+
+    static constexpr HostRuntimeConfig Defaults() noexcept
+    {
+        return
+        {
+            .bandwidthLimit = HostBandwidthLimitConfig::Unlimited(),
+            .channelLimit   = NetConfig::Default().channelLimit,
+        };
+    }
+};
+
+export struct HostInfo final
+{
+    DreamNetAddress address;
+    size_t          peerCount;
+    size_t          channelLimit;
+    enet_uint32     incomingBandwidth;
+    enet_uint32     outgoingBandwidth;
+};
+
+export struct HostTelemetry final
+{
+    size_t      connectedPeers;
+    enet_uint32 totalSentData;
+    enet_uint32 totalSentPackets;
+    enet_uint32 totalReceivedData;
+    enet_uint32 totalReceivedPackets;
+    enet_uint32 serviceTime;
+};
+
 export class DreamNetHost
 {
 public:
     using Result      = NetResult<DreamNetHost>;
     using EventResult = NetResult<std::optional<DreamNetEvent>>;
 
-    static Result TryCreateClient(const ClientConfig config)
+    static Result TryCreateClient(
+        const ClientConfig config,
+        const std::optional<HostRuntimeConfig>& runtimeConfig = std::nullopt)
     {
         auto validationResult = ValidateConfig(config);
         if (!validationResult)
@@ -97,11 +148,26 @@ public:
         }
         
         ENetHostPtr enetHost = ENetHostPtr(host);
-        
-        return DreamNetHost(std::move(enetHost));
+        auto dreamHost = DreamNetHost(std::move(enetHost));
+
+        if (runtimeConfig)
+        {
+            auto result = dreamHost.ApplyRuntimeConfig(runtimeConfig.value());
+            if (!result)
+            {
+                return DreamNetError::WrapUnexpected(
+                    DreamNetErrorCode::InvalidConfig,
+                    std::move(result.error()),
+                    "Failed to apply host runtime config during client DreamNetHost creation");
+            }
+        }
+
+        return dreamHost;
     }
     
-    static Result TryCreateServer(const ServerConfig config)
+    static Result TryCreateServer(
+        const ServerConfig config,
+        const std::optional<HostRuntimeConfig>& runtimeConfig = std::nullopt)
     {
         auto validationResult = ValidateConfig(config);
         if (!validationResult)
@@ -130,8 +196,21 @@ public:
         }
         
         ENetHostPtr enetHost = ENetHostPtr(host);
-        
-        return DreamNetHost(std::move(enetHost));
+        auto dreamHost = DreamNetHost(std::move(enetHost));
+
+        if (runtimeConfig)
+        {
+            auto result = dreamHost.ApplyRuntimeConfig(runtimeConfig.value());
+            if (!result)
+            {
+                return DreamNetError::WrapUnexpected(
+                    DreamNetErrorCode::InvalidConfig,
+                    std::move(result.error()),
+                    "Failed to apply host runtime config during server DreamNetHost creation");
+            }
+        }
+
+        return dreamHost;
     }
     
     EventResult Service(const TimeOutMs timeoutMs)
@@ -206,6 +285,46 @@ public:
     {
         return BroadcastPushPacketSpan(std::as_bytes(data), channelId, flags);
     }
+
+    NetOperationResult ApplyRuntimeConfig(const HostRuntimeConfig& config) noexcept
+    {
+        if (!IsValid())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidHost,
+                "Cannot apply runtime config to invalid DreamNetHost");
+        }
+
+        if (config.channelLimit &&
+            (*config.channelLimit != 0 &&
+             (*config.channelLimit < ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT ||
+              *config.channelLimit > ENET_PROTOCOL_MAXIMUM_CHANNEL_COUNT)))
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidConfig,
+                std::format(
+                    "HostRuntimeConfig.channelLimit must be 0 or in range [{}, {}], got {}",
+                    static_cast<std::size_t>(ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT),
+                    static_cast<std::size_t>(ENET_PROTOCOL_MAXIMUM_CHANNEL_COUNT),
+                    *config.channelLimit));
+        }
+
+        if (config.bandwidthLimit)
+        {
+            const auto& bandwidthLimit = *config.bandwidthLimit;
+            enet_host_bandwidth_limit(
+                Native(),
+                bandwidthLimit.incoming,
+                bandwidthLimit.outgoing);
+        }
+
+        if (config.channelLimit)
+        {
+            enet_host_channel_limit(Native(), *config.channelLimit);
+        }
+
+        return {};
+    }
     
     DreamNetPeer::Result Connect(const DreamNetAddress& address, size_t channelCount, enet_uint32 data = 0)
     {
@@ -240,6 +359,41 @@ public:
     {
         if (!IsValid()) return;
         enet_host_flush(Native());
+    }
+
+    std::optional<HostInfo> GetHostInfo() const noexcept
+    {
+        if (!IsValid())
+        {
+            return std::nullopt;
+        }
+
+        return HostInfo
+        {
+            .address           = DreamNetAddress::FromNative(enetHost->address),
+            .peerCount         = enetHost->peerCount,
+            .channelLimit      = enetHost->channelLimit,
+            .incomingBandwidth = enetHost->incomingBandwidth,
+            .outgoingBandwidth = enetHost->outgoingBandwidth,
+        };
+    }
+
+    std::optional<HostTelemetry> GetHostTelemetry() const noexcept
+    {
+        if (!IsValid())
+        {
+            return std::nullopt;
+        }
+
+        return HostTelemetry
+        {
+            .connectedPeers       = enetHost->connectedPeers,
+            .totalSentData        = enetHost->totalSentData,
+            .totalSentPackets     = enetHost->totalSentPackets,
+            .totalReceivedData    = enetHost->totalReceivedData,
+            .totalReceivedPackets = enetHost->totalReceivedPackets,
+            .serviceTime          = enetHost->serviceTime,
+        };
     }
     
     inline ENetHost* Native() const noexcept

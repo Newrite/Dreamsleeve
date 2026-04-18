@@ -90,11 +90,11 @@ export struct PeerTelemetry final
     
 export struct PeerInfo final
 {
-    const ENetPeerState   state;
-    const DreamNetAddress address;
-    const size_t          channelCount;
-    const enet_uint32     incomingBandwidth;
-    const enet_uint32     outgoingBandwidth;
+    ENetPeerState   state;
+    DreamNetAddress address;
+    size_t          channelCount;
+    enet_uint32     incomingBandwidth;
+    enet_uint32     outgoingBandwidth;
 };
 
 export struct TimeoutConfig final
