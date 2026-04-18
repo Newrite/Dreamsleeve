@@ -64,13 +64,11 @@ export struct ServerConfig final : NetConfig
 
 export using ClientConfig = NetConfig;
 
-export using TimeOutMs = enet_uint32;
-
 export class DreamNetHost
 {
 public:
-    using Result = NetResult<DreamNetHost>;
-    using ServiceResult = NetResult<std::optional<DreamNetEvent>>;
+    using Result      = NetResult<DreamNetHost>;
+    using EventResult = NetResult<std::optional<DreamNetEvent>>;
 
     static Result TryCreateClient(const ClientConfig config)
     {
@@ -132,7 +130,7 @@ public:
         return DreamNetHost(std::move(enetHost));
     }
     
-    ServiceResult Service(TimeOutMs timeoutMs)
+    EventResult Service(const TimeOutMs timeoutMs)
     {
         if (!IsValid())
         {
@@ -143,12 +141,95 @@ public:
         
         ENetEvent event{};
         auto serviceResult = enet_host_service(Native(), &event, timeoutMs);
-        if (serviceResult == 0) return std::nullopt;
-        if (serviceResult < 0)
+        return EventResultImpl(event, serviceResult, "enet_host_service");
+    }
+    
+    EventResult CheckEvents()
+    {
+        if (!IsValid())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidHost,
+                "DreamNetHost::CheckEvents called on invalid host");
+        }
+        
+        ENetEvent event{};
+        auto checkResult = enet_host_check_events(Native(), &event);
+        return EventResultImpl(event, checkResult, "enet_host_check_events");
+    }
+    
+    NetOperationResult BroadcastPushPacket(DreamNetPacket&& packet, const ChannelId channelId)
+    {
+        if (!IsValid())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidHost,
+                "Cannot broadcast packet through invalid DreamNetHost");
+        }
+
+        if (!packet.IsValid())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPacket,
+                "Cannot broadcast invalid DreamNetPacket");
+        }
+
+        auto nativePacket = packet.ReleaseNative();
+        
+        enet_host_broadcast(Native(), channelId, nativePacket);
+        return {};
+    }
+    
+    NetOperationResult BroadcastPushPacketSpan(
+        const DreamNetPacket::DataBytes bytes,
+        const ChannelId                 channelId,
+        const PacketFlag                flags = PacketFlag::Reliable)
+    {
+        auto packet = DreamNetPacket::TryFromSpan(bytes, flags);
+        if (!packet)
+        {
+            return DreamNetError::WrapUnexpected(
+                DreamNetErrorCode::FailedPushPacket,
+                std::move(packet.error()),
+                "Failed to prepare packet for host broadcast from byte span");
+        }
+        
+        return BroadcastPushPacket(std::move(packet.value()), channelId);
+    }
+    
+    NetOperationResult BroadcastPushPacketSpan(
+        const DreamNetPacket::DataSpan data,
+        const ChannelId                channelId,
+        const PacketFlag               flags = PacketFlag::Reliable)
+    {
+        return BroadcastPushPacketSpan(std::as_bytes(data), channelId, flags);
+    }
+    
+    void FlushPackets() noexcept
+    {
+        if (!IsValid()) return;
+        enet_host_flush(Native());
+    }
+    
+    ENetHost* Native() const noexcept
+    {
+        return enetHost.get();
+    }
+    
+    inline bool IsValid() const noexcept
+    {
+        return enetHost ? true : false;
+    }
+    
+private:
+    static EventResult EventResultImpl(const ENetEvent& event, const int result, std::string_view function)
+    {
+        if (result == 0) return std::nullopt;
+        if (result < 0)
         {
             return DreamNetError::MakeUnexpected(
                 DreamNetErrorCode::FailedHostService,
-                "enet_host_service returned a negative result");
+                std::format("{} returned a negative result", function));
         }
         
         auto dreamEvent = DreamNetEvent::TryFromNative(event);
@@ -163,17 +244,6 @@ public:
         return std::optional<DreamNetEvent>{std::move(dreamEvent.value())};
     }
     
-    ENetHost* Native() const noexcept
-    {
-        return enetHost.get();
-    }
-    
-    inline bool IsValid() const noexcept
-    {
-        return enetHost ? true : false;
-    }
-    
-private:
     static bool IsValidConfig(const NetConfig& config) noexcept
     {
         if (config.maxPeers == 0 || config.maxPeers > ENET_PROTOCOL_MAXIMUM_PEER_ID)

@@ -19,6 +19,7 @@ export using BandwidthLimit   = enet_uint32;
 export using DisconnectReason = Protocol::Network::DisconnectReason;
 export using ChannelId        = enet_uint8;
 export using PingIntervalMs   = enet_uint32;
+export using TimeOutMs        = enet_uint32;
 
 export enum class DisconnectType : std::uint8_t
 {
