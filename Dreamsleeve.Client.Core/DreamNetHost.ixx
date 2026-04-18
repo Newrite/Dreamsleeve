@@ -343,10 +343,9 @@ public:
         auto peer = DreamNetPeer::TryFromNative(nativePeer);
         if (!peer)
         {
-            return DreamNetError::WrapUnexpected(
-                DreamNetErrorCode::InvalidPeer, 
-                std::move(peer.error()), 
-                "Can't configure DreamNetPeer after success create connect peer with address: {}", address.ToString());
+            auto message = 
+                std::format("Can't configure DreamNetPeer after success create connect peer with address: {}", address.ToString());
+            return DreamNetError::WrapUnexpected(DreamNetErrorCode::InvalidPeer, std::move(peer.error()), message);
         }
         
         return peer.value();
@@ -367,11 +366,11 @@ public:
 
         return HostInfo
         {
-            .address           = DreamNetAddress::FromNative(enetHost->address),
-            .peerCount         = enetHost->peerCount,
-            .channelLimit      = enetHost->channelLimit,
-            .incomingBandwidth = enetHost->incomingBandwidth,
-            .outgoingBandwidth = enetHost->outgoingBandwidth,
+            .address           = DreamNetAddress::FromNative(host->address),
+            .peerCount         = host->peerCount,
+            .channelLimit      = host->channelLimit,
+            .incomingBandwidth = host->incomingBandwidth,
+            .outgoingBandwidth = host->outgoingBandwidth,
         };
     }
 
@@ -384,23 +383,23 @@ public:
 
         return HostTelemetry
         {
-            .connectedPeers       = enetHost->connectedPeers,
-            .totalSentData        = enetHost->totalSentData,
-            .totalSentPackets     = enetHost->totalSentPackets,
-            .totalReceivedData    = enetHost->totalReceivedData,
-            .totalReceivedPackets = enetHost->totalReceivedPackets,
-            .serviceTime          = enetHost->serviceTime,
+            .connectedPeers       = host->connectedPeers,
+            .totalSentData        = host->totalSentData,
+            .totalSentPackets     = host->totalSentPackets,
+            .totalReceivedData    = host->totalReceivedData,
+            .totalReceivedPackets = host->totalReceivedPackets,
+            .serviceTime          = host->serviceTime,
         };
     }
     
     inline ENetHost* Native() const noexcept
     {
-        return enetHost.get();
+        return host.get();
     }
     
     inline bool IsValid() const noexcept
     {
-        return enetHost ? true : false;
+        return host ? true : false;
     }
     
 private:
@@ -487,9 +486,9 @@ private:
 
         return {};
     }
-    explicit DreamNetHost(ENetHostPtr enetHost) : enetHost(std::move(enetHost)) {}
+    explicit DreamNetHost(ENetHostPtr enetHost) : host(std::move(enetHost)) {}
     
-    ENetHostPtr enetHost = nullptr;
+    ENetHostPtr host = nullptr;
 };
 
 export using DreamNetHostPtr = std::unique_ptr<DreamNetHost>;
