@@ -295,18 +295,15 @@ public:
                 "Cannot apply runtime config to invalid DreamNetHost");
         }
 
-        if (config.channelLimit &&
-            (*config.channelLimit != 0 &&
-             (*config.channelLimit < ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT ||
-              *config.channelLimit > ENET_PROTOCOL_MAXIMUM_CHANNEL_COUNT)))
+        if (config.channelLimit)
         {
-            return DreamNetError::MakeUnexpected(
-                DreamNetErrorCode::InvalidConfig,
-                std::format(
-                    "HostRuntimeConfig.channelLimit must be 0 or in range [{}, {}], got {}",
-                    static_cast<std::size_t>(ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT),
-                    static_cast<std::size_t>(ENET_PROTOCOL_MAXIMUM_CHANNEL_COUNT),
-                    *config.channelLimit));
+            auto validationResult = ValidateChannelLimit(
+                *config.channelLimit,
+                "HostRuntimeConfig.channelLimit");
+            if (!validationResult)
+            {
+                return validationResult;
+            }
         }
 
         if (config.bandwidthLimit)
@@ -431,34 +428,61 @@ private:
     
     static NetOperationResult ValidateConfig(const NetConfig& config)
     {
-        if (config.maxPeers == 0)
+        auto maxPeersValidationResult = ValidateMaxPeers(config.maxPeers);
+        if (!maxPeersValidationResult)
+        {
+            return maxPeersValidationResult;
+        }
+
+        auto channelLimitValidationResult = ValidateChannelLimit(
+            config.channelLimit,
+            "NetConfig.channelLimit");
+        if (!channelLimitValidationResult)
+        {
+            return channelLimitValidationResult;
+        }
+
+        return {};
+    }
+
+    static NetOperationResult ValidateMaxPeers(const size_t maxPeers)
+    {
+        if (maxPeers == 0)
         {
             return DreamNetError::MakeUnexpected(
                 DreamNetErrorCode::InvalidConfig,
                 "NetConfig.maxPeers must be greater than 0");
         }
 
-        if (config.maxPeers > ENET_PROTOCOL_MAXIMUM_PEER_ID)
+        if (maxPeers > ENET_PROTOCOL_MAXIMUM_PEER_ID)
         {
             return DreamNetError::MakeUnexpected(
                 DreamNetErrorCode::InvalidConfig,
                 std::format(
                     "NetConfig.maxPeers must be less than or equal to {}, got {}",
                     static_cast<std::size_t>(ENET_PROTOCOL_MAXIMUM_PEER_ID),
-                    config.maxPeers));
+                    maxPeers));
         }
 
-        if (config.channelLimit != 0 &&
-            (config.channelLimit < ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT ||
-             config.channelLimit > ENET_PROTOCOL_MAXIMUM_CHANNEL_COUNT))
+        return {};
+    }
+
+    static NetOperationResult ValidateChannelLimit(
+        const ChannelLimit channelLimit,
+        const std::string_view fieldName)
+    {
+        if (channelLimit != 0 &&
+            (channelLimit < ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT ||
+             channelLimit > ENET_PROTOCOL_MAXIMUM_CHANNEL_COUNT))
         {
             return DreamNetError::MakeUnexpected(
                 DreamNetErrorCode::InvalidConfig,
                 std::format(
-                    "NetConfig.channelLimit must be 0 or in range [{}, {}], got {}",
+                    "{} must be 0 or in range [{}, {}], got {}",
+                    fieldName,
                     static_cast<std::size_t>(ENET_PROTOCOL_MINIMUM_CHANNEL_COUNT),
                     static_cast<std::size_t>(ENET_PROTOCOL_MAXIMUM_CHANNEL_COUNT),
-                    config.channelLimit));
+                    static_cast<std::size_t>(channelLimit)));
         }
 
         return {};
