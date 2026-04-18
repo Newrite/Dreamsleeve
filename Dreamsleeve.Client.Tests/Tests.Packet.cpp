@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include <enet/enet.h>
 import DreamNet.Packet;
+import DreamNet.Core;
 import std;
 
 // ==================== PacketFlags ====================
@@ -121,7 +122,7 @@ TEST_CASE("DreamNetPacket.TryFromSpan - invalid flags (reliable | unsequenced)",
     auto result = DreamNetPacket::TryFromSpan(std::span{data.data(), data.size()}, invalidFlags);
 
     REQUIRE_FALSE(result.has_value());
-    REQUIRE(result.error() == DreamNetPacket::Error::InvalidFlags);
+    REQUIRE(result.error().code == DreamNetErrorCode::InvalidPacketFlags);
 }
 
 TEST_CASE("DreamNetPacket.TryFromSpan - NoAllocate rejected", "[packet]")
@@ -130,7 +131,7 @@ TEST_CASE("DreamNetPacket.TryFromSpan - NoAllocate rejected", "[packet]")
     auto result = DreamNetPacket::TryFromSpan(std::span{data.data(), data.size()}, PacketFlag::NoAllocate);
 
     REQUIRE_FALSE(result.has_value());
-    REQUIRE(result.error() == DreamNetPacket::Error::InvalidFlags);
+    REQUIRE(result.error().code == DreamNetErrorCode::InvalidPacketFlags);
 }
 
 TEST_CASE("DreamNetPacket.TryFromSpan - default flag is Reliable", "[packet]")
@@ -146,7 +147,7 @@ TEST_CASE("DreamNetPacket.TryAdoptNative - null pointer", "[packet]")
 {
     auto result = DreamNetPacket::TryAdoptNative(nullptr);
     REQUIRE_FALSE(result.has_value());
-    REQUIRE(result.error() == DreamNetPacket::Error::NullPacket);
+    REQUIRE(result.error().code == DreamNetErrorCode::NullPacket);
 }
 
 TEST_CASE("DreamNetPacket move semantics", "[packet]")

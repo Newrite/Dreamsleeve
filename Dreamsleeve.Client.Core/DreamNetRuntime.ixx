@@ -5,20 +5,20 @@
 export module DreamNet.Runtime;
 
 import std;
+import DreamNet.Core;
 
 export class DreamNetRuntime
 {
 public:
-    enum class Error
-    {
-        EnetInitializeError
-    };
+    using Result = NetResult<DreamNetRuntime>;
 
-    static std::expected<DreamNetRuntime, Error> TryInitialize()
+    static Result TryInitialize()
     {
         if (enet_initialize() != 0)
         {
-            return std::unexpected(Error::EnetInitializeError);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedENetInitialize,
+                "enet_initialize returned a non-zero result");
         }
 
         return DreamNetRuntime(true);

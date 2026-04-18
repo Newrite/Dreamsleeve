@@ -5,6 +5,7 @@
 export module DreamNet.Packet;
 
 import std;
+import DreamNet.Core;
 
 export namespace PacketFlags
 {
@@ -111,13 +112,7 @@ public:
     
     using DataSpan  = std::span<const enet_uint8>;
     using DataBytes = std::span<const std::byte>;
-    
-    enum class Error : std::uint8_t
-    {
-        NullPacket,
-        InvalidFlags,
-        CreateFailed,
-    };
+    using Result = NetResult<DreamNetPacket>;
     
     DreamNetPacket(const DreamNetPacket& other)                = delete;
     DreamNetPacket(DreamNetPacket&& other) noexcept            = default;
@@ -125,18 +120,22 @@ public:
     DreamNetPacket& operator=(DreamNetPacket&& other) noexcept = default;
     ~DreamNetPacket()                                          = default;
     
-    static std::expected<DreamNetPacket, Error> TryFromSpan(const DataBytes bytes, const PacketFlag flags = PacketFlag::Reliable)
+    static Result TryFromSpan(const DataBytes bytes, const PacketFlag flags = PacketFlag::Reliable)
     {
         const auto isValidFlags = PacketFlags::IsValidPacketFlags(flags);
         
         if (!isValidFlags)
         {
-            return std::unexpected(Error::InvalidFlags);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPacketFlags,
+                "Packet flags are invalid for ENet packet creation");
         }
         
-        if (!isValidFlags || PacketFlags::HasFlag(flags, PacketFlag::NoAllocate))
+        if (PacketFlags::HasFlag(flags, PacketFlag::NoAllocate))
         {
-            return std::unexpected(Error::InvalidFlags);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPacketFlags,
+                "PacketFlag::NoAllocate is not allowed when DreamNetPacket owns the packet memory");
         }
 
         ENetPacket* packet = enet_packet_create(
@@ -147,27 +146,33 @@ public:
 
         if (packet == nullptr)
         {
-            return std::unexpected(Error::CreateFailed);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedCreatePacket,
+                "enet_packet_create returned nullptr");
         }
         
         return DreamNetPacket(ENetPacketPtr{packet});
     }
     
-    static std::expected<DreamNetPacket, Error> TryFromSpan(const DataSpan span, const PacketFlag flags = PacketFlag::Reliable)
+    static Result TryFromSpan(const DataSpan span, const PacketFlag flags = PacketFlag::Reliable)
     {
         return TryFromSpan(std::as_bytes(span), flags);
     }
     
-    static std::expected<DreamNetPacket, Error> TryAdoptNative(ENetPacket* packet)
+    static Result TryAdoptNative(ENetPacket* packet)
     {
         if (!packet)
         {
-            return std::unexpected(Error::NullPacket);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::NullPacket,
+                "Cannot adopt a null ENetPacket");
         }
         
         if (!PacketFlags::IsValidPacketFlags(packet->flags))
         {
-            return std::unexpected(Error::InvalidFlags);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPacketFlags,
+                "Cannot adopt ENetPacket with invalid flags");
         }
         
         return DreamNetPacket(ENetPacketPtr{packet});

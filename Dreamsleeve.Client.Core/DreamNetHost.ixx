@@ -69,19 +69,17 @@ export using TimeOutMs = enet_uint32;
 export class DreamNetHost
 {
 public:
-    enum class Error : std::uint8_t
+    using Result = NetResult<DreamNetHost>;
+    using ServiceResult = NetResult<std::optional<DreamNetEvent>>;
+
+    static Result TryCreateClient(const ClientConfig config)
     {
-        InvalidConfig,
-        InvalidHost,
-        FailedCreateServer,
-        FailedCreateClient,
-        FailedService,
-        FailedServiceEvent,
-    };
-    
-    static std::expected<DreamNetHost, Error> TryCreateClient(const ClientConfig config)
-    {
-        if (!IsValidConfig(config)) return std::unexpected(Error::InvalidConfig);
+        if (!IsValidConfig(config))
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidConfig,
+                "Invalid client config when creating DreamNetHost");
+        }
         
         auto host = enet_host_create(
             nullptr, 
@@ -93,7 +91,9 @@ public:
         
         if (!host)
         {
-            return std::unexpected(Error::FailedCreateClient);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedCreateClient,
+                "enet_host_create failed for client host");
         }
         
         ENetHostPtr enetHost = ENetHostPtr(host);
@@ -101,9 +101,14 @@ public:
         return DreamNetHost(std::move(enetHost));
     }
     
-    static std::expected<DreamNetHost, Error> TryCreateServer(const ServerConfig config)
+    static Result TryCreateServer(const ServerConfig config)
     {
-        if (!IsValidConfig(config)) return std::unexpected(Error::InvalidConfig);
+        if (!IsValidConfig(config))
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidConfig,
+                "Invalid server config when creating DreamNetHost");
+        }
         
         auto& nativeAddress = config.address.Native();
         
@@ -117,7 +122,9 @@ public:
         
         if (!host)
         {
-            return std::unexpected(Error::FailedCreateServer);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedCreateServer,
+                "enet_host_create failed for server host");
         }
         
         ENetHostPtr enetHost = ENetHostPtr(host);
@@ -125,19 +132,35 @@ public:
         return DreamNetHost(std::move(enetHost));
     }
     
-    std::expected<std::optional<DreamNetEvent>, Error> Service(TimeOutMs timeoutMs)
+    ServiceResult Service(TimeOutMs timeoutMs)
     {
-        if (!IsValid()) return std::unexpected(Error::InvalidHost);
+        if (!IsValid())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidHost,
+                "DreamNetHost::Service called on invalid host");
+        }
         
-        ENetEvent event;
+        ENetEvent event{};
         auto serviceResult = enet_host_service(Native(), &event, timeoutMs);
         if (serviceResult == 0) return std::nullopt;
-        if (serviceResult < 0) return std::unexpected(Error::FailedService);
+        if (serviceResult < 0)
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedHostService,
+                "enet_host_service returned a negative result");
+        }
         
         auto dreamEvent = DreamNetEvent::TryFromNative(event);
-        if (!dreamEvent) return std::unexpected(Error::FailedServiceEvent);
+        if (!dreamEvent)
+        {
+            return DreamNetError::WrapUnexpected(
+                DreamNetErrorCode::FailedEventBuild,
+                std::move(dreamEvent.error()),
+                "Failed to build DreamNetEvent from ENetEvent");
+        }
         
-        return std::move(dreamEvent.value());
+        return std::optional<DreamNetEvent>{std::move(dreamEvent.value())};
     }
     
     ENetHost* Native() const noexcept

@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include <enet/enet.h>
 import DreamNet.Address;
+import DreamNet.Core;
 import std;
 
 TEST_CASE("DreamNetAddress.TryParseIp - valid IP", "[address]")
@@ -17,7 +18,7 @@ TEST_CASE("DreamNetAddress.TryParseIp - invalid IP", "[address]")
 {
     auto result = DreamNetAddress::TryParseIp("not.an.ip", 7777);
     REQUIRE_FALSE(result.has_value());
-    REQUIRE(result.error() == DreamNetAddress::Error::InvalidIp);
+    REQUIRE(result.error().code == DreamNetErrorCode::InvalidIp);
 }
 
 TEST_CASE("DreamNetAddress.TryParseIp - empty string", "[address]")

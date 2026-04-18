@@ -195,3 +195,5 @@ private:
 
 export template <typename T>
 using NetResult = std::expected<T, DreamNetError>;
+
+export using NetOperationResult = NetResult<std::monostate>;

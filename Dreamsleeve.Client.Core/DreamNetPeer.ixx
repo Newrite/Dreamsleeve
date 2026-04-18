@@ -133,14 +133,6 @@ export struct ThrottleConfig final
 
 export struct PeerRuntimeConfig final
 {
-    enum class Error : std::uint8_t
-    {
-        InvalidPeer,
-        InvalidTimeoutConfig,
-        InvalidThrottleConfig,
-        InvalidPingInterval,
-    };
-    
     std::optional<TimeoutConfig>  timeout;
     std::optional<ThrottleConfig> throttle;
     std::optional<PingIntervalMs> pingIntervalMs;
@@ -159,40 +151,41 @@ export struct PeerRuntimeConfig final
 export class DreamNetPeer
 {
 public:
-    enum class Error : std::uint8_t
-    {
-        InvalidPacket,
-        InvalidPeer,
-        InvalidPeerState,
-        PushFailed,
-        InvalidConfig,
-    };
-    
-    static std::expected<DreamNetPeer, Error> TryFromNative(ENetPeer* peer, const std::optional<PeerRuntimeConfig>& config = std::nullopt)
+    using Result                 = NetResult<DreamNetPeer>;
+    using ReceiveOperationResult = NetResult<std::optional<ReceiveResult>>;
+
+    static Result TryFromNative(ENetPeer* peer, const std::optional<PeerRuntimeConfig>& config = std::nullopt)
     {
         if (!peer)
         {
-            return std::unexpected(Error::InvalidPeer);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPeer,
+                "Cannot create DreamNetPeer from null ENetPeer");
         }
         
         auto dreamPeer = DreamNetPeer(peer);
         if (config)
         {
-            auto result = 
-                dreamPeer.ApplyRuntimeConfig(config.value())
-            .transform_error([](const auto& err) { return Error::InvalidConfig; });
-            
-            if (!result) return std::unexpected(result.error());
+            auto result = dreamPeer.ApplyRuntimeConfig(config.value());
+            if (!result)
+            {
+                return DreamNetError::WrapUnexpected(
+                    DreamNetErrorCode::InvalidConfig,
+                    std::move(result.error()),
+                    "Failed to apply peer runtime config during DreamNetPeer creation");
+            }
         }
         
         return dreamPeer;
     }
     
-    std::expected<std::monostate, PeerRuntimeConfig::Error> ApplyRuntimeConfig(const PeerRuntimeConfig& config) noexcept
+    NetOperationResult ApplyRuntimeConfig(const PeerRuntimeConfig& config) noexcept
     {
         if (!IsValid())
         {
-            return std::unexpected(PeerRuntimeConfig::Error::InvalidPeer);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPeer,
+                "Cannot apply runtime config to invalid DreamNetPeer");
         }
 
         if (config.timeout)
@@ -200,7 +193,9 @@ public:
             const auto& timeout = *config.timeout;
             if (timeout.limit == 0 || timeout.minimumMs > timeout.maximumMs)
             {
-                return std::unexpected(PeerRuntimeConfig::Error::InvalidTimeoutConfig);
+                return DreamNetError::MakeUnexpected(
+                    DreamNetErrorCode::InvalidTimeoutConfig,
+                    "TimeoutConfig must have non-zero limit and minimumMs <= maximumMs");
             }
         }
 
@@ -209,7 +204,9 @@ public:
             const auto& throttle = *config.throttle;
             if (throttle.intervalMs == 0)
             {
-                return std::unexpected(PeerRuntimeConfig::Error::InvalidThrottleConfig);
+                return DreamNetError::MakeUnexpected(
+                    DreamNetErrorCode::InvalidThrottleConfig,
+                    "ThrottleConfig intervalMs must be non-zero");
             }
         }
 
@@ -217,7 +214,9 @@ public:
         {
             if (*config.pingIntervalMs == 0)
             {
-                return std::unexpected(PeerRuntimeConfig::Error::InvalidPingInterval);
+                return DreamNetError::MakeUnexpected(
+                    DreamNetErrorCode::InvalidPingInterval,
+                    "Ping interval must be non-zero");
             }
         }
 
@@ -246,24 +245,33 @@ public:
         return std::monostate{};
     }
     
-    std::expected<std::monostate, Error> PushPacket(DreamNetPacket&& packet, const ChannelId channelId)
+    NetOperationResult PushPacket(DreamNetPacket&& packet, const ChannelId channelId)
     {
-        if (!CanSend())        return std::unexpected(Error::InvalidPeerState);
+        if (!CanSend())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPeerState,
+                "Cannot send packet because peer is not connected");
+        }
+
         return PushPacketImpl(std::move(packet), channelId);
     }
     
-    std::expected<std::monostate, Error> PushSpan(
+    NetOperationResult PushSpan(
         const DreamNetPacket::DataBytes bytes,
         const ChannelId                 channelId,
         const PacketFlag                flags = PacketFlag::Reliable)
     {
         auto packet = DreamNetPacket::TryFromSpan(bytes, flags);
-        if (!packet) return std::unexpected(Error::InvalidPacket);
+        if (!packet)
+        {
+            return std::unexpected(std::move(packet.error()));
+        }
         
         return PushPacket(std::move(packet.value()), channelId);
     }
     
-    std::expected<std::monostate, Error> PushSpan(
+    NetOperationResult PushSpan(
         const DreamNetPacket::DataSpan data, 
         const ChannelId                channelId, 
         const PacketFlag               flags = PacketFlag::Reliable)
@@ -271,23 +279,26 @@ public:
         return PushSpan(std::as_bytes(data), channelId, flags);
     }
     
-    std::expected<std::monostate, Error> PushPacketUnchecked(DreamNetPacket&& packet, const ChannelId channelId)
+    NetOperationResult PushPacketUnchecked(DreamNetPacket&& packet, const ChannelId channelId)
     {
         return PushPacketImpl(std::move(packet), channelId);
     }
     
-    std::expected<std::monostate, Error> PushSpanUnchecked(
+    NetOperationResult PushSpanUnchecked(
         const DreamNetPacket::DataBytes bytes,
         const ChannelId                 channelId,
         const PacketFlag                flags = PacketFlag::Reliable)
     {
         auto packet = DreamNetPacket::TryFromSpan(bytes, flags);
-        if (!packet) return std::unexpected(Error::InvalidPacket);
+        if (!packet)
+        {
+            return std::unexpected(std::move(packet.error()));
+        }
         
         return PushPacketUnchecked(std::move(packet.value()), channelId);
     }
     
-    std::expected<std::monostate, Error> PushSpanUnchecked(
+    NetOperationResult PushSpanUnchecked(
         const DreamNetPacket::DataSpan data, 
         const ChannelId                channelId, 
         const PacketFlag               flags = PacketFlag::Reliable)
@@ -313,9 +324,14 @@ public:
         enet_peer_disconnect(peer, static_cast<enet_uint32>(reason));
     }
     
-    std::expected<std::optional<ReceiveResult>, Error> TryReceive(ChannelId channelId)
+    ReceiveOperationResult TryReceive(ChannelId channelId)
     {
-        if (!IsValid()) return std::unexpected(Error::InvalidPeer);
+        if (!IsValid())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPeer,
+                "Cannot receive packet from invalid DreamNetPeer");
+        }
         
         auto nativePacket = enet_peer_receive(Native(), std::addressof(channelId));
         if (!nativePacket) return std::nullopt;
@@ -323,7 +339,13 @@ public:
         auto packet = 
             DreamNetPacket::TryAdoptNative(nativePacket);
         
-        if (!packet) return std::unexpected(Error::InvalidPacket);
+        if (!packet)
+        {
+            return DreamNetError::WrapUnexpected(
+                DreamNetErrorCode::FailedReceivePacket,
+                std::move(packet.error()),
+                "enet_peer_receive returned a packet that DreamNetPacket could not adopt");
+        }
         
         return ReceiveResult 
             { .packet    = std::move(packet.value()),
@@ -529,14 +551,27 @@ public:
         SetRawUserData(static_cast<void*>(value));
     }
 private:
-    std::expected<std::monostate, Error> PushPacketImpl(DreamNetPacket&& packet, const ChannelId channelId)
+    NetOperationResult PushPacketImpl(DreamNetPacket&& packet, const ChannelId channelId)
     {
-        if (!packet.IsValid()) return std::unexpected(Error::InvalidPacket);
-        if (!IsValid())        return std::unexpected(Error::InvalidPeer);
+        if (!packet.IsValid())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPacket,
+                "Cannot send invalid DreamNetPacket");
+        }
+
+        if (!IsValid())
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPeer,
+                "Cannot send packet through invalid DreamNetPeer");
+        }
         
         if (enet_peer_send(Native(), channelId, packet.Native()) < 0)
         {
-            return std::unexpected(Error::PushFailed);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedPushPacket,
+                "enet_peer_send returned a negative result");
         }
         
         auto _ = packet.ReleaseNative();

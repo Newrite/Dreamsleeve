@@ -117,10 +117,13 @@ public:
             if (auto peerResult = DreamNetPeer::TryFromNative(event.peer); peerResult)
             {
                 peer = std::move(peerResult.value());
-            } else
+            }
+            else
             {
-                
-                return std::unexpected(Error::InvalidPeer);
+                return DreamNetError::WrapUnexpected(
+                    DreamNetErrorCode::InvalidPeer,
+                    std::move(peerResult.error()),
+                    "Failed to build DreamNetEvent peer from ENetEvent");
             }
         }
 
@@ -130,9 +133,13 @@ public:
             if (auto packetResult = DreamNetPacket::TryAdoptNative(event.packet); packetResult)
             {
                 packet = std::move(packetResult.value());
-            } else
+            }
+            else
             {
-                return std::unexpected(Error::ReceivePacketFailed);
+                return DreamNetError::WrapUnexpected(
+                    DreamNetErrorCode::FailedReceivePacket,
+                    std::move(packetResult.error()),
+                    "Failed to adopt receive packet while building DreamNetEvent");
             }
         }
 
