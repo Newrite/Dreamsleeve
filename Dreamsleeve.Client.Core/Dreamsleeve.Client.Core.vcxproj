@@ -165,6 +165,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DreamNetAddress.ixx" />
+    <ClCompile Include="DreamNetCore.ixx" />
     <ClCompile Include="DreamNetHost.ixx" />
     <ClCompile Include="DreamNetEvent.ixx" />
     <ClCompile Include="DreamNetPacket.ixx" />

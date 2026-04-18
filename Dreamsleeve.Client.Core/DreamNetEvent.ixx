@@ -8,6 +8,7 @@ import std;
 
 import DreamNet.Peer;
 import DreamNet.Packet;
+import DreamNet.Core;
 
 export enum class EventType : std::uint8_t
 {
@@ -97,11 +98,8 @@ public:
 export class DreamNetEvent
 {
 public:
-    enum class Error : std::uint8_t
-    {
-        ReceivePacketFailed,
-        InvalidPeer,
-    };
+    
+    using Result = NetResult<DreamNetEvent>;
     
     DreamNetEvent(const DreamNetEvent& other)                = delete;
     DreamNetEvent(DreamNetEvent&& other) noexcept            = default;
@@ -109,7 +107,7 @@ public:
     DreamNetEvent& operator=(DreamNetEvent&& other) noexcept = default;
     ~DreamNetEvent()                                         = default;
     
-    static std::expected<DreamNetEvent, Error> TryFromNative(const ENetEvent& event)
+    static Result TryFromNative(const ENetEvent& event)
     {
         EventInfo info = EventInfo::FromEvent(event);
 
@@ -121,6 +119,7 @@ public:
                 peer = std::move(peerResult.value());
             } else
             {
+                
                 return std::unexpected(Error::InvalidPeer);
             }
         }

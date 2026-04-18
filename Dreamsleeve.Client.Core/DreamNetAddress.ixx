@@ -6,32 +6,23 @@ export module DreamNet.Address;
 
 import std;
 
-export using IpStr        = std::string;
-export using IpStrView    = std::string_view;
-export using HostName     = std::string;
-export using HostNameView = std::string_view;
-export using Port         = std::uint16_t;
+import DreamNet.Core;
 
 export class DreamNetAddress
 {
 public:
     
+    using Result = NetResult<DreamNetAddress>;
+    
     static constexpr IpStrView   LoopbackIp        = "127.0.0.1"; 
     static constexpr std::size_t BufferSize = 256;
-    
-    enum class Error : std::uint8_t
-    {
-        InvalidIp,
-        ResolveFailed,
-        FormatFailed
-    };
     
     static DreamNetAddress FromNative(const ENetAddress address) noexcept
     {
         return DreamNetAddress(address);
     }
     
-    static std::expected<DreamNetAddress, Error> TryParseIp(const IpStrView hostIp, const Port port)
+    static Result TryParseIp(const IpStrView hostIp, const Port port)
     {
         IpStr owned{hostIp};
         ENetAddress address{};
@@ -39,12 +30,14 @@ public:
         
         if (owned.empty() || enet_address_set_host_ip(&address, owned.c_str()) != 0)
         {
-            return std::unexpected(Error::InvalidIp);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidIp, 
+                "Invalid string IP when try make DreamNetAddress");
         }
         
         return DreamNetAddress{address};
     }
-    static std::expected<DreamNetAddress, Error> TryResolveHost(const HostNameView hostName, const Port port)
+    static Result TryResolveHost(const HostNameView hostName, const Port port)
     {
         HostName owned{hostName};
         ENetAddress address{};
@@ -52,7 +45,9 @@ public:
         
         if (owned.empty() || enet_address_set_host(&address, owned.c_str()) != 0)
         {
-            return std::unexpected(Error::ResolveFailed);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedResolveHost, 
+                "Failed resolve string Host when try make DreamNetAddress");
         }
         
         return DreamNetAddress{address};
@@ -89,25 +84,29 @@ public:
         return address.port;
     }
 
-    std::expected<IpStr, Error> ToIpString() const
+    NetResult<IpStr> ToIpString() const
     {
         std::array<char, BufferSize> buffer{};
         
         if (enet_address_get_host_ip(&address, buffer.data(), buffer.size()) != 0)
         {
-            return std::unexpected(Error::FormatFailed);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedFormatAddress, 
+                "Failed to ip string with enet_address_get_host_ip");
         }
         
         return IpStr{buffer.data()};
     }
     
-    std::expected<HostName, Error> ToHostString() const
+    NetResult<HostName> ToHostString() const
     {
         std::array<char, BufferSize> buffer{};
         
         if (enet_address_get_host(&address, buffer.data(), buffer.size()) != 0)
         {
-            return std::unexpected(Error::FormatFailed);
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedFormatAddress, 
+                "Failed to host string with enet_address_get_host");
         }
         
         return HostName{buffer.data()};

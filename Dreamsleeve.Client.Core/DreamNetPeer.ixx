@@ -6,21 +6,9 @@ export module DreamNet.Peer;
 
 import std;
 
-import Dreamsleeve.Protocol;
-
 import DreamNet.Packet;
 import DreamNet.Address;
-
-export enum class DisconnectType : std::uint8_t
-{
-    Normal,
-    Force,
-    Later,
-};
-
-export using DisconnectReason = Protocol::Network::DisconnectReason;
-
-export using ChannelId = enet_uint8;
+import DreamNet.Core;
 
 export struct ReceiveResult
 {
@@ -32,45 +20,45 @@ export struct PeerTelemetry final
 {
     struct TransportInfo final
     {
-        const enet_uint32   mtu;
-        const enet_uint32   windowSize;
-        const enet_uint32   incomingDataTotal;
-        const enet_uint32   outgoingDataTotal;
-        const enet_uint32   reliableDataInTransit;
-        const enet_uint32   lastReceiveTime;
-        const enet_uint32   lastSendTime;
-        const ENetPeerState state;
+        enet_uint32   mtu;
+        enet_uint32   windowSize;
+        enet_uint32   incomingDataTotal;
+        enet_uint32   outgoingDataTotal;
+        enet_uint32   reliableDataInTransit;
+        enet_uint32   lastReceiveTime;
+        enet_uint32   lastSendTime;
+        ENetPeerState state;
     };
     
     struct RoundTripTimeInfo final
     {
-        const enet_uint32 lastRoundTripTime;
-        const enet_uint32 lowestRoundTripTime;
-        const enet_uint32 roundTripTime;
-        const enet_uint32 roundTripTimeVariance;
+        enet_uint32 lastRoundTripTime;
+        enet_uint32 lowestRoundTripTime;
+        enet_uint32 roundTripTime;
+        enet_uint32 roundTripTimeVariance;
     };
     
     struct PacketStats final
     {
-        const enet_uint32 packetLoss;
-        const enet_uint32 packetLossVariance;  
-        const enet_uint32 packetsLost;  
-        const enet_uint32 packetsSent;  
+        enet_uint32 packetLoss;
+        enet_uint32 packetLossVariance;  
+        enet_uint32 packetsLost;  
+        enet_uint32 packetsSent;  
     };
     
     struct PacketThrottleStats final
     {
-        const enet_uint32 packetThrottle;
-        const enet_uint32 packetThrottleLimit;
-        const enet_uint32 packetThrottleAcceleration;
-        const enet_uint32 packetThrottleDeceleration;
-        const enet_uint32 packetThrottleInterval;
+        enet_uint32 packetThrottle;
+        enet_uint32 packetThrottleLimit;
+        enet_uint32 packetThrottleAcceleration;
+        enet_uint32 packetThrottleDeceleration;
+        enet_uint32 packetThrottleInterval;
     };
         
-    const TransportInfo       transportInfo;
-    const PacketStats         packetStats;
-    const PacketThrottleStats packetThrottleStats;
-    const RoundTripTimeInfo   roundTripTimeInfo;
+    TransportInfo       transportInfo;
+    PacketStats         packetStats;
+    PacketThrottleStats packetThrottleStats;
+    RoundTripTimeInfo   roundTripTimeInfo;
     
     double PacketLossRatio() const noexcept
     {
@@ -108,8 +96,6 @@ export struct PeerInfo final
     const enet_uint32     incomingBandwidth;
     const enet_uint32     outgoingBandwidth;
 };
-
-export using PingIntervalMs = enet_uint32;
 
 export struct TimeoutConfig final
 {
