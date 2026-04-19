@@ -54,10 +54,10 @@ export struct ServerConfig final : NetConfig
         ServerConfig   config{.address = DreamNetAddress::Loopback(loopbackPort)};
         NetConfig      defaultNet = NetConfig::Default();
         
-        config.maxPeers         = defaultNet.maxPeers;
-        config.channelLimit     = defaultNet.channelLimit;
-        config.inBwLimit        = defaultNet.inBwLimit;
-        config.outBwLimit       = defaultNet.outBwLimit;
+        config.maxPeers     = defaultNet.maxPeers;
+        config.channelLimit = defaultNet.channelLimit;
+        config.inBwLimit    = defaultNet.inBwLimit;
+        config.outBwLimit   = defaultNet.outBwLimit;
         return config;
     }
 };
@@ -388,7 +388,8 @@ public:
     }
     std::optional<DreamNetPeer> TryGetPeer(const size_t slot) const noexcept
     {
-        if (!IsValid()) return std::nullopt;
+        if (!IsValid())       return std::nullopt;
+        if (!Native()->peers) return std::nullopt;
         
         if (auto hostInfo = GetHostInfo())
         {
@@ -407,7 +408,8 @@ public:
     template <typename TCallback>
     void ForEachPeerSlot(TCallback&& callback)
     {
-        if (!IsValid()) return;
+        if (!IsValid())       return;
+        if (!Native()->peers) return;
         
         auto hostInfo = GetHostInfo();
         if (!hostInfo) return;
