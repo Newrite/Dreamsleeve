@@ -98,6 +98,8 @@ export struct HostInfo final
 {
     DreamNetAddress address;
     size_t          peerCount;
+    size_t          connectedPeers;
+    size_t          duplicatePeers;
     ChannelLimit    channelLimit;
     enet_uint32     incomingBandwidth;
     enet_uint32     outgoingBandwidth;
@@ -118,6 +120,12 @@ export class DreamNetHost
 public:
     using Result      = NetResult<DreamNetHost>;
     using EventResult = NetResult<std::optional<DreamNetEvent>>;
+    
+    DreamNetHost(const DreamNetHost&)                = delete;
+    DreamNetHost(DreamNetHost&&) noexcept            = default;
+    DreamNetHost& operator=(const DreamNetHost&)     = delete;
+    DreamNetHost& operator=(DreamNetHost&&) noexcept = default;
+    ~DreamNetHost()                                  = default;
 
     static Result TryCreateClient(
         const ClientConfig config,
@@ -178,7 +186,7 @@ public:
                 "Invalid server config when creating DreamNetHost");
         }
         
-        auto& nativeAddress = config.address.Native();
+        const auto& nativeAddress = config.address.Native();
         
         auto host = enet_host_create(
             std::addressof(nativeAddress), 
@@ -286,7 +294,7 @@ public:
         return BroadcastPushPacketSpan(std::as_bytes(data), channelId, flags);
     }
 
-    NetOperationResult ApplyRuntimeConfig(const HostRuntimeConfig& config) noexcept
+    NetOperationResult ApplyRuntimeConfig(const HostRuntimeConfig& config)
     {
         if (!IsValid())
         {
@@ -323,14 +331,24 @@ public:
         return {};
     }
     
-    DreamNetPeer::Result Connect(const DreamNetAddress& address, size_t channelCount, enet_uint32 data = 0)
+    DreamNetPeer::Result Connect(const DreamNetAddress& address, ChannelLimit channelCount, enet_uint32 data = 0)
     {
         if (!IsValid()) 
             return DreamNetError::MakeUnexpected(
                 DreamNetErrorCode::InvalidHost, 
-                "Can't create connect, host invalid");
+                "Cannot initiate connect on invalid host");
         
-        auto& nativeAddress = address.Native();
+        auto channelLimitValidationResult = ValidateChannelLimit(channelCount, "DreamNetPeer::Result Connect");
+        if (!channelLimitValidationResult)
+        {
+            auto message = std::format("Invalid channelCount with count {}", channelCount);
+            return DreamNetError::WrapUnexpected(
+                DreamNetErrorCode::FailedCreateConnect, 
+                std::move(channelLimitValidationResult.error()), 
+                message);
+        }
+        
+        const auto& nativeAddress = address.Native();
         auto nativePeer = enet_host_connect(Native(), std::addressof(nativeAddress), channelCount, data);
         
         if (!nativePeer)
@@ -356,6 +374,52 @@ public:
         if (!IsValid()) return;
         enet_host_flush(Native());
     }
+    
+    std::optional<DreamNetAddress> TryGetSocketAddress() const noexcept
+    {
+        if (!IsValid()) return std::nullopt;
+        return DreamNetAddress::FromNative(Native()->address);
+    }
+    
+    void BandwidthThrottle() noexcept
+    {
+        if (!IsValid()) return;
+        enet_host_bandwidth_throttle(Native());
+    }
+    std::optional<DreamNetPeer> TryGetPeer(const size_t slot) const noexcept
+    {
+        if (!IsValid()) return std::nullopt;
+        
+        if (auto hostInfo = GetHostInfo())
+        {
+            if (slot >= hostInfo->peerCount) return std::nullopt;
+            
+            auto& nativePeer = Native()->peers[slot];
+            auto peer = DreamNetPeer::TryFromNative(std::addressof(nativePeer));
+            if (!peer) return std::nullopt;
+            
+            return peer.value();
+        }
+
+        return std::nullopt;
+    }
+    
+    template <typename TCallback>
+    void ForEachPeerSlot(TCallback&& callback)
+    {
+        if (!IsValid()) return;
+        
+        auto hostInfo = GetHostInfo();
+        if (!hostInfo) return;
+
+        for (const size_t peerIndex : std::views::iota(size_t{0}, hostInfo->peerCount))
+        {
+            auto& nativePeer = Native()->peers[peerIndex];
+            auto peer = DreamNetPeer::TryFromNative(std::addressof(nativePeer));
+            if (!peer) continue;
+            if (!callback(peer.value())) return;
+        }
+    }
 
     std::optional<HostInfo> GetHostInfo() const noexcept
     {
@@ -368,6 +432,8 @@ public:
         {
             .address           = DreamNetAddress::FromNative(host->address),
             .peerCount         = host->peerCount,
+            .connectedPeers    = host->connectedPeers,
+            .duplicatePeers    = host->duplicatePeers,
             .channelLimit      = host->channelLimit,
             .incomingBandwidth = host->incomingBandwidth,
             .outgoingBandwidth = host->outgoingBandwidth,
