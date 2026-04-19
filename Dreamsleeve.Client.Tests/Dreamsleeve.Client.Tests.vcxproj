@@ -178,6 +178,7 @@
   <ItemGroup>
     <ClCompile Include="Dreamsleeve.Client.Tests.cpp" />
     <ClCompile Include="Tests.Address.cpp" />
+    <ClCompile Include="Tests.Network.cpp" />
     <ClCompile Include="Tests.Packet.cpp" />
     <ClCompile Include="Tests.Runtime.cpp" />
   </ItemGroup>
