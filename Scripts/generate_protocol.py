@@ -83,8 +83,7 @@ def find_protoc(repo_root: Path, explicit: str | None) -> Path:
 
 def find_default_proto_dir(repo_root: Path) -> Path:
     candidates = [
-        repo_root / "proto",
-        repo_root / "Protocol" / "proto",
+        repo_root / "Protocol",
     ]
 
     for candidate in candidates:
@@ -94,8 +93,7 @@ def find_default_proto_dir(repo_root: Path) -> Path:
     raise FileNotFoundError(
         "Could not find proto directory.\n"
         "Expected one of:\n"
-        "  - proto\n"
-        "  - Protocol/proto\n"
+        "  - Protocol\n"
         "Use --proto-dir to specify it explicitly."
     )
 
@@ -163,7 +161,7 @@ def main() -> int:
     parser.add_argument(
         "--proto-dir",
         default=None,
-        help="Directory containing .proto files. Default: auto-detect proto or Protocol/proto",
+        help="Directory containing .proto files. Default: auto-detect Protocol",
     )
     parser.add_argument(
         "--native-out-dir",
