@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 {
     InitializeLogging();
     
-    auto enetClient = DreamNetHost::TryCreate();
+    auto enetClient = DreamNetHost::TryCreateServer(ServerConfig::Default());
     
     spdlog::info("Client starting...");
     spdlog::warn("This goes to console and file");
