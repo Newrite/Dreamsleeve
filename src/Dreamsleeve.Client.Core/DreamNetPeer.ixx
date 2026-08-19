@@ -324,8 +324,9 @@ public:
         enet_peer_disconnect(peer, static_cast<enet_uint32>(reason));
     }
     
-    ReceiveOperationResult TryReceive(ChannelId channelId)
+    ReceiveOperationResult TryReceive()
     {
+        ChannelId channelId;
         if (!IsValid())
         {
             return DreamNetError::MakeUnexpected(

@@ -7,6 +7,7 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 
 import DreamNet.Host;
+import DreamNet.Runtime;
 
 void InitializeLogging()
 {
@@ -50,6 +51,8 @@ void ShutdownLogger() noexcept
 int main(int argc, char* argv[])
 {
     InitializeLogging();
+
+    auto init = DreamNetRuntime::TryInitialize();
     
     auto enetClient = DreamNetHost::TryCreateServer(ServerConfig::Default());
     

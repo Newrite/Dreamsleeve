@@ -7,7 +7,7 @@ set_defaultarchs("windows|x64")
 set_allowedplats("windows")
 set_allowedarchs("x64")
 set_defaultmode("releasedbg")
-set_languages("c++latest")
+set_languages("c++23")
 
 -- Enable C++20/23 modules for targets that import modules from regular .cpp files.
 set_policy("build.c++.modules", true)
@@ -19,10 +19,6 @@ set_warnings("allextra")
 add_cxflags("/utf-8", "/external:anglebrackets", "/external:W0", "/external:templates-", {tools = "cl"})
 add_syslinks("ws2_32", "winmm")
 
--- Note:
--- I intentionally do NOT pin set_runtimes("MD")/set_runtimes("MDd") here.
--- If you later decide to mirror a specific vcpkg triplet runtime policy exactly,
--- we can add it back explicitly.
 
 add_requires("enet 1.3.18")
 add_requires("spdlog 1.17.0")

@@ -1,0 +1,249 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# C++ / modules
+Standard: Latest
+DisableFormat: false
+
+# Encoding / line endings
+UseTab: Never
+TabWidth: 2
+IndentWidth: 2
+ContinuationIndentWidth: 2
+LineEnding: LF
+InsertNewlineAtEOF: true
+
+# Line length.
+# 100 is a good "pretty but not too wide" value.
+# If you want fewer forced wraps, change to 120.
+ColumnLimit: 140
+
+# Braces: Allman-like.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterObjCDeclaration: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: false
+  BeforeWhile: true
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+# Namespaces / export blocks
+NamespaceIndentation: All
+CompactNamespaces: false
+FixNamespaceComments: false
+ShortNamespaceLines: 1
+IndentExportBlock: true
+WrapNamespaceBodyWithEmptyLines: Always
+
+# Access modifiers
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+EmptyLineBeforeAccessModifier: LogicalBlock
+EmptyLineAfterAccessModifier: Always
+
+# Indentation details
+IndentCaseLabels: true
+IndentCaseBlocks: false
+IndentGotoLabels: true
+IndentPPDirectives: None
+PPIndentWidth: -1
+IndentRequiresClause: false
+RequiresClausePosition: OwnLine
+RequiresExpressionIndentation: OuterScope
+
+# Keep useful visual spacing.
+MaxEmptyLinesToKeep: 1
+KeepEmptyLines:
+  AtStartOfFile: false
+  AtStartOfBlock: true
+  AtEndOfFile: false
+SeparateDefinitionBlocks: Always
+
+# Includes / imports.
+# Safer for C++20 module global fragments:
+# module;
+# #include ...
+# export module ...
+SortIncludes:
+  Enabled: false
+IncludeBlocks: Preserve
+SortUsingDeclarations: Never
+
+# Pointer/reference style:
+# ENetPacket* packet
+# T& ref
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Do not let clang-format reorder const/volatile/etc.
+# Official docs warn that changing QualifierAlignment can be semantically risky.
+QualifierAlignment: Leave
+
+# Alignment: this is what gives the "pretty columns" look.
+AlignAfterOpenBracket: true
+AlignArrayOfStructures: Left
+
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCompound: true
+  PadOperators: true
+
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignFunctionDeclarations: true
+  AlignFunctionPointers: true
+
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+
+AlignEscapedNewlines: Left
+AlignOperands: AlignAfterOperator
+
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 1
+
+# Function calls / params.
+# clang-format will not always force:
+#   f(
+#       a,
+#       b
+#   )
+# if the whole call fits in ColumnLimit.
+# But this preserves and cleans up that shape when you already break it.
+BinPackArguments: false
+BinPackParameters: OnePerLine
+BinPackLongBracedList: false
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+ExperimentalAutoDetectBinPacking: false
+
+BreakAfterOpenBracketBracedList: true
+BreakAfterOpenBracketFunction: true
+BreakAfterOpenBracketIf: true
+BreakAfterOpenBracketLoop: true
+BreakAfterOpenBracketSwitch: true
+
+BreakBeforeCloseBracketBracedList: true
+BreakBeforeCloseBracketFunction: false
+BreakBeforeCloseBracketIf: false
+BreakBeforeCloseBracketLoop: false
+BreakBeforeCloseBracketSwitch: false
+
+# Return type / templates / requires
+BreakAfterReturnType: Automatic
+PenaltyReturnTypeOnItsOwnLine: 1000000
+BreakTemplateDeclarations: Yes
+PenaltyBreakTemplateDeclaration: 0
+
+# Constructors / inheritance
+PackConstructorInitializers: CurrentLine
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerIndentWidth: 4
+BreakInheritanceList: BeforeColon
+
+# Operators
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+BreakStringLiterals: false
+BreakAdjacentStringLiterals: false
+
+# Attributes
+# Keeps:
+# [[nodiscard]] constexpr ...
+BreakAfterAttributes: Never
+
+# Short constructs.
+# Allows:
+# if (!IsValid()) return;
+# but does not collapse normal functions/classes/enums.
+AllowShortEnumsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortCompoundRequirementOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLambdasOnASingleLine: Inline
+AllowShortLoopsOnASingleLine: false
+AllowShortNamespacesOnASingleLine: false
+
+# C++ braced lists / designated initializers
+Cpp11BracedListStyle: FunctionCall
+BracedInitializerIndentWidth: 4
+SpaceBeforeCpp11BracedList: false
+InsertTrailingCommas: None
+EnumTrailingComma: Leave
+
+# Spacing
+SpaceBeforeParens: ControlStatements
+SpaceBeforeParensOptions:
+  AfterControlStatements: true
+  AfterForeachMacros: true
+  AfterFunctionDeclarationName: false
+  AfterFunctionDefinitionName: false
+  AfterIfMacros: true
+  AfterOverloadedOperator: false
+  AfterPlacementOperator: false
+  AfterRequiresInClause: true
+  AfterRequiresInExpression: true
+  BeforeNonEmptyParentheses: false
+
+SpacesInParens: Never
+SpacesInAngles: Never
+SpacesInSquareBrackets: false
+SpaceInEmptyBlock: false
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterOperatorKeyword: false
+SpaceAfterTemplateKeyword: true
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeJsonColon: false
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+BitFieldColonSpacing: Both
+
+# Comments
+ReflowComments: false
+SpacesBeforeTrailingComments: 2
+SpacesInLineCommentPrefix:
+  Minimum: 1
+  Maximum: -1
+
+# Misc
+AllowAllConstructorInitializersOnNextLine: false
+DeriveLineEnding: false
+InsertBraces: false
+RemoveBracesLLVM: false
+RemoveParentheses: Leave
+RemoveSemicolon: false
+SkipMacroDefinitionBody: false
