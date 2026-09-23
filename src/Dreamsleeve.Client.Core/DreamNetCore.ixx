@@ -21,6 +21,7 @@ export using ChannelId        = enet_uint8;
 export using ChannelLimit     = size_t;
 export using PingIntervalMs   = enet_uint32;
 export using TimeOutMs        = enet_uint32;
+export using ConnectId        = enet_uint32;
 
 export enum class DisconnectType : std::uint8_t
 {

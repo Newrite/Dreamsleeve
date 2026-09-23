@@ -397,7 +397,9 @@ public:
             
             auto& nativePeer = Native()->peers[slot];
             auto peer = DreamNetPeer::TryFromNative(std::addressof(nativePeer));
-            if (!peer) return std::nullopt;
+          
+            if (!peer)            return std::nullopt;
+            if (!peer->IsAlive()) return std::nullopt;
             
             return peer.value();
         }
@@ -418,7 +420,8 @@ public:
         {
             auto& nativePeer = Native()->peers[peerIndex];
             auto peer = DreamNetPeer::TryFromNative(std::addressof(nativePeer));
-            if (!peer) continue;
+            if (!peer)            continue;
+            if (!peer->IsAlive()) continue;
             if (!callback(peer.value())) return;
         }
     }

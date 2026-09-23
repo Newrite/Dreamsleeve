@@ -360,7 +360,7 @@ public:
     
     inline bool IsValid() const noexcept
     {
-        return peer ? true : false;
+        return peer && peer->connectID == connectId;
     }
     
     bool IsConnected() const noexcept
@@ -584,9 +584,10 @@ private:
         return IsValid() && peer->state == ENET_PEER_STATE_CONNECTED;
     }
     
-    explicit DreamNetPeer(ENetPeer* peer) : peer(peer) {}
+    explicit DreamNetPeer(ENetPeer* peer) : peer(peer), connectId(peer->connectID) {}
     
     ENetPeer* peer;
+    ConnectId connectId;
 };
 
 export using DreamNetPeerPtr = std::unique_ptr<DreamNetPeer>;
