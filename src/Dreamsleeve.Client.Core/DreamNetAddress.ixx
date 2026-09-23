@@ -53,25 +53,19 @@ public:
         return DreamNetAddress{address};
     }
 
-    static DreamNetAddress Loopback(const Port port)
+    static constexpr DreamNetAddress Loopback(const Port port) noexcept
     {
-        return TryParseIp(LoopbackIp, port).value();
+      return DreamNetAddress{ENetAddress{.host = 0x0100007Fu /* = 7F 00 00 01 little-endian */, .port = port}};  // 127.0.0.1
     }
-    
-    static DreamNetAddress Any(const Port port) noexcept
+
+    static constexpr DreamNetAddress Any(const Port port) noexcept
     {
-        ENetAddress address;
-        address.port = port;
-        address.host = ENET_HOST_ANY;
-        return DreamNetAddress{address};
+      return DreamNetAddress{ENetAddress{.host = ENET_HOST_ANY, .port = port}};
     }
-    
-    static DreamNetAddress Broadcast(const Port port) noexcept
+
+    static constexpr DreamNetAddress Broadcast(const Port port) noexcept
     {
-        ENetAddress address;
-        address.port = port;
-        address.host = ENET_HOST_BROADCAST;
-        return DreamNetAddress{address};
+      return DreamNetAddress{ENetAddress{.host = ENET_HOST_BROADCAST, .port = port}};
     }
 
     std::uint32_t HostRaw() const noexcept
@@ -98,7 +92,8 @@ public:
         return IpStr{buffer.data()};
     }
     
-    NetResult<HostName> ToHostString() const
+    // should never call from game thread or hot path
+    NetResult<HostName> TryResolveHostNameBlocking() const
     {
         std::array<char, BufferSize> buffer{};
         
@@ -112,12 +107,11 @@ public:
         return HostName{buffer.data()};
     }
     
+    // manual cast like enet
     std::string ToString() const
     {
-        auto hostStr = ToHostString();
-        auto ipStr       = ToIpString();
-        return std::format("Host: {} Ip: {}", 
-            hostStr ? hostStr.value() : "", ipStr ? ipStr.value() : "");
+      const auto raw = std::bit_cast<std::array<std::uint8_t, 4>>(address.host);
+      return std::format("{}.{}.{}.{}:{}", raw[0], raw[1], raw[2], raw[3], address.port);
     }
 
     const ENetAddress& Native() const noexcept
