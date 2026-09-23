@@ -29,7 +29,7 @@ void EventReceiveHandle(DreamNetEvent event)
 
 export void ClinetLoop(DreamNetHostPtr host)
 {
-    constexpr auto timeoutms = ixx::alias::Into<TimeOutMs>(20);
+    constexpr TimeOutMs timeoutms = TimeOutMs(20);
     while (auto event = host->Service(timeoutms))
     {
         if (!event)
