@@ -17,7 +17,7 @@ public:
     static constexpr IpStrView   LoopbackIp        = "127.0.0.1"; 
     static constexpr std::size_t BufferSize = 256;
     
-    static DreamNetAddress FromNative(const ENetAddress address) noexcept
+    static constexpr DreamNetAddress FromNative(const ENetAddress address) noexcept
     {
         return DreamNetAddress(address);
     }
@@ -120,7 +120,7 @@ public:
     }
     
 private:
-    explicit DreamNetAddress(ENetAddress address) noexcept : address(address) {}
+    explicit constexpr DreamNetAddress(ENetAddress address) noexcept : address(address) {}
 
     ENetAddress address{};
 };
