@@ -193,3 +193,209 @@ TEST_CASE("DreamNetPacket.DataBytesView uses std::as_bytes", "[packet]")
     REQUIRE(bytesView[2] == std::byte{0xBE});
     REQUIRE(bytesView[3] == std::byte{0xEF});
 }
+
+// ==================== TryAllocate / MutableData ====================
+
+TEST_CASE("DreamNetPacket.TryAllocate - allocates requested size", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(16, PacketFlag::Reliable);
+    REQUIRE(result.has_value());
+    REQUIRE(result->IsValid());
+    REQUIRE(result->Size() == 16);
+    REQUIRE(result->Flags() == PacketFlag::Reliable);
+    REQUIRE(result->MutableData().size() == 16);
+}
+
+TEST_CASE("DreamNetPacket.TryAllocate - write through as_writable_bytes round-trips", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(4, PacketFlag::Reliable);
+    REQUIRE(result.has_value());
+
+    auto buffer = std::as_writable_bytes(result->MutableData());
+    REQUIRE(buffer.size() == 4);
+    buffer[0] = std::byte{0xDE};
+    buffer[1] = std::byte{0xAD};
+    buffer[2] = std::byte{0xBE};
+    buffer[3] = std::byte{0xEF};
+
+    auto view = result->DataBytesView();
+    REQUIRE(view.size() == 4);
+    REQUIRE(view[0] == std::byte{0xDE});
+    REQUIRE(view[1] == std::byte{0xAD});
+    REQUIRE(view[2] == std::byte{0xBE});
+    REQUIRE(view[3] == std::byte{0xEF});
+}
+
+TEST_CASE("DreamNetPacket.TryAllocate - write through MutableData round-trips", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(3, PacketFlag::Reliable);
+    REQUIRE(result.has_value());
+
+    auto buffer = result->MutableData();
+    REQUIRE(buffer.size() == 3);
+    buffer[0] = enet_uint8{1};
+    buffer[1] = enet_uint8{2};
+    buffer[2] = enet_uint8{3};
+
+    auto view = result->Data();
+    REQUIRE(view.size() == 3);
+    REQUIRE(view[0] == enet_uint8{1});
+    REQUIRE(view[1] == enet_uint8{2});
+    REQUIRE(view[2] == enet_uint8{3});
+}
+
+TEST_CASE("DreamNetPacket.TryAllocate - NoAllocate rejected", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(8, PacketFlag::NoAllocate);
+    REQUIRE_FALSE(result.has_value());
+    REQUIRE(result.error().code == DreamNetErrorCode::InvalidPacketFlags);
+}
+
+TEST_CASE("DreamNetPacket.TryAllocate - reliable + unsequenced rejected", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(8, PacketFlag::Reliable | PacketFlag::Unsequenced);
+    REQUIRE_FALSE(result.has_value());
+    REQUIRE(result.error().code == DreamNetErrorCode::InvalidPacketFlags);
+}
+
+TEST_CASE("DreamNetPacket.TryAllocate - size above MaxDataSize rejected", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(DreamNetPacket::MaxDataSize + 1);
+    REQUIRE_FALSE(result.has_value());
+    REQUIRE(result.error().code == DreamNetErrorCode::InvalidPacket);
+}
+
+TEST_CASE("DreamNetPacket.TryAllocate - zero size yields empty packet", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(0);
+    REQUIRE(result.has_value());
+    REQUIRE(result->IsValid());
+    REQUIRE(result->Size() == 0);
+    REQUIRE(result->MutableData().empty());
+}
+
+TEST_CASE("DreamNetPacket.TryAllocateWith - writer fills the buffer", "[packet][allocate]")
+{
+    constexpr std::array<std::byte, 3> payload = {std::byte{1}, std::byte{2}, std::byte{3}};
+
+    auto result = DreamNetPacket::TryAllocateWith(payload.size(), [&](std::span<std::byte> buffer)
+    {
+        if (buffer.size() != payload.size()) return false;
+        std::ranges::copy(payload, buffer.begin());
+        return true;
+    });
+
+    REQUIRE(result.has_value());
+    REQUIRE(result->Size() == 3);
+
+    auto view = result->DataBytesView();
+    REQUIRE(view[0] == std::byte{1});
+    REQUIRE(view[1] == std::byte{2});
+    REQUIRE(view[2] == std::byte{3});
+}
+
+TEST_CASE("DreamNetPacket.TryAllocateWith - failing writer rejects the packet", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocateWith(8, [](std::span<std::byte>) { return false; });
+
+    REQUIRE_FALSE(result.has_value());
+    REQUIRE(result.error().code == DreamNetErrorCode::FailedCreatePacket);
+}
+
+TEST_CASE("DreamNetPacket.TryAllocateWith - propagates allocation error without invoking writer", "[packet][allocate]")
+{
+    bool writerInvoked = false;
+
+    auto result = DreamNetPacket::TryAllocateWith(
+        8,
+        [&](std::span<std::byte>) { writerInvoked = true; return true; },
+        PacketFlag::NoAllocate);
+
+    REQUIRE_FALSE(result.has_value());
+    REQUIRE(result.error().code == DreamNetErrorCode::InvalidPacketFlags);
+    REQUIRE_FALSE(writerInvoked);
+}
+
+TEST_CASE("DreamNetPacket.MutableData - writable on a packet built from a span", "[packet][allocate]")
+{
+    std::array<std::byte, 3> data = {std::byte{0x10}, std::byte{0x20}, std::byte{0x30}};
+    auto result = DreamNetPacket::TryFromSpan(std::span{data.data(), data.size()});
+    REQUIRE(result.has_value());
+
+    auto buffer = std::as_writable_bytes(result->MutableData());
+    REQUIRE(buffer.size() == 3);
+    buffer[1] = std::byte{0xFF};
+
+    CHECK(result->DataBytesView()[0] == std::byte{0x10});
+    CHECK(result->DataBytesView()[1] == std::byte{0xFF});
+    CHECK(result->DataBytesView()[2] == std::byte{0x30});
+
+    // The source span is untouched - ENet copied the bytes on create.
+    CHECK(data[1] == std::byte{0x20});
+}
+
+TEST_CASE("DreamNetPacket.MutableData - moved-from packet yields an empty span", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(8);
+    REQUIRE(result.has_value());
+
+    DreamNetPacket moved = std::move(result.value());
+
+    CHECK(moved.MutableData().size() == 8);
+    CHECK_FALSE(result->IsValid());
+    CHECK(result->MutableData().empty());
+}
+
+TEST_CASE("DreamNetPacket.MutableData - aliases the same memory as Data", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocate(4);
+    REQUIRE(result.has_value());
+
+    CHECK(static_cast<const void*>(result->MutableData().data()) ==
+          static_cast<const void*>(result->Data().data()));
+    CHECK(result->MutableData().size() == result->Data().size());
+}
+
+TEST_CASE("DreamNetPacket.TryAllocateWith - writer sees exactly the requested size", "[packet][allocate]")
+{
+    std::size_t observedSize = 0;
+
+    auto result = DreamNetPacket::TryAllocateWith(12, [&](std::span<std::byte> buffer)
+    {
+        observedSize = buffer.size();
+        std::ranges::fill(buffer, std::byte{0xAB});
+        return true;
+    });
+
+    REQUIRE(result.has_value());
+    CHECK(observedSize == 12);
+    CHECK(result->Size() == 12);
+    CHECK(std::ranges::all_of(result->DataBytesView(), [](std::byte b) { return b == std::byte{0xAB}; }));
+}
+
+TEST_CASE("DreamNetPacket.TryAllocateWith - honours non-default flags", "[packet][allocate]")
+{
+    auto result = DreamNetPacket::TryAllocateWith(
+        2,
+        [](std::span<std::byte> buffer) { std::ranges::fill(buffer, std::byte{0}); return true; },
+        PacketFlag::Unsequenced);
+
+    REQUIRE(result.has_value());
+    CHECK(PacketFlags::HasFlag(result->Flags(), PacketFlag::Unsequenced));
+    CHECK_FALSE(PacketFlags::HasFlag(result->Flags(), PacketFlag::Reliable));
+}
+
+TEST_CASE("DreamNetPacket.TryAllocateWith - zero size gives the writer an empty span", "[packet][allocate]")
+{
+    bool writerInvoked = false;
+
+    auto result = DreamNetPacket::TryAllocateWith(0, [&](std::span<std::byte> buffer)
+    {
+        writerInvoked = true;
+        return buffer.empty();
+    });
+
+    REQUIRE(result.has_value());
+    CHECK(writerInvoked);
+    CHECK(result->Size() == 0);
+}

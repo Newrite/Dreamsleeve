@@ -326,3 +326,132 @@ TEST_CASE("DreamNetPeer.ApplyRuntimeConfig - invalid ping interval is rejected",
     REQUIRE_FALSE(applyResult.has_value());
     REQUIRE(applyResult.error().code == DreamNetErrorCode::InvalidPingInterval);
 }
+
+TEST_CASE("DreamNet disconnect carries a non-zero reason across the wire", "[host][event][integration]")
+{
+    // Unspecified is 0, which is also what enet_protocol_notify_disconnect writes
+    // on a timeout - so only a non-zero reason proves the value actually travelled.
+    auto connected = CreateConnectedHosts();
+
+    connected.clientPeer.Disconnect(DisconnectType::Normal, DisconnectReason::Kicked);
+    connected.clientHost.FlushPackets();
+
+    std::optional<DreamNetEvent> serverDisconnectEvent = std::nullopt;
+
+    for (int attempt = 0; attempt < 200 && !serverDisconnectEvent; ++attempt)
+    {
+        if (auto maybeServerEvent = ServiceHost(connected.serverHost, 5); maybeServerEvent)
+        {
+            if (maybeServerEvent->IsDisconnect())
+            {
+                serverDisconnectEvent = std::move(maybeServerEvent);
+            }
+        }
+
+        auto maybeClientEvent = ServiceHost(connected.clientHost, 5);
+        if (maybeClientEvent && maybeClientEvent->IsDisconnect())
+        {
+            // drain client-side disconnect event so ENet can finish the cycle
+        }
+    }
+
+    REQUIRE(serverDisconnectEvent.has_value());
+    REQUIRE(serverDisconnectEvent->TryDisconnectReason().has_value());
+    CHECK(serverDisconnectEvent->TryDisconnectReason().value() == DisconnectReason::Kicked);
+}
+
+TEST_CASE("DreamNet disconnect event peer is already reset by ENet", "[peer][event][integration]")
+{
+    // enet_protocol_dispatch_incoming_commands calls enet_peer_reset before the
+    // disconnect event is returned, so channelCount is gone by the time we see it.
+    // The address survives the reset, which is what makes it loggable.
+    auto connected = CreateConnectedHosts();
+
+    const auto clientAddressBefore = connected.serverPeer.GetPeerInfo();
+    REQUIRE(clientAddressBefore.has_value());
+
+    connected.clientPeer.Disconnect(DisconnectType::Normal, DisconnectReason::ClientShutdown);
+    connected.clientHost.FlushPackets();
+
+    std::optional<DreamNetEvent> serverDisconnectEvent = std::nullopt;
+
+    for (int attempt = 0; attempt < 200 && !serverDisconnectEvent; ++attempt)
+    {
+        if (auto maybeServerEvent = ServiceHost(connected.serverHost, 5); maybeServerEvent)
+        {
+            if (maybeServerEvent->IsDisconnect())
+            {
+                serverDisconnectEvent = std::move(maybeServerEvent);
+            }
+        }
+
+        auto maybeClientEvent = ServiceHost(connected.clientHost, 5);
+        if (maybeClientEvent && maybeClientEvent->IsDisconnect())
+        {
+            // drain client-side disconnect event so ENet can finish the cycle
+        }
+    }
+
+    REQUIRE(serverDisconnectEvent.has_value());
+    REQUIRE(serverDisconnectEvent->HasPeer());
+
+    auto peer = serverDisconnectEvent->Peer();
+    REQUIRE(peer.has_value());
+
+    const auto info = peer->GetPeerInfo();
+    REQUIRE(info.has_value());
+    CHECK(peer->IsDisconnected());
+    CHECK(info->channelCount == 0);
+    CHECK(info->address.HostRaw() == clientAddressBefore->address.HostRaw());
+}
+
+TEST_CASE("DreamNetPacket.TryAllocateWith delivers a serialized payload end to end", "[peer][packet][allocate][integration]")
+{
+    // The zero-copy send path: allocate the ENet packet first, write straight into
+    // its buffer, then hand it to the peer - no staging buffer anywhere.
+    auto connected = CreateConnectedHosts();
+
+    constexpr std::size_t payloadSize = 6;
+
+    auto packet = DreamNetPacket::TryAllocateWith(payloadSize, [](std::span<std::byte> buffer)
+    {
+        if (buffer.size() != payloadSize)
+        {
+            return false;
+        }
+
+        for (std::size_t index = 0; index < buffer.size(); ++index)
+        {
+            buffer[index] = static_cast<std::byte>(index + 1);
+        }
+
+        return true;
+    });
+
+    if (!packet.has_value())
+    {
+        FAIL(packet.error().ToLogString());
+    }
+
+    auto sendResult = connected.clientPeer.PushPacket(std::move(packet.value()), 0);
+    if (!sendResult.has_value())
+    {
+        FAIL(sendResult.error().ToLogString());
+    }
+    connected.clientHost.FlushPackets();
+
+    auto maybeReceiveEvent = TryWaitForEvent(
+        connected.serverHost,
+        [](const DreamNetEvent& event) { return event.IsReceive(); });
+
+    REQUIRE(maybeReceiveEvent.has_value());
+
+    const auto* received = maybeReceiveEvent->ViewPacket();
+    REQUIRE(received != nullptr);
+    REQUIRE(received->DataBytesView().size() == payloadSize);
+
+    for (std::size_t index = 0; index < payloadSize; ++index)
+    {
+        CHECK(received->DataBytesView()[index] == static_cast<std::byte>(index + 1));
+    }
+}
