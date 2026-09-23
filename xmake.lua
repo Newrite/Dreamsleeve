@@ -73,7 +73,10 @@ target("Dreamsleeve.Protocol.Native")
     add_visible_headers("src/Dreamsleeve.Protocol.Native")
     add_headerfiles("src/Dreamsleeve.Protocol.Native/**.pb.h")
     add_module_interface_files("src/Dreamsleeve.Protocol.Native")
-    add_files("src/Dreamsleeve.Protocol.Native/**.pb.cc")
+    -- Picks up the generated **.pb.cc plus plain .cpp units such as
+    -- ProtocolContract.cpp, which may include network.pb.h (a module interface
+    -- may not - see the comment in Dreamsleeve.Protocol.Native.ixx).
+    add_cpp_files("src/Dreamsleeve.Protocol.Native")
 
     add_packages("protobuf-cpp", {public = true})
 
