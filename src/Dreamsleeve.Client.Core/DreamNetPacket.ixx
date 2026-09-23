@@ -110,10 +110,16 @@ export class DreamNetPacket
 {
 public:
     
-    using DataSpan  = std::span<const enet_uint8>;
-    using DataBytes = std::span<const std::byte>;
+    using DataSpan     = std::span<const enet_uint8>;
+    using DataBytes    = std::span<const std::byte>;
+    using MutableSpan  = std::span<enet_uint8>;
+    using MutableBytes = std::span<std::byte>;
     using Result = NetResult<DreamNetPacket>;
-    
+
+    // ENet refuses to send anything larger than the host's maximumPacketSize,
+    // which enet_host_create always initialises to this value.
+    static constexpr std::size_t MaxDataSize = ENET_HOST_DEFAULT_MAXIMUM_PACKET_SIZE;
+
     DreamNetPacket(const DreamNetPacket& other)                = delete;
     DreamNetPacket(DreamNetPacket&& other) noexcept            = default;
     DreamNetPacket& operator=(const DreamNetPacket& other)     = delete;
@@ -122,20 +128,10 @@ public:
     
     static Result TryFromSpan(const DataBytes bytes, const PacketFlag flags = PacketFlag::Reliable)
     {
-        const auto isValidFlags = PacketFlags::IsValidPacketFlags(flags);
-        
-        if (!isValidFlags)
+        auto validationResult = ValidateOwningCreate(bytes.size(), flags);
+        if (!validationResult)
         {
-            return DreamNetError::MakeUnexpected(
-                DreamNetErrorCode::InvalidPacketFlags,
-                "Packet flags are invalid for ENet packet creation");
-        }
-        
-        if (PacketFlags::HasFlag(flags, PacketFlag::NoAllocate))
-        {
-            return DreamNetError::MakeUnexpected(
-                DreamNetErrorCode::InvalidPacketFlags,
-                "PacketFlag::NoAllocate is not allowed when DreamNetPacket owns the packet memory");
+            return std::unexpected(std::move(validationResult.error()));
         }
 
         ENetPacket* packet = enet_packet_create(
@@ -150,15 +146,66 @@ public:
                 DreamNetErrorCode::FailedCreatePacket,
                 "enet_packet_create returned nullptr");
         }
-        
+
         return DreamNetPacket(ENetPacketPtr{packet});
     }
-    
+
     static Result TryFromSpan(const DataSpan span, const PacketFlag flags = PacketFlag::Reliable)
     {
         return TryFromSpan(std::as_bytes(span), flags);
     }
-    
+
+    // Creates an owning packet of `size` bytes without copying anything into it.
+    // enet_packet_create skips its memcpy when data is null, so the buffer comes
+    // back allocated but UNINITIALISED - fill it through MutableData() before
+    // sending, or prefer TryAllocateWith, which closes that window.
+    static Result TryAllocate(const std::size_t size, const PacketFlag flags = PacketFlag::Reliable)
+    {
+        auto validationResult = ValidateOwningCreate(size, flags);
+        if (!validationResult)
+        {
+            return std::unexpected(std::move(validationResult.error()));
+        }
+
+        ENetPacket* packet = enet_packet_create(nullptr, size, ToNative(flags));
+
+        if (packet == nullptr)
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedCreatePacket,
+                "enet_packet_create returned nullptr for preallocated packet");
+        }
+
+        return DreamNetPacket(ENetPacketPtr{packet});
+    }
+
+    // Allocates the packet and hands its buffer straight to `writer`, so a
+    // serializer writes into ENet memory instead of into a staging buffer.
+    // `writer` returns false to reject the packet; it is then destroyed and
+    // never reaches a peer.
+    template <typename TWriter>
+    requires std::is_invocable_r_v<bool, TWriter, MutableBytes>
+    static Result TryAllocateWith(
+        const std::size_t size,
+        TWriter&&         writer,
+        const PacketFlag  flags = PacketFlag::Reliable)
+    {
+        auto packet = TryAllocate(size, flags);
+        if (!packet)
+        {
+            return packet;
+        }
+
+        if (!std::invoke(std::forward<TWriter>(writer), std::as_writable_bytes(packet->MutableData())))
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::FailedCreatePacket,
+                std::format("Packet writer failed to fill preallocated buffer of {} bytes", size));
+        }
+
+        return packet;
+    }
+
     static Result TryAdoptNative(ENetPacket* packet)
     {
         if (!packet)
@@ -229,7 +276,22 @@ public:
     {
         return std::as_bytes(Data());
     }
-    
+
+    // Writable view over the packet buffer. Non-const on purpose: it is only
+    // meaningful before the packet is handed to a peer, and PushPacket takes the
+    // packet by rvalue, so a sent packet can no longer be written through.
+    // For a std::byte view, wrap it in std::as_writable_bytes at the call site.
+    MutableSpan MutableData() noexcept
+    {
+        const auto dataSize = Size();
+        if (IsValid() && dataSize > 0)
+        {
+            return MutableSpan(packet->data, dataSize);
+        }
+
+        return MutableSpan{};
+    }
+
     template <typename T, typename... Args>
     T& EmplaceUserData(Args&&... args)
     {
@@ -274,6 +336,36 @@ public:
     }
 
 private:
+    // Shared preconditions for every path where DreamNetPacket owns the buffer.
+    static NetOperationResult ValidateOwningCreate(const std::size_t size, const PacketFlag flags)
+    {
+        if (!PacketFlags::IsValidPacketFlags(flags))
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPacketFlags,
+                "Packet flags are invalid for ENet packet creation");
+        }
+
+        if (PacketFlags::HasFlag(flags, PacketFlag::NoAllocate))
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPacketFlags,
+                "PacketFlag::NoAllocate is not allowed when DreamNetPacket owns the packet memory");
+        }
+
+        if (size > MaxDataSize)
+        {
+            return DreamNetError::MakeUnexpected(
+                DreamNetErrorCode::InvalidPacket,
+                std::format(
+                    "Packet size must be less than or equal to {}, got {}",
+                    MaxDataSize,
+                    size));
+        }
+
+        return {};
+    }
+
     explicit DreamNetPacket(ENetPacketPtr packet) : packet(std::move(packet)) {}
     
     ENetPacketPtr packet;
