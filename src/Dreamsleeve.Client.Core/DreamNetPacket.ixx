@@ -114,7 +114,7 @@ public:
     using DataBytes    = std::span<const std::byte>;
     using MutableSpan  = std::span<enet_uint8>;
     using MutableBytes = std::span<std::byte>;
-    using Result = NetResult<DreamNetPacket>;
+    using Result       = NetResult<DreamNetPacket>;
 
     // ENet refuses to send anything larger than the host's maximumPacketSize,
     // which enet_host_create always initialises to this value.
