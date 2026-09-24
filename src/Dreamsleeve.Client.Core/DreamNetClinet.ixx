@@ -15,45 +15,135 @@ import DreamNet.Packet;
 import DreamNet.Peer;
 import DreamNet.Runtime;
 
-void EventReceiveHandle(DreamNetEvent event)
+export enum class ClientState : std::uint8_t
 {
-    if (!event.HasPacket())
+  Disconnected,
+  Connecting,
+  Connected,
+  Disconnecting,
+  Faulted
+};
+
+export struct DreamNetClientConfig final
+{
+  NetConfig       host;
+  DreamNetAddress serverAddress;
+
+  static DreamNetClientConfig Default() noexcept
+  {
+    auto hostConfig = NetConfig::Default();
+    hostConfig.maxPeers = 1;
+
+    return
     {
-        spdlog::error("Receive Event without packet");
-        return;
+      .host = hostConfig,
+      .serverAddress = DreamNetAddress::Loopback(8778),
+  };
+  }
+};
+
+export class DreamNetClient final
+{
+public:
+  using Clock  = std::chrono::steady_clock;
+  using Result = NetResult<std::unique_ptr<DreamNetClient>>;
+  
+  DreamNetClient(const DreamNetClient&)            = delete;
+  DreamNetClient& operator=(const DreamNetClient&) = delete;
+  DreamNetClient(DreamNetClient&&)                 = delete;
+  DreamNetClient& operator=(DreamNetClient&&)      = delete;
+  ~DreamNetClient()                                = default;
+  
+  static Result TryCreate(DreamNetClientConfig config)
+  {
+    auto clientHostResult = DreamNetHost::TryCreateClient(config.host);
+    if (!clientHostResult)
+    {
+      return std::unexpected{std::move(clientHostResult.error())};
+    }
+
+    return std::unique_ptr<DreamNetClient>{new DreamNetClient(std::move(*clientHostResult), std::move(config))};
+  }
+  
+  ClientState State()                  const noexcept { return state; }
+  void        SetState(ClientState newState) noexcept { state = newState; }
+  
+  NetOperationResult BeginConnect()
+  {
+    auto initiateConnectResult = host.Connect(clientConfig.serverAddress, clientConfig.host.channelLimit);
+    if (!initiateConnectResult)
+    {
+      SetState(ClientState::Faulted);
+      return std::unexpected{std::move(initiateConnectResult.error())};
     }
     
-    auto dreamNetPacket = event.AcquirePacket();
-    auto data = dreamNetPacket->Data();
-}
-
-export void ClinetLoop(DreamNetHostPtr host)
-{
-    constexpr TimeOutMs timeoutms = TimeOutMs(20);
-    while (auto event = host->Service(timeoutms))
-    {
-        if (!event)
-        {
-            spdlog::warn("Client Host Service Error: {}", event.error().ToLogString());
-            continue;
-        }
-        
-        auto dreamNetEvent = std::move(event.value());
-        if (!dreamNetEvent) continue;
-        
-        switch (dreamNetEvent->Type()) {
-        case EventType::None:
-            break;
-        case EventType::Connect:
-            break;
-        case EventType::Disconnect:
-            break;
-        case EventType::Receive:
-            EventReceiveHandle(std::move(*dreamNetEvent));
-            continue;
-        }
-
-        spdlog::error("Unknown event type: {}", static_cast<int>(dreamNetEvent->Type()));
+    serverPeer = *initiateConnectResult;
+    SetState(ClientState::Connecting);
     
+    return {};
+  }
+  
+  NetOperationResult Poll(TimeOutMs firstWaitMs = 0, std::size_t maxEvents = 64)
+  {
+    return {};
+  }
+  
+private:
+  NetOperationResult DispatchEvent(DreamNetEvent& event)
+  {
+    switch (event.Type())
+    {
+      case EventType::Connect:
+        return HandleConnect(event);
+
+      case EventType::Disconnect:
+        return HandleDisconnect(event);
+
+      case EventType::Receive:
+        return HandleReceive(event);
+
+      case EventType::None:
+        return {};
+
+      default:
+        return DreamNetError::MakeUnexpected(
+            DreamNetErrorCode::FailedEventBuild,
+            std::format(
+                "Unsupported ENet event type: {}",
+                static_cast<int>(event.Type())
+            )
+        );
     }
-}
+  }
+  
+  NetOperationResult HandleConnect(DreamNetEvent& event)
+  {
+    SetState(ClientState::Connected);
+    return {};
+  }
+  
+  NetOperationResult HandleDisconnect(DreamNetEvent& event)
+  {
+    SetState(ClientState::Disconnected);
+    return {};
+  }
+  
+  NetOperationResult HandleReceive(DreamNetEvent& event)
+  {
+    return {};
+  }
+
+  void CheckDeadline(Clock::time_point now);
+  
+  explicit DreamNetClient(DreamNetHost createdHost, DreamNetClientConfig clientConfig) noexcept
+    : host(std::move(createdHost)), clientConfig(std::move(clientConfig)) {}
+  
+  DreamNetHost                     host;
+  const DreamNetClientConfig       clientConfig;
+  
+  std::optional<DreamNetPeer>      serverPeer;
+  ClientState                      state = ClientState::Disconnected;
+  std::optional<Clock::time_point> deadline;
+};
+
+export using DreamNetClientPtr = std::unique_ptr<DreamNetClient>;
