@@ -6,7 +6,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Library.fs"/>
+        <Compile Include="Primitives.fs" />
+        <Compile Include="Spatial.fs" />
+        <Compile Include="ActorValues.fs" />
+        <Compile Include="Players.fs" />
+        <Compile Include="Chat.fs" />
     </ItemGroup>
 
     <ItemGroup>

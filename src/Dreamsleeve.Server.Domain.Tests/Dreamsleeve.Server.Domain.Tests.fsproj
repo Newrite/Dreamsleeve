@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
+    <PackageReference Include="Expecto" Version="11.1.0" />
+    <PackageReference Include="Faqt" Version="5.1.0" />
+  </ItemGroup>
+</Project>

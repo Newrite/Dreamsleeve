@@ -11,9 +11,15 @@ src/Dreamsleeve.Server.Core/obj
 src/Dreamsleeve.Server.Core/bin
 src/Dreamsleeve.Server.Domain/obj
 src/Dreamsleeve.Server.Domain/bin
+src/Dreamsleeve.Server.Domain.Tests/obj
+src/Dreamsleeve.Server.Domain.Tests/bin
 src/Dreamsleeve.Server.Infrastructure/obj
 src/Dreamsleeve.Server.Infrastructure/bin
 src/Dreamsleeve.Agent/obj
 src/Dreamsleeve.Agent/bin
+src/Dreamsleeve.Agent.Tests/obj
+src/Dreamsleeve.Agent.Tests/bin
+src/Dreamsleeve.Agent/examples/obj
+src/Dreamsleeve.Agent/examples/bin
 src/Dreamsleeve.Protocol.Dotnet/obj
 src/Dreamsleeve.Protocol.Dotnet/bin
