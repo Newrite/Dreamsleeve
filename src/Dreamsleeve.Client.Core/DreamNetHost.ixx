@@ -12,19 +12,6 @@ import DreamNet.Peer;
 import DreamNet.Event;
 import DreamNet.Core;
 
-export struct ENetHostDeleter
-{
-  void operator()(ENetHost* host) const noexcept
-  {
-    if (host != nullptr)
-    {
-      enet_host_destroy(host);
-    }
-  }
-};
-
-export using ENetHostPtr = std::unique_ptr<ENetHost, ENetHostDeleter>;
-
 export struct NetConfig
 {
   size_t         maxPeers;
@@ -143,8 +130,8 @@ export class DreamNetHost
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateClient, "enet_host_create failed for client host");
     }
 
-    ENetHostPtr enetHost  = ENetHostPtr(host);
-    auto        dreamHost = DreamNetHost(std::move(enetHost));
+    NativePtr enetHost  = NativePtr(host);
+    auto      dreamHost = DreamNetHost(std::move(enetHost));
 
     if (runtimeConfig)
     {
@@ -181,8 +168,8 @@ export class DreamNetHost
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateServer, "enet_host_create failed for server host");
     }
 
-    ENetHostPtr enetHost  = ENetHostPtr(host);
-    auto        dreamHost = DreamNetHost(std::move(enetHost));
+    NativePtr enetHost  = NativePtr(host);
+    auto      dreamHost = DreamNetHost(std::move(enetHost));
 
     if (runtimeConfig)
     {
@@ -432,6 +419,19 @@ export class DreamNetHost
 
   private:
 
+  struct NativeDeleter
+  {
+    void operator()(ENetHost* nativeHost) const noexcept
+    {
+      if (nativeHost != nullptr)
+      {
+        enet_host_destroy(nativeHost);
+      }
+    }
+  };
+
+  using NativePtr = std::unique_ptr<ENetHost, NativeDeleter>;
+
   static EventResult EventResultImpl(const ENetEvent& event, const int result, std::string_view function)
   {
     if (result == 0) return std::nullopt;
@@ -508,9 +508,7 @@ export class DreamNetHost
     return {};
   }
 
-  explicit DreamNetHost(ENetHostPtr enetHost) : host(std::move(enetHost)) {}
+  explicit DreamNetHost(NativePtr enetHost) : host(std::move(enetHost)) {}
 
-  ENetHostPtr host = nullptr;
+  NativePtr host = nullptr;
 };
-
-export using DreamNetHostPtr = std::unique_ptr<DreamNetHost>;

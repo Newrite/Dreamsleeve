@@ -74,25 +74,12 @@ export namespace PacketFlags
 
 export using PacketFlag = PacketFlags::Flag;
 
-export struct ENetPacketPtrDeleter
-{
-  void operator()(ENetPacket* packet) const noexcept
-  {
-    if (packet != nullptr)
-    {
-      enet_packet_destroy(packet);
-    }
-  }
-};
-
-export using ENetPacketPtr = std::unique_ptr<ENetPacket, ENetPacketPtrDeleter>;
-
 export struct IPacketUserData
 {
+  using Ptr = std::unique_ptr<IPacketUserData>;
+
   virtual ~IPacketUserData() = default;
 };
-
-export using IPacketUserDataPtr = std::unique_ptr<IPacketUserData>;
 
 export class DreamNetPacket
 {
@@ -129,7 +116,7 @@ export class DreamNetPacket
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreatePacket, "enet_packet_create returned nullptr");
     }
 
-    return DreamNetPacket(ENetPacketPtr{packet});
+    return DreamNetPacket(NativePtr{packet});
   }
 
   static Result TryFromSpan(const DataSpan span, const PacketFlag flags = PacketFlag::Reliable)
@@ -158,7 +145,7 @@ export class DreamNetPacket
         "enet_packet_create returned nullptr for preallocated packet");
     }
 
-    return DreamNetPacket(ENetPacketPtr{packet});
+    return DreamNetPacket(NativePtr{packet});
   }
 
   // Allocates the packet and hands its buffer straight to `writer`, so a
@@ -197,7 +184,7 @@ export class DreamNetPacket
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPacketFlags, "Cannot adopt ENetPacket with invalid flags");
     }
 
-    return DreamNetPacket(ENetPacketPtr{packet});
+    return DreamNetPacket(NativePtr{packet});
   }
 
   inline bool IsValid() const noexcept
@@ -312,6 +299,19 @@ export class DreamNetPacket
 
   private:
 
+  struct NativeDeleter
+  {
+    void operator()(ENetPacket* nativePacket) const noexcept
+    {
+      if (nativePacket != nullptr)
+      {
+        enet_packet_destroy(nativePacket);
+      }
+    }
+  };
+
+  using NativePtr = std::unique_ptr<ENetPacket, NativeDeleter>;
+
   // Shared preconditions for every path where DreamNetPacket owns the buffer.
   static NetOperationResult ValidateOwningCreate(const std::size_t size, const PacketFlag flags)
   {
@@ -337,10 +337,8 @@ export class DreamNetPacket
     return {};
   }
 
-  explicit DreamNetPacket(ENetPacketPtr packet) : packet(std::move(packet)) {}
+  explicit DreamNetPacket(NativePtr packet) : packet(std::move(packet)) {}
 
-  ENetPacketPtr      packet;
-  IPacketUserDataPtr userData = nullptr;
+  NativePtr            packet;
+  IPacketUserData::Ptr userData = nullptr;
 };
-
-export using DreamNetPacketPtr = std::unique_ptr<DreamNetPacket>;

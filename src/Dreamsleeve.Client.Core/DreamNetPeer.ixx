@@ -555,5 +555,3 @@ export class DreamNetPeer
   ENetPeer* peer;
   ConnectId connectId;
 };
-
-export using DreamNetPeerPtr = std::unique_ptr<DreamNetPeer>;

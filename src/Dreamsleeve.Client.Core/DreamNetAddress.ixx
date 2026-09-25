@@ -126,5 +126,3 @@ export class DreamNetAddress
 
   ENetAddress address{};
 };
-
-export using DreamNetAddressPtr = std::unique_ptr<DreamNetAddress>;

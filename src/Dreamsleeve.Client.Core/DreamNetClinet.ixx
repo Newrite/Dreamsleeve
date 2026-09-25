@@ -71,7 +71,8 @@ export class DreamNetClient final
   public:
 
   using Clock  = std::chrono::steady_clock;
-  using Result = NetResult<std::unique_ptr<DreamNetClient>>;
+  using Ptr    = std::unique_ptr<DreamNetClient>;
+  using Result = NetResult<Ptr>;
 
   DreamNetClient(const DreamNetClient&)            = delete;
   DreamNetClient& operator=(const DreamNetClient&) = delete;
@@ -104,7 +105,7 @@ export class DreamNetClient final
       return std::unexpected{std::move(clientHostResult.error())};
     }
 
-    return std::unique_ptr<DreamNetClient>{new DreamNetClient(std::move(*clientHostResult), std::move(config))};
+    return Ptr{new DreamNetClient(std::move(*clientHostResult), std::move(config))};
   }
 
   ClientState State() const noexcept
@@ -442,5 +443,3 @@ export class DreamNetClient final
   ClientState                      state = ClientState::Disconnected;
   std::optional<Clock::time_point> deadline;
 };
-
-export using DreamNetClientPtr = std::unique_ptr<DreamNetClient>;

@@ -229,5 +229,3 @@ export class DreamNetEvent
   std::optional<DreamNetPeer>   peer;
   std::optional<DreamNetPacket> packet;
 };
-
-export using DreamNetEventPtr = std::unique_ptr<DreamNetEvent>;
