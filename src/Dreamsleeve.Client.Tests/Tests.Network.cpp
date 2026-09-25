@@ -11,447 +11,435 @@ import std;
 
 namespace
 {
-    using namespace std::chrono_literals;
 
-    Port NextTestPort() noexcept
+  using namespace std::chrono_literals;
+
+  Port NextTestPort() noexcept
+  {
+    static std::atomic_uint16_t nextPort = 19000;
+    return nextPort.fetch_add(1);
+  }
+
+  std::optional<DreamNetEvent> ServiceHost(DreamNetHost& host, const TimeOutMs timeoutMs = 5)
+  {
+    auto result = host.Service(timeoutMs);
+    if (!result.has_value())
     {
-        static std::atomic_uint16_t nextPort = 19000;
-        return nextPort.fetch_add(1);
+      FAIL(result.error().ToLogString());
     }
 
-    std::optional<DreamNetEvent> ServiceHost(DreamNetHost& host, const TimeOutMs timeoutMs = 5)
+    return std::move(result.value());
+  }
+
+  template <typename Predicate>
+  std::optional<DreamNetEvent> TryWaitForEvent(
+    DreamNetHost&   host,
+    Predicate&&     predicate,
+    const int       maxAttempts = 200,
+    const TimeOutMs timeoutMs   = 5)
+  {
+    for (int attempt = 0; attempt < maxAttempts; ++attempt)
     {
-        auto result = host.Service(timeoutMs);
-        if (!result.has_value())
+      auto maybeEvent = ServiceHost(host, timeoutMs);
+      if (maybeEvent && predicate(*maybeEvent))
+      {
+        return std::move(maybeEvent);
+      }
+    }
+
+    return std::nullopt;
+  }
+
+  struct ConnectedHosts final
+  {
+    DreamNetRuntime runtime;
+    DreamNetHost    serverHost;
+    DreamNetHost    clientHost;
+    DreamNetPeer    clientPeer;
+    DreamNetPeer    serverPeer;
+    Port            serverPort;
+  };
+
+  ConnectedHosts CreateConnectedHosts()
+  {
+    auto runtimeResult = DreamNetRuntime::TryInitialize();
+    REQUIRE(runtimeResult.has_value());
+
+    ServerConfig serverConfig = ServerConfig::Default();
+    serverConfig.address      = DreamNetAddress::Loopback(NextTestPort());
+    serverConfig.maxPeers     = 4;
+    serverConfig.channelLimit = 2;
+
+    auto serverResult = DreamNetHost::TryCreateServer(serverConfig);
+    if (!serverResult.has_value())
+    {
+      FAIL(serverResult.error().ToLogString());
+    }
+
+    const auto serverInfo = serverResult->GetHostInfo();
+    REQUIRE(serverInfo.has_value());
+
+    auto clientResult = DreamNetHost::TryCreateClient(NetConfig::Default());
+    if (!clientResult.has_value())
+    {
+      FAIL(clientResult.error().ToLogString());
+    }
+
+    auto clientPeerResult = clientResult->Connect(serverConfig.address, 1);
+    if (!clientPeerResult.has_value())
+    {
+      FAIL(clientPeerResult.error().ToLogString());
+    }
+
+    std::optional<DreamNetPeer> serverPeer           = std::nullopt;
+    bool                        clientConnectedEvent = false;
+
+    for (int attempt = 0; attempt < 200 && (!serverPeer || !clientConnectedEvent); ++attempt)
+    {
+      if (auto maybeServerEvent = ServiceHost(serverResult.value(), 5); maybeServerEvent)
+      {
+        if (maybeServerEvent->IsConnect())
         {
-            FAIL(result.error().ToLogString());
+          auto peer = maybeServerEvent->Peer();
+          REQUIRE(peer.has_value());
+          serverPeer = std::move(peer.value());
         }
+      }
 
-        return std::move(result.value());
-    }
-
-    template <typename Predicate>
-    std::optional<DreamNetEvent> TryWaitForEvent(
-        DreamNetHost& host,
-        Predicate&& predicate,
-        const int maxAttempts = 200,
-        const TimeOutMs timeoutMs = 5)
-    {
-        for (int attempt = 0; attempt < maxAttempts; ++attempt)
+      if (auto maybeClientEvent = ServiceHost(clientResult.value(), 5); maybeClientEvent)
+      {
+        if (maybeClientEvent->IsConnect())
         {
-            auto maybeEvent = ServiceHost(host, timeoutMs);
-            if (maybeEvent && predicate(*maybeEvent))
-            {
-                return std::move(maybeEvent);
-            }
+          clientConnectedEvent = true;
         }
-
-        return std::nullopt;
+      }
     }
 
-    struct ConnectedHosts final
-    {
-        DreamNetRuntime runtime;
-        DreamNetHost    serverHost;
-        DreamNetHost    clientHost;
-        DreamNetPeer    clientPeer;
-        DreamNetPeer    serverPeer;
-        Port            serverPort;
+    REQUIRE(serverPeer.has_value());
+    REQUIRE(clientConnectedEvent);
+
+    return ConnectedHosts{
+        .runtime    = std::move(runtimeResult.value()),
+        .serverHost = std::move(serverResult.value()),
+        .clientHost = std::move(clientResult.value()),
+        .clientPeer = std::move(clientPeerResult.value()),
+        .serverPeer = std::move(serverPeer.value()),
+        .serverPort = serverInfo->address.GetPort(),
     };
+  }
 
-    ConnectedHosts CreateConnectedHosts()
-    {
-        auto runtimeResult = DreamNetRuntime::TryInitialize();
-        REQUIRE(runtimeResult.has_value());
-
-        ServerConfig serverConfig = ServerConfig::Default();
-        serverConfig.address = DreamNetAddress::Loopback(NextTestPort());
-        serverConfig.maxPeers = 4;
-        serverConfig.channelLimit = 2;
-
-        auto serverResult = DreamNetHost::TryCreateServer(serverConfig);
-        if (!serverResult.has_value())
-        {
-            FAIL(serverResult.error().ToLogString());
-        }
-
-        const auto serverInfo = serverResult->GetHostInfo();
-        REQUIRE(serverInfo.has_value());
-
-        auto clientResult = DreamNetHost::TryCreateClient(NetConfig::Default());
-        if (!clientResult.has_value())
-        {
-            FAIL(clientResult.error().ToLogString());
-        }
-
-        auto clientPeerResult = clientResult->Connect(serverConfig.address, 1);
-        if (!clientPeerResult.has_value())
-        {
-            FAIL(clientPeerResult.error().ToLogString());
-        }
-
-        std::optional<DreamNetPeer> serverPeer = std::nullopt;
-        bool clientConnectedEvent = false;
-
-        for (int attempt = 0; attempt < 200 && (!serverPeer || !clientConnectedEvent); ++attempt)
-        {
-            if (auto maybeServerEvent = ServiceHost(serverResult.value(), 5); maybeServerEvent)
-            {
-                if (maybeServerEvent->IsConnect())
-                {
-                    auto peer = maybeServerEvent->Peer();
-                    REQUIRE(peer.has_value());
-                    serverPeer = std::move(peer.value());
-                }
-            }
-
-            if (auto maybeClientEvent = ServiceHost(clientResult.value(), 5); maybeClientEvent)
-            {
-                if (maybeClientEvent->IsConnect())
-                {
-                    clientConnectedEvent = true;
-                }
-            }
-        }
-
-        REQUIRE(serverPeer.has_value());
-        REQUIRE(clientConnectedEvent);
-
-        return ConnectedHosts
-        {
-            .runtime    = std::move(runtimeResult.value()),
-            .serverHost = std::move(serverResult.value()),
-            .clientHost = std::move(clientResult.value()),
-            .clientPeer = std::move(clientPeerResult.value()),
-            .serverPeer = std::move(serverPeer.value()),
-            .serverPort = serverInfo->address.GetPort(),
-        };
-    }
 }
 
 TEST_CASE("DreamNetHost.TryCreateClient - invalid config contains detailed cause", "[host][config]")
 {
-    ClientConfig config = NetConfig::Default();
-    config.maxPeers = 0;
+  ClientConfig config = NetConfig::Default();
+  config.maxPeers     = 0;
 
-    auto result = DreamNetHost::TryCreateClient(config);
-    REQUIRE_FALSE(result.has_value());
-    REQUIRE(result.error().code == DreamNetErrorCode::InvalidConfig);
-    REQUIRE(result.error().HasCause());
-    REQUIRE(result.error().Cause() != nullptr);
-    REQUIRE(result.error().Cause()->message.find("maxPeers") != std::string::npos);
+  auto result = DreamNetHost::TryCreateClient(config);
+  REQUIRE_FALSE(result.has_value());
+  REQUIRE(result.error().code == DreamNetErrorCode::InvalidConfig);
+  REQUIRE(result.error().HasCause());
+  REQUIRE(result.error().Cause() != nullptr);
+  REQUIRE(result.error().Cause()->message.find("maxPeers") != std::string::npos);
 }
 
 TEST_CASE("DreamNetHost.ApplyRuntimeConfig - invalid channel limit is rejected", "[host][config]")
 {
-    auto runtimeResult = DreamNetRuntime::TryInitialize();
-    REQUIRE(runtimeResult.has_value());
+  auto runtimeResult = DreamNetRuntime::TryInitialize();
+  REQUIRE(runtimeResult.has_value());
 
-    auto hostResult = DreamNetHost::TryCreateClient(NetConfig::Default());
-    REQUIRE(hostResult.has_value());
+  auto hostResult = DreamNetHost::TryCreateClient(NetConfig::Default());
+  REQUIRE(hostResult.has_value());
 
-    HostRuntimeConfig config
-    {
-        .bandwidthLimit = std::nullopt,
-        .channelLimit = std::numeric_limits<ChannelLimit>::max(),
-    };
+  HostRuntimeConfig config{
+      .bandwidthLimit = std::nullopt,
+      .channelLimit   = std::numeric_limits<ChannelLimit>::max(),
+  };
 
-    auto applyResult = hostResult->ApplyRuntimeConfig(config);
-    REQUIRE_FALSE(applyResult.has_value());
-    REQUIRE(applyResult.error().code == DreamNetErrorCode::InvalidConfig);
-    REQUIRE(applyResult.error().message.find("channelLimit") != std::string::npos);
+  auto applyResult = hostResult->ApplyRuntimeConfig(config);
+  REQUIRE_FALSE(applyResult.has_value());
+  REQUIRE(applyResult.error().code == DreamNetErrorCode::InvalidConfig);
+  REQUIRE(applyResult.error().message.find("channelLimit") != std::string::npos);
 }
 
 TEST_CASE("DreamNet client server connect populates host and peer state", "[host][peer][event][integration]")
 {
-    auto connected = CreateConnectedHosts();
+  auto connected = CreateConnectedHosts();
 
-    const auto serverInfo = connected.serverHost.GetHostInfo();
-    REQUIRE(serverInfo.has_value());
-    CHECK(serverInfo->peerCount == 4);
-    CHECK(serverInfo->channelLimit == 2);
-    CHECK(serverInfo->address.GetPort() == connected.serverPort);
+  const auto serverInfo = connected.serverHost.GetHostInfo();
+  REQUIRE(serverInfo.has_value());
+  CHECK(serverInfo->peerCount == 4);
+  CHECK(serverInfo->channelLimit == 2);
+  CHECK(serverInfo->address.GetPort() == connected.serverPort);
 
-    const auto serverTelemetry = connected.serverHost.GetHostTelemetry();
-    REQUIRE(serverTelemetry.has_value());
-    CHECK(serverTelemetry->connectedPeers == 1);
+  const auto serverTelemetry = connected.serverHost.GetHostTelemetry();
+  REQUIRE(serverTelemetry.has_value());
+  CHECK(serverTelemetry->connectedPeers == 1);
 
-    const auto clientTelemetry = connected.clientHost.GetHostTelemetry();
-    REQUIRE(clientTelemetry.has_value());
-    CHECK(clientTelemetry->connectedPeers == 1);
+  const auto clientTelemetry = connected.clientHost.GetHostTelemetry();
+  REQUIRE(clientTelemetry.has_value());
+  CHECK(clientTelemetry->connectedPeers == 1);
 
-    const auto clientPeerInfo = connected.clientPeer.GetPeerInfo();
-    REQUIRE(clientPeerInfo.has_value());
-    CHECK(clientPeerInfo->state == ENET_PEER_STATE_CONNECTED);
-    CHECK(clientPeerInfo->channelCount == 1);
+  const auto clientPeerInfo = connected.clientPeer.GetPeerInfo();
+  REQUIRE(clientPeerInfo.has_value());
+  CHECK(clientPeerInfo->state == ENET_PEER_STATE_CONNECTED);
+  CHECK(clientPeerInfo->channelCount == 1);
 
-    const auto serverPeerInfo = connected.serverPeer.GetPeerInfo();
-    REQUIRE(serverPeerInfo.has_value());
-    CHECK(serverPeerInfo->state == ENET_PEER_STATE_CONNECTED);
+  const auto serverPeerInfo = connected.serverPeer.GetPeerInfo();
+  REQUIRE(serverPeerInfo.has_value());
+  CHECK(serverPeerInfo->state == ENET_PEER_STATE_CONNECTED);
 
-    const auto clientPeerTelemetry = connected.clientPeer.GetPeerTelemetry();
-    REQUIRE(clientPeerTelemetry.has_value());
-    CHECK(clientPeerTelemetry->transportInfo.state == ENET_PEER_STATE_CONNECTED);
+  const auto clientPeerTelemetry = connected.clientPeer.GetPeerTelemetry();
+  REQUIRE(clientPeerTelemetry.has_value());
+  CHECK(clientPeerTelemetry->transportInfo.state == ENET_PEER_STATE_CONNECTED);
 }
 
 TEST_CASE("DreamNetPeer.PushSpan delivers receive event with packet payload", "[peer][event][integration]")
 {
-    auto connected = CreateConnectedHosts();
+  auto connected = CreateConnectedHosts();
 
-    constexpr std::array<std::byte, 4> payload =
-    {
-        std::byte{0x01},
-        std::byte{0x02},
-        std::byte{0x03},
-        std::byte{0x04},
-    };
+  constexpr std::array<std::byte, 4> payload = {
+      std::byte{0x01},
+      std::byte{0x02},
+      std::byte{0x03},
+      std::byte{0x04},
+  };
 
-    auto sendResult = connected.clientPeer.PushSpan(std::span{payload.data(), payload.size()}, 0);
-    if (!sendResult.has_value())
-    {
-        FAIL(sendResult.error().ToLogString());
-    }
-    connected.clientHost.FlushPackets();
+  auto sendResult = connected.clientPeer.PushSpan(std::span{payload.data(), payload.size()}, 0);
+  if (!sendResult.has_value())
+  {
+    FAIL(sendResult.error().ToLogString());
+  }
+  connected.clientHost.FlushPackets();
 
-    auto maybeReceiveEvent = TryWaitForEvent(
-        connected.serverHost,
-        [](const DreamNetEvent& event) { return event.IsReceive(); });
+  auto maybeReceiveEvent = TryWaitForEvent(connected.serverHost, [](const DreamNetEvent& event) { return event.IsReceive(); });
 
-    REQUIRE(maybeReceiveEvent.has_value());
-    CHECK(maybeReceiveEvent->HasPeer());
-    CHECK(maybeReceiveEvent->HasPacket());
-    REQUIRE(maybeReceiveEvent->TryChannelId().has_value());
-    CHECK(maybeReceiveEvent->TryChannelId().value() == 0);
-    CHECK_FALSE(maybeReceiveEvent->TryDisconnectReason().has_value());
+  REQUIRE(maybeReceiveEvent.has_value());
+  CHECK(maybeReceiveEvent->HasPeer());
+  CHECK(maybeReceiveEvent->HasPacket());
+  REQUIRE(maybeReceiveEvent->TryChannelId().has_value());
+  CHECK(maybeReceiveEvent->TryChannelId().value() == 0);
+  CHECK_FALSE(maybeReceiveEvent->TryDisconnectReason().has_value());
 
-    const auto* packet = maybeReceiveEvent->ViewPacket();
-    REQUIRE(packet != nullptr);
-    REQUIRE(packet->DataBytesView().size() == payload.size());
-    CHECK(packet->DataBytesView()[0] == payload[0]);
-    CHECK(packet->DataBytesView()[1] == payload[1]);
-    CHECK(packet->DataBytesView()[2] == payload[2]);
-    CHECK(packet->DataBytesView()[3] == payload[3]);
+  const auto* packet = maybeReceiveEvent->ViewPacket();
+  REQUIRE(packet != nullptr);
+  REQUIRE(packet->DataBytesView().size() == payload.size());
+  CHECK(packet->DataBytesView()[0] == payload[0]);
+  CHECK(packet->DataBytesView()[1] == payload[1]);
+  CHECK(packet->DataBytesView()[2] == payload[2]);
+  CHECK(packet->DataBytesView()[3] == payload[3]);
 
-    const auto serverTelemetry = connected.serverHost.GetHostTelemetry();
-    REQUIRE(serverTelemetry.has_value());
-    CHECK(serverTelemetry->totalReceivedPackets > 0);
-    CHECK(serverTelemetry->totalReceivedData >= payload.size());
+  const auto serverTelemetry = connected.serverHost.GetHostTelemetry();
+  REQUIRE(serverTelemetry.has_value());
+  CHECK(serverTelemetry->totalReceivedPackets > 0);
+  CHECK(serverTelemetry->totalReceivedData >= payload.size());
 }
 
 TEST_CASE("DreamNetHost.BroadcastPushPacketSpan sends packet to connected client", "[host][event][integration]")
 {
-    auto connected = CreateConnectedHosts();
+  auto connected = CreateConnectedHosts();
 
-    constexpr std::array<std::byte, 3> payload =
-    {
-        std::byte{0xAA},
-        std::byte{0xBB},
-        std::byte{0xCC},
-    };
+  constexpr std::array<std::byte, 3> payload = {
+      std::byte{0xAA},
+      std::byte{0xBB},
+      std::byte{0xCC},
+  };
 
-    auto broadcastResult = connected.serverHost.BroadcastPushPacketSpan(
-        std::span{payload.data(), payload.size()},
-        0);
-    if (!broadcastResult.has_value())
-    {
-        FAIL(broadcastResult.error().ToLogString());
-    }
-    connected.serverHost.FlushPackets();
+  auto broadcastResult = connected.serverHost.BroadcastPushPacketSpan(std::span{payload.data(), payload.size()}, 0);
+  if (!broadcastResult.has_value())
+  {
+    FAIL(broadcastResult.error().ToLogString());
+  }
+  connected.serverHost.FlushPackets();
 
-    auto maybeReceiveEvent = TryWaitForEvent(
-        connected.clientHost,
-        [](const DreamNetEvent& event) { return event.IsReceive(); });
+  auto maybeReceiveEvent = TryWaitForEvent(connected.clientHost, [](const DreamNetEvent& event) { return event.IsReceive(); });
 
-    REQUIRE(maybeReceiveEvent.has_value());
-    REQUIRE(maybeReceiveEvent->HasPacket());
+  REQUIRE(maybeReceiveEvent.has_value());
+  REQUIRE(maybeReceiveEvent->HasPacket());
 
-    const auto* packet = maybeReceiveEvent->ViewPacket();
-    REQUIRE(packet != nullptr);
-    REQUIRE(packet->DataBytesView().size() == payload.size());
-    CHECK(packet->DataBytesView()[0] == payload[0]);
-    CHECK(packet->DataBytesView()[1] == payload[1]);
-    CHECK(packet->DataBytesView()[2] == payload[2]);
+  const auto* packet = maybeReceiveEvent->ViewPacket();
+  REQUIRE(packet != nullptr);
+  REQUIRE(packet->DataBytesView().size() == payload.size());
+  CHECK(packet->DataBytesView()[0] == payload[0]);
+  CHECK(packet->DataBytesView()[1] == payload[1]);
+  CHECK(packet->DataBytesView()[2] == payload[2]);
 
-    const auto serverTelemetry = connected.serverHost.GetHostTelemetry();
-    REQUIRE(serverTelemetry.has_value());
-    CHECK(serverTelemetry->totalSentPackets > 0);
-    CHECK(serverTelemetry->totalSentData >= payload.size());
+  const auto serverTelemetry = connected.serverHost.GetHostTelemetry();
+  REQUIRE(serverTelemetry.has_value());
+  CHECK(serverTelemetry->totalSentPackets > 0);
+  CHECK(serverTelemetry->totalSentData >= payload.size());
 }
 
 TEST_CASE("DreamNet disconnect produces disconnect event with reason", "[host][event][integration]")
 {
-    auto connected = CreateConnectedHosts();
+  auto connected = CreateConnectedHosts();
 
-    connected.clientPeer.Disconnect(DisconnectType::Normal, DisconnectReason::Unspecified);
-    connected.clientHost.FlushPackets();
+  connected.clientPeer.Disconnect(DisconnectType::Normal, DisconnectReason::Unspecified);
+  connected.clientHost.FlushPackets();
 
-    std::optional<DreamNetEvent> serverDisconnectEvent = std::nullopt;
+  std::optional<DreamNetEvent> serverDisconnectEvent = std::nullopt;
 
-    for (int attempt = 0; attempt < 200 && !serverDisconnectEvent; ++attempt)
+  for (int attempt = 0; attempt < 200 && !serverDisconnectEvent; ++attempt)
+  {
+    if (auto maybeServerEvent = ServiceHost(connected.serverHost, 5); maybeServerEvent)
     {
-        if (auto maybeServerEvent = ServiceHost(connected.serverHost, 5); maybeServerEvent)
-        {
-            if (maybeServerEvent->IsDisconnect())
-            {
-                serverDisconnectEvent = std::move(maybeServerEvent);
-            }
-        }
-
-        auto maybeClientEvent = ServiceHost(connected.clientHost, 5);
-        if (maybeClientEvent && maybeClientEvent->IsDisconnect())
-        {
-            // drain client-side disconnect event so ENet can finish the cycle
-        }
+      if (maybeServerEvent->IsDisconnect())
+      {
+        serverDisconnectEvent = std::move(maybeServerEvent);
+      }
     }
 
-    REQUIRE(serverDisconnectEvent.has_value());
-    CHECK(serverDisconnectEvent->HasPeer());
-    CHECK_FALSE(serverDisconnectEvent->HasPacket());
-    REQUIRE(serverDisconnectEvent->TryDisconnectReason().has_value());
-    CHECK(serverDisconnectEvent->TryDisconnectReason().value() == DisconnectReason::Unspecified);
+    auto maybeClientEvent = ServiceHost(connected.clientHost, 5);
+    if (maybeClientEvent && maybeClientEvent->IsDisconnect())
+    {
+      // drain client-side disconnect event so ENet can finish the cycle
+    }
+  }
+
+  REQUIRE(serverDisconnectEvent.has_value());
+  CHECK(serverDisconnectEvent->HasPeer());
+  CHECK_FALSE(serverDisconnectEvent->HasPacket());
+  REQUIRE(serverDisconnectEvent->TryDisconnectReason().has_value());
+  CHECK(serverDisconnectEvent->TryDisconnectReason().value() == DisconnectReason::Unspecified);
 }
 
 TEST_CASE("DreamNetPeer.ApplyRuntimeConfig - invalid ping interval is rejected", "[peer][config][integration]")
 {
-    auto connected = CreateConnectedHosts();
+  auto connected = CreateConnectedHosts();
 
-    PeerRuntimeConfig config
-    {
-        .timeout = std::nullopt,
-        .throttle = std::nullopt,
-        .pingIntervalMs = 0,
-    };
+  PeerRuntimeConfig config{
+      .timeout        = std::nullopt,
+      .throttle       = std::nullopt,
+      .pingIntervalMs = 0,
+  };
 
-    auto applyResult = connected.clientPeer.ApplyRuntimeConfig(config);
-    REQUIRE_FALSE(applyResult.has_value());
-    REQUIRE(applyResult.error().code == DreamNetErrorCode::InvalidPingInterval);
+  auto applyResult = connected.clientPeer.ApplyRuntimeConfig(config);
+  REQUIRE_FALSE(applyResult.has_value());
+  REQUIRE(applyResult.error().code == DreamNetErrorCode::InvalidPingInterval);
 }
 
 TEST_CASE("DreamNet disconnect carries a non-zero reason across the wire", "[host][event][integration]")
 {
-    // Unspecified is 0, which is also what enet_protocol_notify_disconnect writes
-    // on a timeout - so only a non-zero reason proves the value actually travelled.
-    auto connected = CreateConnectedHosts();
+  // Unspecified is 0, which is also what enet_protocol_notify_disconnect writes
+  // on a timeout - so only a non-zero reason proves the value actually travelled.
+  auto connected = CreateConnectedHosts();
 
-    connected.clientPeer.Disconnect(DisconnectType::Normal, DisconnectReason::Kicked);
-    connected.clientHost.FlushPackets();
+  connected.clientPeer.Disconnect(DisconnectType::Normal, DisconnectReason::Kicked);
+  connected.clientHost.FlushPackets();
 
-    std::optional<DreamNetEvent> serverDisconnectEvent = std::nullopt;
+  std::optional<DreamNetEvent> serverDisconnectEvent = std::nullopt;
 
-    for (int attempt = 0; attempt < 200 && !serverDisconnectEvent; ++attempt)
+  for (int attempt = 0; attempt < 200 && !serverDisconnectEvent; ++attempt)
+  {
+    if (auto maybeServerEvent = ServiceHost(connected.serverHost, 5); maybeServerEvent)
     {
-        if (auto maybeServerEvent = ServiceHost(connected.serverHost, 5); maybeServerEvent)
-        {
-            if (maybeServerEvent->IsDisconnect())
-            {
-                serverDisconnectEvent = std::move(maybeServerEvent);
-            }
-        }
-
-        auto maybeClientEvent = ServiceHost(connected.clientHost, 5);
-        if (maybeClientEvent && maybeClientEvent->IsDisconnect())
-        {
-            // drain client-side disconnect event so ENet can finish the cycle
-        }
+      if (maybeServerEvent->IsDisconnect())
+      {
+        serverDisconnectEvent = std::move(maybeServerEvent);
+      }
     }
 
-    REQUIRE(serverDisconnectEvent.has_value());
-    REQUIRE(serverDisconnectEvent->TryDisconnectReason().has_value());
-    CHECK(serverDisconnectEvent->TryDisconnectReason().value() == DisconnectReason::Kicked);
+    auto maybeClientEvent = ServiceHost(connected.clientHost, 5);
+    if (maybeClientEvent && maybeClientEvent->IsDisconnect())
+    {
+      // drain client-side disconnect event so ENet can finish the cycle
+    }
+  }
+
+  REQUIRE(serverDisconnectEvent.has_value());
+  REQUIRE(serverDisconnectEvent->TryDisconnectReason().has_value());
+  CHECK(serverDisconnectEvent->TryDisconnectReason().value() == DisconnectReason::Kicked);
 }
 
 TEST_CASE("DreamNet disconnect event peer is already reset by ENet", "[peer][event][integration]")
 {
-    // enet_protocol_dispatch_incoming_commands calls enet_peer_reset before the
-    // disconnect event is returned, so channelCount is gone by the time we see it.
-    // The address survives the reset, which is what makes it loggable.
-    auto connected = CreateConnectedHosts();
+  // enet_protocol_dispatch_incoming_commands calls enet_peer_reset before the
+  // disconnect event is returned, so channelCount is gone by the time we see it.
+  // The address survives the reset, which is what makes it loggable.
+  auto connected = CreateConnectedHosts();
 
-    const auto clientAddressBefore = connected.serverPeer.GetPeerInfo();
-    REQUIRE(clientAddressBefore.has_value());
+  const auto clientAddressBefore = connected.serverPeer.GetPeerInfo();
+  REQUIRE(clientAddressBefore.has_value());
 
-    connected.clientPeer.Disconnect(DisconnectType::Normal, DisconnectReason::ClientShutdown);
-    connected.clientHost.FlushPackets();
+  connected.clientPeer.Disconnect(DisconnectType::Normal, DisconnectReason::ClientShutdown);
+  connected.clientHost.FlushPackets();
 
-    std::optional<DreamNetEvent> serverDisconnectEvent = std::nullopt;
+  std::optional<DreamNetEvent> serverDisconnectEvent = std::nullopt;
 
-    for (int attempt = 0; attempt < 200 && !serverDisconnectEvent; ++attempt)
+  for (int attempt = 0; attempt < 200 && !serverDisconnectEvent; ++attempt)
+  {
+    if (auto maybeServerEvent = ServiceHost(connected.serverHost, 5); maybeServerEvent)
     {
-        if (auto maybeServerEvent = ServiceHost(connected.serverHost, 5); maybeServerEvent)
-        {
-            if (maybeServerEvent->IsDisconnect())
-            {
-                serverDisconnectEvent = std::move(maybeServerEvent);
-            }
-        }
-
-        auto maybeClientEvent = ServiceHost(connected.clientHost, 5);
-        if (maybeClientEvent && maybeClientEvent->IsDisconnect())
-        {
-            // drain client-side disconnect event so ENet can finish the cycle
-        }
+      if (maybeServerEvent->IsDisconnect())
+      {
+        serverDisconnectEvent = std::move(maybeServerEvent);
+      }
     }
 
-    REQUIRE(serverDisconnectEvent.has_value());
-    REQUIRE(serverDisconnectEvent->HasPeer());
+    auto maybeClientEvent = ServiceHost(connected.clientHost, 5);
+    if (maybeClientEvent && maybeClientEvent->IsDisconnect())
+    {
+      // drain client-side disconnect event so ENet can finish the cycle
+    }
+  }
 
-    auto peer = serverDisconnectEvent->Peer();
-    REQUIRE(peer.has_value());
+  REQUIRE(serverDisconnectEvent.has_value());
+  REQUIRE(serverDisconnectEvent->HasPeer());
 
-    const auto info = peer->GetPeerInfo();
-    REQUIRE(info.has_value());
-    CHECK(peer->IsDisconnected());
-    CHECK(info->channelCount == 0);
-    CHECK(info->address.HostRaw() == clientAddressBefore->address.HostRaw());
+  auto peer = serverDisconnectEvent->Peer();
+  REQUIRE(peer.has_value());
+
+  const auto info = peer->GetPeerInfo();
+  REQUIRE(info.has_value());
+  CHECK(peer->IsDisconnected());
+  CHECK(info->channelCount == 0);
+  CHECK(info->address.HostRaw() == clientAddressBefore->address.HostRaw());
 }
 
 TEST_CASE("DreamNetPacket.TryAllocateWith delivers a serialized payload end to end", "[peer][packet][allocate][integration]")
 {
-    // The zero-copy send path: allocate the ENet packet first, write straight into
-    // its buffer, then hand it to the peer - no staging buffer anywhere.
-    auto connected = CreateConnectedHosts();
+  // The zero-copy send path: allocate the ENet packet first, write straight into
+  // its buffer, then hand it to the peer - no staging buffer anywhere.
+  auto connected = CreateConnectedHosts();
 
-    constexpr std::size_t payloadSize = 6;
+  constexpr std::size_t payloadSize = 6;
 
-    auto packet = DreamNetPacket::TryAllocateWith(payloadSize, [](std::span<std::byte> buffer)
+  auto packet = DreamNetPacket::TryAllocateWith(payloadSize, [](std::span<std::byte> buffer) {
+    if (buffer.size() != payloadSize)
     {
-        if (buffer.size() != payloadSize)
-        {
-            return false;
-        }
-
-        for (std::size_t index = 0; index < buffer.size(); ++index)
-        {
-            buffer[index] = static_cast<std::byte>(index + 1);
-        }
-
-        return true;
-    });
-
-    if (!packet.has_value())
-    {
-        FAIL(packet.error().ToLogString());
+      return false;
     }
 
-    auto sendResult = connected.clientPeer.PushPacket(std::move(packet.value()), 0);
-    if (!sendResult.has_value())
+    for (std::size_t index = 0; index < buffer.size(); ++index)
     {
-        FAIL(sendResult.error().ToLogString());
+      buffer[index] = static_cast<std::byte>(index + 1);
     }
-    connected.clientHost.FlushPackets();
 
-    auto maybeReceiveEvent = TryWaitForEvent(
-        connected.serverHost,
-        [](const DreamNetEvent& event) { return event.IsReceive(); });
+    return true;
+  });
 
-    REQUIRE(maybeReceiveEvent.has_value());
+  if (!packet.has_value())
+  {
+    FAIL(packet.error().ToLogString());
+  }
 
-    const auto* received = maybeReceiveEvent->ViewPacket();
-    REQUIRE(received != nullptr);
-    REQUIRE(received->DataBytesView().size() == payloadSize);
+  auto sendResult = connected.clientPeer.PushPacket(std::move(packet.value()), 0);
+  if (!sendResult.has_value())
+  {
+    FAIL(sendResult.error().ToLogString());
+  }
+  connected.clientHost.FlushPackets();
 
-    for (std::size_t index = 0; index < payloadSize; ++index)
-    {
-        CHECK(received->DataBytesView()[index] == static_cast<std::byte>(index + 1));
-    }
+  auto maybeReceiveEvent = TryWaitForEvent(connected.serverHost, [](const DreamNetEvent& event) { return event.IsReceive(); });
+
+  REQUIRE(maybeReceiveEvent.has_value());
+
+  const auto* received = maybeReceiveEvent->ViewPacket();
+  REQUIRE(received != nullptr);
+  REQUIRE(received->DataBytesView().size() == payloadSize);
+
+  for (std::size_t index = 0; index < payloadSize; ++index)
+  {
+    CHECK(received->DataBytesView()[index] == static_cast<std::byte>(index + 1));
+  }
 }

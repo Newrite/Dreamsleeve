@@ -12,24 +12,26 @@ import Dreamsleeve.Protocol;
 
 namespace
 {
-    using Generated = Dreamsleeve::Protocol::Network::DisconnectReason;
-    using Mirrored  = Protocol::Network::DisconnectReason;
 
-    constexpr bool SameValue(const Mirrored mirrored, const Generated generated) noexcept
-    {
-        return static_cast<unsigned long long>(mirrored) == static_cast<unsigned long long>(generated);
-    }
+  using Generated = Dreamsleeve::Protocol::Network::DisconnectReason;
+  using Mirrored  = Protocol::Network::DisconnectReason;
 
-    static_assert(SameValue(Mirrored::Unspecified,    Dreamsleeve::Protocol::Network::Unspecified));
-    static_assert(SameValue(Mirrored::ClientShutdown, Dreamsleeve::Protocol::Network::ClientShutdown));
-    static_assert(SameValue(Mirrored::ServerShutdown, Dreamsleeve::Protocol::Network::ServerShutdown));
-    static_assert(SameValue(Mirrored::Kicked,         Dreamsleeve::Protocol::Network::Kicked));
-    static_assert(SameValue(Mirrored::AuthFailed,     Dreamsleeve::Protocol::Network::AuthFailed));
-    static_assert(SameValue(Mirrored::TimeoutPolicy,  Dreamsleeve::Protocol::Network::TimeoutPolicy));
-    static_assert(SameValue(Mirrored::ProtocolError,  Dreamsleeve::Protocol::Network::ProtocolError));
+  constexpr bool SameValue(const Mirrored mirrored, const Generated generated) noexcept
+  {
+    return static_cast<unsigned long long>(mirrored) == static_cast<unsigned long long>(generated);
+  }
 
-    // Trips when network.proto gains a DisconnectReason value that the mirror lacks.
-    static_assert(
-        Dreamsleeve::Protocol::Network::DisconnectReason_ARRAYSIZE == 7,
-        "network.proto gained a DisconnectReason value - update the mirror in Dreamsleeve.Protocol.Native.ixx");
+  static_assert(SameValue(Mirrored::Unspecified, Dreamsleeve::Protocol::Network::Unspecified));
+  static_assert(SameValue(Mirrored::ClientShutdown, Dreamsleeve::Protocol::Network::ClientShutdown));
+  static_assert(SameValue(Mirrored::ServerShutdown, Dreamsleeve::Protocol::Network::ServerShutdown));
+  static_assert(SameValue(Mirrored::Kicked, Dreamsleeve::Protocol::Network::Kicked));
+  static_assert(SameValue(Mirrored::AuthFailed, Dreamsleeve::Protocol::Network::AuthFailed));
+  static_assert(SameValue(Mirrored::TimeoutPolicy, Dreamsleeve::Protocol::Network::TimeoutPolicy));
+  static_assert(SameValue(Mirrored::ProtocolError, Dreamsleeve::Protocol::Network::ProtocolError));
+
+  // Trips when network.proto gains a DisconnectReason value that the mirror lacks.
+  static_assert(
+    Dreamsleeve::Protocol::Network::DisconnectReason_ARRAYSIZE == 7,
+    "network.proto gained a DisconnectReason value - update the mirror in Dreamsleeve.Protocol.Native.ixx");
+
 }

@@ -9,61 +9,60 @@ import DreamNet.Core;
 
 export class DreamNetRuntime
 {
-public:
-    using Result = NetResult<DreamNetRuntime>;
+  public:
 
-    static Result TryInitialize()
+  using Result = NetResult<DreamNetRuntime>;
+
+  static Result TryInitialize()
+  {
+    if (enet_initialize() != 0)
     {
-        if (enet_initialize() != 0)
-        {
-            return DreamNetError::MakeUnexpected(
-                DreamNetErrorCode::FailedENetInitialize,
-                "enet_initialize returned a non-zero result");
-        }
-
-        return DreamNetRuntime(true);
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedENetInitialize, "enet_initialize returned a non-zero result");
     }
 
-    DreamNetRuntime(const DreamNetRuntime&) = delete;
-    DreamNetRuntime& operator=(const DreamNetRuntime&) = delete;
+    return DreamNetRuntime(true);
+  }
 
-    DreamNetRuntime(DreamNetRuntime&& other) noexcept
-        : ownsRuntime(other.ownsRuntime)
+  DreamNetRuntime(const DreamNetRuntime&)            = delete;
+  DreamNetRuntime& operator=(const DreamNetRuntime&) = delete;
+
+  DreamNetRuntime(DreamNetRuntime&& other) noexcept : ownsRuntime(other.ownsRuntime)
+  {
+    other.ownsRuntime = false;
+  }
+
+  DreamNetRuntime& operator=(DreamNetRuntime&& other) noexcept
+  {
+    if (this != &other)
     {
-        other.ownsRuntime = false;
+      if (ownsRuntime)
+      {
+        enet_deinitialize();
+      }
+
+      ownsRuntime       = other.ownsRuntime;
+      other.ownsRuntime = false;
     }
 
-    DreamNetRuntime& operator=(DreamNetRuntime&& other) noexcept
+    return *this;
+  }
+
+  ~DreamNetRuntime()
+  {
+    Deinitialize();
+  }
+
+  private:
+
+  void Deinitialize()
+  {
+    if (ownsRuntime)
     {
-        if (this != &other)
-        {
-            if (ownsRuntime)
-            {
-                enet_deinitialize();
-            }
-
-            ownsRuntime = other.ownsRuntime;
-            other.ownsRuntime = false;
-        }
-
-        return *this;
+      enet_deinitialize();
     }
+  }
 
-    ~DreamNetRuntime()
-    {
-        Deinitialize();
-    }
+  explicit DreamNetRuntime(bool ownsRuntime) noexcept : ownsRuntime(ownsRuntime) {}
 
-private:
-    void Deinitialize()
-    {
-        if (ownsRuntime)
-        {
-            enet_deinitialize();
-        }
-    }
-    explicit DreamNetRuntime(bool ownsRuntime) noexcept
-        : ownsRuntime(ownsRuntime) {}
-
-    bool ownsRuntime = false;
+  bool ownsRuntime = false;
 };

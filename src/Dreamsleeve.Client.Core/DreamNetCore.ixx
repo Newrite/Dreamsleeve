@@ -25,9 +25,9 @@ export using ConnectId        = enet_uint32;
 
 export enum class DisconnectType : std::uint8_t
 {
-    Normal,
-    Force,
-    Later,
+  Normal,
+  Force,
+  Later,
 };
 
 export enum class DreamNetErrorCode : std::uint16_t
@@ -63,141 +63,126 @@ export enum class DreamNetErrorCode : std::uint16_t
 
 export struct DreamNetError final
 {
-    DreamNetErrorCode code{};
-    std::string  message{};
-    std::string  operationOverride{};
-    std::source_location where = std::source_location::current();
-    std::shared_ptr<DreamNetError> cause{};
+  DreamNetErrorCode              code{};
+  std::string                    message{};
+  std::string                    operationOverride{};
+  std::source_location           where = std::source_location::current();
+  std::shared_ptr<DreamNetError> cause{};
 
-    static DreamNetError Make(
-        const DreamNetErrorCode code,
-        std::string message = {},
-        std::string operationOverride = {},
-        const std::source_location where = std::source_location::current()) noexcept
+  static DreamNetError Make(
+    const DreamNetErrorCode    code,
+    std::string                message           = {},
+    std::string                operationOverride = {},
+    const std::source_location where             = std::source_location::current()) noexcept
+  {
+    return DreamNetError{
+        .code              = code,
+        .message           = std::move(message),
+        .operationOverride = std::move(operationOverride),
+        .where             = where,
+        .cause             = nullptr,
+    };
+  }
+
+  static DreamNetError Wrap(
+    const DreamNetErrorCode    code,
+    DreamNetError              inner,
+    std::string                message           = {},
+    std::string                operationOverride = {},
+    const std::source_location where             = std::source_location::current())
+  {
+    return DreamNetError{
+        .code              = code,
+        .message           = std::move(message),
+        .operationOverride = std::move(operationOverride),
+        .where             = where,
+        .cause             = std::make_shared<DreamNetError>(std::move(inner)),
+    };
+  }
+
+  std::string_view CodeName() const noexcept
+  {
+    const auto name = magic_enum::enum_name(code);
+    return name.empty() ? std::string_view{"Unknown"} : name;
+  }
+
+  std::string_view Operation() const noexcept
+  {
+    if (!operationOverride.empty())
     {
-        return DreamNetError
-        {
-            .code = code,
-            .message = std::move(message),
-            .operationOverride = std::move(operationOverride),
-            .where = where,
-            .cause = nullptr,
-        };
+      return operationOverride;
     }
 
-    static DreamNetError Wrap(
-        const DreamNetErrorCode code,
-        DreamNetError inner,
-        std::string message = {},
-        std::string operationOverride = {},
-        const std::source_location where = std::source_location::current())
+    return where.function_name();
+  }
+
+  bool HasCause() const noexcept
+  {
+    return static_cast<bool>(cause);
+  }
+
+  const DreamNetError* Cause() const noexcept
+  {
+    return cause ? cause.get() : nullptr;
+  }
+
+  std::string ToLogString() const
+  {
+    std::string out;
+    AppendToLogString(out, *this, 0);
+    return out;
+  }
+
+  static inline std::unexpected<DreamNetError> MakeUnexpected(
+    const DreamNetErrorCode    code,
+    std::string                message           = {},
+    std::string                operationOverride = {},
+    const std::source_location where             = std::source_location::current()) noexcept
+  {
+    return std::unexpected(DreamNetError::Make(code, std::move(message), std::move(operationOverride), where));
+  }
+
+  static inline std::unexpected<DreamNetError> WrapUnexpected(
+    const DreamNetErrorCode    code,
+    DreamNetError              inner,
+    std::string                message           = {},
+    std::string                operationOverride = {},
+    const std::source_location where             = std::source_location::current())
+  {
+    return std::unexpected(DreamNetError::Wrap(code, std::move(inner), std::move(message), std::move(operationOverride), where));
+  }
+
+  private:
+
+  static void AppendToLogString(std::string& out, const DreamNetError& error, const std::size_t depth)
+  {
+    out += std::string(depth * 2, ' ');
+    out += "code=";
+    out += error.CodeName();
+
+    out += ", operation=";
+    out += error.Operation();
+
+    if (!error.message.empty())
     {
-        return DreamNetError
-        {
-            .code = code,
-            .message = std::move(message),
-            .operationOverride = std::move(operationOverride),
-            .where = where,
-            .cause = std::make_shared<DreamNetError>(std::move(inner)),
-        };
+      out += ", message=";
+      out += error.message;
     }
 
-    std::string_view CodeName() const noexcept
+    out += ", file=";
+    out += error.where.file_name();
+    out += ", line=";
+    out += std::to_string(error.where.line());
+
+    out += ", function=";
+    out += error.where.function_name();
+    out += '\n';
+
+    if (error.cause)
     {
-        const auto name = magic_enum::enum_name(code);
-        return name.empty() ? std::string_view{"Unknown"} : name;
+      AppendToLogString(out, *error.cause, depth + 1);
     }
-
-    std::string_view Operation() const noexcept
-    {
-        if (!operationOverride.empty())
-        {
-            return operationOverride;
-        }
-
-        return where.function_name();
-    }
-
-    bool HasCause() const noexcept
-    {
-        return static_cast<bool>(cause);
-    }
-
-    const DreamNetError* Cause() const noexcept
-    {
-        return cause ? cause.get() : nullptr;
-    }
-
-    std::string ToLogString() const
-    {
-        std::string out;
-        AppendToLogString(out, *this, 0);
-        return out;
-    }
-    
-    static inline std::unexpected<DreamNetError> MakeUnexpected(
-        const DreamNetErrorCode code,
-        std::string message = {},
-        std::string operationOverride = {},
-        const std::source_location where = std::source_location::current()) noexcept
-    {
-        return std::unexpected(
-            DreamNetError::Make(
-                code,
-                std::move(message),
-                std::move(operationOverride),
-                where));
-    }
-
-    static inline std::unexpected<DreamNetError> WrapUnexpected(
-        const DreamNetErrorCode code,
-        DreamNetError inner,
-        std::string message = {},
-        std::string operationOverride = {},
-        const std::source_location where = std::source_location::current())
-    {
-        return std::unexpected(
-            DreamNetError::Wrap(
-                code,
-                std::move(inner),
-                std::move(message),
-                std::move(operationOverride),
-                where));
-    }
-
-private:
-    static void AppendToLogString(
-        std::string& out,
-        const DreamNetError& error,
-        const std::size_t depth)
-    {
-        out += std::string(depth * 2, ' ');
-        out += "code=";
-        out += error.CodeName();
-
-        out += ", operation=";
-        out += error.Operation();
-
-        if (!error.message.empty())
-        {
-            out += ", message=";
-            out += error.message;
-        }
-
-        out += ", file=";
-        out += error.where.file_name();
-        out += ", line=";
-        out += std::to_string(error.where.line());
-
-        out += ", function=";
-        out += error.where.function_name();
-        out += '\n';
-
-        if (error.cause)
-        {
-            AppendToLogString(out, *error.cause, depth + 1);
-        }
-    }
+  }
 };
 
 export template <typename T>
