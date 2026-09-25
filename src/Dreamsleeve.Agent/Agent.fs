@@ -16,7 +16,7 @@ type AgentMailbox =
     /// <param name="allowSynchronousContinuations">If true, allows synchronous execution of continuations on the thread that completes the operation.</param>
     | Unbounded of allowSynchronousContinuations: bool
     /// <summary>
-    /// Creates a bounded mailbox with a strict capacity. It provides backpressure.
+    /// Creates a bounded mailbox. Wait provides backpressure; drop modes discard messages when full.
     /// </summary>
     /// <param name="capacity">The maximum number of items the mailbox can hold.</param>
     /// <param name="fullMode">The behavior when the mailbox is full (e.g., Wait, DropNewest, DropOldest, DropWrite).</param>
@@ -39,7 +39,7 @@ module AgentMailbox =
     let unboundedAllowSync = AgentMailbox.Unbounded true
 
     /// <summary>
-    /// Creates a bounded mailbox that asynchronously waits (blocks writers) when it is full.
+    /// Creates a bounded mailbox whose asynchronous writers wait for space without blocking a thread.
     /// </summary>
     /// <param name="capacity">The maximum number of items the mailbox can hold.</param>
     let boundedWait capacity =
@@ -59,9 +59,13 @@ module AgentMailbox =
 [<RequireQualifiedAccess>]
 type AgentPostResult =
     /// <summary>
-    /// The message was successfully accepted into the mailbox.
+    /// The message was accepted now. DropOldest and DropNewest may evict it on a later write.
     /// </summary>
     | Posted
+    /// <summary>
+    /// The mailbox's DropWrite policy discarded this message instead of enqueuing it.
+    /// </summary>
+    | Dropped
     /// <summary>
     /// The mailbox was full and the message could not be accepted immediately.
     /// </summary>
@@ -89,6 +93,10 @@ type AgentAskResult<'T> =
     /// </summary>
     | Faulted of exn
     /// <summary>
+    /// A bounded mailbox policy discarded or evicted this request before it could be processed.
+    /// </summary>
+    | Dropped
+    /// <summary>
     /// The mailbox was full and the request could not be accepted into the queue.
     /// </summary>
     | Full
@@ -97,7 +105,7 @@ type AgentAskResult<'T> =
     /// </summary>
     | Closed
     /// <summary>
-    /// Waiting for the reply timed out.
+    /// The shared timeout for admission and reply expired. Admitted commands are not retracted.
     /// </summary>
     | TimedOut
     /// <summary>
@@ -129,7 +137,7 @@ type AgentStopReason =
     /// </summary>
     | Completed
     /// <summary>
-    /// The agent was aborted immediately without draining its mailbox.
+    /// The agent was aborted without draining its mailbox. An in-flight handler must finish cooperatively.
     /// </summary>
     | Aborted
     /// <summary>
@@ -142,43 +150,32 @@ type AgentStopReason =
 /// Wraps a TaskCompletionSource to provide thread-safe, single-use reply mechanisms.
 /// </summary>
 [<Sealed>]
-type ReplyChannel<'T> internal (completion: TaskCompletionSource<'T>) =
+type ReplyChannel<'T> internal (completion: TaskCompletionSource<AgentAskResult<'T>>) =
     /// <summary>
-    /// Attempts to reply with a value.
+    /// True once any reply, failure, cancellation, timeout, or shutdown result has won.
+    /// This is advisory: use the boolean returned by TryReply for atomic settlement.
     /// </summary>
-    /// <param name="value">The reply value.</param>
-    /// <returns>True if the reply was set successfully, false if the channel was already replied to or canceled.</returns>
-    member _.TryReply(value: 'T) = completion.TrySetResult(value)
+    member _.IsCompleted = completion.Task.IsCompleted
 
-    /// <summary>
-    /// Replies with a value and ignores if the channel was already replied to or canceled.
-    /// </summary>
-    /// <param name="value">The reply value.</param>
-    member _.Reply(value: 'T) = completion.TrySetResult(value) |> ignore
+    /// <summary>Attempts to reply with a value. Only the first terminal result wins.</summary>
+    member _.TryReply(value: 'T) = completion.TrySetResult(AgentAskResult.Replied value)
 
-    /// <summary>
-    /// Attempts to fault the reply with an exception.
-    /// </summary>
-    /// <param name="error">The exception to propagate back to the caller.</param>
-    /// <returns>True if the exception was set successfully.</returns>
-    member _.TryReplyError(error: exn) = completion.TrySetException(error)
+    /// <summary>Replies with a value, ignoring an already completed request.</summary>
+    member this.Reply(value: 'T) = this.TryReply(value) |> ignore
 
-    /// <summary>
-    /// Faults the reply with an exception and ignores if the channel was already replied to.
-    /// </summary>
-    /// <param name="error">The exception to propagate back to the caller.</param>
-    member _.ReplyError(error: exn) = completion.TrySetException(error) |> ignore
+    /// <summary>Attempts to return a request-local error without faulting an abandoned task.</summary>
+    member _.TryReplyError(error: exn) =
+        if isNull error then nullArg (nameof error)
+        completion.TrySetResult(AgentAskResult.Faulted error)
 
-    /// <summary>
-    /// Attempts to cancel the reply.
-    /// </summary>
-    /// <returns>True if canceled successfully.</returns>
-    member _.TryCancel() = completion.TrySetCanceled()
+    /// <summary>Returns a request-local error, ignoring an already completed request.</summary>
+    member this.ReplyError(error: exn) = this.TryReplyError(error) |> ignore
 
-    /// <summary>
-    /// Cancels the reply and ignores if the channel was already replied to.
-    /// </summary>
-    member _.Cancel() = completion.TrySetCanceled() |> ignore
+    /// <summary>Attempts to complete the request as canceled.</summary>
+    member _.TryCancel() = completion.TrySetResult(AgentAskResult.Canceled)
+
+    /// <summary>Completes the request as canceled, ignoring an already completed request.</summary>
+    member this.Cancel() = this.TryCancel() |> ignore
 
 /// <summary>
 /// Configuration options for initializing a standard Agent.
@@ -200,17 +197,18 @@ type AgentOptions =
         /// </summary>
         SingleWriter: bool
         /// <summary>
-        /// Default timeout used by AskAsync and TryAskAsync when a timeout is not explicitly provided.
+        /// Default admission-plus-reply timeout used by AskAsync and TryAskAsync.
+        /// None and Timeout.InfiniteTimeSpan mean no deadline; zero expires without posting.
         /// </summary>
         DefaultAskTimeout: TimeSpan option
         /// <summary>
-        /// Optional callback invoked synchronously when the agent successfully starts processing.
+        /// Optional callback invoked on the background processing loop when it starts.
         /// Receives the agent's name.
         /// </summary>
         OnStarted: (string -> unit) option
         /// <summary>
-        /// Optional callback invoked exactly once when the agent stops processing.
-        /// Receives the agent's name and the reason it stopped.
+        /// Optional callback invoked exactly once after processing and cleanup stop, before Completion settles.
+        /// Receives the agent's name and the reason it stopped. Must not wait for Completion.
         /// </summary>
         OnStopped: (string * AgentStopReason -> unit) option
         /// <summary>
@@ -242,19 +240,41 @@ module AgentOptions =
 
 [<AutoOpen>]
 module private AgentInternals =
-    let taskFromException<'T> (ex: exn) = Task.FromException<'T>(ex)
+    let taskFromException<'T> (error: exn) = Task.FromException<'T>(error)
 
-    let tryGetBaseException (task: Task) =
-        if isNull task.Exception then
-            InvalidOperationException("The task faulted without an exception payload.") :> exn
-        else
-            task.Exception.GetBaseException()
+    let inline safeInvoke (callback: unit -> unit) =
+        try callback () with _ -> ()
 
-    let inline safeInvoke (f: unit -> unit) =
-        try f() with _ -> ()
+    // CancellationTokenSource timers support at most UInt32.MaxValue - 1 milliseconds.
+    let validateTimeout name timeout =
+        match timeout with
+        | Some value when value <> Timeout.InfiniteTimeSpan &&
+                          (value < TimeSpan.Zero || value > TimeSpan.FromMilliseconds(4294967294.0)) ->
+            raise (ArgumentOutOfRangeException(name, value,
+                "The timeout must be nonnegative, no greater than 4294967294 milliseconds, or Timeout.InfiniteTimeSpan."))
+        | _ -> ()
 
-    let waitIndefinitelyTask (token: CancellationToken) =
-        Task.Delay(Timeout.InfiniteTimeSpan, token)
+    let resultForStop reason =
+        match reason with
+        | AgentStopReason.Completed -> AgentAskResult.Closed
+        | AgentStopReason.Aborted -> AgentAskResult.Canceled
+        | AgentStopReason.Faulted error -> AgentAskResult.Faulted error
+
+    // Envelopes retain request settlement even when the user handler throws before replying.
+    // Every callback below is internal and only settles a RunContinuationsAsynchronously TCS.
+    type MailboxEnvelope<'Message>
+        (message: 'Message,
+         onError: (exn -> unit) option,
+         onDrop: (unit -> unit) option,
+         onDiscard: (AgentStopReason -> unit) option) =
+        let mutable dropped = 0
+        member _.Message = message
+        member _.WasDropped = Volatile.Read(&dropped) <> 0
+        member _.Fault(error) = onError |> Option.iter (fun settle -> settle error)
+        member _.Drop() =
+            Interlocked.Exchange(&dropped, 1) |> ignore
+            onDrop |> Option.iter (fun settle -> settle ())
+        member _.Discard(reason) = onDiscard |> Option.iter (fun settle -> settle reason)
 
 /// <summary>
 /// Context passed to each message handler of a base agent, providing access to its lifecycle and self-messaging capabilities.
@@ -279,6 +299,7 @@ type AgentContext<'Message>
     /// <summary>
     /// A cancellation token that is triggered when the agent is aborted.
     /// Useful for passing to long-running asynchronous operations within the handler.
+    /// Cancellation callbacks must return promptly and must not wait for this agent's Completion.
     /// </summary>
     member _.CancellationToken = cancellationToken
 
@@ -313,71 +334,72 @@ type AgentContext<'Message>
 /// </summary>
 [<Sealed>]
 type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>) =
+    do
+        if isNull (box options) then nullArg (nameof options)
+        if isNull (box handler) then nullArg (nameof handler)
+        validateTimeout "DefaultAskTimeout" options.DefaultAskTimeout
+        match options.Mailbox with
+        | AgentMailbox.Bounded(capacity, _, _) when capacity <= 0 ->
+            invalidArg "capacity" "Bounded mailbox capacity must be greater than zero."
+        | AgentMailbox.Bounded(_, fullMode, _) when not (Enum.IsDefined(fullMode)) ->
+            invalidArg "fullMode" "Unknown bounded mailbox full-mode policy."
+        | _ -> ()
+
     let lifetime = new CancellationTokenSource()
+    // Capture the token while its source is alive. Contexts never access CTS.Token after disposal.
+    let lifetimeToken = lifetime.Token
     let completion = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+    let termination = TaskCompletionSource<AgentStopReason>(TaskCreationOptions.RunContinuationsAsynchronously)
     let startedEvent = Event<string>()
     let stoppedEvent = Event<string * AgentStopReason>()
     let errorEvent = Event<string * exn>()
-    let syncRoot = obj()
+    let lifecycleGate = obj()
 
     let mutable queueLength = 0
+    let mutable droppedCount = 0L
     let mutable accepting = 1
-    let mutable aborted = 0
-    let mutable finalized = 0
+    let mutable immediateStop = 0
+    // Protected by lifecycleGate. A cancellation reserved before finishing must complete
+    // before CTS disposal; no additional cancellation may be requested after finishing starts.
+    let mutable finishing = false
     let mutable stopReason: AgentStopReason option = None
+    let mutable cancellationTask: Task = Task.CompletedTask
 
-    let mailboxWaitsWhenFull =
+    let mailboxDropsWrites =
         match options.Mailbox with
-        | AgentMailbox.Unbounded _ -> false
-        | AgentMailbox.Bounded(_, fullMode, _) -> fullMode = BoundedChannelFullMode.Wait
+        | AgentMailbox.Bounded(_, BoundedChannelFullMode.DropWrite, _) -> true
+        | _ -> false
 
-    let channel : Channel<'Message> =
+    let itemDropped (envelope: MailboxEnvelope<'Message>) =
+        Interlocked.Decrement(&queueLength) |> ignore
+        Interlocked.Increment(&droppedCount) |> ignore
+        envelope.Drop()
+
+    let channel : Channel<MailboxEnvelope<'Message>> =
         match options.Mailbox with
         | AgentMailbox.Unbounded allowSynchronousContinuations ->
-            let channelOptions =
+            let settings =
                 UnboundedChannelOptions(
                     SingleReader = true,
                     SingleWriter = options.SingleWriter,
                     AllowSynchronousContinuations = allowSynchronousContinuations)
-
-            Channel.CreateUnbounded<'Message>(channelOptions)
-
+            Channel.CreateUnbounded<MailboxEnvelope<'Message>>(settings)
         | AgentMailbox.Bounded(capacity, fullMode, allowSynchronousContinuations) ->
-            if capacity <= 0 then
-                invalidArg (nameof capacity) "Bounded mailbox capacity must be greater than zero."
-
-            let channelOptions =
+            let settings =
                 BoundedChannelOptions(capacity,
                     SingleReader = true,
                     SingleWriter = options.SingleWriter,
                     FullMode = fullMode,
                     AllowSynchronousContinuations = allowSynchronousContinuations)
+            Channel.CreateBounded<MailboxEnvelope<'Message>>(settings, Action<_>(itemDropped))
 
-            Channel.CreateBounded<'Message>(channelOptions)
-
-    let setStopReasonOnce reason =
-        lock syncRoot (fun () ->
-            match stopReason with
-            | Some _ -> ()
-            | None -> stopReason <- Some reason)
-
-    let getStopReason () =
-        lock syncRoot (fun () -> stopReason)
-
-    let finalize reason =
-        if Interlocked.Exchange(&finalized, 1) = 0 then
-            setStopReasonOnce reason
-
-            match reason with
-            | AgentStopReason.Completed -> completion.TrySetResult() |> ignore
-            | AgentStopReason.Aborted -> completion.TrySetCanceled() |> ignore
-            | AgentStopReason.Faulted error -> completion.TrySetException(error) |> ignore
-
-            safeInvoke (fun () -> stoppedEvent.Trigger(options.Name, reason))
-            options.OnStopped |> Option.iter (fun callback -> safeInvoke (fun () -> callback (options.Name, reason)))
-
-    let isAcceptingMessages () =
-        Volatile.Read(&accepting) = 1 && Volatile.Read(&aborted) = 0
+    let getStopReason () = lock lifecycleGate (fun () -> stopReason)
+    let isAcceptingMessages () = Volatile.Read(&accepting) = 1
+    let isImmediateStopRequested () = Volatile.Read(&immediateStop) <> 0
+    let isAbortRequested () =
+        match getStopReason () with
+        | Some AgentStopReason.Aborted -> true
+        | _ -> false
 
     let completeCore () =
         if Interlocked.Exchange(&accepting, 0) = 1 then
@@ -385,67 +407,94 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
         else
             false
 
-    let abortCore () =
-        if Interlocked.Exchange(&aborted, 1) = 0 then
-            Interlocked.Exchange(&accepting, 0) |> ignore
-            lifetime.Cancel()
+    let requestImmediateStop reason =
+        let selected, cancellation =
+            lock lifecycleGate (fun () ->
+                if finishing || stopReason.IsSome then
+                    false, None
+                else
+                    stopReason <- Some reason
+                    Volatile.Write(&immediateStop, 1)
+                    Interlocked.Exchange(&accepting, 0) |> ignore
+                    let pendingCancellation =
+                        match reason with
+                        | AgentStopReason.Aborted ->
+                            let pending = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+                            // Reserve before closing the writer: a synchronous channel continuation
+                            // may enter finish before CancelAsync has actually been called.
+                            cancellationTask <- pending.Task :> Task
+                            Some pending
+                        | _ -> None
+                    true, pendingCancellation)
+
+        if selected then
+            // Close admission first. Even a throwing cancellation callback cannot strand writers.
+            // Do not hold the gate here: channels may allow synchronous continuations.
             channel.Writer.TryComplete() |> ignore
+            match cancellation with
+            | None -> ()
+            | Some pending ->
+                let cancelAndObserve =
+                    task {
+                        try
+                            let callbacks = lock lifecycleGate (fun () -> lifetime.CancelAsync())
+                            do! callbacks
+                        with _ -> ()
+                        pending.TrySetResult() |> ignore
+                    }
+                // Every exception from user cancellation callbacks is observed above. The finish
+                // path awaits pending before disposal, including when CancelAsync starts late.
+                cancelAndObserve |> ignore
+            termination.TrySetResult(reason) |> ignore
 
-    let classifyFailedImmediateWrite () =
-        if isAcceptingMessages() then AgentPostResult.Full else AgentPostResult.Closed
+    let abortCore () = requestImmediateStop AgentStopReason.Aborted
 
-    let tryPostCore (message: 'Message) =
-        if not (isAcceptingMessages()) then
+    let tryWriteEnvelope (envelope: MailboxEnvelope<'Message>) =
+        if not (isAcceptingMessages ()) then
             AgentPostResult.Closed
-        elif channel.Writer.TryWrite(message) then
-            Interlocked.Increment(&queueLength) |> ignore
-            AgentPostResult.Posted
         else
-            classifyFailedImmediateWrite ()
-
-    let postAsyncCore (message: 'Message) (cancellationToken: CancellationToken) =
-        task {
-            if cancellationToken.IsCancellationRequested then
-                return AgentPostResult.Canceled
-            elif not (isAcceptingMessages()) then
-                return AgentPostResult.Closed
+            // Reserve before publishing: a reader or drop callback may run before TryWrite returns.
+            Interlocked.Increment(&queueLength) |> ignore
+            if channel.Writer.TryWrite(envelope) then
+                if mailboxDropsWrites && envelope.WasDropped then AgentPostResult.Dropped
+                else AgentPostResult.Posted
             else
-                try
-                    let mutable finished = false
-                    let mutable result = AgentPostResult.Closed
+                Interlocked.Decrement(&queueLength) |> ignore
+                if isAcceptingMessages () then AgentPostResult.Full else AgentPostResult.Closed
 
-                    while not finished do
-                        let! canWrite = channel.Writer.WaitToWriteAsync(cancellationToken).AsTask()
-
-                        if not canWrite then
-                            finished <- true
-                            result <- AgentPostResult.Closed
-                        elif channel.Writer.TryWrite(message) then
-                            Interlocked.Increment(&queueLength) |> ignore
-                            finished <- true
-                            result <- AgentPostResult.Posted
-                        elif not (isAcceptingMessages()) then
-                            finished <- true
-                            result <- AgentPostResult.Closed
-                        elif mailboxWaitsWhenFull then
-                            ()
-                        else
-                            finished <- true
-                            result <- AgentPostResult.Full
-
-                    return result
-                with :? OperationCanceledException ->
-                    return AgentPostResult.Canceled
+    let postEnvelopeAsync (envelope: MailboxEnvelope<'Message>) (token: CancellationToken) =
+        task {
+            let mutable result = AgentPostResult.Full
+            let mutable waiting = true
+            while waiting do
+                if token.IsCancellationRequested then
+                    result <- AgentPostResult.Canceled
+                    waiting <- false
+                else
+                    result <- tryWriteEnvelope envelope
+                    match result with
+                    | AgentPostResult.Full ->
+                        try
+                            let! canWrite = channel.Writer.WaitToWriteAsync(token).AsTask()
+                            if not canWrite then
+                                result <- AgentPostResult.Closed
+                                waiting <- false
+                        with :? OperationCanceledException ->
+                            result <- AgentPostResult.Canceled
+                            waiting <- false
+                    | _ -> waiting <- false
+            return result
         }
+
+    let tryPostCore message =
+        tryWriteEnvelope (MailboxEnvelope(message, None, None, None))
+
+    let postAsyncCore message token =
+        postEnvelopeAsync (MailboxEnvelope(message, None, None, None)) token
 
     let context =
         AgentContext<'Message>(
-            options.Name,
-            lifetime.Token,
-            tryPostCore,
-            postAsyncCore,
-            completeCore,
-            abortCore)
+            options.Name, lifetimeToken, tryPostCore, postAsyncCore, completeCore, abortCore)
 
     let signalStarted () =
         safeInvoke (fun () -> startedEvent.Trigger(options.Name))
@@ -459,230 +508,230 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
             with _ -> AgentErrorAction.Stop
         | None -> AgentErrorAction.Stop
 
+    let tryTakeNext () =
+        // Dispatch and Abort are ordered at this gate. At most the current dispatched handler
+        // remains in flight after Abort; cancellation is cooperative, not thread interruption.
+        lock lifecycleGate (fun () ->
+            if isImmediateStopRequested () then
+                None
+            else
+                match channel.Reader.TryRead() with
+                | true, envelope ->
+                    Interlocked.Decrement(&queueLength) |> ignore
+                    Some envelope
+                | false, _ -> None)
+
+    let finish () =
+        task {
+            let reason, callbacks =
+                lock lifecycleGate (fun () ->
+                    finishing <- true
+                    Interlocked.Exchange(&accepting, 0) |> ignore
+                    let reason = defaultArg stopReason AgentStopReason.Completed
+                    stopReason <- Some reason
+                    reason, cancellationTask)
+
+            channel.Writer.TryComplete() |> ignore
+            // The sole reader is now done dispatching. Drop references and settle queued requests.
+            let mutable draining = true
+            while draining do
+                match channel.Reader.TryRead() with
+                | true, envelope ->
+                    Interlocked.Decrement(&queueLength) |> ignore
+                    envelope.Discard reason
+                | false, _ -> draining <- false
+            termination.TrySetResult(reason) |> ignore
+
+            // Observe callback failures and finish every callback before disposing the CTS.
+            // They cannot replace an already selected stop reason or prevent shutdown.
+            try do! callbacks with _ -> ()
+            lock lifecycleGate (fun () -> lifetime.Dispose())
+
+            safeInvoke (fun () -> stoppedEvent.Trigger(options.Name, reason))
+            options.OnStopped |> Option.iter (fun callback -> safeInvoke (fun () -> callback (options.Name, reason)))
+
+            match reason with
+            | AgentStopReason.Completed -> completion.TrySetResult() |> ignore
+            | AgentStopReason.Aborted -> completion.TrySetCanceled(lifetimeToken) |> ignore
+            | AgentStopReason.Faulted error -> completion.TrySetException(error) |> ignore
+        }
+
     let runLoop () =
         task {
             signalStarted ()
-
             try
-                let mutable keepRunning = true
-
-                while keepRunning do
-                    let! canRead = channel.Reader.WaitToReadAsync(lifetime.Token).AsTask()
-
+                let mutable running = true
+                while running && not (isImmediateStopRequested ()) do
+                    let! canRead = channel.Reader.WaitToReadAsync(lifetimeToken).AsTask()
                     if not canRead then
-                        keepRunning <- false
+                        running <- false
                     else
                         let mutable draining = true
-
-                        while draining do
-                            match channel.Reader.TryRead() with
-                            | true, message ->
-                                Interlocked.Decrement(&queueLength) |> ignore
-
+                        while draining && not (isImmediateStopRequested ()) do
+                            match tryTakeNext () with
+                            | None -> draining <- false
+                            | Some envelope ->
                                 try
-                                    do! handler context message
-                                with error ->
+                                    do! handler context envelope.Message
+                                with
+                                | :? OperationCanceledException when isAbortRequested () ->
+                                    envelope.Discard AgentStopReason.Aborted
+                                | error ->
+                                    envelope.Fault error
                                     match reportHandlerError error with
                                     | AgentErrorAction.Continue -> ()
                                     | AgentErrorAction.Stop ->
-                                        setStopReasonOnce (AgentStopReason.Faulted error)
-                                        completeCore() |> ignore
-                                        draining <- false
-                                        keepRunning <- false
-                            | false, _ ->
-                                draining <- false
-
-                if Volatile.Read(&aborted) = 1 then
-                    finalize AgentStopReason.Aborted
-                else
-                    finalize (defaultArg (getStopReason ()) AgentStopReason.Completed)
+                                        requestImmediateStop (AgentStopReason.Faulted error)
             with
-            | :? OperationCanceledException ->
-                if Volatile.Read(&aborted) = 1 then
-                    finalize AgentStopReason.Aborted
-                else
-                    finalize (defaultArg (getStopReason ()) AgentStopReason.Completed)
-            | error ->
-                finalize (AgentStopReason.Faulted error)
+            | :? OperationCanceledException when isAbortRequested () -> ()
+            | error -> requestImmediateStop (AgentStopReason.Faulted error)
+            do! finish ()
         }
 
-    do Task.Run(fun () -> runLoop() :> Task) |> ignore
+    do Task.Run(fun () -> runLoop () :> Task) |> ignore
 
-    let waitForReply (replyTask: Task<'Reply>) (timeout: TimeSpan option) (cancellationToken: CancellationToken) =
+    let tryAskCore
+        (buildMessage: ReplyChannel<'Reply> -> 'Message)
+        (timeout: TimeSpan option)
+        (token: CancellationToken) =
         task {
-            let replyAsTask = replyTask :> Task
-            let completionTask = completion.Task :> Task
+            let effectiveTimeout = Option.orElse options.DefaultAskTimeout timeout
+            let validationError =
+                try
+                    validateTimeout "timeout" effectiveTimeout
+                    if isNull (box buildMessage) then nullArg (nameof buildMessage)
+                    None
+                with error -> Some error
 
-            let timeoutCts =
-                match timeout, cancellationToken.CanBeCanceled with
-                | None, false -> None
-                | Some _, false -> Some(new CancellationTokenSource())
-                | None, true -> Some(CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-                | Some _, true -> Some(CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            match validationError with
+            | Some error -> return AgentAskResult.Faulted error
+            | None when token.IsCancellationRequested -> return AgentAskResult.Canceled
+            | None when effectiveTimeout = Some TimeSpan.Zero -> return AgentAskResult.TimedOut
+            | None when not (isAcceptingMessages ()) -> return AgentAskResult.Closed
+            | None ->
+                let replyCompletion =
+                    TaskCompletionSource<AgentAskResult<'Reply>>(TaskCreationOptions.RunContinuationsAsynchronously)
+                let reply = ReplyChannel<'Reply>(replyCompletion)
+                let settle result = replyCompletion.TrySetResult(result) |> ignore
+                let cancellationResult () =
+                    if token.IsCancellationRequested then AgentAskResult.Canceled
+                    else AgentAskResult.TimedOut
 
-            timeoutCts |> Option.iter (fun cts -> timeout |> Option.iter cts.CancelAfter)
+                use waitCts =
+                    if token.CanBeCanceled then CancellationTokenSource.CreateLinkedTokenSource(token)
+                    else new CancellationTokenSource()
+                use registration = waitCts.Token.Register(fun () -> settle (cancellationResult ()))
+                match effectiveTimeout with
+                | Some value when value <> Timeout.InfiniteTimeSpan -> waitCts.CancelAfter(value)
+                | _ -> ()
 
-            try
-                let! winner =
-                    match timeoutCts with
-                    | None -> Task.WhenAny(replyAsTask, completionTask)
-                    | Some cts -> Task.WhenAny(replyAsTask, completionTask, waitIndefinitelyTask cts.Token)
+                let messageResult =
+                    try Ok (buildMessage reply)
+                    with error -> Error error
+                match messageResult with
+                | Error error -> settle (AgentAskResult.Faulted error)
+                | Ok message ->
+                    let envelope =
+                        MailboxEnvelope(
+                            message,
+                            Some (fun error -> settle (AgentAskResult.Faulted error)),
+                            Some (fun () -> settle AgentAskResult.Dropped),
+                            Some (fun reason -> settle (resultForStop reason)))
+                    let! postResult = postEnvelopeAsync envelope waitCts.Token
+                    match postResult with
+                    | AgentPostResult.Posted -> ()
+                    | AgentPostResult.Dropped -> settle AgentAskResult.Dropped
+                    | AgentPostResult.Full -> settle AgentAskResult.Full
+                    | AgentPostResult.Closed -> settle AgentAskResult.Closed
+                    | AgentPostResult.Canceled -> settle (cancellationResult ())
 
-                if Object.ReferenceEquals(winner, replyAsTask) then
-                    match replyTask.Status with
-                    | TaskStatus.RanToCompletion ->
-                        return AgentAskResult.Replied replyTask.Result
-                    | TaskStatus.Faulted ->
-                        return AgentAskResult.Faulted (tryGetBaseException replyTask)
-                    | TaskStatus.Canceled ->
-                        return AgentAskResult.Canceled
-                    | _ ->
-                        return AgentAskResult.Closed
-                elif Object.ReferenceEquals(winner, completionTask) then
-                    match getStopReason () with
-                    | Some (AgentStopReason.Faulted error) -> return AgentAskResult.Faulted error
-                    | Some AgentStopReason.Aborted -> return AgentAskResult.Canceled
-                    | Some AgentStopReason.Completed
-                    | None -> return AgentAskResult.Closed
-                else
-                    if cancellationToken.IsCancellationRequested then
-                        return AgentAskResult.Canceled
-                    else
-                        return AgentAskResult.TimedOut
-            finally
-                timeoutCts |> Option.iter (fun cts -> cts.Dispose())
+                if not replyCompletion.Task.IsCompleted then
+                    let! winner = Task.WhenAny(replyCompletion.Task :> Task, termination.Task :> Task)
+                    if Object.ReferenceEquals(winner, termination.Task) then
+                        settle (resultForStop termination.Task.Result)
+                return! replyCompletion.Task
         }
 
-    /// <summary>
-    /// The configured agent name.
-    /// </summary>
+    /// <summary>The configured agent name.</summary>
     member _.Name = options.Name
 
     /// <summary>
-    /// A task that completes when the agent has fully stopped processing.
+    /// Completes after dispatch, queue cleanup, cancellation callbacks, and stopped callbacks finish.
+    /// Succeeds for Completed, is canceled for Aborted, and faults for Faulted.
+    /// Lifecycle callbacks must not block waiting for this task.
     /// </summary>
     member _.Completion : Task = completion.Task :> Task
 
     /// <summary>
-    /// The approximate number of messages currently accepted into the mailbox and waiting to be processed.
+    /// Approximate queued count, excluding the current handler and writers waiting for admission.
+    /// On channel implementations without Count, a concurrent write reservation can be included briefly.
     /// </summary>
-    member _.QueueLength = max 0 (Volatile.Read(&queueLength))
+    member _.QueueLength =
+        if channel.Reader.CanCount then channel.Reader.Count
+        else max 0 (Volatile.Read(&queueLength))
 
-    /// <summary>
-    /// True if the agent is still accepting new messages (i.e., Complete or Abort has not been called).
-    /// </summary>
+    /// <summary>Total messages discarded by the bounded full-mode policy; excludes shutdown cleanup.</summary>
+    member _.DroppedCount = Interlocked.Read(&droppedCount)
+
+    /// <summary>True while the mailbox accepts new messages.</summary>
     member _.IsAcceptingMessages = isAcceptingMessages ()
 
-    /// <summary>
-    /// Gets the reason the agent stopped, or None if it is still running.
-    /// </summary>
+    /// <summary>The selected shutdown reason, or None before shutdown has been selected.</summary>
     member _.StopReason = getStopReason ()
 
-    /// <summary>
-    /// An event raised exactly once when the agent starts its processing loop.
-    /// </summary>
+    /// <summary>Raised on the background loop at startup. Use OnStarted to avoid subscription races.</summary>
     member _.Started = startedEvent.Publish
 
-    /// <summary>
-    /// An event raised when a message handler throws an unhandled exception.
-    /// </summary>
+    /// <summary>Raised for unhandled handler failures before the configured error policy runs.</summary>
     member _.Errored = errorEvent.Publish
 
-    /// <summary>
-    /// An event raised exactly once when the agent stops processing.
-    /// </summary>
+    /// <summary>Raised exactly once during shutdown, before Completion becomes complete.</summary>
     member _.Stopped = stoppedEvent.Publish
 
     /// <summary>
-    /// Attempts to enqueue a message immediately. Returns a result indicating success or failure. Does not block.
+    /// Attempts immediate admission. Posted means accepted now, not processed or durably retained:
+    /// a later write using DropOldest or DropNewest may evict an accepted message.
     /// </summary>
-    /// <param name="message">The message to post.</param>
     member _.TryPost(message: 'Message) = tryPostCore message
 
     /// <summary>
-    /// Asynchronously posts a message to the agent.
-    /// If the mailbox is bounded and full, this operation will wait asynchronously until space is available or the token is canceled.
+    /// Posts a message, asynchronously waiting for space only with a bounded Wait mailbox.
+    /// Cancellation stops waiting for admission; an already accepted message is not rolled back.
     /// </summary>
-    /// <param name="message">The message to post.</param>
-    /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.PostAsync(message: 'Message, ?cancellationToken: CancellationToken) =
-        let token = defaultArg cancellationToken CancellationToken.None
-        postAsyncCore message token
+        postAsyncCore message (defaultArg cancellationToken CancellationToken.None)
 
     /// <summary>
-    /// Sends a request message and waits for a reply, returning an AgentAskResult instead of throwing exceptions on failure.
+    /// Constructs a request, waits for admission, and waits for its reply under one timeout budget.
+    /// The first terminal result wins. Invalid timeout arguments return Faulted before construction.
+    /// Timeout or cancellation does not retract an admitted command or undo its effects.
+    /// BuildMessage must only construct the message; it runs synchronously on the caller.
     /// </summary>
-    /// <param name="buildMessage">A function that constructs the request message, given a ReplyChannel.</param>
-    /// <param name="timeout">An optional timeout for the reply. Defaults to the agent's DefaultAskTimeout.</param>
-    /// <param name="cancellationToken">An optional cancellation token to cancel the wait.</param>
     member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Message, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        task {
-            let effectiveTimeout =
-                match timeout with
-                | Some value -> Some value
-                | None -> options.DefaultAskTimeout
-            let token = defaultArg cancellationToken CancellationToken.None
-            let replyCompletion = TaskCompletionSource<'Reply>(TaskCreationOptions.RunContinuationsAsynchronously)
-            let reply = ReplyChannel<'Reply>(replyCompletion)
+        tryAskCore buildMessage timeout (defaultArg cancellationToken CancellationToken.None)
 
-            let messageResult =
-                try Ok (buildMessage reply)
-                with error -> Error error
-
-            match messageResult with
-            | Error error ->
-                return AgentAskResult.Faulted error
-            | Ok message ->
-                let! postResult = postAsyncCore message token
-
-                match postResult with
-                | AgentPostResult.Posted ->
-                    let! askResult = waitForReply replyCompletion.Task effectiveTimeout token
-
-                    match askResult with
-                    | AgentAskResult.Replied _
-                    | AgentAskResult.Faulted _ ->
-                        return askResult
-                    | AgentAskResult.Full
-                    | AgentAskResult.Closed
-                    | AgentAskResult.TimedOut
-                    | AgentAskResult.Canceled ->
-                        reply.TryCancel() |> ignore
-                        return askResult
-                | AgentPostResult.Full -> return AgentAskResult.Full
-                | AgentPostResult.Closed -> return AgentAskResult.Closed
-                | AgentPostResult.Canceled -> return AgentAskResult.Canceled
-        }
-
-    /// <summary>
-    /// Sends a request message and waits for a reply asynchronously.
-    /// Throws an exception if the agent is full, closed, timed out, or if the handler explicitly faults the reply.
-    /// </summary>
-    /// <param name="buildMessage">A function that constructs the request message, given a ReplyChannel.</param>
-    /// <param name="timeout">An optional timeout for the reply.</param>
-    /// <param name="cancellationToken">An optional cancellation token to cancel the wait.</param>
+    /// <summary>Sends a request and returns the reply, throwing on any unsuccessful request result.</summary>
     member this.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Message, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
         task {
             let! result = this.TryAskAsync(buildMessage, ?timeout = timeout, ?cancellationToken = cancellationToken)
-
             match result with
             | AgentAskResult.Replied value -> return value
             | AgentAskResult.Faulted error -> return! taskFromException<'Reply> error
+            | AgentAskResult.Dropped -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' mailbox dropped the request."))
             | AgentAskResult.Full -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' mailbox is full."))
             | AgentAskResult.Closed -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' is not accepting new messages."))
-            | AgentAskResult.TimedOut -> return! taskFromException<'Reply> (TimeoutException($"Timed out waiting for a reply from agent '{options.Name}'."))
+            | AgentAskResult.TimedOut -> return! taskFromException<'Reply> (TimeoutException($"Request to agent '{options.Name}' timed out."))
             | AgentAskResult.Canceled -> return! taskFromException<'Reply> (OperationCanceledException($"Ask to agent '{options.Name}' was canceled."))
         }
 
-    /// <summary>
-    /// Signals the agent to stop accepting new messages and to process all currently queued messages before shutting down gracefully.
-    /// </summary>
-    member _.Complete() = completeCore()
+    /// <summary>Closes admission and gracefully drains every accepted message.</summary>
+    member _.Complete() = completeCore ()
 
     /// <summary>
-    /// Signals the agent to stop immediately. The internal cancellation token is triggered, and pending messages are discarded.
+    /// Closes admission, stops queued dispatch, and requests cooperative in-flight cancellation.
+    /// Returns immediately; await Completion to observe finished cleanup. Safe after shutdown.
     /// </summary>
-    member _.Abort() = abortCore()
+    member _.Abort() = abortCore ()
 
     interface IDisposable with
         member this.Dispose() = this.Abort()
@@ -692,11 +741,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
             this.Complete() |> ignore
             ValueTask(this.Completion)
 
-    /// <summary>
-    /// Creates and starts a new Agent with the specified options and message handler.
-    /// </summary>
-    /// <param name="options">The configuration options for the agent.</param>
-    /// <param name="handler">The asynchronous function that processes incoming messages.</param>
+    /// <summary>Validates configuration and starts a sequential background message loop.</summary>
     static member Start(options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>) =
         new Agent<'Message>(options, handler)
 
@@ -757,6 +802,7 @@ type StatefulAgentOptions<'State> =
         /// <summary>
         /// Optional callback invoked after an unhandled exception in the command handler.
         /// Receives the current state and the exception, and must return a StatefulErrorAction to determine the next step.
+        /// When present this policy takes precedence over AgentOptions.OnError; otherwise the base policy is used.
         /// </summary>
         OnUnhandled: ('State * exn -> StatefulErrorAction<'State>) option
         /// <summary>
@@ -831,8 +877,9 @@ type StatefulAgentContext
     member _.Abort() = abortImpl ()
 
 /// <summary>
-/// A stateful agent that strictly encapsulates a mutable state and models a finite-state machine.
-/// All state mutations and reads happen sequentially within the agent's processing loop, eliminating data races.
+/// A sequential agent whose handler returns explicit replacements of the current state value.
+/// Prefer immutable state. Serialization protects state only while mutable references stay inside
+/// the agent; return immutable values or detached snapshots from read projections.
 /// </summary>
 [<Sealed>]
 type StatefulAgent<'State, 'Command>
@@ -850,42 +897,43 @@ type StatefulAgent<'State, 'Command>
         state <- nextState
         options.OnTransition |> Option.iter (fun callback -> safeInvoke (fun () -> callback (previous, nextState)))
 
+    let onError (name, error) =
+        match options.OnUnhandled with
+        | None ->
+            match options.AgentOptions.OnError with
+            | Some decide -> decide (name, error)
+            | None -> AgentErrorAction.Stop
+        | Some decide ->
+            match decide (state, error) with
+            | StatefulErrorAction.KeepStateAndContinue -> AgentErrorAction.Continue
+            | StatefulErrorAction.ReplaceStateAndContinue nextState ->
+                applyState nextState
+                AgentErrorAction.Continue
+            | StatefulErrorAction.Stop -> AgentErrorAction.Stop
+            | StatefulErrorAction.StopWithState nextState ->
+                applyState nextState
+                AgentErrorAction.Stop
+
     let inner =
         Agent.Start(
-            { options.AgentOptions with OnError = None },
+            { options.AgentOptions with OnError = Some onError },
             fun agentContext envelope ->
                 task {
                     match envelope with
-                    | Query query ->
-                        query.Execute state
+                    | Query query -> query.Execute state
                     | Command command ->
-                        let ctx = StatefulAgentContext(agentContext.Name, agentContext.CancellationToken, agentContext.Complete, agentContext.Abort)
-
-                        try
-                            let! transition = commandHandler ctx state command
-
-                            match transition with
-                            | StatefulTransition.Stay -> ()
-                            | StatefulTransition.SetState nextState -> applyState nextState
-                            | StatefulTransition.Stop -> agentContext.Complete() |> ignore
-                            | StatefulTransition.StopWithState nextState ->
-                                applyState nextState
-                                agentContext.Complete() |> ignore
-                        with error ->
-                            let decision =
-                                match options.OnUnhandled with
-                                | Some decide ->
-                                    try decide (state, error)
-                                    with _ -> StatefulErrorAction.Stop
-                                | None -> StatefulErrorAction.Stop
-
-                            match decision with
-                            | StatefulErrorAction.KeepStateAndContinue -> ()
-                            | StatefulErrorAction.ReplaceStateAndContinue nextState -> applyState nextState
-                            | StatefulErrorAction.Stop -> agentContext.Complete() |> ignore
-                            | StatefulErrorAction.StopWithState nextState ->
-                                applyState nextState
-                                agentContext.Complete() |> ignore
+                        let ctx =
+                            StatefulAgentContext(
+                                agentContext.Name, agentContext.CancellationToken,
+                                agentContext.Complete, agentContext.Abort)
+                        let! transition = commandHandler ctx state command
+                        match transition with
+                        | StatefulTransition.Stay -> ()
+                        | StatefulTransition.SetState nextState -> applyState nextState
+                        | StatefulTransition.Stop -> agentContext.Complete() |> ignore
+                        | StatefulTransition.StopWithState nextState ->
+                            applyState nextState
+                            agentContext.Complete() |> ignore
                 })
 
     /// <summary>
@@ -902,6 +950,9 @@ type StatefulAgent<'State, 'Command>
     /// The approximate number of queued envelopes (commands and queries).
     /// </summary>
     member _.QueueLength = inner.QueueLength
+
+    /// <summary>Total envelopes discarded by the bounded mailbox policy.</summary>
+    member _.DroppedCount = inner.DroppedCount
 
     /// <summary>
     /// True if the stateful agent is still accepting new commands and queries.
@@ -942,6 +993,23 @@ type StatefulAgent<'State, 'Command>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.PostAsync(command: 'Command, ?cancellationToken: CancellationToken) =
         inner.PostAsync(Command command, ?cancellationToken = cancellationToken)
+
+    /// <summary>
+    /// Enqueues an atomic command/request and waits for its handler to reply.
+    /// Timeout includes admission and reply; an admitted command may still execute after timeout.
+    /// </summary>
+    member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
+        inner.TryAskAsync(
+            (fun reply -> Command (buildMessage reply)),
+            ?timeout = timeout,
+            ?cancellationToken = cancellationToken)
+
+    /// <summary>Enqueues a command/request and returns the reply, throwing on unsuccessful results.</summary>
+    member _.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
+        inner.AskAsync(
+            (fun reply -> Command (buildMessage reply)),
+            ?timeout = timeout,
+            ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Enqueues a read query to safely project data from the current state.
@@ -1056,6 +1124,14 @@ module StatefulAgent =
     let postAsync command (agent: StatefulAgent<_, _>) =
         agent.PostAsync(command)
 
+    /// <summary>Sends a command/request and returns its reply, throwing on failure.</summary>
+    let askAsync buildMessage (agent: StatefulAgent<_, _>) =
+        agent.AskAsync(buildMessage)
+
+    /// <summary>Sends a command/request and returns a result union.</summary>
+    let tryAskAsync buildMessage (agent: StatefulAgent<_, _>) =
+        agent.TryAskAsync(buildMessage)
+
     /// <summary>
     /// Reads a projection of the current state, throwing on failure.
     /// </summary>
@@ -1068,11 +1144,6 @@ module StatefulAgent =
     let tryReadAsync projection (agent: StatefulAgent<_, _>) =
         agent.TryReadAsync(projection)
 
-
-[<AutoOpen>]
-module private MutableStatefulAgentInternals =
-    let inline privateSafeInvoke (f: unit -> unit) =
-        try f() with _ -> ()
 
 /// <summary>
 /// Represents a transition returned by a mutable stateful agent's command handler.
@@ -1099,7 +1170,7 @@ type MutableStatefulErrorAction =
     /// </summary>
     | Continue
     /// <summary>
-    /// Stop the agent gracefully after the error.
+    /// Stop with a Faulted reason immediately after this handler; discard queued commands.
     /// </summary>
     | Stop
 
@@ -1117,6 +1188,8 @@ type MutableStatefulAgentOptions<'State> =
         /// <summary>
         /// Optional callback invoked after an unhandled exception in the command handler.
         /// Receives the current mutable state instance and the exception, and must decide whether to continue or stop.
+        /// When present this policy takes precedence over AgentOptions.OnError; otherwise the base policy is used.
+        /// Continuing does not roll back partial in-place mutations made before the error.
         /// </summary>
         OnUnhandled: ('State * exn -> MutableStatefulErrorAction) option
     }
@@ -1136,21 +1209,6 @@ module MutableStatefulAgentOptions =
             OnUnhandled = None
         }
 
-type private IMutableStateQuery<'State> =
-    abstract member Execute : 'State -> unit
-
-type private MutableStateQuery<'State, 'Reply>(projection: 'State -> 'Reply, reply: ReplyChannel<'Reply>) =
-    interface IMutableStateQuery<'State> with
-        member _.Execute(state: 'State) =
-            try
-                projection state |> reply.Reply
-            with error ->
-                reply.ReplyError error
-
-type private MutableStatefulEnvelope<'State, 'Command> =
-    | Command of 'Command
-    | Query of IMutableStateQuery<'State>
-
 /// <summary>
 /// A mutable stateful agent that fully encapsulates a mutable state object.
 /// All command handling and state reads are serialized through the agent mailbox,
@@ -1167,43 +1225,33 @@ type MutableStatefulAgent<'State, 'Command>
 
     let state = initialState
 
+    let onError (name, error) =
+        match options.OnUnhandled with
+        | None ->
+            match options.AgentOptions.OnError with
+            | Some decide -> decide (name, error)
+            | None -> AgentErrorAction.Stop
+        | Some decide ->
+            match decide (state, error) with
+            | MutableStatefulErrorAction.Continue -> AgentErrorAction.Continue
+            | MutableStatefulErrorAction.Stop -> AgentErrorAction.Stop
+
     let inner =
         Agent.Start(
-            { options.AgentOptions with OnError = None },
+            { options.AgentOptions with OnError = Some onError },
             fun agentContext envelope ->
                 task {
                     match envelope with
-                    | Query query ->
-                        query.Execute state
-
+                    | Query query -> query.Execute state
                     | Command command ->
                         let ctx =
                             StatefulAgentContext(
-                                agentContext.Name,
-                                agentContext.CancellationToken,
-                                agentContext.Complete,
-                                agentContext.Abort)
-
-                        try
-                            let! transition = commandHandler ctx state command
-
-                            match transition with
-                            | MutableStatefulTransition.Stay -> ()
-                            | MutableStatefulTransition.Stop ->
-                                agentContext.Complete() |> ignore
-                        with error ->
-                            let action =
-                                match options.OnUnhandled with
-                                | Some decide ->
-                                    try decide (state, error)
-                                    with _ -> MutableStatefulErrorAction.Stop
-                                | None ->
-                                    MutableStatefulErrorAction.Stop
-
-                            match action with
-                            | MutableStatefulErrorAction.Continue -> ()
-                            | MutableStatefulErrorAction.Stop ->
-                                agentContext.Complete() |> ignore
+                                agentContext.Name, agentContext.CancellationToken,
+                                agentContext.Complete, agentContext.Abort)
+                        let! transition = commandHandler ctx state command
+                        match transition with
+                        | MutableStatefulTransition.Stay -> ()
+                        | MutableStatefulTransition.Stop -> agentContext.Complete() |> ignore
                 })
 
     /// <summary>
@@ -1220,6 +1268,9 @@ type MutableStatefulAgent<'State, 'Command>
     /// The approximate number of queued envelopes (commands and queries).
     /// </summary>
     member _.QueueLength = inner.QueueLength
+
+    /// <summary>Total envelopes discarded by the bounded mailbox policy.</summary>
+    member _.DroppedCount = inner.DroppedCount
 
     /// <summary>
     /// True if the mutable stateful agent is still accepting new commands and queries.
@@ -1263,16 +1314,34 @@ type MutableStatefulAgent<'State, 'Command>
         inner.PostAsync(Command command, ?cancellationToken = cancellationToken)
 
     /// <summary>
+    /// Enqueues an atomic command/request and waits for its handler to reply.
+    /// Timeout includes admission and reply; an admitted command may still execute after timeout.
+    /// </summary>
+    member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
+        inner.TryAskAsync(
+            (fun reply -> Command (buildMessage reply)),
+            ?timeout = timeout,
+            ?cancellationToken = cancellationToken)
+
+    /// <summary>Enqueues a command/request and returns the reply, throwing on unsuccessful results.</summary>
+    member _.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
+        inner.AskAsync(
+            (fun reply -> Command (buildMessage reply)),
+            ?timeout = timeout,
+            ?cancellationToken = cancellationToken)
+
+    /// <summary>
     /// Enqueues a read query to safely project data from the current mutable state.
     /// The projection runs sequentially inside the agent loop.
-    /// Do not return live mutable references unless the caller is trusted not to mutate them concurrently.
+    /// Return immutable values or detached snapshots, never live mutable objects or lazy views:
+    /// even a read-only caller would otherwise race later mutations inside the agent.
     /// </summary>
     /// <param name="projection">A function that extracts data from the current state.</param>
     /// <param name="timeout">An optional timeout for the query.</param>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.TryReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
         inner.TryAskAsync(
-            (fun reply -> Query (MutableStateQuery<'State, 'Reply>(projection, reply) :> IMutableStateQuery<'State>)),
+            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
             ?timeout = timeout,
             ?cancellationToken = cancellationToken)
 
@@ -1286,7 +1355,7 @@ type MutableStatefulAgent<'State, 'Command>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.ReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
         inner.AskAsync(
-            (fun reply -> Query (MutableStateQuery<'State, 'Reply>(projection, reply) :> IMutableStateQuery<'State>)),
+            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
             ?timeout = timeout,
             ?cancellationToken = cancellationToken)
 
@@ -1344,6 +1413,14 @@ module MutableStatefulAgent =
     /// </summary>
     let postAsync command (agent: MutableStatefulAgent<_, _>) =
         agent.PostAsync(command)
+
+    /// <summary>Sends a command/request and returns its reply, throwing on failure.</summary>
+    let askAsync buildMessage (agent: MutableStatefulAgent<_, _>) =
+        agent.AskAsync(buildMessage)
+
+    /// <summary>Sends a command/request and returns a result union.</summary>
+    let tryAskAsync buildMessage (agent: MutableStatefulAgent<_, _>) =
+        agent.TryAskAsync(buildMessage)
 
     /// <summary>
     /// Reads a projection of the current mutable state, throwing on failure.
