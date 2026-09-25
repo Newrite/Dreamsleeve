@@ -6,13 +6,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Library.fs"/>
+        <Compile Include="Config.fs" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Dreamsleeve.Agent\Dreamsleeve.Agent.fsproj" />
-      <ProjectReference Include="..\Dreamsleeve.Server.Domain\Dreamsleeve.Server.Domain.fsproj" />
-      <ProjectReference Include="..\Dreamsleeve.Server.Infrastructure\Dreamsleeve.Server.Infrastructure.fsproj" />
+      <PackageReference Include="yENet" Version="1.2.1" />
     </ItemGroup>
 
 </Project>
