@@ -10,6 +10,7 @@
     <Compile Include="CodecTests.fs" />
     <Compile Include="BackgroundTests.fs" />
     <Compile Include="ProfileStoreTests.fs" />
+    <Compile Include="ChatAgentTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
