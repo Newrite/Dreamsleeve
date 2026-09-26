@@ -3,7 +3,9 @@
 import DreamNet.Runtime;
 import std;
 
-TEST_CASE("DreamNetRuntime.TryInitialize - success", "[runtime]")
+TEST_SUITE_BEGIN("DreamNet.Runtime");
+
+TEST_CASE("DreamNetRuntime.TryInitialize - success")
 {
   auto result = DreamNetRuntime::TryInitialize();
   REQUIRE(result.has_value());
@@ -12,7 +14,7 @@ TEST_CASE("DreamNetRuntime.TryInitialize - success", "[runtime]")
   // runtime deinitializes on destruction at end of scope
 }
 
-TEST_CASE("DreamNetRuntime move constructor transfers ownership", "[runtime]")
+TEST_CASE("DreamNetRuntime move constructor transfers ownership")
 {
   auto result = DreamNetRuntime::TryInitialize();
   REQUIRE(result.has_value());
@@ -24,7 +26,7 @@ TEST_CASE("DreamNetRuntime move constructor transfers ownership", "[runtime]")
   // runtime2 owns it and will deinitialize on destruction
 }
 
-TEST_CASE("DreamNetRuntime move assignment transfers ownership", "[runtime]")
+TEST_CASE("DreamNetRuntime move assignment transfers ownership")
 {
   auto result1 = DreamNetRuntime::TryInitialize();
   auto result2 = DreamNetRuntime::TryInitialize();
@@ -39,7 +41,7 @@ TEST_CASE("DreamNetRuntime move assignment transfers ownership", "[runtime]")
   // Now runtime1 owns the second runtime, the first was already released
 }
 
-TEST_CASE("DreamNetRuntime scope-based lifetime", "[runtime]")
+TEST_CASE("DreamNetRuntime scope-based lifetime")
 {
   // This test verifies that the runtime can be created and destroyed cleanly
   {
@@ -56,3 +58,5 @@ TEST_CASE("DreamNetRuntime scope-based lifetime", "[runtime]")
     auto runtime = std::move(result.value());
   }
 }
+
+TEST_SUITE_END();

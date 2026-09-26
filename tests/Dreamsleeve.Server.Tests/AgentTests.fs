@@ -1,4 +1,6 @@
-module Dreamsleeve.Agent.Tests
+module Dreamsleeve.Server.Tests.AgentTests
+
+open Expecto
 
 open System
 open System.Collections.Concurrent
@@ -644,7 +646,7 @@ let concurrentTerminalRequestsRemainConsistent () = task {
     equal [| AgentStopReason.Aborted |] (stopped.ToArray())
 }
 
-let tests : (string * (unit -> Task<unit>)) list =
+let private scenarios : (string * (unit -> Task<unit>)) list =
     [ "Serial FIFO handling and reply", serialAndReply
       "Bounded backpressure and canceled writer", boundedBackpressure
       "Ask timeout includes mailbox admission", askTimeoutIncludesAdmission
@@ -674,18 +676,12 @@ let tests : (string * (unit -> Task<unit>)) list =
       "Idle synchronous-continuation Abort cancels lifetime", synchronousIdleAbortCancelsLifetime
       "Concurrent Complete and Abort preserve one terminal outcome", concurrentTerminalRequestsRemainConsistent ]
 
-[<EntryPoint>]
-let main _ =
-    let run = task {
-        let mutable failures = 0
-        for name, test in tests do
-            try
-                do! (test ()).WaitAsync(TimeSpan.FromSeconds 15.0)
-                printfn "PASS %s" name
-            with error ->
-                failures <- failures + 1
-                eprintfn "FAIL %s\n  %s" name (error.ToString())
-        printfn "\n%d passed; %d failed; %d total." (tests.Length - failures) failures tests.Length
-        return if failures = 0 then 0 else 1
-    }
-    run.GetAwaiter().GetResult()
+// Keep the original suite sequential and preserve its per-scenario hang guard.
+let tests =
+    scenarios
+    |> List.map (fun (name, run) ->
+        testCaseAsync name (async {
+            do! (run ()).WaitAsync(TimeSpan.FromSeconds 15.0) |> Async.AwaitTask
+        }))
+    |> testList "Dreamsleeve.Agent"
+    |> testSequenced

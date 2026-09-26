@@ -220,9 +220,12 @@ ID и `SentAt`; фабрика сообщения приводит время к
 
 ```sh
 dotnet build src/Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj -c Release
-dotnet run --project src/Dreamsleeve.Server.Domain.Tests -c Release
+dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list Dreamsleeve.Server.Domain
 ```
 
 Тестовый проект использует указанные в техническом справочнике Expecto и Faqt.
 Проверяются нормализация и внешние ключи, конечность и точность вычислений,
 снимки, смена персонажа, членство и ошибки чата, вытеснение и продолжение истории.
+
+Общий запуск всех тестов: `python Scripts/run_tests.py`.
+[Организация тестов](../../tests/README.md).

@@ -23,7 +23,7 @@ From the repository root, with a .NET 10 SDK:
 ```sh
 dotnet build src/Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj -c Release
 dotnet run --project src/Dreamsleeve.Agent/examples/Dreamsleeve.Agent.Examples.fsproj -c Release
-dotnet run --project src/Dreamsleeve.Agent.Tests/Dreamsleeve.Agent.Tests.fsproj -c Release
+dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list Dreamsleeve.Agent
 ```
 
 The example program runs a base outbound worker, immutable party state, and mutable presence snapshots. It produces deterministic output and shuts down all agents. Source files: [Outbound.fs](examples/Outbound.fs), [Party.fs](examples/Party.fs), [Presence.fs](examples/Presence.fs).
@@ -79,3 +79,5 @@ python src/Dreamsleeve.Agent/docs/build.py
 ```
 
 The generated `docs/index.html` needs neither Python nor a server to open. Keep the bundled directory layout, including `examples`, when regenerating it.
+
+Run all suites: `python Scripts/run_tests.py`. [Test organization](../../tests/README.md).

@@ -11,6 +11,8 @@ import DreamNet.Packet;
 import DreamNet.Peer;
 import DreamNet.Runtime;
 
+TEST_SUITE_BEGIN("DreamNet.Client");
+
 TEST_CASE("DreamNetClient requires one peer slot and an explicit channel count")
 {
   auto config = DreamNetClientConfig::Default();
@@ -154,3 +156,5 @@ TEST_CASE("DreamNetClient owns received packets and preserves disconnect data af
   client.reset();
   CHECK(std::ranges::equal(retainedPacket->DataBytesView(), payload));
 }
+
+TEST_SUITE_END();

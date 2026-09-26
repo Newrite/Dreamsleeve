@@ -125,9 +125,9 @@ target("Dreamsleeve.Client.Tests")
     set_kind("binary")
     set_group("Tests")
 
-    add_includedirs("src/Dreamsleeve.Client.Tests")
-    add_visible_headers("src/Dreamsleeve.Client.Tests")
-    add_cpp_files("src/Dreamsleeve.Client.Tests")
+    add_includedirs("tests/Dreamsleeve.Client.Tests")
+    add_visible_headers("tests/Dreamsleeve.Client.Tests")
+    add_cpp_files("tests/Dreamsleeve.Client.Tests")
 
     add_deps("Dreamsleeve.Client.Core")
     add_packages("doctest")

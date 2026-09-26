@@ -130,7 +130,9 @@ namespace
 
 }
 
-TEST_CASE("DreamNetHost.TryCreateClient - invalid config contains detailed cause", "[host][config]")
+TEST_SUITE_BEGIN("DreamNet.Network");
+
+TEST_CASE("DreamNetHost.TryCreateClient - invalid config contains detailed cause")
 {
   ClientConfig config = NetConfig::Default();
   config.maxPeers     = 0;
@@ -143,7 +145,7 @@ TEST_CASE("DreamNetHost.TryCreateClient - invalid config contains detailed cause
   REQUIRE(result.error().Cause()->message.find("maxPeers") != std::string::npos);
 }
 
-TEST_CASE("DreamNetHost.ApplyRuntimeConfig - invalid channel limit is rejected", "[host][config]")
+TEST_CASE("DreamNetHost.ApplyRuntimeConfig - invalid channel limit is rejected")
 {
   auto runtimeResult = DreamNetRuntime::TryInitialize();
   REQUIRE(runtimeResult.has_value());
@@ -162,7 +164,7 @@ TEST_CASE("DreamNetHost.ApplyRuntimeConfig - invalid channel limit is rejected",
   REQUIRE(applyResult.error().message.find("channelLimit") != std::string::npos);
 }
 
-TEST_CASE("DreamNet client server connect populates host and peer state", "[host][peer][event][integration]")
+TEST_CASE("DreamNet client server connect populates host and peer state")
 {
   auto connected = CreateConnectedHosts();
 
@@ -194,7 +196,7 @@ TEST_CASE("DreamNet client server connect populates host and peer state", "[host
   CHECK(clientPeerTelemetry->transportInfo.state == ENET_PEER_STATE_CONNECTED);
 }
 
-TEST_CASE("DreamNetPeer.PushSpan delivers receive event with packet payload", "[peer][event][integration]")
+TEST_CASE("DreamNetPeer.PushSpan delivers receive event with packet payload")
 {
   auto connected = CreateConnectedHosts();
 
@@ -235,7 +237,7 @@ TEST_CASE("DreamNetPeer.PushSpan delivers receive event with packet payload", "[
   CHECK(serverTelemetry->totalReceivedData >= payload.size());
 }
 
-TEST_CASE("DreamNetHost.BroadcastPushPacketSpan sends packet to connected client", "[host][event][integration]")
+TEST_CASE("DreamNetHost.BroadcastPushPacketSpan sends packet to connected client")
 {
   auto connected = CreateConnectedHosts();
 
@@ -270,7 +272,7 @@ TEST_CASE("DreamNetHost.BroadcastPushPacketSpan sends packet to connected client
   CHECK(serverTelemetry->totalSentData >= payload.size());
 }
 
-TEST_CASE("DreamNet disconnect produces disconnect event with reason", "[host][event][integration]")
+TEST_CASE("DreamNet disconnect produces disconnect event with reason")
 {
   auto connected = CreateConnectedHosts();
 
@@ -303,7 +305,7 @@ TEST_CASE("DreamNet disconnect produces disconnect event with reason", "[host][e
   CHECK(serverDisconnectEvent->TryDisconnectReason().value() == DisconnectReason::Unspecified);
 }
 
-TEST_CASE("DreamNetPeer.ApplyRuntimeConfig - invalid ping interval is rejected", "[peer][config][integration]")
+TEST_CASE("DreamNetPeer.ApplyRuntimeConfig - invalid ping interval is rejected")
 {
   auto connected = CreateConnectedHosts();
 
@@ -318,7 +320,7 @@ TEST_CASE("DreamNetPeer.ApplyRuntimeConfig - invalid ping interval is rejected",
   REQUIRE(applyResult.error().code == DreamNetErrorCode::InvalidPingInterval);
 }
 
-TEST_CASE("DreamNet disconnect carries a non-zero reason across the wire", "[host][event][integration]")
+TEST_CASE("DreamNet disconnect carries a non-zero reason across the wire")
 {
   // Unspecified is 0, which is also what enet_protocol_notify_disconnect writes
   // on a timeout - so only a non-zero reason proves the value actually travelled.
@@ -351,7 +353,7 @@ TEST_CASE("DreamNet disconnect carries a non-zero reason across the wire", "[hos
   CHECK(serverDisconnectEvent->TryDisconnectReason().value() == DisconnectReason::Kicked);
 }
 
-TEST_CASE("DreamNet disconnect event peer is already reset by ENet", "[peer][event][integration]")
+TEST_CASE("DreamNet disconnect event peer is already reset by ENet")
 {
   // enet_protocol_dispatch_incoming_commands calls enet_peer_reset before the
   // disconnect event is returned, so channelCount is gone by the time we see it.
@@ -396,7 +398,7 @@ TEST_CASE("DreamNet disconnect event peer is already reset by ENet", "[peer][eve
   CHECK(info->address.HostRaw() == clientAddressBefore->address.HostRaw());
 }
 
-TEST_CASE("DreamNetPacket.TryAllocateWith delivers a serialized payload end to end", "[peer][packet][allocate][integration]")
+TEST_CASE("DreamNetPacket.TryAllocateWith delivers a serialized payload end to end")
 {
   // The zero-copy send path: allocate the ENet packet first, write straight into
   // its buffer, then hand it to the peer - no staging buffer anywhere.
@@ -443,3 +445,5 @@ TEST_CASE("DreamNetPacket.TryAllocateWith delivers a serialized payload end to e
     CHECK(received->DataBytesView()[index] == static_cast<std::byte>(index + 1));
   }
 }
+
+TEST_SUITE_END();

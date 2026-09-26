@@ -23,7 +23,7 @@
 ```sh
 dotnet build src/Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj -c Release
 dotnet run --project src/Dreamsleeve.Agent/examples/Dreamsleeve.Agent.Examples.fsproj -c Release
-dotnet run --project src/Dreamsleeve.Agent.Tests/Dreamsleeve.Agent.Tests.fsproj -c Release
+dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list Dreamsleeve.Agent
 ```
 
 Программа примеров запускает обычный агент исходящих действий, неизменяемое состояние партии и изменяемый реестр присутствия со снимками. Вывод детерминирован, все агенты завершаются. Исходники: [Outbound.fs](examples/Outbound.fs), [Party.fs](examples/Party.fs), [Presence.fs](examples/Presence.fs).
@@ -79,3 +79,6 @@ python src/Dreamsleeve.Agent/docs/build.py
 ```
 
 Готовый `docs/index.html` открывается без Python и без сервера. Для пересборки сохрани структуру каталогов из комплекта, включая `examples`.
+
+Общий запуск всех тестов: `python Scripts/run_tests.py`.
+[Организация тестов](../../tests/README.md).

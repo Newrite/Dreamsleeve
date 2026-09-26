@@ -118,13 +118,10 @@ def find_solution_path(repo_root: Path, before: dict[Path, int]) -> Path:
 
 
 def collect_managed_projects(repo_root: Path) -> list[Path]:
-    src_root = repo_root / "src"
-    if not src_root.is_dir():
-        return []
-
     projects = [
         path.resolve()
-        for path in src_root.rglob("*")
+        for directory in (repo_root / "src", repo_root / "tests")
+        for path in directory.rglob("*")
         if path.is_file() and path.suffix.lower() in {".csproj", ".fsproj"}
     ]
     return sorted(projects)

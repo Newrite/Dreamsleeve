@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.Domain.Tests
+module Dreamsleeve.Server.Tests.DomainTests
 
 open System
 open System.Globalization
@@ -381,6 +381,5 @@ let private chatTests =
             Expect.notEqual value.Author.DisplayName renamed.DisplayName "Renaming profile does not rewrite message"
     ]
 
-[<EntryPoint>]
-let main argv =
-    runTestsWithCLIArgs [] argv (testList "Dreamsleeve.Server.Domain" [ textTests; spatialTests; stateTests; chatTests ])
+let tests =
+    testList "Dreamsleeve.Server.Domain" [ textTests; spatialTests; stateTests; chatTests ]
