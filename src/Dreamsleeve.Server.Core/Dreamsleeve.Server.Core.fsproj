@@ -10,6 +10,7 @@
         <Compile Include="Config.fs" />
         <Compile Include="ChatCodec.fs" />
         <Compile Include="ProfileStore.fs" />
+        <Compile Include="SessionContracts.fs" />
         <Compile Include="ChatAgent.fs" />
         <Compile Include="PlayerAgent.fs" />
         <Compile Include="ChatPublication.fs" />

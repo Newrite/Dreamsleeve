@@ -6,6 +6,7 @@
 
 | Документ | Статус и назначение |
 |---|---|
+| [План разделения SessionRegistry](SessionArchitecturePlanRu.md) | Предложение на основе `f4eef57`: владельцы, маршруты, жизненный цикл, параллелизм и этапы рефакторинга |
 | [ProductSpecRu.MD](ProductSpecRu.MD) | Текущий MVP и более широкое продуктовое видение |
 | [DomainSpecRu.MD](DomainSpecRu.MD) | Имена, пространство, показания, чат и будущие социальные правила |
 | [TechnicalHandbookRu.MD](TechnicalHandbookRu.MD) | Архитектура и справочные примеры стека |
