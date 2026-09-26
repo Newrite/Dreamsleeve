@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
+#include "chat.pb.h"
 
+import Dreamsleeve.Client.Codec;
 import DreamNet.Address;
 import DreamNet.Core;
 import DreamNet.Event;
@@ -60,7 +62,7 @@ namespace
     Port            serverPort;
   };
 
-  ConnectedHosts CreateConnectedHosts()
+  ConnectedHosts CreateConnectedHosts(std::size_t maxPacketBytes = NetConfig::Default().maxPacketBytes)
   {
     auto runtimeResult = DreamNetRuntime::TryInitialize();
     REQUIRE(runtimeResult.has_value());
@@ -69,6 +71,8 @@ namespace
     serverConfig.address      = DreamNetAddress::Loopback(NextTestPort());
     serverConfig.maxPeers     = 4;
     serverConfig.channelLimit = 2;
+    serverConfig.maxPacketBytes = maxPacketBytes;
+    serverConfig.maxWaitingData = maxPacketBytes * 2;
 
     auto serverResult = DreamNetHost::TryCreateServer(serverConfig);
     if (!serverResult.has_value())
@@ -79,7 +83,10 @@ namespace
     const auto serverInfo = serverResult->GetHostInfo();
     REQUIRE(serverInfo.has_value());
 
-    auto clientResult = DreamNetHost::TryCreateClient(NetConfig::Default());
+    auto clientConfig = NetConfig::Default();
+    clientConfig.maxPacketBytes = maxPacketBytes;
+    clientConfig.maxWaitingData = maxPacketBytes * 2;
+    auto clientResult = DreamNetHost::TryCreateClient(clientConfig);
     if (!clientResult.has_value())
     {
       FAIL(clientResult.error().ToLogString());
@@ -444,6 +451,74 @@ TEST_CASE("DreamNetPacket.TryAllocateWith delivers a serialized payload end to e
   {
     CHECK(received->DataBytesView()[index] == static_cast<std::byte>(index + 1));
   }
+}
+
+TEST_CASE("Configured host packet limits apply to clients servers and broadcast ownership")
+{
+  constexpr std::size_t limit = 4096;
+  auto connected = CreateConnectedHosts(limit);
+  for (auto* host : {&connected.serverHost, &connected.clientHost})
+  {
+    auto info = host->GetHostInfo();
+    REQUIRE(info);
+    CHECK(info->maxPacketBytes == limit);
+    CHECK(info->maxWaitingData == limit * 2);
+  }
+  const std::vector<std::byte> bytes(limit, std::byte{0x2a});
+  REQUIRE(connected.clientPeer.PushSpan(bytes, 0));
+  connected.clientHost.FlushPackets();
+  auto received = TryWaitForEvent(connected.serverHost, [](const DreamNetEvent& event) { return event.IsReceive(); });
+  REQUIRE(received);
+  REQUIRE(received->ViewPacket());
+  CHECK(received->ViewPacket()->Size() == limit);
+
+  const std::vector<std::byte> oversized(limit + 1);
+  CHECK_FALSE(connected.clientPeer.PushSpan(oversized, 0));
+  CHECK_FALSE(connected.serverHost.BroadcastPushPacketSpan(oversized, 0));
+  auto packet = DreamNetPacket::TryFromSpan(oversized);
+  REQUIRE(packet);
+  CHECK_FALSE(connected.clientPeer.PushPacket(std::move(*packet), 0));
+  CHECK(packet->IsValid());
+  CHECK_FALSE(connected.serverHost.BroadcastPushPacket(std::move(*packet), 0));
+  CHECK(packet->IsValid());
+}
+
+TEST_CASE("Invalid host packet budgets are rejected before creating a socket")
+{
+  auto config = NetConfig::Default();
+  config.maxPacketBytes = 0;
+  CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+  config.maxPacketBytes = 2048;
+  config.maxWaitingData = 2047;
+  CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+  config.maxPacketBytes = DreamNetPacket::MaxDataSize + 1;
+  config.maxWaitingData = config.maxPacketBytes;
+  CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+}
+
+
+
+TEST_CASE("Chat codec serializes directly into a transferable reliable ENet packet")
+{
+  auto connected = CreateConnectedHosts();
+  auto codec = Dreamsleeve::Client::Wire::Codec::TryCreate({});
+  REQUIRE(codec);
+  auto packet = codec->Encode(Dreamsleeve::Client::SendChat{42, 1, "Привет"});
+  REQUIRE(packet);
+  CHECK(packet->Flags() == PacketFlag::Reliable);
+  REQUIRE(connected.clientPeer.PushPacket(std::move(*packet), 0));
+  CHECK_FALSE(packet->IsValid()); // Successful send transferred ownership.
+  connected.clientHost.FlushPackets();
+
+  auto received = TryWaitForEvent(connected.serverHost, [](const DreamNetEvent& event) { return event.IsReceive(); });
+  REQUIRE(received);
+  REQUIRE(received->ViewPacket());
+  const auto bytes = received->ViewPacket()->DataBytesView();
+  Dreamsleeve::Protocol::Chat::ClientPacket decoded;
+  REQUIRE(decoded.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
+  CHECK(decoded.request_id() == 42);
+  CHECK(decoded.send_chat().channel_id() == 1);
+  CHECK(decoded.send_chat().text() == "Привет");
 }
 
 TEST_SUITE_END();

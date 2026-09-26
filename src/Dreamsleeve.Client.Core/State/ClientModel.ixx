@@ -5,11 +5,13 @@ import std;
 export import Dreamsleeve.Client.ChatCache;
 export import Dreamsleeve.Client.Changes;
 export import Dreamsleeve.Client.PlayerStore;
+export import Dreamsleeve.Protocol;
 
 export namespace Dreamsleeve::Client
 {
 
   using namespace Domain;
+  using RequestRejectionCode = ::Protocol::Chat::RequestRejectionCode;
 
   // Application updates after decoding. These are not protobuf or ENet events.
   struct SelfPlayerAssigned
@@ -79,14 +81,14 @@ export namespace Dreamsleeve::Client
     ChatHistoryPage page;
   };
 
-  // A server business rejection after decoding. The code is opaque until the
-  // application protocol defines it; unknown codes still carry a message.
+  // A rejection of a specific request after decoding, not a transport error.
+  // Codes come from chat.proto; unknown nonzero values retain their message.
   struct ServerRejection
   {
-    std::optional<std::uint64_t> requestId;
-    std::uint32_t                code{};
-    std::string                  message;
-    std::string                  field;
+    std::uint64_t        requestId;
+    RequestRejectionCode code{};
+    std::string          message;
+    std::string          field;
   };
 
   struct ServerRejectionEvent

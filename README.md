@@ -12,9 +12,11 @@
 для получателя и ClientExchange: команды к сетевому владельцу, дельты/снимки
 и отказы обратно в игровой/UI-поток. В Client.Dev есть двухпоточная консоль
 с синтетическим сервером для проверки этого обмена.
-Прикладной протокол, серверный цикл приложения,
-`ClientRuntime`, SKSE/PrismaUI и интерполяция ещё не соединены в работающий MVP.
-`Protocol/network.proto` пока определяет только причины отключения.
+Добавлены `Protocol/chat.proto` и C++/F# codec для сессии, онлайна и чата.
+Серверные обработчики и ClientRuntime ещё не подключены к этому протоколу;
+SKSE/PrismaUI и интерполяция остаются следующими этапами.
+Лимиты codec и ENet задаются конфигурацией клиента/сервера; загрузчик внешнего
+конфига ещё не подключён. Контракт: [Protocol/README.ru.md](Protocol/README.ru.md).
 
 Ближайшее направление — работающий `Client.Dev` и сервер без запуска Skyrim.
 Будущий интерфейс на HTML/CSS/JS планируется переиспользовать в PrismaUI через
@@ -27,7 +29,7 @@
 | `src/Dreamsleeve.Client.Dev` | Двухпоточная консоль без Skyrim; серверные события пока синтетические |
 | `src/Dreamsleeve.Server.Domain` | F#/.NET 10: проверяемые значения, игроки, ограниченная история чата |
 | `src/Dreamsleeve.Agent` | Последовательные агенты на Channels/Task и примеры |
-| `src/Dreamsleeve.Server.Core` | Конфигурация транспорта, зависимость yENet |
+| `src/Dreamsleeve.Server.Core` | Конфигурация транспорта, yENet и прикладной codec |
 | `src/Dreamsleeve.Server` | Точка запуска сервера; пока заглушка |
 | `src/Dreamsleeve.Server.Infrastructure` | Заготовка хранения данных |
 | `Protocol`, `src/Dreamsleeve.Protocol.*` | Рабочая схема protobuf и сгенерированные C++/C# типы |

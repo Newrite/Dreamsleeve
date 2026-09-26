@@ -501,7 +501,7 @@ TEST_CASE("ClientModel server rejection preserves unknown codes and text without
   REQUIRE(model.Apply(generation, PlayerUpserted{StateTests::MakePlayer()}).has_value());
   REQUIRE(model.Apply(generation, ChatMessagesReceived{7, {StateTests::Message(10)}}).has_value());
   const auto before = model.Snapshot();
-  const ServerRejection rejection{42, 0xFFFF0001, "Имя уже занято", "username"};
+  const ServerRejection rejection{42, static_cast<RequestRejectionCode>(0x7FFF0001), "Имя уже занято", "username"};
   REQUIRE(model.Apply(generation, rejection).has_value());
   const auto after = model.Snapshot();
   CHECK(after.players == before.players);
@@ -511,7 +511,7 @@ TEST_CASE("ClientModel server rejection preserves unknown codes and text without
   auto notifications = model.TakeServerRejections();
   REQUIRE(notifications.size() == 1);
   CHECK(notifications[0].generation == generation);
-  CHECK(notifications[0].rejection.requestId == std::optional<std::uint64_t>{42});
+  CHECK(notifications[0].rejection.requestId == 42);
   CHECK(notifications[0].rejection.code == rejection.code);
   CHECK(notifications[0].rejection.message == rejection.message);
   CHECK(notifications[0].rejection.field == rejection.field);
@@ -522,19 +522,19 @@ TEST_CASE("ClientModel pending rejection explanations survive disconnect and res
 {
   ClientModel model;
   const auto firstGeneration = model.Generation();
-  REQUIRE(model.Apply(firstGeneration, ServerRejection{1, 100, "First error", "field"}).has_value());
+  REQUIRE(model.Apply(firstGeneration, ServerRejection{1, RequestRejectionCode::InvalidRequest, "First error", "field"}).has_value());
   model.ClearOnlineState();
   const auto secondGeneration = model.Generation();
-  REQUIRE(model.Apply(secondGeneration, ServerRejection{std::nullopt, 200, "Connection refused", ""}).has_value());
+  REQUIRE(model.Apply(secondGeneration, ServerRejection{2, RequestRejectionCode::InvalidRequest, "Request refused", ""}).has_value());
   model.ResetSession();
   auto notifications = model.TakeServerRejections();
   REQUIRE(notifications.size() == 2);
   CHECK(notifications[0].generation == firstGeneration);
-  CHECK(notifications[0].rejection.requestId == std::optional<std::uint64_t>{1});
+  CHECK(notifications[0].rejection.requestId == 1);
   CHECK(notifications[0].rejection.message == "First error");
   CHECK(notifications[1].generation == secondGeneration);
-  CHECK_FALSE(notifications[1].rejection.requestId.has_value());
-  CHECK(notifications[1].rejection.message == "Connection refused");
+  CHECK(notifications[1].rejection.requestId == 2);
+  CHECK(notifications[1].rejection.message == "Request refused");
   CHECK(notifications[1].rejection.field.empty());
   CHECK(model.TakeServerRejections().empty());
 }
@@ -545,7 +545,7 @@ TEST_CASE("ClientModel stale rejection results are refused before notification i
   const auto oldGeneration = model.Generation();
   model.ResetSession();
   const auto before = model.Snapshot();
-  const auto result = model.Apply(oldGeneration, ServerRejection{99, 7, "Obsolete", "username"});
+  const auto result = model.Apply(oldGeneration, ServerRejection{99, RequestRejectionCode::InvalidRequest, "Obsolete", "username"});
   REQUIRE_FALSE(result.has_value());
   CHECK(result.error().code == ErrorCode::StaleGeneration);
   CHECK(model.Snapshot().revision == before.revision);

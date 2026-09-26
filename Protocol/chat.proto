@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package Dreamsleeve.Protocol.Chat;
+
+// One serialized envelope per reliable ENet packet. Version 1 is the chat-only
+// application slice. A session belongs to one ENet connection; opening it again
+// requires reconnecting. Transport Connected alone is not application readiness.
+message ClientPacket {
+  uint32 protocol_version = 1;
+  uint64 request_id = 2; // Nonzero, assigned by the initiating client.
+  oneof payload {
+    OpenSession open_session = 10;
+    SendChat send_chat = 11;
+  }
+}
+
+// Correlation is recipient-specific. A chat broadcast includes request_id only
+// in the copy sent to its initiating connection. Others receive the same message
+// without request_id and apply it through the same state-update path.
+message ServerPacket {
+  uint32 protocol_version = 1;
+  optional uint64 request_id = 2;
+  oneof payload {
+    SessionOpened session_opened = 10;
+    ChatPublished chat_published = 11;
+    RequestRejected request_rejected = 12;
+    PlayerJoined player_joined = 13;
+    PlayerLeft player_left = 14;
+  }
+}
+
+// Development identity negotiation, NOT authentication or proof of ownership.
+message OpenSession {
+  string username = 1;
+  string display_name = 2;
+}
+
+message SendChat {
+  uint64 channel_id = 1;
+  string text = 2;
+}
+
+message PlayerProfile {
+  uint64 player_id = 1;
+  string username = 2;
+  string display_name = 3;
+}
+
+message ChatMessage {
+  uint64 message_id = 1;
+  uint64 channel_id = 2;
+  PlayerProfile author = 3; // Profile at the time of sending, possibly offline now.
+  string text = 4;
+  int64 sent_at_unix_ms = 5;
+}
+
+message SessionOpened {
+  uint64 self_player_id = 1;
+  uint64 global_channel_id = 2;
+  repeated PlayerProfile players = 3; // Complete online list, including self.
+  repeated ChatMessage recent_messages = 4; // Retained tail, ascending message_id.
+}
+
+message ChatPublished { ChatMessage message = 1; }
+message PlayerJoined { PlayerProfile player = 1; }
+message PlayerLeft { uint64 player_id = 1; }
+
+// Stable application rejection codes shared by client and server.
+// Never reuse numeric values; reserve removed values/names when evolving this enum.
+enum RequestRejectionCode {
+  REQUEST_REJECTION_CODE_UNSPECIFIED = 0; // Invalid in a RequestRejected response.
+  REQUEST_REJECTION_CODE_INVALID_REQUEST = 1; // Invalid field or command arguments.
+  REQUEST_REJECTION_CODE_SESSION_NOT_READY = 2; // No ready application session.
+  REQUEST_REJECTION_CODE_SESSION_ALREADY_OPEN = 3; // Repeated OpenSession.
+  REQUEST_REJECTION_CODE_USERNAME_TAKEN = 4; // Requested username is already reserved.
+  REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND = 5; // Requested channel does not exist.
+  REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER = 6; // Sender may not publish to this channel.
+}
+
+// Code controls program behavior; message is a display/diagnostic fallback.
+// Clients preserve unknown nonzero codes from newer servers with their message.
+// request_id in the envelope is mandatory for this first command-response slice.
+message RequestRejected {
+  RequestRejectionCode code = 1;
+  string message = 2;
+  string field = 3;
+}

@@ -150,7 +150,7 @@ TEST_CASE("State overflow and reset preserve rejections while recovering bounded
   ClientModel model;
   Initialize(*exchange, model);
   const auto generation = model.Generation();
-  REQUIRE(model.Apply(generation, ServerRejection{42, 5, "Rejected", "text"}));
+  REQUIRE(model.Apply(generation, ServerRejection{42, RequestRejectionCode::InvalidRequest, "Rejected", "text"}));
   for (Domain::ChatMessageId id = 1; id <= 4; ++id)
   {
     Receive(model, id);
@@ -164,7 +164,7 @@ TEST_CASE("State overflow and reset preserve rejections while recovering bounded
   CHECK(snapshot.chats[0].messages == model.FindChat(1)->messages);
   REQUIRE(output.rejections.size() == 1);
   CHECK(output.rejections[0].rejection.requestId == 42);
-  REQUIRE(model.Apply(generation, ServerRejection{43, 5, "Old session", ""}));
+  REQUIRE(model.Apply(generation, ServerRejection{43, RequestRejectionCode::InvalidRequest, "Old session", ""}));
   model.ResetSession();
   exchange->Publish(model);
   exchange->Drain(output);

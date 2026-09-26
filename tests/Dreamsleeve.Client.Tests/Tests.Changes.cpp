@@ -296,7 +296,7 @@ TEST_CASE("ClientModel session resets replace pending invalidations and preserve
   REQUIRE(model.Apply(generation, ChatMessagesReceived{1, {ChangeTestMessage()}}));
   auto round = model.BeginHistory(1);
   REQUIRE(round);
-  REQUIRE(model.Apply(generation, ServerRejection{42, 3, "Rejected", "displayName"}));
+  REQUIRE(model.Apply(generation, ServerRejection{42, RequestRejectionCode::InvalidRequest, "Rejected", "displayName"}));
   bool retainsChats{};
 
   SUBCASE("disconnect clears online state and keeps chat")
@@ -333,13 +333,13 @@ TEST_CASE("ClientModel session resets replace pending invalidations and preserve
   const auto rejections = model.TakeServerRejections();
   REQUIRE(rejections.size() == 1);
   CHECK(rejections.front().generation == generation);
-  CHECK(rejections.front().rejection.requestId == std::optional<std::uint64_t>{42});
+  CHECK(rejections.front().rejection.requestId == 42);
   CHECK(model.TakeServerRejections().empty());
   CHECK_FALSE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   model.TakeChanges(changes);
   CHECK(changes.Empty());
 
-  REQUIRE(model.Apply(model.Generation(), ServerRejection{43, 4, "Another rejection", ""}));
+  REQUIRE(model.Apply(model.Generation(), ServerRejection{43, RequestRejectionCode::InvalidRequest, "Another rejection", ""}));
   model.TakeChanges(changes);
   CHECK(changes.Empty());
   CHECK(changes.revision == model.Snapshot().revision);

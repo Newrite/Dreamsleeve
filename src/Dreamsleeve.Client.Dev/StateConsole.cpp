@@ -69,7 +69,8 @@ public:
       if (awaitingServer.empty()) return false;
       const auto requestId = awaitingServer.front().requestId;
       awaitingServer.pop_front();
-      return model.Apply(model.Generation(), ServerRejection{requestId, 1, std::move(reason), "text"}).has_value();
+      return model.Apply(model.Generation(), ServerRejection{requestId, RequestRejectionCode::InvalidRequest, std::move(reason), "text"})
+        .has_value();
     }
 
     bool Reset(ClientModel& model)
@@ -77,7 +78,14 @@ public:
       while (!awaitingServer.empty())
         Reject(model, "Session reset");
       model.ResetSession();
-      return model.RegisterChannel(1, 3).has_value();
+      const auto generation = model.Generation();
+      Domain::Player self{.data = {7, "dev", "Dev"}};
+      const bool initialized = model.RegisterChannel(1, 3).has_value()
+        && model.Apply(generation, OnlinePlayersReplaced{{self}}).has_value()
+        && model.SetSelfPlayer(generation, self.data.playerId).has_value();
+      // Invoke publishes only after this handler returns, never between operations.
+      if (!initialized) model.ResetSession();
+      return initialized;
     }
 
 private:
@@ -95,13 +103,19 @@ private:
         }
         if (queued.generation != model.Generation())
         {
-          const auto* chat = std::get_if<SendChat>(&queued.command);
-          ok               = model
-                               .Apply(
-                                 model.Generation(),
-                                 ServerRejection{chat ? std::optional{chat->requestId} : std::nullopt, 2, "Stale outgoing generation", "generation"})
-                               .has_value() &&
-                             ok;
+          if (const auto* chat = std::get_if<SendChat>(&queued.command))
+          {
+            ok = model
+                   .Apply(
+                     model.Generation(),
+                     ServerRejection{chat->requestId, RequestRejectionCode::SessionNotReady, "Stale outgoing generation", "generation"})
+                   .has_value() &&
+                 ok;
+          }
+          else
+          {
+            std::cout << "discarded stale local state command\n";
+          }
           continue;
         }
         if (auto* chat = std::get_if<SendChat>(&queued.command))
@@ -178,7 +192,7 @@ private:
       }
     }
     for (const auto& event : output.rejections)
-      std::cout << " rejection generation=" << event.generation << " request=" << event.rejection.requestId.value_or(0) << ": "
+      std::cout << " rejection generation=" << event.generation << " request=" << event.rejection.requestId << ": "
                 << event.rejection.message << '\n';
     if (output.stopped) std::cout << "owner stopped and joined\n";
   }
@@ -194,7 +208,7 @@ private:
     bool          failed{};
     {
       DevOwner owner{*exchange};
-      if (!owner.Invoke([](ClientModel& model) { return model.RegisterChannel(1, 3).has_value(); })) return 1;
+      if (!owner.Invoke([&](ClientModel& model) { return owner.Reset(model); })) return 1;
       exchange->Drain(output);
       PrintOutput(output, generation);
       std::string line;

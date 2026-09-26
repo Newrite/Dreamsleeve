@@ -7,16 +7,16 @@
 
 ## Реальный контракт проекта
 
-Source of truth — `Protocol/*.proto`; пока там только `network.proto` с
-DisconnectReason. Генерацию C++ и C# выполняет `Scripts/generate_protocol.py`.
+Source of truth — `Protocol/*.proto`: `network.proto` с DisconnectReason и
+`chat.proto` для первого среза сессии/чата. Генерацию C++ и C# выполняет `Scripts/generate_protocol.py`.
 `Dreamsleeve.Protocol.Dotnet` содержит generated C# и Google.Protobuf, а
 Dreamsleeve.Protocol.Native — generated C++ и модульную границу. Рецепт
 Grpc.Tools ниже описывает альтернативную настройку, не текущую сборку.
 
-Прикладные сообщения ещё нужно спроектировать: вход, свой профиль, глобальный
-чат, онлайн, публикация своего состояния, история и отказы сервера.
-Будущий контракт должен отражать uint64 ID, Username/DisplayName/CharacterName,
-FormKey пространства, scalar/resource Actor Values и время Unix milliseconds.
+Вход, начальные профили/история, глобальный чат, онлайн и отказы описаны в
+[актуальном контракте](../Protocol/README.ru.md); реализованы C++/F# codec.
+Игровые показания и пагинация ещё не спроектированы. Будущее расширение должно
+отражать CharacterName, FormKey пространства и scalar/resource Actor Values.
 Локальные generation/revision/round модели не являются wire sequence.
 
 Примеры из `40059c5:docs/ProtoExamples` — исторический проект широкого

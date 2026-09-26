@@ -3,13 +3,17 @@
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <WarningsAsErrors>$(WarningsAsErrors);FS0025</WarningsAsErrors>
     </PropertyGroup>
 
     <ItemGroup>
         <Compile Include="Config.fs" />
+        <Compile Include="ChatCodec.fs" />
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="../Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
+      <ProjectReference Include="../Dreamsleeve.Protocol.Dotnet/Dreamsleeve.Protocol.Dotnet.csproj" />
       <PackageReference Include="yENet" Version="1.2.1" />
     </ItemGroup>
 

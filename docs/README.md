@@ -9,7 +9,9 @@
 | [ProductSpecRu.MD](ProductSpecRu.MD) | Текущий MVP и более широкое продуктовое видение |
 | [DomainSpecRu.MD](DomainSpecRu.MD) | Имена, пространство, показания, чат и будущие социальные правила |
 | [TechnicalHandbookRu.MD](TechnicalHandbookRu.MD) | Архитектура и справочные примеры стека |
-| [ProtobufHandbookRu.MD](ProtobufHandbookRu.MD) | Работа с protobuf; прикладная схема MVP ещё не реализована |
+| [Прикладной протокол](../Protocol/README.ru.md) | Реализованные контракты сессии/чата и C++/F# codec |
+| [MSVC и protobuf в модулях](MsvcProtobufModulesRu.md) | Повторная проверка C1001 на VS 18.10.2 / cl 19.51.36260 |
+| [ProtobufHandbookRu.MD](ProtobufHandbookRu.MD) | Справочник работы с protobuf |
 | [SqlHandbookRu.md](SqlHandbookRu.md) | Справочник предложенного SQLite-стека, не работающая persistence-подсистема |
 | [FSAgentReadme.MD](FSAgentReadme.MD) | Указатель на поддерживаемую документацию агентов |
 | [Answers/PeerInfo.MD](Answers/PeerInfo.MD) | Справочные заметки об ENet Peer |

@@ -43,7 +43,7 @@ TEST_CASE("State publication omits empty changes and leaves rejection notificati
   ClientModel model;
   ChangeBatch scratch;
   CHECK_FALSE(TakeStateUpdate(model, scratch));
-  REQUIRE(model.Apply(model.Generation(), ServerRejection{42, 9, "Rejected", "text"}));
+  REQUIRE(model.Apply(model.Generation(), ServerRejection{42, RequestRejectionCode::InvalidRequest, "Rejected", "text"}));
 
   CHECK_FALSE(TakeStateUpdate(model, scratch));
   const auto rejections = model.TakeServerRejections();

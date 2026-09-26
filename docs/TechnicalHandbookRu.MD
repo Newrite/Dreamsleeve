@@ -9,11 +9,12 @@
 
 Сервер — F#/.NET 10+, yENet 1.2.1, домен с UMX и агенты Channels/Task.
 Клиент — C++23/MSVC/xmake, native ENet 1.3.18; Core независим от Skyrim,
-Client предназначен для SKSE/PrismaUI. Runtime/codec и прикладная сессия ещё
-не реализованы. Server сейчас содержит заглушку запуска.
+Client предназначен для SKSE/PrismaUI. Codec сессии/чата реализован, runtime и обработчики сессии
+ещё не подключены. Server сейчас содержит заглушку запуска.
 
 Protobuf генерируется `Scripts/generate_protocol.py` из `Protocol/*.proto`
-в Native и Dotnet проекты; рабочая схема пока только DisconnectReason.
+в Native и Dotnet проекты; схемы — DisconnectReason и chat.proto.
+[Прикладной контракт](../Protocol/README.ru.md) описывает текущий срез.
 Grpc.Tools из ранних примеров не подключён к текущему csproj.
 
 SQLite + SqlHydra/Fling/Migrondi — ранее выбранный проект хранения;
@@ -22,7 +23,7 @@ LiteDB обсуждалась, окончательная замена не пр
 Текущие зависимости надо сверять с fsproj/csproj и xmake.lua.
 
 Тесты: `tests/Dreamsleeve.Client.Tests` (doctest) и
-`tests/Dreamsleeve.Server.Tests` (Expecto + Faqt, наборы Agent/Domain).
+`tests/Dreamsleeve.Server.Tests` (Expecto + Faqt, наборы Agent/Domain/Codec).
 См. [общий запуск](../tests/README.md) и [корневой README](../README.md).
 
 ## Статус документа

@@ -45,7 +45,7 @@ module ServerConfig =
             ShutdownTimeoutMs = 1500u
         }
 
-    // Also used by the codec boundary; no socket is needed to validate protocol settings.
+    // Used at codec creation and host startup; no per-packet config validation.
     let protocolErrors (config: ServerConfig) =
         [
             if config.MaxPacketBytes < 1 then "MaxPacketBytes must be positive."
@@ -77,7 +77,7 @@ module ServerConfig =
 
         if List.isEmpty errors then Ok config else Error errors
 
-    /// Apply before serving any peers. The same config must be supplied to ChatCodec.
+    /// Apply before serving any peers. Create ChatCodec from the same config before serving peers.
     let applyPacketLimits config (host: Enet.EnetHost) =
         match validate config with
         | Error errors -> Error errors
