@@ -109,9 +109,31 @@ let private textTests =
             let actual = PluginName.create 255 "ÉП.ESP" |> ok |> PluginName.value
             actual.Should().Be("ÉП.esp") |> ignore
 
-        testCase "plugin identity rejects paths and unsupported extensions" <| fun _ ->
-            for input in [ "Data/Skyrim.esm"; "Data\\Skyrim.esm"; "C:Skyrim.esm"; ".esm"; "Skyrim.txt"; "Skyrim.esm " ] do
-                Expect.isError (PluginName.create 255 input) (sprintf "Reject %A" input)
+        testCase "plugin identity is a bounded opaque key rather than a filename policy" <| fun _ ->
+            let original = "  Custom.Record  "
+            PluginName.create 255 original |> ok |> PluginName.value
+            |> fun value -> value.Should().Be("  custom.record  ") |> ignore
+            for input in [ null; ""; "   "; "Plugin\000Name"; "Plugin\nName"; String [| char 0xD800 |] ] do
+                Expect.isError (PluginName.create 255 input) "Identity still needs bounded valid text"
+            Expect.isError (PluginName.create 3 "Game") "Identity cannot exceed the configured limit"
+
+        testCase "game display labels preserve exact text including empty and blank labels" <| fun _ ->
+            for original in [ ""; "   "; "  Ne\u0301revar  "; "\U0001F600" ] do
+                LocationName.create 128 original |> ok |> LocationName.value
+                |> fun value -> value.Should().Be(original) |> ignore
+                ActorValueName.create 128 original |> ok |> ActorValueName.value
+                |> fun value -> value.Should().Be(original) |> ignore
+
+        testCase "game display labels reject malformed controls and over-limit text" <| fun _ ->
+            for input in [ null; "\000"; "name\n"; "name\u2028"; String [| char 0xD800 |]; String [| char 0xDC00 |] ] do
+                Expect.isError (LocationName.create 128 input) "Location label must be safe text"
+                Expect.isError (ActorValueName.create 128 input) "Actor value label must be safe text"
+            LocationName.create 1 "\U0001F600" |> ok |> ignore
+            ActorValueName.create 1 "\U0001F600" |> ok |> ignore
+            Expect.isError (LocationName.create 1 "\U0001F600a") "Location label limit counts scalars"
+            Expect.isError (ActorValueName.create 1 "\U0001F600a") "Actor value label limit counts scalars"
+            Expect.isError (LocationName.create 0 "") "Limit must be positive even for an empty label"
+            Expect.isError (ActorValueName.create 0 "") "Limit must be positive even for an empty label"
 
         testCase "local form and server IDs reject sentinel and load-order values" <| fun _ ->
             LocalFormId.create 0xFFFFFFu |> ok |> LocalFormId.value
@@ -216,23 +238,12 @@ let private stateTests =
             Expect.equal (ActorValueStorage.count storage) 0 "Live key is gone"
             Expect.equal before[key] (health 50.0f) "Snapshot keeps the original reading"
 
-        testCase "setMany cannot partially mutate storage if enumeration throws" <| fun _ ->
-            let storage = ActorValueStorage.create ()
-            let key = actorKey "skyrim:health"
-            ActorValueStorage.set key (health 50.0f) storage
-            let changes = seq {
-                yield key, health 25.0f
-                raise (InvalidOperationException "Source failed")
-            }
-            Expect.throws (fun () -> ActorValueStorage.setMany changes storage) "Source failure propagates"
-            Expect.equal (ActorValueStorage.tryFind key storage) (ValueSome (health 50.0f)) "No prefix was applied"
-
         testCase "setMany merges by key and last duplicate wins" <| fun _ ->
             let storage = ActorValueStorage.create ()
             let key = actorKey "skyrim:health"
             let rareKey = actorKey "avg:rare"
             ActorValueStorage.set rareKey (health 7.0f) storage
-            ActorValueStorage.setMany [ key, health 10.0f; key, health 20.0f ] storage
+            ActorValueStorage.setMany [| key, health 10.0f; key, health 20.0f |] storage
             Expect.equal (ActorValueStorage.count storage) 2 "Unchanged readings are retained"
             Expect.equal (ActorValueStorage.tryFind key storage) (ValueSome (health 20.0f)) "Last update wins"
 

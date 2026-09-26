@@ -2,7 +2,7 @@
 
 Sequential, in-process F# agents built on `System.Threading.Channels` and `Task`. Targets **.NET 10+**; no external runtime packages.
 
-**[Interactive guide — English / Русский](docs/index.html)** · **[Русский README](README.ru.md)** · [Source](Agent.fs) · [Runnable examples](../../examples)
+**[Interactive guide — English / Русский](docs/index.html)** · **[Русский README](README.ru.md)** · [Source](Agent.fs) · [Runnable examples](examples)
 
 Open `docs/index.html` directly in a browser. It is a self-contained, responsive page with a language switch, section search, light/dark themes and copy buttons. It requires no server, build step, CDN or network connection.
 
@@ -18,15 +18,15 @@ All three serialize handlers, including asynchronous work inside each handler. T
 
 ## Build and run
 
-From the root of this review bundle (the folder containing `src`, `examples`, and `tests`), with a .NET 10 SDK:
+From the repository root, with a .NET 10 SDK:
 
 ```sh
 dotnet build src/Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj -c Release
-dotnet run --project examples/Dreamsleeve.Agent.Examples.fsproj -c Release
-dotnet run --project tests/Dreamsleeve.Agent.Tests/Dreamsleeve.Agent.Tests.fsproj -c Release
+dotnet run --project src/Dreamsleeve.Agent/examples/Dreamsleeve.Agent.Examples.fsproj -c Release
+dotnet run --project src/Dreamsleeve.Agent.Tests/Dreamsleeve.Agent.Tests.fsproj -c Release
 ```
 
-The example program runs a base outbound worker, immutable party state, and mutable presence snapshots. It produces deterministic output and shuts down all agents. Source files: [Outbound.fs](../../examples/Outbound.fs), [Party.fs](../../examples/Party.fs), [Presence.fs](../../examples/Presence.fs).
+The example program runs a base outbound worker, immutable party state, and mutable presence snapshots. It produces deterministic output and shuts down all agents. Source files: [Outbound.fs](examples/Outbound.fs), [Party.fs](examples/Party.fs), [Presence.fs](examples/Presence.fs).
 
 ## Minimal request/reply
 

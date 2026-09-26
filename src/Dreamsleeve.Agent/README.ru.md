@@ -2,7 +2,7 @@
 
 Последовательные агенты F# внутри одного процесса, построенные на `System.Threading.Channels` и `Task`. Целевая платформа — **.NET 10+**; используются только стандартные зависимости F#/.NET.
 
-**[Интерактивное руководство — Русский / English](docs/index.html#ru)** · **[English README](README.md)** · [Исходник](Agent.fs) · [Запускаемые примеры](../../examples)
+**[Интерактивное руководство — Русский / English](docs/index.html#ru)** · **[English README](README.md)** · [Исходник](Agent.fs) · [Запускаемые примеры](examples)
 
 Открой `docs/index.html` прямо в браузере. Это одна автономная адаптивная страница: переключение языка, поиск разделов, светлая и тёмная темы, кнопки копирования. Сервер, сборка сайта, CDN и подключение к сети не требуются.
 
@@ -18,15 +18,15 @@
 
 ## Сборка и запуск
 
-Из корня этого комплекта ревью — каталога с `src`, `examples` и `tests` — при установленном SDK .NET 10:
+Из корня репозитория при установленном SDK .NET 10:
 
 ```sh
 dotnet build src/Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj -c Release
-dotnet run --project examples/Dreamsleeve.Agent.Examples.fsproj -c Release
-dotnet run --project tests/Dreamsleeve.Agent.Tests/Dreamsleeve.Agent.Tests.fsproj -c Release
+dotnet run --project src/Dreamsleeve.Agent/examples/Dreamsleeve.Agent.Examples.fsproj -c Release
+dotnet run --project src/Dreamsleeve.Agent.Tests/Dreamsleeve.Agent.Tests.fsproj -c Release
 ```
 
-Программа примеров запускает обычный агент исходящих действий, неизменяемое состояние партии и изменяемый реестр присутствия со снимками. Вывод детерминирован, все агенты завершаются. Исходники: [Outbound.fs](../../examples/Outbound.fs), [Party.fs](../../examples/Party.fs), [Presence.fs](../../examples/Presence.fs).
+Программа примеров запускает обычный агент исходящих действий, неизменяемое состояние партии и изменяемый реестр присутствия со снимками. Вывод детерминирован, все агенты завершаются. Исходники: [Outbound.fs](examples/Outbound.fs), [Party.fs](examples/Party.fs), [Presence.fs](examples/Presence.fs).
 
 ## Минимальный запрос с ответом
 

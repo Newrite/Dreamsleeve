@@ -5,7 +5,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../src/Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
+    <ProjectReference Include="../Dreamsleeve.Agent.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Outbound.fs" />

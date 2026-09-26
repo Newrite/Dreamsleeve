@@ -74,10 +74,10 @@ module ActorValueStorage =
 
     let set key info (storage: ActorValueStorage) = storage.values[key] <- info
 
-    /// Materialize the source before changing storage; source enumeration may fail.
-    /// All entries must already be validated. Repeated keys use the last supplied value.
-    let setMany (entries: seq<ActorValueKey * ActorValueInfo>) (storage: ActorValueStorage) =
-        let entries = Seq.toArray entries
+    /// Apply an already materialized, validated batch. The sender must finish
+    /// building the array before handing it to the owning agent and must not
+    /// mutate it afterwards. Repeated keys use the last supplied value.
+    let setMany (entries: (ActorValueKey * ActorValueInfo) array) (storage: ActorValueStorage) =
         for key, info in entries do
             storage.values[key] <- info
 

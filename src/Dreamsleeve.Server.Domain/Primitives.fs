@@ -80,59 +80,73 @@ type DomainError =
     | MessageOutOfOrder of lastAccepted: ChatMessageId * received: ChatMessageId
 
 module internal PrimitiveValidation =
-    // EnumerateRunes replaces malformed UTF-16, so validate surrogate pairs explicitly.
-    let scalarCount (text: string) =
+    let invalidControl multiline (rune: Rune) =
+        if multiline then
+            Rune.IsControl rune && rune.Value <> 0x0A && rune.Value <> 0x0D && rune.Value <> 0x09
+        else
+            Rune.IsControl rune || rune.Value = 0x2028 || rune.Value = 0x2029
+
+    // TryGetRuneAt rejects malformed UTF-16 instead of replacing it with U+FFFD.
+    // Validate controls before trimming so a trailing newline cannot disappear.
+    let scan multiline (source: string) =
         let mutable offset = 0
         let mutable count = 0
-        let mutable valid = true
-        while valid && offset < text.Length do
-            let character = text[offset]
-            if Char.IsHighSurrogate character then
-                if offset + 1 < text.Length && Char.IsLowSurrogate text[offset + 1] then
-                    offset <- offset + 2
-                else
-                    valid <- false
-            elif Char.IsLowSurrogate character then
-                valid <- false
+        let mutable error = ValueNone
+        let mutable rune = Unchecked.defaultof<Rune>
+        while ValueOption.isNone error && offset < source.Length do
+            if not (Rune.TryGetRuneAt(source, offset, &rune)) then
+                error <- ValueSome TextError.InvalidUnicode
+            elif invalidControl multiline rune then
+                error <- ValueSome TextError.InvalidCharacters
             else
-                offset <- offset + 1
-            count <- count + 1
-        if valid then ValueSome count else ValueNone
+                offset <- offset + rune.Utf16SequenceLength
+                count <- count + 1
+        match error with
+        | ValueSome error -> Error error
+        | ValueNone -> Ok count
 
-    let invalidControl multiline character =
-        if multiline then
-            Char.IsControl character && character <> '\n' && character <> '\r' && character <> '\t'
-        else
-            Char.IsControl character || character = '\u2028' || character = '\u2029'
+    let scalarCount (source: string) =
+        let mutable count = 0
+        for _ in source.EnumerateRunes() do
+            count <- count + 1
+        count
 
     let unrestricted (_: string) = ValueNone
 
-    /// Limits count Unicode scalar values in the resulting text, not UTF-16 code units.
-    let text field maxLength transform multiline validate (source: string) =
+    let private checkedText allowBlank field maxLength transform multiline validate (source: string) =
         let fail error = Error(DomainError.InvalidText(field, error))
         if maxLength <= 0 then
             Error(DomainError.InvalidLimit(field, maxLength))
-        elif String.IsNullOrWhiteSpace source then
+        elif isNull source || (not allowBlank && String.IsNullOrWhiteSpace source) then
             fail TextError.Missing
         else
-            match scalarCount source with
-            | ValueNone -> fail TextError.InvalidUnicode
-            | ValueSome _ when source |> Seq.exists (invalidControl multiline) ->
-                fail TextError.InvalidCharacters
-            | ValueSome _ ->
+            match scan multiline source with
+            | Error error -> fail error
+            | Ok sourceLength ->
                 let transformed =
                     try Ok(transform source)
                     with :? ArgumentException -> Error TextError.InvalidUnicode
                 match transformed with
                 | Error error -> fail error
                 | Ok canonical ->
-                    match scalarCount canonical with
-                    | ValueNone -> fail TextError.InvalidUnicode
-                    | ValueSome length when length > maxLength -> fail (TextError.TooLong maxLength)
-                    | ValueSome _ ->
+                    // Trim, NFC and ASCII folding preserve valid Unicode. Text that
+                    // remains unchanged needs neither decoding nor counting twice.
+                    let length =
+                        if Object.ReferenceEquals(source, canonical) then sourceLength
+                        else scalarCount canonical
+                    if length > maxLength then fail (TextError.TooLong maxLength)
+                    else
                         match validate canonical with
                         | ValueSome error -> fail error
                         | ValueNone -> Ok canonical
+
+    /// Limits count Unicode scalar values in the resulting text, not UTF-16 code units.
+    let text field maxLength transform multiline validate source =
+        checkedText false field maxLength transform multiline validate source
+
+    /// Game labels may be absent and are preserved exactly; they do not identify data.
+    let label field maxLength source =
+        checkedText true field maxLength id false unrestricted source
 
     let nfcTrim (source: string) = source.Trim().Normalize(NormalizationForm.FormC)
 
@@ -158,24 +172,6 @@ module internal PrimitiveValidation =
         else
             ValueSome TextError.InvalidCharacters
 
-    let plugin (source: string) =
-        let invalidFilenameChar character =
-            match character with
-            | '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' -> true
-            | _ -> false
-        if source |> Seq.exists invalidFilenameChar then
-            ValueSome TextError.InvalidCharacters
-        elif source.Length <= 4 then
-            ValueSome TextError.InvalidFormat
-        else
-            let extension = source.Substring(source.Length - 4)
-            let stem = source.Substring(0, source.Length - 4)
-            if (extension = ".esp" || extension = ".esm" || extension = ".esl")
-               && not (String.IsNullOrWhiteSpace stem) then
-                ValueNone
-            else
-                ValueSome TextError.InvalidFormat
-
     let actorValueKey (source: string) =
         let separator = source.IndexOf ':'
         if separator <= 0 || separator = source.Length - 1 then
@@ -199,11 +195,11 @@ module internal PrimitiveValidation =
 [<RequireQualifiedAccess>]
 module PluginName =
     let value (name: PluginName) : string = UMX.untag name
-    /// Basename including .esp, .esm or .esl; no path.
+    /// The game adapter supplies the actual plugin filename; the server treats it as a key.
     /// ASCII case folding only: non-ASCII text is preserved; no Unicode normalization or trimming.
     let create maxLength raw : Result<PluginName, DomainError> =
         PrimitiveValidation.text "PluginName" maxLength PrimitiveValidation.asciiLower
-            false PrimitiveValidation.plugin raw
+            false PrimitiveValidation.unrestricted raw
         |> Result.map UMX.tag
 
 [<RequireQualifiedAccess>]
@@ -220,8 +216,9 @@ module LocalFormId =
 [<RequireQualifiedAccess>]
 module LocationName =
     let value (name: LocationName) : string = UMX.untag name
+    /// Preserves the game's display label, including an empty label or surrounding spaces.
     let create maxLength raw : Result<LocationName, DomainError> =
-        PrimitiveValidation.name "LocationName" maxLength raw |> Result.map UMX.tag
+        PrimitiveValidation.label "LocationName" maxLength raw |> Result.map UMX.tag
 
 [<RequireQualifiedAccess>]
 module WorldUnit =
@@ -258,8 +255,9 @@ module ActorValue =
 [<RequireQualifiedAccess>]
 module ActorValueName =
     let value (name: ActorValueName) : string = UMX.untag name
+    /// Preserves the game's display label, including an empty label or surrounding spaces.
     let create maxLength raw : Result<ActorValueName, DomainError> =
-        PrimitiveValidation.name "ActorValueName" maxLength raw |> Result.map UMX.tag
+        PrimitiveValidation.label "ActorValueName" maxLength raw |> Result.map UMX.tag
 
 [<RequireQualifiedAccess>]
 module PlayerId =

@@ -8,10 +8,10 @@ The runner contains 28 regression scenarios.
 тестового фреймворка; при ошибке процесс возвращает ненулевой код завершения.
 В наборе 28 регрессионных сценариев.
 
-Run from the package root / Запуск из корня пакета:
+Run from the repository root / Запуск из корня репозитория:
 
 ```sh
-dotnet run --project tests/Dreamsleeve.Agent.Tests -c Release
+dotnet run --project src/Dreamsleeve.Agent.Tests -c Release
 ```
 
 The suite uses `TaskCompletionSource` gates to establish ordering, plus `WaitAsync`

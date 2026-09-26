@@ -1,11 +1,3 @@
 ﻿namespace Dreamsleeve.Server.Infrastructure
 
-module Database =
-    
-    type Player = {
-        PlayerId: uint64
-    }
-    
-    let private player = { PlayerId = 0UL }
-    
-    let getPlayer() = player
+// Storage adapters will be added here when persistence is introduced.

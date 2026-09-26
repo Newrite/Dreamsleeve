@@ -134,7 +134,9 @@ module Chat =
             let selected = ResizeArray<ChatMessage>(min maxCount chat.messages.Count)
             let mutable hasMore = false
 
-            for message in chat.messages do
+            use mutable messages = chat.messages.GetEnumerator()
+            while not hasMore && messages.MoveNext() do
+                let message = messages.Current
                 let followsCursor =
                     match cursor with
                     | ValueNone -> true
