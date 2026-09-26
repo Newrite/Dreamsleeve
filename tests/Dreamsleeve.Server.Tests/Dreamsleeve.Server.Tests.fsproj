@@ -17,6 +17,7 @@
     <Compile Include="PlayerAgentTests.fs" />
     <Compile Include="SessionRegistryTests.fs" />
     <Compile Include="ChatFlowTests.fs" />
+    <Compile Include="ChatRoomAgentTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
