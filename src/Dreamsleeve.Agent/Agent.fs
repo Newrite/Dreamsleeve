@@ -388,6 +388,11 @@ type AgentContext<'Message>
 
         startBackgroundImpl deliver
 
+    // Library delivery workers only. Application state remains in the handler.
+    // Unlike PipeToSelf, these workers do not need mailbox admission to finish.
+    member internal _.StartDelivery(operation: CancellationToken -> Task<unit>) =
+        startBackgroundImpl operation
+
     /// <summary>
     /// A cancellation token that is triggered when the agent is aborted or faults.
     /// Useful for passing to long-running asynchronous operations within the handler.
@@ -453,8 +458,9 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let mutable accepting = 1
     let mutable immediateStop = 0
     // Protected by lifecycleGate. A cancellation reserved before finishing must complete
-    // before CTS disposal; no additional cancellation may be requested after finishing starts.
+    // before CTS disposal. Graceful draining can still be escalated until stopSealed.
     let mutable finishing = false
+    let mutable stopSealed = false
     let mutable stopReason: AgentStopReason option = None
     let mutable cancellationTask: Task = Task.CompletedTask
 
@@ -503,14 +509,14 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let requestImmediateStop reason =
         let selected, cancellation =
             lock lifecycleGate (fun () ->
-                // A completion mapper can fail while graceful shutdown joins work.
-                // Preserve that fault and cancel sibling work rather than reporting success.
-                let lateBackgroundFault =
+                // Deliveries can fail or be aborted while graceful shutdown joins work.
+                // Escalate until the final reason and cancellation callbacks are sealed.
+                let escalation =
                     match stopReason, reason with
-                    | Some AgentStopReason.Completed, AgentStopReason.Faulted _ -> true
+                    | Some AgentStopReason.Completed, (AgentStopReason.Faulted _ | AgentStopReason.Aborted) -> true
                     | _ -> false
 
-                if (finishing || stopReason.IsSome) && not lateBackgroundFault then
+                if stopSealed || ((finishing || stopReason.IsSome) && not escalation) then
                     false, None
                 else
                     stopReason <- Some reason
@@ -601,7 +607,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let startBackground operation =
         match options.Mailbox with
         | AgentMailbox.Bounded(_, mode, _) when mode <> BoundedChannelFullMode.Wait ->
-            invalidOp "PipeToSelf requires an unbounded or bounded-wait mailbox."
+            invalidOp "Tracked background work requires an unbounded or bounded-wait mailbox."
         | _ -> ()
 
         background.RemoveAll(fun work -> work.IsCompleted) |> ignore
@@ -674,10 +680,12 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
 
             do! Task.WhenAll(background)
 
-            // Joining work can escalate a graceful stop to a background mapper fault.
+            // Joining work can escalate graceful completion to failure or cancellation.
             // Capture cancellation after the join so its callbacks cannot outlive the CTS.
             let reason, callbacks =
-                lock lifecycleGate (fun () -> defaultArg stopReason reason, cancellationTask)
+                lock lifecycleGate (fun () ->
+                    stopSealed <- true
+                    defaultArg stopReason reason, cancellationTask)
 
             try do! callbacks with _ -> ()
             lock lifecycleGate (fun () -> lifetime.Dispose())

@@ -37,9 +37,8 @@ type SessionRegistryMessage =
     | ChannelReplied of ChannelReply
     | PlayerReported of connectionId: Guid * event: PlayerEvent
     | PlayerStopped of connectionId: Guid * outcome: Result<unit, exn>
-    | PlayerAdmissionFinished of connectionId: Guid * Result<AgentDeliveryResult, exn>
-    | ChannelAdmissionFinished of Result<AgentDeliveryResult, exn>
-    | OutputAdmissionFinished of Result<AgentDeliveryResult, exn>
+    | PlayerDeliveryFailed of connectionId: Guid * AgentSendFailure
+    | ChannelDeliveryFailed of AgentSendFailure
     | UpdatePlayer of connectionId: Guid * PlayerUpdate
     | ReadPlayer of connectionId: Guid * ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
     /// Forwarded by the owner of the profile store/channel, not an operation failure.
@@ -83,9 +82,7 @@ module SessionRegistry =
     }
 
     let private emit state (context: AgentContext<SessionRegistryMessage>) value =
-        if state.Output.TryEnqueue value then
-            state.Output.Pump(context, SessionRegistryMessage.OutputAdmissionFinished)
-        else
+        if not (state.Output.TrySend(context, value)) then
             // The lifecycle owner must close transports when registry Completion ends.
             context.Abort()
 
@@ -107,6 +104,7 @@ module SessionRegistry =
             for entry in state.Entries.Values do
                 close state context entry
                 entry.Agent.Abort()
+            state.Output.AbortAfterDrain context
 
     let private failPlayer state context entry reason =
         emit state context (SessionOutput.PlayerFailed(entry.Request.ConnectionId, reason))
@@ -116,9 +114,7 @@ module SessionRegistry =
     let private sendPlayer state (context: AgentContext<SessionRegistryMessage>) entry message =
         if entry.Stopped then
             false
-        elif entry.Output.TryEnqueue message then
-            let completed result = SessionRegistryMessage.PlayerAdmissionFinished(entry.Request.ConnectionId, result)
-            entry.Output.Pump(context, completed)
+        elif entry.Output.TrySend(context, message, fun failure -> SessionRegistryMessage.PlayerDeliveryFailed(entry.Request.ConnectionId, failure)) then
             true
         else
             failPlayer state context entry PlayerFailure.Overloaded
@@ -131,9 +127,8 @@ module SessionRegistry =
             fail state context SessionRegistryFailure.Overloaded
         | Some output ->
             let id = Guid.NewGuid()
-            if output.TryEnqueue { OperationId = id; Command = command } then
+            if output.TrySend(context, { OperationId = id; Command = command }, SessionRegistryMessage.ChannelDeliveryFailed) then
                 state.Pending.Add(id, operation)
-                output.Pump(context, SessionRegistryMessage.ChannelAdmissionFinished)
             else
                 fail state context SessionRegistryFailure.Overloaded
 
@@ -311,32 +306,18 @@ module SessionRegistry =
                     | (Join _ | Leave _), Ok (ChannelOutcome.Published _ | ChannelOutcome.History _)
                     | (Join _ | Leave _), Error _ -> fail state context (SessionRegistryFailure.InvalidReply "channel outcome")
 
-    let private playerAdmission state context connectionId result =
+    let private playerDeliveryFailed state context connectionId failure =
         match state.Entries.TryGetValue connectionId with
         | false, _ -> ()
         | true, entry ->
-            entry.Output.Acknowledge()
-            match result with
-            | Ok AgentDeliveryResult.Posted ->
-                entry.Output.Pump(context, fun result -> SessionRegistryMessage.PlayerAdmissionFinished(connectionId, result))
-            | Ok (AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled) -> entry.Agent.Abort()
-            | Error error -> failPlayer state context entry (PlayerFailure.Unexpected error)
+            match failure with
+            | AgentSendFailure.Closed | AgentSendFailure.Canceled -> entry.Agent.Abort()
+            | AgentSendFailure.Faulted error -> failPlayer state context entry (PlayerFailure.Unexpected error)
 
-    let private outputAdmission state context result =
-        state.Output.Acknowledge()
-        match result with
-        | Ok AgentDeliveryResult.Posted -> state.Output.Pump(context, SessionRegistryMessage.OutputAdmissionFinished)
-        | Ok (AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled) | Error _ -> context.Abort()
-
-    let private channelAdmission state context result =
-        match state.Channel with
-        | None -> fail state context (SessionRegistryFailure.InvalidReply "channel admission")
-        | Some output ->
-            output.Acknowledge()
-            match result with
-            | Ok AgentDeliveryResult.Posted -> output.Pump(context, SessionRegistryMessage.ChannelAdmissionFinished)
-            | Ok (AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled) -> fail state context SessionRegistryFailure.DependencyUnavailable
-            | Error error -> fail state context (SessionRegistryFailure.OperationFailed error)
+    let private channelDeliveryFailed state context failure =
+        match failure with
+        | AgentSendFailure.Closed | AgentSendFailure.Canceled -> fail state context SessionRegistryFailure.DependencyUnavailable
+        | AgentSendFailure.Faulted error -> fail state context (SessionRegistryFailure.OperationFailed error)
 
     let private readPlayer (config: SessionRegistryConfig) state context connectionId (reply: ReplyChannel<_>) =
         match state.Entries.TryGetValue connectionId with
@@ -355,12 +336,12 @@ module SessionRegistry =
     let private stop state context =
         state.Stopping <- true
         for entry in state.Entries.Values do
-            close state context entry
-            sendPlayer state context entry PlayerMessage.Stop |> ignore
+            if entry.Connected then
+                close state context entry
+                sendPlayer state context entry PlayerMessage.Stop |> ignore
 
     let private handle (config: SessionRegistryConfig) globalId profiles state (context: AgentContext<SessionRegistryMessage>) message = task {
         match message with
-        | SessionRegistryMessage.OutputAdmissionFinished result -> outputAdmission state context result
         | _ when state.Failing -> ()
         | SessionRegistryMessage.BindChannel channel ->
             match state.Channel with
@@ -371,8 +352,8 @@ module SessionRegistry =
         | SessionRegistryMessage.PlayerReported(connectionId, event) -> playerEvent state context connectionId event
         | SessionRegistryMessage.PlayerStopped(connectionId, outcome) -> playerStopped state context connectionId outcome
         | SessionRegistryMessage.ChannelReplied reply -> channelReply globalId state context reply
-        | SessionRegistryMessage.PlayerAdmissionFinished(connectionId, result) -> playerAdmission state context connectionId result
-        | SessionRegistryMessage.ChannelAdmissionFinished result -> channelAdmission state context result
+        | SessionRegistryMessage.PlayerDeliveryFailed(connectionId, failure) -> playerDeliveryFailed state context connectionId failure
+        | SessionRegistryMessage.ChannelDeliveryFailed failure -> channelDeliveryFailed state context failure
         | SessionRegistryMessage.UpdatePlayer(connectionId, command) ->
             match state.Entries.TryGetValue connectionId with
             | true, entry when entry.Connected -> sendPlayer state context entry (PlayerMessage.Update command) |> ignore
@@ -381,11 +362,8 @@ module SessionRegistry =
         | SessionRegistryMessage.DependencyStopped error -> fail state context error
         | SessionRegistryMessage.Stop -> stop state context
 
-        if state.Failing && state.Output.IsEmpty then
-            context.Abort()
-        elif state.Stopping && state.Entries.Count = 0 && state.Pending.Count = 0 && state.Output.IsEmpty then
-            let channelDrained = state.Channel |> Option.forall _.IsEmpty
-            if channelDrained then context.Complete() |> ignore
+        if not state.Failing && state.Stopping && state.Entries.Count = 0 && state.Pending.Count = 0 then
+            context.Complete() |> ignore
     }
 
     /// The registry owns player lifetimes. The caller owns the channel/profile store.

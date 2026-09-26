@@ -169,4 +169,29 @@ let tests = testList "PlayerAgent" [
             do! awaitUnit player.Completion
             equal 0 events.Reader.Count
         }))
+    case "a closed profile store fails opening instead of leaving the player waiting" (fun () -> task {
+        let queries = Channel.CreateUnbounded<ProfileRequest>()
+        let events = Channel.CreateUnbounded<PlayerEvent>()
+        use profiles = Agent.Start(AgentOptions.create "closed-profiles", collect queries)
+        profiles.Complete() |> ignore
+        do! awaitUnit profiles.Completion
+        use receiver = Agent.Start(AgentOptions.create "events", collect events)
+        use player = PlayerAgent.start 2 2 (request ()) (profiles.Ref.TryReliable().Value) (receiver.Ref.TryReliable().Value) |> ok
+        let! failure = receive events
+        equal (PlayerEvent.Failed PlayerFailure.DependencyUnavailable) failure
+        do! awaitUnit player.Completion
+        receiver.Complete() |> ignore
+        do! awaitUnit receiver.Completion
+    })
+
+    case "duplicate Begin cannot submit another profile request" (fun () ->
+        withPlayer (fun _ player queries _ -> task {
+            let! _ = receive queries
+            do! post player PlayerMessage.Begin
+            let! state = read player
+            equal (Error PlayerStateError.NotReady) state
+            do! post player PlayerMessage.Stop
+            let! _ = terminal player.Completion
+            equal 0 queries.Reader.Count
+        }))
 ]

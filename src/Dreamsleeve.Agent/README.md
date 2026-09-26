@@ -116,15 +116,49 @@ Completion settles.
 
 ## Bounded ordered sends
 
-AgentOutbox(capacity, destination) belongs to one handler; it owns no thread,
-mailbox or lock. TryEnqueue counts queued messages and the one admission in flight.
-Pump(context, completed) starts at most one PostAsync through PipeToSelf without
-suspending the handler. On its completion message, call Acknowledge, handle the
-result, then Pump again if appropriate. Posted acknowledges admission only;
-outstanding business replies need their own limit.
+Construct one `AgentOutbox(capacity, destination)` per independently progressing
+route. From the owner handler, call `TrySend(context, message, onFailure)`.
+False means the local limit is full: the message was not scheduled. True means
+accepted by the outbox, not delivered or processed by the destination. The limit
+includes queued messages, the current admission, and any pending failure notification.
+Only one actual admission runs at a time; ordering is FIFO.
 
-Use separate outboxes for independently progressing destinations. Overflow returns
-false without evicting messages; the owner chooses its overload policy. Abort
-cancels active admission. A graceful Stop protocol must drain outboxes before
-Complete. Operations and completion mappers run outside the handler and must not
-mutate owner state.
+The library advances the queue and releases capacity without successful admission
+messages, Pump, Acknowledge, or public receipts. Only AgentSendFailure
+(Closed, Canceled, Faulted) enters the owner's mailbox through onFailure. The mapper
+runs outside the handler and must only construct a message from immutable inputs.
+The overload without onFailure aborts the owner for an unavailable destination and
+faults it for an exception. Abort cancellation does not produce failure messages.
+
+Complete drains accepted sends automatically, even after mailbox admission closes.
+Abort cancels queued/waiting sends and joins workers. If a failure can no longer enter
+its owner mailbox during Complete, shutdown escalates to cancellation or the original
+exception instead of silently succeeding. Completed termination is sealed only after
+tracked work has finished. For a terminal failure that must first flush notifications,
+call `AbortAfterDrain(context)` once and do not schedule further sends on that route.
+
+Outboxes use the same internal delivery window as the request/reply handlers below.
+SemaphoreSlim protects only library delivery reservations; domain state remains in
+the sequential owner handler. Use non-dropping owner mailboxes. Outboxes do not retry
+commands and do not guarantee processing, deduplication or exactly-once effects.
+PipeToSelf remains available for background operations whose result the owner needs,
+including observing child Completion; ordinary sends no longer require it.
+
+## Request/reply handlers
+
+`AgentOutbox.createHandler capacity output execute` creates an ordered request/reply
+handler. `AgentReplyDispatcher.createHandler capacity replyTo execute` uses independent
+per-request destinations. Independent replies may arrive out of order: correlate them
+by operation ID. Construct each handler once per owner.
+
+Both reserve capacity BEFORE calling execute in the owner handler. At saturation,
+further execution waits; a bounded mailbox supplies upstream backpressure. Delivery
+workers release capacity without requiring an owner mailbox round trip. A slow caller
+uses part of the independent delivery limit; if all slots are occupied, later commands
+wait too. This is a global limit, not a per-caller quota.
+
+Complete joins deliveries; Abort cancels capacity waits and delivery workers. A closed
+sole ordered output aborts its owner; a closed independent recipient does not stop
+other callers or roll back a write. Delivery exceptions fault the owner and remain
+observable through Completion. A live recipient that never drains can delay graceful
+completion; the lifecycle owner can Abort.

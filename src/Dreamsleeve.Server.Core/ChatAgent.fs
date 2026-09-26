@@ -7,6 +7,7 @@ open Dreamsleeve.Server.Domain
 type ChatAgentConfig = {
     MailboxCapacity: int
     HistoryCapacity: int
+    MaxPendingReplies: int
 }
 
 [<RequireQualifiedAccess>]
@@ -57,21 +58,10 @@ module ChatAgent =
             Chat.historyAfter cursor maxCount chat
             |> Result.map ChannelOutcome.History
 
-    let private handle (chat: Chat) (output: ReliableAgentRef<ChannelReply>)
-                       (context: AgentContext<ChannelRequest>) (request: ChannelRequest) = task {
-        if not context.CancellationToken.IsCancellationRequested then
-            let reply = {
-                ChannelId = chat.ChannelId
-                OperationId = request.OperationId
-                Result = execute chat request.Command
-            }
-
-            let! delivered = output.PostAsync(reply, cancellationToken = context.CancellationToken)
-
-            match delivered with
-            | AgentDeliveryResult.Posted -> ()
-            | AgentDeliveryResult.Closed -> context.Abort()
-            | AgentDeliveryResult.Canceled -> ()
+    let private reply (chat: Chat) (request: ChannelRequest) = {
+        ChannelId = chat.ChannelId
+        OperationId = request.OperationId
+        Result = execute chat request.Command
     }
 
     /// A single output preserves ordering between join snapshots and later publications.
@@ -79,6 +69,8 @@ module ChatAgent =
     let start config channelId output =
         if config.MailboxCapacity < 1 then
             Error (DomainError.InvalidLimit ("mailboxCapacity", config.MailboxCapacity))
+        elif config.MaxPendingReplies < 1 then
+            Error (DomainError.InvalidLimit ("maxPendingReplies", config.MaxPendingReplies))
         else
             Chat.create channelId config.HistoryCapacity
             |> Result.map (fun chat ->
@@ -87,4 +79,4 @@ module ChatAgent =
                         Mailbox = AgentMailbox.boundedWait config.MailboxCapacity
                 }
 
-                Agent.Start(options, handle chat output))
+                Agent.Start(options, AgentOutbox.createHandler config.MaxPendingReplies output (reply chat)))

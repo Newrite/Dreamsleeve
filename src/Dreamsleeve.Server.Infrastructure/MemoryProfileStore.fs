@@ -5,6 +5,11 @@ open Dreamsleeve.Agent
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Domain
 
+type MemoryProfileStoreConfig = {
+    MailboxCapacity: int
+    MaxPendingReplies: int
+}
+
 /// The running agent owns both profiles and the ID allocator.
 /// Keep this agent alive across network restarts to retain process-local profiles.
 [<RequireQualifiedAccess>]
@@ -45,33 +50,21 @@ module MemoryProfileStore =
         | ProfileCommand.GetOrCreate(username, displayName) ->
             getOrCreate username displayName state |> Result.map ProfileOutcome.Resolved
 
-    let private handle state (context: AgentContext<ProfileRequest>) (request: ProfileRequest) = task {
-        let result =
-            if context.CancellationToken.IsCancellationRequested then
-                Error ProfileStoreError.Canceled
-            else
-                execute state request.Command
-
-        let reply = { OperationId = request.OperationId; Result = result }
-        let! delivered = request.ReplyTo.PostAsync(reply, cancellationToken = context.CancellationToken)
-
-        match delivered with
-        | AgentDeliveryResult.Posted -> ()
-        // The caller can leave before receiving a result. Already applied writes remain.
-        | AgentDeliveryResult.Closed
-        | AgentDeliveryResult.Canceled -> ()
+    let private reply state (request: ProfileRequest) = {
+        OperationId = request.OperationId
+        Result = execute state request.Command
     }
 
-    /// Capacity bounds queued requests; one further request can be in its handler.
-    /// Reply backpressure is awaited asynchronously before taking another request.
-    let start capacity =
-        if capacity < 1 then
-            Error "Profile mailbox capacity must be positive."
+    /// Replies are independent; capacity is reserved before executing a command.
+    let start config =
+        if config.MailboxCapacity < 1 || config.MaxPendingReplies < 1 then
+            Error "Profile mailbox and pending reply capacities must be positive."
         else
             let state = { Profiles = Dictionary<Username, PlayerData>(); NextId = 1UL }
             let options = {
                 AgentOptions.create "profiles" with
-                    Mailbox = AgentMailbox.boundedWait capacity
+                    Mailbox = AgentMailbox.boundedWait config.MailboxCapacity
             }
 
-            Ok (Agent.Start(options, handle state))
+            let handle = AgentReplyDispatcher.createHandler config.MaxPendingReplies (fun request -> request.ReplyTo) (reply state)
+            Ok (Agent.Start(options, handle))

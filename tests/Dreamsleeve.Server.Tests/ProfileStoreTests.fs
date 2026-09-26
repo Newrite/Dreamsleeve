@@ -14,7 +14,7 @@ open BackgroundTests
 let ok = function Ok value -> value | Error error -> failwithf "%A" error
 let username value = Username.create 32 value |> ok
 let display = DisplayName.create 64 "Player" |> ok
-let start capacity = MemoryProfileStore.start capacity |> ok
+let start capacity = MemoryProfileStore.start { MailboxCapacity = capacity; MaxPendingReplies = 4 } |> ok
 let request command (reply: AgentRef<ProfileReply>) =
     let reliable =
         reply.TryReliable()
@@ -165,7 +165,7 @@ let tests = testList "Profiles" [
         | Ok (ProfileOutcome.Created a), Ok (ProfileOutcome.Created b) ->
             check (a.PlayerId <> b.PlayerId) "Different profiles received the same player ID."
             check (PlayerId.value a.PlayerId <> 0UL && PlayerId.value b.PlayerId <> 0UL) "Zero ID allocated."
-            do! send profiles (request (ProfileCommand.FindByUsername(username "one")) receiver.Ref)
+            do! send profiles (request (ProfileCommand.FindByUsername a.Username) receiver.Ref)
             let! found = receive output
             match found.Result with
             | Ok (ProfileOutcome.Found(Some profile)) -> equal a profile
@@ -232,18 +232,48 @@ let tests = testList "Profiles" [
         do! stop receiver
     })
 
+    case "a slow reply target does not delay another caller" (fun () -> task {
+        let entered, release, received = gate<unit>(), gate<unit>(), gate<ProfileReply>()
+        use slow = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slowReceiver received)
+        slow.TryPost(Hold(entered, release)) |> ignore
+        do! awaitResult entered.Task
+        slow.TryPost Filler |> ignore
+        let replies = Channel.CreateUnbounded<ProfileReply>()
+        use fast = Agent.Start(AgentOptions.create "fast", collect replies)
+        use profiles = MemoryProfileStore.start { MailboxCapacity = 2; MaxPendingReplies = 2 } |> ok
+        let create = request (ProfileCommand.Create(username "stored", display)) (slow.Ref.Map Reply)
+        let lookup = request (ProfileCommand.FindByUsername(username "stored")) fast.Ref
+        do! send profiles create
+        do! send profiles lookup
+        let! found = receive replies
+        equal lookup.OperationId found.OperationId
+        match found.Result with
+        | Ok (ProfileOutcome.Found(Some profile)) -> equal (username "stored") profile.Username
+        | other -> failwithf "The later query did not observe the write: %A" other
+        profiles.Complete() |> ignore
+        check (not profiles.Completion.IsCompleted) "Completion skipped the slow reply."
+        release.SetResult()
+        do! awaitUnit profiles.Completion
+        let! saved = awaitResult received.Task
+        equal create.OperationId saved.OperationId
+        do! stop slow
+        do! stop fast
+    })
+
     case "mailbox bounds queued requests and completion drains them" (fun () -> task {
         let entered, release, received = gate<unit>(), gate<unit>(), gate<ProfileReply>()
         use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slowReceiver received)
         receiver.TryPost(Hold(entered, release)) |> ignore
         do! awaitResult entered.Task
         equal AgentPostResult.Posted (receiver.TryPost Filler)
-        use profiles = start 1
+        use profiles = MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = 1 } |> ok
         let query = request (ProfileCommand.FindByUsername(username "missing")) (receiver.Ref.Map Reply)
         do! send profiles query
         do! eventually (fun () -> profiles.QueueLength = 0)
 
-        // The first request is waiting to deliver its reply; only one further request fits.
+        // One reserved reply, one handler waiting BEFORE execution, one mailbox entry.
+        do! send profiles query
+        do! eventually (fun () -> profiles.QueueLength = 0)
         let second = profiles.TryPost query
         let third = profiles.TryPost query
         profiles.Complete() |> ignore
@@ -267,7 +297,7 @@ let tests = testList "Profiles" [
         receiver.TryPost(Hold(entered, release)) |> ignore
         do! awaitResult entered.Task
         receiver.TryPost Filler |> ignore
-        use profiles = start 1
+        use profiles = MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = 1 } |> ok
         let query = request (ProfileCommand.FindByUsername(username "missing")) (receiver.Ref.Map Reply)
         do! send profiles query
         do! eventually (fun () -> profiles.QueueLength = 0)
@@ -291,7 +321,9 @@ let tests = testList "Profiles" [
     })
 
     case "invalid mailbox capacity does not start an agent" (fun () -> task {
-        check (MemoryProfileStore.start 0 |> Result.isError) "Zero capacity accepted."
-        check (MemoryProfileStore.start -1 |> Result.isError) "Negative capacity accepted."
+        check (MemoryProfileStore.start { MailboxCapacity = 0; MaxPendingReplies = 4 } |> Result.isError) "Zero capacity accepted."
+        check (MemoryProfileStore.start { MailboxCapacity = -1; MaxPendingReplies = 4 } |> Result.isError) "Negative capacity accepted."
+        for limit in [0; -1] do
+            check (MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = limit } |> Result.isError) "Invalid reply limit accepted."
     })
 ]

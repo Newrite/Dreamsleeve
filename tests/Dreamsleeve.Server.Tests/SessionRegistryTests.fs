@@ -21,7 +21,7 @@ let private config = {
     MaxPendingChannelRequests = 16
     MaxPendingOutput = 64
 }
-let private chatConfig = { MailboxCapacity = 2; HistoryCapacity = 2 }
+let private chatConfig = { MailboxCapacity = 2; HistoryCapacity = 2; MaxPendingReplies = 4 }
 
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test channel closed."
@@ -141,7 +141,7 @@ let private withRegistry settings profiles
 
 let tests = testList "SessionRegistry" [
     case "real stores open sessions, announce presence and retain profiles across reconnect" (fun () -> task {
-        use profiles = MemoryProfileStore.start 2 |> ok
+        use profiles = MemoryProfileStore.start { MailboxCapacity = 2; MaxPendingReplies = 4 } |> ok
         let run (registry: Agent<SessionRegistryMessage>) (events: Channel<SessionOutput>) = task {
             let alice, bob = openRequest "Alice", openRequest "Bob"
             do! post registry (SessionRegistryMessage.Open alice)
@@ -188,7 +188,7 @@ let tests = testList "SessionRegistry" [
     })
 
     case "one canonical username can have only one pending or online session" (fun () -> task {
-        use profiles = MemoryProfileStore.start 2 |> ok
+        use profiles = MemoryProfileStore.start { MailboxCapacity = 2; MaxPendingReplies = 4 } |> ok
         let run (registry: Agent<SessionRegistryMessage>) (events: Channel<SessionOutput>) = task {
             let first, second = openRequest "USER", openRequest "user"
             do! post registry (SessionRegistryMessage.Open first)
@@ -227,6 +227,18 @@ let tests = testList "SessionRegistry" [
             let next = { first with ConnectionId = Guid.NewGuid() }
             do! post registry (SessionRegistryMessage.Open next)
             let! nextQuery = receive requests
+            // Opening the replacement is no longer a barrier for termination of
+            // the old child. Probe with an unrelated operation until its address closes.
+            let elapsed = System.Diagnostics.Stopwatch.StartNew()
+            let mutable closed = false
+            while not closed do
+                check (elapsed.Elapsed < guard) "The disconnected player did not stop."
+                let! admission = pending.ReplyTo.PostAsync {
+                    OperationId = Guid.Empty
+                    Result = Ok (ProfileOutcome.Resolved(player first))
+                }
+                closed <- admission = AgentDeliveryResult.Closed
+                do! Task.Yield()
             let! stale = pending.ReplyTo.PostAsync {
                 OperationId = pending.OperationId
                 Result = Ok (ProfileOutcome.Resolved(player first))
@@ -488,7 +500,7 @@ let tests = testList "SessionRegistry" [
         do! awaitResult entered.Task
         do! post receiver Filler
 
-        use profiles = MemoryProfileStore.start 2 |> ok
+        use profiles = MemoryProfileStore.start { MailboxCapacity = 2; MaxPendingReplies = 4 } |> ok
         let channelRequests = Channel.CreateUnbounded<ChannelRequest>()
         use channel = Agent.Start(AgentOptions.create "controlled-chat", collect channelRequests)
         use registry = SessionRegistry.start config globalId (profiles.Ref.TryReliable().Value)
@@ -582,7 +594,7 @@ let tests = testList "SessionRegistry" [
     })
 
     case "an unexpected player fault settles forwarded reads and leaves other players online" (fun () -> task {
-        use profiles = MemoryProfileStore.start 2 |> ok
+        use profiles = MemoryProfileStore.start { MailboxCapacity = 2; MaxPendingReplies = 4 } |> ok
         let run (registry: Agent<SessionRegistryMessage>) (events: Channel<SessionOutput>) = task {
             let healthy, broken = openRequest "healthy", openRequest "broken"
             do! post registry (SessionRegistryMessage.Open healthy)

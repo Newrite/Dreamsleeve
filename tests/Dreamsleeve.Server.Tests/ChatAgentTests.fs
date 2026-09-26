@@ -14,7 +14,7 @@ let private ok = function Ok value -> value | Error error -> failwithf "%A" erro
 let private playerId value = PlayerId.create value |> ok
 let private channelId value = ChatChannelId.create value |> ok
 let private messageId value = ChatMessageId.create value |> ok
-let private config = { MailboxCapacity = 4; HistoryCapacity = 2 }
+let private config = { MailboxCapacity = 4; HistoryCapacity = 2; MaxPendingReplies = 4 }
 let private globalId = channelId 1UL
 
 let private player value =
@@ -209,10 +209,12 @@ let tests = testList "ChatAgent" [
         output.TryPost(HoldOutput(entered, release)) |> ignore
         do! awaitResult entered.Task
         output.TryPost Filler |> ignore
-        use chat = start { config with MailboxCapacity = 1 } (output.Ref.TryReliable().Value.Map Output)
+        use chat = start { config with MailboxCapacity = 1; MaxPendingReplies = 1 } (output.Ref.TryReliable().Value.Map Output)
         let! first = send chat (ChannelCommand.Join(playerId 1UL))
         do! eventually (fun () -> chat.QueueLength = 0)
-        let second = request (ChannelCommand.Join(playerId 2UL))
+        let! waiting = send chat (ChannelCommand.Join(playerId 2UL))
+        do! eventually (fun () -> chat.QueueLength = 0)
+        let second = request (ChannelCommand.Join(playerId 3UL))
         let admitted = chat.TryPost second
         let full = chat.TryPost(request (ChannelCommand.Join(playerId 3UL)))
         chat.Complete() |> ignore
@@ -225,9 +227,11 @@ let tests = testList "ChatAgent" [
         check (not completedEarly) "Completion skipped a blocked output."
         let! a = receive replies
         let! b = receive replies
+        let! c = receive replies
         equal first a.OperationId
-        equal second.OperationId b.OperationId
-        equal (Set.ofList [playerId 1UL; playerId 2UL]) (joined b.Result).Players
+        equal waiting b.OperationId
+        equal second.OperationId c.OperationId
+        equal (Set.ofList [playerId 1UL; playerId 2UL; playerId 3UL]) (joined c.Result).Players
         equal AgentPostResult.Closed (chat.TryPost second)
         do! stop output
     })
@@ -271,6 +275,8 @@ let tests = testList "ChatAgent" [
             let history = ChatAgent.start { config with HistoryCapacity = limit } globalId (output.Ref.TryReliable().Value)
             check (Result.isError mailbox) "Invalid mailbox capacity was accepted."
             check (Result.isError history) "Invalid history capacity was accepted."
+            let pending = ChatAgent.start { config with MaxPendingReplies = limit } globalId (output.Ref.TryReliable().Value)
+            check (Result.isError pending) "Invalid reply limit was accepted."
         do! stop output
     })
 ]
