@@ -8,7 +8,7 @@
 | 1. Контракты и инварианты | Готово | Core Release: 0 warnings/errors. Саморевью: immutable identity/DTO, отдельный ReplyTo отказа, нет peer/Player в контрактах. Исполняемые проверки гонок добавляются с владельцами в этапах 3–5 |
 | 2. Допуск и резерв управления | Готово | 10 новых admission-тестов; managed suite 166/166. Саморевью: единый FIFO, резерв не меняет порядок, quota освобождается при dequeue; Complete/Abort будят ожидающих отправителей. |
 | 3. Владелец публикации | Готово | ChatRoom: 8/8. Канал назначает ID/время, хранит историю и делает fanout; один authoritative event автору. Саморевью и агентское ревью: SlowConsumer изолирован, порядок snapshot/delta, cleanup ack после удаления, независимые ID каналов. |
-| 4. Онлайн и персональный bootstrap | Ожидает | |
+| 4. Онлайн и персональный bootstrap | Готово | Presence 5/5, PlayerSession 9/9. Оба порядка снимков, bootstrap quota, персональный pending, Stop/Detach, reserve denial. Ревью исправило control-классификацию собственных ответов и duplicate RequestId до проверки канала. |
 | 5. Таблица и runtime | Ожидает | |
 | 6. Удаление старого пути | Ожидает | |
 | 7. ENet и Client.Dev | Ожидает | |

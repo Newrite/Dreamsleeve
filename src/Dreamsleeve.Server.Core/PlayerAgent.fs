@@ -4,14 +4,6 @@ open System
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
-/// A new ID per transport connection, independent of reusable ENet peer slots.
-type SessionOpenRequest = {
-    ConnectionId: Guid
-    RequestId: uint64
-    Username: Username
-    DisplayName: DisplayName
-}
-
 [<RequireQualifiedAccess>]
 type PlayerFailure =
     | Profile of ProfileStoreError
@@ -19,22 +11,6 @@ type PlayerFailure =
     | InvalidReply
     | Unexpected of exn
     | Overloaded
-
-[<RequireQualifiedAccess>]
-type PlayerStateError =
-    | NotReady
-    | Closed
-    | Busy
-
-/// Validated domain input from an adapter; no wire telemetry contract is implied.
-[<RequireQualifiedAccess>]
-type PlayerUpdate =
-    | BeginCharacter of CharacterName
-    | RenameCharacter of CharacterName
-    | SetLocation of PlayerLocation
-    | ClearLocation
-    | SetActorValues of (ActorValueKey * ActorValueInfo) list
-    | LeaveGame
 
 [<RequireQualifiedAccess>]
 type PlayerEvent =
@@ -165,7 +141,7 @@ module PlayerAgent =
         | Starting | Resolving _ | Joining _ | Active _ | Leaving _ -> ()
     }
 
-    let start mailboxCapacity maxPendingEvents request profiles output =
+    let start mailboxCapacity maxPendingEvents (request: SessionOpenRequest) profiles output =
         if mailboxCapacity < 1 || maxPendingEvents < 1 then
             Error "Player mailbox and pending event capacities must be positive."
         else

@@ -12,6 +12,8 @@
         <Compile Include="ProfileStore.fs" />
         <Compile Include="SessionContracts.fs" />
         <Compile Include="ChatRoomAgent.fs" />
+        <Compile Include="PresenceAgent.fs" />
+        <Compile Include="PlayerSession.fs" />
         <Compile Include="ChatAgent.fs" />
         <Compile Include="PlayerAgent.fs" />
         <Compile Include="ChatPublication.fs" />

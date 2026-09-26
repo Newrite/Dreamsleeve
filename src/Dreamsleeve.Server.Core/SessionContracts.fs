@@ -4,6 +4,30 @@ open System
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
+/// A new ID per transport connection, independent of reusable ENet peer slots.
+type SessionOpenRequest = {
+    ConnectionId: Guid
+    RequestId: uint64
+    Username: Username
+    DisplayName: DisplayName
+}
+
+[<RequireQualifiedAccess>]
+type PlayerStateError =
+    | NotReady
+    | Closed
+    | Busy
+
+/// Validated domain input from an adapter; no wire telemetry contract is implied.
+[<RequireQualifiedAccess>]
+type PlayerUpdate =
+    | BeginCharacter of CharacterName
+    | RenameCharacter of CharacterName
+    | SetLocation of PlayerLocation
+    | ClearLocation
+    | SetActorValues of (ActorValueKey * ActorValueInfo) list
+    | LeaveGame
+
 /// The adapter and the runtime share one sequential owner of every transport call.
 [<RequireQualifiedAccess>]
 type ServerTransportEvent =

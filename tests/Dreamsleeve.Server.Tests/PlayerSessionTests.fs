@@ -1,0 +1,293 @@
+module Dreamsleeve.Server.Tests.PlayerSessionTests
+
+open System
+open System.Threading.Channels
+open Dreamsleeve.Agent
+open Dreamsleeve.Server.Core
+open Dreamsleeve.Server.Domain
+open Expecto
+open AgentTests
+open BackgroundTests
+
+let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private globalId = ChatChannelId.create 1UL |> ok
+let private options = { ServerRuntimeOptions.defaults.Player with MaxPendingChat = 1; MaxBootstrapEvents = 4; MaxPendingOutput = 16 }
+let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
+    check (output.Writer.TryWrite value) "Test output closed."
+}
+let private receive (output: Channel<'T>) = output.Reader.ReadAsync().AsTask().WaitAsync guard
+let private deliver (address: ReliableAgentRef<'T>) value = task {
+    let! result = address.PostAsync value
+    equal AgentDeliveryResult.Posted result
+}
+let private post (player: Agent<PlayerSessionMessage>) message = deliver (player.Ref.TryReliable().Value) message
+let private read (player: Agent<PlayerSessionMessage>) = task {
+    let! result = player.TryAskAsync PlayerSessionMessage.Read |> awaitResult
+    match result with
+    | AgentAskResult.Replied value -> return value
+    | other -> return failwithf "%A" other
+}
+
+type private Fixture = {
+    Request: SessionOpenRequest
+    Player: Agent<PlayerSessionMessage>
+    Profiles: Channel<ProfileRequest>
+    Chat: Channel<ChatRoomCommand>
+    Presence: Channel<PresenceCommand>
+    Host: Channel<SessionHostCommand>
+}
+
+let private withPlayer settings run = task {
+    let queries = Channel.CreateUnbounded<ProfileRequest>()
+    let chatCommands = Channel.CreateUnbounded<ChatRoomCommand>()
+    let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
+    let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
+    use profiles = Agent.Start(AgentOptions.create "profiles", collect queries)
+    use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
+    use presence = Agent.Start(AgentOptions.create "presence", collect presenceCommands)
+    use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
+    let request = {
+        ConnectionId = Guid.NewGuid()
+        RequestId = 1UL
+        Username = Username.create 32 "player" |> ok
+        DisplayName = DisplayName.create 64 "Player" |> ok
+    }
+    use player = PlayerSession.start settings globalId
+                     (profiles.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+                     (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
+    let fixture = { Request = request; Player = player; Profiles = queries;
+                    Chat = chatCommands; Presence = presenceCommands; Host = hostCommands }
+    do! run fixture
+    if not player.Completion.IsCompleted then player.Abort()
+    let! _ = terminal player.Completion
+    profiles.Complete() |> ignore
+    chat.Complete() |> ignore
+    presence.Complete() |> ignore
+    host.Complete() |> ignore
+    do! awaitUnit profiles.Completion
+    do! awaitUnit chat.Completion
+    do! awaitUnit presence.Completion
+    do! awaitUnit host.Completion
+}
+
+let private resolve fixture = task {
+    let! query = receive fixture.Profiles
+    let profile = PlayerData.create (PlayerId.create 42UL |> ok) fixture.Request.Username fixture.Request.DisplayName
+    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok (ProfileOutcome.Resolved profile) }
+    let! command = receive fixture.Host
+    match command with
+    | SessionHostCommand.Reserve(connectionId, playerId, reply) ->
+        equal fixture.Request.ConnectionId connectionId
+        equal profile.PlayerId playerId
+        return profile, reply
+    | other -> return failwithf "Expected Reserve: %A" other
+}
+
+let private joins fixture = task {
+    let! profile, reply = resolve fixture
+    do! deliver reply IdentityAdmission.Reserved
+    let! chatCommand = receive fixture.Chat
+    let! presenceCommand = receive fixture.Presence
+    match chatCommand, presenceCommand with
+    | ChatRoomCommand.Join chat, PresenceCommand.Join presence -> return profile, chat, presence
+    | other -> return failwithf "Expected subscriptions: %A" other
+}
+
+let private snapshot (profile: PlayerData) = {
+    ChannelId = globalId
+    Players = Set.singleton profile.PlayerId
+    Messages = []
+    HistoryCapacity = 4
+}
+
+let private ready fixture = task {
+    let! profile, chat, presence = joins fixture
+    do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
+    do! deliver presence.Events (PresenceEvent.Snapshot [profile])
+    let! command = receive fixture.Host
+    match command with
+    | SessionHostCommand.Activate(connectionId, requestId, welcome) ->
+        equal fixture.Request.ConnectionId connectionId
+        equal fixture.Request.RequestId requestId
+        equal profile.PlayerId welcome.SelfPlayerId
+    | other -> failwithf "Expected Activate: %A" other
+    return profile, chat, presence
+}
+
+let private publication profile id =
+    ChatMessage.create (ChatMessageId.create id |> ok) globalId profile
+        (ChatMessageText.create 2000 $"message {id}" |> ok) DateTimeOffset.UnixEpoch
+
+let private finish fixture = task {
+    let! chatCommand = receive fixture.Chat
+    let! presenceCommand = receive fixture.Presence
+    match chatCommand, presenceCommand with
+    | ChatRoomCommand.Detach chat, PresenceCommand.Detach presence ->
+        do! deliver chat.ReplyTo fixture.Request.ConnectionId
+        check (not fixture.Player.Completion.IsCompleted) "Session skipped presence cleanup."
+        do! deliver presence.ReplyTo fixture.Request.ConnectionId
+        do! awaitUnit fixture.Player.Completion
+    | other -> failwithf "Expected detach: %A" other
+}
+
+let tests = testList "PlayerSession" [
+    case "bootstrap orders history before later chat and buffers independent presence changes" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! profile, chat, presence = joins fixture
+            let message = publication profile 1UL
+            do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
+            do! deliver chat.Events (ChatRoomEvent.Published message)
+            let! state = read fixture.Player
+            equal (Error PlayerStateError.NotReady) state
+            equal 0 fixture.Host.Reader.Count
+
+            do! deliver presence.Events (PresenceEvent.Snapshot [profile])
+            let! first = receive fixture.Host
+            match first with
+            | SessionHostCommand.Activate(_, _, welcome) -> equal [] welcome.RecentMessages
+            | other -> failwithf "Expected welcome first: %A" other
+            let! second = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.ChatPublished message)) second
+            do! deliver presence.Events (PresenceEvent.Left profile.PlayerId)
+            let! third = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerLeft profile.PlayerId)) third
+        }))
+
+    case "presence snapshot and later delta remain ordered while chat snapshot is delayed" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! profile, chat, presence = joins fixture
+            do! deliver presence.Events (PresenceEvent.Snapshot [profile])
+            do! deliver presence.Events (PresenceEvent.Left profile.PlayerId)
+            do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
+            let! welcome = receive fixture.Host
+            match welcome with
+            | SessionHostCommand.Activate(_, _, value) -> equal [profile] value.Players
+            | other -> failwithf "%A" other
+            let! delta = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerLeft profile.PlayerId)) delta
+        }))
+
+    case "personal quota and rejection settle one request without closing the player" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! profile, chat, _ = ready fixture
+            let text = ChatMessageText.create 2000 "hello" |> ok
+            do! post fixture.Player (PlayerSessionMessage.SendChat(2UL, globalId, text))
+            let! first = receive fixture.Chat
+            match first with
+            | ChatRoomCommand.Publish value -> equal 2UL value.RequestId
+            | other -> failwithf "%A" other
+            do! post fixture.Player (PlayerSessionMessage.SendChat(3UL, globalId, text))
+            let! overloaded = receive fixture.Host
+            match overloaded with
+            | SessionHostCommand.Send(_, ChatResponse.RequestRejected(id, reason)) ->
+                equal 3UL id
+                equal RequestRejectionCode.Overloaded reason.Code
+            | other -> failwithf "%A" other
+            equal 0 fixture.Chat.Reader.Count
+
+            let rejection = { Code = RequestRejectionCode.NotChannelMember; Message = "refused"; Field = "" }
+            do! deliver chat.Events (ChatRoomEvent.Rejected(2UL, rejection))
+            let! rejected = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.RequestRejected(2UL, rejection))) rejected
+            do! post fixture.Player (PlayerSessionMessage.SendChat(4UL, globalId, text))
+            let! next = receive fixture.Chat
+            match next with
+            | ChatRoomCommand.Publish value -> equal 4UL value.RequestId
+            | other -> failwithf "%A" other
+            let message = publication profile 1UL
+            do! deliver chat.Events (ChatRoomEvent.Accepted(4UL, message))
+            let! accepted = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.ChatAccepted(4UL, message))) accepted
+            let! state = read fixture.Player
+            equal profile (ok state).Data
+        }))
+
+    case "stop before snapshots detaches in the source command order and waits for both acknowledgements" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! profile, chat, presence = joins fixture
+            do! post fixture.Player PlayerSessionMessage.Stop
+            do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
+            do! deliver presence.Events (PresenceEvent.Snapshot [profile])
+            let! state = read fixture.Player
+            equal (Error PlayerStateError.Closed) state
+            do! finish fixture
+            equal 0 fixture.Host.Reader.Count
+        }))
+
+    case "bootstrap overflow closes only this session and completes its subscriptions" (fun () ->
+        withPlayer { options with MaxBootstrapEvents = 1 } (fun fixture -> task {
+            let! profile, chat, _ = joins fixture
+            do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
+            do! deliver chat.Events (ChatRoomEvent.Published(publication profile 1UL))
+            do! deliver chat.Events (ChatRoomEvent.Published(publication profile 2UL))
+            let! command = receive fixture.Host
+            match command with
+            | SessionHostCommand.Close(id, _) -> equal fixture.Request.ConnectionId id
+            | other -> failwithf "%A" other
+            do! finish fixture
+            equal 0 fixture.Host.Reader.Count
+        }))
+
+    case "denied identity sends correlated refusal before close and never joins services" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! _, reply = resolve fixture
+            do! deliver reply IdentityAdmission.AlreadyInUse
+            let! rejected = receive fixture.Host
+            match rejected with
+            | SessionHostCommand.Send(_, ChatResponse.RequestRejected(id, reason)) ->
+                equal fixture.Request.RequestId id
+                equal RequestRejectionCode.SessionAlreadyOpen reason.Code
+            | other -> failwithf "%A" other
+            let! closed = receive fixture.Host
+            match closed with
+            | SessionHostCommand.Close(id, _) -> equal fixture.Request.ConnectionId id
+            | other -> failwithf "%A" other
+            let! _ = terminal fixture.Player.Completion
+            equal 0 fixture.Chat.Reader.Count
+            equal 0 fixture.Presence.Reader.Count
+        }))
+
+    case "profile resolution can stop without waiting for its reply" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! query = receive fixture.Profiles
+            do! post fixture.Player PlayerSessionMessage.Stop
+            let! _ = terminal fixture.Player.Completion
+            let! late = query.ReplyTo.PostAsync { OperationId = query.OperationId; Result = Error ProfileStoreError.Canceled }
+            equal AgentDeliveryResult.Closed late
+            equal 0 fixture.Host.Reader.Count
+        }))
+
+    case "player telemetry remains local to the ready session" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! profile, _, _ = ready fixture
+            let name = CharacterName.create 64 "Nerevar" |> ok
+            do! post fixture.Player (PlayerSessionMessage.Update(PlayerUpdate.BeginCharacter name))
+            let! state = read fixture.Player
+            equal profile (ok state).Data
+            equal (ValueSome name) (ok state).CharacterName
+            do! post fixture.Player (PlayerSessionMessage.Update PlayerUpdate.LeaveGame)
+            let! empty = read fixture.Player
+            equal ValueNone (ok empty).CharacterName
+            do! post fixture.Player PlayerSessionMessage.Stop
+            do! finish fixture
+        }))
+    case "duplicate pending ID on another channel closes without settling the original as a refusal" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! _, _, _ = ready fixture
+            let text = ChatMessageText.create 2000 "hello" |> ok
+            do! post fixture.Player (PlayerSessionMessage.SendChat(2UL, globalId, text))
+            let! published = receive fixture.Chat
+            match published with
+            | ChatRoomCommand.Publish value -> equal 2UL value.RequestId
+            | other -> failwithf "%A" other
+            let otherChannel = ChatChannelId.create 99UL |> ok
+            do! post fixture.Player (PlayerSessionMessage.SendChat(2UL, otherChannel, text))
+            let! command = receive fixture.Host
+            match command with
+            | SessionHostCommand.Close(id, _) -> equal fixture.Request.ConnectionId id
+            | other -> failwithf "Duplicate must not create another correlated response: %A" other
+            do! finish fixture
+            equal 0 fixture.Host.Reader.Count
+        }))
+
+]
