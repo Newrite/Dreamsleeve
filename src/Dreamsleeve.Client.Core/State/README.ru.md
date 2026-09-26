@@ -2,8 +2,13 @@
 
 `PlayerStore`, `ChatCache` и `ClientModel` принадлежат одному последовательному
 владельцу. Все методы, включая чтение, вызываются на нём. Перед передачей другому
-потоку владелец формирует самостоятельные значения. `SnapshotMailbox` атомарно
-публикует последний неизменяемый снимок, но не хранит все события и не является агентом.
+потоку владелец формирует самостоятельные значения и передаёт их через
+`StateUpdateQueue`. Отдельный SnapshotMailbox удалён как неиспользуемый.
+
+`ChangeBatch` — накопитель затронутых ID внутри владельца модели;
+`ClientStateUpdate` — снимок или дельта с собственными данными для получателя;
+`StateUpdateQueue` — синхронизация передачи этих данных между потоками.
+Это один путь доставки, без параллельной публикации в mailbox.
 
 ## TakeChanges
 
@@ -59,7 +64,7 @@ import Dreamsleeve.Client.StateUpdate;
 // scratch живёт у сетевого владельца и переиспользуется между итерациями.
 Dreamsleeve::Client::ChangeBatch scratch;
 auto update = Dreamsleeve::Client::TakeStateUpdate(model, scratch);
-// update владеет данными: его можно переместить в будущую синхронизированную очередь.
+// update владеет данными: его можно переместить в StateUpdateQueue.
 ```
 
 Результат — `optional<variant<ClientSnapshot, ClientStateDelta>>`:
@@ -87,10 +92,63 @@ TakeStateUpdate сам вызывает TakeChanges; отдельно вызыв
 и уничтожение. Верхний буфер `chatContent` передаётся результату перемещением;
 его ёмкость, как и вложенные векторы, не остаётся в scratch для переиспользования.
 
-Это подготовка payload, а не потокобезопасный канал. Очередь, начальная подписка
-со снимком и восстановление при потере пакета ещё относятся к будущему runtime.
+Это подготовка payload; потокобезопасную доставку обеспечивает StateUpdateQueue.
+Начальная подписка и соединение этих операций в runtime ещё не реализованы.
 Как и другие операции модели, сборка payload может бросить при аллокации:
 продолжение этой же сессии после такого сбоя не гарантируется.
+
+## Очередь между владельцем модели и потребителем
+
+`Dreamsleeve.Client.StateUpdateQueue` передаёт самостоятельные пакеты через mutex.
+Один владелец модели публикует их по порядку; один потребитель забирает и применяет
+пачки последовательно. Очередь не обращается к модели и не вызывает callbacks.
+
+```cpp
+import Dreamsleeve.Client.StateUpdateQueue;
+using namespace Dreamsleeve::Client;
+
+auto created = StateUpdateQueue::TryCreate(64); // Лимит пакетов, не байтов.
+if (!created) return; // Передать created.error() вызывающему коду.
+auto queue = std::move(*created);
+ChangeBatch scratch;       // Только у владельца модели.
+
+// Инициализация доставки на владельце: снимок включает накопленные изменения.
+model.TakeChanges(scratch);
+queue->Publish(model.Snapshot());
+
+// После очередной пачки изменений модели, на том же владельце:
+if (auto update = TakeStateUpdate(model, scratch))
+{
+  if (queue->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired)
+    queue->Publish(model.Snapshot());
+}
+
+// На потребителе: переиспользовать batch, применять до следующего TakeAll.
+StateUpdateBatch batch;
+queue->TakeAll(batch);
+```
+
+TryCreate возвращает `Domain::Result<Ptr>`; нулевой лимит даёт
+`InvalidConfig` для поля `capacity`, без явного throw. Очередь не перемещается
+из-за mutex и создаётся через unique_ptr, как DreamNetClient. Это не обещание
+отсутствия исключений выделения памяти у стандартной библиотеки.
+Новая очередь требует начального снимка.
+При переполнении вся ожидающая цепочка удаляется; Publish возвращает
+`SnapshotRequired`, а следующие дельты отклоняются до публикации полного снимка.
+`RequiresSnapshot()` и `batch.requiresSnapshot` показывают это состояние;
+чтение его не сбрасывает. При пустой пачке с этим флагом потребитель ожидает
+восстановления владельцем, а не применяет неполную цепочку.
+
+Свежий снимок заменяет все ожидающие пакеты, даже если очередь заполнена.
+Уже вычитанные данные остаются собственностью потребителя и не изменяются.
+TakeAll очищает предыдущий output и меняет векторы местами. Аллокации возможны;
+лимит числа пакетов не ограничивает размер отдельного снимка или дельты.
+
+Владелец отвечает за свежесть снимков и порядок публикации: очередь не проверяет
+generation/revision. Пример рассчитан на одного получателя; при появлении подписок
+нужно один раз вычитывать модель и распределять результат, а не вызывать этот
+код отдельно для каждого окна. Ошибки команд (`ServerRejection`) и измерения
+движения не входят в эту заменяемую снимком очередь состояния.
 
 ## Сессия, история и ошибки
 
@@ -132,5 +190,6 @@ ChangeBatch не сохраняет каждый момент приёма по�
 
 Проверки: [Tests.State.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.State.cpp),
 [Tests.Changes.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.Changes.cpp)
-и [Tests.StateUpdate.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.StateUpdate.cpp).
+[Tests.StateUpdate.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.StateUpdate.cpp)
+и [Tests.StateUpdateQueue.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.StateUpdateQueue.cpp).
 Запуск: [tests/README](../../../tests/README.md).

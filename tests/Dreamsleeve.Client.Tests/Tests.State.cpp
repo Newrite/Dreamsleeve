@@ -4,7 +4,6 @@ import std;
 import Dreamsleeve.Client.ChatCache;
 import Dreamsleeve.Client.PlayerStore;
 import Dreamsleeve.Client.Model;
-import Dreamsleeve.Client.SnapshotMailbox;
 
 using namespace Domain;
 using namespace Dreamsleeve::Client;
@@ -492,70 +491,6 @@ TEST_CASE("ClientModel disconnect cancels active history while preserving accept
   obsolete.nextCursor = 20;
   obsolete.messages = {StateTests::Message(20)};
   CHECK_FALSE(model.Apply(model.Generation(), ChatHistoryReceived{obsolete}).has_value());
-}
-
-TEST_CASE("SnapshotMailbox gives readers owned immutable snapshots that outlive later publication")
-{
-  SnapshotMailbox mailbox;
-  CHECK_FALSE(mailbox.Read());
-  ClientModel model;
-  REQUIRE(model.Apply(model.Generation(), PlayerUpserted{StateTests::MakePlayer()}).has_value());
-  REQUIRE(model.RegisterChannel(7, 4).has_value());
-  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{7, {StateTests::Message(10)}}).has_value());
-  auto source = model.Snapshot();
-  mailbox.Publish(source);
-  const auto first = mailbox.Read();
-  REQUIRE(first);
-  source.players[0].actorValues.clear();
-  source.players[0].data.displayName = "Caller mutation";
-  source.chats[0].messages[0].messageText = "Caller edit";
-  CHECK(first->players[0].actorValues.size() == 2);
-  CHECK(first->players[0].data.displayName == "Player 1");
-  CHECK(first->chats[0].messages[0].messageText == "Message 10");
-  model.ResetSession();
-  mailbox.Publish(model.Snapshot());
-  CHECK(mailbox.Read()->players.empty());
-  CHECK(first->players[0].actorValues.size() == 2);
-  CHECK(first->chats[0].messages.size() == 1);
-}
-
-TEST_CASE("SnapshotMailbox publishes coherent state from its owner to a concurrent reader")
-{
-  SnapshotMailbox mailbox;
-  std::atomic<bool> complete{false};
-  std::atomic<bool> coherent{true};
-  constexpr std::uint64_t publications = 1000;
-  std::jthread reader([&]
-  {
-    std::uint64_t lastRevision{};
-    do
-    {
-      if (const auto snapshot = mailbox.Read())
-      {
-        if (snapshot->revision < lastRevision || snapshot->selfPlayerId != snapshot->revision ||
-            snapshot->players.size() != 1 || snapshot->players[0].data.playerId != snapshot->revision ||
-            snapshot->players[0].data.displayName != std::to_string(snapshot->revision))
-          coherent.store(false, std::memory_order_relaxed);
-        lastRevision = snapshot->revision;
-      }
-    } while (!complete.load(std::memory_order_acquire));
-  });
-  for (std::uint64_t revision = 1; revision <= publications; ++revision)
-  {
-    auto player = StateTests::MakePlayer(revision);
-    player.data.displayName = std::to_string(revision);
-    ClientSnapshot snapshot;
-    snapshot.generation = 1;
-    snapshot.revision = revision;
-    snapshot.selfPlayerId = revision;
-    snapshot.players.push_back(std::move(player));
-    mailbox.Publish(std::move(snapshot));
-  }
-  complete.store(true, std::memory_order_release);
-  reader.join();
-  CHECK(coherent.load(std::memory_order_relaxed));
-  REQUIRE(mailbox.Read());
-  CHECK(mailbox.Read()->revision == publications);
 }
 
 TEST_CASE("ClientModel server rejection preserves unknown codes and text without changing accepted state")
