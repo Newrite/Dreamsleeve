@@ -1,6 +1,6 @@
 # Выполнение плана разделения SessionRegistry
 
-Основа: [план](SessionArchitecturePlanRu.md), маршрут Runtime → PlayerAgent → ChatAgent.
+Основа: [план](SessionArchitecturePlanRu.md), маршрут Runtime → PlayerSession → ChatRoomAgent (имена итоговых модулей).
 Начальная версия кода: 8d4cb9f. Пользователь разрешил реализацию, расширения библиотеки и коммит каждого этапа.
 
 | Этап | Состояние | Проверка и ревью |
@@ -11,7 +11,12 @@
 | 4. Онлайн и персональный bootstrap | Готово | Presence 5/5, PlayerSession 9/9. Оба порядка снимков, bootstrap quota, персональный pending, Stop/Detach, reserve denial. Ревью исправило control-классификацию собственных ответов и duplicate RequestId до проверки канала. |
 | 5. Таблица и runtime | Готово | Runtime 9/9: резерв PlayerId, cleanup, поздний profile reply, один deadline, отказ зависимости, reconnect и чат. Полный текущий managed-прогон 202/202. Независимое ревью подтвердило cleanup barrier и потребовало сохранять fault источника при shutdown — исправлено. |
 | 6. Удаление старого пути | Готово | Удалены 4 старых реализации и 4 привязанных к ним тестовых файла. Перенесены история/курсор, telemetry snapshots, повторный Begin и отказы профилей; причина ProfileStoreError.Failed сохранена в диагностике. Актуализированы README/доки; текущая интеграционная suite 177/177. |
-| 7. ENet и Client.Dev | Ожидает | |
+| 7. ENet и Client.Dev | Готово | Managed 181/181, native 162/162 (2547 assertions), реальный smoke 7 сценариев. 8 ENet loopback-проверок, JSON config. Ревью исправило graceful close, ACK-бюджеты, аварийный Dispose и встречное закрытие клиента после отказа входа. |
 | 8. Измерения | Ожидает | |
 
 Коммиты выполняются после проверки соответствующего этапа. Временная совместимость старого API удаляется до завершения этапа 6.
+
+Сетевые уточнения шага 7: `Close` дренирует ENet через DisconnectLater; `Reset` применяется
+существующим deadline runtime только к зависшему peer после domain cleanup. Резерв PlayerId
+удерживается до обеих границ. Аварийный Dispose уведомляет оставшихся peers и освобождает
+пакеты. ClientRuntime завершает отвергнутый вход без встречного graceful-handshake.

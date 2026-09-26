@@ -23,6 +23,7 @@ export namespace Dreamsleeve::Client
     TimeOutMs       disconnectTimeoutMs{2000};
     TimeOutMs       sessionTimeoutMs{5000};
     std::size_t     chatCapacity{512};
+    std::size_t     maxPendingChatRequests{32};
 
     std::optional<std::string_view> InvalidProtocolSetting() const noexcept
     {

@@ -47,7 +47,12 @@ namespace
     return "Unknown";
   }
 
-  void Print(ClientExchange& exchange)
+  void PrintMessage(std::ostream& output, const Domain::ChatMessage& message)
+  {
+    output << '[' << message.channelId << "] " << message.author.displayName << ": " << message.messageText << '\n';
+  }
+
+  void Print(ClientExchange& exchange, std::uint64_t& generation, Domain::ChatChannelId& channel)
   {
     ClientOutput output;
     exchange.Drain(output);
@@ -56,16 +61,99 @@ namespace
     console << "session=" << PhaseName(output.phase) << '\n';
 
     for (const auto& update : output.state.updates)
+    {
+      generation = std::visit([](const auto& value) { return value.generation; }, update);
       if (const auto* snapshot = std::get_if<ClientSnapshot>(&update))
       {
         console << "snapshot generation=" << snapshot->generation << " players=" << snapshot->players.size() << '\n';
         for (const auto& player : snapshot->players)
           console << player.data.playerId << ": " << player.data.displayName << '\n';
+
+        channel = snapshot->chats.empty() ? 0 : snapshot->chats.front().channelId;
+        for (const auto& chat : snapshot->chats)
+          for (const auto& message : chat.messages)
+            PrintMessage(console, message);
       }
+      else
+      {
+        const auto& delta = std::get<ClientStateDelta>(update);
+        for (const auto& player : delta.players)
+          console << "online " << player.data.playerId << ": " << player.data.displayName << '\n';
+        for (const auto playerId : delta.removedPlayers)
+          console << "offline " << playerId << '\n';
+        for (const auto& change : delta.chatContent)
+          if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
+            for (const auto& message : added->messages)
+              PrintMessage(console, message);
+      }
+    }
 
     for (const auto& event : output.rejections)
       console << "request " << event.rejection.requestId << " rejected (" << static_cast<int>(event.rejection.code)
               << "): " << event.rejection.message << '\n';
+
+    for (const auto& failure : output.commandFailures)
+      console << "request " << failure.requestId << " not sent (local " << static_cast<int>(failure.code) << ")\n";
+  }
+
+  enum class Action
+  {
+    Connect,
+    Disconnect
+  };
+
+  struct NetworkControl
+  {
+    std::mutex         mutex;
+    std::deque<Action> actions;
+    std::atomic_bool   failed{};
+  };
+
+  void RunNetwork(std::stop_token stop, Configuration config, ClientExchange& exchange,
+                  const std::string& username, const std::string& displayName, NetworkControl& control)
+  {
+    auto created = ClientRuntime::TryCreate(config, exchange);
+    if (!created)
+    {
+      std::visit([](const auto& error) { PrintError(error); }, created.error());
+      control.failed = true;
+
+      exchange.Finish();
+      return;
+    }
+
+    auto client = std::move(*created);
+    Report(client->Connect(username, displayName));
+
+    auto last = SessionPhase::Disconnected;
+
+    while (!stop.stop_requested())
+    {
+      std::deque<Action> pending;
+      {
+        std::lock_guard lock(control.mutex);
+        pending.swap(control.actions);
+      }
+
+      for (const auto action : pending)
+        Report(action == Action::Connect ? client->Connect(username, displayName) : client->Disconnect());
+
+      Report(client->Poll(10));
+
+      if (client->Phase() != last)
+      {
+        last = client->Phase();
+        std::osyncstream(std::cout) << "session=" << PhaseName(last) << '\n';
+      }
+
+      if (last == SessionPhase::Disconnected || last == SessionPhase::Faulted) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    Report(client->Disconnect());
+    while (client->Phase() == SessionPhase::Disconnecting)
+      Report(client->Poll(10));
+
+    exchange.Finish();
   }
 
 }
@@ -108,80 +196,48 @@ int RunNetworkConsole(int argc, char* argv[])
     return 1;
   }
 
-  enum class Action
-  {
-    Connect,
-    Disconnect
-  };
+  NetworkControl control;
+  std::jthread worker(RunNetwork, config, std::ref(**exchange), std::cref(username), std::cref(displayName), std::ref(control));
+  std::uint64_t generation{};
+  Domain::ChatChannelId channel{};
 
-  std::mutex         mutex;
-  std::deque<Action> actions;
-  std::atomic_bool   failed{};
-
-  std::jthread worker([&](std::stop_token stop) {
-    auto created = ClientRuntime::TryCreate(config, **exchange);
-    if (!created)
-    {
-      std::visit([](const auto& error) { PrintError(error); }, created.error());
-      failed = true;
-
-      (*exchange)->Finish();
-      return;
-    }
-
-    auto client = std::move(*created);
-    Report(client->Connect(username, displayName));
-
-    auto last = SessionPhase::Disconnected;
-
-    while (!stop.stop_requested())
-    {
-      std::deque<Action> pending;
-      {
-        std::lock_guard lock(mutex);
-        pending.swap(actions);
-      }
-
-      for (const auto action : pending)
-        Report(action == Action::Connect ? client->Connect(username, displayName) : client->Disconnect());
-
-      Report(client->Poll(10));
-
-      if (client->Phase() != last)
-      {
-        last = client->Phase();
-        std::osyncstream(std::cout) << "session=" << PhaseName(last) << '\n';
-      }
-
-      if (last == SessionPhase::Disconnected || last == SessionPhase::Faulted) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-
-    Report(client->Disconnect());
-    while (client->Phase() == SessionPhase::Disconnecting)
-      Report(client->Poll(10));
-
-    (*exchange)->Finish();
-  });
-
-  std::cout << "Real ENet connection. Commands: connect | disconnect | read | quit\n";
+  std::cout << "Real ENet connection. Commands: connect | disconnect | send <text> | read | quit\n";
 
   std::string line;
   while (std::getline(std::cin, line) && line != "quit")
   {
     if (line == "read")
-      Print(**exchange);
+      Print(**exchange, generation, channel);
     else if (line == "connect" || line == "disconnect")
     {
-      std::lock_guard lock(mutex);
-      actions.push_back(line == "connect" ? Action::Connect : Action::Disconnect);
+      std::lock_guard lock(control.mutex);
+      if (control.actions.size() < 8)
+        control.actions.push_back(line == "connect" ? Action::Connect : Action::Disconnect);
+      else
+        std::cout << "Control queue is full\n";
+    }
+    else if (line.starts_with("send ") || line.starts_with("chat "))
+    {
+      Print(**exchange, generation, channel);
+      const auto requestId = (*exchange)->NextRequestId();
+      if (!requestId)
+        std::cout << "Request IDs exhausted\n";
+      else
+      {
+        const auto posted = (*exchange)->Post({generation, SendChat{*requestId, channel, line.substr(5)}});
+        if (posted == CommandPostResult::Queued)
+          std::cout << "request " << *requestId << " queued\n";
+        else
+          std::cout << "Command queue is full or closed\n";
+      }
     }
     else
-      std::cout << "Commands: connect | disconnect | read | quit\n";
+      std::cout << "Commands: connect | disconnect | send <text> | read | quit\n";
   }
 
   worker.request_stop();
   worker.join();
-  Print(**exchange);
+  Print(**exchange, generation, channel);
 
-  return failed ? 1 : 0;
+  return control.failed ? 1 : 0;
 }

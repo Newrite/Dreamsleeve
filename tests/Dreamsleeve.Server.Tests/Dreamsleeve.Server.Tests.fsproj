@@ -17,6 +17,8 @@
     <Compile Include="ChatRoomAgentTests.fs" />
     <Compile Include="PresenceAgentTests.fs" />
     <Compile Include="ServerRuntimeTests.fs" />
+    <Compile Include="EnetTransportTests.fs" />
+    <Compile Include="ConfigurationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -24,6 +26,7 @@
     <ProjectReference Include="../../src/Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
     <ProjectReference Include="../../src/Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
     <ProjectReference Include="../../src/Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />
+    <ProjectReference Include="../../src/Dreamsleeve.Server/Dreamsleeve.Server.fsproj" />
     <PackageReference Include="Expecto" Version="11.1.0" />
     <PackageReference Include="Faqt" Version="5.1.0" />
   </ItemGroup>

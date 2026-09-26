@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -6,11 +6,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Configuration.fs"/>
         <Compile Include="Program.fs"/>
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Dreamsleeve.Server.Core\Dreamsleeve.Server.Core.fsproj" />
+      <ProjectReference Include="..\Dreamsleeve.Server.Infrastructure\Dreamsleeve.Server.Infrastructure.fsproj" />
     </ItemGroup>
 
 </Project>

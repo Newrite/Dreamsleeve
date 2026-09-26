@@ -17,5 +17,7 @@ let main argv =
         PresenceAgentTests.tests
         PlayerSessionTests.tests
         ServerRuntimeTests.tests
+        EnetTransportTests.tests
+        ConfigurationTests.tests
     ]
     |> runTestsWithCLIArgs [] argv

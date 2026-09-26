@@ -58,12 +58,29 @@ export namespace Dreamsleeve::Client
     Faulted
   };
 
+  enum class CommandFailureCode
+  {
+    StaleGeneration,
+    SessionNotReady,
+    Busy,
+    InvalidRequest,
+    EncodingFailed
+  };
+
+  struct CommandFailure
+  {
+    std::uint64_t      generation{};
+    std::uint64_t      requestId{};
+    CommandFailureCode code{};
+  };
+
   struct ClientOutput
   {
     StateUpdateBatch state;
     SessionPhase     phase{SessionPhase::Disconnected};
     // Not reconstructible from a snapshot. Original generation is retained.
     std::vector<ServerRejectionEvent> rejections;
+    std::vector<CommandFailure>        commandFailures;
     bool                              stopped{};
   };
 
@@ -92,6 +109,15 @@ public:
 
     ClientExchange(const ClientExchange&)            = delete;
     ClientExchange& operator=(const ClientExchange&) = delete;
+
+    // Shared by the network owner and its UI producer. Never reset on reconnect.
+    std::optional<std::uint64_t> NextRequestId()
+    {
+      std::lock_guard lock{mutex};
+      if (nextRequestId == 0) return std::nullopt;
+
+      return nextRequestId++;
+    }
 
     // Consumer side. Admission is not server acceptance; no model mutation.
     CommandPostResult Post(QueuedClientCommand command)
@@ -122,8 +148,28 @@ public:
       output.clear();
 
       std::lock_guard lock{mutex};
-      commands.swap(output);
-      return !inputClosed || !output.empty();
+      // Reserve room for one local failure per taken command. A stalled consumer
+      // backpressures command admission without stopping the network pump.
+      const auto count = std::min(commands.size(), maxCommands - pendingFailures.size());
+      if (count == commands.size())
+        commands.swap(output);
+      else
+      {
+        output.insert(output.end(), std::make_move_iterator(commands.begin()), std::make_move_iterator(commands.begin() + count));
+        commands.erase(commands.begin(), commands.begin() + count);
+      }
+
+      return !inputClosed || !commands.empty() || !output.empty();
+    }
+
+    // Owner only, once per command obtained in the latest TakeCommands batch.
+    bool PublishCommandFailure(CommandFailure failure)
+    {
+      std::lock_guard lock{mutex};
+      if (pendingFailures.size() >= maxCommands) return false;
+
+      pendingFailures.push_back(failure);
+      return true;
     }
 
     // Owner only, after decoded events. Exactly one exchange drains a model.
@@ -163,10 +209,12 @@ public:
     void Drain(ClientOutput& output)
     {
       output.rejections.clear();
+      output.commandFailures.clear();
 
       std::lock_guard lock{mutex};
       state->TakeAll(output.state);
       pendingRejections.swap(output.rejections);
+      pendingFailures.swap(output.commandFailures);
       output.stopped = stopped;
       output.phase   = phase;
     }
@@ -195,6 +243,8 @@ private:
     const std::size_t                 maxCommands;
     std::vector<QueuedClientCommand>  commands;
     bool                              inputClosed{};
+    std::uint64_t                     nextRequestId{1};
+    std::vector<CommandFailure>       pendingFailures;
     bool                              stopped{};
     SessionPhase                      phase{SessionPhase::Disconnected};
     StateUpdateQueue::Ptr             state;

@@ -77,11 +77,16 @@ module ServerRuntime =
     let private close (options: ServerRuntimeOptions) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
         if entry.Phase <> SessionTable.Closing then
             entry.Phase <- SessionTable.Closing
-            entry.Deadline <- now () + int64 options.ShutdownTimeoutMs
-            state.Transport.Close entry.ConnectionId
+            let deadline = now () + int64 options.ShutdownTimeoutMs
+            entry.Deadline <- if state.Stopping then min deadline state.StopDeadline else deadline
+            if not entry.TransportClosed then state.Transport.Close entry.ConnectionId
 
             match entry.Child with
-            | None -> SessionTable.remove entry state.Table
+            | None ->
+                entry.ChildStopped <- true
+                entry.ChatDetached <- true
+                entry.PresenceDetached <- true
+                if SessionTable.clean entry then SessionTable.remove entry state.Table
             | Some child ->
                 match child.TryPost PlayerSessionMessage.Stop with
                 | AgentPostResult.Posted -> ()
@@ -193,7 +198,12 @@ module ServerRuntime =
             | Some entry when entry.Phase <> SessionTable.Closing -> receive options globalId profiles state context entry bytes
             | Some _ | None -> ()
         | ServerTransportEvent.Disconnected connectionId ->
-            SessionTable.find connectionId state.Table |> Option.iter (close options state context)
+            match SessionTable.find connectionId state.Table with
+            | None -> ()
+            | Some entry ->
+                entry.TransportClosed <- true
+                close options state context entry
+                if SessionTable.clean entry then SessionTable.remove entry state.Table
 
     let private schedule (options: ServerRuntimeOptions) (context: AgentContext<ServerRuntimeMessage>) =
         let wait (token: CancellationToken) = task { do! Task.Delay(options.PollIntervalMs, token) }
@@ -243,14 +253,14 @@ module ServerRuntime =
             | SessionSource.Presence -> entry.PresenceDetached <- true
             | SessionSource.Profiles -> ()
 
-            if entry.ChildStopped && entry.ChatDetached && entry.PresenceDetached then
+            if SessionTable.clean entry then
                 SessionTable.remove entry state.Table
 
     let private stop (options: ServerRuntimeOptions) state context =
         if not state.Stopping then
             state.Stopping <- true
             state.StopDeadline <- now () + int64 options.ShutdownTimeoutMs
-            // Closing a connection that has no child removes it from the table.
+            // Closing changes routes now; transport drain and domain cleanup finish independently.
             for entry in state.Table.Connections.Values |> Seq.toArray do
                 close options state context entry
 
@@ -266,18 +276,26 @@ module ServerRuntime =
                 match entry.Phase with
                 | SessionTable.Waiting | SessionTable.Opening when time >= entry.Deadline -> close options state context entry
                 | SessionTable.Closing when time >= entry.Deadline ->
-                    // Do not release identity before Completion and source cleanup.
-                    // A stuck source escalates the whole source lifetime instead.
-                    fail state context $"Session cleanup timed out: {entry.ConnectionId}"
+                    if SessionTable.domainClean entry then
+                        // A non-acknowledging peer cannot keep the route forever.
+                        // Domain cleanup is already confirmed; reset only its transport.
+                        state.Transport.Reset entry.ConnectionId
+                        entry.TransportClosed <- true
+                        SessionTable.remove entry state.Table
+                    else
+                        // A stuck source still requires containment of its lifetime.
+                        fail state context $"Session cleanup timed out: {entry.ConnectionId}"
                 | SessionTable.Waiting | SessionTable.Opening | SessionTable.Ready | SessionTable.Closing -> ()
 
-            if state.Stopping && time >= state.StopDeadline then
+            let sourcesStopped =
+                state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.PresenceStopped)
+            if state.Stopping && time >= state.StopDeadline && (state.Table.Connections.Count > 0 || not sourcesStopped) then
                 fail state context "Server shutdown timed out."
             else
                 schedule options context
 
     let private finish state (context: AgentContext<ServerRuntimeMessage>) =
-        if state.Stopping && state.Table.Connections.Count = 0 then
+        if state.Stopping && (state.Table.Connections.Values |> Seq.forall SessionTable.domainClean) then
             match state.Sources with
             | None -> context.Complete() |> ignore
             | Some sources ->
@@ -286,7 +304,7 @@ module ServerRuntime =
                     sources.Chat.Complete() |> ignore
                     sources.Presence.Complete() |> ignore
 
-                if sources.ChatStopped && sources.PresenceStopped then
+                if sources.ChatStopped && sources.PresenceStopped && state.Table.Connections.Count = 0 then
                     context.Complete() |> ignore
 
     let private sourceStopped state context source (outcome: Result<unit, exn>) =
@@ -303,7 +321,8 @@ module ServerRuntime =
 
     let private handle (options: ServerRuntimeOptions) globalId profiles state (context: AgentContext<ServerRuntimeMessage>) message = task {
         match message with
-        | ServerRuntimeMessage.Start -> initialize options globalId profiles state context
+        | ServerRuntimeMessage.Start ->
+            if state.Sources.IsNone && not state.Stopping then initialize options globalId profiles state context
         | ServerRuntimeMessage.Tick -> tick options globalId profiles state context
         | ServerRuntimeMessage.Host command -> host options state context command
         | ServerRuntimeMessage.PlayerStopped(connectionId, outcome) -> stopped options state context connectionId outcome
@@ -352,6 +371,10 @@ module ServerRuntime =
                 "Runtime MaxSessions must fit transport PeerLimit and protocol MaxInitialPlayers."
             if options.Chat.HistoryCapacity > config.MaxRecentMessages then
                 "Chat history must fit MaxRecentMessages."
+            if int64 config.ServiceTimeoutMs + int64 options.PollIntervalMs > int64 (min options.OpenTimeoutMs options.ShutdownTimeoutMs) then
+                "Transport service wait plus poll interval must fit runtime deadlines."
+            if options.Player.MaxPendingChat > Int32.MaxValue - 2 || options.Player.MaxPendingOutput > Int32.MaxValue - 2 then
+                "Session pending capacity plus cleanup reserve overflows."
             if profiles.Ref.TryReliable().IsNone then "Profile store requires a reliable mailbox."
             for ordinary, reserve in [options.MailboxCapacity, options.ControlReserve; options.Player.MailboxCapacity, options.Player.ControlReserve
                                       options.Chat.MailboxCapacity, options.Chat.ControlReserve; options.Presence.MailboxCapacity, options.Presence.ControlReserve] do

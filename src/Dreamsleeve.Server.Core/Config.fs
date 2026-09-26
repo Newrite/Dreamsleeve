@@ -20,10 +20,13 @@ type ServerConfig =
         EventBudget: int
         MaxPacketBytes: int
         MaxWaitingData: int
+        MaxOutgoingPacketsPerPeer: int
+        MaxOutgoingBytesPerPeer: int
+        MaxOutgoingPackets: int
+        MaxOutgoingBytes: int
         MaxInitialPlayers: int
         MaxRecentMessages: int
         ChatInput: ChatInputLimits
-        ShutdownTimeoutMs: uint32
     }
 
 [<RequireQualifiedAccess>]
@@ -39,10 +42,13 @@ module ServerConfig =
             EventBudget = 64
             MaxPacketBytes = 1024 * 1024
             MaxWaitingData = 32 * 1024 * 1024
+            MaxOutgoingPacketsPerPeer = 256
+            MaxOutgoingBytesPerPeer = 4 * 1024 * 1024
+            MaxOutgoingPackets = 4096
+            MaxOutgoingBytes = 32 * 1024 * 1024
             MaxInitialPlayers = 4096
             MaxRecentMessages = 512
             ChatInput = { Username = 32; DisplayName = 64; MessageText = 2000 }
-            ShutdownTimeoutMs = 1500u
         }
 
     // Used at codec creation and host startup; no per-packet config validation.
@@ -72,6 +78,14 @@ module ServerConfig =
                     "ChannelLimit must be between 1 and 255."
                 if config.EventBudget < 1 then
                     "EventBudget must be positive."
+                if config.MaxOutgoingPacketsPerPeer < 1 then
+                    "MaxOutgoingPacketsPerPeer must be positive."
+                if config.MaxOutgoingPackets < config.MaxOutgoingPacketsPerPeer then
+                    "MaxOutgoingPackets must allow at least one peer budget."
+                if config.MaxOutgoingBytesPerPeer < config.MaxPacketBytes then
+                    "MaxOutgoingBytesPerPeer must allow at least one maximum-size packet."
+                if config.MaxOutgoingBytes < config.MaxOutgoingBytesPerPeer then
+                    "MaxOutgoingBytes must allow at least one peer budget."
                 yield! protocolErrors config
             ]
 

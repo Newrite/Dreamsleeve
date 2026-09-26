@@ -40,13 +40,15 @@ namespace
     std::vector<ClientRuntime::Error> errors;
     bool                              closed{};
 
-    explicit Fixture(TimeOutMs sessionTimeout = 2000)
+    explicit Fixture(TimeOutMs sessionTimeout = 2000, std::size_t maxPending = 2, std::size_t packetBytes = 1024 * 1024)
     {
       config.serverAddress       = Value(server.GetHostInfo()).address;
       config.sessionTimeoutMs    = sessionTimeout;
       config.connectTimeoutMs    = 100;
       config.disconnectTimeoutMs = 100;
       config.chatCapacity        = 1;
+      config.maxPendingChatRequests = maxPending;
+      config.network.maxPacketBytes = packetBytes;
       client                     = Value(ClientRuntime::TryCreate(config, *exchange));
     }
 
@@ -111,6 +113,17 @@ namespace
       server.FlushPackets();
     }
 
+    ClientOutput ReceiveOutput()
+    {
+      ClientOutput result;
+      Until([&] {
+        if (!result.state.updates.empty() || !result.rejections.empty() || !result.commandFailures.empty()) return true;
+        exchange->Drain(result);
+        return !result.state.updates.empty() || !result.rejections.empty() || !result.commandFailures.empty();
+      });
+      return result;
+    }
+
     ClientOutput Drain()
     {
       ClientOutput result;
@@ -140,6 +153,51 @@ namespace
       message->set_text("accepted");
     }
     return packet;
+  }
+
+  std::uint64_t Ready(Fixture& fixture)
+  {
+    fixture.Send(Welcome(fixture.Open()));
+    fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+    const auto output = fixture.Drain();
+    REQUIRE(output.state.updates.size() == 1);
+    return std::get<ClientSnapshot>(output.state.updates.front()).generation;
+  }
+
+  std::uint64_t Queue(Fixture& fixture, std::uint64_t generation, std::string text = "outbound")
+  {
+    const auto id = Value(fixture.exchange->NextRequestId());
+    REQUIRE(fixture.exchange->Post({generation, SendChat{id, 1, std::move(text)}}) == CommandPostResult::Queued);
+    return id;
+  }
+
+  P::ServerPacket Publication(std::uint64_t requestId, std::uint64_t messageId, std::uint64_t author = 7)
+  {
+    P::ServerPacket packet;
+    packet.set_protocol_version(1);
+    if (requestId != 0) packet.set_request_id(requestId);
+    auto* message = packet.mutable_chat_published()->mutable_message();
+    message->set_message_id(messageId);
+    message->set_channel_id(1);
+    message->mutable_author()->set_player_id(author);
+    message->mutable_author()->set_username("canonical");
+    message->mutable_author()->set_display_name("Server Author");
+    message->set_text("accepted by server");
+    message->set_sent_at_unix_ms(123);
+    return packet;
+  }
+
+  std::vector<Domain::ChatMessage> Added(const ClientOutput& output)
+  {
+    std::vector<Domain::ChatMessage> messages;
+    for (const auto& update : output.state.updates)
+    {
+      REQUIRE(std::holds_alternative<ClientStateDelta>(update));
+      for (const auto& change : std::get<ClientStateDelta>(update).chatContent)
+        if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
+          messages.insert(messages.end(), added->messages.begin(), added->messages.end());
+    }
+    return messages;
   }
 
   void Empty(const ClientOutput& output)
@@ -205,6 +263,28 @@ TEST_CASE("Session rejection retains correlation and permits another connection"
   const auto next = fixture.Open();
   fixture.Send(Welcome(next));
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Terminal opening rejection does not start a competing graceful disconnect")
+{
+  Fixture fixture;
+  const auto id = fixture.Open();
+  P::ServerPacket rejected;
+  rejected.set_protocol_version(1);
+  rejected.set_request_id(id);
+  rejected.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_SESSION_ALREADY_OPEN);
+  rejected.mutable_request_rejected()->set_message("Player already has a session");
+  fixture.Send(rejected);
+  fixture.peer->Disconnect(DisconnectType::Later, DisconnectReason::ServerShutdown);
+  fixture.server.FlushPackets();
+
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
+  const auto output = fixture.Drain();
+  Empty(output);
+  REQUIRE(output.rejections.size() == 1);
+  CHECK(output.rejections.front().rejection.requestId == id);
+  CHECK(output.rejections.front().rejection.code == RequestRejectionCode::SessionAlreadyOpen);
   CHECK(fixture.errors.empty());
 }
 
@@ -290,6 +370,10 @@ TEST_CASE("Invalid runtime settings fail before any connection")
   {
     config.chatCapacity = 0;
   }
+  SUBCASE("pending chat capacity")
+  {
+    config.maxPendingChatRequests = 0;
+  }
   SUBCASE("session timeout")
   {
     config.sessionTimeoutMs = 0;
@@ -338,6 +422,183 @@ TEST_CASE("A duplicate welcome cannot reset a ready session")
   Empty(fixture.Drain());
   REQUIRE(fixture.errors.size() == 1);
   CHECK(std::get<Wire::Error>(fixture.errors[0]).field == "request_id");
+}
+
+TEST_CASE("SendChat has no local echo and own publications use the broadcast delta path")
+{
+  Fixture fixture;
+  const auto generation = Ready(fixture);
+  const auto requestId = Queue(fixture, generation, "local text");
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+
+  const auto& request = fixture.requests.back();
+  CHECK(request.request_id() == requestId);
+  CHECK(request.send_chat().channel_id() == 1);
+  CHECK(request.send_chat().text() == "local text");
+  CHECK(fixture.Drain().state.updates.empty());
+
+  fixture.Send(Publication(requestId, 3));
+  const auto own = Added(fixture.ReceiveOutput());
+  REQUIRE(own.size() == 1);
+  CHECK(own.front().messageId == 3);
+  CHECK(own.front().messageText == "accepted by server");
+  CHECK(own.front().author.displayName == "Server Author");
+
+  fixture.Send(Publication(0, 4, 8));
+  const auto other = Added(fixture.ReceiveOutput());
+  REQUIRE(other.size() == 1);
+  CHECK(other.front().messageId == 4);
+  CHECK(other.front().author.playerId == 8);
+  CHECK(fixture.client->Phase() == SessionPhase::Ready);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Pending chat is bounded and a correlated server rejection frees only that request")
+{
+  Fixture fixture;
+  const auto generation = Ready(fixture);
+  const auto first = Queue(fixture, generation);
+  const auto second = Queue(fixture, generation);
+  const auto excess = Queue(fixture, generation);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+
+  const auto busy = fixture.Drain();
+  REQUIRE(busy.commandFailures.size() == 1);
+  CHECK(busy.commandFailures.front().requestId == excess);
+  CHECK(busy.commandFailures.front().code == CommandFailureCode::Busy);
+  CHECK(busy.rejections.empty());
+  CHECK(busy.state.updates.empty());
+
+  P::ServerPacket rejected;
+  rejected.set_protocol_version(1);
+  rejected.set_request_id(second);
+  rejected.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_OVERLOADED);
+  rejected.mutable_request_rejected()->set_message("Channel busy");
+  fixture.Send(rejected);
+  const auto output = fixture.ReceiveOutput();
+  REQUIRE(output.rejections.size() == 1);
+  CHECK(output.rejections.front().rejection.requestId == second);
+  CHECK(output.rejections.front().rejection.code == RequestRejectionCode::Overloaded);
+  CHECK(output.phase == SessionPhase::Ready);
+  CHECK(output.state.updates.empty());
+
+  const auto next = Queue(fixture, generation);
+  fixture.Until([&] { return fixture.requests.size() == 4; });
+  fixture.Send(Publication(first, 3));
+  REQUIRE(Added(fixture.ReceiveOutput()).size() == 1);
+  fixture.Send(Publication(next, 4));
+  REQUIRE(Added(fixture.ReceiveOutput()).size() == 1);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Old queued commands and correlations cannot enter a replacement session")
+{
+  Fixture fixture{2000, 1};
+  const auto oldGeneration = Ready(fixture);
+  const auto oldRequest = Queue(fixture, oldGeneration);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  REQUIRE(fixture.client->Disconnect());
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected && fixture.closed; });
+  fixture.Drain();
+
+  const auto generation = Ready(fixture);
+  CHECK(generation != oldGeneration);
+  const auto stale = Queue(fixture, oldGeneration);
+  const auto current = Queue(fixture, generation);
+  CHECK(current > oldRequest);
+  fixture.Until([&] { return fixture.requests.size() == 4; });
+  CHECK(fixture.requests.back().request_id() == current);
+
+  const auto output = fixture.Drain();
+  REQUIRE(output.commandFailures.size() == 1);
+  CHECK(output.commandFailures.front().requestId == stale);
+  CHECK(output.commandFailures.front().generation == oldGeneration);
+  CHECK(output.commandFailures.front().code == CommandFailureCode::StaleGeneration);
+
+  SUBCASE("new request works after old pending state was cleared")
+  {
+    fixture.Send(Publication(current, 3));
+    REQUIRE(Added(fixture.ReceiveOutput()).size() == 1);
+    CHECK(fixture.errors.empty());
+  }
+  SUBCASE("old reply on new connection is a protocol fault")
+  {
+    fixture.Send(Publication(oldRequest, 3));
+    fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
+    Empty(fixture.Drain());
+    REQUIRE(fixture.errors.size() == 1);
+    CHECK(std::get<Wire::Error>(fixture.errors.front()).field == "request_id");
+  }
+}
+
+TEST_CASE("Chat commands while opening are refused locally without reaching the server")
+{
+  Fixture fixture;
+  const auto opening = fixture.Open();
+  const auto initial = fixture.Drain();
+  const auto generation = std::get<ClientSnapshot>(initial.state.updates.front()).generation;
+  const auto requestId = Queue(fixture, generation);
+  const auto output = fixture.ReceiveOutput();
+  REQUIRE(output.commandFailures.size() == 1);
+  CHECK(output.commandFailures.front().requestId == requestId);
+  CHECK(output.commandFailures.front().code == CommandFailureCode::SessionNotReady);
+  CHECK(fixture.requests.size() == 1);
+
+  fixture.Send(Welcome(opening));
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Reusing a request ID cannot replace an outstanding chat command")
+{
+  Fixture fixture;
+  const auto generation = Ready(fixture);
+  const auto requestId = Queue(fixture, generation);
+  REQUIRE(fixture.exchange->Post({generation, SendChat{requestId, 1, "duplicate"}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  const auto output = fixture.Drain();
+  REQUIRE(output.commandFailures.size() == 1);
+  CHECK(output.commandFailures.front().code == CommandFailureCode::InvalidRequest);
+  CHECK(output.state.updates.empty());
+
+  fixture.Send(Publication(requestId, 3));
+  REQUIRE(Added(fixture.ReceiveOutput()).size() == 1);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Wrong chat response identity fails before publication")
+{
+  Fixture fixture;
+  const auto generation = Ready(fixture);
+  const auto requestId = Queue(fixture, generation);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  auto packet = Publication(requestId, 3);
+  SUBCASE("unknown request") { packet.set_request_id(requestId + 99); }
+  SUBCASE("different channel") { packet.mutable_chat_published()->mutable_message()->set_channel_id(2); }
+  SUBCASE("different author") { packet.mutable_chat_published()->mutable_message()->mutable_author()->set_player_id(8); }
+  fixture.Send(packet);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
+  Empty(fixture.Drain());
+  REQUIRE(fixture.errors.size() == 1);
+}
+
+TEST_CASE("Oversized outgoing chat stays local and does not occupy the pending slot")
+{
+  Fixture fixture{2000, 1, 256};
+  const auto generation = Ready(fixture);
+  const auto tooLarge = Queue(fixture, generation, std::string(512, 'x'));
+  const auto output = fixture.ReceiveOutput();
+  REQUIRE(output.commandFailures.size() == 1);
+  CHECK(output.commandFailures.front().requestId == tooLarge);
+  CHECK(output.commandFailures.front().code == CommandFailureCode::EncodingFailed);
+  CHECK(fixture.requests.size() == 1);
+  CHECK(fixture.client->Phase() == SessionPhase::Ready);
+
+  const auto valid = Queue(fixture, generation);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  fixture.Send(Publication(valid, 3));
+  REQUIRE(Added(fixture.ReceiveOutput()).size() == 1);
+  CHECK(fixture.errors.empty());
 }
 
 TEST_SUITE_END();

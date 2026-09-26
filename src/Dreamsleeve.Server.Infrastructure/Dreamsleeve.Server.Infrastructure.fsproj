@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -7,10 +7,12 @@
 
     <ItemGroup>
         <Compile Include="MemoryProfileStore.fs" />
+        <Compile Include="EnetTransport.fs" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="../Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />
+        <ProjectReference Include="../Dreamsleeve.Server.Infrastructure.Interop/Dreamsleeve.Server.Infrastructure.Interop.csproj" />
     </ItemGroup>
 
 </Project>

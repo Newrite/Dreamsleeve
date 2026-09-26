@@ -17,6 +17,7 @@ module internal SessionTable =
         mutable PlayerId: PlayerId option
         mutable Child: Agent<PlayerSessionMessage> option
         mutable ChildStopped: bool
+        mutable TransportClosed: bool
         mutable ChatDetached: bool
         mutable PresenceDetached: bool
     }
@@ -31,7 +32,7 @@ module internal SessionTable =
     let add connectionId deadline state =
         let entry = {
             ConnectionId = connectionId; Phase = Waiting; Deadline = deadline
-            PlayerId = None; Child = None; ChildStopped = false
+            PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
             ChatDetached = false; PresenceDetached = false
         }
         state.Connections.Add(connectionId, entry)
@@ -50,6 +51,10 @@ module internal SessionTable =
             IdentityAdmission.Reserved
         | Opening, None | Opening, Some _ -> IdentityAdmission.AlreadyInUse
         | Waiting, _ | Ready, _ | Closing, _ -> IdentityAdmission.Closed
+
+    let domainClean (entry: Entry) = entry.ChildStopped && entry.ChatDetached && entry.PresenceDetached
+
+    let clean (entry: Entry) = domainClean entry && entry.TransportClosed
 
     /// A reservation survives transport removal and is freed only after cleanup.
     let remove entry state =

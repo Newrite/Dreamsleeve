@@ -21,9 +21,9 @@ public:
 
     static Result<Ptr> TryCreate(Configuration config, ClientExchange& exchange)
     {
-      if (config.chatCapacity == 0 || config.sessionTimeoutMs == 0 || config.connectTimeoutMs == 0 || config.disconnectTimeoutMs == 0)
+      if (config.chatCapacity == 0 || config.maxPendingChatRequests == 0 || config.sessionTimeoutMs == 0 || config.connectTimeoutMs == 0 || config.disconnectTimeoutMs == 0)
         return std::unexpected{
-            DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Session timeouts and chat capacity must be positive")
+            DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Session timeouts, chat and pending request capacities must be positive")
         };
 
       auto codec = Wire::Codec::TryCreate(config);
@@ -50,14 +50,17 @@ public:
       if (phase != SessionPhase::Disconnected && phase != SessionPhase::Faulted)
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "A session is already active")};
 
-      if (nextRequest == 0) return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Request IDs exhausted")};
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Request IDs exhausted")};
 
       DreamNetClientConfig transportConfig{config.network, config.serverAddress, config.connectTimeoutMs, config.disconnectTimeoutMs};
       auto                 created = DreamNetClient::TryCreate(transportConfig);
       if (!created) return Fail(created.error());
 
       transport = std::move(*created);
-      opening   = Wire::OpenSession{nextRequest++, std::move(username), std::move(displayName)};
+      opening   = Wire::OpenSession{*requestId, std::move(username), std::move(displayName)};
+      lastRequest = *requestId;
+      pendingChats.clear();
       model.ResetSession();
       exchange.Publish(model);
 
@@ -92,7 +95,8 @@ public:
     // A caller-owned loop drives network work. No hidden threads or model callbacks.
     Result<void> Poll(TimeOutMs waitMs = 0)
     {
-      if (!transport || phase == SessionPhase::Disconnected || phase == SessionPhase::Faulted) return {};
+      auto commandsResult = ProcessCommands();
+      if (!transport || phase == SessionPhase::Disconnected || phase == SessionPhase::Faulted) return commandsResult;
 
       events.clear();
 
@@ -117,7 +121,7 @@ public:
       if (phase == SessionPhase::Opening && Clock::now() >= deadline)
         return Fail(DreamNetError::Make(DreamNetErrorCode::ConnectTimeout, "OpenSession timed out"));
 
-      return {};
+      return commandsResult;
     }
 
 private:
@@ -138,6 +142,7 @@ private:
 
     void Clear(SessionPhase value)
     {
+      pendingChats.clear();
       model.ResetSession();
       phase = value;
       exchange.Publish(model, true, phase);
@@ -182,7 +187,8 @@ private:
 
     Result<void> Handle(ClientReceived& received)
     {
-      if (phase == SessionPhase::Disconnecting) return {};  // Late packets cannot reopen a closing session.
+      if (phase == SessionPhase::Disconnecting || phase == SessionPhase::Disconnected || phase == SessionPhase::Faulted)
+        return {};  // A terminal reply may have closed the session earlier in this batch.
       if (received.channelId != 0) return Unexpected("channel");
 
       auto response = codec.Decode(received.packet.DataBytesView());
@@ -218,17 +224,38 @@ private:
 
     Result<void> Receive(ServerRejection& rejection)
     {
-      if (phase != SessionPhase::Opening || rejection.requestId != opening.requestId) return Unexpected("request_id");
+      if (phase == SessionPhase::Opening)
+      {
+        if (rejection.requestId != opening.requestId) return Unexpected("request_id");
 
-      auto applied = model.Apply(model.Generation(), rejection);
-      if (!applied) return std::unexpected{applied.error()};
+        auto applied = model.Apply(model.Generation(), rejection);
+        if (!applied) return std::unexpected{applied.error()};
 
-      return Disconnect();  // Clear publishes the correlated rejection alongside empty state.
+        // Opening was refused: the full terminal reply is already received.
+        // Notify the peer best-effort, without racing its own graceful close.
+        transport->Abort(DisconnectReason::ClientShutdown);
+        Clear(SessionPhase::Disconnected);
+        return {};
+      }
+
+      if (phase != SessionPhase::Ready || pendingChats.erase(rejection.requestId) == 0) return Unexpected("request_id");
+
+      return Apply(rejection);
     }
 
-    Result<void> Receive(Wire::ChatAccepted&)
+    Result<void> Receive(Wire::ChatAccepted& accepted)
     {
-      return Unexpected("unsolicited_chat_ack");
+      const auto found = pendingChats.find(accepted.requestId);
+      if (phase != SessionPhase::Ready || found == pendingChats.end()) return Unexpected("request_id");
+      if (accepted.changes.channelId != found->second) return Unexpected("channel_id");
+      if (accepted.changes.messages.front().author.playerId != model.SelfPlayerId()) return Unexpected("author");
+
+      // The server's publication is the only source of accepted chat content.
+      // Correlation settles the command; the model path is shared with broadcasts.
+      auto applied = Apply(accepted.changes);
+      if (applied) pendingChats.erase(found);
+
+      return applied;
     }
 
     Result<void> Receive(ChatMessagesReceived& value)
@@ -259,6 +286,64 @@ private:
       return {};
     }
 
+    Result<void> RejectCommand(std::uint64_t generation, const SendChat& command, CommandFailureCode code)
+    {
+      if (!exchange.PublishCommandFailure({generation, command.requestId, code}))
+        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
+
+      return {};
+    }
+
+    Result<void> Process(std::uint64_t generation, SendChat& command)
+    {
+      if (generation != model.Generation()) return RejectCommand(generation, command, CommandFailureCode::StaleGeneration);
+      if (phase != SessionPhase::Ready) return RejectCommand(generation, command, CommandFailureCode::SessionNotReady);
+      if (command.requestId <= lastRequest) return RejectCommand(generation, command, CommandFailureCode::InvalidRequest);
+
+      lastRequest = command.requestId;
+      if (!model.FindChatState(command.channelId)) return RejectCommand(generation, command, CommandFailureCode::InvalidRequest);
+      if (pendingChats.size() >= config.maxPendingChatRequests) return RejectCommand(generation, command, CommandFailureCode::Busy);
+
+      auto packet = codec.Encode(command);
+      if (!packet) return RejectCommand(generation, command, CommandFailureCode::EncodingFailed);
+
+      auto sent = transport->Send(std::move(*packet));
+      if (!sent) return Fail(sent.error());
+
+      pendingChats.emplace(command.requestId, command.channelId);
+      return {};
+    }
+
+    Result<void> Process(std::uint64_t, RequestSnapshot&)
+    {
+      exchange.Publish(model, true);
+      return {};
+    }
+
+    static Result<void> UnsupportedCommand()
+    {
+      return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Player telemetry has no wire contract yet")};
+    }
+
+    Result<void> Process(std::uint64_t, LocalPlayerState&) { return UnsupportedCommand(); }
+    Result<void> Process(std::uint64_t, CharacterStarted&) { return UnsupportedCommand(); }
+    Result<void> Process(std::uint64_t, GameExited&) { return UnsupportedCommand(); }
+
+    Result<void> ProcessCommands()
+    {
+      exchange.TakeCommands(commands);
+      Result<void> firstError;
+
+      for (auto& queued : commands)
+      {
+        auto result = std::visit([&](auto& command) { return Process(queued.generation, command); }, queued.command);
+        if (!result && firstError) firstError = std::unexpected{std::move(result.error())};
+      }
+
+      commands.clear();
+      return firstError;
+    }
+
     Configuration            config;
     Wire::Codec              codec;
     ClientExchange&          exchange;
@@ -266,7 +351,9 @@ private:
     ClientModel              model;
     SessionPhase             phase{SessionPhase::Disconnected};
     Wire::OpenSession        opening;
-    std::uint64_t            nextRequest{1};
+    std::uint64_t            lastRequest{};
+    std::unordered_map<std::uint64_t, Domain::ChatChannelId> pendingChats;
+    std::vector<QueuedClientCommand> commands;
     Clock::time_point        deadline{};
     std::vector<ClientEvent> events;
   };

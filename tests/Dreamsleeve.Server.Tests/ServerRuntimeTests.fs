@@ -29,6 +29,8 @@ type private Fixture = {
     Output: Channel<Guid * ServerPacket>
     Closed: Channel<Guid>
     Profiles: Agent<ProfileRequest>
+    IgnoreClose: ConcurrentDictionary<Guid, unit>
+    Reset: Channel<Guid>
 }
 
 let private post (agent: Agent<_>) command = task {
@@ -40,21 +42,28 @@ let private withRuntimeUsing options createProfiles run = task {
     let input = ConcurrentQueue<ServerTransportEvent>()
     let output = Channel.CreateUnbounded<Guid * ServerPacket>()
     let closed = Channel.CreateUnbounded<Guid>()
+    let reset = Channel.CreateUnbounded<Guid>()
+    let ignoreClose = ConcurrentDictionary<Guid, unit>()
     let poll () =
         let events = ResizeArray()
         let mutable value = Unchecked.defaultof<ServerTransportEvent>
-        while events.Count < 64 && input.TryDequeue(&value) do events.Add value
+        while events.Count < 64 && input.TryDequeue(&value) do
+            match value with
+            | ServerTransportEvent.Disconnected id -> closed.Writer.TryWrite id |> ignore
+            | ServerTransportEvent.Connected _ | ServerTransportEvent.Received _ -> ()
+            events.Add value
         Ok (List.ofSeq events)
     let transport = {
         Poll = poll
         Send = fun (id, bytes) -> output.Writer.TryWrite(id, ServerPacket.Parser.ParseFrom bytes) |> ignore; Ok ()
-        Close = fun id -> closed.Writer.TryWrite id |> ignore
+        Close = fun id -> if not (ignoreClose.ContainsKey id) then input.Enqueue(ServerTransportEvent.Disconnected id)
+        Reset = fun id -> reset.Writer.TryWrite id |> ignore
         Dispose = ignore
     }
     use profiles = createProfiles ()
     let diagnostics = ConcurrentQueue<string>()
     use runtime = ServerRuntime.start options ServerConfig.defaults profiles transport diagnostics.Enqueue |> ok
-    let fixture = { Runtime = runtime; Input = input; Output = output; Closed = closed; Profiles = profiles }
+    let fixture = { Runtime = runtime; Input = input; Output = output; Closed = closed; Profiles = profiles; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
         if not runtime.Completion.IsCompleted then
@@ -248,6 +257,60 @@ let tests = testList "ServerRuntime" [
             equal connection closed
             do! empty fixture
             check (not fixture.Profiles.Completion.IsCompleted) "A live but silent shared store was killed."
+        })
+    }
+
+    testTask "duplicate initialization cannot replace live source owners" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
+            let id = connect fixture "once"
+            let! _ = welcome fixture id
+            do! post fixture.Runtime ServerRuntimeMessage.Start
+            fixture.Input.Enqueue(ServerTransportEvent.Received(id, chat 2UL "one source"))
+            let! _, response = nextWhere fixture (fun _ p -> p.PayloadCase = ServerPacket.PayloadOneofCase.ChatPublished)
+            equal "one source" response.ChatPublished.Message.Text
+        })
+    }
+    testCase "transport blocking interval must fit runtime deadlines" (fun () ->
+        use profiles = MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = 1 } |> ok
+        let transport = {
+            Poll = fun () -> failwith "Invalid runtime must not poll."
+            Send = fun _ -> failwith "Invalid runtime must not send."
+            Close = ignore; Reset = ignore; Dispose = ignore
+        }
+        let config = { ServerConfig.defaults with ServiceTimeoutMs = UInt32.MaxValue }
+        match ServerRuntime.start ServerRuntimeOptions.defaults config profiles transport ignore with
+        | Error errors -> check (errors |> List.exists (fun error -> error.Contains "deadlines")) "Deadline validation missing."
+        | Ok runtime -> runtime.Abort(); failwith "Invalid runtime started.")
+
+    testTask "a peer that never acknowledges close is reset without stopping healthy sessions" {
+        let options = { ServerRuntimeOptions.defaults with ShutdownTimeoutMs = 100 }
+        do! withRuntime options (fun fixture -> task {
+            let slow = connect fixture "noack"
+            let! _ = welcome fixture slow
+            let healthy = connect fixture "survivor"
+            let! _ = welcome fixture healthy
+            fixture.IgnoreClose.TryAdd(slow, ()) |> ignore
+            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Close(slow, "close without ack")))
+            let! reset = receive fixture.Reset
+            equal slow reset
+            let! status = stats fixture
+            equal 1 status.Ready
+            equal 1 status.Reservations
+            fixture.Input.Enqueue(ServerTransportEvent.Received(healthy, chat 2UL "survived"))
+            let! _, response = nextWhere fixture (fun id p -> id = healthy && p.PayloadCase = ServerPacket.PayloadOneofCase.ChatPublished)
+            equal "survived" response.ChatPublished.Message.Text
+        })
+    }
+    testTask "shutdown completes after resetting an unacknowledged transport with clean domain state" {
+        let options = { ServerRuntimeOptions.defaults with ShutdownTimeoutMs = 100 }
+        do! withRuntime options (fun fixture -> task {
+            let id = connect fixture "stopnoack"
+            let! _ = welcome fixture id
+            fixture.IgnoreClose.TryAdd(id, ()) |> ignore
+            do! post fixture.Runtime ServerRuntimeMessage.Stop
+            let! reset = receive fixture.Reset
+            equal id reset
+            do! awaitUnit fixture.Runtime.Completion
         })
     }
 

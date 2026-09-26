@@ -38,7 +38,10 @@ type ServerTransportEvent =
 type ServerTransport = {
     Poll: unit -> Result<ServerTransportEvent list, string>
     Send: Guid * byte array -> Result<unit, string>
+    /// Stop new sends and drain accepted reliable packets; Poll eventually reports Disconnected.
     Close: Guid -> unit
+    /// Force local removal on the runtime deadline; no Disconnected event is required.
+    Reset: Guid -> unit
     Dispose: unit -> unit
 }
 
@@ -48,7 +51,7 @@ type IdentityAdmission =
     | AlreadyInUse
     | Closed
 
-/// Control traffic only. Normal chat events travel directly to the session.
+/// Session-to-runtime boundary: transport output and route lifecycle, never chat execution.
 [<RequireQualifiedAccess>]
 type SessionHostCommand =
     | Reserve of Guid * PlayerId * ReliableAgentRef<IdentityAdmission>

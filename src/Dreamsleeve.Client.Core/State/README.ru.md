@@ -131,7 +131,7 @@ generation/revision. ClientExchange вычитывает модель один �
   `ChatMessagesReceived`, что и чужое. При отказе история не меняется.
   SelfPlayerId не создаёт отдельного пути применения; подтверждаемые изменения
   поступают в модель после серверного события. Исходящие команды описаны в ClientExchange;
-  кодирование SendChat реализовано в Client.Codec, но ещё не подключено к runtime.
+  SendChat кодируется Client.Codec и обслуживается ClientRuntime через Exchange.
 - `Apply` отвергает другое поколение до изменения данных. Успешная операция
   увеличивает revision даже при no-op; ошибка `Domain::Result` сохраняет уже
   накопленные уведомления. Это не транзакционная гарантия при `bad_alloc`.
@@ -184,6 +184,9 @@ Post возвращает Queued, Replaced, Full или Closed. Queued не оз
 преобразует их в доменные типы, кодирование/отправка выполняются сетевым владельцем.
 
 Команды: SendChat, LocalPlayerState, CharacterStarted, GameExited, RequestSnapshot.
+NextRequestId() — общий allocator OpenSession/UI SendChat, сохраняющий счётчик
+между сессиями. Producer ставит SendChat в порядке выделенных ID. ClientRuntime
+обслуживает SendChat/RequestSnapshot; игровые команды пока возвращают InvalidOperation.
 QueuedClientCommand несёт generation, которую владелец сверяет перед выполнением.
 RequestSnapshot обслуживает текущую модель, в том числе после смены поколения.
 LocalPlayerState — полный срез позиции/ActorValues, не патч. Заменяются только
@@ -196,7 +199,11 @@ Publish первый раз выдаёт снимок, затем вычитыв
 Added/Removed. Снимок используется при явном запросе, смене сессии и переполнении.
 Запрошенный снимок сразу поглощает накопленные изменения, исключая их повторную выдачу.
 
-Один Drain возвращает StateUpdateBatch, отдельные ServerRejectionEvent и stopped.
+Один Drain возвращает StateUpdateBatch, отдельные ServerRejectionEvent, локальные
+commandFailures и stopped. Локальный отказ SendChat сохраняет generation/requestId.
+Ёмкость commandFailures равна commandCapacity; TakeCommands резервирует место под
+возможные отказы выданных команд, оставляя остальные в очереди до Drain.
+Это ограничивает накопитель, не блокируя сетевой Poll.
 Отказы сохраняются при замене состояния снимком и смене сессии; потребитель учитывает
 их исходную generation. Лимиты задаются для числа команд и пакетов состояния,
 не для байтов. Накопитель отказов пока не ограничен; это не гарантия общего лимита

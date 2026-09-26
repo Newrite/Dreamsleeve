@@ -1,0 +1,53 @@
+{
+  "Server": {
+    "BindAddress": "127.0.0.1",
+    "Port": 8778,
+    "PeerLimit": 32,
+    "ChannelLimit": 2,
+    "ServiceTimeoutMs": 10,
+    "EventBudget": 64,
+    "MaxPacketBytes": 1048576,
+    "MaxWaitingData": 33554432,
+    "MaxOutgoingPacketsPerPeer": 256,
+    "MaxOutgoingBytesPerPeer": 4194304,
+    "MaxOutgoingPackets": 4096,
+    "MaxOutgoingBytes": 33554432,
+    "MaxInitialPlayers": 4096,
+    "MaxRecentMessages": 512,
+    "ChatInput": {
+      "Username": 32,
+      "DisplayName": 64,
+      "MessageText": 2000
+    }
+  },
+  "Runtime": {
+    "MaxSessions": 32,
+    "MailboxCapacity": 256,
+    "ControlReserve": 128,
+    "OpenTimeoutMs": 10000,
+    "ShutdownTimeoutMs": 1500,
+    "PollIntervalMs": 1,
+    "Player": {
+      "MailboxCapacity": 128,
+      "ControlReserve": 32,
+      "MaxPendingChat": 16,
+      "MaxBootstrapEvents": 128,
+      "MaxPendingOutput": 128
+    },
+    "Chat": {
+      "MailboxCapacity": 256,
+      "ControlReserve": 64,
+      "HistoryCapacity": 512,
+      "MaxControlDeliveries": 128
+    },
+    "Presence": {
+      "MailboxCapacity": 128,
+      "ControlReserve": 64,
+      "MaxControlDeliveries": 128
+    }
+  },
+  "Profiles": {
+    "MailboxCapacity": 64,
+    "MaxPendingReplies": 64
+  }
+}

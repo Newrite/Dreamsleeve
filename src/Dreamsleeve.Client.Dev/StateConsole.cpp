@@ -228,7 +228,6 @@ private:
     auto          exchange = std::move(*created);
     ClientOutput  output;
     std::uint64_t generation{};
-    std::uint64_t nextRequest{1};
     bool          failed{};
     {
       DevOwner owner{*exchange};
@@ -268,7 +267,15 @@ private:
               std::cerr << "Empty message\n";
               continue;
             }
-            outgoing = SendChat{nextRequest++, 1, std::move(text)};
+            const auto requestId = exchange->NextRequestId();
+            if (!requestId)
+            {
+              failed = true;
+              std::cerr << "Request IDs exhausted\n";
+              continue;
+            }
+
+            outgoing = SendChat{*requestId, 1, std::move(text)};
           }
           else if (action == "sample")
             outgoing = LocalPlayerState{};

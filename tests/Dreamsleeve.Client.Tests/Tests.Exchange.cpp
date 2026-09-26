@@ -232,4 +232,49 @@ TEST_CASE("Owner receives commands and publishes final output before joined shut
   CHECK(exchange->Post({1, RequestSnapshot{}}) == CommandPostResult::Closed);
 }
 
+TEST_CASE("Shared request IDs survive model generation changes")
+{
+  auto exchange = Exchange();
+  const auto owner = exchange->NextRequestId();
+  const auto producer = exchange->NextRequestId();
+  REQUIRE(owner);
+  REQUIRE(producer);
+  CHECK(*owner != 0);
+  CHECK(*producer > *owner);
+
+  ClientModel model;
+  exchange->Publish(model);
+  model.ResetSession();
+  exchange->Publish(model);
+  const auto reconnect = exchange->NextRequestId();
+  REQUIRE(reconnect);
+  CHECK(*reconnect > *producer);
+}
+
+TEST_CASE("Undrained local failures backpressure commands within the configured capacity")
+{
+  auto exchange = Exchange(2);
+  REQUIRE(exchange->Post({1, SendChat{1, 1, "first"}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, SendChat{2, 1, "second"}}) == CommandPostResult::Queued);
+  std::vector<QueuedClientCommand> commands;
+  REQUIRE(exchange->TakeCommands(commands));
+  REQUIRE(commands.size() == 2);
+  CHECK(exchange->PublishCommandFailure({1, 1, CommandFailureCode::SessionNotReady}));
+  CHECK(exchange->PublishCommandFailure({1, 2, CommandFailureCode::SessionNotReady}));
+  CHECK_FALSE(exchange->PublishCommandFailure({1, 3, CommandFailureCode::SessionNotReady}));
+
+  REQUIRE(exchange->Post({1, SendChat{3, 1, "third"}}) == CommandPostResult::Queued);
+  exchange->CloseInput();
+  CHECK(exchange->TakeCommands(commands));
+  CHECK(commands.empty());
+
+  ClientOutput output;
+  exchange->Drain(output);
+  REQUIRE(output.commandFailures.size() == 2);
+  CHECK(exchange->TakeCommands(commands));
+  REQUIRE(commands.size() == 1);
+  CHECK(std::get<SendChat>(commands.front().command).requestId == 3);
+  CHECK_FALSE(exchange->TakeCommands(commands));
+}
+
 TEST_SUITE_END();
