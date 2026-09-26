@@ -1,0 +1,81 @@
+// Historical design example; not the current Dreamsleeve contract.
+// See docs/CurrentStateRu.md and the README in this example directory.
+syntax = "proto3";
+
+package mmochat.v1;
+
+option csharp_namespace = "MmoChat.Protocol.V1";
+
+import "common.proto";
+
+message AddFriendRequest {
+  uint64 target_player_id = 1;
+}
+
+message RemoveFriendRequest {
+  uint64 target_player_id = 1;
+}
+
+message AddBlockRequest {
+  uint64 target_player_id = 1;
+}
+
+message RemoveBlockRequest {
+  uint64 target_player_id = 1;
+}
+
+message ListFriendsRequest {}
+
+message FriendListResponse {
+  repeated FriendEntry entries = 1;
+}
+
+message ListBlockedPlayersRequest {}
+
+message BlockListResponse {
+  repeated BlockEntry entries = 1;
+}
+
+message ListOnlinePlayersRequest {
+  Pagination page = 1;
+}
+
+message PlayerDirectoryResponse {
+  repeated PlayerDirectoryEntry entries = 1;
+  bool has_more = 2;
+  uint32 next_offset = 3;
+}
+
+message ListPlayerGuildsRequest {
+  uint64 player_id = 1;
+}
+
+message PlayerGuildsResponse {
+  repeated GuildSummary guilds = 1;
+}
+
+message ListDirectDialogsRequest {}
+
+message DirectDialogListResponse {
+  repeated DirectDialogSummary dialogs = 1;
+}
+
+message SocialEvent {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_FRIEND_ADDED = 1;
+    KIND_FRIEND_REMOVED = 2;
+    KIND_PLAYER_BLOCKED = 3;
+    KIND_PLAYER_UNBLOCKED = 4;
+    KIND_PLAYER_ONLINE = 5;
+    KIND_PLAYER_OFFLINE = 6;
+    KIND_DIRECT_DIALOG_CREATED = 7;
+  }
+
+  Kind kind = 1;
+  optional FriendEntry friend = 2;
+  optional BlockEntry block = 3;
+  optional DirectDialogSummary dialog = 4;
+  optional IdentityRef actor = 5;
+  int64 occurred_at_unix_ms = 6;
+}

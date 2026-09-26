@@ -1,0 +1,99 @@
+// Historical design example; not the current Dreamsleeve contract.
+// See docs/CurrentStateRu.md and the README in this example directory.
+syntax = "proto3";
+
+package mmochat.v1;
+
+option csharp_namespace = "MmoChat.Protocol.V1";
+
+import "common.proto";
+
+message CreateGuildRequest {
+  string guild_name = 1;
+}
+
+message CreateGuildResponse {
+  GuildSummary guild = 1;
+  repeated GuildMember members = 2;
+}
+
+message ListGuildMembersRequest {
+  uint64 guild_id = 1;
+}
+
+message GuildMemberListResponse {
+  uint64 guild_id = 1;
+  repeated GuildMember members = 2;
+}
+
+message InviteToGuildRequest {
+  uint64 guild_id = 1;
+  uint64 target_player_id = 2;
+}
+
+message RespondGuildInviteRequest {
+  uint64 invite_id = 1;
+  Decision decision = 2;
+}
+
+message LeaveGuildRequest {
+  uint64 guild_id = 1;
+}
+
+message DisbandGuildRequest {
+  uint64 guild_id = 1;
+}
+
+message KickGuildMemberRequest {
+  uint64 guild_id = 1;
+  uint64 target_player_id = 2;
+}
+
+message MuteGuildMemberRequest {
+  uint64 guild_id = 1;
+  uint64 target_player_id = 2;
+  int64 muted_until_unix_ms = 3;
+  string reason = 4;
+}
+
+message ChangeGuildRoleRequest {
+  uint64 guild_id = 1;
+  uint64 target_player_id = 2;
+  GuildRole new_role = 3;
+}
+
+message GuildInviteEvent {
+  uint64 invite_id = 1;
+  uint64 guild_id = 2;
+  string guild_name = 3;
+  IdentityRef invited_by = 4;
+  int64 expires_at_unix_ms = 5;
+}
+
+message GuildInviteResponse {
+  uint64 invite_id = 1;
+  Decision decision = 2;
+  GuildSummary guild = 3;
+}
+
+message GuildStateEvent {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_SNAPSHOT = 1;
+    KIND_CREATED = 2;
+    KIND_MEMBER_JOINED = 3;
+    KIND_MEMBER_LEFT = 4;
+    KIND_MEMBER_KICKED = 5;
+    KIND_MEMBER_MUTED = 6;
+    KIND_ROLE_CHANGED = 7;
+    KIND_DISBANDED = 8;
+  }
+
+  Kind kind = 1;
+  GuildSummary guild = 2;
+  repeated GuildMember members = 3;
+  optional uint64 subject_player_id = 4;
+  optional uint64 actor_player_id = 5;
+  int64 occurred_at_unix_ms = 6;
+  string reason = 7;
+}

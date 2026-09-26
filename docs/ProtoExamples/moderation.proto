@@ -1,0 +1,50 @@
+// Historical design example; not the current Dreamsleeve contract.
+// See docs/CurrentStateRu.md and the README in this example directory.
+syntax = "proto3";
+
+package mmochat.v1;
+
+option csharp_namespace = "MmoChat.Protocol.V1";
+
+message IssueGlobalMuteRequest {
+  uint64 target_player_id = 1;
+  int64 muted_until_unix_ms = 2;
+  string reason = 3;
+}
+
+message RevokeGlobalMuteRequest {
+  uint64 target_player_id = 1;
+}
+
+message IssueGlobalBanRequest {
+  uint64 target_player_id = 1;
+  int64 banned_until_unix_ms = 2;
+  string reason = 3;
+}
+
+message RevokeGlobalBanRequest {
+  uint64 target_player_id = 1;
+}
+
+message ModerationActionResponse {
+  uint64 target_player_id = 1;
+  string action = 2;
+  int64 effective_until_unix_ms = 3;
+}
+
+message ModerationEvent {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_GLOBAL_MUTED = 1;
+    KIND_GLOBAL_UNMUTED = 2;
+    KIND_GLOBAL_BANNED = 3;
+    KIND_GLOBAL_UNBANNED = 4;
+  }
+
+  Kind kind = 1;
+  uint64 target_player_id = 2;
+  uint64 actor_player_id = 3;
+  int64 effective_until_unix_ms = 4;
+  string reason = 5;
+  int64 occurred_at_unix_ms = 6;
+}

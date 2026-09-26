@@ -1,0 +1,97 @@
+// Historical design example; not the current Dreamsleeve contract.
+// See docs/CurrentStateRu.md and the README in this example directory.
+syntax = "proto3";
+
+package mmochat.v1;
+
+option csharp_namespace = "MmoChat.Protocol.V1";
+
+import "common.proto";
+
+// Сообщения для identity, аутентификации, резюма сессии и initial snapshot.
+// Долгоживущая identity пользователя не зависит от ника.
+// Ник — display name. Идентичность — player_id + public_key.
+
+message ClientHello {
+  string client_version = 1;
+  string client_name = 2;
+}
+
+message RegisterIdentityRequest {
+  string desired_nickname = 1;
+  bytes public_key = 2;
+}
+
+message RegisterIdentityResponse {
+  uint64 player_id = 1;
+  string accepted_nickname = 2;
+  bytes nonce = 3;
+  string challenge_context = 4;
+  uint32 challenge_expires_in_seconds = 5;
+}
+
+message BeginAuthenticationRequest {
+  uint64 player_id = 1;
+}
+
+message Challenge {
+  uint64 player_id = 1;
+  bytes nonce = 2;
+  string challenge_context = 3;
+  uint32 challenge_expires_in_seconds = 4;
+}
+
+message CompleteAuthenticationRequest {
+  uint64 player_id = 1;
+  bytes signature = 2;
+}
+
+message AuthSuccess {
+  uint64 player_id = 1;
+  string nickname = 2;
+  uint64 session_id = 3;
+  bytes resume_token = 4;
+  int64 session_expires_at_unix_ms = 5;
+  ServerSettingsSnapshot settings = 6;
+}
+
+message ResumeSessionRequest {
+  uint64 session_id = 1;
+  bytes resume_token = 2;
+  repeated ChatCursor chat_cursors = 3;
+}
+
+message ResumeSessionResponse {
+  uint64 session_id = 1;
+  bytes new_resume_token = 2;
+  int64 session_expires_at_unix_ms = 3;
+  ServerSettingsSnapshot settings = 4;
+}
+
+message RequestInitialState {
+  bool include_player_directory = 1;
+  Pagination player_directory_page = 2;
+}
+
+message InitialStateSnapshot {
+  ServerSettingsSnapshot settings = 1;
+  repeated FriendEntry friends = 2;
+  repeated BlockEntry blocks = 3;
+  repeated GuildSummary guilds = 4;
+  optional PartySummary party = 5;
+  repeated DirectDialogSummary dialogs = 6;
+}
+
+message Ping {
+  uint64 client_time_unix_ms = 1;
+}
+
+message Pong {
+  uint64 client_time_unix_ms = 1;
+  uint64 server_time_unix_ms = 2;
+}
+
+message DisconnectNotice {
+  string reason = 1;
+  bool can_resume = 2;
+}

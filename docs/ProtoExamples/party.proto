@@ -1,0 +1,84 @@
+// Historical design example; not the current Dreamsleeve contract.
+// See docs/CurrentStateRu.md and the README in this example directory.
+syntax = "proto3";
+
+package mmochat.v1;
+
+option csharp_namespace = "MmoChat.Protocol.V1";
+
+import "common.proto";
+
+message CreatePartyRequest {}
+
+message CreatePartyResponse {
+  PartySummary party = 1;
+  repeated PartyMember members = 2;
+}
+
+message ListPartyMembersRequest {}
+
+message PartyMemberListResponse {
+  PartySummary party = 1;
+  repeated PartyMember members = 2;
+}
+
+message InviteToPartyRequest {
+  uint64 target_player_id = 1;
+}
+
+message SuggestPartyInviteRequest {
+  uint64 target_player_id = 1;
+}
+
+message RespondPartyInviteRequest {
+  uint64 invite_id = 1;
+  Decision decision = 2;
+}
+
+message LeavePartyRequest {}
+
+message DisbandPartyRequest {}
+
+message TransferPartyLeadershipRequest {
+  uint64 target_player_id = 1;
+}
+
+message KickFromPartyRequest {
+  uint64 target_player_id = 1;
+}
+
+message PartyInviteEvent {
+  uint64 invite_id = 1;
+  IdentityRef invited_by = 2;
+  PartySummary party = 3;
+  int64 expires_at_unix_ms = 4;
+}
+
+message PartyInviteResponse {
+  uint64 invite_id = 1;
+  Decision decision = 2;
+  PartySummary party = 3;
+}
+
+message PartyStateEvent {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_SNAPSHOT = 1;
+    KIND_CREATED = 2;
+    KIND_MEMBER_JOINED = 3;
+    KIND_MEMBER_LEFT = 4;
+    KIND_MEMBER_KICKED = 5;
+    KIND_LEADERSHIP_TRANSFERRED = 6;
+    KIND_LEADER_HANDOFF = 7;
+    KIND_INVITE_SUGGESTED = 8;
+    KIND_DISBANDED = 9;
+  }
+
+  Kind kind = 1;
+  PartySummary party = 2;
+  repeated PartyMember members = 3;
+  optional uint64 subject_player_id = 4;
+  optional uint64 actor_player_id = 5;
+  int64 occurred_at_unix_ms = 6;
+  string reason = 7;
+}

@@ -1,0 +1,155 @@
+// Historical design example; not the current Dreamsleeve contract.
+// See docs/CurrentStateRu.md and the README in this example directory.
+syntax = "proto3";
+
+package mmochat.v1;
+
+option csharp_namespace = "MmoChat.Protocol.V1";
+
+import "common.proto";
+import "session.proto";
+import "chat.proto";
+import "party.proto";
+import "guild.proto";
+import "social.proto";
+import "moderation.proto";
+import "admin.proto";
+import "state.proto";
+
+// Корневые packet envelopes.
+// Поверх ENet вы можете отправлять:
+// - ClientPacket / ServerPacket в reliable channels
+// - PlayerStateBatch в отдельном channel с более слабой важностью
+//
+// Но для простоты v1 допускает и один общий envelope поверх одного transport path.
+
+message ClientPacket {
+  uint64 request_id = 1;
+
+  oneof payload {
+    // Session / auth
+    ClientHello client_hello = 10;
+    RegisterIdentityRequest register_identity = 11;
+    BeginAuthenticationRequest begin_authentication = 12;
+    CompleteAuthenticationRequest complete_authentication = 13;
+    ResumeSessionRequest resume_session = 14;
+    RequestInitialState request_initial_state = 15;
+    Ping ping = 16;
+
+    // Chat
+    OpenDirectDialogRequest open_direct_dialog = 20;
+    SendChatMessageRequest send_chat_message = 21;
+    FetchChatHistoryRequest fetch_chat_history = 22;
+
+    // Party
+    CreatePartyRequest create_party = 30;
+    ListPartyMembersRequest list_party_members = 31;
+    InviteToPartyRequest invite_to_party = 32;
+    SuggestPartyInviteRequest suggest_party_invite = 33;
+    RespondPartyInviteRequest respond_party_invite = 34;
+    LeavePartyRequest leave_party = 35;
+    DisbandPartyRequest disband_party = 36;
+    TransferPartyLeadershipRequest transfer_party_leadership = 37;
+    KickFromPartyRequest kick_from_party = 38;
+
+    // Guild
+    CreateGuildRequest create_guild = 40;
+    ListGuildMembersRequest list_guild_members = 41;
+    InviteToGuildRequest invite_to_guild = 42;
+    RespondGuildInviteRequest respond_guild_invite = 43;
+    LeaveGuildRequest leave_guild = 44;
+    DisbandGuildRequest disband_guild = 45;
+    KickGuildMemberRequest kick_guild_member = 46;
+    MuteGuildMemberRequest mute_guild_member = 47;
+    ChangeGuildRoleRequest change_guild_role = 48;
+
+    // Social
+    AddFriendRequest add_friend = 50;
+    RemoveFriendRequest remove_friend = 51;
+    AddBlockRequest add_block = 52;
+    RemoveBlockRequest remove_block = 53;
+    ListFriendsRequest list_friends = 54;
+    ListBlockedPlayersRequest list_blocked_players = 55;
+    ListOnlinePlayersRequest list_online_players = 56;
+    ListPlayerGuildsRequest list_player_guilds = 57;
+    ListDirectDialogsRequest list_direct_dialogs = 58;
+
+    // Moderation
+    IssueGlobalMuteRequest issue_global_mute = 60;
+    RevokeGlobalMuteRequest revoke_global_mute = 61;
+    IssueGlobalBanRequest issue_global_ban = 62;
+    RevokeGlobalBanRequest revoke_global_ban = 63;
+
+    // Admin
+    GetServerSettingsRequest get_server_settings = 70;
+    UpdateServerSettingsRequest update_server_settings = 71;
+    GetServerAnnouncementsRequest get_server_announcements = 72;
+    PutServerAnnouncementRequest put_server_announcement = 73;
+    DeleteServerAnnouncementRequest delete_server_announcement = 74;
+    RebindPlayerKeyRequest rebind_player_key = 75;
+    RenamePlayerRequest rename_player = 76;
+    DisconnectPlayerRequest disconnect_player = 77;
+  }
+}
+
+message ServerPacket {
+  uint64 packet_seq = 1;
+  optional uint64 request_id = 2;
+
+  oneof payload {
+    // Generic
+    ErrorInfo error = 10;
+    OperationSuccess success = 11;
+    Pong pong = 12;
+    DisconnectNotice disconnect_notice = 13;
+
+    // Session / auth
+    RegisterIdentityResponse register_identity_response = 20;
+    Challenge challenge = 21;
+    AuthSuccess auth_success = 22;
+    ResumeSessionResponse resume_session_response = 23;
+    InitialStateSnapshot initial_state_snapshot = 24;
+
+    // Chat
+    OpenDirectDialogResponse open_direct_dialog_response = 30;
+    ChatAcceptedResponse chat_accepted_response = 31;
+    ChatHistoryResponse chat_history_response = 32;
+    ChatMessageEvent chat_message_event = 33;
+
+    // Party
+    CreatePartyResponse create_party_response = 40;
+    PartyMemberListResponse party_member_list_response = 41;
+    PartyInviteEvent party_invite_event = 42;
+    PartyInviteResponse party_invite_response = 43;
+    PartyStateEvent party_state_event = 44;
+
+    // Guild
+    CreateGuildResponse create_guild_response = 50;
+    GuildMemberListResponse guild_member_list_response = 51;
+    GuildInviteEvent guild_invite_event = 52;
+    GuildInviteResponse guild_invite_response = 53;
+    GuildStateEvent guild_state_event = 54;
+
+    // Social
+    FriendListResponse friend_list_response = 60;
+    BlockListResponse block_list_response = 61;
+    PlayerDirectoryResponse player_directory_response = 62;
+    PlayerGuildsResponse player_guilds_response = 63;
+    DirectDialogListResponse direct_dialog_list_response = 64;
+    SocialEvent social_event = 65;
+
+    // Moderation
+    ModerationActionResponse moderation_action_response = 70;
+    ModerationEvent moderation_event = 71;
+
+    // Admin
+    ServerSettingsResponse server_settings_response = 80;
+    ServerAnnouncementListResponse server_announcement_list_response = 81;
+    ServerAnnouncementChangedEvent server_announcement_changed_event = 82;
+    AdminActionResponse admin_action_response = 83;
+
+    // Volatile state
+    PlayerStateBatch player_state_batch = 90;
+    PlayerPresenceEvent player_presence_event = 91;
+  }
+}

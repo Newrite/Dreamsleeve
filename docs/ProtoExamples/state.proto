@@ -1,0 +1,33 @@
+// Historical design example; not the current Dreamsleeve contract.
+// See docs/CurrentStateRu.md and the README in this example directory.
+syntax = "proto3";
+
+package mmochat.v1;
+
+option csharp_namespace = "MmoChat.Protocol.V1";
+
+// Volatile state feed.
+// Подходит для часто обновляющихся данных, где latest-wins семантика важнее истории.
+
+message PlayerState {
+  uint64 player_id = 1;
+  uint64 state_seq = 2;
+  string current_location = 3;
+  uint32 hp = 4;
+  uint32 hp_max = 5;
+  float pos_x = 6;
+  float pos_y = 7;
+  float pos_z = 8;
+  int64 captured_at_unix_ms = 9;
+}
+
+message PlayerStateBatch {
+  uint64 batch_seq = 1;
+  repeated PlayerState states = 2;
+}
+
+message PlayerPresenceEvent {
+  uint64 player_id = 1;
+  bool online = 2;
+  int64 occurred_at_unix_ms = 3;
+}
