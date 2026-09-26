@@ -2,7 +2,6 @@ namespace Dreamsleeve.Server.Core
 
 open System
 open System.Collections.Generic
-open System.Threading
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
@@ -59,7 +58,7 @@ module SessionRegistry =
         Request: SessionOpenRequest
         Agent: Agent<PlayerMessage>
         Output: AgentOutbox<PlayerMessage>
-        Reads: ResizeArray<ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>>
+        Reads: AgentReplyScope<Result<PlayerSnapshot, PlayerStateError>>
         mutable Connected: bool
         mutable Stopped: bool
         mutable PlayerId: PlayerId option
@@ -86,13 +85,8 @@ module SessionRegistry =
             // The lifecycle owner must close transports when registry Completion ends.
             context.Abort()
 
-    let private closeReads entry =
-        for reply in entry.Reads do
-            reply.Reply(Error PlayerStateError.Closed)
-        entry.Reads.Clear()
-
     let private close state context entry =
-        closeReads entry
+        entry.Reads.Close()
         if entry.Connected then
             entry.Connected <- false
             emit state context (SessionOutput.Close entry.Request.ConnectionId)
@@ -161,12 +155,6 @@ module SessionRegistry =
                 emit state context (SessionOutput.Send(entry.Request.ConnectionId, response))
             | Some _ | None -> ()
 
-    let private watchChild (child: Agent<PlayerMessage>) (token: CancellationToken) = task {
-        // Cancellation aborts the child but never abandons its cleanup.
-        use registration = token.Register(fun () -> child.Abort())
-        do! child.Completion
-    }
-
     let private reject state context request code message =
         let rejection = { Code = code; Message = message; Field = "" }
         emit state context (SessionOutput.Send(request.ConnectionId, ChatResponse.RequestRejected(request.RequestId, rejection)))
@@ -195,19 +183,20 @@ module SessionRegistry =
                             Request = request
                             Agent = child
                             Output = AgentOutbox(config.MaxPendingPerPlayer, destination)
-                            Reads = ResizeArray()
+                            Reads = AgentReplyScope.create context child config.MaxPendingPerPlayer
+                                        (Error PlayerStateError.Closed) (Error PlayerStateError.Busy)
                             Connected = true
                             Stopped = false
                             PlayerId = None
                             Member = None
                         }
                         state.Entries.Add(request.ConnectionId, entry)
-                        context.PipeToSelf(watchChild child, fun result -> SessionRegistryMessage.PlayerStopped(request.ConnectionId, result))
+                        context.Own(child, fun result -> SessionRegistryMessage.PlayerStopped(request.ConnectionId, result))
 
     let private disconnect state context connectionId =
         match state.Entries.TryGetValue connectionId with
         | true, entry when entry.Connected ->
-            closeReads entry
+            entry.Reads.Close()
             entry.Connected <- false
             sendPlayer state context entry PlayerMessage.Stop |> ignore
         | true, _ | false, _ -> ()
@@ -319,18 +308,10 @@ module SessionRegistry =
         | AgentSendFailure.Closed | AgentSendFailure.Canceled -> fail state context SessionRegistryFailure.DependencyUnavailable
         | AgentSendFailure.Faulted error -> fail state context (SessionRegistryFailure.OperationFailed error)
 
-    let private readPlayer (config: SessionRegistryConfig) state context connectionId (reply: ReplyChannel<_>) =
+    let private readPlayer state context connectionId (reply: ReplyChannel<_>) =
         match state.Entries.TryGetValue connectionId with
         | true, entry when entry.Connected ->
-            // A forwarded ordinary message has no Ask cleanup of its own. Retain the
-            // reply until settled so disconnect/fault cannot leave the caller waiting.
-            entry.Reads.RemoveAll(fun pending -> pending.IsCompleted) |> ignore
-            if entry.Reads.Count >= config.MaxPendingPerPlayer then
-                reply.Reply(Error PlayerStateError.Busy)
-            else
-                entry.Reads.Add reply
-                if not (sendPlayer state context entry (PlayerMessage.Read reply)) then
-                    reply.Reply(Error PlayerStateError.Closed)
+            entry.Reads.Forward(reply, fun reply -> sendPlayer state context entry (PlayerMessage.Read reply))
         | true, _ | false, _ -> reply.Reply(Error PlayerStateError.Closed)
 
     let private stop state context =
@@ -358,7 +339,7 @@ module SessionRegistry =
             match state.Entries.TryGetValue connectionId with
             | true, entry when entry.Connected -> sendPlayer state context entry (PlayerMessage.Update command) |> ignore
             | true, _ | false, _ -> ()
-        | SessionRegistryMessage.ReadPlayer(connectionId, reply) -> readPlayer config state context connectionId reply
+        | SessionRegistryMessage.ReadPlayer(connectionId, reply) -> readPlayer state context connectionId reply
         | SessionRegistryMessage.DependencyStopped error -> fail state context error
         | SessionRegistryMessage.Stop -> stop state context
 

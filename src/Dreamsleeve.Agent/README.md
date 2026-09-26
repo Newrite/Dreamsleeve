@@ -106,8 +106,8 @@ mailbox policy. `ReliableAgentRef.Map` preserves the guarantee. PostAsync return
 only Posted/Closed/Canceled, asynchronously waiting when the mailbox is full.
 Shutdown can still discard unprocessed messages: Posted only acknowledges admission.
 
-The owner observes `child.Completion`, for example through PipeToSelf and a child
-termination message. Faults preserve the original exception; observation also works
+The owner observes `child.Completion` through `context.Own(child, stopped)` or
+`context.Watch(target, stopped)` and receives a termination message. Faults preserve the original exception; observation also works
 after the child has stopped. Restart means creating a new agent after Completion
 and updating consumer addresses. The library does not automatically restart agents,
 restore state or replay accepted commands. Stopped events are not replayed for late
@@ -142,7 +142,7 @@ SemaphoreSlim protects only library delivery reservations; domain state remains 
 the sequential owner handler. Use non-dropping owner mailboxes. Outboxes do not retry
 commands and do not guarantee processing, deduplication or exactly-once effects.
 PipeToSelf remains available for background operations whose result the owner needs,
-including observing child Completion; ordinary sends no longer require it.
+while child observation uses Own/Watch; ordinary sends no longer require it.
 
 ## Request/reply handlers
 
@@ -162,3 +162,39 @@ sole ordered output aborts its owner; a closed independent recipient does not st
 other callers or roll back a write. Delivery exceptions fault the owner and remain
 observable through Completion. A live recipient that never drains can delay graceful
 completion; the lifecycle owner can Abort.
+
+## Child ownership and shared dependencies
+
+Call `context.Own(child, stopped)` once from the owning handler. The mapper creates
+an owner message from `Result<unit, exn>` after the child's actual Completion,
+including for an already stopped child. Parent Abort/fault aborts the child and joins
+its cleanup; cooperative cleanup may delay the parent. Graceful child Stop remains
+application-specific: stop children first, then Complete the parent. Own does not
+restart children or recover their state.
+
+`context.Watch(target, stopped)` observes a shared dependency without owning it.
+Complete and Abort detach the observation without stopping the target or waiting
+for it to terminate. Mappers run outside the handler and must only construct messages.
+Both APIs require a non-dropping owner mailbox.
+
+## Forwarded reply ownership
+
+Create `AgentReplyScope.create context target capacity closedReply busyReply` once per
+route. `scope.Forward(reply, send)` bounds unfinished reply channels and schedules a
+forward through the supplied synchronous send function. The function runs outside
+the library lock, must return false when refused, and can use an outbox to preserve
+ordering with other target commands. False settles closedReply; a thrown exception
+settles the request error and propagates to the owner's error policy.
+
+Scope closure is automatic on target termination or owner shutdown, including when
+the owner mailbox is busy. `scope.Close()` also closes a domain route immediately,
+for example on disconnect. Closed scopes reject later forwarding with closedReply;
+a full scope returns busyReply. Settled/canceled channels are reclaimed on the next
+Forward, and closure clears all retained channels. Duplicate forwarding of the same
+pending channel does not schedule a second command. ReplyChannel's first-result rule
+protects a successful reply from concurrent closure and rejects late replies.
+
+A short library lock coordinates reservation and settlement with termination; send
+never runs under it. Application data stays in its handler. Closing waits does not
+retract admitted commands and the scope never stops the target. Result mapping,
+route identity, request semantics and graceful domain cleanup remain application code.

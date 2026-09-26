@@ -344,6 +344,7 @@ type AgentContext<'Message>
         (
             name: string,
             cancellationToken: CancellationToken,
+            dispatchStoppedToken: CancellationToken,
             tryPostImpl: 'Message -> AgentPostResult,
             postAsyncImpl: 'Message -> CancellationToken -> Task<AgentPostResult>,
             completeImpl: unit -> bool,
@@ -388,8 +389,10 @@ type AgentContext<'Message>
 
         startBackgroundImpl deliver
 
-    // Library delivery workers only. Application state remains in the handler.
-    // Unlike PipeToSelf, these workers do not need mailbox admission to finish.
+    // Ends non-owning observations after dispatch, including graceful completion.
+    member internal _.DispatchStopped = dispatchStoppedToken
+
+    // Library workers only. Application state remains in the handler.
     member internal _.StartDelivery(operation: CancellationToken -> Task<unit>) =
         startBackgroundImpl operation
 
@@ -444,6 +447,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
         | _ -> ()
 
     let lifetime = new CancellationTokenSource()
+    let dispatchStopped = new CancellationTokenSource()
     // Capture the token while its source is alive. Contexts never access CTS.Token after disposal.
     let lifetimeToken = lifetime.Token
     let completion = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
@@ -629,7 +633,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
 
     let context =
         AgentContext<'Message>(
-            options.Name, lifetimeToken, tryPostCore, postAsyncCore, completeCore, abortCore, startBackground, reliableMailbox)
+            options.Name, lifetimeToken, dispatchStopped.Token, tryPostCore, postAsyncCore, completeCore, abortCore, startBackground, reliableMailbox)
 
     let signalStarted () =
         safeInvoke (fun () -> startedEvent.Trigger(options.Name))
@@ -678,6 +682,8 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                 | false, _ -> draining <- false
             termination.TrySetResult(reason) |> ignore
 
+            // Detach non-owning observations and close forwarding scopes before joining children.
+            do! dispatchStopped.CancelAsync()
             do! Task.WhenAll(background)
 
             // Joining work can escalate graceful completion to failure or cancellation.
@@ -688,6 +694,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                     defaultArg stopReason reason, cancellationTask)
 
             try do! callbacks with _ -> ()
+            dispatchStopped.Dispose()
             lock lifecycleGate (fun () -> lifetime.Dispose())
 
             safeInvoke (fun () -> stoppedEvent.Trigger(options.Name, reason))

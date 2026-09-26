@@ -22,15 +22,11 @@ type OwnerMessage =
     | WatchChild of Agent<AgentTests.Message>
     | ChildStopped of Agent<AgentTests.Message> * Result<unit, exn>
 
-let observeChild (child: Agent<AgentTests.Message>) (token: CancellationToken) = task {
-    do! child.Completion.WaitAsync token
-}
-
 let handleOwner seen (replacement: TaskCompletionSource<Agent<AgentTests.Message> * exn>)
                 (context: AgentContext<OwnerMessage>) message = task {
     match message with
     | WatchChild child ->
-        context.PipeToSelf(observeChild child, fun result -> ChildStopped(child, result))
+        context.Watch(child, fun result -> ChildStopped(child, result))
     | ChildStopped(child, Error error) ->
         check child.Completion.IsCompleted "Restart preceded the old child's cleanup."
         expectStopFault error child.StopReason
