@@ -9,3 +9,4 @@ src/**/bin/
 tests/**/obj/
 tests/**/bin/
 **/__pycache__/
+logs/

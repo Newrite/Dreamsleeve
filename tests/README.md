@@ -23,12 +23,14 @@ Skyrim, PrismaUI, работающий сервер и база данных н�
 
 | Проект | Фреймворк | Наборы |
 |---|---|---|
-| `Dreamsleeve.Client.Tests` | doctest, цель xmake | DreamNet.Address/Packet/Runtime/Network/Client; Client.Domain/State/Changes/StateUpdate/StateUpdateQueue |
+| `Dreamsleeve.Client.Tests` | doctest, цель xmake | DreamNet.Address/Packet/Runtime/Network/Client; Client.Domain/State/Changes/StateUpdate/StateUpdateQueue/Exchange |
 | `Dreamsleeve.Server.Tests` | Expecto + Faqt, F# executable | Dreamsleeve.Server.Domain (41), Dreamsleeve.Agent (28) |
 
-C++: 126 сценариев, включая 42 сохранённых из архивов, 6 проверок StateUpdate
+C++: 132 сценария, включая 42 сохранённых из архивов, 6 проверок StateUpdate
 и 7 проверок очереди: порядок, переполнение, восстановление чата и передача между
-двумя потоками. F#: 69 сценариев.
+двумя потоками. Ещё 6 проверок ClientExchange покрывают FIFO/Full/Closed, отсутствие локального
+добавления чата, доставку только новых сообщений, объединение показаний,
+восстановление без потери отказов и двусторонний обмен с join владельца. F#: 69 сценариев.
 Две архивные проверки удалены вместе с неиспользуемым SnapshotMailbox.
 Нативные файлы используют именованные doctest suites вместо лишнего второго
 аргумента TEST_CASE с псевдотегом. F# Agent и Domain объединены одним entry point.
@@ -43,6 +45,7 @@ Agent сохраняет последовательное выполнение, 
 ```powershell
 xmake build Dreamsleeve.Client.Tests
 xmake run Dreamsleeve.Client.Tests --test-suite=Client.Changes
+xmake run Dreamsleeve.Client.Tests --test-suite=Client.Exchange
 xmake run Dreamsleeve.Client.Tests --test-suite=DreamNet.Network
 
 dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list Dreamsleeve.Agent
@@ -54,6 +57,11 @@ dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-
 `Scripts/vxmakegen.py` и `Scripts/vxmakegen_modules.py` включают managed-проекты
 из `src` и `tests` при генерации IDE solution. Старые generated solution нужно
 перегенерировать после переноса, вручную их поддерживать не требуется.
+
+Для ручной проверки двустороннего обмена есть `xmake build Dreamsleeve.Client.Dev`, затем
+`xmake run Dreamsleeve.Client.Dev --state-demo` или интерактивный запуск без флага.
+Это локальная демонстрация на синтетических серверных событиях; автоматические
+проверки контракта находятся в Client.Exchange.
 
 ## Происхождение и адаптация архивов
 
@@ -86,5 +94,6 @@ dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-
 - Проверки транспорта используют loopback и ограниченные ожидания; UI/игровая
   интеграция и межъязыковой echo не входят в нынешнюю проверенную сборку.
 
-Проверено на Windows/MSVC: 126/126 native. Последний прогон .NET 10 при объединении
-проектов: 69/69 managed; шаг StateUpdateQueue меняет только C++-код.
+Проверено на Windows/MSVC: 132/132 native и сценарий Client.Dev --state-demo.
+Последний прогон .NET 10 при объединении проектов: 69/69 managed;
+шаг ClientExchange меняет только C++-код.

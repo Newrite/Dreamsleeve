@@ -276,7 +276,7 @@ public:
 
     // One owner drains once, resolves player/chat-state invalidations, then
     // forwards the owning chat-content deltas in their stored order. Drain
-    // regularly even when no UI is subscribed. Reusing output preserves the
+    // regularly even when the UI is closed. Reusing output preserves the
     // capacities of the top-level vectors exchanged with pendingChanges.
     void TakeChanges(ChangeBatch& output) noexcept
     {
@@ -287,7 +287,7 @@ public:
     }
 
     // Owner-only drain. Forward these owning events through the application's
-    // synchronized UI queue; snapshots can skip intermediate publications.
+    // exchange separately from replaceable state snapshots.
     // Already accepted events survive either reset until explicitly taken.
     std::vector<ServerRejectionEvent> TakeServerRejections()
     {

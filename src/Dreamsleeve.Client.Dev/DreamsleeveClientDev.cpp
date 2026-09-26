@@ -1,13 +1,13 @@
 #include <memory>
 #include <vector>
 #include <filesystem>
+#include <string_view>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 
-import DreamNet.Host;
-import DreamNet.Runtime;
+int RunStateConsole(bool demo);
 
 void InitializeLogging()
 {
@@ -47,13 +47,13 @@ int main(int argc, char* argv[])
 {
   InitializeLogging();
 
-  auto init = DreamNetRuntime::TryInitialize();
-
-  auto enetClient = DreamNetHost::TryCreateServer(ServerConfig::Default());
-
-  spdlog::info("Client starting...");
-  spdlog::warn("This goes to console and file");
-
+  if (argc > 2 || (argc == 2 && std::string_view{argv[1]} != "--state-demo"))
+  {
+    spdlog::error("Usage: Dreamsleeve.Client.Dev [--state-demo]");
+    ShutdownLogger();
+    return 2;
+  }
+  const int result = RunStateConsole(argc == 2);
   ShutdownLogger();
-  return 0;
+  return result;
 }

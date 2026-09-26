@@ -9,7 +9,9 @@
 Реализованы обёртки ENet на C++, доменные типы и операции F#, библиотека агентов,
 клиентские хранилища игроков и чата, `ClientModel`, снимки и `ChangeBatch`
 с дельтами содержимого чата, подготовка самостоятельного `ClientStateUpdate`
-для получателей и ограниченная потокобезопасная очередь этих обновлений.
+для получателя и ClientExchange: команды к сетевому владельцу, дельты/снимки
+и отказы обратно в игровой/UI-поток. В Client.Dev есть двухпоточная консоль
+с синтетическим сервером для проверки этого обмена.
 Прикладной протокол, серверный цикл приложения,
 `ClientRuntime`, SKSE/PrismaUI и интерполяция ещё не соединены в работающий MVP.
 `Protocol/network.proto` пока определяет только причины отключения.
@@ -22,7 +24,7 @@
 |---|---|
 | `src/Dreamsleeve.Client.Core` | C++23: DreamNet, независимый от Skyrim домен и состояние клиента |
 | `src/Dreamsleeve.Client` | Заготовка игрового адаптера; пока static library, будущий SKSE-плагин |
-| `src/Dreamsleeve.Client.Dev` | Нативное приложение для работы без Skyrim; сейчас заготовка |
+| `src/Dreamsleeve.Client.Dev` | Двухпоточная консоль без Skyrim; серверные события пока синтетические |
 | `src/Dreamsleeve.Server.Domain` | F#/.NET 10: проверяемые значения, игроки, ограниченная история чата |
 | `src/Dreamsleeve.Agent` | Последовательные агенты на Channels/Task и примеры |
 | `src/Dreamsleeve.Server.Core` | Конфигурация транспорта, зависимость yENet |
@@ -39,11 +41,16 @@ Python 3.10+ и .NET SDK 10. Первый запуск восстанавлив�
 
 ```powershell
 xmake build Dreamsleeve.Client.Dev
+xmake run Dreamsleeve.Client.Dev --state-demo
 dotnet build src/Dreamsleeve.Server/Dreamsleeve.Server.fsproj -c Release
 python Scripts/run_tests.py
 ```
 
 Выбор набора и команды отдельных проектов: [tests/README.md](tests/README.md).
+Без `--state-demo` Client.Dev принимает команды: `send <text>`, `accept`, `reject`,
+`receive <text>`, `sample`, `read`, `snapshot`, `reset`, `quit`. Отправленный чат
+появляется в модели только после `accept`.
+Формат команд описан в [контракте состояния](src/Dreamsleeve.Client.Core/State/README.ru.md#обмен-с-одним-потребителем).
 Генерация protobuf: `python Scripts/generate_protocol.py --help`.
 Генерация IDE solution: `python Scripts/vxmakegen.py --help`.
 
