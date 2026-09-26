@@ -27,3 +27,5 @@
 Исторические SQL/protobuf-примеры удалены из рабочего дерева; архивный коммит `40059c5`.
 Просмотр: `git show 40059c5:docs/ProtoExamples/README.md` или
 `git show 40059c5:docs/SqlExamples/README_ru.md`.
+
+- [Измерения после разделения сессий](benchmarks/session-routing-2026-09-27.md): воспроизводимое сравнение и ограничения выводов.

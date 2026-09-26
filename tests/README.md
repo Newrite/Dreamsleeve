@@ -140,3 +140,5 @@ production-файлы не возвращаются в текущую сборк
 
 MSVC/protobuf workaround и проверенные отрицательные компиляции enum/visitor описаны
 в [MsvcProtobufModulesRu.md](../docs/MsvcProtobufModulesRu.md).
+
+Нагрузочные сравнения запускаются отдельно: [методика и скрипт](Dreamsleeve.Server.Benchmarks/README.md), [измеренные результаты](../docs/benchmarks/session-routing-2026-09-27.md).

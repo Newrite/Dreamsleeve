@@ -16,6 +16,19 @@ ServerRuntime, PlayerSession для каждого соединения, ChatRoo
 | MemoryProfileStore | Профили и выделение PlayerId, отдельный владелец в Infrastructure |
 | EnetTransport | Адаптер yENet в том же контуре владения, без второго глобального роутера |
 
+```mermaid
+flowchart LR
+    ENet <--> Runtime[ServerRuntime + SessionTable]
+    Runtime -->|OpenSession / SendChat| Player[PlayerSession × N]
+    Player -->|Publish| Chat[ChatRoomAgent]
+    Chat -->|Accepted / Published| Player
+    Presence[PresenceAgent] -->|snapshot / deltas| Player
+    Player -->|GetOrCreate| Profiles[MemoryProfileStore]
+    Player -->|Activate / Send| Runtime
+```
+
+Схема показывает основной поток данных; подписки и подтверждения очистки описаны ниже.
+
 Агент выполняет один обработчик за раз; разные агенты могут работать параллельно
 через ThreadPool. Выделенного потока на каждого игрока нет. Коллекции состояния
 используются только обработчиком владельца. Адреса подписчиков не дают доступа
