@@ -33,8 +33,8 @@ public:
       std::packaged_task<bool(ClientModel&)> task{[this, action = std::move(action)](ClientModel& model) {
         const bool pumped = Pump(model);
         const bool result = action(model);
-        exchange.Publish(model);
-        return pumped && result;
+        const bool published = exchange.Publish(model);
+        return pumped && result && published;
       }};
 
       auto completion = task.get_future();
@@ -106,14 +106,14 @@ private:
 
     bool Pump(ClientModel& model)
     {
-      exchange.TakeCommands(commands);
+      exchange.TakeCommands(commands, awaitingServer.size() + model.PendingServerRejectionCount());
 
       bool ok = true;
       for (auto& queued : commands)
       {
         if (std::holds_alternative<RequestSnapshot>(queued.command))
         {
-          exchange.Publish(model, true);
+          ok = exchange.Publish(model, true) && ok;
           continue;
         }
 

@@ -143,14 +143,16 @@ public:
 
     // Owner side, nonblocking so the network pump can continue polling ENet.
     // False means input is closed and all admitted commands have been taken.
-    bool TakeCommands(std::vector<QueuedClientCommand>& output)
+    bool TakeCommands(std::vector<QueuedClientCommand>& output, std::size_t pendingReplies = 0)
     {
       output.clear();
 
       std::lock_guard lock{mutex};
-      // Reserve room for one local failure per taken command. A stalled consumer
-      // backpressures command admission without stopping the network pump.
-      const auto count = std::min(commands.size(), maxCommands - pendingFailures.size());
+      // Every taken command may fail locally or produce a server rejection.
+      // Existing requests retain their result slots until a reply arrives.
+      const auto free = maxCommands - pendingFailures.size() - pendingRejections.size();
+      const auto available = pendingReplies >= free ? 0 : free - pendingReplies;
+      const auto count = std::min(commands.size(), available);
       if (count == commands.size())
         commands.swap(output);
       else
@@ -162,11 +164,19 @@ public:
       return !inputClosed || !commands.empty() || !output.empty();
     }
 
+    // Owner only, before starting a request outside TakeCommands (OpenSession).
+    // The owner includes that request in pendingReplies until it settles.
+    bool CanAcceptReplies(std::size_t count = 1)
+    {
+      std::lock_guard lock{mutex};
+      return count <= maxCommands - pendingFailures.size() - pendingRejections.size();
+    }
+
     // Owner only, once per command obtained in the latest TakeCommands batch.
     bool PublishCommandFailure(CommandFailure failure)
     {
       std::lock_guard lock{mutex};
-      if (pendingFailures.size() >= maxCommands) return false;
+      if (pendingFailures.size() + pendingRejections.size() >= maxCommands) return false;
 
       pendingFailures.push_back(failure);
       return true;
@@ -174,9 +184,13 @@ public:
 
     // Owner only, after decoded events. Exactly one exchange drains a model.
     // A requested snapshot consumes the pending changes that it includes.
-    void Publish(ClientModel& model, bool requestSnapshot = false, std::optional<SessionPhase> nextPhase = std::nullopt)
+    // False preserves model rejections for retry after Drain. State and phase
+    // still publish so terminal failure can clear the UI. Only this owner adds
+    // results; a concurrent Drain can only free room between check and insertion.
+    [[nodiscard]] bool Publish(ClientModel& model, bool requestSnapshot = false, std::optional<SessionPhase> nextPhase = std::nullopt)
     {
-      auto                             rejections = model.TakeServerRejections();
+      const bool accepted = CanAcceptReplies(model.PendingServerRejectionCount());
+      auto rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
       std::optional<ClientStateUpdate> update;
 
       if (requestSnapshot || needsInitialSnapshot)
@@ -196,6 +210,7 @@ public:
         pendingRejections.end(),
         std::make_move_iterator(rejections.begin()),
         std::make_move_iterator(rejections.end()));
+      return accepted;
     }
 
     // Owner only; consumers observe phase through the same synchronized exchange.
@@ -226,7 +241,8 @@ public:
       inputClosed = true;
     }
 
-    // Owner calls after handling admitted commands and publishing final state.
+    // Owner calls after publishing final state. Stopped cancels any commands
+    // still waiting behind result backpressure; it does not fabricate replies.
     // No further owner operations after Finish. Host joins before destruction.
     void Finish()
     {

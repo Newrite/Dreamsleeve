@@ -32,7 +32,7 @@ namespace
   {
     DreamNetRuntime                   enet{Value(DreamNetRuntime::TryInitialize())};
     DreamNetHost                      server{Server()};
-    ClientExchange::Ptr               exchange{Value(ClientExchange::TryCreate(8, 16))};
+    ClientExchange::Ptr               exchange;
     Configuration                     config;
     ClientRuntime::Ptr                client;
     std::optional<DreamNetPeer>       peer;
@@ -40,7 +40,8 @@ namespace
     std::vector<ClientRuntime::Error> errors;
     bool                              closed{};
 
-    explicit Fixture(TimeOutMs sessionTimeout = 2000, std::size_t maxPending = 2, std::size_t packetBytes = 1024 * 1024)
+    explicit Fixture(TimeOutMs sessionTimeout = 2000, std::size_t maxPending = 2, std::size_t packetBytes = 1024 * 1024, std::size_t resultCapacity = 8)
+        : exchange{Value(ClientExchange::TryCreate(resultCapacity, 16))}
     {
       config.serverAddress       = Value(server.GetHostInfo()).address;
       config.sessionTimeoutMs    = sessionTimeout;
@@ -184,6 +185,16 @@ namespace
     message->mutable_author()->set_display_name("Server Author");
     message->set_text("accepted by server");
     message->set_sent_at_unix_ms(123);
+    return packet;
+  }
+
+  P::ServerPacket Rejection(std::uint64_t requestId)
+  {
+    P::ServerPacket packet;
+    packet.set_protocol_version(1);
+    packet.set_request_id(requestId);
+    packet.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_OVERLOADED);
+    packet.mutable_request_rejected()->set_message("Busy");
     return packet;
   }
 
@@ -598,6 +609,73 @@ TEST_CASE("Oversized outgoing chat stays local and does not occupy the pending s
   fixture.Until([&] { return fixture.requests.size() == 2; });
   fixture.Send(Publication(valid, 3));
   REQUIRE(Added(fixture.ReceiveOutput()).size() == 1);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Undrained server rejections stop outgoing commands while network close still progresses")
+{
+  Fixture fixture{2000, 2, 1024 * 1024, 2};
+  const auto generation = Ready(fixture);
+  const auto first = Queue(fixture, generation);
+  const auto second = Queue(fixture, generation);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+
+  const auto waiting = Queue(fixture, generation);
+  const auto otherWaiting = Queue(fixture, generation);
+  REQUIRE(fixture.client->Poll());
+  fixture.Send(Rejection(first));
+  fixture.Send(Rejection(second));
+  fixture.peer->Disconnect(DisconnectType::Later, DisconnectReason::ServerShutdown);
+  fixture.server.FlushPackets();
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected && fixture.closed; });
+
+  CHECK(fixture.requests.size() == 3);
+  CHECK_FALSE(fixture.client->Connect("user", "Player"));
+  CHECK(fixture.client->Phase() == SessionPhase::Disconnected);
+  const auto rejected = fixture.Drain();
+  REQUIRE(rejected.rejections.size() == 2);
+  CHECK(rejected.rejections[0].rejection.requestId == first);
+  CHECK(rejected.rejections[1].rejection.requestId == second);
+  CHECK(rejected.commandFailures.empty());
+
+  REQUIRE(fixture.client->Poll());
+  const auto stale = fixture.Drain();
+  REQUIRE(stale.commandFailures.size() == 2);
+  CHECK(stale.commandFailures[0].requestId == waiting);
+  CHECK(stale.commandFailures[1].requestId == otherWaiting);
+  CHECK(stale.commandFailures[0].code == CommandFailureCode::StaleGeneration);
+
+  const auto fresh = Queue(fixture, Ready(fixture));
+  fixture.Until([&] { return fixture.requests.size() == 5; });
+  fixture.Send(Publication(fresh, 3));
+  REQUIRE(Added(fixture.ReceiveOutput()).size() == 1);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Opening reserves its terminal rejection slot before queued commands or reconnect")
+{
+  Fixture fixture{2000, 1, 1024 * 1024, 1};
+  REQUIRE(fixture.client->Connect("user", "Player"));
+  const auto queued = Queue(fixture, 0);
+  fixture.Until([&] { return fixture.requests.size() == 1; });
+  const auto opening = fixture.requests.front().request_id();
+  fixture.Send(Rejection(opening));
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected && fixture.closed; });
+  REQUIRE(fixture.client->Poll());
+
+  CHECK_FALSE(fixture.client->Connect("user", "Player"));
+  const auto rejected = fixture.Drain();
+  REQUIRE(rejected.rejections.size() == 1);
+  CHECK(rejected.rejections.front().rejection.requestId == opening);
+  CHECK(rejected.commandFailures.empty());
+
+  REQUIRE(fixture.client->Poll());
+  const auto stale = fixture.Drain();
+  REQUIRE(stale.commandFailures.size() == 1);
+  CHECK(stale.commandFailures.front().requestId == queued);
+  CHECK(stale.commandFailures.front().code == CommandFailureCode::StaleGeneration);
+  REQUIRE(fixture.client->Connect("user", "Player"));
+  CHECK(fixture.client->Phase() == SessionPhase::Connecting);
   CHECK(fixture.errors.empty());
 }
 

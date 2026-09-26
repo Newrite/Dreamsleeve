@@ -300,6 +300,11 @@ public:
     // Owner-only drain. Forward these owning events through the application's
     // exchange separately from replaceable state snapshots.
     // Already accepted events survive either reset until explicitly taken.
+    std::size_t PendingServerRejectionCount() const noexcept
+    {
+      return serverRejections.size();
+    }
+
     std::vector<ServerRejectionEvent> TakeServerRejections()
     {
       std::vector<ServerRejectionEvent> result;

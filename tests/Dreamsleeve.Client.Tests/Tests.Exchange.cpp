@@ -29,7 +29,7 @@ namespace
   void Initialize(ClientExchange& exchange, ClientModel& model)
   {
     REQUIRE(model.RegisterChannel(1, 3));
-    exchange.Publish(model);
+    REQUIRE(exchange.Publish(model));
     ClientOutput output;
     exchange.Drain(output);
     REQUIRE(output.state.updates.size() == 1);
@@ -77,7 +77,7 @@ TEST_CASE("Posting chat does not mutate history and accepted messages are delive
   ClientModel model;
   Initialize(*exchange, model);
   Receive(model, 1);
-  exchange->Publish(model);
+  REQUIRE(exchange->Publish(model));
   ClientOutput output;
   exchange->Drain(output);
   CHECK(
@@ -85,12 +85,12 @@ TEST_CASE("Posting chat does not mutate history and accepted messages are delive
         model.Generation(),
         SendChat{42, 1, "Outgoing"}
   }) == CommandPostResult::Queued);
-  exchange->Publish(model);
+  REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
   CHECK(output.state.updates.empty());
   REQUIRE(model.FindChat(1)->messages.size() == 1);
   Receive(model, 2);
-  exchange->Publish(model);
+  REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
   REQUIRE(output.state.updates.size() == 1);
   REQUIRE(std::holds_alternative<ClientStateDelta>(output.state.updates[0]));
@@ -100,7 +100,7 @@ TEST_CASE("Posting chat does not mutate history and accepted messages are delive
   REQUIRE(messages.size() == 1);
   CHECK(messages[0].messageId == 2);  // No copy of existing history in the payload.
   model.ResetSession();
-  exchange->Publish(model);
+  REQUIRE(exchange->Publish(model));
   CHECK(messages[0].messageId == 2);  // Already drained data is independent.
 }
 
@@ -133,13 +133,13 @@ TEST_CASE("Explicit snapshot consumes included changes and an idle pump emits no
   ClientModel model;
   Initialize(*exchange, model);
   Receive(model, 1);
-  exchange->Publish(model, true);
+  REQUIRE(exchange->Publish(model, true));
   ClientOutput output;
   exchange->Drain(output);
   REQUIRE(output.state.updates.size() == 1);
   const auto& snapshot = std::get<ClientSnapshot>(output.state.updates[0]);
   CHECK(snapshot.chats[0].messages == model.FindChat(1)->messages);
-  exchange->Publish(model);
+  REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
   CHECK(output.state.updates.empty());
 }
@@ -154,7 +154,7 @@ TEST_CASE("State overflow and reset preserve rejections while recovering bounded
   for (Domain::ChatMessageId id = 1; id <= 4; ++id)
   {
     Receive(model, id);
-    exchange->Publish(model);
+    REQUIRE(exchange->Publish(model));
   }
   ClientOutput output;
   exchange->Drain(output);
@@ -166,7 +166,7 @@ TEST_CASE("State overflow and reset preserve rejections while recovering bounded
   CHECK(output.rejections[0].rejection.requestId == 42);
   REQUIRE(model.Apply(generation, ServerRejection{43, RequestRejectionCode::InvalidRequest, "Old session", ""}));
   model.ResetSession();
-  exchange->Publish(model);
+  REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
   REQUIRE(output.rejections.size() == 1);
   CHECK(output.rejections[0].generation == generation);
@@ -186,7 +186,7 @@ TEST_CASE("Owner receives commands and publishes final output before joined shut
     std::jthread owner{[&] {
       ClientModel model;
       applied = model.RegisterChannel(1, 3).has_value();
-      exchange->Publish(model);
+      applied = exchange->Publish(model) && applied;
       phase.arrive_and_wait();
       phase.arrive_and_wait();
       std::vector<QueuedClientCommand> commands;
@@ -206,7 +206,7 @@ TEST_CASE("Owner receives commands and publishes final output before joined shut
       else
         applied = false;
       exhausted = !exchange->TakeCommands(commands);
-      exchange->Publish(model);
+      applied = exchange->Publish(model) && applied;
       exchange->Finish();
     }};
     phase.arrive_and_wait();
@@ -243,9 +243,9 @@ TEST_CASE("Shared request IDs survive model generation changes")
   CHECK(*producer > *owner);
 
   ClientModel model;
-  exchange->Publish(model);
+  REQUIRE(exchange->Publish(model));
   model.ResetSession();
-  exchange->Publish(model);
+  REQUIRE(exchange->Publish(model));
   const auto reconnect = exchange->NextRequestId();
   REQUIRE(reconnect);
   CHECK(*reconnect > *producer);
@@ -275,6 +275,65 @@ TEST_CASE("Undrained local failures backpressure commands within the configured 
   REQUIRE(commands.size() == 1);
   CHECK(std::get<SendChat>(commands.front().command).requestId == 3);
   CHECK_FALSE(exchange->TakeCommands(commands));
+}
+
+TEST_CASE("In-flight replies and both outcome kinds share one bounded budget")
+{
+  auto exchange = Exchange(2);
+  ClientModel model;
+  REQUIRE(exchange->Post({1, SendChat{2, 1, "invalid"}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, SendChat{3, 1, "waiting"}}) == CommandPostResult::Queued);
+
+  std::vector<QueuedClientCommand> commands;
+  REQUIRE(exchange->TakeCommands(commands, 1));
+  REQUIRE(commands.size() == 1);
+  REQUIRE(exchange->PublishCommandFailure({1, 2, CommandFailureCode::InvalidRequest}));
+  REQUIRE(exchange->TakeCommands(commands, 1));
+  CHECK(commands.empty());
+
+  REQUIRE(model.Apply(model.Generation(), ServerRejection{1, RequestRejectionCode::Overloaded, "Busy", ""}));
+  REQUIRE(exchange->Publish(model));
+  CHECK_FALSE(exchange->CanAcceptReplies());
+  CHECK_FALSE(exchange->PublishCommandFailure({1, 3, CommandFailureCode::Busy}));
+  REQUIRE(exchange->TakeCommands(commands));
+  CHECK(commands.empty());
+
+  ClientOutput output;
+  exchange->Drain(output);
+  REQUIRE(output.commandFailures.size() == 1);
+  REQUIRE(output.rejections.size() == 1);
+  CHECK(output.rejections.front().rejection.requestId == 1);
+  REQUIRE(exchange->TakeCommands(commands));
+  REQUIRE(commands.size() == 1);
+  CHECK(std::get<SendChat>(commands.front().command).requestId == 3);
+}
+
+TEST_CASE("Rejection overflow is explicit and retry preserves correlation and terminal state")
+{
+  auto exchange = Exchange(1);
+  ClientModel model;
+  Initialize(*exchange, model);
+  const auto generation = model.Generation();
+  REQUIRE(exchange->PublishCommandFailure({generation, 1, CommandFailureCode::Busy}));
+  REQUIRE(model.Apply(generation, ServerRejection{2, RequestRejectionCode::Overloaded, "Busy", ""}));
+  model.ResetSession();
+
+  CHECK_FALSE(exchange->Publish(model, true, SessionPhase::Faulted));
+  CHECK(model.PendingServerRejectionCount() == 1);
+  ClientOutput output;
+  exchange->Drain(output);
+  CHECK(output.phase == SessionPhase::Faulted);
+  REQUIRE(output.state.updates.size() == 1);
+  CHECK(std::get<ClientSnapshot>(output.state.updates.front()).players.empty());
+  REQUIRE(output.commandFailures.size() == 1);
+  CHECK(output.rejections.empty());
+
+  REQUIRE(exchange->Publish(model));
+  CHECK(model.PendingServerRejectionCount() == 0);
+  exchange->Drain(output);
+  REQUIRE(output.rejections.size() == 1);
+  CHECK(output.rejections.front().generation == generation);
+  CHECK(output.rejections.front().rejection.requestId == 2);
 }
 
 TEST_SUITE_END();

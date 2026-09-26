@@ -50,6 +50,15 @@ public:
       if (phase != SessionPhase::Disconnected && phase != SessionPhase::Faulted)
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "A session is already active")};
 
+      if (model.PendingServerRejectionCount() != 0)
+      {
+        auto published = Publish();
+        if (!published) return published;
+      }
+
+      if (!exchange.CanAcceptReplies())
+        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Drain command results before opening a session")};
+
       const auto requestId = exchange.NextRequestId();
       if (!requestId) return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Request IDs exhausted")};
 
@@ -62,7 +71,8 @@ public:
       lastRequest = *requestId;
       pendingChats.clear();
       model.ResetSession();
-      exchange.Publish(model);
+      auto published = Publish();
+      if (!published) return Fail(published.error());
 
       auto connected = transport->BeginConnect();
       if (!connected) return Fail(connected.error());
@@ -80,16 +90,13 @@ public:
       if (phase == SessionPhase::Connecting)
       {
         transport->Abort(DisconnectReason::ClientShutdown);
-        Clear(SessionPhase::Disconnected);
-        return {};
+        return Clear(SessionPhase::Disconnected);
       }
 
       auto result = transport->BeginDisconnect();
       if (!result) return Fail(result.error());
 
-      Clear(SessionPhase::Disconnecting);
-
-      return {};
+      return Clear(SessionPhase::Disconnecting);
     }
 
     // A caller-owned loop drives network work. No hidden threads or model callbacks.
@@ -140,19 +147,30 @@ private:
       exchange.PublishPhase(value);
     }
 
-    void Clear(SessionPhase value)
+    Result<void> Clear(SessionPhase value)
     {
       pendingChats.clear();
       model.ResetSession();
       phase = value;
-      exchange.Publish(model, true, phase);
+      auto published = Publish(true);
+      if (!published) SetPhase(SessionPhase::Faulted);
+      return published;
+    }
+
+    Result<void> Publish(bool requestSnapshot = false)
+    {
+      if (!exchange.Publish(model, requestSnapshot, phase))
+        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
+
+      return {};
     }
 
     Result<void> Fail(Error error)
     {
       if (transport) transport->Abort(DisconnectReason::ProtocolError);
 
-      Clear(SessionPhase::Faulted);
+      auto cleared = Clear(SessionPhase::Faulted);
+      if (!cleared) return cleared;
       return std::unexpected{std::move(error)};
     }
 
@@ -181,8 +199,7 @@ private:
 
     Result<void> Handle(ClientClosed&)
     {
-      Clear(SessionPhase::Disconnected);
-      return {};
+      return Clear(SessionPhase::Disconnected);
     }
 
     Result<void> Handle(ClientReceived& received)
@@ -217,9 +234,7 @@ private:
       if (!self) return std::unexpected{self.error()};
 
       phase = SessionPhase::Ready;
-      exchange.Publish(model, true, phase);
-
-      return {};
+      return Publish(true);
     }
 
     Result<void> Receive(ServerRejection& rejection)
@@ -234,8 +249,7 @@ private:
         // Opening was refused: the full terminal reply is already received.
         // Notify the peer best-effort, without racing its own graceful close.
         transport->Abort(DisconnectReason::ClientShutdown);
-        Clear(SessionPhase::Disconnected);
-        return {};
+        return Clear(SessionPhase::Disconnected);
       }
 
       if (phase != SessionPhase::Ready || pendingChats.erase(rejection.requestId) == 0) return Unexpected("request_id");
@@ -281,9 +295,7 @@ private:
       auto result = model.Apply(model.Generation(), value);
       if (!result) return std::unexpected{result.error()};
 
-      exchange.Publish(model);
-
-      return {};
+      return Publish();
     }
 
     Result<void> RejectCommand(std::uint64_t generation, const SendChat& command, CommandFailureCode code)
@@ -316,8 +328,7 @@ private:
 
     Result<void> Process(std::uint64_t, RequestSnapshot&)
     {
-      exchange.Publish(model, true);
-      return {};
+      return Publish(true);
     }
 
     static Result<void> UnsupportedCommand()
@@ -331,7 +342,8 @@ private:
 
     Result<void> ProcessCommands()
     {
-      exchange.TakeCommands(commands);
+      const auto openingReply = phase == SessionPhase::Connecting || phase == SessionPhase::Opening ? 1u : 0u;
+      exchange.TakeCommands(commands, pendingChats.size() + openingReply + model.PendingServerRejectionCount());
       Result<void> firstError;
 
       for (auto& queued : commands)
