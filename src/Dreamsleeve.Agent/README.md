@@ -81,3 +81,35 @@ python src/Dreamsleeve.Agent/docs/build.py
 The generated `docs/index.html` needs neither Python nor a server to open. Keep the bundled directory layout, including `examples`, when regenerating it.
 
 Run all suites: `python Scripts/run_tests.py`. [Test organization](../../tests/README.md).
+
+## Message addresses and background operations
+
+`agent.Ref` / `context.Ref` expose send-only AgentRef addresses. `Ref.Map(Constructor)`
+narrows an address to part of the receiver's protocol. Stateful wrappers expose
+command addresses too. IsNonDropping describes mailbox policy, not processing.
+
+From a base Agent handler, call `context.PipeToSelf(operation, toMessage)` to start
+tracked work and post its Result<_, exn> as a new message. Both functions run outside
+the mailbox: capture immutable inputs, never mutate actor-owned state. Use a
+non-dropping mailbox; bound outstanding work in the owning component. Abort/fault
+cancels work; Completion joins it before disposing lifetime resources. Operation
+errors become messages; mapping failures fault the agent, including during shutdown.
+
+Complete closes admission immediately, including background replies. To drain
+results, use an application Stop message and call context.Complete after accepted
+work and replies finish.
+Cancellation is cooperative; an operation ignoring it can delay Completion.
+
+For protocols requiring admission without dropping, call `Ref.TryReliable()`
+when wiring addresses. Some contains a `ReliableAgentRef`; None means an incompatible
+mailbox policy. `ReliableAgentRef.Map` preserves the guarantee. PostAsync returns
+only Posted/Closed/Canceled, asynchronously waiting when the mailbox is full.
+Shutdown can still discard unprocessed messages: Posted only acknowledges admission.
+
+The owner observes `child.Completion`, for example through PipeToSelf and a child
+termination message. Faults preserve the original exception; observation also works
+after the child has stopped. Restart means creating a new agent after Completion
+and updating consumer addresses. The library does not automatically restart agents,
+restore state or replay accepted commands. Stopped events are not replayed for late
+subscribers; OnStopped in options is installed before startup but runs before
+Completion settles.

@@ -276,6 +276,65 @@ module private AgentInternals =
             onDrop |> Option.iter (fun settle -> settle ())
         member _.Discard(reason) = onDiscard |> Option.iter (fun settle -> settle reason)
 
+/// Admission to a mailbox that waits for space and never evicts accepted messages.
+[<RequireQualifiedAccess>]
+type AgentDeliveryResult =
+    | Posted
+    | Closed
+    | Canceled
+
+/// An asynchronous send-only address, available only for non-dropping mailboxes.
+/// Posted acknowledges admission, not processing or persistence.
+[<Sealed>]
+type ReliableAgentRef<'Message> internal
+    (postAsync: 'Message -> CancellationToken -> Task<AgentDeliveryResult>) =
+
+    member _.PostAsync(message, ?cancellationToken: CancellationToken) =
+        postAsync message (defaultArg cancellationToken CancellationToken.None)
+
+    /// The mapping runs on the sender and must not access receiver-owned state.
+    member _.Map<'Input>(map: 'Input -> 'Message) =
+        ReliableAgentRef<'Input>(fun value token -> postAsync (map value) token)
+
+/// A send-only address. Admission is not processing or persistence acknowledgement.
+[<Sealed>]
+type AgentRef<'Message> internal
+    (reliable: bool,
+     tryPost: 'Message -> AgentPostResult,
+     postAsync: 'Message -> CancellationToken -> Task<AgentPostResult>) =
+
+    member _.IsNonDropping = reliable
+
+    member _.TryPost(message) = tryPost message
+
+    member _.PostAsync(message, ?cancellationToken: CancellationToken) =
+        postAsync message (defaultArg cancellationToken CancellationToken.None)
+
+    /// Validate mailbox policy once when wiring a protocol that requires reliable replies.
+    /// DropWrite, DropOldest and DropNewest cannot provide this address.
+    member _.TryReliable() =
+        if not reliable then
+            None
+        else
+            let deliver message token = task {
+                let! result = postAsync message token
+
+                match result with
+                | AgentPostResult.Posted -> return AgentDeliveryResult.Posted
+                | AgentPostResult.Closed -> return AgentDeliveryResult.Closed
+                | AgentPostResult.Canceled -> return AgentDeliveryResult.Canceled
+                | AgentPostResult.Full
+                | AgentPostResult.Dropped ->
+                    return invalidOp "Non-dropping PostAsync violated its admission contract."
+            }
+
+            Some (ReliableAgentRef<'Message>(deliver))
+
+    /// Narrow an address to one part of the receiving agent's protocol.
+    /// The mapping runs on the sender and must not access receiver-owned state.
+    member _.Map<'Input>(map: 'Input -> 'Message) =
+        AgentRef<'Input>(reliable, (map >> tryPost), fun value token -> postAsync (map value) token)
+
 /// <summary>
 /// Context passed to each message handler of a base agent, providing access to its lifecycle and self-messaging capabilities.
 /// </summary>
@@ -288,7 +347,9 @@ type AgentContext<'Message>
             tryPostImpl: 'Message -> AgentPostResult,
             postAsyncImpl: 'Message -> CancellationToken -> Task<AgentPostResult>,
             completeImpl: unit -> bool,
-            abortImpl: unit -> unit
+            abortImpl: unit -> unit,
+            startBackgroundImpl: (CancellationToken -> Task<unit>) -> unit,
+            reliableMailbox: bool
         ) =
 
     /// <summary>
@@ -296,8 +357,39 @@ type AgentContext<'Message>
     /// </summary>
     member _.Name = name
 
+    member _.Ref = AgentRef<'Message>(reliableMailbox, tryPostImpl, postAsyncImpl)
+
+    /// Call only from this agent's handler. The operation and mapper execute outside
+    /// the mailbox: capture immutable inputs, never mutate agent state there.
+    /// Results re-enter the mailbox; cancellation and exceptions are explicit results.
+    /// Requires a non-dropping mailbox. Completion waits for all launched work.
+    member _.PipeToSelf<'Result>
+        (operation: CancellationToken -> Task<'Result>, toMessage: Result<'Result, exn> -> 'Message) =
+        let deliver token = task {
+            let! result = task {
+                try
+                    let! value = operation token
+                    return Ok value
+                with error ->
+                    return Error error
+            }
+
+            if not token.IsCancellationRequested then
+                let! posted = postAsyncImpl (toMessage result) token
+
+                match posted with
+                | AgentPostResult.Posted
+                | AgentPostResult.Closed
+                | AgentPostResult.Canceled -> ()
+                | AgentPostResult.Full
+                | AgentPostResult.Dropped ->
+                    invalidOp "A background completion could not enter its non-dropping mailbox."
+        }
+
+        startBackgroundImpl deliver
+
     /// <summary>
-    /// A cancellation token that is triggered when the agent is aborted.
+    /// A cancellation token that is triggered when the agent is aborted or faults.
     /// Useful for passing to long-running asynchronous operations within the handler.
     /// Cancellation callbacks must return promptly and must not wait for this agent's Completion.
     /// </summary>
@@ -411,7 +503,14 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let requestImmediateStop reason =
         let selected, cancellation =
             lock lifecycleGate (fun () ->
-                if finishing || stopReason.IsSome then
+                // A completion mapper can fail while graceful shutdown joins work.
+                // Preserve that fault and cancel sibling work rather than reporting success.
+                let lateBackgroundFault =
+                    match stopReason, reason with
+                    | Some AgentStopReason.Completed, AgentStopReason.Faulted _ -> true
+                    | _ -> false
+
+                if (finishing || stopReason.IsSome) && not lateBackgroundFault then
                     false, None
                 else
                     stopReason <- Some reason
@@ -419,7 +518,8 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                     Interlocked.Exchange(&accepting, 0) |> ignore
                     let pendingCancellation =
                         match reason with
-                        | AgentStopReason.Aborted ->
+                        | AgentStopReason.Aborted
+                        | AgentStopReason.Faulted _ ->
                             let pending = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
                             // Reserve before closing the writer: a synchronous channel continuation
                             // may enter finish before CancelAsync has actually been called.
@@ -495,9 +595,35 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let postAsyncCore message token =
         postEnvelopeAsync (MailboxEnvelope(message, None, None, None)) token
 
+    // Only the handler adds work; finish reads after dispatch has stopped.
+    let background = ResizeArray<Task>()
+
+    let startBackground operation =
+        match options.Mailbox with
+        | AgentMailbox.Bounded(_, mode, _) when mode <> BoundedChannelFullMode.Wait ->
+            invalidOp "PipeToSelf requires an unbounded or bounded-wait mailbox."
+        | _ -> ()
+
+        background.RemoveAll(fun work -> work.IsCompleted) |> ignore
+
+        let runWork () : Task = task {
+            try
+                do! operation lifetimeToken
+            with error ->
+                requestImmediateStop (AgentStopReason.Faulted error)
+        }
+
+        background.Add(Task.Run(Func<Task>(runWork)))
+
+    let reliableMailbox =
+        match options.Mailbox with
+        | AgentMailbox.Unbounded _
+        | AgentMailbox.Bounded(_, BoundedChannelFullMode.Wait, _) -> true
+        | AgentMailbox.Bounded _ -> false
+
     let context =
         AgentContext<'Message>(
-            options.Name, lifetimeToken, tryPostCore, postAsyncCore, completeCore, abortCore)
+            options.Name, lifetimeToken, tryPostCore, postAsyncCore, completeCore, abortCore, startBackground, reliableMailbox)
 
     let signalStarted () =
         safeInvoke (fun () -> startedEvent.Trigger(options.Name))
@@ -527,13 +653,13 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
 
     let finish () =
         task {
-            let reason, callbacks =
+            let reason =
                 lock lifecycleGate (fun () ->
                     finishing <- true
                     Interlocked.Exchange(&accepting, 0) |> ignore
                     let reason = defaultArg stopReason AgentStopReason.Completed
                     stopReason <- Some reason
-                    reason, cancellationTask)
+                    reason)
 
             channel.Writer.TryComplete() |> ignore
             // The sole reader is now done dispatching. Drop references and settle queued requests.
@@ -546,8 +672,13 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                 | false, _ -> draining <- false
             termination.TrySetResult(reason) |> ignore
 
-            // Observe callback failures and finish every callback before disposing the CTS.
-            // They cannot replace an already selected stop reason or prevent shutdown.
+            do! Task.WhenAll(background)
+
+            // Joining work can escalate a graceful stop to a background mapper fault.
+            // Capture cancellation after the join so its callbacks cannot outlive the CTS.
+            let reason, callbacks =
+                lock lifecycleGate (fun () -> defaultArg stopReason reason, cancellationTask)
+
             try do! callbacks with _ -> ()
             lock lifecycleGate (fun () -> lifetime.Dispose())
 
@@ -662,6 +793,9 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
 
     /// <summary>The configured agent name.</summary>
     member _.Name = options.Name
+
+    /// Send-only address; does not expose lifecycle operations.
+    member _.Ref = context.Ref
 
     /// <summary>
     /// Completes after dispatch, queue cleanup, cancellation callbacks, and stopped callbacks finish.
@@ -871,7 +1005,7 @@ type StatefulAgentContext
     member _.Name = name
 
     /// <summary>
-    /// A cancellation token that is triggered when the underlying agent is aborted.
+    /// A cancellation token that is triggered when the underlying agent is aborted or faults.
     /// </summary>
     member _.CancellationToken = cancellationToken
 
@@ -950,6 +1084,8 @@ type StatefulAgent<'State, 'Command>
     /// The configured stateful agent name.
     /// </summary>
     member _.Name = inner.Name
+
+    member _.Ref = inner.Ref.Map(Command)
 
     /// <summary>
     /// A task that completes when the stateful agent has fully stopped.
@@ -1269,6 +1405,8 @@ type MutableStatefulAgent<'State, 'Command>
     /// The configured mutable stateful agent name.
     /// </summary>
     member _.Name = inner.Name
+
+    member _.Ref = inner.Ref.Map(Command)
 
     /// <summary>
     /// A task that completes when the mutable stateful agent has fully stopped.

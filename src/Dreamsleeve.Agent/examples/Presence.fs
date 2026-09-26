@@ -16,6 +16,19 @@ type PresenceCommand =
     | Upsert of PlayerPresence
     | Remove of playerId: uint64 * ReplyChannel<bool>
 
+let private handle (_: StatefulAgentContext) (players: Dictionary<uint64, PlayerPresence>) command = task {
+    match command with
+    | Upsert player -> players[player.PlayerId] <- player
+    | Remove (playerId, reply) -> reply.Reply(players.Remove playerId)
+
+    return MutableStatefulTransition.Stay
+}
+
+let private snapshot (players: Dictionary<uint64, PlayerPresence>) =
+    players.Values
+    |> Seq.sortBy (fun player -> player.PlayerId)
+    |> Seq.toArray
+
 let run () = task {
     let options =
         { MutableStatefulAgentOptions.create "presence" with
@@ -26,14 +39,7 @@ let run () = task {
 
     // The dictionary belongs exclusively to the agent from this point onward.
     use presence =
-        MutableStatefulAgent<Dictionary<uint64, PlayerPresence>, PresenceCommand>.Start(
-            options, Dictionary<uint64, PlayerPresence>(),
-            fun _ players command -> task {
-                match command with
-                | Upsert player -> players[player.PlayerId] <- player
-                | Remove (playerId, reply) -> reply.Reply(players.Remove playerId)
-                return MutableStatefulTransition.Stay
-            })
+        MutableStatefulAgent.Start(options, Dictionary<uint64, PlayerPresence>(), handle)
 
     let! posted =
         presence.PostAsync(Upsert
@@ -46,11 +52,7 @@ let run () = task {
 
     // Materialize INSIDE the agent: no live Dictionary/Values/seq escapes.
     // Each element is immutable, and the returned array is an independent copy.
-    let! snapshot =
-        presence.ReadAsync(fun players ->
-            players.Values
-            |> Seq.sortBy (fun player -> player.PlayerId)
-            |> Seq.toArray)
+    let! snapshot = presence.ReadAsync snapshot
 
     let! removed = presence.AskAsync(fun reply -> Remove (7UL, reply))
     let! count = presence.ReadAsync(fun players -> players.Count)

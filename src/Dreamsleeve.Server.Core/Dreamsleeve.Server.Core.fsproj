@@ -9,9 +9,11 @@
     <ItemGroup>
         <Compile Include="Config.fs" />
         <Compile Include="ChatCodec.fs" />
+        <Compile Include="ProfileStore.fs" />
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="../Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
       <ProjectReference Include="../Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
       <ProjectReference Include="../Dreamsleeve.Protocol.Dotnet/Dreamsleeve.Protocol.Dotnet.csproj" />
       <PackageReference Include="yENet" Version="1.2.1" />

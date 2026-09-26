@@ -6,7 +6,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Database.fs" />
+        <Compile Include="MemoryProfileStore.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />
     </ItemGroup>
 
 </Project>

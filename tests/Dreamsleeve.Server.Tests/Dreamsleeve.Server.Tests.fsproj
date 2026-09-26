@@ -8,9 +8,12 @@
     <Compile Include="DomainTests.fs" />
     <Compile Include="AgentTests.fs" />
     <Compile Include="CodecTests.fs" />
+    <Compile Include="BackgroundTests.fs" />
+    <Compile Include="ProfileStoreTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/Dreamsleeve.Server.Infrastructure/Dreamsleeve.Server.Infrastructure.fsproj" />
     <ProjectReference Include="../../src/Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
     <ProjectReference Include="../../src/Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
     <ProjectReference Include="../../src/Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />

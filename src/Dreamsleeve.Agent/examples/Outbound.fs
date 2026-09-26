@@ -8,6 +8,17 @@ type OutboundCommand =
     | Send of recipient: string * text: string
     | SendAndConfirm of recipient: string * text: string * ReplyChannel<unit>
 
+let private handle (send: string -> string -> Task) (context: AgentContext<OutboundCommand>) command = task {
+    context.CancellationToken.ThrowIfCancellationRequested()
+
+    match command with
+    | Send (recipient, text) ->
+        do! send recipient text
+    | SendAndConfirm (recipient, text, reply) ->
+        do! send recipient text
+        reply.Reply ()
+}
+
 let run () = task {
     let options =
         { AgentOptions.create "outbound" with
@@ -20,17 +31,7 @@ let run () = task {
         printfn "outbound: %s <- %s" recipient text
         Task.CompletedTask
 
-    use agent =
-        Agent<OutboundCommand>.Start(options, fun ctx command -> task {
-            ctx.CancellationToken.ThrowIfCancellationRequested()
-
-            match command with
-            | Send (recipient, text) ->
-                do! send recipient text
-            | SendAndConfirm (recipient, text, reply) ->
-                do! send recipient text
-                reply.Reply ()
-        })
+    use agent = Agent.Start(options, handle send)
 
     let! posted = agent.PostAsync(Send ("global", "hello"))
 
