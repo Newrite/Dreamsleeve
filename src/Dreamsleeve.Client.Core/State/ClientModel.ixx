@@ -3,6 +3,7 @@ export module Dreamsleeve.Client.Model;
 import std;
 
 export import Dreamsleeve.Client.ChatCache;
+export import Dreamsleeve.Client.Changes;
 export import Dreamsleeve.Client.PlayerStore;
 
 export namespace Dreamsleeve::Client
@@ -119,7 +120,7 @@ export namespace Dreamsleeve::Client
   };
 
   // All methods, including Snapshot/Generation, belong to one serial owner.
-  // Publish only the resulting detached snapshot to game/UI threads.
+  // Resolve ChangeBatch on that owner; publish only detached values/snapshots.
   class ClientModel final
   {
 public:
@@ -145,6 +146,7 @@ public:
 
       chats.emplace(channelId, std::move(*cache));
       ++revision;
+      MarkChat(channelId);
       return {};
     }
 
@@ -156,6 +158,7 @@ public:
       }
 
       ++revision;
+      MarkChat(channelId);
       return true;
     }
 
@@ -183,6 +186,7 @@ public:
       {
         historyRound = *result;
         ++revision;
+        MarkChat(channelId);
       }
       return result;
     }
@@ -202,6 +206,7 @@ public:
         // A successful operation advances revision even if it was an idempotent
         // duplicate. This is a local publication marker, not a server sequence.
         ++revision;
+        std::visit([this](const auto& value) { MarkUpdate(value); }, update);
       }
       return result;
     }
@@ -219,6 +224,7 @@ public:
       }
       ++generation;
       ++revision;
+      RequireSnapshot();
     }
 
     // Use for a server switch or an announced reset of server identity/history.
@@ -230,11 +236,41 @@ public:
       selfPlayerId.reset();
       ++generation;
       ++revision;
+      RequireSnapshot();
     }
 
     std::uint64_t Generation() const noexcept
     {
       return generation;
+    }
+
+    std::optional<PlayerId> SelfPlayerId() const noexcept
+    {
+      return selfPlayerId;
+    }
+
+    std::optional<Player> FindPlayer(PlayerId playerId) const
+    {
+      return players.Find(playerId);
+    }
+
+    std::optional<ChatCacheSnapshot> FindChat(ChatChannelId channelId) const
+    {
+      const auto found = chats.find(channelId);
+      if (found == chats.end()) return std::nullopt;
+      return found->second.Snapshot();
+    }
+
+    // One owner drains once, resolves the invalidations, then distributes owning
+    // payloads to consumers. Drain regularly, even when no UI is subscribed.
+    // Reuse the same output: its previous contents are replaced, and the two
+    // sets of vector buffers are exchanged without allocating or copying data.
+    void TakeChanges(ChangeBatch& output) noexcept
+    {
+      output.Clear();
+      std::swap(output, pendingChanges);
+      output.generation = generation;
+      output.revision   = revision;
     }
 
     // Owner-only drain. Forward these owning events through the application's
@@ -260,6 +296,71 @@ public:
     }
 
 private:
+
+    void RequireSnapshot() noexcept
+    {
+      pendingChanges.Clear();
+      pendingChanges.requiresSnapshot = true;
+    }
+
+    template <class Id>
+    void MarkId(std::vector<Id>& ids, Id id)
+    {
+      if (std::ranges::find(ids, id) != ids.end())
+      {
+        return;
+      }
+
+      ids.push_back(id);
+    }
+
+    void MarkPlayer(PlayerId playerId)
+    {
+      if (!pendingChanges.requiresSnapshot && !pendingChanges.playersReplaced)
+      {
+        MarkId(pendingChanges.players, playerId);
+      }
+    }
+
+    void MarkChat(ChatChannelId channelId)
+    {
+      if (!pendingChanges.requiresSnapshot)
+      {
+        MarkId(pendingChanges.chats, channelId);
+      }
+    }
+
+    template <class Update>
+    void MarkUpdate(const Update& update)
+    {
+      if (pendingChanges.requiresSnapshot) return;
+
+      if constexpr (std::is_same_v<Update, SelfPlayerAssigned>)
+      {
+        pendingChanges.selfPlayerChanged = true;
+      }
+      else if constexpr (std::is_same_v<Update, OnlinePlayersReplaced>)
+      {
+        pendingChanges.players.clear();
+        pendingChanges.playersReplaced = true;
+      }
+      else if constexpr (std::is_same_v<Update, PlayerUpserted>)
+      {
+        MarkPlayer(update.player.data.playerId);
+      }
+      else if constexpr (std::is_same_v<Update, ChatMessagesReceived>)
+      {
+        MarkChat(update.channelId);
+      }
+      else if constexpr (std::is_same_v<Update, ChatHistoryReceived>)
+      {
+        MarkChat(update.page.channelId);
+      }
+      else if constexpr (!std::is_same_v<Update, ServerRejection>)
+      {
+        MarkPlayer(update.playerId);
+      }
+    }
 
     Domain::OperationResult ApplyOne(const SelfPlayerAssigned& update)
     {
@@ -356,6 +457,7 @@ private:
     std::map<ChatChannelId, ChatCache> chats;
     std::vector<ServerRejectionEvent>  serverRejections;
     std::optional<PlayerId>            selfPlayerId;
+    ChangeBatch                        pendingChanges;
     std::uint64_t                      generation{1};
     std::uint64_t                      revision{};
     std::uint64_t                      historyRound{};
