@@ -43,8 +43,10 @@ TEST_CASE("ChangeBatch.Clear resets markers and retains reusable buffers")
   CHECK(changes.Empty());
   changes.players.reserve(64);
   changes.chats.reserve(32);
+  changes.resetChats.reserve(16);
   const auto playerCapacity = changes.players.capacity();
   const auto chatCapacity = changes.chats.capacity();
+  const auto resetCapacity = changes.resetChats.capacity();
   changes.generation = 4;
   changes.revision = 9;
   changes.requiresSnapshot = true;
@@ -52,6 +54,7 @@ TEST_CASE("ChangeBatch.Clear resets markers and retains reusable buffers")
   changes.playersReplaced = true;
   changes.players.push_back(7);
   changes.chats.push_back(1);
+  changes.resetChats.push_back(1);
 
   changes.Clear();
 
@@ -63,9 +66,11 @@ TEST_CASE("ChangeBatch.Clear resets markers and retains reusable buffers")
   CHECK_FALSE(changes.playersReplaced);
   CHECK(changes.players.empty());
   CHECK(changes.chats.empty());
+  CHECK(changes.resetChats.empty());
   CHECK(changes.chatContent.empty());
   CHECK(changes.players.capacity() == playerCapacity);
   CHECK(changes.chats.capacity() == chatCapacity);
+  CHECK(changes.resetChats.capacity() == resetCapacity);
 }
 
 TEST_CASE("ClientModel coalesces changes and exposes detached targeted queries")

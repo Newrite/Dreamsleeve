@@ -47,13 +47,18 @@ export namespace Dreamsleeve::Client
     // ordinary incoming messages do not mark this list.
     std::vector<Domain::ChatChannelId> chats;
 
+    // Subset of chats registered since the last drain. If still present,
+    // clear the recipient's old contents before applying chatContent.
+    std::vector<Domain::ChatChannelId> resetChats;
+
     // Exact visible cache transitions. Unlike invalidations, these are ordered:
     // applying them in sequence reproduces the native chat cache contents.
     std::vector<ChatContentChange> chatContent;
 
     bool Empty() const noexcept
     {
-      return !requiresSnapshot && !selfPlayerChanged && !playersReplaced && players.empty() && chats.empty() && chatContent.empty();
+      return !requiresSnapshot && !selfPlayerChanged && !playersReplaced && players.empty() && chats.empty() && resetChats.empty() &&
+             chatContent.empty();
     }
 
     // Keep allocated top-level storage for the next owner iteration. Nested
@@ -67,6 +72,7 @@ export namespace Dreamsleeve::Client
       playersReplaced   = false;
       players.clear();
       chats.clear();
+      resetChats.clear();
       chatContent.clear();
     }
   };

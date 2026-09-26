@@ -23,10 +23,10 @@ Skyrim, PrismaUI, работающий сервер и база данных н�
 
 | Проект | Фреймворк | Наборы |
 |---|---|---|
-| `Dreamsleeve.Client.Tests` | doctest, цель xmake | DreamNet.Address/Packet/Runtime/Network/Client; Client.Domain/State/Changes |
+| `Dreamsleeve.Client.Tests` | doctest, цель xmake | DreamNet.Address/Packet/Runtime/Network/Client; Client.Domain/State/Changes/StateUpdate |
 | `Dreamsleeve.Server.Tests` | Expecto + Faqt, F# executable | Dreamsleeve.Server.Domain (41), Dreamsleeve.Agent (28) |
 
-C++: 115 сценариев, включая 44 перенесённых из архивов. F#: 69 сценариев.
+C++: 121 сценарий, включая 44 перенесённых из архивов и 6 проверок StateUpdate. F#: 69 сценариев.
 Нативные файлы используют именованные doctest suites вместо лишнего второго
 аргумента TEST_CASE с псевдотегом. F# Agent и Domain объединены одним entry point.
 Agent сохраняет последовательное выполнение, gates и 15-секундный предел на
@@ -83,4 +83,5 @@ dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-
 - Проверки транспорта используют loopback и ограниченные ожидания; UI/игровая
   интеграция и межъязыковой echo не входят в нынешнюю проверенную сборку.
 
-Проверено на Windows/MSVC и .NET 10: 115/115 native, 69/69 managed.
+Проверено на Windows/MSVC: 121/121 native. Последний прогон .NET 10 при объединении
+проектов: 69/69 managed; шаг StateUpdate меняет только C++-код.

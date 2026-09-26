@@ -146,7 +146,7 @@ public:
 
       chats.emplace(channelId, std::move(*cache));
       ++revision;
-      MarkChatState(channelId);
+      MarkChatState(channelId, true);
       return {};
     }
 
@@ -255,6 +255,11 @@ public:
       return players.Find(playerId);
     }
 
+    std::vector<Player> SnapshotPlayers() const
+    {
+      return players.Snapshot();
+    }
+
     std::optional<ChatCacheSnapshot> FindChat(ChatChannelId channelId) const
     {
       const auto found = chats.find(channelId);
@@ -326,11 +331,12 @@ private:
       }
     }
 
-    void MarkChatState(ChatChannelId channelId)
+    void MarkChatState(ChatChannelId channelId, bool resetContent = false)
     {
       if (!pendingChanges.requiresSnapshot)
       {
         MarkId(pendingChanges.chats, channelId);
+        if (resetContent) MarkId(pendingChanges.resetChats, channelId);
       }
     }
 
