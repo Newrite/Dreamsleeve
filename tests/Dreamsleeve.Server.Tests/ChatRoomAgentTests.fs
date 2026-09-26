@@ -258,4 +258,42 @@ let tests = testList "ChatRoomAgent" [
         expectStopFault expected room.StopReason
     })
 
+    case "history eviction preserves detached snapshots and reports a cursor gap" (fun () -> task {
+        let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
+        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = Agent.Start(AgentOptions.create "player", collect events)
+        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        let subscriber = subscription 1UL player
+        do! post room (ChatRoomCommand.Join subscriber)
+        let! _ = receive events
+        for requestId in 1UL..4UL do
+            do! publish room subscriber requestId $"message {requestId}"
+            let! message = receive events
+            accepted requestId message |> ignore
+
+        do! post room (ChatRoomCommand.Join subscriber)
+        let! response = receive events
+        let snapshot = joined response
+        let ids messages = messages |> List.map (fun (message: ChatMessage) -> ChatMessageId.value message.MessageId)
+        equal 2 snapshot.HistoryCapacity
+        equal (Set.singleton subscriber.Profile.PlayerId) snapshot.Players
+        equal [3UL; 4UL] (ids snapshot.Messages)
+
+        let cursor = ChatMessageId.create 1UL |> ok
+        let! result = room.AskAsync(fun reply -> ChatRoomCommand.ReadHistory(ValueSome cursor, 1, reply)) |> awaitResult
+        let page = ok result
+        equal [3UL] (ids page.Messages)
+        check page.HasGap "Evicted messages before this page were not reported."
+        check page.HasMore "The retained fourth message was not reported."
+        equal (ValueSome(ChatMessageId.create 3UL |> ok)) page.NextCursor
+
+        do! publish room subscriber 5UL "fifth"
+        let! _ = receive events
+        let! current = history room
+        equal [4UL; 5UL] (ids current.Messages)
+        equal [3UL; 4UL] (ids snapshot.Messages)
+        equal [3UL] (ids page.Messages)
+        do! stop room
+    })
+
 ]

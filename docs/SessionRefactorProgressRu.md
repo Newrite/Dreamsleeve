@@ -10,7 +10,7 @@
 | 3. Владелец публикации | Готово | ChatRoom: 8/8. Канал назначает ID/время, хранит историю и делает fanout; один authoritative event автору. Саморевью и агентское ревью: SlowConsumer изолирован, порядок snapshot/delta, cleanup ack после удаления, независимые ID каналов. |
 | 4. Онлайн и персональный bootstrap | Готово | Presence 5/5, PlayerSession 9/9. Оба порядка снимков, bootstrap quota, персональный pending, Stop/Detach, reserve denial. Ревью исправило control-классификацию собственных ответов и duplicate RequestId до проверки канала. |
 | 5. Таблица и runtime | Готово | Runtime 9/9: резерв PlayerId, cleanup, поздний profile reply, один deadline, отказ зависимости, reconnect и чат. Полный текущий managed-прогон 202/202. Независимое ревью подтвердило cleanup barrier и потребовало сохранять fault источника при shutdown — исправлено. |
-| 6. Удаление старого пути | Ожидает | |
+| 6. Удаление старого пути | Готово | Удалены 4 старых реализации и 4 привязанных к ним тестовых файла. Перенесены история/курсор, telemetry snapshots, повторный Begin и отказы профилей; причина ProfileStoreError.Failed сохранена в диагностике. Актуализированы README/доки; текущая интеграционная suite 177/177. |
 | 7. ENet и Client.Dev | Ожидает | |
 | 8. Измерения | Ожидает | |
 

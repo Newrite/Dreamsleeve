@@ -257,20 +257,49 @@ let tests = testList "PlayerSession" [
             equal 0 fixture.Host.Reader.Count
         }))
 
-    case "player telemetry remains local to the ready session" (fun () ->
+    case "player owns detached telemetry across character changes" (fun () ->
         withPlayer options (fun fixture -> task {
             let! profile, _, _ = ready fixture
-            let name = CharacterName.create 64 "Nerevar" |> ok
-            do! post fixture.Player (PlayerSessionMessage.Update(PlayerUpdate.BeginCharacter name))
-            let! state = read fixture.Player
-            equal profile (ok state).Data
-            equal (ValueSome name) (ok state).CharacterName
-            do! post fixture.Player (PlayerSessionMessage.Update PlayerUpdate.LeaveGame)
-            let! empty = read fixture.Player
-            equal ValueNone (ok empty).CharacterName
+            let name = CharacterName.create 128 "Nerevar" |> ok
+            let key = ActorValueKey.create 128 "skyrim:health" |> ok
+            let health value =
+                ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok)
+                    (ActorValueState.resource value 100.0f |> ok)
+            let form = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)
+            let location = PlayerLocation.create
+                               (Location.create form (LocationName.create 128 "Whiterun" |> ok))
+                               (Position.create 1.0f 2.0f 3.0f |> ok) Rotation.zero
+            let update value = post fixture.Player (PlayerSessionMessage.Update value)
+
+            do! update (PlayerUpdate.BeginCharacter name)
+            do! update (PlayerUpdate.SetLocation location)
+            do! update (PlayerUpdate.SetActorValues [key, health 80.0f])
+            let! first = read fixture.Player
+            let first = ok first
+            equal profile first.Data
+            equal (ValueSome name) first.CharacterName
+            equal (ValueSome location) first.Location
+
+            do! update (PlayerUpdate.SetActorValues [key, health 20.0f])
+            let! second = read fixture.Player
+            equal (health 20.0f) (ok second).ActorValues[key]
+            equal (health 80.0f) first.ActorValues[key]
+
+            // Loading another save with the same character name clears its old telemetry.
+            do! update (PlayerUpdate.BeginCharacter name)
+            let! fresh = read fixture.Player
+            let fresh = ok fresh
+            equal (ValueSome name) fresh.CharacterName
+            equal ValueNone fresh.Location
+            equal Map.empty fresh.ActorValues
+            do! update PlayerUpdate.LeaveGame
+            let! cleared = read fixture.Player
+            equal { fresh with CharacterName = ValueNone } (ok cleared)
+            equal 0 fixture.Host.Reader.Count
             do! post fixture.Player PlayerSessionMessage.Stop
             do! finish fixture
         }))
+
     case "duplicate pending ID on another channel closes without settling the original as a refusal" (fun () ->
         withPlayer options (fun fixture -> task {
             let! _, _, _ = ready fixture
@@ -289,5 +318,55 @@ let tests = testList "PlayerSession" [
             do! finish fixture
             equal 0 fixture.Host.Reader.Count
         }))
+
+    case "duplicate Begin cannot issue a second profile request" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! _ = receive fixture.Profiles
+            do! post fixture.Player PlayerSessionMessage.Begin
+            let! state = read fixture.Player
+            equal (Error PlayerStateError.NotReady) state
+            equal 0 fixture.Profiles.Reader.Count
+        }))
+
+    case "failed profile resolution reports its original diagnostic and closes only this session" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! query = receive fixture.Profiles
+            let expected = InvalidOperationException("profile database operation failed")
+            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Error (ProfileStoreError.Failed expected) }
+            let! command = receive fixture.Host
+            match command with
+            | SessionHostCommand.Close(connectionId, reason) ->
+                equal fixture.Request.ConnectionId connectionId
+                check (reason.Contains expected.Message) "Original operation failure was lost."
+                check (reason.Contains(expected.GetType().Name)) "Failure type was lost."
+            | other -> failwithf "Expected profile failure: %A" other
+            let! _ = terminal fixture.Player.Completion
+            equal 0 fixture.Chat.Reader.Count
+            equal 0 fixture.Presence.Reader.Count
+        }))
+
+    case "a closed profile destination cannot leave opening waiting forever" (fun () -> task {
+        let queries, chatCommands, presenceCommands, hostCommands =
+            Channel.CreateUnbounded<ProfileRequest>(), Channel.CreateUnbounded<ChatRoomCommand>(),
+            Channel.CreateUnbounded<PresenceCommand>(), Channel.CreateUnbounded<SessionHostCommand>()
+        use profiles = Agent.Start(AgentOptions.create "closed-profiles", collect queries)
+        profiles.Complete() |> ignore
+        do! awaitUnit profiles.Completion
+        use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
+        use presence = Agent.Start(AgentOptions.create "presence", collect presenceCommands)
+        use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
+        let request = {
+            ConnectionId = Guid.NewGuid(); RequestId = 1UL
+            Username = Username.create 32 "closed" |> ok
+            DisplayName = DisplayName.create 64 "Closed" |> ok
+        }
+        use player = PlayerSession.start options globalId
+                         (profiles.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+                         (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
+        let! failure = terminal player.Completion
+        check failure.IsSome "Closed dependency should terminate this session observably."
+        equal 0 chatCommands.Reader.Count
+        equal 0 presenceCommands.Reader.Count
+    })
 
 ]

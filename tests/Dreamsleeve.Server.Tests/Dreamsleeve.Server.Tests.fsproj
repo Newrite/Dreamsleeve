@@ -13,13 +13,9 @@
     <Compile Include="AdmissionTests.fs" />
     <Compile Include="LifetimeTests.fs" />
     <Compile Include="ProfileStoreTests.fs" />
-    <Compile Include="ChatAgentTests.fs" />
-    <Compile Include="PlayerAgentTests.fs" />
-    <Compile Include="SessionRegistryTests.fs" />
-    <Compile Include="ChatFlowTests.fs" />
+    <Compile Include="PlayerSessionTests.fs" />
     <Compile Include="ChatRoomAgentTests.fs" />
     <Compile Include="PresenceAgentTests.fs" />
-    <Compile Include="PlayerSessionTests.fs" />
     <Compile Include="ServerRuntimeTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

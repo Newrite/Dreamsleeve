@@ -142,8 +142,12 @@ module PlayerSession =
 
             | Error ProfileStoreError.UsernameTaken, _ ->
                 rejectOpening options request state context RequestRejectionCode.UsernameTaken "Username is taken."
-            | Error (ProfileStoreError.IdExhausted | ProfileStoreError.Canceled | ProfileStoreError.Failed _), _ ->
-                close request state context "Profile resolution failed."
+            | Error ProfileStoreError.IdExhausted, _ ->
+                close request state context "Profile ID allocation is exhausted."
+            | Error ProfileStoreError.Canceled, _ ->
+                close request state context "Profile resolution was canceled."
+            | Error (ProfileStoreError.Failed error), _ ->
+                close request state context $"Profile resolution failed: {error}"
             | Ok (ProfileOutcome.Found _ | ProfileOutcome.Created _), _
             | Ok (ProfileOutcome.Resolved _), None ->
                 close request state context "Unexpected profile reply."

@@ -16,17 +16,13 @@
         <Compile Include="PlayerSession.fs" />
         <Compile Include="SessionTable.fs" />
         <Compile Include="ServerRuntime.fs" />
-        <Compile Include="ChatAgent.fs" />
-        <Compile Include="PlayerAgent.fs" />
-        <Compile Include="ChatPublication.fs" />
-        <Compile Include="SessionRegistry.fs" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="../Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
-      <ProjectReference Include="../Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
-      <ProjectReference Include="../Dreamsleeve.Protocol.Dotnet/Dreamsleeve.Protocol.Dotnet.csproj" />
-      <PackageReference Include="yENet" Version="1.2.1" />
+        <ProjectReference Include="../Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
+        <ProjectReference Include="../Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
+        <ProjectReference Include="../Dreamsleeve.Protocol.Dotnet/Dreamsleeve.Protocol.Dotnet.csproj" />
+        <PackageReference Include="yENet" Version="1.2.1" />
     </ItemGroup>
 
 </Project>

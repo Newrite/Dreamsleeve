@@ -1,6 +1,6 @@
 # Технический handbook проекта MMO Chat / Social Server
 
-> Статус на 26.09.2026: справочник и примеры, не перечень готовых подсистем.
+> Статус на 27.09.2026: справочник и примеры, не перечень готовых подсистем.
 > [Текущие решения](CurrentStateRu.md) определяют MVP и имеют приоритет над
 > ранними примерами ниже. Тесты находятся в `tests`, общий запуск:
 > `python Scripts/run_tests.py`.
@@ -9,8 +9,9 @@
 
 Сервер — F#/.NET 10+, yENet 1.2.1, домен с UMX и агенты Channels/Task.
 Клиент — C++23/MSVC/xmake, native ENet 1.3.18; Core независим от Skyrim,
-Client предназначен для SKSE/PrismaUI. Codec сессии/чата реализован, runtime и обработчики сессии
-ещё не подключены. Server сейчас содержит заглушку запуска.
+Client предназначен для SKSE/PrismaUI. Кодеки и ENet runtime подключены на обеих
+сторонах; сервер запускает PlayerSession, ChatRoomAgent и PresenceAgent.
+Актуальные контракты: [Server.Core](../src/Dreamsleeve.Server.Core/README.ru.md).
 
 Protobuf генерируется `Scripts/generate_protocol.py` из `Protocol/*.proto`
 в Native и Dotnet проекты; схемы — DisconnectReason и chat.proto.
@@ -18,8 +19,10 @@ Protobuf генерируется `Scripts/generate_protocol.py` из `Protocol/
 Grpc.Tools из ранних примеров не подключён к текущему csproj.
 
 SQLite + SqlHydra/Fling/Migrondi — ранее выбранный проект хранения;
-LiteDB обсуждалась, окончательная замена не принята. Infrastructure — заглушка.
-Логирование/конфигурация F# и HTTP-админка ниже также описывают дальнейшие шаги.
+LiteDB обсуждалась, окончательная замена не принята. Infrastructure содержит
+MemoryProfileStore и адаптер ENet; долговременной БД пока нет. Server загружает
+JSON при старте. Примеры расширенного логирования, hot reload и HTTP-админки ниже
+описывают последующие возможности.
 Текущие зависимости надо сверять с fsproj/csproj и xmake.lua.
 
 Тесты: `tests/Dreamsleeve.Client.Tests` (doctest) и
