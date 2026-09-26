@@ -20,6 +20,7 @@
     <Compile Include="ChatRoomAgentTests.fs" />
     <Compile Include="PresenceAgentTests.fs" />
     <Compile Include="PlayerSessionTests.fs" />
+    <Compile Include="ServerRuntimeTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

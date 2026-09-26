@@ -14,6 +14,8 @@
         <Compile Include="ChatRoomAgent.fs" />
         <Compile Include="PresenceAgent.fs" />
         <Compile Include="PlayerSession.fs" />
+        <Compile Include="SessionTable.fs" />
+        <Compile Include="ServerRuntime.fs" />
         <Compile Include="ChatAgent.fs" />
         <Compile Include="PlayerAgent.fs" />
         <Compile Include="ChatPublication.fs" />
