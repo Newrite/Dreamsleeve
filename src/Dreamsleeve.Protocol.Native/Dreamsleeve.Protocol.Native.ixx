@@ -32,6 +32,7 @@ export namespace Protocol::Chat
     UsernameTaken      = 4,
     ChannelNotFound    = 5,
     NotChannelMember   = 6,
+    Overloaded         = 7,
   };
 
 }

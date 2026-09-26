@@ -282,6 +282,11 @@ TEST_CASE("Rejection codes share protobuf names and retain future signed enum va
   REQUIRE(decoded);
   CHECK(std::get<ServerRejection>(*decoded).code == RequestRejectionCode::UsernameTaken);
 
+  rejected->set_code(P::REQUEST_REJECTION_CODE_OVERLOADED);
+  auto overloaded = codec.Decode(Bytes(packet));
+  REQUIRE(overloaded);
+  CHECK(std::get<ServerRejection>(*overloaded).code == RequestRejectionCode::Overloaded);
+
   for (const auto code : {0x7FFF0001, -1})
   {
     rejected->set_code(static_cast<P::RequestRejectionCode>(code));

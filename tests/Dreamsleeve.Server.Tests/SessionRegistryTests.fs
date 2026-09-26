@@ -19,6 +19,7 @@ let private config = {
     PlayerMailboxCapacity = 4
     MaxPendingPerPlayer = 8
     MaxPendingChannelRequests = 16
+    MaxPendingChatRequests = 16
     MaxPendingOutput = 64
 }
 let private chatConfig = { MailboxCapacity = 2; HistoryCapacity = 2; MaxPendingReplies = 4 }
@@ -65,7 +66,7 @@ let private openRequest name : SessionOpenRequest = {
 let private player (request: SessionOpenRequest) =
     PlayerData.create (PlayerId.create 42UL |> ok) request.Username request.DisplayName
 
-let private opened request = function
+let private opened (request: SessionOpenRequest) = function
     | SessionOutput.Send(connectionId, ChatResponse.SessionOpened(requestId, welcome)) ->
         equal request.ConnectionId connectionId
         equal request.RequestId requestId
@@ -73,7 +74,7 @@ let private opened request = function
         welcome
     | other -> failwithf "Expected SessionOpened: %A" other
 
-let private rejected request code = function
+let private rejected (request: SessionOpenRequest) code = function
     | SessionOutput.Send(connectionId, ChatResponse.RequestRejected(requestId, rejection)) ->
         equal request.ConnectionId connectionId
         equal request.RequestId requestId

@@ -4,5 +4,5 @@ open Expecto
 
 [<EntryPoint>]
 let main argv =
-    testList "Tests" [ DomainTests.tests; AgentTests.tests; CodecTests.tests; BackgroundTests.tests; OutboxTests.tests; LifetimeTests.tests; ProfileStoreTests.tests; ChatAgentTests.tests; PlayerAgentTests.tests; SessionRegistryTests.tests ]
+    testList "Tests" [ DomainTests.tests; AgentTests.tests; CodecTests.tests; BackgroundTests.tests; OutboxTests.tests; LifetimeTests.tests; ProfileStoreTests.tests; ChatAgentTests.tests; PlayerAgentTests.tests; SessionRegistryTests.tests; ChatFlowTests.tests ]
     |> runTestsWithCLIArgs [] argv

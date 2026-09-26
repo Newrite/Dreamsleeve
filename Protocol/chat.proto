@@ -75,6 +75,7 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_USERNAME_TAKEN = 4; // Requested username is already reserved.
   REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND = 5; // Requested channel does not exist.
   REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER = 6; // Sender may not publish to this channel.
+  REQUEST_REJECTION_CODE_OVERLOADED = 7; // Request was not admitted; the session remains usable.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

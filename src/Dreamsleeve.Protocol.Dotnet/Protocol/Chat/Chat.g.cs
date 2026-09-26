@@ -56,7 +56,7 @@ namespace Dreamsleeve.Protocol.Chat {
             "ZXZlLlByb3RvY29sLkNoYXQuUGxheWVyUHJvZmlsZSIfCgpQbGF5ZXJMZWZ0",
             "EhEKCXBsYXllcl9pZBgBIAEoBCJwCg9SZXF1ZXN0UmVqZWN0ZWQSPQoEY29k",
             "ZRgBIAEoDjIvLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUmVxdWVzdFJl",
-            "amVjdGlvbkNvZGUSDwoHbWVzc2FnZRgCIAEoCRINCgVmaWVsZBgDIAEoCSrR",
+            "amVjdGlvbkNvZGUSDwoHbWVzc2FnZRgCIAEoCRINCgVmaWVsZBgDIAEoCSr4",
             "AgoUUmVxdWVzdFJlamVjdGlvbkNvZGUSJgoiUkVRVUVTVF9SRUpFQ1RJT05f",
             "Q09ERV9VTlNQRUNJRklFRBAAEioKJlJFUVVFU1RfUkVKRUNUSU9OX0NPREVf",
             "SU5WQUxJRF9SRVFVRVNUEAESLAooUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9T",
@@ -64,7 +64,8 @@ namespace Dreamsleeve.Protocol.Chat {
             "U0VTU0lPTl9BTFJFQURZX09QRU4QAxIpCiVSRVFVRVNUX1JFSkVDVElPTl9D",
             "T0RFX1VTRVJOQU1FX1RBS0VOEAQSLAooUkVRVUVTVF9SRUpFQ1RJT05fQ09E",
             "RV9DSEFOTkVMX05PVF9GT1VORBAFEi0KKVJFUVVFU1RfUkVKRUNUSU9OX0NP",
-            "REVfTk9UX0NIQU5ORUxfTUVNQkVSEAZiBnByb3RvMw=="));
+            "REVfTk9UX0NIQU5ORUxfTUVNQkVSEAYSJQohUkVRVUVTVF9SRUpFQ1RJT05f",
+            "Q09ERV9PVkVSTE9BREVEEAdiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.RequestRejectionCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -118,6 +119,10 @@ namespace Dreamsleeve.Protocol.Chat {
     /// Sender may not publish to this channel.
     /// </summary>
     [pbr::OriginalName("REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER")] NotChannelMember = 6,
+    /// <summary>
+    /// Request was not admitted; the session remains usable.
+    /// </summary>
+    [pbr::OriginalName("REQUEST_REJECTION_CODE_OVERLOADED")] Overloaded = 7,
   }
 
   #endregion

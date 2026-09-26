@@ -11,6 +11,7 @@ type SessionRegistryConfig = {
     PlayerMailboxCapacity: int
     MaxPendingPerPlayer: int
     MaxPendingChannelRequests: int
+    MaxPendingChatRequests: int
     MaxPendingOutput: int
 }
 
@@ -20,6 +21,7 @@ type SessionRegistryFailure =
     | OperationFailed of exn
     | InvalidReply of string
     | Overloaded
+    | MessageIdExhausted
 
 [<RequireQualifiedAccess>]
 type SessionOutput =
@@ -32,6 +34,7 @@ type SessionOutput =
 type SessionRegistryMessage =
     | BindChannel of ReliableAgentRef<ChannelRequest>
     | Open of SessionOpenRequest
+    | SendChat of ChatSendRequest
     | Disconnect of connectionId: Guid
     | ChannelReplied of ChannelReply
     | PlayerReported of connectionId: Guid * event: PlayerEvent
@@ -73,6 +76,7 @@ module SessionRegistry =
         Entries: Dictionary<Guid, Entry>
         Players: Dictionary<PlayerId, Guid>
         Pending: Dictionary<Guid, MembershipOperation>
+        Publications: ChatPublication.State
         MaxPendingChannelRequests: int
         Output: AgentOutbox<SessionOutput>
         mutable Channel: AgentOutbox<ChannelRequest> option
@@ -155,15 +159,64 @@ module SessionRegistry =
                 emit state context (SessionOutput.Send(entry.Request.ConnectionId, response))
             | Some _ | None -> ()
 
-    let private reject state context request code message =
+    let private reject state context connectionId requestId code message =
         let rejection = { Code = code; Message = message; Field = "" }
-        emit state context (SessionOutput.Send(request.ConnectionId, ChatResponse.RequestRejected(request.RequestId, rejection)))
+        emit state context (SessionOutput.Send(connectionId, ChatResponse.RequestRejected(requestId, rejection)))
 
-    let private openSession (config: SessionRegistryConfig) profiles state (context: AgentContext<SessionRegistryMessage>) request =
+    let private activeProfile state connectionId =
+        match state.Entries.TryGetValue connectionId with
+        | true, entry when entry.Connected && not entry.Stopped ->
+            match entry.Member with
+            | Some memberState when memberState.Announced && not memberState.Leaving -> Some memberState.Profile
+            | Some _ | None -> None
+        | true, _ | false, _ -> None
+
+    let private sendChat globalId state context (request: ChatSendRequest) =
+        let rejectRequest = reject state context request.ConnectionId request.RequestId
+
+        match activeProfile state request.ConnectionId, state.Channel with
+        | Some profile, Some output when not state.Stopping ->
+            if request.ChannelId <> globalId then
+                rejectRequest RequestRejectionCode.ChannelNotFound "Channel does not exist."
+            else
+                let enqueue command = output.TrySend(context, command, SessionRegistryMessage.ChannelDeliveryFailed)
+
+                match ChatPublication.send state.Publications request profile enqueue with
+                | Ok () -> ()
+                | Error ChatPublication.Overloaded ->
+                    rejectRequest RequestRejectionCode.Overloaded "Too many pending chat requests."
+                | Error ChatPublication.IdExhausted ->
+                    fail state context SessionRegistryFailure.MessageIdExhausted
+
+        | Some _, Some _ | Some _, None | None, _ ->
+            rejectRequest RequestRejectionCode.SessionNotReady "Session is not ready."
+
+    let private publicationReply state context reply =
+        match ChatPublication.complete state.Publications reply with
+        | None -> ()
+        | Some (ChatPublication.InvalidReply reason) -> fail state context (SessionRegistryFailure.InvalidReply reason)
+        | Some (ChatPublication.NotMember request) ->
+            if activeProfile state request.ConnectionId |> Option.isSome then
+                reject state context request.ConnectionId request.RequestId
+                    RequestRejectionCode.NotChannelMember "Player is not a member of this channel."
+
+        | Some (ChatPublication.Accepted(request, message, recipients)) ->
+            for playerId in recipients do
+                match state.Players.TryGetValue playerId with
+                | true, connectionId when activeProfile state connectionId |> Option.isSome ->
+                    if playerId <> message.Author.PlayerId then
+                        emit state context (SessionOutput.Send(connectionId, ChatResponse.ChatPublished message))
+                    elif connectionId = request.ConnectionId then
+                        emit state context (SessionOutput.Send(connectionId, ChatResponse.ChatAccepted(request.RequestId, message)))
+                | true, _ | false, _ -> ()
+
+    let private openSession (config: SessionRegistryConfig) profiles state
+                            (context: AgentContext<SessionRegistryMessage>) (request: SessionOpenRequest) =
         if state.Stopping || state.Channel.IsNone then
             emit state context (SessionOutput.Close request.ConnectionId)
         elif state.Entries.ContainsKey request.ConnectionId then
-            reject state context request RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
+            reject state context request.ConnectionId request.RequestId
+                RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
         elif state.Entries.Count >= config.MaxSessions then
             emit state context (SessionOutput.Close request.ConnectionId)
         else
@@ -211,7 +264,8 @@ module SessionRegistry =
                 match entry.Member with
                 | Some _ -> failPlayer state context entry PlayerFailure.InvalidReply
                 | None when state.Players.ContainsKey profile.PlayerId ->
-                    reject state context entry.Request RequestRejectionCode.SessionAlreadyOpen "Player already has a session."
+                    reject state context entry.Request.ConnectionId entry.Request.RequestId
+                        RequestRejectionCode.SessionAlreadyOpen "Player already has a session."
                     close state context entry
                     entry.Agent.Abort()
                 | None ->
@@ -277,7 +331,7 @@ module SessionRegistry =
 
     let private channelReply globalId state context (reply: ChannelReply) =
         match state.Pending.TryGetValue reply.OperationId with
-        | false, _ -> ()
+        | false, _ -> publicationReply state context reply
         | true, operation ->
             state.Pending.Remove reply.OperationId |> ignore
             let connectionId = match operation with Join id | Leave id -> id
@@ -326,9 +380,10 @@ module SessionRegistry =
         | _ when state.Failing -> ()
         | SessionRegistryMessage.BindChannel channel ->
             match state.Channel with
-            | None -> state.Channel <- Some (AgentOutbox(config.MaxPendingChannelRequests, channel))
+            | None -> state.Channel <- Some (AgentOutbox(config.MaxPendingChannelRequests + config.MaxPendingChatRequests, channel))
             | Some _ -> fail state context (SessionRegistryFailure.InvalidReply "channel already bound")
         | SessionRegistryMessage.Open request -> openSession config profiles state context request
+        | SessionRegistryMessage.SendChat request -> sendChat globalId state context request
         | SessionRegistryMessage.Disconnect connectionId -> disconnect state context connectionId
         | SessionRegistryMessage.PlayerReported(connectionId, event) -> playerEvent state context connectionId event
         | SessionRegistryMessage.PlayerStopped(connectionId, outcome) -> playerStopped state context connectionId outcome
@@ -343,7 +398,9 @@ module SessionRegistry =
         | SessionRegistryMessage.DependencyStopped error -> fail state context error
         | SessionRegistryMessage.Stop -> stop state context
 
-        if not state.Failing && state.Stopping && state.Entries.Count = 0 && state.Pending.Count = 0 then
+        if not state.Failing && state.Stopping
+           && state.Entries.Count = 0 && state.Pending.Count = 0
+           && ChatPublication.isEmpty state.Publications then
             context.Complete() |> ignore
     }
 
@@ -351,9 +408,12 @@ module SessionRegistry =
     /// Use Stop for draining or Abort for cancellation; Completion joins all children.
     let start (config: SessionRegistryConfig) globalId profiles output =
         let limits = [config.MailboxCapacity; config.MaxSessions; config.PlayerMailboxCapacity;
-                      config.MaxPendingPerPlayer; config.MaxPendingChannelRequests; config.MaxPendingOutput]
+                      config.MaxPendingPerPlayer; config.MaxPendingChannelRequests;
+                      config.MaxPendingChatRequests; config.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
             Error "Session, player and pending queue limits must be positive."
+        elif int64 config.MaxPendingChannelRequests + int64 config.MaxPendingChatRequests > int64 Int32.MaxValue then
+            Error "Combined channel queue capacity exceeds Int32.MaxValue."
         elif config.MaxPendingOutput <= config.MaxSessions then
             Error "MaxPendingOutput must allow a failure notification and one close per session."
         else
@@ -361,6 +421,7 @@ module SessionRegistry =
                 Entries = Dictionary()
                 Players = Dictionary()
                 Pending = Dictionary()
+                Publications = ChatPublication.create config.MaxPendingChatRequests config.MaxPendingPerPlayer
                 MaxPendingChannelRequests = config.MaxPendingChannelRequests
                 Output = AgentOutbox(config.MaxPendingOutput, output)
                 Channel = None

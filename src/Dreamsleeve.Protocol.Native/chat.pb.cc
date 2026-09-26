@@ -518,7 +518,7 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "_id\030\001 \001(\004\"p\n\017RequestRejected\022=\n\004code\030\001 \001"
     "(\0162/.Dreamsleeve.Protocol.Chat.RequestRe"
     "jectionCode\022\017\n\007message\030\002 \001(\t\022\r\n\005field\030\003 "
-    "\001(\t*\321\002\n\024RequestRejectionCode\022&\n\"REQUEST_"
+    "\001(\t*\370\002\n\024RequestRejectionCode\022&\n\"REQUEST_"
     "REJECTION_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_"
     "REJECTION_CODE_INVALID_REQUEST\020\001\022,\n(REQU"
     "EST_REJECTION_CODE_SESSION_NOT_READY\020\002\022/"
@@ -526,13 +526,14 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "_OPEN\020\003\022)\n%REQUEST_REJECTION_CODE_USERNA"
     "ME_TAKEN\020\004\022,\n(REQUEST_REJECTION_CODE_CHA"
     "NNEL_NOT_FOUND\020\005\022-\n)REQUEST_REJECTION_CO"
-    "DE_NOT_CHANNEL_MEMBER\020\006b\006proto3"
+    "DE_NOT_CHANNEL_MEMBER\020\006\022%\n!REQUEST_REJEC"
+    "TION_CODE_OVERLOADED\020\007b\006proto3"
 };
 static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    1831,
+    1870,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
@@ -553,7 +554,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_
   return file_level_enum_descriptors_chat_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t RequestRejectionCode_internal_data_[] = {
-    458752u, 0u, };
+    524288u, 0u, };
 // ===================================================================
 
 class ClientPacket::_Internal {

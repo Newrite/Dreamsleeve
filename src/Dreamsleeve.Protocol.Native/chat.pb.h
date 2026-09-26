@@ -124,6 +124,7 @@ enum RequestRejectionCode : int {
   REQUEST_REJECTION_CODE_USERNAME_TAKEN = 4,
   REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND = 5,
   REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER = 6,
+  REQUEST_REJECTION_CODE_OVERLOADED = 7,
   RequestRejectionCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   RequestRejectionCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -134,11 +135,11 @@ extern const uint32_t RequestRejectionCode_internal_data_[];
 inline constexpr RequestRejectionCode RequestRejectionCode_MIN =
     static_cast<RequestRejectionCode>(0);
 inline constexpr RequestRejectionCode RequestRejectionCode_MAX =
-    static_cast<RequestRejectionCode>(6);
+    static_cast<RequestRejectionCode>(7);
 inline bool RequestRejectionCode_IsValid(int value) {
-  return 0 <= value && value <= 6;
+  return 0 <= value && value <= 7;
 }
-inline constexpr int RequestRejectionCode_ARRAYSIZE = 6 + 1;
+inline constexpr int RequestRejectionCode_ARRAYSIZE = 7 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_descriptor();
 template <typename T>
 const ::std::string& RequestRejectionCode_Name(T value) {
@@ -149,7 +150,7 @@ const ::std::string& RequestRejectionCode_Name(T value) {
 }
 template <>
 inline const ::std::string& RequestRejectionCode_Name(RequestRejectionCode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 6>(
+  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 7>(
       static_cast<int>(value));
 }
 inline bool RequestRejectionCode_Parse(

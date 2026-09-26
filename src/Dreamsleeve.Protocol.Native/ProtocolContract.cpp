@@ -47,4 +47,7 @@ static_assert(
 static_assert(
   static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotChannelMember) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 7);
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::Overloaded) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_OVERLOADED));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 8);
