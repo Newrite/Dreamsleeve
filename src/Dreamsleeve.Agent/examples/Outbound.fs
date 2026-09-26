@@ -23,6 +23,7 @@ let run () = task {
     use agent =
         Agent<OutboundCommand>.Start(options, fun ctx command -> task {
             ctx.CancellationToken.ThrowIfCancellationRequested()
+
             match command with
             | Send (recipient, text) ->
                 do! send recipient text
@@ -32,6 +33,7 @@ let run () = task {
         })
 
     let! posted = agent.PostAsync(Send ("global", "hello"))
+
     match posted with
     | AgentPostResult.Posted -> ()
     | other -> failwithf "Unexpected post result: %A" other

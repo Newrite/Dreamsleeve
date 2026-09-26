@@ -18,8 +18,10 @@ module ActorValueState =
 
     /// Negative readings or a current value above the maximum are preserved.
     let resource (current: float32) (maximum: float32) =
-        if not (Single.IsFinite current) then Error (DomainError.NonFiniteNumber "ActorValue.current")
-        elif not (Single.IsFinite maximum) then Error (DomainError.NonFiniteNumber "ActorValue.maximum")
+        if not (Single.IsFinite current) then
+            Error (DomainError.NonFiniteNumber "ActorValue.current")
+        elif not (Single.IsFinite maximum) then
+            Error (DomainError.NonFiniteNumber "ActorValue.maximum")
         else
             Ok (ActorValueState.Resource (
                 LanguagePrimitives.Float32WithMeasure<actorValue> current,

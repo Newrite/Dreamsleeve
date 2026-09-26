@@ -85,4 +85,5 @@ module ServerConfig =
         | Ok settings ->
             host.SetMaximumPacketSize(unativeint settings.MaxPacketBytes)
             host.SetMaximumWaitingData(unativeint settings.MaxWaitingData)
+
             Ok ()

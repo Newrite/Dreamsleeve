@@ -135,8 +135,10 @@ module Chat =
             let mutable hasMore = false
 
             use mutable messages = chat.messages.GetEnumerator()
+
             while not hasMore && messages.MoveNext() do
                 let message = messages.Current
+
                 let followsCursor =
                     match cursor with
                     | ValueNone -> true

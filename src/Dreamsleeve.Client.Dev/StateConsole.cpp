@@ -22,6 +22,7 @@ public:
           Reject(model, "Dev stopped before server acceptance");
         return true;
       });
+
       worker.request_stop();
       wake.notify_one();
       worker.join();
@@ -35,11 +36,13 @@ public:
         exchange.Publish(model);
         return pumped && result;
       }};
-      auto                                   completion = task.get_future();
+
+      auto completion = task.get_future();
       {
         std::lock_guard lock{mutex};
         pending.emplace(std::move(task));
       }
+
       wake.notify_one();
       return completion.get();
     }
@@ -53,22 +56,27 @@ public:
           std::move(text),
           {}
       };
+
       return model.Apply(model.Generation(), ChatMessagesReceived{1, {message}}).has_value();
     }
 
     bool Accept(ClientModel& model)
     {
       if (awaitingServer.empty()) return false;
+
       auto send = std::move(awaitingServer.front());
       awaitingServer.pop_front();
+
       return Receive(model, std::move(send.text));
     }
 
     bool Reject(ClientModel& model, std::string reason)
     {
       if (awaitingServer.empty()) return false;
+
       const auto requestId = awaitingServer.front().requestId;
       awaitingServer.pop_front();
+
       return model.Apply(model.Generation(), ServerRejection{requestId, RequestRejectionCode::InvalidRequest, std::move(reason), "text"})
         .has_value();
     }
@@ -77,14 +85,20 @@ public:
     {
       while (!awaitingServer.empty())
         Reject(model, "Session reset");
+
       model.ResetSession();
-      const auto generation = model.Generation();
-      Domain::Player self{.data = {7, "dev", "Dev"}};
-      const bool initialized = model.RegisterChannel(1, 3).has_value()
-        && model.Apply(generation, OnlinePlayersReplaced{{self}}).has_value()
-        && model.SetSelfPlayer(generation, self.data.playerId).has_value();
+
+      const auto     generation = model.Generation();
+      Domain::Player self{
+          .data = {7, "dev", "Dev"}
+      };
+      const bool initialized = model.RegisterChannel(1, 3).has_value() &&
+                               model.Apply(generation, OnlinePlayersReplaced{{self}}).has_value() &&
+                               model.SetSelfPlayer(generation, self.data.playerId).has_value();
+
       // Invoke publishes only after this handler returns, never between operations.
       if (!initialized) model.ResetSession();
+
       return initialized;
     }
 
@@ -93,6 +107,7 @@ private:
     bool Pump(ClientModel& model)
     {
       exchange.TakeCommands(commands);
+
       bool ok = true;
       for (auto& queued : commands)
       {
@@ -101,6 +116,7 @@ private:
           exchange.Publish(model, true);
           continue;
         }
+
         if (queued.generation != model.Generation())
         {
           if (const auto* chat = std::get_if<SendChat>(&queued.command))
@@ -118,6 +134,7 @@ private:
           }
           continue;
         }
+
         if (auto* chat = std::get_if<SendChat>(&queued.command))
         {
           std::cout << "outbound chat " << chat->requestId << " awaiting server\n";
@@ -128,12 +145,14 @@ private:
           std::cout << "outbound game data (no local model mutation)\n";
         }
       }
+
       return ok;
     }
 
     void Run(std::stop_token stop)
     {
       ClientModel model;
+
       for (;;)
       {
         std::optional<std::packaged_task<bool(ClientModel&)>> task;
@@ -143,8 +162,10 @@ private:
           if (!pending) break;
           task.swap(pending);
         }
+
         (*task)(model);
       }
+
       exchange.Finish();
     }
 
@@ -191,9 +212,11 @@ private:
         }
       }
     }
+
     for (const auto& event : output.rejections)
       std::cout << " rejection generation=" << event.generation << " request=" << event.rejection.requestId << ": "
                 << event.rejection.message << '\n';
+
     if (output.stopped) std::cout << "owner stopped and joined\n";
   }
 
@@ -201,6 +224,7 @@ private:
   {
     auto created = ClientExchange::TryCreate(8, 2);
     if (!created) return 1;
+
     auto          exchange = std::move(*created);
     ClientOutput  output;
     std::uint64_t generation{};
@@ -209,17 +233,21 @@ private:
     {
       DevOwner owner{*exchange};
       if (!owner.Invoke([&](ClientModel& model) { return owner.Reset(model); })) return 1;
+
       exchange->Drain(output);
       PrintOutput(output, generation);
+
       std::string line;
       while (std::getline(input, line))
       {
         if (echo) std::cout << "> " << line << '\n';
+
         std::istringstream command{line};
         std::string        action;
         command >> action;
         if (action.empty()) continue;
         if (action == "quit") break;
+
         bool ok = false;
         if (action == "read")
         {
@@ -244,6 +272,7 @@ private:
           }
           else if (action == "sample")
             outgoing = LocalPlayerState{};
+
           const auto posted = exchange->Post({generation, std::move(outgoing)});
           if (posted == CommandPostResult::Queued || posted == CommandPostResult::Replaced)
             ok = owner.Invoke([](ClientModel&) { return true; });
@@ -267,6 +296,7 @@ private:
         {
           ok = owner.Invoke([&](ClientModel& model) { return owner.Reset(model); });
         }
+
         if (!ok)
         {
           failed = true;
@@ -274,8 +304,10 @@ private:
         }
       }
     }
+
     exchange->Drain(output);
     PrintOutput(output, generation);
+
     return failed ? 1 : 0;
   }
 
@@ -286,8 +318,10 @@ int RunStateConsole(bool demo)
   std::cout << "One consumer, one model owner thread. Synthetic server; no network connection.\n"
             << "send <text> | accept | reject | receive <text> | sample | read | snapshot | reset | quit\n";
   if (!demo) return RunCommands(std::cin, false);
+
   std::istringstream script{
       "send First\nread\naccept\nread\n" "send Refused\nreject\nread\n" "receive Second\nreceive Third\nreceive Fourth\nread\n" "receive Fifth\nread\nsnapshot\nread\nsample\nreset\nread\nquit\n"
   };
+
   return RunCommands(script, true);
 }

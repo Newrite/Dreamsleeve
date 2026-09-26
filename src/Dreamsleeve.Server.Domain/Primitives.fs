@@ -93,6 +93,7 @@ module internal PrimitiveValidation =
         let mutable count = 0
         let mutable error = ValueNone
         let mutable rune = Unchecked.defaultof<Rune>
+
         while ValueOption.isNone error && offset < source.Length do
             if not (Rune.TryGetRuneAt(source, offset, &rune)) then
                 error <- ValueSome TextError.InvalidUnicode
@@ -101,20 +102,24 @@ module internal PrimitiveValidation =
             else
                 offset <- offset + rune.Utf16SequenceLength
                 count <- count + 1
+
         match error with
         | ValueSome error -> Error error
         | ValueNone -> Ok count
 
     let scalarCount (source: string) =
         let mutable count = 0
+
         for _ in source.EnumerateRunes() do
             count <- count + 1
+
         count
 
     let unrestricted (_: string) = ValueNone
 
     let private checkedText allowBlank field maxLength transform multiline validate (source: string) =
         let fail error = Error(DomainError.InvalidText(field, error))
+
         if maxLength <= 0 then
             Error(DomainError.InvalidLimit(field, maxLength))
         elif isNull source || (not allowBlank && String.IsNullOrWhiteSpace source) then
@@ -126,6 +131,7 @@ module internal PrimitiveValidation =
                 let transformed =
                     try Ok(transform source)
                     with :? ArgumentException -> Error TextError.InvalidUnicode
+
                 match transformed with
                 | Error error -> fail error
                 | Ok canonical ->
@@ -134,6 +140,7 @@ module internal PrimitiveValidation =
                     let length =
                         if Object.ReferenceEquals(source, canonical) then sourceLength
                         else scalarCount canonical
+
                     if length > maxLength then fail (TextError.TooLong maxLength)
                     else
                         match validate canonical with
@@ -174,11 +181,13 @@ module internal PrimitiveValidation =
 
     let actorValueKey (source: string) =
         let separator = source.IndexOf ':'
+
         if separator <= 0 || separator = source.Length - 1 then
             ValueSome TextError.InvalidFormat
         else
             let prefix = source.Substring(0, separator)
             let name = source.Substring(separator + 1)
+
             if prefix |> Seq.exists (fun c -> not (asciiLetterOrDigit c || c = '.' || c = '_' || c = '-')) then
                 ValueSome TextError.InvalidCharacters
             elif String.IsNullOrWhiteSpace name || Char.IsWhiteSpace name[0] || Char.IsWhiteSpace name[name.Length - 1] then
@@ -195,6 +204,7 @@ module internal PrimitiveValidation =
 [<RequireQualifiedAccess>]
 module PluginName =
     let value (name: PluginName) : string = UMX.untag name
+
     /// The game adapter supplies the actual plugin filename; the server treats it as a key.
     /// ASCII case folding only: non-ASCII text is preserved; no Unicode normalization or trimming.
     let create maxLength raw : Result<PluginName, DomainError> =
@@ -205,6 +215,7 @@ module PluginName =
 [<RequireQualifiedAccess>]
 module LocalFormId =
     let value (id: LocalFormId) : uint32 = uint32 id
+
     /// Rejects zero and values outside the 24-bit local range.
     /// The client must correctly extract local IDs for both full and light plugins.
     let create (raw: uint32) : Result<LocalFormId, DomainError> =
@@ -216,6 +227,7 @@ module LocalFormId =
 [<RequireQualifiedAccess>]
 module LocationName =
     let value (name: LocationName) : string = UMX.untag name
+
     /// Preserves the game's display label, including an empty label or surrounding spaces.
     let create maxLength raw : Result<LocationName, DomainError> =
         PrimitiveValidation.label "LocationName" maxLength raw |> Result.map UMX.tag
@@ -223,6 +235,7 @@ module LocationName =
 [<RequireQualifiedAccess>]
 module WorldUnit =
     let value (amount: WorldUnit) : float32 = UMX.untag amount
+
     /// Native game units are preserved; only NaN and infinities are rejected.
     let create raw : Result<WorldUnit, DomainError> =
         PrimitiveValidation.finite "WorldUnit" raw |> Result.map UMX.tag
@@ -230,6 +243,7 @@ module WorldUnit =
 [<RequireQualifiedAccess>]
 module Radian =
     let value (amount: Radian) : float32 = UMX.untag amount
+
     /// Native radians are preserved without angle wrapping.
     let create raw : Result<Radian, DomainError> =
         PrimitiveValidation.finite "Radian" raw |> Result.map UMX.tag
@@ -237,6 +251,7 @@ module Radian =
 [<RequireQualifiedAccess>]
 module ActorValueKey =
     let value (key: ActorValueKey) : string = UMX.untag key
+
     /// Namespace:name. The namespace is ASCII; the name may be Unicode.
     /// ASCII case folding only: non-ASCII text is preserved; no Unicode normalization or trimming.
     /// The first colon separates the namespace from the mod's registered machine name.
@@ -248,6 +263,7 @@ module ActorValueKey =
 [<RequireQualifiedAccess>]
 module ActorValue =
     let value (amount: ActorValue) : float32 = UMX.untag amount
+
     /// Values are relayed as supplied; negative values are allowed, NaN/infinities are not.
     let create raw : Result<ActorValue, DomainError> =
         PrimitiveValidation.finite "ActorValue" raw |> Result.map UMX.tag
@@ -255,6 +271,7 @@ module ActorValue =
 [<RequireQualifiedAccess>]
 module ActorValueName =
     let value (name: ActorValueName) : string = UMX.untag name
+
     /// Preserves the game's display label, including an empty label or surrounding spaces.
     let create maxLength raw : Result<ActorValueName, DomainError> =
         PrimitiveValidation.label "ActorValueName" maxLength raw |> Result.map UMX.tag
@@ -262,12 +279,14 @@ module ActorValueName =
 [<RequireQualifiedAccess>]
 module PlayerId =
     let value (id: PlayerId) : uint64 = UMX.untag id
+
     let create raw : Result<PlayerId, DomainError> =
         PrimitiveValidation.identifier "PlayerId" raw |> Result.map UMX.tag
 
 [<RequireQualifiedAccess>]
 module Username =
     let value (name: Username) : string = UMX.untag name
+
     /// Trims, accepts only ASCII letters/digits/underscore/dot, then lowercases.
     /// Availability and uniqueness are checked by the owning server agent.
     let create maxLength raw : Result<Username, DomainError> =
@@ -278,6 +297,7 @@ module Username =
 [<RequireQualifiedAccess>]
 module DisplayName =
     let value (name: DisplayName) : string = UMX.untag name
+
     /// Trims and normalizes to NFC while preserving case; duplicates are allowed.
     let create maxLength raw : Result<DisplayName, DomainError> =
         PrimitiveValidation.name "DisplayName" maxLength raw |> Result.map UMX.tag
@@ -285,6 +305,7 @@ module DisplayName =
 [<RequireQualifiedAccess>]
 module CharacterName =
     let value (name: CharacterName) : string = UMX.untag name
+
     /// Preserves the game's original text, including case and surrounding spaces.
     let create maxLength raw : Result<CharacterName, DomainError> =
         PrimitiveValidation.text "CharacterName" maxLength id false PrimitiveValidation.unrestricted raw
@@ -293,12 +314,14 @@ module CharacterName =
 [<RequireQualifiedAccess>]
 module ChatMessageId =
     let value (id: ChatMessageId) : uint64 = UMX.untag id
+
     let create raw : Result<ChatMessageId, DomainError> =
         PrimitiveValidation.identifier "ChatMessageId" raw |> Result.map UMX.tag
 
 [<RequireQualifiedAccess>]
 module ChatMessageText =
     let value (message: ChatMessageText) : string = UMX.untag message
+
     /// Preserves original text. Newlines and tabs are allowed; other controls are not.
     let create maxLength raw : Result<ChatMessageText, DomainError> =
         PrimitiveValidation.text "ChatMessageText" maxLength id true PrimitiveValidation.unrestricted raw
@@ -307,11 +330,13 @@ module ChatMessageText =
 [<RequireQualifiedAccess>]
 module ChatChannelId =
     let value (id: ChatChannelId) : uint64 = UMX.untag id
+
     let create raw : Result<ChatChannelId, DomainError> =
         PrimitiveValidation.identifier "ChatChannelId" raw |> Result.map UMX.tag
 
 [<RequireQualifiedAccess>]
 module ChatChannelName =
     let value (name: ChatChannelName) : string = UMX.untag name
+
     let create maxLength raw : Result<ChatChannelName, DomainError> =
         PrimitiveValidation.name "ChatChannelName" maxLength raw |> Result.map UMX.tag

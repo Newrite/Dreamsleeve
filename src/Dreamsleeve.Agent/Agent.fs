@@ -338,6 +338,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
         if isNull (box options) then nullArg (nameof options)
         if isNull (box handler) then nullArg (nameof handler)
         validateTimeout "DefaultAskTimeout" options.DefaultAskTimeout
+
         match options.Mailbox with
         | AgentMailbox.Bounded(capacity, _, _) when capacity <= 0 ->
             invalidArg "capacity" "Bounded mailbox capacity must be greater than zero."
@@ -431,6 +432,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
             // Close admission first. Even a throwing cancellation callback cannot strand writers.
             // Do not hold the gate here: channels may allow synchronous continuations.
             channel.Writer.TryComplete() |> ignore
+
             match cancellation with
             | None -> ()
             | Some pending ->
@@ -472,6 +474,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                     waiting <- false
                 else
                     result <- tryWriteEnvelope envelope
+
                     match result with
                     | AgentPostResult.Full ->
                         try
@@ -502,6 +505,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
 
     let reportHandlerError error =
         safeInvoke (fun () -> errorEvent.Trigger(options.Name, error))
+
         match options.OnError with
         | Some decide ->
             try decide (options.Name, error)
@@ -578,6 +582,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                                     envelope.Discard AgentStopReason.Aborted
                                 | error ->
                                     envelope.Fault error
+
                                     match reportHandlerError error with
                                     | AgentErrorAction.Continue -> ()
                                     | AgentErrorAction.Stop ->
@@ -621,6 +626,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                     if token.CanBeCanceled then CancellationTokenSource.CreateLinkedTokenSource(token)
                     else new CancellationTokenSource()
                 use registration = waitCts.Token.Register(fun () -> settle (cancellationResult ()))
+
                 match effectiveTimeout with
                 | Some value when value <> Timeout.InfiniteTimeSpan -> waitCts.CancelAfter(value)
                 | _ -> ()
@@ -628,6 +634,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                 let messageResult =
                     try Ok (buildMessage reply)
                     with error -> Error error
+
                 match messageResult with
                 | Error error -> settle (AgentAskResult.Faulted error)
                 | Ok message ->
@@ -638,6 +645,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                             Some (fun () -> settle AgentAskResult.Dropped),
                             Some (fun reason -> settle (resultForStop reason)))
                     let! postResult = postEnvelopeAsync envelope waitCts.Token
+
                     match postResult with
                     | AgentPostResult.Posted -> ()
                     | AgentPostResult.Dropped -> settle AgentAskResult.Dropped
@@ -714,6 +722,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     member this.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Message, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
         task {
             let! result = this.TryAskAsync(buildMessage, ?timeout = timeout, ?cancellationToken = cancellationToken)
+
             match result with
             | AgentAskResult.Replied value -> return value
             | AgentAskResult.Faulted error -> return! taskFromException<'Reply> error
@@ -927,6 +936,7 @@ type StatefulAgent<'State, 'Command>
                                 agentContext.Name, agentContext.CancellationToken,
                                 agentContext.Complete, agentContext.Abort)
                         let! transition = commandHandler ctx state command
+
                         match transition with
                         | StatefulTransition.Stay -> ()
                         | StatefulTransition.SetState nextState -> applyState nextState
@@ -1249,6 +1259,7 @@ type MutableStatefulAgent<'State, 'Command>
                                 agentContext.Name, agentContext.CancellationToken,
                                 agentContext.Complete, agentContext.Abort)
                         let! transition = commandHandler ctx state command
+
                         match transition with
                         | MutableStatefulTransition.Stay -> ()
                         | MutableStatefulTransition.Stop -> agentContext.Complete() |> ignore

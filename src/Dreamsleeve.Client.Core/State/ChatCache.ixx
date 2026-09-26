@@ -132,6 +132,7 @@ public:
     {
       const auto found = messages.find(messageId);
       if (found == messages.end()) return std::nullopt;
+
       return found->second;
     }
 
@@ -297,6 +298,7 @@ public:
       historyRound   = round;
       history        = ChatHistoryState{.round = round, .cursor = after};
       historyPending = true;
+
       return history.round;
     }
 
@@ -355,6 +357,7 @@ public:
       history.hasMore = page.hasMore;
       history.hasGap  = history.hasGap || page.hasGap;
       historyPending  = page.hasMore;
+
       return merged;
     }
 

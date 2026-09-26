@@ -33,6 +33,7 @@ public:
         return std::unexpected{
             Domain::Error{Domain::ErrorCode::InvalidConfig, "capacity"}
         };
+
       return Ptr{new StateUpdateQueue{capacity}};
     }
 
@@ -75,6 +76,7 @@ public:
     void TakeAll(StateUpdateBatch& output)
     {
       output.updates.clear();
+
       std::lock_guard lock{mutex};
       pending.swap(output.updates);
       output.requiresSnapshot = requiresSnapshot;

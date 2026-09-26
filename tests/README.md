@@ -23,10 +23,10 @@ Skyrim, PrismaUI, работающий сервер и база данных н�
 
 | Проект | Фреймворк | Наборы |
 |---|---|---|
-| `Dreamsleeve.Client.Tests` | doctest, цель xmake | DreamNet.Address/Packet/Runtime/Network/Client; Client.Domain/State/Changes/StateUpdate/StateUpdateQueue/Exchange/Codec |
+| `Dreamsleeve.Client.Tests` | doctest, цель xmake | DreamNet.Address/Packet/Runtime/Network/Client; Client.Runtime; Client.Domain/State/Changes/StateUpdate/StateUpdateQueue/Exchange/Codec |
 | `Dreamsleeve.Server.Tests` | Expecto + Faqt, F# executable | Dreamsleeve.Server.Domain (41), Dreamsleeve.Agent (28), Dreamsleeve.Server.Codec (12) |
 
-C++: 144 сценария, включая 42 сохранённых из архивов, 6 проверок StateUpdate
+C++: 152 сценария, включая 42 сохранённых из архивов, 6 проверок StateUpdate
 и 7 проверок очереди: порядок, переполнение, восстановление чата и передача между
 двумя потоками. Ещё 6 проверок ClientExchange покрывают FIFO/Full/Closed, отсутствие локального
 добавления чата, доставку только новых сообщений, объединение показаний,
@@ -56,6 +56,13 @@ Codec-тест проверяет обычные данные игроков/с�
 Agent сохраняет последовательное выполнение, gates и 15-секундный предел на
 сценарий; короткие таймеры используются там, где проверяется сам timeout.
 Это регрессионные проверки, а не доказательство всех возможных чередований потоков.
+
+## Сетевой runtime
+
+Client.Runtime: 8 сценариев с настоящим ENet host и protobuf на серверной стороне
+теста: коррелированный вход, один начальный снимок, отказ и повторный вход, ошибочные
+ответы без публикации частичных данных, таймауты входа/подключения, отмена, удалённое
+отключение и запоздалые/повторные ответы. Серверный F# runtime этим не подменяется.
 
 ## Запуск отдельных наборов
 
@@ -113,7 +120,7 @@ dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-
 - Проверки транспорта используют loopback и ограниченные ожидания; UI/игровая
   интеграция и межъязыковой echo не входят в нынешнюю проверенную сборку.
 
-Проверено на Windows/MSVC/.NET 10: 144/144 native (1446 assertions) и 81/81 managed.
+Проверено на Windows/MSVC/.NET 10: 152/152 native (1991 assertions) и 81/81 managed.
 Шаг codec не повторяет ENet echo: проверяет новые прикладные контракты.
 
 После обновления VS 18.10.2 / cl 19.51.36260 выполнена чистая сборка всех native-целей,

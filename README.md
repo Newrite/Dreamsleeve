@@ -13,7 +13,8 @@
 и отказы обратно в игровой/UI-поток. В Client.Dev есть двухпоточная консоль
 с синтетическим сервером для проверки этого обмена.
 Добавлены `Protocol/chat.proto` и C++/F# codec для сессии, онлайна и чата.
-Серверные обработчики и ClientRuntime ещё не подключены к этому протоколу;
+C++ ClientRuntime выполняет настоящий вход по ENet, обрабатывает ответ/отказ,
+отключение и переподключение. Серверные обработчики пока не реализованы;
 SKSE/PrismaUI и интерполяция остаются следующими этапами.
 Лимиты codec и ENet задаются конфигурацией клиента/сервера; загрузчик внешнего
 конфига ещё не подключён. Контракт: [Protocol/README.ru.md](Protocol/README.ru.md).
@@ -26,7 +27,7 @@ SKSE/PrismaUI и интерполяция остаются следующими 
 |---|---|
 | `src/Dreamsleeve.Client.Core` | C++23: DreamNet, независимый от Skyrim домен и состояние клиента |
 | `src/Dreamsleeve.Client` | Заготовка игрового адаптера; пока static library, будущий SKSE-плагин |
-| `src/Dreamsleeve.Client.Dev` | Двухпоточная консоль без Skyrim; серверные события пока синтетические |
+| `src/Dreamsleeve.Client.Dev` | Двухпоточная консоль: сетевой вход через --connect и отдельное синтетическое демо |
 | `src/Dreamsleeve.Server.Domain` | F#/.NET 10: проверяемые значения, игроки, ограниченная история чата |
 | `src/Dreamsleeve.Agent` | Последовательные агенты на Channels/Task и примеры |
 | `src/Dreamsleeve.Server.Core` | Конфигурация транспорта, yENet и прикладной codec |
@@ -44,15 +45,18 @@ Python 3.10+ и .NET SDK 10. Первый запуск восстанавлив�
 ```powershell
 xmake build Dreamsleeve.Client.Dev
 xmake run Dreamsleeve.Client.Dev --state-demo
+xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player "Player Name"
 dotnet build src/Dreamsleeve.Server/Dreamsleeve.Server.fsproj -c Release
 python Scripts/run_tests.py
 ```
 
 Выбор набора и команды отдельных проектов: [tests/README.md](tests/README.md).
-Без `--state-demo` Client.Dev принимает команды: `send <text>`, `accept`, `reject`,
+Без аргументов Client.Dev запускает синтетическую консоль с командами: `send <text>`, `accept`, `reject`,
 `receive <text>`, `sample`, `read`, `snapshot`, `reset`, `quit`. Отправленный чат
 появляется в модели только после `accept`.
 Формат команд описан в [контракте состояния](src/Dreamsleeve.Client.Core/State/README.ru.md#обмен-с-одним-потребителем).
+Сетевой режим `--connect` принимает `read`, `disconnect`, `connect`, `quit`;
+нужен сервер, реализующий chat.proto. [Контракт runtime](src/Dreamsleeve.Client.Core/README.ru.md).
 Генерация protobuf: `python Scripts/generate_protocol.py --help`.
 Генерация IDE solution: `python Scripts/vxmakegen.py --help`.
 

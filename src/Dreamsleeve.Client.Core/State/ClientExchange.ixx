@@ -48,9 +48,20 @@ export namespace Dreamsleeve::Client
     Closed
   };
 
+  enum class SessionPhase
+  {
+    Disconnected,
+    Connecting,
+    Opening,
+    Ready,
+    Disconnecting,
+    Faulted
+  };
+
   struct ClientOutput
   {
     StateUpdateBatch state;
+    SessionPhase     phase{SessionPhase::Disconnected};
     // Not reconstructible from a snapshot. Original generation is retained.
     std::vector<ServerRejectionEvent> rejections;
     bool                              stopped{};
@@ -70,8 +81,10 @@ public:
         return std::unexpected{
             Domain::Error{Domain::ErrorCode::InvalidConfig, "commandCapacity"}
         };
+
       auto state = StateUpdateQueue::TryCreate(stateCapacity);
       if (!state) return std::unexpected{state.error()};
+
       return Ptr{
           new ClientExchange{commandCapacity, std::move(*state)}
       };
@@ -85,6 +98,7 @@ public:
     {
       std::lock_guard lock{mutex};
       if (inputClosed) return CommandPostResult::Closed;
+
       if (std::holds_alternative<LocalPlayerState>(command.command) && !commands.empty())
       {
         auto& last = commands.back();
@@ -94,7 +108,9 @@ public:
           return CommandPostResult::Replaced;
         }
       }
+
       if (commands.size() >= maxCommands) return CommandPostResult::Full;
+
       commands.push_back(std::move(command));
       return CommandPostResult::Queued;
     }
@@ -104,6 +120,7 @@ public:
     bool TakeCommands(std::vector<QueuedClientCommand>& output)
     {
       output.clear();
+
       std::lock_guard lock{mutex};
       commands.swap(output);
       return !inputClosed || !output.empty();
@@ -111,10 +128,11 @@ public:
 
     // Owner only, after decoded events. Exactly one exchange drains a model.
     // A requested snapshot consumes the pending changes that it includes.
-    void Publish(ClientModel& model, bool requestSnapshot = false)
+    void Publish(ClientModel& model, bool requestSnapshot = false, std::optional<SessionPhase> nextPhase = std::nullopt)
     {
       auto                             rejections = model.TakeServerRejections();
       std::optional<ClientStateUpdate> update;
+
       if (requestSnapshot || needsInitialSnapshot)
       {
         model.TakeChanges(scratch);
@@ -125,21 +143,32 @@ public:
         update = TakeStateUpdate(model, scratch);
 
       std::lock_guard lock{mutex};
+      if (nextPhase) phase = *nextPhase;
       if (update && state->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired) state->Publish(model.Snapshot());
+
       pendingRejections.insert(
         pendingRejections.end(),
         std::make_move_iterator(rejections.begin()),
         std::make_move_iterator(rejections.end()));
     }
 
+    // Owner only; consumers observe phase through the same synchronized exchange.
+    void PublishPhase(SessionPhase value)
+    {
+      std::lock_guard lock{mutex};
+      phase = value;
+    }
+
     // Consumer side: drain once per frame, then route locally to UI/presence.
     void Drain(ClientOutput& output)
     {
       output.rejections.clear();
+
       std::lock_guard lock{mutex};
       state->TakeAll(output.state);
       pendingRejections.swap(output.rejections);
       output.stopped = stopped;
+      output.phase   = phase;
     }
 
     // Either side. Accepted commands remain available for the owner to handle.
@@ -167,6 +196,7 @@ private:
     std::vector<QueuedClientCommand>  commands;
     bool                              inputClosed{};
     bool                              stopped{};
+    SessionPhase                      phase{SessionPhase::Disconnected};
     StateUpdateQueue::Ptr             state;
     std::vector<ServerRejectionEvent> pendingRejections;
     ChangeBatch                       scratch;                     // Owner only.

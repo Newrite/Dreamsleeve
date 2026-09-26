@@ -2,6 +2,8 @@ export module Dreamsleeve.Client.Config;
 
 import std;
 export import DreamNet.Host;
+export import DreamNet.Address;
+export import DreamNet.Core;
 
 export namespace Dreamsleeve::Client
 {
@@ -9,9 +11,18 @@ export namespace Dreamsleeve::Client
   // Load externally before creating the network owner; keep fixed for its lifetime.
   struct Configuration
   {
-    NetConfig   network{NetConfig::Default()};
-    std::size_t maxInitialPlayers{4096};
-    std::size_t maxRecentMessages{512};
+    NetConfig       network{[] {
+      auto value     = NetConfig::Default();
+      value.maxPeers = 1;
+      return value;
+    }()};
+    std::size_t     maxInitialPlayers{4096};
+    std::size_t     maxRecentMessages{512};
+    DreamNetAddress serverAddress{DreamNetAddress::Loopback(8778)};
+    TimeOutMs       connectTimeoutMs{5000};
+    TimeOutMs       disconnectTimeoutMs{2000};
+    TimeOutMs       sessionTimeoutMs{5000};
+    std::size_t     chatCapacity{512};
 
     std::optional<std::string_view> InvalidProtocolSetting() const noexcept
     {

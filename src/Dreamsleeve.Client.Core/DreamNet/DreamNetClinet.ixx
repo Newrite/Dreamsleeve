@@ -262,6 +262,13 @@ export class DreamNetClient final
     ResetConnection(nextState);
   }
 
+  // Best-effort remote notification followed by immediate local teardown.
+  void Abort(DisconnectReason reason) noexcept
+  {
+    if (serverPeer) serverPeer->Disconnect(DisconnectType::Force, reason);
+    Abort();
+  }
+
   private:
 
   NetOperationResult ValidateSend(const ChannelId channelId) const

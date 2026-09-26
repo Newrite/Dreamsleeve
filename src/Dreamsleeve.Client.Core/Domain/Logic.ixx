@@ -118,6 +118,7 @@ export namespace Domain::Spatial
     const double dx = static_cast<double>(left.X) - static_cast<double>(right.X);
     const double dy = static_cast<double>(left.Y) - static_cast<double>(right.Y);
     const double dz = static_cast<double>(left.Z) - static_cast<double>(right.Z);
+
     return dx * dx + dy * dy + dz * dz;
   }
 
@@ -131,6 +132,7 @@ export namespace Domain::Spatial
   std::optional<double> TryDistance(const PlayerLocation& left, const PlayerLocation& right)
   {
     if (!IsSameSpace(left, right)) return std::nullopt;
+
     return Distance(left.position, right.position);
   }
 

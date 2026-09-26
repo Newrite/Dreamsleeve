@@ -71,7 +71,9 @@ export namespace Dreamsleeve::Client
       const bool reset = state && std::ranges::find(scratch.resetChats, id) != scratch.resetChats.end();
       delta.chats.push_back(ChatStateChange{id, state, reset});
     }
+
     delta.chatContent = std::move(scratch.chatContent);
+
     return ClientStateUpdate{std::move(delta)};
   }
 

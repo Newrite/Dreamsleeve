@@ -182,6 +182,7 @@ public:
       {
         return std::unexpected(Domain::Error{Domain::ErrorCode::InvalidCursor, "round"});
       }
+
       // The token belongs to this model, so removing and re-registering a
       // channel cannot reuse a canceled request's token in the same session.
       auto result = found->second.BeginHistory(after, historyRound + 1);
@@ -191,6 +192,7 @@ public:
         ++revision;
         MarkChatState(channelId);
       }
+
       return result;
     }
 
@@ -211,6 +213,7 @@ public:
         ++revision;
         std::visit([this](const auto& value) { MarkUpdate(value); }, update);
       }
+
       return result;
     }
 
@@ -221,10 +224,12 @@ public:
     {
       players.Clear();
       selfPlayerId.reset();
+
       for (auto& [channelId, cache] : chats)
       {
         cache.CancelHistory();
       }
+
       ++generation;
       ++revision;
       RequireSnapshot();
@@ -237,6 +242,7 @@ public:
       players.Clear();
       chats.clear();
       selfPlayerId.reset();
+
       ++generation;
       ++revision;
       RequireSnapshot();
@@ -266,6 +272,7 @@ public:
     {
       const auto found = chats.find(channelId);
       if (found == chats.end()) return std::nullopt;
+
       return found->second.Snapshot();
     }
 
@@ -273,6 +280,7 @@ public:
     {
       const auto found = chats.find(channelId);
       if (found == chats.end()) return std::nullopt;
+
       return found->second.State();
     }
 
@@ -284,6 +292,7 @@ public:
     {
       output.Clear();
       std::swap(output, pendingChanges);
+
       output.generation = generation;
       output.revision   = revision;
     }
@@ -295,6 +304,7 @@ public:
     {
       std::vector<ServerRejectionEvent> result;
       result.swap(serverRejections);
+
       return result;
     }
 
@@ -307,6 +317,7 @@ public:
       {
         result.chats.push_back(cache.Snapshot());
       }
+
       return result;
     }
 
@@ -322,6 +333,7 @@ private:
     void MarkId(std::vector<Id>& ids, Id id)
     {
       if (std::ranges::find(ids, id) != ids.end()) return;
+
       ids.push_back(id);
     }
 
@@ -515,6 +527,7 @@ private:
     Domain::OperationResult ApplyOne(const ServerRejection& update)
     {
       serverRejections.push_back(ServerRejectionEvent{generation, update});
+
       // Success means the notification was handled, not that the server
       // accepted the originating request. Accepted game/chat state is intact.
       return {};

@@ -39,6 +39,7 @@ let run () = task {
         presence.PostAsync(Upsert
             { PlayerId = 7UL; Location = "Balmora"
               X = 10.f; Y = 2.f; Z = 0.f; Health = 100 })
+
     match posted with
     | AgentPostResult.Posted -> ()
     | other -> failwithf "Unexpected post result: %A" other

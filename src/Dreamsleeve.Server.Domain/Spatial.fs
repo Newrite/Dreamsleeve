@@ -47,9 +47,12 @@ type Position = private {
 module Position =
     /// Preserve native NiPoint3 coordinates. Reject only non-finite components.
     let create (x: float32) (y: float32) (z: float32) =
-        if not (Single.IsFinite x) then Error (DomainError.NonFiniteNumber "Position.X")
-        elif not (Single.IsFinite y) then Error (DomainError.NonFiniteNumber "Position.Y")
-        elif not (Single.IsFinite z) then Error (DomainError.NonFiniteNumber "Position.Z")
+        if not (Single.IsFinite x) then
+            Error (DomainError.NonFiniteNumber "Position.X")
+        elif not (Single.IsFinite y) then
+            Error (DomainError.NonFiniteNumber "Position.Y")
+        elif not (Single.IsFinite z) then
+            Error (DomainError.NonFiniteNumber "Position.Z")
         else
             Ok ({ x = LanguagePrimitives.Float32WithMeasure<worldUnit> x
                   y = LanguagePrimitives.Float32WithMeasure<worldUnit> y
@@ -63,6 +66,7 @@ module Position =
         let dx = float left.X - float right.X
         let dy = float left.Y - float right.Y
         let dz = float left.Z - float right.Z
+
         LanguagePrimitives.FloatWithMeasure<worldUnit^2> (dx * dx + dy * dy + dz * dz)
 
     let distance left right : float<worldUnit> =
@@ -82,9 +86,12 @@ type Rotation = private {
 module Rotation =
     /// Preserve native Euler angles in radians without wrapping or clamping.
     let create (x: float32) (y: float32) (z: float32) =
-        if not (Single.IsFinite x) then Error (DomainError.NonFiniteNumber "Rotation.X")
-        elif not (Single.IsFinite y) then Error (DomainError.NonFiniteNumber "Rotation.Y")
-        elif not (Single.IsFinite z) then Error (DomainError.NonFiniteNumber "Rotation.Z")
+        if not (Single.IsFinite x) then
+            Error (DomainError.NonFiniteNumber "Rotation.X")
+        elif not (Single.IsFinite y) then
+            Error (DomainError.NonFiniteNumber "Rotation.Y")
+        elif not (Single.IsFinite z) then
+            Error (DomainError.NonFiniteNumber "Rotation.Z")
         else
             Ok ({ x = LanguagePrimitives.Float32WithMeasure<radian> x
                   y = LanguagePrimitives.Float32WithMeasure<radian> y
@@ -122,6 +129,7 @@ module PlayerLocation =
             Error DomainError.InvalidRadius
         else
             let radius64 = LanguagePrimitives.FloatWithMeasure<worldUnit> (float radius)
+
             match tryDistanceSquared left right with
             | ValueSome squared -> Ok (squared <= radius64 * radius64)
             | ValueNone -> Ok false
