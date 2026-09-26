@@ -198,3 +198,28 @@ A short library lock coordinates reservation and settlement with termination; se
 never runs under it. Application data stays in its handler. Closing waits does not
 retract admitted commands and the scope never stops the target. Result mapping,
 route identity, request semantics and graceful domain cleanup remain application code.
+
+## Admission with reserved control capacity
+
+`AgentMailbox.boundedWithControl ordinaryCapacity controlReserve` creates one FIFO
+with total capacity `ordinaryCapacity + controlReserve`. Pass a named pure classifier
+as `Agent.Start(options, handler, isControl = isControlMessage)`. Classification runs
+on the posting caller, including Map and Ask, and must not access receiver-owned state.
+Existing mailbox variants and Start calls are unchanged.
+
+Ordinary messages occupy at most ordinaryCapacity queued slots. Control messages can
+use the total capacity but never overtake already accepted messages. The reserve
+protects admission from ordinary traffic; it is not priority processing. Both limits
+exclude the current handler. Dequeue releases capacity before the handler finishes,
+including when that handler subsequently faults.
+
+`ReliableAgentRef.TryPost` returns `AgentTryDeliveryResult.Posted/Full/Closed`.
+`PostAsync` waits for the appropriate capacity; a canceled waiter reserves nothing.
+Complete and Abort close admission and wake waiting senders. Cancellation after Posted
+does not retract a message. Mapped addresses and Ask use the same classifier and FIFO.
+
+Control traffic remains bounded. This mailbox reserve does not reserve capacity in
+an outgoing AgentOutbox: its owner must separately bound ordinary pending operations,
+leave slots for Stop/Detach in the same ordered outbox, and stop ordinary admission
+before shutdown. Independent concurrent writers are ordered by actual admission,
+not by when their PostAsync calls started.

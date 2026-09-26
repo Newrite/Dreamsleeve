@@ -22,6 +22,9 @@ type AgentMailbox =
     /// <param name="fullMode">The behavior when the mailbox is full (e.g., Wait, DropNewest, DropOldest, DropWrite).</param>
     /// <param name="allowSynchronousContinuations">If true, allows synchronous execution of continuations.</param>
     | Bounded of capacity: int * fullMode: BoundedChannelFullMode * allowSynchronousContinuations: bool
+    /// One FIFO with a limit on ordinary queued messages and additional control capacity.
+    /// Control messages use the total capacity without overtaking accepted ordinary messages.
+    | BoundedWithControl of ordinaryCapacity: int * controlReserve: int
 
 /// <summary>
 /// Helper constructors for creating mailboxes.
@@ -44,6 +47,11 @@ module AgentMailbox =
     /// <param name="capacity">The maximum number of items the mailbox can hold.</param>
     let boundedWait capacity =
         AgentMailbox.Bounded(capacity, BoundedChannelFullMode.Wait, false)
+
+    /// Bound ordinary admission separately while retaining one shared FIFO.
+    /// The handler currently executing is not included in either queued capacity.
+    let boundedWithControl ordinaryCapacity controlReserve =
+        AgentMailbox.BoundedWithControl(ordinaryCapacity, controlReserve)
 
     /// <summary>
     /// Creates a bounded mailbox with an explicit full-mode policy.
@@ -269,6 +277,7 @@ module private AgentInternals =
          onDiscard: (AgentStopReason -> unit) option) =
         let mutable dropped = 0
         member _.Message = message
+        member val IsOrdinary = false with get, set
         member _.WasDropped = Volatile.Read(&dropped) <> 0
         member _.Fault(error) = onError |> Option.iter (fun settle -> settle error)
         member _.Drop() =
@@ -283,18 +292,28 @@ type AgentDeliveryResult =
     | Closed
     | Canceled
 
-/// An asynchronous send-only address, available only for non-dropping mailboxes.
+/// Immediate admission to a mailbox that never evicts accepted messages.
+[<RequireQualifiedAccess>]
+type AgentTryDeliveryResult =
+    | Posted
+    | Full
+    | Closed
+
+/// A send-only address, available only for non-dropping mailboxes.
 /// Posted acknowledges admission, not processing or persistence.
 [<Sealed>]
 type ReliableAgentRef<'Message> internal
-    (postAsync: 'Message -> CancellationToken -> Task<AgentDeliveryResult>) =
+    (tryPost: 'Message -> AgentTryDeliveryResult,
+     postAsync: 'Message -> CancellationToken -> Task<AgentDeliveryResult>) =
+
+    member _.TryPost(message) = tryPost message
 
     member _.PostAsync(message, ?cancellationToken: CancellationToken) =
         postAsync message (defaultArg cancellationToken CancellationToken.None)
 
     /// The mapping runs on the sender and must not access receiver-owned state.
     member _.Map<'Input>(map: 'Input -> 'Message) =
-        ReliableAgentRef<'Input>(fun value token -> postAsync (map value) token)
+        ReliableAgentRef<'Input>((map >> tryPost), fun value token -> postAsync (map value) token)
 
 /// A send-only address. Admission is not processing or persistence acknowledgement.
 [<Sealed>]
@@ -328,7 +347,15 @@ type AgentRef<'Message> internal
                     return invalidOp "Non-dropping PostAsync violated its admission contract."
             }
 
-            Some (ReliableAgentRef<'Message>(deliver))
+            let tryDeliver message =
+                match tryPost message with
+                | AgentPostResult.Posted -> AgentTryDeliveryResult.Posted
+                | AgentPostResult.Full -> AgentTryDeliveryResult.Full
+                | AgentPostResult.Closed -> AgentTryDeliveryResult.Closed
+                | AgentPostResult.Dropped | AgentPostResult.Canceled ->
+                    invalidOp "Non-dropping TryPost violated its admission contract."
+
+            Some (ReliableAgentRef<'Message>(tryDeliver, deliver))
 
     /// Narrow an address to one part of the receiving agent's protocol.
     /// The mapping runs on the sender and must not access receiver-owned state.
@@ -433,18 +460,56 @@ type AgentContext<'Message>
 /// Processes messages sequentially without built-in state management.
 /// </summary>
 [<Sealed>]
-type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>) =
+type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>,
+                             isControl: ('Message -> bool) option) =
     do
         if isNull (box options) then nullArg (nameof options)
         if isNull (box handler) then nullArg (nameof handler)
         validateTimeout "DefaultAskTimeout" options.DefaultAskTimeout
 
         match options.Mailbox with
+        | AgentMailbox.BoundedWithControl(ordinary, reserve)
+            when ordinary < 1 || reserve < 1 || int64 ordinary + int64 reserve > int64 Int32.MaxValue ->
+            invalidArg "capacity" "Ordinary capacity and control reserve must be positive and fit in Int32."
+        | AgentMailbox.BoundedWithControl _ when isControl.IsNone ->
+            invalidArg "isControl" "A mailbox with reserved control capacity requires a message classifier."
         | AgentMailbox.Bounded(capacity, _, _) when capacity <= 0 ->
             invalidArg "capacity" "Bounded mailbox capacity must be greater than zero."
         | AgentMailbox.Bounded(_, fullMode, _) when not (Enum.IsDefined(fullMode)) ->
             invalidArg "fullMode" "Unknown bounded mailbox full-mode policy."
         | _ -> ()
+
+    let ordinaryLimit =
+        match options.Mailbox with
+        | AgentMailbox.BoundedWithControl(ordinary, _) -> Some ordinary
+        | AgentMailbox.Unbounded _ | AgentMailbox.Bounded _ -> None
+
+    // This boundary lock covers admission bookkeeping, not application state.
+    // Both classes share the channel; a notification changes only after capacity or closure.
+    let admissionGate = obj()
+    let mutable ordinaryQueued = 0
+    let mutable admissionChanged = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+
+    let notifyAdmissionLocked () =
+        let previous = admissionChanged
+        admissionChanged <- TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        previous.TrySetResult() |> ignore
+
+    let notifyAdmission () =
+        if ordinaryLimit.IsSome then
+            lock admissionGate notifyAdmissionLocked
+
+    let releaseAdmission (envelope: MailboxEnvelope<'Message>) =
+        if ordinaryLimit.IsSome then
+            lock admissionGate (fun () ->
+                if envelope.IsOrdinary then ordinaryQueued <- ordinaryQueued - 1
+                notifyAdmissionLocked ())
+
+    let classify (envelope: MailboxEnvelope<'Message>) =
+        match ordinaryLimit, isControl with
+        | Some _, Some control -> envelope.IsOrdinary <- not (control envelope.Message)
+        | Some _, None | None, _ -> ()
+        envelope
 
     let lifetime = new CancellationTokenSource()
     let dispatchStopped = new CancellationTokenSource()
@@ -479,6 +544,15 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
         envelope.Drop()
 
     let channel : Channel<MailboxEnvelope<'Message>> =
+        let bounded capacity fullMode allowSynchronousContinuations =
+            let settings =
+                BoundedChannelOptions(capacity,
+                    SingleReader = true,
+                    SingleWriter = options.SingleWriter,
+                    FullMode = fullMode,
+                    AllowSynchronousContinuations = allowSynchronousContinuations)
+            Channel.CreateBounded<MailboxEnvelope<'Message>>(settings, Action<_>(itemDropped))
+
         match options.Mailbox with
         | AgentMailbox.Unbounded allowSynchronousContinuations ->
             let settings =
@@ -488,13 +562,9 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                     AllowSynchronousContinuations = allowSynchronousContinuations)
             Channel.CreateUnbounded<MailboxEnvelope<'Message>>(settings)
         | AgentMailbox.Bounded(capacity, fullMode, allowSynchronousContinuations) ->
-            let settings =
-                BoundedChannelOptions(capacity,
-                    SingleReader = true,
-                    SingleWriter = options.SingleWriter,
-                    FullMode = fullMode,
-                    AllowSynchronousContinuations = allowSynchronousContinuations)
-            Channel.CreateBounded<MailboxEnvelope<'Message>>(settings, Action<_>(itemDropped))
+            bounded capacity fullMode allowSynchronousContinuations
+        | AgentMailbox.BoundedWithControl(ordinary, reserve) ->
+            bounded (ordinary + reserve) BoundedChannelFullMode.Wait false
 
     let getStopReason () = lock lifecycleGate (fun () -> stopReason)
     let isAcceptingMessages () = Volatile.Read(&accepting) = 1
@@ -506,7 +576,9 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
 
     let completeCore () =
         if Interlocked.Exchange(&accepting, 0) = 1 then
-            channel.Writer.TryComplete()
+            let completed = channel.Writer.TryComplete()
+            notifyAdmission ()
+            completed
         else
             false
 
@@ -542,6 +614,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
             // Close admission first. Even a throwing cancellation callback cannot strand writers.
             // Do not hold the gate here: channels may allow synchronous continuations.
             channel.Writer.TryComplete() |> ignore
+            notifyAdmission ()
 
             match cancellation with
             | None -> ()
@@ -561,7 +634,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
 
     let abortCore () = requestImmediateStop AgentStopReason.Aborted
 
-    let tryWriteEnvelope (envelope: MailboxEnvelope<'Message>) =
+    let tryWriteUnrestricted (envelope: MailboxEnvelope<'Message>) =
         if not (isAcceptingMessages ()) then
             AgentPostResult.Closed
         else
@@ -574,6 +647,23 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                 Interlocked.Decrement(&queueLength) |> ignore
                 if isAcceptingMessages () then AgentPostResult.Full else AgentPostResult.Closed
 
+    let tryWriteReserved limit (envelope: MailboxEnvelope<'Message>) =
+        if not (isAcceptingMessages ()) then
+            AgentPostResult.Closed
+        elif envelope.IsOrdinary && ordinaryQueued >= limit then
+            AgentPostResult.Full
+        else
+            if envelope.IsOrdinary then ordinaryQueued <- ordinaryQueued + 1
+            let result = tryWriteUnrestricted envelope
+            if result <> AgentPostResult.Posted && envelope.IsOrdinary then
+                ordinaryQueued <- ordinaryQueued - 1
+            result
+
+    let tryWriteEnvelope envelope =
+        match ordinaryLimit with
+        | Some limit -> lock admissionGate (fun () -> tryWriteReserved limit envelope)
+        | None -> tryWriteUnrestricted envelope
+
     let postEnvelopeAsync (envelope: MailboxEnvelope<'Message>) (token: CancellationToken) =
         task {
             let mutable result = AgentPostResult.Full
@@ -583,12 +673,26 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                     result <- AgentPostResult.Canceled
                     waiting <- false
                 else
-                    result <- tryWriteEnvelope envelope
+                    // Capture the change notification together with a failed attempt:
+                    // a dequeue between the two must not leave an asynchronous writer asleep.
+                    let attempt, changed =
+                        match ordinaryLimit with
+                        | Some limit ->
+                            lock admissionGate (fun () ->
+                                tryWriteReserved limit envelope, Some admissionChanged.Task)
+                        | None -> tryWriteUnrestricted envelope, None
+                    result <- attempt
 
                     match result with
                     | AgentPostResult.Full ->
                         try
-                            let! canWrite = channel.Writer.WaitToWriteAsync(token).AsTask()
+                            let! canWrite = task {
+                                match changed with
+                                | Some notification ->
+                                    do! notification.WaitAsync token
+                                    return true
+                                | None -> return! channel.Writer.WaitToWriteAsync(token).AsTask()
+                            }
                             if not canWrite then
                                 result <- AgentPostResult.Closed
                                 waiting <- false
@@ -600,10 +704,10 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
         }
 
     let tryPostCore message =
-        tryWriteEnvelope (MailboxEnvelope(message, None, None, None))
+        tryWriteEnvelope (MailboxEnvelope(message, None, None, None) |> classify)
 
     let postAsyncCore message token =
-        postEnvelopeAsync (MailboxEnvelope(message, None, None, None)) token
+        postEnvelopeAsync (MailboxEnvelope(message, None, None, None) |> classify) token
 
     // Only the handler adds work; finish reads after dispatch has stopped.
     let background = ResizeArray<Task>()
@@ -628,6 +732,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let reliableMailbox =
         match options.Mailbox with
         | AgentMailbox.Unbounded _
+        | AgentMailbox.BoundedWithControl _
         | AgentMailbox.Bounded(_, BoundedChannelFullMode.Wait, _) -> true
         | AgentMailbox.Bounded _ -> false
 
@@ -658,6 +763,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                 match channel.Reader.TryRead() with
                 | true, envelope ->
                     Interlocked.Decrement(&queueLength) |> ignore
+                    releaseAdmission envelope
                     Some envelope
                 | false, _ -> None)
 
@@ -672,12 +778,14 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                     reason)
 
             channel.Writer.TryComplete() |> ignore
+            notifyAdmission ()
             // The sole reader is now done dispatching. Drop references and settle queued requests.
             let mutable draining = true
             while draining do
                 match channel.Reader.TryRead() with
                 | true, envelope ->
                     Interlocked.Decrement(&queueLength) |> ignore
+                    releaseAdmission envelope
                     envelope.Discard reason
                 | false, _ -> draining <- false
             termination.TrySetResult(reason) |> ignore
@@ -790,6 +898,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                             Some (fun error -> settle (AgentAskResult.Faulted error)),
                             Some (fun () -> settle AgentAskResult.Dropped),
                             Some (fun reason -> settle (resultForStop reason)))
+                        |> classify
                     let! postResult = postEnvelopeAsync envelope waitCts.Token
 
                     match postResult with
@@ -900,8 +1009,11 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
             ValueTask(this.Completion)
 
     /// <summary>Validates configuration and starts a sequential background message loop.</summary>
-    static member Start(options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>) =
-        new Agent<'Message>(options, handler)
+    /// <param name="isControl">Required for BoundedWithControl. Runs at the posting boundary;
+    /// it must classify immutable messages without reading or mutating agent-owned state.</param>
+    static member Start(options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>,
+                        ?isControl: 'Message -> bool) =
+        new Agent<'Message>(options, handler, isControl)
 
 /// <summary>
 /// Represents a state transition returned by a stateful agent's command handler.
