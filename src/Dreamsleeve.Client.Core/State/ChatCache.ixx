@@ -17,6 +17,12 @@ export namespace Dreamsleeve::Client
     std::size_t duplicates{};
     // Messages discarded from the combined cache and batch to enforce capacity.
     std::size_t evicted{};
+
+    // Exact visible transition from the cache state before Merge to the state
+    // after Merge. Newly accepted messages that are immediately evicted do not
+    // appear here because a consumer never needs to render them.
+    std::vector<ChatMessage>   addedMessages{};
+    std::vector<ChatMessageId> removedMessageIds{};
   };
 
   struct ChatHistoryState
@@ -39,6 +45,15 @@ export namespace Dreamsleeve::Client
     std::vector<ChatMessage>     messages{};
     bool                         hasMore{};
     bool                         hasGap{};
+  };
+
+  struct ChatCacheState
+  {
+    ChatChannelId                channelId{};
+    std::size_t                  capacity{};
+    std::size_t                  count{};
+    ChatHistoryState             history{};
+    std::optional<ChatMessageId> maxObservedId{};
   };
 
   struct ChatCacheSnapshot
@@ -100,6 +115,17 @@ public:
     std::optional<ChatMessageId> MaxObservedId() const noexcept
     {
       return maxObservedId;
+    }
+
+    ChatCacheState State() const noexcept
+    {
+      return ChatCacheState{
+          .channelId     = channelId,
+          .capacity      = capacity,
+          .count         = messages.size(),
+          .history       = history,
+          .maxObservedId = maxObservedId
+      };
     }
 
     std::optional<ChatMessage> Find(ChatMessageId messageId) const
@@ -178,6 +204,41 @@ public:
       }
 
       result.added = staged.size();
+
+      const auto combinedSize = messages.size() + staged.size();
+      const auto evictCount   = combinedSize > capacity ? combinedSize - capacity : 0;
+      result.evicted          = evictCount;
+
+      // Build the outgoing delta before mutating live state. If one of these
+      // allocations fails, the cache is still unchanged. Both maps are ordered,
+      // so the first evictCount keys of their merged ordering are exactly the
+      // messages that will disappear.
+      result.removedMessageIds.reserve(std::min(evictCount, messages.size()));
+      result.addedMessages.reserve(staged.size());
+
+      auto retainedNew = staged.begin();
+      auto existing    = messages.begin();
+      for (std::size_t i = 0; i < evictCount; ++i)
+      {
+        const bool takeExisting = retainedNew == staged.end() || (existing != messages.end() && existing->first < retainedNew->first);
+
+        if (takeExisting)
+        {
+          result.removedMessageIds.push_back(existing->first);
+          ++existing;
+        }
+        else
+        {
+          // This newly accepted message is evicted before it can become visible.
+          ++retainedNew;
+        }
+      }
+
+      for (auto it = retainedNew; it != staged.end(); ++it)
+      {
+        result.addedMessages.push_back(it->second);
+      }
+
       if (!staged.empty())
       {
         const auto greatest = staged.rbegin()->first;
@@ -189,10 +250,9 @@ public:
         messages.merge(staged);
       }
 
-      while (messages.size() > capacity)
+      for (std::size_t i = 0; i < evictCount; ++i)
       {
         messages.erase(messages.begin());
-        ++result.evicted;
       }
 
       return result;

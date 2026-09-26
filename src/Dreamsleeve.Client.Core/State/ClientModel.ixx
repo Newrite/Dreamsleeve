@@ -146,7 +146,7 @@ public:
 
       chats.emplace(channelId, std::move(*cache));
       ++revision;
-      MarkChat(channelId);
+      MarkChatState(channelId);
       return {};
     }
 
@@ -158,7 +158,8 @@ public:
       }
 
       ++revision;
-      MarkChat(channelId);
+      ForgetChatContent(channelId);
+      MarkChatState(channelId);
       return true;
     }
 
@@ -186,7 +187,7 @@ public:
       {
         historyRound = *result;
         ++revision;
-        MarkChat(channelId);
+        MarkChatState(channelId);
       }
       return result;
     }
@@ -261,10 +262,17 @@ public:
       return found->second.Snapshot();
     }
 
-    // One owner drains once, resolves the invalidations, then distributes owning
-    // payloads to consumers. Drain regularly, even when no UI is subscribed.
-    // Reuse the same output: its previous contents are replaced, and the two
-    // sets of vector buffers are exchanged without allocating or copying data.
+    std::optional<ChatCacheState> FindChatState(ChatChannelId channelId) const noexcept
+    {
+      const auto found = chats.find(channelId);
+      if (found == chats.end()) return std::nullopt;
+      return found->second.State();
+    }
+
+    // One owner drains once, resolves player/chat-state invalidations, then
+    // forwards the owning chat-content deltas in their stored order. Drain
+    // regularly even when no UI is subscribed. Reusing output preserves the
+    // capacities of the top-level vectors exchanged with pendingChanges.
     void TakeChanges(ChangeBatch& output) noexcept
     {
       output.Clear();
@@ -306,11 +314,7 @@ private:
     template <class Id>
     void MarkId(std::vector<Id>& ids, Id id)
     {
-      if (std::ranges::find(ids, id) != ids.end())
-      {
-        return;
-      }
-
+      if (std::ranges::find(ids, id) != ids.end()) return;
       ids.push_back(id);
     }
 
@@ -322,12 +326,66 @@ private:
       }
     }
 
-    void MarkChat(ChatChannelId channelId)
+    void MarkChatState(ChatChannelId channelId)
     {
       if (!pendingChanges.requiresSnapshot)
       {
         MarkId(pendingChanges.chats, channelId);
       }
+    }
+
+    void AppendChatContent(ChatChannelId channelId, std::vector<ChatMessageId> messageIds)
+    {
+      if (messageIds.empty()) return;
+
+      if (!pendingChanges.chatContent.empty())
+      {
+        if (auto* last = std::get_if<ChatMessagesRemoved>(&pendingChanges.chatContent.back()); last && last->channelId == channelId)
+        {
+          last->messageIds.reserve(last->messageIds.size() + messageIds.size());
+          last->messageIds.insert(
+            last->messageIds.end(),
+            std::make_move_iterator(messageIds.begin()),
+            std::make_move_iterator(messageIds.end()));
+          return;
+        }
+      }
+
+      pendingChanges.chatContent.emplace_back(ChatMessagesRemoved{.channelId = channelId, .messageIds = std::move(messageIds)});
+    }
+
+    void AppendChatContent(ChatChannelId channelId, std::vector<ChatMessage> messages)
+    {
+      if (messages.empty()) return;
+
+      if (!pendingChanges.chatContent.empty())
+      {
+        if (auto* last = std::get_if<ChatMessagesAdded>(&pendingChanges.chatContent.back()); last && last->channelId == channelId)
+        {
+          last->messages.reserve(last->messages.size() + messages.size());
+          last->messages.insert(last->messages.end(), std::make_move_iterator(messages.begin()), std::make_move_iterator(messages.end()));
+          return;
+        }
+      }
+
+      pendingChanges.chatContent.emplace_back(ChatMessagesAdded{.channelId = channelId, .messages = std::move(messages)});
+    }
+
+    void RecordChatMerge(ChatChannelId channelId, ChatMergeResult result)
+    {
+      if (pendingChanges.requiresSnapshot) return;
+
+      // Preserve cache transition order across multiple Merge calls between
+      // TakeChanges invocations. Removals precede additions for one merge.
+      AppendChatContent(channelId, std::move(result.removedMessageIds));
+      AppendChatContent(channelId, std::move(result.addedMessages));
+    }
+
+    void ForgetChatContent(ChatChannelId channelId)
+    {
+      std::erase_if(pendingChanges.chatContent, [channelId](const ChatContentChange& change) {
+        return std::visit([channelId](const auto& value) { return value.channelId == channelId; }, change);
+      });
     }
 
     template <class Update>
@@ -348,15 +406,9 @@ private:
       {
         MarkPlayer(update.player.data.playerId);
       }
-      else if constexpr (std::is_same_v<Update, ChatMessagesReceived>)
-      {
-        MarkChat(update.channelId);
-      }
-      else if constexpr (std::is_same_v<Update, ChatHistoryReceived>)
-      {
-        MarkChat(update.page.channelId);
-      }
-      else if constexpr (!std::is_same_v<Update, ServerRejection>)
+      else if constexpr (
+        !std::is_same_v<Update, ChatMessagesReceived> && !std::is_same_v<Update, ChatHistoryReceived> &&
+        !std::is_same_v<Update, ServerRejection>)
       {
         MarkPlayer(update.playerId);
       }
@@ -422,11 +474,14 @@ private:
       {
         return std::unexpected(Domain::Error{Domain::ErrorCode::UnknownChannel, "channelId"});
       }
+
       auto result = found->second.Merge(update.messages);
       if (!result)
       {
         return std::unexpected(std::move(result.error()));
       }
+
+      RecordChatMerge(update.channelId, std::move(*result));
       return {};
     }
 
@@ -437,11 +492,15 @@ private:
       {
         return std::unexpected(Domain::Error{Domain::ErrorCode::UnknownChannel, "channelId"});
       }
+
       auto result = found->second.ApplyHistoryPage(update.page);
       if (!result)
       {
         return std::unexpected(std::move(result.error()));
       }
+
+      RecordChatMerge(update.page.channelId, std::move(*result));
+      MarkChatState(update.page.channelId);
       return {};
     }
 
