@@ -18,6 +18,8 @@ export struct NetConfig
   size_t         channelLimit;
   BandwidthLimit inBwLimit;
   BandwidthLimit outBwLimit;
+  size_t         maxPacketBytes{1024 * 1024};
+  size_t         maxWaitingData{32 * 1024 * 1024};
 
   static constexpr NetConfig Default() noexcept
   {
@@ -40,10 +42,12 @@ export struct ServerConfig final : NetConfig
     ServerConfig   config{.address = DreamNetAddress::Loopback(loopbackPort)};
     NetConfig      defaultNet = NetConfig::Default();
 
-    config.maxPeers     = defaultNet.maxPeers;
-    config.channelLimit = defaultNet.channelLimit;
-    config.inBwLimit    = defaultNet.inBwLimit;
-    config.outBwLimit   = defaultNet.outBwLimit;
+    config.maxPeers       = defaultNet.maxPeers;
+    config.channelLimit   = defaultNet.channelLimit;
+    config.inBwLimit      = defaultNet.inBwLimit;
+    config.outBwLimit     = defaultNet.outBwLimit;
+    config.maxPacketBytes = defaultNet.maxPacketBytes;
+    config.maxWaitingData = defaultNet.maxWaitingData;
     return config;
   }
 };
@@ -87,6 +91,8 @@ export struct HostInfo final
   ChannelLimit    channelLimit;
   enet_uint32     incomingBandwidth;
   enet_uint32     outgoingBandwidth;
+  size_t          maxPacketBytes;
+  size_t          maxWaitingData;
 };
 
 export struct HostTelemetry final
@@ -130,6 +136,9 @@ export class DreamNetHost
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateClient, "enet_host_create failed for client host");
     }
 
+    host->maximumPacketSize  = config.maxPacketBytes;
+    host->maximumWaitingData = config.maxWaitingData;
+
     NativePtr enetHost  = NativePtr(host);
     auto      dreamHost = DreamNetHost(std::move(enetHost));
 
@@ -167,6 +176,9 @@ export class DreamNetHost
     {
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateServer, "enet_host_create failed for server host");
     }
+
+    host->maximumPacketSize  = config.maxPacketBytes;
+    host->maximumWaitingData = config.maxWaitingData;
 
     NativePtr enetHost  = NativePtr(host);
     auto      dreamHost = DreamNetHost(std::move(enetHost));
@@ -222,6 +234,11 @@ export class DreamNetHost
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPacket, "Cannot broadcast invalid DreamNetPacket");
     }
 
+    if (packet.Size() > host->maximumPacketSize)
+    {
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPacket, "Packet exceeds configured host maximumPacketSize");
+    }
+
     enet_host_broadcast(Native(), channelId, packet.ReleaseNative());
     return {};
   }
@@ -231,6 +248,10 @@ export class DreamNetHost
     const ChannelId                 channelId,
     const PacketFlag                flags = PacketFlag::Reliable)
   {
+    if (!IsValid()) return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidHost, "Cannot broadcast through invalid host");
+    if (bytes.size() > host->maximumPacketSize)
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPacket, "Packet exceeds configured host maximumPacketSize");
+
     auto packet = DreamNetPacket::TryFromSpan(bytes, flags);
     if (!packet)
     {
@@ -387,6 +408,8 @@ export class DreamNetHost
         .channelLimit      = host->channelLimit,
         .incomingBandwidth = host->incomingBandwidth,
         .outgoingBandwidth = host->outgoingBandwidth,
+        .maxPacketBytes    = host->maximumPacketSize,
+        .maxWaitingData    = host->maximumWaitingData,
     };
   }
 
@@ -456,6 +479,15 @@ export class DreamNetHost
 
   static NetOperationResult ValidateConfig(const NetConfig& config)
   {
+    if (config.maxPacketBytes == 0 || config.maxPacketBytes > DreamNetPacket::MaxDataSize)
+      return DreamNetError::MakeUnexpected(
+        DreamNetErrorCode::InvalidConfig,
+        "NetConfig.maxPacketBytes is outside the ENet wire size range");
+    if (config.maxWaitingData < config.maxPacketBytes)
+      return DreamNetError::MakeUnexpected(
+        DreamNetErrorCode::InvalidConfig,
+        "NetConfig.maxWaitingData must allow at least one maximum-size packet");
+
     auto maxPeersValidationResult = ValidateMaxPeers(config.maxPeers);
     if (!maxPeersValidationResult)
     {

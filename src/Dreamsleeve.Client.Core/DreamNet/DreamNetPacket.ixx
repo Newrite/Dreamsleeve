@@ -91,9 +91,9 @@ export class DreamNetPacket
   using MutableBytes = std::span<std::byte>;
   using Result       = NetResult<DreamNetPacket>;
 
-  // ENet refuses to send anything larger than the host's maximumPacketSize,
-  // which enet_host_create always initialises to this value.
-  static constexpr std::size_t MaxDataSize = ENET_HOST_DEFAULT_MAXIMUM_PACKET_SIZE;
+  // ENet's fragmented-message length is uint32. The configured host limit is
+  // checked on send; its default is not a fixed ceiling for packet allocation.
+  static constexpr std::size_t MaxDataSize = (std::numeric_limits<enet_uint32>::max)();
 
   DreamNetPacket(const DreamNetPacket& other)                = delete;
   DreamNetPacket(DreamNetPacket&& other) noexcept            = default;

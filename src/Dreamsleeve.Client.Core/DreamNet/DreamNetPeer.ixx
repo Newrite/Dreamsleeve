@@ -244,6 +244,10 @@ export class DreamNetPeer
     const ChannelId                 channelId,
     const PacketFlag                flags = PacketFlag::Reliable)
   {
+    if (!IsValid()) return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPeer, "Cannot send through invalid peer");
+    if (bytes.size() > peer->host->maximumPacketSize)
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPacket, "Packet exceeds configured host maximumPacketSize");
+
     auto packet = DreamNetPacket::TryFromSpan(bytes, flags);
     if (!packet)
     {
@@ -268,6 +272,10 @@ export class DreamNetPeer
     const ChannelId                 channelId,
     const PacketFlag                flags = PacketFlag::Reliable)
   {
+    if (!IsValid()) return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPeer, "Cannot send through invalid peer");
+    if (bytes.size() > peer->host->maximumPacketSize)
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPacket, "Packet exceeds configured host maximumPacketSize");
+
     auto packet = DreamNetPacket::TryFromSpan(bytes, flags);
     if (!packet)
     {
