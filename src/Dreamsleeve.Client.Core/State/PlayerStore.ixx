@@ -6,7 +6,7 @@ import std;
 
 export namespace Dreamsleeve::Client
 {
-  
+
   using namespace Domain;
 
   // The network thread owns this store. All calls, including const reads, must
@@ -24,20 +24,14 @@ public:
 
     // A complete server snapshot replaces every field, including absent game
     // data. The result distinguishes a newly online player from a replacement.
-    Domain::Result<bool> Upsert(Player player)
+    bool Upsert(Player player)
     {
-      auto normalized = Domain::Normalize::PlayerValue(std::move(player));
-      if (!normalized)
-      {
-        return std::unexpected{std::move(normalized.error())};
-      }
-
-      const auto id = normalized->data.playerId;
-      return players.insert_or_assign(id, std::move(*normalized)).second;
+      const auto id = player.data.playerId;
+      return players.insert_or_assign(id, std::move(player)).second;
     }
 
     // An authoritative online snapshot removes players absent from the input.
-    // Build a replacement first so validation failures leave the store intact.
+    // Build a replacement first so duplicate IDs leave the store intact.
     Domain::OperationResult ReplaceAll(std::span<const Player> snapshot)
     {
       std::unordered_map<PlayerId, Player> replacement;
@@ -45,14 +39,8 @@ public:
 
       for (const auto& player : snapshot)
       {
-        auto normalized = Domain::Normalize::PlayerValue(player);
-        if (!normalized)
-        {
-          return std::unexpected{std::move(normalized.error())};
-        }
-
-        const auto id = normalized->data.playerId;
-        if (!replacement.try_emplace(id, std::move(*normalized)).second)
+        const auto id = player.data.playerId;
+        if (!replacement.try_emplace(id, player).second)
         {
           return std::unexpected{
               Domain::Error{Domain::ErrorCode::DuplicatePlayer, "playerId"}
@@ -124,13 +112,7 @@ public:
         };
       }
 
-      auto normalized = Domain::Normalize::Profile(std::move(profile));
-      if (!normalized)
-      {
-        return std::unexpected{std::move(normalized.error())};
-      }
-
-      found->second.data = std::move(*normalized);
+      found->second.data = std::move(profile);
       return {};
     }
 
@@ -142,20 +124,7 @@ public:
         return UnknownPlayer();
       }
 
-      if (location)
-      {
-        auto& pluginName = location->location.locationId.pluginName;
-        pluginName       = Domain::Normalize::PluginName(pluginName);
-
-        auto valid = Domain::Validation::Validate(*location);
-        if (!valid)
-        {
-          return valid;
-        }
-      }
-
-      // Position updates are frequent: validate their own payload instead of
-      // copying the player's profile and potentially large actor-value map.
+      // Position updates are frequent; replace only their payload.
       found->second.location = std::move(location);
       return {};
     }
@@ -168,11 +137,8 @@ public:
         return UnknownPlayer();
       }
 
-      // Character metadata changes are infrequent. A staged value lets the
-      // common domain validation enforce all rules before the commit.
-      auto staged          = found->second;
-      staged.characterName = std::move(characterName);
-      return Commit(found->second, std::move(staged));
+      found->second.characterName = std::move(characterName);
+      return {};
     }
 
     Domain::OperationResult BeginCharacter(PlayerId id, CharacterName name)
@@ -183,14 +149,8 @@ public:
         return UnknownPlayer();
       }
 
-      Player staged{.data = found->second.data};
-      auto   result = Domain::Players::BeginCharacter(staged, std::move(name));
-      if (!result)
-      {
-        return result;
-      }
-
-      return Commit(found->second, std::move(staged));
+      Domain::Players::BeginCharacter(found->second, std::move(name));
+      return {};
     }
 
     Domain::OperationResult ClearGameState(PlayerId id)
@@ -205,8 +165,8 @@ public:
       return {};
     }
 
-    // Apply one delta atomically with respect to domain errors. Canonicalize
-    // keys before matching so casing cannot create or remove a second entry.
+    // Apply one delta atomically with respect to local consistency errors.
+    // Keys arrive canonicalized by the server and are matched exactly as sent.
     Domain::OperationResult ApplyActorValues(PlayerId id, ActorValueStorage values, std::span<const ActorValueKey> removedKeys = {})
     {
       const auto found = players.find(id);
@@ -220,53 +180,17 @@ public:
         return {};
       }
 
-      ActorValueStorage canonicalValues;
-      canonicalValues.reserve(values.size());
-
-      for (auto& [key, value] : values)
-      {
-        auto canonicalKey = Domain::Normalize::ActorValueKey(key);
-        if (auto valid = Domain::Validation::ActorValueKey(canonicalKey); !valid)
-        {
-          return valid;
-        }
-
-        if (auto valid = Domain::Validation::Validate(value); !valid)
-        {
-          return valid;
-        }
-
-        if (!canonicalValues.try_emplace(std::move(canonicalKey), std::move(value)).second)
-        {
-          return DuplicateKey();
-        }
-      }
-
-      std::unordered_set<ActorValueKey> canonicalRemovals;
-      canonicalRemovals.reserve(removedKeys.size());
-
       for (const auto& key : removedKeys)
       {
-        auto canonicalKey = Domain::Normalize::ActorValueKey(key);
-        auto valid        = Domain::Validation::ActorValueKey(canonicalKey);
-        if (!valid)
-        {
-          return valid;
-        }
-
-        if (canonicalValues.contains(canonicalKey))
+        if (values.contains(key))
         {
           return DuplicateKey();
         }
-
-        // Repeated removals are idempotent; only remove/upsert overlap is
-        // ambiguous and rejected above.
-        canonicalRemovals.insert(std::move(canonicalKey));
       }
 
       auto&       target = found->second.actorValues;
       std::size_t newCount{};
-      for (const auto& [key, value] : canonicalValues)
+      for (const auto& [key, value] : values)
       {
         if (!target.contains(key))
         {
@@ -292,23 +216,24 @@ public:
       // assertion also prevents adding a throwing value move to the commit.
       static_assert(std::is_nothrow_move_assignable_v<ActorValueInfo>);
 
-      for (const auto& key : canonicalRemovals)
+      // Repeated removals are idempotent. No extra removal set is needed.
+      for (const auto& key : removedKeys)
       {
         target.erase(key);
       }
 
-      while (!canonicalValues.empty())
+      while (!values.empty())
       {
-        const auto incoming = canonicalValues.begin();
+        const auto incoming = values.begin();
         const auto existing = target.find(incoming->first);
         if (existing != target.end())
         {
           existing->second = std::move(incoming->second);
-          canonicalValues.erase(incoming);
+          values.erase(incoming);
         }
         else
         {
-          target.insert(canonicalValues.extract(incoming));
+          target.insert(values.extract(incoming));
         }
       }
 
@@ -329,18 +254,6 @@ private:
       return std::unexpected{
           Domain::Error{Domain::ErrorCode::DuplicateKey, "actorValues"}
       };
-    }
-
-    static Domain::OperationResult Commit(Player& target, Player staged)
-    {
-      auto normalized = Domain::Normalize::PlayerValue(std::move(staged));
-      if (!normalized)
-      {
-        return std::unexpected{std::move(normalized.error())};
-      }
-
-      target = std::move(*normalized);
-      return {};
     }
 
     std::unordered_map<PlayerId, Player> players;

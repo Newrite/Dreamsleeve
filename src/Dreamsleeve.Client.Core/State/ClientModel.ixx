@@ -9,7 +9,7 @@ export namespace Dreamsleeve::Client
 {
 
   using namespace Domain;
-  
+
   // Application updates after decoding. These are not protobuf or ENet events.
   struct SelfPlayerAssigned
   {
@@ -78,6 +78,22 @@ export namespace Dreamsleeve::Client
     ChatHistoryPage page;
   };
 
+  // A server business rejection after decoding. The code is opaque until the
+  // application protocol defines it; unknown codes still carry a message.
+  struct ServerRejection
+  {
+    std::optional<std::uint64_t> requestId;
+    std::uint32_t                code{};
+    std::string                  message;
+    std::string                  field;
+  };
+
+  struct ServerRejectionEvent
+  {
+    std::uint64_t   generation{};
+    ServerRejection rejection;
+  };
+
   using ClientUpdate = std::variant<
     SelfPlayerAssigned,
     OnlinePlayersReplaced,
@@ -90,7 +106,8 @@ export namespace Dreamsleeve::Client
     PlayerGameStateCleared,
     PlayerActorValuesUpdated,
     ChatMessagesReceived,
-    ChatHistoryReceived>;
+    ChatHistoryReceived,
+    ServerRejection>;
 
   struct ClientSnapshot
   {
@@ -191,6 +208,7 @@ public:
 
     // A disconnect to the same server can retain accepted chat messages.
     // The session adapter must still negotiate a valid history-resume cursor.
+    // Pending rejections survive: the server can reject and then disconnect.
     void ClearOnlineState()
     {
       players.Clear();
@@ -219,6 +237,16 @@ public:
       return generation;
     }
 
+    // Owner-only drain. Forward these owning events through the application's
+    // synchronized UI queue; snapshots can skip intermediate publications.
+    // Already accepted events survive either reset until explicitly taken.
+    std::vector<ServerRejectionEvent> TakeServerRejections()
+    {
+      std::vector<ServerRejectionEvent> result;
+      result.swap(serverRejections);
+      return result;
+    }
+
     ClientSnapshot Snapshot() const
     {
       ClientSnapshot
@@ -235,10 +263,6 @@ private:
 
     Domain::OperationResult ApplyOne(const SelfPlayerAssigned& update)
     {
-      if (update.playerId && *update.playerId == 0)
-      {
-        return std::unexpected(Domain::Error{Domain::ErrorCode::InvalidId, "selfPlayerId"});
-      }
       selfPlayerId = update.playerId;
       return {};
     }
@@ -250,20 +274,12 @@ private:
 
     Domain::OperationResult ApplyOne(const PlayerUpserted& update)
     {
-      auto result = players.Upsert(update.player);
-      if (!result)
-      {
-        return std::unexpected(std::move(result.error()));
-      }
+      players.Upsert(update.player);
       return {};
     }
 
     Domain::OperationResult ApplyOne(const PlayerRemoved& update)
     {
-      if (update.playerId == 0)
-      {
-        return std::unexpected(Domain::Error{Domain::ErrorCode::InvalidId, "playerId"});
-      }
       players.Remove(update.playerId);
       return {};
     }
@@ -328,8 +344,17 @@ private:
       return {};
     }
 
+    Domain::OperationResult ApplyOne(const ServerRejection& update)
+    {
+      serverRejections.push_back(ServerRejectionEvent{generation, update});
+      // Success means the notification was handled, not that the server
+      // accepted the originating request. Accepted game/chat state is intact.
+      return {};
+    }
+
     PlayerStore                        players;
     std::map<ChatChannelId, ChatCache> chats;
+    std::vector<ServerRejectionEvent>  serverRejections;
     std::optional<PlayerId>            selfPlayerId;
     std::uint64_t                      generation{1};
     std::uint64_t                      revision{};

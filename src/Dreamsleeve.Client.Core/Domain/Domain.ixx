@@ -58,7 +58,7 @@ export namespace Domain
     PluginName  pluginName{};
     LocalFormId localFormId{};
 
-    // Compare canonical keys: normalize the ASCII casing when accepting data.
+    // Keys use canonical ASCII casing, supplied by the game adapter or server.
     bool operator==(const FormKey&) const = default;
   };
 
@@ -128,5 +128,5 @@ export namespace Domain
 
     bool operator==(const ChatMessage&) const = default;
   };
-  
+
 }

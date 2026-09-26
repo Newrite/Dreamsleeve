@@ -6,14 +6,14 @@ export import Dreamsleeve.Client.Domain.Logic;
 
 export namespace Dreamsleeve::Client
 {
-  
+
   using namespace Domain;
 
   struct ChatMergeResult
   {
     // New distinct IDs accepted, including messages immediately evicted below.
     std::size_t added{};
-    // Repeated messages equal after normalization, in the batch or in the cache.
+    // Repeated messages equal exactly as received, in the batch or in the cache.
     std::size_t duplicates{};
     // Messages discarded from the combined cache and batch to enforce capacity.
     std::size_t evicted{};
@@ -67,13 +67,6 @@ public:
 
     static Domain::Result<ChatCache> TryCreate(ChatChannelId channelId, std::size_t capacity)
     {
-      if (channelId == 0)
-      {
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidId, "channelId"}
-        };
-      }
-
       if (capacity == 0)
       {
         return std::unexpected{
@@ -134,10 +127,10 @@ public:
       return Merge(std::span<const ChatMessage>{&message, 1});
     }
 
-    // Validate and normalize the whole batch before touching live state.
+    // Stage the whole batch before touching live state; preserve server values.
     // Duplicate/conflict checks cover retained messages and this whole batch.
     // No unbounded ledger is kept for IDs already evicted from the cache.
-    // Domain failures and allocation failures while staging leave the cache
+    // Consistency failures and allocation failures while staging leave the cache
     // unchanged. Commit transfers preallocated map nodes, then erases old IDs;
     // it does not allocate or copy the existing cache. std::bad_alloc propagates
     // as an exception rather than being reported as a domain error.
@@ -146,12 +139,8 @@ public:
       std::map<ChatMessageId, ChatMessage> staged;
       ChatMergeResult                      result{};
 
-      for (const auto& input : batch)
+      for (const auto& message : batch)
       {
-        auto normalized = Domain::Normalize::Message(input);
-        if (!normalized) return std::unexpected{std::move(normalized.error())};
-
-        auto& message = *normalized;
         if (message.channelId != channelId)
         {
           return std::unexpected{
@@ -185,9 +174,7 @@ public:
           continue;
         }
 
-        // Read the ID before moving the containing message.
-        const auto id = message.messageId;
-        staged.emplace(id, std::move(message));
+        staged.emplace(message.messageId, message);
       }
 
       result.added = staged.size();
