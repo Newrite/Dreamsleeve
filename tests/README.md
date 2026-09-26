@@ -24,13 +24,13 @@ Skyrim, PrismaUI, работающий сервер и база данных н�
 | Проект | Фреймворк | Наборы |
 |---|---|---|
 | `Dreamsleeve.Client.Tests` | doctest, цель xmake | DreamNet.Address/Packet/Runtime/Network/Client; Client.Runtime; Client.Domain/State/Changes/StateUpdate/StateUpdateQueue/Exchange/Codec |
-| `Dreamsleeve.Server.Tests` | Expecto + Faqt, F# executable | Dreamsleeve.Server.Domain (41), Dreamsleeve.Agent (28), Dreamsleeve.Server.Codec (12), Background (9), Profiles (9), ChatAgent (8) |
+| `Dreamsleeve.Server.Tests` | Expecto + Faqt, F# executable | Dreamsleeve.Server.Domain (41), Dreamsleeve.Agent (28), Dreamsleeve.Server.Codec (12), Background (9), Profiles (9), ChatAgent (8), SessionRegistry (10) |
 
 C++: 152 сценария, включая 42 сохранённых из архивов, 6 проверок StateUpdate
 и 7 проверок очереди: порядок, переполнение, восстановление чата и передача между
 двумя потоками. Ещё 6 проверок ClientExchange покрывают FIFO/Full/Closed, отсутствие локального
 добавления чата, доставку только новых сообщений, объединение показаний,
-восстановление без потери отказов и двусторонний обмен с join владельца. F#: 107 сценариев.
+восстановление без потери отказов и двусторонний обмен с join владельца. F#: 117 сценариев.
 Проверки codec: 9 native и 12 managed — корреляция, структура bootstrap,
 доменные ошибки, повреждённые пакеты и выдача одного сообщения без истории.
 Общие коды отказа проверены на известных значениях, недопустимом нуле, отказе
@@ -120,7 +120,7 @@ dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-
 - Проверки транспорта используют loopback и ограниченные ожидания; UI/игровая
   интеграция и межъязыковой echo не входят в нынешнюю проверенную сборку.
 
-Проверено на Windows/MSVC/.NET 10: 152/152 native (11071 assertions) и 107/107 managed.
+Проверено на Windows/MSVC/.NET 10: 152/152 native (1991 assertions) и 117/117 managed.
 Шаг codec не повторяет ENet echo: проверяет новые прикладные контракты.
 
 После обновления VS 18.10.2 / cl 19.51.36260 выполнена чистая сборка всех native-целей,
@@ -140,8 +140,8 @@ refused без ID» заменён на отказ конкретной кома
 
 ## Основа агентного сервера
 
-Managed-набор теперь содержит 107 тестов: прежние 81 и 26 сценариев
-Background/Profiles/ChatAgent. Проверяются отзывчивость mailbox во время I/O, возврат
+Managed-набор теперь содержит 117 тестов: прежние 81 и 36 сценариев
+Background/Profiles/ChatAgent/SessionRegistry. Проверяются отзывчивость mailbox во время I/O, возврат
 ошибок сообщениями, отмена и завершение фоновой работы, запрет dropping-mailbox,
 ошибка отображения результата во время остановки, получение сбоя дочернего агента
 поздним владельцем и запуск замены, типизированная доставка с ожиданием/отменой,
@@ -155,3 +155,9 @@ ChatAgent проверяется через настоящие mailbox: поря
 история и курсор, отклонение публикаций без изменения истории, конкурентная подача
 одного MessageId, обратное давление, дренирование и отмена заблокированного выхода.
 Закрытие единственного выхода и неверные ёмкости также проверяются.
+
+SessionRegistry проверяет настоящий обмен с MemoryProfileStore и ChatAgent,
+совместимость SessionOpened с codec, повторное использование офлайн-профиля,
+конкуренцию за Username, отключение во время поиска/создания/входа, старые ответы,
+порядок bootstrap/PlayerLeft, отказ зависимости после допуска, ограничение сессий
+при заполненной очереди зависимости и Stop с незавершёнными операциями.

@@ -11,6 +11,7 @@
         <Compile Include="ChatCodec.fs" />
         <Compile Include="ProfileStore.fs" />
         <Compile Include="ChatAgent.fs" />
+        <Compile Include="SessionRegistry.fs" />
     </ItemGroup>
 
     <ItemGroup>
