@@ -113,3 +113,18 @@ and updating consumer addresses. The library does not automatically restart agen
 restore state or replay accepted commands. Stopped events are not replayed for late
 subscribers; OnStopped in options is installed before startup but runs before
 Completion settles.
+
+## Bounded ordered sends
+
+AgentOutbox(capacity, destination) belongs to one handler; it owns no thread,
+mailbox or lock. TryEnqueue counts queued messages and the one admission in flight.
+Pump(context, completed) starts at most one PostAsync through PipeToSelf without
+suspending the handler. On its completion message, call Acknowledge, handle the
+result, then Pump again if appropriate. Posted acknowledges admission only;
+outstanding business replies need their own limit.
+
+Use separate outboxes for independently progressing destinations. Overflow returns
+false without evicting messages; the owner chooses its overload policy. Abort
+cancels active admission. A graceful Stop protocol must drain outboxes before
+Complete. Operations and completion mappers run outside the handler and must not
+mutate owner state.

@@ -54,6 +54,74 @@ let slowReceiver (received: TaskCompletionSource<ProfileReply>) (_: AgentContext
 }
 
 let tests = testList "Profiles" [
+    case "concurrent get-or-create requests resolve to one profile" (fun () -> task {
+        let output = Channel.CreateUnbounded<ProfileReply>()
+        use receiver = Agent.Start(AgentOptions.create "replies", collect output)
+        use profiles = start 4
+        let requests = [|
+            for index in 0..31 ->
+                let name = if index % 2 = 0 then "USER" else "user"
+                let displayName = DisplayName.create 64 (sprintf "Player %d" index) |> ok
+                request (ProfileCommand.GetOrCreate(username name, displayName)) receiver.Ref
+        |]
+
+        let! admissions = requests |> Array.map profiles.Ref.PostAsync |> Task.WhenAll
+        check (admissions |> Array.forall ((=) AgentPostResult.Posted)) "Requests were not admitted."
+
+        let replies = ResizeArray<ProfileReply>()
+        for _ in requests do
+            let! reply = receive output
+            replies.Add reply
+
+        equal (requests |> Array.map _.OperationId |> Set.ofArray) (replies |> Seq.map _.OperationId |> Set.ofSeq)
+        let resolved = replies |> Seq.map (fun reply ->
+            match reply.Result with
+            | Ok (ProfileOutcome.Resolved profile) -> profile
+            | other -> failwithf "Get-or-create failed: %A" other) |> Seq.toArray
+
+        check (resolved |> Array.forall ((=) resolved[0])) "A canonical username resolved to different profiles."
+        equal (username "user") resolved[0].Username
+        equal 1UL (PlayerId.value resolved[0].PlayerId)
+
+        do! send profiles (request (ProfileCommand.GetOrCreate(username "other", display)) receiver.Ref)
+        let! other = receive output
+        match other.Result with
+        | Ok (ProfileOutcome.Resolved profile) -> equal 2UL (PlayerId.value profile.PlayerId)
+        | result -> failwithf "Could not resolve another profile: %A" result
+
+        do! stop profiles
+        do! stop receiver
+    })
+
+    case "get-or-create preserves an existing profile and its identity" (fun () -> task {
+        let output = Channel.CreateUnbounded<ProfileReply>()
+        use receiver = Agent.Start(AgentOptions.create "replies", collect output)
+        use profiles = start 2
+        let name = username "player"
+        do! send profiles (request (ProfileCommand.Create(name, display)) receiver.Ref)
+        let! created = receive output
+        let original =
+            match created.Result with
+            | Ok (ProfileOutcome.Created profile) -> profile
+            | other -> failwithf "Could not create profile: %A" other
+
+        let replacement = DisplayName.create 64 "Different name" |> ok
+        do! send profiles (request (ProfileCommand.GetOrCreate(username "PLAYER", replacement)) receiver.Ref)
+        let! resolved = receive output
+        match resolved.Result with
+        | Ok (ProfileOutcome.Resolved profile) -> equal original profile
+        | other -> failwithf "Could not resolve existing profile: %A" other
+
+        do! send profiles (request (ProfileCommand.FindByUsername name) receiver.Ref)
+        let! found = receive output
+        match found.Result with
+        | Ok (ProfileOutcome.Found (Some profile)) -> equal original profile
+        | other -> failwithf "Existing profile changed: %A" other
+
+        do! stop profiles
+        do! stop receiver
+    })
+
     case "concurrent senders reserve a canonical username exactly once" (fun () -> task {
         let output = Channel.CreateUnbounded<ProfileReply>()
         use receiver = Agent.Start(AgentOptions.create "replies", collect output)

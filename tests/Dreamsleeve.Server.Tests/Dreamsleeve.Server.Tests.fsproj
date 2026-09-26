@@ -9,8 +9,10 @@
     <Compile Include="AgentTests.fs" />
     <Compile Include="CodecTests.fs" />
     <Compile Include="BackgroundTests.fs" />
+    <Compile Include="OutboxTests.fs" />
     <Compile Include="ProfileStoreTests.fs" />
     <Compile Include="ChatAgentTests.fs" />
+    <Compile Include="PlayerAgentTests.fs" />
     <Compile Include="SessionRegistryTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

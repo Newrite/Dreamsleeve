@@ -15,11 +15,14 @@ type ProfileStoreError =
 type ProfileCommand =
     | FindByUsername of Username
     | Create of Username * DisplayName
+    /// Atomically return the existing profile or create one; never change an existing profile.
+    | GetOrCreate of Username * DisplayName
 
 [<RequireQualifiedAccess>]
 type ProfileOutcome =
     | Found of PlayerData option
     | Created of PlayerData
+    | Resolved of PlayerData
 
 type ProfileReply = {
     OperationId: Guid

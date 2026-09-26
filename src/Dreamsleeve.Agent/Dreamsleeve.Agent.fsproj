@@ -5,5 +5,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Agent.fs" />
+    <Compile Include="AgentOutbox.fs" />
   </ItemGroup>
 </Project>

@@ -30,12 +30,20 @@ module MemoryProfileStore =
                 state.Profiles.Add(username, profile)
                 state.NextId <- if state.NextId = System.UInt64.MaxValue then 0UL else state.NextId + 1UL
 
-                Ok (ProfileOutcome.Created profile)
+                Ok profile
+
+    let private getOrCreate username displayName state =
+        match state.Profiles.TryGetValue username with
+        | true, profile -> Ok profile
+        | false, _ -> create username displayName state
 
     let private execute state command =
         match command with
         | ProfileCommand.FindByUsername username -> Ok (find username state)
-        | ProfileCommand.Create(username, displayName) -> create username displayName state
+        | ProfileCommand.Create(username, displayName) ->
+            create username displayName state |> Result.map ProfileOutcome.Created
+        | ProfileCommand.GetOrCreate(username, displayName) ->
+            getOrCreate username displayName state |> Result.map ProfileOutcome.Resolved
 
     let private handle state (context: AgentContext<ProfileRequest>) (request: ProfileRequest) = task {
         let result =
