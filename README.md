@@ -77,6 +77,7 @@ Auth HTTP по умолчанию доступен только локально
 
 - [Принятые решения и состояние проекта](docs/CurrentStateRu.md).
 - [Навигация по документации](docs/README.md).
+- [Бенчмарки движения и интерполяции](docs/benchmarks/movement-2026-09-27.md).
 - [Контракт состояния клиента](src/Dreamsleeve.Client.Core/State/README.ru.md).
 - [Серверный домен](src/Dreamsleeve.Server.Domain/README.ru.md).
 - [Агенты: RU](src/Dreamsleeve.Agent/README.ru.md) / [EN](src/Dreamsleeve.Agent/README.md).

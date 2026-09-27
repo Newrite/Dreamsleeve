@@ -9,6 +9,7 @@
 
 int RunStateConsole(bool demo);
 int RunMovementDemo();
+int RunMovementBenchmark();
 int RunNetworkConsole(int argc, char* argv[]);
 
 void InitializeLogging()
@@ -49,6 +50,13 @@ int main(int argc, char* argv[])
 {
   InitializeLogging();
 
+  if (argc == 2 && std::string_view{argv[1]} == "--movement-benchmark")
+  {
+    const int result = RunMovementBenchmark();
+    ShutdownLogger();
+    return result;
+  }
+
   if (argc == 2 && std::string_view{argv[1]} == "--movement-demo")
   {
     const int result = RunMovementDemo();
@@ -64,7 +72,7 @@ int main(int argc, char* argv[])
   }
   if (argc > 2 || (argc == 2 && std::string_view{argv[1]} != "--state-demo"))
   {
-    spdlog::error("Usage: Dreamsleeve.Client.Dev [--state-demo | --movement-demo] | --connect <IPv4> <port> <username> [--auth-url <origin>] [--register <displayName>]");
+    spdlog::error("Usage: Dreamsleeve.Client.Dev [--state-demo | --movement-demo | --movement-benchmark] | --connect <IPv4> <port> <username> [--auth-url <origin>] [--register <displayName>]");
     ShutdownLogger();
     return 2;
   }

@@ -4,7 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Compile Include="Measurements.fs" />
+    <Compile Include="Movement.fs" />
     <Compile Include="Program.fs" />
-    <ProjectReference Include="../../src/Dreamsleeve.Server.Infrastructure/Dreamsleeve.Server.Infrastructure.fsproj" />
+    <ProjectReference Include="../../src/Dreamsleeve.Server/Dreamsleeve.Server.fsproj" />
   </ItemGroup>
 </Project>

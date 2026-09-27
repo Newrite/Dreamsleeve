@@ -1,8 +1,9 @@
-﻿# Real ENet network load generator
+# Real ENet network load generator
 
 This executable is a separate process from `Dreamsleeve.Server`. It uses yENet and
-protobuf from the existing Infrastructure references; no production code changes.
-It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v3 keeps ticket authentication and uses full player snapshots; no username enters OpenSession.
+protobuf from the existing projects. The movement host also subscribes to standard
+server duration instruments; no benchmark branch is added to the server handlers.
+It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v4 keeps ticket authentication and uses full player snapshots; no username enters OpenSession.
 
 ```powershell
 dotnet build tests/Dreamsleeve.Server.NetworkBenchmarks -c Release
@@ -20,18 +21,19 @@ in the benchmark process and HTTP bodies; neither passwords nor tickets enter ar
 logs or result JSON. Plain HTTP is accepted only on loopback; other endpoints require
 HTTPS. The fixed password belongs only to fresh disposable benchmark accounts.
 
-Registration happens before ENet starts and is reported as `registrationMs`. Login
-runs during connection ramp and is separately accumulated in `loginMs`; `rampMs`
+Registration uses at most four concurrent HTTP operations and happens before ENet starts and is reported as `registrationMs`. Login
+runs in batches of at most four during connection ramp and is separately accumulated in `loginMs`; `rampMs`
 includes it, while transport/application opening timers start after that peer's login.
-The ramp services ENet between batches of at most eight admissions; HTTP waits can
-therefore add service delay to already connecting peers. Steady-state SendChat latency
+The ramp admits at most four peers, then waits for all admitted online lists to
+converge before obtaining the next batch of tickets. HTTP waits can still add
+service delay to existing peers. Steady-state SendChat latency
 starts only after every peer is ready and the idle phase has completed. This tool is
 not an authentication throughput benchmark. Historical protocol-v1 measurements
 remain historical; current opening times are not directly comparable to them.
 
 `--rate` is aggregate SendChat requests per second across all clients; zero means
 idle sessions throughout the load interval. Senders rotate. Connections use one
-ENet host, one UDP socket and one client service loop, with up to eight application
+ENet host, one UDP socket and one client service loop, with up to four application
 opens in flight. These are independent protocol peers and profiles, not 1000 game
 processes or 1000 independent IP addresses. No packet loss, latency or WAN jitter
 is injected. This measures the server plus local network/protobuf/ENet path.
@@ -176,3 +178,69 @@ python Scripts/benchmark_enet.py --clients 2 --rates 2 --seconds 1 --repetitions
 The runner's process deadline also bounds registration and login. If running large
 account counts on a slower machine, increase `--timeout` explicitly; do not lower
 the production password hashing policy to manufacture better chat benchmark results.
+
+## Movement benchmark
+
+```powershell
+python Scripts/benchmark_enet.py --clients 100 500 1000 --rates 10 --scenarios dense spaces sparse boundaries --seconds 10 --profile movement
+```
+
+For movement, --rate is **per-client Hz**, not aggregate chat rate. Each case uses a
+fresh server process and SQLite database; registration/login and complete online
+convergence precede BeginCharacter. Characters start in batches of 16 with 150 ms
+service windows; every one of N*N character projections must arrive before the
+one-second idle window and timed movement. Thus setup fan-out cannot silently
+contaminate the load interval.
+Source timestamps use the generator clock, so deliveryAgeMs includes server
+coalescing/replication, ENet and the generator's own receive processing. It is not
+server-only latency or a WAN estimate. Quantiles use fixed logarithmic buckets:
+upper bound within 1% + 0.01 ms; max is exact. State matrices and histograms are bounded.
+
+- dense: every player shares one space and radius (worst-case all-to-all).
+- spaces: ten WRLD/CELL identities, evenly populated.
+- sparse: groups of 25, separated by 20000 units in the same space.
+- boundaries: groups change space and jump across the radius every two seconds.
+
+All players send fresh timestamps even while occupying similar coordinates. A
+source sends at most one due update per pump; missed intervals and eight-pending
+admission stalls are recorded rather than hidden behind catch-up bursts. The generator
+transport budget is 16 packets per peer and max(4096, 16*N) packets globally
+(16 MiB); the global limit accommodates all per-peer windows. Final
+samples are sent after the timed load, then every pair is checked for the exact
+latest timestamp/X or absent position, according to space and the 8192-unit radius.
+Intermediate samples are allowed to coalesce. Cleanup waits for ENet disconnects.
+Success means delivery/state correctness, **not** attainment of the requested rate;
+actualSamplesPerClientSecond must be assessed separately. Per-stage CPU uses only
+samples from that stage. Payload bytes omit UDP/IP/ENet overhead/retransmission.
+
+The movement profile raises finite capacities for per-tick fan-out: per-player
+mailbox/output = max(256, 2*N+128), bootstrap = max(128,N), presence mailbox 8192,
+runtime mailbox 65536, ENet per-peer 4096 packets/16 MiB, global 262144 packets/256 MiB.
+Other scaled settings remain (1000 sessions, event budget 512, service timeout 0).
+These are experimental settings written to each result directory; production
+server.example.json is unchanged. Large queues do not establish a sustainable rate.
+
+For movement only, the server runs in a separate benchmark process which calls the
+unmodified Dreamsleeve.Server.Program.main with its saved configuration. dotnet exec
+uses the production server.runtimeconfig.json (in particular Server GC), not the
+load generator runtime defaults. The selected runtime config is saved in metadata
+and the host logs its actual GC mode. A MeterListener
+records presence.flush.duration (scheduled replication work) and runtime.tick.duration
+(poll/dispatch tick work). These distributions cover the **whole run**, including setup
+and cleanup, not just the load; tick duration does not include actor scheduling wait.
+The listener has bounded histogram memory and adds measurement overhead. Its counts
+must not be interpreted as a synchronized 10 Hz global simulation tick.
+
+C++ cost is measured independently:
+
+```powershell
+xmake run Dreamsleeve.Client.Dev --movement-benchmark
+```
+
+One consumer with 100/500/1000 visible tracks, real ClientModel/ClientExchange/MovementView,
+10 seconds of virtual time, 10 Hz input, 50 Hz frames. It runs as fast as possible and
+reports wall-clock costs of complete model publication and complete consumer frames
+(including drain/apply and sampling all tracks). It excludes ENet/protobuf/SKSE/rendering.
+The stalled case skips consumption for two virtual seconds, then verifies snapshot
+recovery and the final pose. snapshotRecoveriesObserved counts delivered replacement
+snapshots, not all queue overflows that occurred during the stall.

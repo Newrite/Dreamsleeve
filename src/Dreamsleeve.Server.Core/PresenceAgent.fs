@@ -1,7 +1,8 @@
-﻿namespace Dreamsleeve.Server.Core
+namespace Dreamsleeve.Server.Core
 
 open System
 open System.Collections.Generic
+open System.Diagnostics
 open System.Threading.Tasks
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
@@ -207,7 +208,9 @@ module PresenceAgent =
         | PresenceCommand.Update(connectionId, value) -> update config state context connectionId value
         | PresenceCommand.Flush ->
             state.FlushScheduled <- false
+            let started = Stopwatch.GetTimestamp()
             publishDirty state context
+            RuntimeMetrics.presenceFlush.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
         | PresenceCommand.Detach request -> detach state context request
     }
 

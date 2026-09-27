@@ -1,6 +1,7 @@
-﻿namespace Dreamsleeve.Server.Core
+namespace Dreamsleeve.Server.Core
 
 open System
+open System.Diagnostics
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging
@@ -331,7 +332,10 @@ module ServerRuntime =
         match message with
         | ServerRuntimeMessage.Start ->
             if state.Sources.IsNone && not state.Stopping then initialize options globalId authenticator state context
-        | ServerRuntimeMessage.Tick -> tick options globalId authenticator state context
+        | ServerRuntimeMessage.Tick ->
+            let started = Stopwatch.GetTimestamp()
+            tick options globalId authenticator state context
+            RuntimeMetrics.runtimeTick.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
         | ServerRuntimeMessage.Host command -> host options state context command
         | ServerRuntimeMessage.PlayerStopped(connectionId, outcome) -> stopped options state context connectionId outcome
         | ServerRuntimeMessage.SourceStopped(source, outcome) -> sourceStopped state context source outcome

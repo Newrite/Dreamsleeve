@@ -171,3 +171,11 @@ Protocol v4: отдельные Move/SetActorValues/SetDetails, объедине
 Для воспроизводимой трассы движения без сервера: `xmake run Dreamsleeve.Client.Dev --movement-demo`.
 Реальный ENet smoke также проверяет source timestamp и потребителя MovementView через watch.
 [Настройки и сценарии](../docs/MovementInterpolationRu.md).
+
+## Нагрузка движения
+
+Сетевые сценарии dense/spaces/sparse/boundaries и отдельный C++ benchmark потребителя:
+[методика](Dreamsleeve.Server.NetworkBenchmarks/README.md#movement-benchmark).
+В отличие от чата, --rate задаёт частоту замеров **каждого** клиента, а успех требует
+сходимости последнего состояния/AOI, а не доставки каждого промежуточного пакета.
+Регистрация и полная рассылка начальных персонажей исключены из интервала нагрузки.

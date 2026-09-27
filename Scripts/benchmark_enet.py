@@ -141,11 +141,18 @@ def configuration(clients, port, profile, case):
     server, runtime = config["Server"], config["Runtime"]
     server.update(Port=port, PeerLimit=max(32, clients))
     runtime.update(MaxSessions=max(32, clients), ControlReserve=max(128, 3 * clients + 4))
-    if profile == "scaled":
+    if profile in ("scaled", "movement"):
         server.update(PeerLimit=1000, ServiceTimeoutMs=0, EventBudget=512,
                       MaxOutgoingPackets=65536, MaxOutgoingBytes=64 * 1024 * 1024)
         runtime.update(MaxSessions=1000, ControlReserve=3004, MailboxCapacity=8192,
                        OpenTimeoutMs=30000, ShutdownTimeoutMs=10000)
+    if profile == "movement":
+        server.update(MaxOutgoingPacketsPerPeer=4096, MaxOutgoingBytesPerPeer=16 * 1024 * 1024,
+                      MaxOutgoingPackets=262144, MaxOutgoingBytes=256 * 1024 * 1024)
+        runtime.update(MailboxCapacity=65536)
+        runtime["Player"].update(MailboxCapacity=max(256, 2 * clients + 128),
+                                 MaxPendingOutput=max(256, 2 * clients + 128), MaxBootstrapEvents=max(128, clients))
+        runtime["Presence"].update(MailboxCapacity=8192, ControlReserve=128, MaxControlDeliveries=1024)
     return config
 
 
@@ -167,8 +174,9 @@ def aggregate(samples, process):
     return result
 
 
-def run_case(args, clients, rate, repetition, destination):
-    name = f"n{clients}-r{rate:g}-run{repetition}"
+def run_case(args, clients, rate, repetition, destination, scenario="chat"):
+    movement = scenario != "chat"
+    name = f"{scenario}-n{clients}-r{rate:g}-run{repetition}"
     case = destination / name
     case.mkdir()
     config = configuration(clients, free_port(), args.profile, case)
@@ -183,7 +191,11 @@ def run_case(args, clients, rate, repetition, destination):
     server_lines = []
     print(f"START {name} profile={args.profile}", flush=True)
     try:
-        server = Child(["dotnet", str(SERVER), "--config", str(config_path)], case / "server.log", env)
+        server_command = (["dotnet", "exec", "--runtimeconfig", str(SERVER.with_suffix(".runtimeconfig.json")),
+                           str(CLIENT), "--server-config", str(config_path),
+                           "--metrics-output", str(case / "metrics.json")] if movement else
+                          ["dotnet", str(SERVER), "--config", str(config_path)])
+        server = Child(server_command, case / "server.log", env)
         ready = False
         while not ready:
             lines = list(server.output())
@@ -197,7 +209,7 @@ def run_case(args, clients, rate, repetition, destination):
             time.sleep(0.1)
         client = Child(["dotnet", str(CLIENT), "--auth-url", config["Authentication"]["ListenUrl"], "--port", str(config["Server"]["Port"]),
             "--clients", str(clients), "--seconds", str(args.seconds), "--rate", str(rate),
-            "--output", str(case / "client.json")], case / "client.log", env)
+            "--scenario", scenario, "--output", str(case / "client.json")], case / "client.log", env)
         while True:
             for line in client.output():
                 if line.startswith("STAGE "):
@@ -241,7 +253,9 @@ def run_case(args, clients, rate, repetition, destination):
     client_path = case / "client.json"
     delivery = json.loads(client_path.read_text(encoding="utf-8-sig")) if client_path.exists() else None
     success = not errors and delivery is not None and delivery.get("success") is True
-    result = {"name": name, "clients": clients, "rate": rate, "repetition": repetition,
+    metrics_path = case / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8-sig")) if metrics_path.exists() else None
+    result = {"scenario": scenario, "serverInstrumentsWholeRun": metrics, "name": name, "clients": clients, "rate": rate, "repetition": repetition,
               "profile": args.profile, "success": success, "errors": errors,
               "config": config, "server": aggregate(samples, "server"),
               "clientProcess": aggregate(samples, "client"), "delivery": delivery,
@@ -262,40 +276,47 @@ def positive_int(text):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--clients", nargs="+", type=positive_int, default=[100, 500, 1000])
+    parser.add_argument("--scenarios", nargs="+", choices=["chat", "dense", "spaces", "sparse", "boundaries"], default=["chat"])
     parser.add_argument("--rates", nargs="+", type=float, default=[0, 10, 100])
     parser.add_argument("--seconds", type=positive_int, default=10)
     parser.add_argument("--repetitions", type=positive_int, default=1)
     parser.add_argument("--timeout", type=positive_int, default=180)
-    parser.add_argument("--profile", choices=["minimal", "scaled"], default="scaled")
+    parser.add_argument("--profile", choices=["minimal", "scaled", "movement"], default="scaled")
     parser.add_argument("--output", type=Path, default=ROOT / "build/benchmarks/enet" / datetime.now().strftime("%Y%m%d-%H%M%S"))
     args = parser.parse_args()
     if os.name != "nt":
         parser.error("Process metrics currently require Windows")
     if any(n > 1000 for n in args.clients) or any(not 0 <= rate <= 1000 for rate in args.rates):
         parser.error("clients must be <=1000; rates must be finite and between 0 and 1000")
+    if any(s != "chat" for s in args.scenarios) and any(r <= 0 for r in args.rates):
+        parser.error("Movement rates must be positive per-client Hz")
     if args.seconds > 300 or any(rate * args.seconds > 100000 for rate in args.rates):
         parser.error("duration must be <=300 seconds; at most 100000 messages per case")
     if not SERVER.exists() or not CLIENT.exists():
         parser.error("Build Dreamsleeve.Server and Dreamsleeve.Server.NetworkBenchmarks in Release first")
     destination = args.output.resolve()
     destination.mkdir(parents=True, exist_ok=False)
-    source = [Path(__file__), ROOT / "tests/Dreamsleeve.Server.NetworkBenchmarks/Program.fs"]
+    source = [Path(__file__), *sorted((ROOT / "tests/Dreamsleeve.Server.NetworkBenchmarks").glob("*.fs")),
+              ROOT / "src/Dreamsleeve.Server.Core/PresenceAgent.fs", ROOT / "src/Dreamsleeve.Server.Core/RuntimeMetrics.fs"]
     metadata = {
         "measuredAtUtc": datetime.now(timezone.utc).isoformat(),
         "head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "worktree": subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).splitlines(),
         "dotnet": subprocess.check_output(["dotnet", "--version"], text=True).strip(),
+        "serverRuntimeConfig": json.loads(SERVER.with_suffix(".runtimeconfig.json").read_text(encoding="utf-8")),
         "logicalProcessors": os.cpu_count(), "os": platform.platform(),
         "tieredCompilationOverride": os.environ.get("DOTNET_TieredCompilation"),
         "sourceSha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source},
-        "binarySha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in [SERVER, CLIENT]},
+        "binarySha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+                         for p in [SERVER, CLIENT, *sorted(CLIENT.parent.glob("Dreamsleeve.*.dll"))]},
         "sampleIntervalMs": 100, "durationSeconds": args.seconds, "runs": [],
     }
     for repetition in range(1, args.repetitions + 1):
         for clients in args.clients:
             for rate in args.rates:
-                metadata["runs"].append(run_case(args, clients, rate, repetition, destination))
-                (destination / "results.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+                for scenario in args.scenarios:
+                    metadata["runs"].append(run_case(args, clients, rate, repetition, destination, scenario))
+                    (destination / "results.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     print(f"Results: {destination / 'results.json'}", flush=True)
     return 0 if all(r["success"] for r in metadata["runs"]) else 1
 

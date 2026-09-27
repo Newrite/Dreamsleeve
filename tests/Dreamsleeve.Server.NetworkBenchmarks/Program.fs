@@ -1,4 +1,4 @@
-﻿// Benchmark process only. One owner services every independent peer on one UDP socket.
+// Benchmark process only. One owner services every independent peer on one UDP socket.
 #nowarn "104"
 module Dreamsleeve.Server.NetworkBenchmarks.Program
 
@@ -17,7 +17,7 @@ open Google.Protobuf
 open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.Infrastructure.Interop
 
-type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Seconds: float; Rate: float; Output: string }
+type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Seconds: float; Rate: float; Scenario: string; Output: string }
 
 type private Client = {
     Index: int
@@ -49,6 +49,7 @@ type private Submission = {
 }
 
 type private State = {
+    mutable Movement: Movement.Probe option
     Options: Options
     Host: EnetHost
     Authentication: HttpClient
@@ -110,8 +111,7 @@ let private login state client =
     let ticket = response.RootElement.GetProperty("sessionTicket").GetString()
     if isNull ticket || ticket.Length <> 43 || response.RootElement.GetProperty("playerId").GetUInt64() <> client.AccountId then
         invalidOp "Authentication returned an invalid benchmark identity or ticket."
-    client.SessionTicket <- ticket
-    state.LoginMs <- state.LoginMs + elapsed.Elapsed.TotalMilliseconds
+    ticket, elapsed.Elapsed.TotalMilliseconds
 
 let private fail state message =
     state.ErrorCount <- state.ErrorCount + 1
@@ -212,6 +212,13 @@ let private received state client (event: EnetEvent) =
             | ServerPacket.PayloadOneofCase.PlayerLeft ->
                 client.Online.Remove response.PlayerLeft.PlayerId |> ignore
                 if not state.Disconnecting then fail state "A player left before benchmark cleanup"
+            | ServerPacket.PayloadOneofCase.PlayerUpdateAccepted
+            | ServerPacket.PayloadOneofCase.PlayerUpdated
+            | ServerPacket.PayloadOneofCase.PlayerMoved
+            | ServerPacket.PayloadOneofCase.PlayerMetadataChanged ->
+                match state.Movement with
+                | Some probe -> probe.Receive(client.Index, response, int packet.DataLength)
+                | None -> fail state "Unexpected player update during chat benchmark"
             | unknown -> fail state (sprintf "Unknown server packet payload: %A" unknown)
 
 let private handle state (event: EnetEvent) =
@@ -258,20 +265,34 @@ let private ramp state =
     let remote = address state.Options.Port
     let mutable started = 0
     let deadline = now state + max 120000. (float state.Clients.Length * 2000.)
-    let converged () = state.ReadyCount = state.Clients.Length && (state.Clients |> Array.forall (fun client -> client.Online.Count = state.Clients.Length))
+    // Finish each join batch before starting another: bootstrap traffic belongs
+    // to preparation, not to the movement load we are trying to measure.
+    let admittedConverged () =
+        state.ReadyCount = started
+        && (state.Clients |> Array.take started |> Array.forall (fun client -> client.Online.Count = started))
+
+    let converged () = started = state.Clients.Length && admittedConverged ()
+
     while not (converged ()) && state.ErrorCount = 0 && now state < deadline do
-        while started < state.Clients.Length && started - state.ReadyCount < 8 && state.ErrorCount = 0 do
-            let client = state.Clients[started]
-            // Obtain the short-lived ticket immediately before this connection; earlier
-            // clients are already serviced between batches, and no password enters ENet.
-            login state client
-            let mutable peer = Unchecked.defaultof<EnetPeer>
-            if state.Host.TryConnect(remote, 1un, 0u, &peer) then
-                client.Peer <- peer
-                client.StartedMs <- now state
-                state.Slots.Add(peer.IncomingPeerId, client)
-                started <- started + 1
-            else fail state "ENet could not allocate a client peer"
+        if started < state.Clients.Length && admittedConverged () then
+            let count = min 4 (state.Clients.Length - started)
+            let batch = state.Clients[started .. started + count - 1]
+            let tickets = batch |> Array.Parallel.map (login state)
+
+            for index in 0 .. batch.Length - 1 do
+                let client = batch[index]
+                let ticket, elapsed = tickets[index]
+                client.SessionTicket <- ticket
+                state.LoginMs <- state.LoginMs + elapsed
+
+                let mutable peer = Unchecked.defaultof<EnetPeer>
+                if state.Host.TryConnect(remote, 1un, 0u, &peer) then
+                    client.Peer <- peer
+                    client.StartedMs <- now state
+                    state.Slots.Add(peer.IncomingPeerId, client)
+                    started <- started + 1
+                else
+                    fail state "ENet could not allocate a client peer"
         pump state
         for client in state.Clients do
             if client.Peer.IsCreated && not client.Ready && now state - client.StartedMs > 30000. then
@@ -353,6 +374,43 @@ let private drain state =
     printfn "DELIVERY_DONE received=%d" state.Received
     Console.Out.Flush()
 
+let private movementLoad state =
+    let probe = Movement.Probe(state.Options.Scenario, state.Options.Rate, state.Clients |> Array.map _.PlayerId,
+                               (fun () -> now state), (fun index packet -> send state state.Clients[index] packet), fail state)
+    state.Movement <- Some probe
+    stage "movement-setup"
+    probe.BeginCharacters(fun () -> serviceFor state 150.)
+    let setupDeadline = now state + 30000.
+    while not probe.Prepared && state.ErrorCount = 0 && now state < setupDeadline do pump state
+    if not probe.Prepared then fail state "Character snapshots did not converge before load"
+    serviceFor state 1000.
+
+    stage "load"
+    let started = now state
+    probe.Start()
+    while now state - started < state.Options.Seconds * 1000. && state.ErrorCount = 0 do
+        probe.SendDue()
+        pump state
+    probe.Stop()
+    state.LoadMs <- now state - started
+
+    stage "drain"
+    let draining = now state
+    let deadline = draining + 30000.
+    while probe.Pending > 0 && state.ErrorCount = 0 && now state < deadline do pump state
+    if state.ErrorCount = 0 && probe.Pending = 0 then
+        probe.FinalSamples(fun () -> pump state)
+        let mutable converged = false
+        let mutable nextCheck = now state
+        while not converged && state.ErrorCount = 0 && now state < deadline do
+            pump state
+            if now state >= nextCheck then
+                converged <- probe.Converged()
+                nextCheck <- now state + 100.
+        if not converged then fail state "Final movement/AOI state did not converge"
+    elif state.ErrorCount = 0 then fail state "Movement acknowledgements did not drain"
+    state.DrainMs <- now state - draining
+
 let private disconnect state =
     stage "disconnect"
     state.Disconnecting <- true
@@ -380,6 +438,7 @@ let private report state =
     let result = {|
         success = state.ErrorCount = 0 && state.PresenceConverged && state.ReadyCount = state.Clients.Length
                   && state.Completed = state.Messages.Count && state.Received = int64 state.Messages.Count * int64 state.Clients.Length
+        movement = state.Movement |> Option.map (fun probe -> probe.Report(state.LoadMs)) |> Option.toObj
         clients = state.Clients.Length; ready = state.ReadyCount; presenceConverged = state.PresenceConverged; seconds = state.Options.Seconds; requestedRate = state.Options.Rate
         sent = state.Messages.Count; received = state.Received; expected = int64 state.Messages.Count * int64 state.Clients.Length
         sentChatPayloadBytes = state.SentChatPayloadBytes
@@ -390,9 +449,9 @@ let private report state =
             else float state.ReceivedChatPayloadBytes * 1000. / (state.LoadMs + state.DrainMs)
         actualSendRate = if state.LoadMs = 0. then 0. else float state.Messages.Count * 1000. / state.LoadMs
         registrationMs = state.RegistrationMs; loginMs = state.LoginMs
-        rampIncludesLogin = true
+        rampIncludesLogin = true; authenticationConcurrency = 4
         rampMs = state.RampMs; loadMs = state.LoadMs; drainMs = state.DrainMs; totalMs = now state
-        backpressuredMs = state.BackpressuredMs; maxInflight = state.MaxInflight; inflightLimit = 128; connectWindow = 8
+        backpressuredMs = state.BackpressuredMs; maxInflight = state.MaxInflight; inflightLimit = 128; connectWindow = 4
         hostCount = 1; socketCount = 1; serviceLoopCount = 1
         unexpectedDisconnects = state.Disconnections; rejections = state.Rejections; errorCount = state.ErrorCount
         errors = state.Errors.ToArray()
@@ -411,7 +470,10 @@ let private run (options: Options) =
     use authentication = new HttpClient(BaseAddress = options.AuthUrl, Timeout = TimeSpan.FromSeconds 30.)
     stage "auth-register"
     let registration = Stopwatch.StartNew()
-    let accounts = Array.init options.Clients (register authentication prefix)
+    let accounts = Array.zeroCreate options.Clients
+    System.Threading.Tasks.Parallel.For(0, options.Clients,
+        System.Threading.Tasks.ParallelOptions(MaxDegreeOfParallelism = 4),
+        fun index -> accounts[index] <- register authentication prefix index) |> ignore
     registration.Stop()
 
     if enet.ENET_API.enet_initialize() <> 0 then invalidOp "ENet initialization failed"
@@ -419,8 +481,11 @@ let private run (options: Options) =
         use host = EnetHost.Create(address 0us, unativeint options.Clients, 1un, 0u, 0u, EnetHostOption.Ipv4)
         host.SetMaximumPacketSize(1024un * 1024un)
         host.SetMaximumWaitingData(32un * 1024un * 1024un)
+        // Movement permits eight pending requests per peer. The aggregate
+        // transport budget must accommodate the same finite per-peer window.
+        let outgoingPackets = if options.Scenario = "chat" then 4096 else max 4096 (16 * options.Clients)
         let state = {
-            Options = options; Host = host; Authentication = authentication
+            Movement = None; Options = options; Host = host; Authentication = authentication
             RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
             Clock = Stopwatch.StartNew(); Prefix = prefix
             Clients = Array.init options.Clients (fun index -> {
@@ -428,21 +493,24 @@ let private run (options: Options) =
                 StartedMs = 0.; ConnectedMs = 0.; ReadyMs = 0.; Ready = false; Closed = false
                 PlayerId = 0UL; ChannelId = 0UL; LastMessageId = 0UL; Received = 0; Pending = Dictionary(); Online = HashSet()
             })
-            Slots = Dictionary(); Budget = PacketBudget(4096, 16L * 1024L * 1024L); Messages = ResizeArray(); Errors = ResizeArray()
+            Slots = Dictionary(); Budget = PacketBudget(outgoingPackets, 16L * 1024L * 1024L); Messages = ResizeArray(); Errors = ResizeArray()
             ErrorCount = 0; ReadyCount = 0; Disconnections = 0; Rejections = 0; Received = 0L; SentChatPayloadBytes = 0L; ReceivedChatPayloadBytes = 0L; Completed = 0; NextSender = 0
             Disconnecting = false; PresenceConverged = false; RampMs = 0.; LoadMs = 0.; DrainMs = 0.; BackpressuredMs = 0.; MaxInflight = 0
         }
         try
             ramp state
-            if state.ErrorCount = 0 then load state
-            if state.ErrorCount = 0 then drain state
+            if state.ErrorCount = 0 then
+                if options.Scenario = "chat" then
+                    load state
+                    if state.ErrorCount = 0 then drain state
+                else movementLoad state
         with error -> fail state (error.ToString())
         try disconnect state with error -> fail state ("Cleanup: " + error.Message)
         report state
     finally enet.ENET_API.enet_deinitialize()
 
 let private parse (args: string array) =
-    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Seconds = 10.; Rate = 10.; Output = "build/network-benchmark.json" }
+    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Seconds = 10.; Rate = 10.; Scenario = "chat"; Output = "build/network-benchmark.json" }
     if args.Length % 2 <> 0 then invalidArg "args" "Expected --auth-url URL --port P --clients N --seconds D --rate R --output path.json"
     for index in 0 .. 2 .. args.Length - 1 do
         let value = args[index + 1]
@@ -452,6 +520,7 @@ let private parse (args: string array) =
         | "--clients" -> options <- { options with Clients = Int32.Parse value }
         | "--seconds" -> options <- { options with Seconds = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--rate" -> options <- { options with Rate = Double.Parse(value, CultureInfo.InvariantCulture) }
+        | "--scenario" -> options <- { options with Scenario = value }
         | "--output" -> options <- { options with Output = value }
         | unknown -> invalidArg "args" ("Unknown option: " + unknown)
     if (options.AuthUrl.Scheme <> Uri.UriSchemeHttps && (options.AuthUrl.Scheme <> Uri.UriSchemeHttp || not options.AuthUrl.IsLoopback)) then
@@ -461,9 +530,15 @@ let private parse (args: string array) =
        || not (Double.IsFinite options.Rate) || options.Rate < 0. || options.Rate > 1000.
        || options.Rate * options.Seconds > 100000. then
         invalidArg "args" "Require port>0, clients 1..4095, seconds (0,300], rate [0,1000], at most 100000 messages."
+    if not (List.contains options.Scenario ["chat"; "dense"; "spaces"; "sparse"; "boundaries"])
+       || (options.Scenario <> "chat" && options.Rate <= 0.) then
+        invalidArg "args" "Movement requires dense/spaces/sparse/boundaries and rate > 0 (per-client Hz)."
     options
 
 [<EntryPoint>]
 let main args =
-    try parse args |> run
+    try
+        match args with
+        | [|"--server-config"; config; "--metrics-output"; output|] -> Measurements.runServer config output
+        | _ -> parse args |> run
     with error -> eprintfn "%s" error.Message; 2
