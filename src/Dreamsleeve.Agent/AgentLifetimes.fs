@@ -3,6 +3,7 @@ namespace Dreamsleeve.Agent
 open System
 open System.Collections.Generic
 open System.Threading
+open System.Threading.Tasks
 
 [<AutoOpen>]
 module AgentLifetimeExtensions =
@@ -18,12 +19,12 @@ module AgentLifetimeExtensions =
 
         /// Observe a shared dependency without controlling its lifetime. Detaches when
         /// the owner stops dispatching, including Complete; it never stops the target.
-        member context.Watch(target: Agent<'Target>, stopped: Result<unit, exn> -> 'Message) =
+        member context.Watch(completion: Task, stopped: Result<unit, exn> -> 'Message) =
             let observe (token: CancellationToken) = task {
                 use cancel = CancellationTokenSource.CreateLinkedTokenSource(token, context.DispatchStopped)
                 let! outcome = task {
                     try
-                        do! target.Completion.WaitAsync cancel.Token
+                        do! completion.WaitAsync cancel.Token
                         return Ok ()
                     with error -> return Error error
                 }
@@ -35,6 +36,9 @@ module AgentLifetimeExtensions =
                         invalidOp "Lifecycle observation requires a non-dropping owner mailbox."
             }
             context.StartDelivery observe
+
+        member context.Watch(target: Agent<'Target>, stopped: Result<unit, exn> -> 'Message) =
+            context.Watch(target.Completion, stopped)
 
 /// Bounded ownership of forwarded reply channels. A library lock coordinates only
 /// reply settlement with target/owner termination; application state stays in handlers.

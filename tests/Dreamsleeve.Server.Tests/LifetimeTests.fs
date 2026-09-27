@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.Tests.LifetimeTests
+﻿module Dreamsleeve.Server.Tests.LifetimeTests
 
 open System
 open System.Collections.Concurrent
@@ -28,6 +28,15 @@ let private attach own (agent: Agent<LifecycleMessage>) = task {
     let ready = gate<unit>()
     agent.TryPost(Attach(own, ready)) |> ignore
     do! awaitResult ready.Task
+}
+
+let private taskLifecycle (completion: Task) (ended: TaskCompletionSource<Result<unit, exn>>)
+                          (context: AgentContext<LifecycleMessage>) message = task {
+    match message with
+    | Attach(_, ready) ->
+        context.Watch(completion, Ended)
+        ready.SetResult()
+    | Ended result -> ended.SetResult result
 }
 
 let private finish (agent: Agent<'T>) = task {
@@ -132,6 +141,31 @@ let tests = testList "Lifetimes" [
             expectReply 42 reply
             do! finish child
             check (not ended.Task.IsCompleted) "Detached watcher delivered a stop message."
+    })
+
+    case "Watch observes an already faulted Task without requiring its owning agent" (fun () -> task {
+        let failure = InvalidOperationException("shared dependency failed")
+        let ended = gate<Result<unit, exn>>()
+        use owner = Agent.Start(AgentOptions.create "observer", taskLifecycle (Task.FromException failure) ended)
+        do! attach false owner
+        let! result = awaitResult ended.Task
+        match result with
+        | Error error -> check (obj.ReferenceEquals(failure, error)) "Task watcher replaced the dependency failure."
+        | Ok () -> failwith "Task failure became success."
+        do! finish owner
+    })
+
+    case "Watch Task detaches on Complete and Abort without awaiting dependency completion" (fun () -> task {
+        for abort in [false; true] do
+            let pending = gate<unit>()
+            let ended = gate<Result<unit, exn>>()
+            use owner = Agent.Start(AgentOptions.create "observer", taskLifecycle pending.Task ended)
+            do! attach false owner
+            if abort then owner.Abort() else owner.Complete() |> ignore
+            let! _ = terminal owner.Completion
+            check (not pending.Task.IsCompleted) "Watching changed the dependency lifetime."
+            pending.SetResult()
+            check (not ended.Task.IsCompleted) "Detached task watcher delivered a stop message."
     })
 
     case "forwarded replies are bounded, reclaim settled slots and preserve the first result" (fun () -> task {

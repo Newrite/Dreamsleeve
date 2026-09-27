@@ -1,4 +1,4 @@
-namespace Dreamsleeve.Agent
+﻿namespace Dreamsleeve.Agent
 
 open System
 open System.Threading
@@ -19,11 +19,13 @@ type internal AgentDeliveryWindow(capacity: int, ordered: bool) =
     let slots = new SemaphoreSlim(capacity, capacity)
     let mutable tail: Task = Task.CompletedTask
 
-    let deliver (previous: Task) (finished: TaskCompletionSource<unit>) (destination: ReliableAgentRef<'Reply>) reply
+    let deliver (previous: Task) (finished: TaskCompletionSource<unit>) (destination: ReliableAgentRef<'Reply>)
+                (execute: CancellationToken -> Task<'Reply>)
                 (onFailure: AgentSendFailure -> Task<unit>) (token: CancellationToken) = task {
         try
             do! previous.WaitAsync token
             token.ThrowIfCancellationRequested()
+            let! reply = execute token
             let! outcome = task {
                 try
                     let! result = destination.PostAsync(reply, cancellationToken = token)
@@ -42,14 +44,14 @@ type internal AgentDeliveryWindow(capacity: int, ordered: bool) =
             slots.Release() |> ignore
     }
 
-    let launch (context: AgentContext<'Request>) destination createReply onFailure =
+    let launch (context: AgentContext<'Request>) destination createOperation onFailure =
         try
             context.CancellationToken.ThrowIfCancellationRequested()
-            let reply = createReply ()
+            let operation = createOperation ()
             let finished = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
             let previous = if ordered then tail else Task.CompletedTask
             if ordered then tail <- finished.Task
-            context.StartDelivery(deliver previous finished destination reply onFailure)
+            context.StartDelivery(deliver previous finished destination operation onFailure)
         with error ->
             slots.Release() |> ignore
             raise error
@@ -59,14 +61,23 @@ type internal AgentDeliveryWindow(capacity: int, ordered: bool) =
     // Only the owning handler schedules sends; workers only release reservations.
     member _.TrySend(context: AgentContext<'Request>, destination, reply, onFailure) =
         if slots.Wait(0) then
-            launch context destination (fun () -> reply) onFailure
+            launch context destination (fun () -> fun _ -> Task.FromResult reply) onFailure
             true
         else
             false
 
     member _.Send(context: AgentContext<'Request>, destination, createReply, onFailure) = task {
         do! slots.WaitAsync context.CancellationToken
-        launch context destination createReply onFailure
+        let createOperation () =
+            let reply = createReply ()
+            fun _ -> Task.FromResult reply
+
+        launch context destination createOperation onFailure
+    }
+
+    member _.SendAsync(context: AgentContext<'Request>, destination, execute, onFailure) = task {
+        do! slots.WaitAsync context.CancellationToken
+        launch context destination (fun () -> execute) onFailure
     }
 
     member _.AbortAfterDrain(context: AgentContext<'Request>) =
@@ -129,16 +140,28 @@ module AgentOutbox =
 
 [<RequireQualifiedAccess>]
 module AgentReplyDispatcher =
+    let private deliveryFailure failure = task {
+        match failure with
+        | AgentSendFailure.Faulted error -> return raise error
+        | AgentSendFailure.Closed | AgentSendFailure.Canceled -> ()
+    }
+
     /// Independent bounded reply admissions. Construct once per owner.
     /// Replies may arrive out of order; correlate them by the request's operation ID.
     /// A closed caller does not undo an applied command or stop other callers.
     let createHandler capacity (replyTo: 'Request -> ReliableAgentRef<'Reply>) (execute: 'Request -> 'Reply) =
         let window = AgentDeliveryWindow(capacity, false)
-        let deliveryFailure failure = task {
-            match failure with
-            | AgentSendFailure.Faulted error -> return raise error
-            | AgentSendFailure.Closed | AgentSendFailure.Canceled -> ()
-        }
-        let handle (context: AgentContext<'Request>) request =
+        let handle (context: AgentContext<'Owner>) (request: 'Request) =
             window.Send(context, replyTo request, (fun () -> execute request), deliveryFailure)
+        handle
+
+    /// Reserves capacity for the whole operation and reply before starting tracked work.
+    /// Execute runs outside the handler, including its synchronous prefix. Pass immutable
+    /// requests and dependencies safe for concurrent use; never capture owner state.
+    /// Complete joins work and reply admissions; Abort requests cooperative cancellation.
+    let createAsyncHandler capacity (replyTo: 'Request -> ReliableAgentRef<'Reply>)
+                           (execute: CancellationToken -> 'Request -> Task<'Reply>) =
+        let window = AgentDeliveryWindow(capacity, false)
+        let handle (context: AgentContext<'Owner>) (request: 'Request) =
+            window.SendAsync(context, replyTo request, (fun token -> execute token request), deliveryFailure)
         handle

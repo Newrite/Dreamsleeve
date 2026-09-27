@@ -1,4 +1,4 @@
-# Dreamsleeve.Agent
+﻿# Dreamsleeve.Agent
 
 Sequential, in-process F# agents built on `System.Threading.Channels` and `Task`. Targets **.NET 10+**; no external runtime packages.
 
@@ -163,6 +163,36 @@ other callers or roll back a write. Delivery exceptions fault the owner and rema
 observable through Completion. A live recipient that never drains can delay graceful
 completion; the lifecycle owner can Abort.
 
+### Background request execution
+
+`AgentReplyDispatcher.createAsyncHandler capacity replyTo execute` accepts
+`execute: CancellationToken -> Request -> Task<Reply>`. It reserves one slot before
+starting work through the existing tracked background worker. Even execute's
+synchronous prefix runs outside the mailbox handler; no additional Task.Run is needed
+around a synchronous dependency call. The slot covers both operation execution and
+pending reply admission. Capacity wait is asynchronous and released by workers, so it
+does not require a completion message to pass through the saturated owner mailbox.
+
+Pass immutable requests and dependencies safe for concurrent use. Execute may run
+concurrently up to the shared capacity; it must not capture mutable owner state or
+wait for work that only this saturated owner can process. `replyTo` still runs in the
+owner and should only select an address. Use the synchronous createHandler when
+execute must update state confined to the owner; its behavior is unchanged.
+
+Complete drains accepted mailbox requests, then joins their work and reply admissions.
+Abort requests cooperative cancellation and waits for tracked cleanup; it cannot
+interrupt a synchronous call that ignores its token. Unhandled operation or delivery
+exceptions fault Completion. Closing a requester releases its reply slot after work
+finishes, without rolling back effects or stopping other callers. A slow requester
+continues to occupy its slot; this limit is global, not a per-caller quota, timeout,
+or dedicated thread pool.
+
+Both dispatcher constructors allow Request to differ from the owner's message type:
+a handler for a larger DU can call `dispatch context request` in one branch and
+handle other commands normally. The asynchronous constructor does not receive the
+owner's state or context inside execute. For results that must change owner state,
+use an explicit response message or PipeToSelf instead.
+
 ## Child ownership and shared dependencies
 
 Call `context.Own(child, stopped)` once from the owning handler. The mapper creates
@@ -173,6 +203,8 @@ application-specific: stop children first, then Complete the parent. Own does no
 restart children or recover their state.
 
 `context.Watch(target, stopped)` observes a shared dependency without owning it.
+The `Watch(completion: Task, stopped)` overload provides the same observation when
+a boundary exposes only its lifetime task; the Agent overload delegates to it.
 Complete and Abort detach the observation without stopping the target or waiting
 for it to terminate. Mappers run outside the handler and must only construct messages.
 Both APIs require a non-dropping owner mailbox.
