@@ -1,4 +1,4 @@
-﻿namespace Dreamsleeve.Server.Core
+namespace Dreamsleeve.Server.Core
 
 open System
 open System.Collections.Generic
@@ -247,7 +247,7 @@ module PlayerSession =
         | PresenceEvent.Joined player -> publish options request state context (ServerResponse.PlayerJoined player)
         | PresenceEvent.Updated player -> publish options request state context (ServerResponse.PlayerUpdated player)
         | PresenceEvent.MetadataChanged(playerId, values, details) -> publish options request state context (ServerResponse.PlayerMetadataChanged(playerId, values, details))
-        | PresenceEvent.Moved(playerId, location) -> publish options request state context (ServerResponse.PlayerMoved(playerId, location))
+        | PresenceEvent.Moved movements -> publish options request state context (ServerResponse.PlayersMoved movements)
         | PresenceEvent.Left playerId -> publish options request state context (ServerResponse.PlayerLeft playerId)
 
     let private sendChat (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context requestId channelId text =

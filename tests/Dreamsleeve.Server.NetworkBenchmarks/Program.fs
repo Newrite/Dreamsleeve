@@ -214,7 +214,7 @@ let private received state client (event: EnetEvent) =
                 if not state.Disconnecting then fail state "A player left before benchmark cleanup"
             | ServerPacket.PayloadOneofCase.PlayerUpdateAccepted
             | ServerPacket.PayloadOneofCase.PlayerUpdated
-            | ServerPacket.PayloadOneofCase.PlayerMoved
+            | ServerPacket.PayloadOneofCase.PlayersMoved
             | ServerPacket.PayloadOneofCase.PlayerMetadataChanged ->
                 match state.Movement with
                 | Some probe -> probe.Receive(client.Index, response, int packet.DataLength)

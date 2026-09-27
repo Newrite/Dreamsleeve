@@ -126,7 +126,8 @@ type Probe(scenario: string, rate: float, ids: uint64 array, now: unit -> float,
                 pending[observer].Remove packet.RequestId |> ignore
                 if measured then acknowledgements.Add(now() - sentAt)
             | false, _ -> fail "Unmatched movement acknowledgement"
-        | ServerPacket.PayloadOneofCase.PlayerMoved -> observe observer packet.PlayerMoved.PlayerId packet.PlayerMoved.Location
+        | ServerPacket.PayloadOneofCase.PlayersMoved ->
+            for item in packet.PlayersMoved.Players do observe observer item.PlayerId item.Location
         | ServerPacket.PayloadOneofCase.PlayerUpdated ->
             let player = packet.PlayerUpdated.Player
             if isNull player || isNull player.Profile then fail "Invalid player update"

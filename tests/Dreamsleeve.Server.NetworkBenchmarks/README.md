@@ -3,7 +3,7 @@
 This executable is a separate process from `Dreamsleeve.Server`. It uses yENet and
 protobuf from the existing projects. The movement host also subscribes to standard
 server duration instruments; no benchmark branch is added to the server handlers.
-It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v4 keeps ticket authentication and uses full player snapshots; no username enters OpenSession.
+It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v5 keeps ticket authentication and uses full player snapshots; no username enters OpenSession.
 
 ```powershell
 dotnet build tests/Dreamsleeve.Server.NetworkBenchmarks -c Release

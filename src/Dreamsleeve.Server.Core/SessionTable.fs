@@ -11,6 +11,7 @@ module internal SessionTable =
     type Phase = Waiting | Opening | Ready | Closing
 
     type Entry = {
+        Movement: Dictionary<PlayerId, PlayerLocation voption>
         ConnectionId: Guid
         mutable Phase: Phase
         mutable Deadline: int64
@@ -31,6 +32,7 @@ module internal SessionTable =
 
     let add connectionId deadline state =
         let entry = {
+            Movement = Dictionary()
             ConnectionId = connectionId; Phase = Waiting; Deadline = deadline
             PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
             ChatDetached = false; PresenceDetached = false

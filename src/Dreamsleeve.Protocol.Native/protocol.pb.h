@@ -562,7 +562,7 @@ class ServerPacket final : public ::google::protobuf::Message
     kPlayerLeft = 14,
     kPlayerUpdated = 15,
     kPlayerUpdateAccepted = 16,
-    kPlayerMoved = 17,
+    kPlayersMoved = 19,
     kPlayerMetadataChanged = 18,
     PAYLOAD_NOT_SET = 0,
   };
@@ -662,7 +662,7 @@ class ServerPacket final : public ::google::protobuf::Message
     kPlayerLeftFieldNumber = 14,
     kPlayerUpdatedFieldNumber = 15,
     kPlayerUpdateAcceptedFieldNumber = 16,
-    kPlayerMovedFieldNumber = 17,
+    kPlayersMovedFieldNumber = 19,
     kPlayerMetadataChangedFieldNumber = 18,
   };
   // optional uint64 request_id = 2;
@@ -819,23 +819,23 @@ class ServerPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted* PROTOBUF_NONNULL _internal_mutable_player_update_accepted();
 
   public:
-  // .Dreamsleeve.Protocol.Chat.PlayerMoved player_moved = 17;
-  bool has_player_moved() const;
+  // .Dreamsleeve.Protocol.Chat.PlayersMoved players_moved = 19;
+  bool has_players_moved() const;
   private:
-  bool _internal_has_player_moved() const;
+  bool _internal_has_players_moved() const;
 
   public:
-  void clear_player_moved() ;
-  const ::Dreamsleeve::Protocol::Chat::PlayerMoved& player_moved() const;
-  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NULLABLE release_player_moved();
-  ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NONNULL mutable_player_moved();
-  void set_allocated_player_moved(::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_player_moved(::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NULLABLE value);
-  ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NULLABLE unsafe_arena_release_player_moved();
+  void clear_players_moved() ;
+  const ::Dreamsleeve::Protocol::Chat::PlayersMoved& players_moved() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NULLABLE release_players_moved();
+  ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NONNULL mutable_players_moved();
+  void set_allocated_players_moved(::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_players_moved(::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NULLABLE unsafe_arena_release_players_moved();
 
   private:
-  const ::Dreamsleeve::Protocol::Chat::PlayerMoved& _internal_player_moved() const;
-  ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NONNULL _internal_mutable_player_moved();
+  const ::Dreamsleeve::Protocol::Chat::PlayersMoved& _internal_players_moved() const;
+  ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NONNULL _internal_mutable_players_moved();
 
   public:
   // .Dreamsleeve.Protocol.Chat.PlayerMetadataChanged player_metadata_changed = 18;
@@ -869,7 +869,7 @@ class ServerPacket final : public ::google::protobuf::Message
   void set_has_player_left();
   void set_has_player_updated();
   void set_has_player_update_accepted();
-  void set_has_player_moved();
+  void set_has_players_moved();
   void set_has_player_metadata_changed();
   inline bool has_payload() const;
   inline void clear_has_payload();
@@ -908,7 +908,7 @@ class ServerPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE player_left_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE player_updated_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE player_update_accepted_;
-      ::google::protobuf::Message* PROTOBUF_NULLABLE player_moved_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE players_moved_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE player_metadata_changed_;
     } payload_;
     ::uint32_t _oneof_case_[1];
@@ -2068,74 +2068,74 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted* PROTOBUF_NONNULL Ser
   return _msg;
 }
 
-// .Dreamsleeve.Protocol.Chat.PlayerMoved player_moved = 17;
-inline bool ServerPacket::has_player_moved() const {
-  return payload_case() == kPlayerMoved;
+// .Dreamsleeve.Protocol.Chat.PlayersMoved players_moved = 19;
+inline bool ServerPacket::has_players_moved() const {
+  return payload_case() == kPlayersMoved;
 }
-inline bool ServerPacket::_internal_has_player_moved() const {
-  return payload_case() == kPlayerMoved;
+inline bool ServerPacket::_internal_has_players_moved() const {
+  return payload_case() == kPlayersMoved;
 }
-inline void ServerPacket::set_has_player_moved() {
-  _impl_._oneof_case_[0] = kPlayerMoved;
+inline void ServerPacket::set_has_players_moved() {
+  _impl_._oneof_case_[0] = kPlayersMoved;
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NULLABLE ServerPacket::release_player_moved() {
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.player_moved)
-  if (payload_case() == kPlayerMoved) {
+inline ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NULLABLE ServerPacket::release_players_moved() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.players_moved)
+  if (payload_case() == kPlayersMoved) {
     clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMoved*>(_impl_.payload_.player_moved_);
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayersMoved*>(_impl_.payload_.players_moved_);
     if (GetArena() != nullptr) {
       temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
     }
-    _impl_.payload_.player_moved_ = nullptr;
+    _impl_.payload_.players_moved_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline const ::Dreamsleeve::Protocol::Chat::PlayerMoved& ServerPacket::_internal_player_moved() const {
-  return payload_case() == kPlayerMoved ? static_cast<const ::Dreamsleeve::Protocol::Chat::PlayerMoved&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMoved*>(_impl_.payload_.player_moved_))
-                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::PlayerMoved&>(::Dreamsleeve::Protocol::Chat::_PlayerMoved_default_instance_);
+inline const ::Dreamsleeve::Protocol::Chat::PlayersMoved& ServerPacket::_internal_players_moved() const {
+  return payload_case() == kPlayersMoved ? static_cast<const ::Dreamsleeve::Protocol::Chat::PlayersMoved&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayersMoved*>(_impl_.payload_.players_moved_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::PlayersMoved&>(::Dreamsleeve::Protocol::Chat::_PlayersMoved_default_instance_);
 }
-inline const ::Dreamsleeve::Protocol::Chat::PlayerMoved& ServerPacket::player_moved() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.player_moved)
-  return _internal_player_moved();
+inline const ::Dreamsleeve::Protocol::Chat::PlayersMoved& ServerPacket::players_moved() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.players_moved)
+  return _internal_players_moved();
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_player_moved() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.player_moved)
-  if (payload_case() == kPlayerMoved) {
+inline ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_players_moved() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.players_moved)
+  if (payload_case() == kPlayersMoved) {
     clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMoved*>(_impl_.payload_.player_moved_);
-    _impl_.payload_.player_moved_ = nullptr;
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayersMoved*>(_impl_.payload_.players_moved_);
+    _impl_.payload_.players_moved_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline void ServerPacket::unsafe_arena_set_allocated_player_moved(
-    ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NULLABLE value) {
+inline void ServerPacket::unsafe_arena_set_allocated_players_moved(
+    ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NULLABLE value) {
   // We rely on the oneof clear method to free the earlier contents
   // of this oneof. We can directly use the pointer we're given to
   // set the new value.
   clear_payload();
   if (value) {
-    set_has_player_moved();
-    _impl_.payload_.player_moved_ = reinterpret_cast<::google::protobuf::Message*>(value);
+    set_has_players_moved();
+    _impl_.payload_.players_moved_ = reinterpret_cast<::google::protobuf::Message*>(value);
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.player_moved)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.players_moved)
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NONNULL ServerPacket::_internal_mutable_player_moved() {
-  if (payload_case() != kPlayerMoved) {
+inline ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NONNULL ServerPacket::_internal_mutable_players_moved() {
+  if (payload_case() != kPlayersMoved) {
     clear_payload();
-    set_has_player_moved();
-    _impl_.payload_.player_moved_ = reinterpret_cast<::google::protobuf::Message*>(
-        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::PlayerMoved>(GetArena()));
+    set_has_players_moved();
+    _impl_.payload_.players_moved_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::PlayersMoved>(GetArena()));
   }
-  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMoved*>(_impl_.payload_.player_moved_);
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayersMoved*>(_impl_.payload_.players_moved_);
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NONNULL ServerPacket::mutable_player_moved()
+inline ::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NONNULL ServerPacket::mutable_players_moved()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::Dreamsleeve::Protocol::Chat::PlayerMoved* _msg = _internal_mutable_player_moved();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.player_moved)
+  ::Dreamsleeve::Protocol::Chat::PlayersMoved* _msg = _internal_mutable_players_moved();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.players_moved)
   return _msg;
 }
 

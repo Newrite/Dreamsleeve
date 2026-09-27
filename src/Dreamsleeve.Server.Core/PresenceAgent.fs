@@ -21,6 +21,8 @@ module PresenceAgent =
         Members: Dictionary<Guid, Member>
         Players: Dictionary<PlayerId, Guid>
         Dirty: HashSet<PlayerId>
+        LatestIndex: SpatialIndex.State
+        PublishedIndex: SpatialIndex.State
         mutable FlushScheduled: bool
         VisibilityDistanceSquared: double
         Host: AgentOutbox<SessionHostCommand>
@@ -38,6 +40,8 @@ module PresenceAgent =
             state.Members.Remove connectionId |> ignore
             state.Players.Remove playerId |> ignore
             state.Dirty.Remove playerId |> ignore
+            SpatialIndex.remove connectionId state.LatestIndex
+            SpatialIndex.remove connectionId state.PublishedIndex
             Some playerId
 
     let private deliver state context (subscriber: Member) event =
@@ -93,44 +97,63 @@ module PresenceAgent =
         | Some playerId -> broadcast state context None (PresenceEvent.Left playerId)
         | None -> ()
 
+    let private publishGlobal state context observer source =
+        if state.Members.ContainsKey observer.ConnectionId && state.Members.ContainsKey source.ConnectionId then
+            if not (identityEqual source.Published source.Latest) then
+                deliverDelta state context observer (PresenceEvent.Updated(project state observer.Latest source.Latest))
+            else
+                let values =
+                    if source.Published.ActorValues = source.Latest.ActorValues then ValueNone
+                    else ValueSome source.Latest.ActorValues
+                let details =
+                    if source.Published.Details = source.Latest.Details then ValueNone
+                    else ValueSome source.Latest.Details
+                deliverDelta state context observer (PresenceEvent.MetadataChanged(source.Latest.Data.PlayerId, values, details))
+
+    let private publishMovement state context (changed: HashSet<Guid>) observer =
+        let candidates = HashSet<Guid>()
+        SpatialIndex.neighbors observer.Published.Location state.PublishedIndex candidates
+        SpatialIndex.neighbors observer.Latest.Location state.LatestIndex candidates
+        candidates.Add observer.ConnectionId |> ignore
+        let observerMoved = observer.Published.Location <> observer.Latest.Location
+        let movements = ResizeArray<PlayerId * PlayerLocation voption>()
+
+        for id in candidates do
+            match state.Members.TryGetValue id with
+            | true, source when (observerMoved || changed.Contains id) && identityEqual source.Published source.Latest ->
+                let previous = visibleLocation state observer.Published source.Published
+                let latest = visibleLocation state observer.Latest source.Latest
+                if previous <> latest then movements.Add(source.Latest.Data.PlayerId, latest)
+            | true, _ | false, _ -> ()
+
+        if movements.Count > 0 && state.Members.ContainsKey observer.ConnectionId then
+            // Only one recipient's candidate set and batch are built at a time.
+            // A slow recipient's Left cannot be followed by its stale coordinates.
+            let ordered = movements |> Seq.sortBy fst |> List.ofSeq
+            deliverDelta state context observer (PresenceEvent.Moved ordered)
+
     let private publishDirty state context =
         if state.Dirty.Count > 0 then
-            // Freeze both sides of every comparison for the whole batch. Advancing a
-            // source baseline early would lose visibility changes when both peers move.
+            // Both spatial indexes and baselines stay frozen for the whole flush.
             let members = state.Members.Values |> Seq.toArray
-            let changed =
-                members
-                |> Array.filter (fun memberState -> state.Dirty.Contains memberState.Latest.Data.PlayerId)
+            let changed = members |> Array.filter (fun memberState -> state.Dirty.Contains memberState.Latest.Data.PlayerId)
+            let changedIds = HashSet<Guid>(changed |> Seq.map _.ConnectionId)
             state.Dirty.Clear()
+            let globalChanges =
+                changed |> Array.filter (fun source ->
+                    not (identityEqual source.Published source.Latest)
+                    || source.Published.ActorValues <> source.Latest.ActorValues
+                    || source.Published.Details <> source.Latest.Details)
 
             for observer in members do
-                let sources =
-                    if observer.Published.Location <> observer.Latest.Location then members
-                    else changed
+                for source in globalChanges do publishGlobal state context observer source
+                if state.Members.ContainsKey observer.ConnectionId then
+                    publishMovement state context changedIds observer
 
-                for source in sources do
-                    // Delivery may remove a slow member and publish Left immediately.
-                    // Never follow that Left with a stale update from this frozen batch.
-                    if state.Members.ContainsKey observer.ConnectionId && state.Members.ContainsKey source.ConnectionId then
-                        let previous = visibleLocation state observer.Published source.Published
-                        let latest = visibleLocation state observer.Latest source.Latest
-
-                        if not (identityEqual source.Published source.Latest) then
-                            deliverDelta state context observer (PresenceEvent.Updated { source.Latest with Location = latest })
-                        else
-                            let values =
-                                if source.Published.ActorValues = source.Latest.ActorValues then ValueNone
-                                else ValueSome source.Latest.ActorValues
-                            let details =
-                                if source.Published.Details = source.Latest.Details then ValueNone
-                                else ValueSome source.Latest.Details
-                            if values.IsSome || details.IsSome then
-                                deliverDelta state context observer (PresenceEvent.MetadataChanged(source.Latest.Data.PlayerId, values, details))
-                            if previous <> latest && state.Members.ContainsKey observer.ConnectionId && state.Members.ContainsKey source.ConnectionId then
-                                deliverDelta state context observer (PresenceEvent.Moved(source.Latest.Data.PlayerId, latest))
-
-            for memberState in members do
-                memberState.Published <- memberState.Latest
+            for memberState in changed do
+                if state.Members.ContainsKey memberState.ConnectionId then
+                    memberState.Published <- memberState.Latest
+                    SpatialIndex.set memberState.ConnectionId memberState.Published.Location state.PublishedIndex
 
     let private join state context (subscription: PresenceSubscription) =
         let existedBefore = state.Members.ContainsKey subscription.ConnectionId
@@ -162,6 +185,8 @@ module PresenceAgent =
                       }
                 state.Members[subscription.ConnectionId] <- memberState
                 state.Players[subscription.Snapshot.Data.PlayerId] <- subscription.ConnectionId
+                SpatialIndex.set memberState.ConnectionId memberState.Latest.Location state.LatestIndex
+                SpatialIndex.set memberState.ConnectionId memberState.Published.Location state.PublishedIndex
 
                 match deliver state context memberState (PresenceEvent.Snapshot(snapshot state memberState.Latest)) with
                 | Some playerId when existing -> broadcast state context None (PresenceEvent.Left playerId)
@@ -190,6 +215,7 @@ module PresenceAgent =
             notifyHost state context (SessionHostCommand.Close(connectionId, "presence_identity_conflict"))
         | true, memberState ->
             memberState.Latest <- value
+            SpatialIndex.set connectionId value.Location state.LatestIndex
             state.Dirty.Add value.Data.PlayerId |> ignore
             schedule config state context
 
@@ -232,6 +258,8 @@ module PresenceAgent =
         else
             let state = {
                 Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
+                LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
+                PublishedIndex = SpatialIndex.create (double config.VisibilityDistance)
                 VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
                 FlushScheduled = false; Host = AgentOutbox(config.MaxControlDeliveries, host)
             }

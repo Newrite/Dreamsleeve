@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 4u
+    let Version = 5u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -70,7 +70,7 @@ module ProtocolCodec =
         | ServerResponse.PlayerJoined _
         | ServerResponse.PlayerUpdated _
         | ServerResponse.PlayerMetadataChanged _
-        | ServerResponse.PlayerMoved _
+        | ServerResponse.PlayersMoved _
         | ServerResponse.PlayerLeft _ -> None
 
     let private validateResponse config response =
@@ -93,11 +93,12 @@ module ProtocolCodec =
                 if values.IsNone && details.IsNone then Some(ProtocolCodecFailure.InvalidPayload "player_metadata_changed")
                 else None
 
+            | ServerResponse.PlayersMoved [] -> Some(ProtocolCodecFailure.InvalidPayload "players_moved")
             | ServerResponse.ChatAccepted _
             | ServerResponse.ChatPublished _
             | ServerResponse.PlayerJoined _
             | ServerResponse.PlayerUpdated _
-            | ServerResponse.PlayerMoved _
+            | ServerResponse.PlayersMoved _
             | ServerResponse.PlayerUpdateAccepted _
             | ServerResponse.PlayerLeft _ -> None
 
@@ -126,8 +127,10 @@ module ProtocolCodec =
                 packet.PlayerUpdated <- Dreamsleeve.Protocol.Chat.PlayerUpdated(Player = PlayerCodec.player value)
             | ServerResponse.PlayerMetadataChanged(playerId, values, metadata) ->
                 packet.PlayerMetadataChanged <- PlayerCodec.metadataChanged playerId values metadata
-            | ServerResponse.PlayerMoved(playerId, place) ->
-                packet.PlayerMoved <- PlayerCodec.moved playerId place
+            | ServerResponse.PlayersMoved movements ->
+                packet.PlayersMoved <- Dreamsleeve.Protocol.Chat.PlayersMoved()
+                for playerId, place in movements do
+                    packet.PlayersMoved.Players.Add(PlayerCodec.moved playerId place)
             | ServerResponse.PlayerUpdateAccepted _ ->
                 packet.PlayerUpdateAccepted <- Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted()
             | ServerResponse.PlayerLeft value ->
@@ -140,3 +143,38 @@ module ProtocolCodec =
                 fail requestId ProtocolCodecFailure.PacketTooLarge
             else
                 Ok(packet.ToByteArray())
+
+    /// Split on protobuf entry boundaries; never rely on ENet fragmentation to
+    /// bypass the configured application packet limit. No partial send on failure.
+    let encodeMovementPackets (codec: ProtocolCodec) movements =
+        let packets = ResizeArray<byte array>()
+        let mutable batch = Dreamsleeve.Protocol.Chat.PlayersMoved()
+        let mutable payloadSize = 0
+        let mutable tooLarge = false
+        let headerSize =
+            CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.ServerPacket.ProtocolVersionFieldNumber)
+            + CodedOutputStream.ComputeUInt32Size(Version)
+            + CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.ServerPacket.PlayersMovedFieldNumber)
+        let envelopeSize size = headerSize + CodedOutputStream.ComputeLengthSize(size) + size
+        let flush () =
+            if batch.Players.Count > 0 then
+                let packet = Dreamsleeve.Protocol.Chat.ServerPacket(ProtocolVersion = Version, PlayersMoved = batch)
+                packets.Add(packet.ToByteArray())
+                batch <- Dreamsleeve.Protocol.Chat.PlayersMoved()
+                payloadSize <- 0
+
+        for playerId, location in movements do
+            let item = PlayerCodec.moved playerId location
+            let size = CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.PlayersMoved.PlayersFieldNumber)
+                       + CodedOutputStream.ComputeMessageSize(item)
+            if envelopeSize size > codec.Config.MaxPacketBytes then
+                tooLarge <- true
+            else
+                if envelopeSize (payloadSize + size) > codec.Config.MaxPacketBytes then flush()
+                batch.Players.Add item
+                payloadSize <- payloadSize + size
+        flush()
+
+        if tooLarge then fail None ProtocolCodecFailure.PacketTooLarge
+        elif packets.Count = 0 then fail None (ProtocolCodecFailure.InvalidPayload "players_moved")
+        else Ok (List.ofSeq packets)

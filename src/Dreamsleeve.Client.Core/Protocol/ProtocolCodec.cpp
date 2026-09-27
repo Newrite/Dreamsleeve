@@ -137,11 +137,19 @@ namespace Dreamsleeve::Client::Wire
         if (!result) return std::unexpected{result.error()};
         return std::move(*result);
       }
-      case P::ServerPacket::kPlayerMoved: {
+      case P::ServerPacket::kPlayersMoved: {
         if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-        auto result = ReadMovement(packet.player_moved());
-        if (!result) return std::unexpected{result.error()};
-        return std::move(*result);
+        if (packet.players_moved().players().empty()) return Invalid("players_moved");
+
+        PlayersMoved batch;
+        batch.players.reserve(packet.players_moved().players_size());
+        for (const auto& item : packet.players_moved().players())
+        {
+          auto result = ReadMovement(item);
+          if (!result) return std::unexpected{result.error()};
+          batch.players.push_back(std::move(*result));
+        }
+        return batch;
       }
       case P::ServerPacket::kPlayerUpdateAccepted:
         if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");

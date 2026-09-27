@@ -829,8 +829,8 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
 
   P::ServerPacket moved;
   moved.set_protocol_version(Wire::Version);
-  moved.mutable_player_moved()->set_player_id(7);
-  auto* location = moved.mutable_player_moved()->mutable_location();
+  moved.mutable_players_moved()->add_players()->set_player_id(7);
+  auto* location = moved.mutable_players_moved()->mutable_players(0)->mutable_location();
   location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
   location->mutable_location()->mutable_location_id()->set_local_form_id(0x123);
   location->mutable_position()->set_x(42);
@@ -843,7 +843,7 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
   CHECK(changed.details.level == 12);
   CHECK(changed.characterGeneration == 1);
 
-  moved.mutable_player_moved()->clear_location();
+  moved.mutable_players_moved()->mutable_players(0)->clear_location();
   fixture.Send(moved);
   output = fixture.ReceiveOutput();
   CHECK_FALSE(std::get<ClientStateDelta>(output.state.updates.back()).players.front().location);
@@ -859,6 +859,36 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
   CHECK_FALSE(changed.characterName);
   CHECK(changed.actorValues.empty());
   CHECK_FALSE(changed.details.level);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Movement batch publishes once and retains multiple source observations")
+{
+  Fixture fixture;
+  auto welcome = Welcome(fixture.Open());
+  auto* second = welcome.mutable_session_opened()->add_players();
+  second->mutable_profile()->set_player_id(8);
+  fixture.Send(welcome);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  fixture.Drain();
+
+  P::ServerPacket packet;
+  packet.set_protocol_version(Wire::Version);
+  for (auto id : {7, 8})
+  {
+    auto* moved = packet.mutable_players_moved()->add_players();
+    moved->set_player_id(id);
+    auto* location = moved->mutable_location();
+    location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
+    location->mutable_location()->mutable_location_id()->set_local_form_id(0x3c);
+    location->mutable_position()->set_x(static_cast<float>(id));
+    location->set_sampled_at_us(1000);
+  }
+  fixture.Send(packet);
+  auto output = fixture.ReceiveOutput();
+  REQUIRE(output.state.updates.size() == 1);
+  const auto& delta = std::get<ClientStateDelta>(output.state.updates.front());
+  CHECK(delta.players.size() == 2);
   CHECK(fixture.errors.empty());
 }
 

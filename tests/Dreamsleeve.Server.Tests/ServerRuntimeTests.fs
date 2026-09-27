@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Tests.ServerRuntimeTests
+module Dreamsleeve.Server.Tests.ServerRuntimeTests
 
 open System
 open System.Collections.Concurrent
@@ -152,6 +152,59 @@ let private empty fixture = task {
 
 [<Tests>]
 let tests = testList "ServerRuntime" [
+    testTask "pending movement coalesces within a space but preserves stream and lifecycle boundaries" {
+        let settings = { ServerRuntimeOptions.defaults with MaxSessions = 2; PollIntervalMs = 1000000; OpenTimeoutMs = 2000000; ShutdownTimeoutMs = 2000000 }
+        do! withRuntime settings (fun fixture -> task {
+            let alice = connect fixture "alice"
+            do! post fixture.Runtime ServerRuntimeMessage.Tick
+            let! _ = welcome fixture alice
+            let pid = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
+            let space name =
+                Dreamsleeve.Server.Domain.FormKey.create
+                    (Dreamsleeve.Server.Domain.PluginName.create 255 name |> ok)
+                    (Dreamsleeve.Server.Domain.LocalFormId.create 60u |> ok)
+            let location name x =
+                Dreamsleeve.Server.Domain.PlayerLocation.create
+                    (Dreamsleeve.Server.Domain.Location.create (space name) (Dreamsleeve.Server.Domain.LocationName.create 128 "Place" |> ok))
+                    (Dreamsleeve.Server.Domain.Position.create x 0.f 0.f |> ok)
+                    Dreamsleeve.Server.Domain.Rotation.zero
+            let move value = ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved [pid, value]))
+            do! post fixture.Runtime (move (ValueSome (location "Skyrim.esm" 1.f)))
+            do! post fixture.Runtime (move (ValueSome (location "Skyrim.esm" 2.f)))
+            let! _ = stats fixture
+            equal 0 fixture.Output.Reader.Count
+            do! post fixture.Runtime (move ValueNone)
+            let! _, beforeClear = receive fixture.Output
+            equal 2.f beforeClear.PlayersMoved.Players[0].Location.Position.X
+            do! post fixture.Runtime (move (ValueSome (location "Skyrim.esm" 3.f)))
+            let! _, clear = receive fixture.Output
+            check (isNull clear.PlayersMoved.Players[0].Location) "Clear remains before reappearance."
+            do! post fixture.Runtime (move (ValueSome (location "Other.esm" 4.f)))
+            let! _, beforeSpace = receive fixture.Output
+            equal 3.f beforeSpace.PlayersMoved.Players[0].Location.Position.X
+            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayerLeft pid)))
+            let! _, beforeLeft = receive fixture.Output
+            let! _, left = receive fixture.Output
+            equal 4.f beforeLeft.PlayersMoved.Players[0].Location.Position.X
+            equal ServerPacket.PayloadOneofCase.PlayerLeft left.PayloadCase
+            do! post fixture.Runtime (move (ValueSome (location "Other.esm" 5.f)))
+            do! post fixture.Runtime ServerRuntimeMessage.Tick
+            let! _, onTick = receive fixture.Output
+            equal 5.f onTick.PlayersMoved.Players[0].Location.Position.X
+
+            let oversized = [for id in 1UL .. 3UL -> Dreamsleeve.Server.Domain.PlayerId.create id |> ok, ValueNone]
+            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved oversized)))
+            let! state = stats fixture
+            equal 1 state.Closing
+            do! post fixture.Runtime ServerRuntimeMessage.Stop
+            let deadline = Environment.TickCount64 + 5000L
+            while not fixture.Runtime.Completion.IsCompleted && Environment.TickCount64 < deadline do
+                fixture.Runtime.TryPost ServerRuntimeMessage.Tick |> ignore
+                do! Task.Delay 1
+            do! awaitUnit fixture.Runtime.Completion
+        })
+    }
+
     testTask "two clients receive one authoritative publication each and reconnect retains identity" {
         do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
             let alice = connect fixture "alice"
@@ -379,10 +432,10 @@ let tests = testList "ServerRuntime" [
                     let current = response.PlayerUpdated.Player
                     replicated[id] <- current
                     if not (isNull current.Location) && current.Location.Position.X = 10.0f then located.Add id |> ignore
-                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayerMoved
-                     && response.PlayerMoved.PlayerId = a.SelfPlayerId then
-                    replicated[id].Location <- response.PlayerMoved.Location
-                    if response.PlayerMoved.Location.Position.X = 10.0f then located.Add id |> ignore
+                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayersMoved
+                     && response.PlayersMoved.Players[0].PlayerId = a.SelfPlayerId then
+                    replicated[id].Location <- response.PlayersMoved.Players[0].Location
+                    if response.PlayersMoved.Players[0].Location.Position.X = 10.0f then located.Add id |> ignore
             equal (set [alice; bob]) (replicated.Keys |> Set.ofSeq)
             for KeyValue(_, current) in replicated do
                 equal a.SelfPlayerId current.Profile.PlayerId
@@ -399,9 +452,9 @@ let tests = testList "ServerRuntime" [
                 if id = alice && response.RequestId = 4UL then
                     equal ServerPacket.PayloadOneofCase.PlayerUpdateAccepted response.PayloadCase
                     movedAccepted <- true
-                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayerMoved then
-                    equal a.SelfPlayerId response.PlayerMoved.PlayerId
-                    equal 20.0f response.PlayerMoved.Location.Position.X
+                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayersMoved then
+                    equal a.SelfPlayerId response.PlayersMoved.Players[0].PlayerId
+                    equal 20.0f response.PlayersMoved.Players[0].Location.Position.X
                     moved.Add id
             equal (set [alice; bob]) (Set.ofSeq moved)
 

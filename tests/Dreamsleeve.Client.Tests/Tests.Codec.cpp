@@ -446,13 +446,13 @@ TEST_CASE("Player update correlation is distinct from uncorrelated full and comp
   auto accepted = codec.Decode(Bytes(packet));
   REQUIRE(accepted);
   CHECK(std::get<W::PlayerUpdateAccepted>(*accepted).requestId == 1);
-  packet.mutable_player_moved()->set_player_id(7);
+  packet.mutable_players_moved()->add_players()->set_player_id(7);
   CHECK_FALSE(codec.Decode(Bytes(packet)));
   packet.clear_request_id();
   auto moved = codec.Decode(Bytes(packet));
   REQUIRE(moved);
-  CHECK(std::get<PlayerLocationUpdated>(*moved).playerId == 7);
-  CHECK_FALSE(std::get<PlayerLocationUpdated>(*moved).location);
+  CHECK(std::get<W::PlayersMoved>(*moved).players[0].playerId == 7);
+  CHECK_FALSE(std::get<W::PlayersMoved>(*moved).players[0].location);
   packet.mutable_player_updated()->mutable_player()->mutable_profile()->set_player_id(7);
   REQUIRE(codec.Decode(Bytes(packet)));
   packet.set_request_id(1);
@@ -492,7 +492,7 @@ TEST_CASE("Movement timestamp survives server decoding including unstamped legac
   const auto codec = MakeCodec();
   P::ServerPacket packet;
   packet.set_protocol_version(W::Version);
-  auto* moved = packet.mutable_player_moved();
+  auto* moved = packet.mutable_players_moved()->add_players();
   moved->set_player_id(7);
   auto* location = moved->mutable_location();
   location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
@@ -504,10 +504,31 @@ TEST_CASE("Movement timestamp survives server decoding including unstamped legac
     location->set_sampled_at_us(stamp);
     auto decoded = codec.Decode(Bytes(packet));
     REQUIRE(decoded);
-    const auto& value = std::get<PlayerLocationUpdated>(*decoded);
+    const auto& value = std::get<W::PlayersMoved>(*decoded).players[0];
     REQUIRE(value.location);
     CHECK(value.location->sampledAtUs == stamp);
   }
+}
+
+TEST_CASE("Movement batch validates every item before returning and preserves order")
+{
+  const auto codec = MakeCodec();
+  P::ServerPacket packet;
+  packet.set_protocol_version(W::Version);
+  auto* batch = packet.mutable_players_moved();
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  batch->add_players()->set_player_id(7);
+  batch->add_players()->set_player_id(8);
+  auto decoded = codec.Decode(Bytes(packet));
+  REQUIRE(decoded);
+  const auto& values = std::get<W::PlayersMoved>(*decoded).players;
+  REQUIRE(values.size() == 2);
+  CHECK(values[0].playerId == 7);
+  CHECK(values[1].playerId == 8);
+  batch->mutable_players(1)->set_player_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  packet.set_protocol_version(4);
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
 }
 
 TEST_SUITE_END();

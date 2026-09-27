@@ -219,7 +219,7 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "enSessionH\000\0228\n\tsend_chat\030\013 \001(\0132#.Dreamsl"
     "eeve.Protocol.Chat.SendChatH\000\022@\n\rupdate_"
     "player\030\014 \001(\0132\'.Dreamsleeve.Protocol.Chat"
-    ".UpdatePlayerH\000B\t\n\007payload\"\327\005\n\014ServerPac"
+    ".UpdatePlayerH\000B\t\n\007payload\"\355\005\n\014ServerPac"
     "ket\022\030\n\020protocol_version\030\001 \001(\r\022\027\n\nrequest"
     "_id\030\002 \001(\004H\001\210\001\001\022B\n\016session_opened\030\n \001(\0132("
     ".Dreamsleeve.Protocol.Chat.SessionOpened"
@@ -233,26 +233,26 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "_updated\030\017 \001(\0132(.Dreamsleeve.Protocol.Ch"
     "at.PlayerUpdatedH\000\022Q\n\026player_update_acce"
     "pted\030\020 \001(\0132/.Dreamsleeve.Protocol.Chat.P"
-    "layerUpdateAcceptedH\000\022>\n\014player_moved\030\021 "
-    "\001(\0132&.Dreamsleeve.Protocol.Chat.PlayerMo"
-    "vedH\000\022S\n\027player_metadata_changed\030\022 \001(\01320"
-    ".Dreamsleeve.Protocol.Chat.PlayerMetadat"
-    "aChangedH\000B\t\n\007payloadB\r\n\013_request_id\"\026\n\024"
-    "PlayerUpdateAccepted\"p\n\017RequestRejected\022"
-    "=\n\004code\030\001 \001(\0162/.Dreamsleeve.Protocol.Cha"
-    "t.RequestRejectionCode\022\017\n\007message\030\002 \001(\t\022"
-    "\r\n\005field\030\003 \001(\t*\252\003\n\024RequestRejectionCode\022"
-    "&\n\"REQUEST_REJECTION_CODE_UNSPECIFIED\020\000\022"
-    "*\n&REQUEST_REJECTION_CODE_INVALID_REQUES"
-    "T\020\001\022,\n(REQUEST_REJECTION_CODE_SESSION_NO"
-    "T_READY\020\002\022/\n+REQUEST_REJECTION_CODE_SESS"
-    "ION_ALREADY_OPEN\020\003\022)\n%REQUEST_REJECTION_"
-    "CODE_USERNAME_TAKEN\020\004\022,\n(REQUEST_REJECTI"
-    "ON_CODE_CHANNEL_NOT_FOUND\020\005\022-\n)REQUEST_R"
-    "EJECTION_CODE_NOT_CHANNEL_MEMBER\020\006\022%\n!RE"
-    "QUEST_REJECTION_CODE_OVERLOADED\020\007\0220\n,REQ"
-    "UEST_REJECTION_CODE_AUTHENTICATION_FAILE"
-    "D\020\010b\006proto3"
+    "layerUpdateAcceptedH\000\022@\n\rplayers_moved\030\023"
+    " \001(\0132\'.Dreamsleeve.Protocol.Chat.Players"
+    "MovedH\000\022S\n\027player_metadata_changed\030\022 \001(\013"
+    "20.Dreamsleeve.Protocol.Chat.PlayerMetad"
+    "ataChangedH\000B\t\n\007payloadB\r\n\013_request_idJ\004"
+    "\010\021\020\022R\014player_moved\"\026\n\024PlayerUpdateAccept"
+    "ed\"p\n\017RequestRejected\022=\n\004code\030\001 \001(\0162/.Dr"
+    "eamsleeve.Protocol.Chat.RequestRejection"
+    "Code\022\017\n\007message\030\002 \001(\t\022\r\n\005field\030\003 \001(\t*\252\003\n"
+    "\024RequestRejectionCode\022&\n\"REQUEST_REJECTI"
+    "ON_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_REJECTI"
+    "ON_CODE_INVALID_REQUEST\020\001\022,\n(REQUEST_REJ"
+    "ECTION_CODE_SESSION_NOT_READY\020\002\022/\n+REQUE"
+    "ST_REJECTION_CODE_SESSION_ALREADY_OPEN\020\003"
+    "\022)\n%REQUEST_REJECTION_CODE_USERNAME_TAKE"
+    "N\020\004\022,\n(REQUEST_REJECTION_CODE_CHANNEL_NO"
+    "T_FOUND\020\005\022-\n)REQUEST_REJECTION_CODE_NOT_"
+    "CHANNEL_MEMBER\020\006\022%\n!REQUEST_REJECTION_CO"
+    "DE_OVERLOADED\020\007\0220\n,REQUEST_REJECTION_COD"
+    "E_AUTHENTICATION_FAILED\020\010b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_protocol_2eproto_deps[3] = {
@@ -264,7 +264,7 @@ static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    1651,
+    1673,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -985,26 +985,26 @@ void ServerPacket::set_allocated_player_update_accepted(::Dreamsleeve::Protocol:
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.player_update_accepted)
 }
-void ServerPacket::set_allocated_player_moved(::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NULLABLE player_moved) {
+void ServerPacket::set_allocated_players_moved(::Dreamsleeve::Protocol::Chat::PlayersMoved* PROTOBUF_NULLABLE players_moved) {
   ::google::protobuf::Arena* message_arena = GetArena();
   clear_payload();
-  if (player_moved) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(player_moved)->GetArena();
+  if (players_moved) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(players_moved)->GetArena();
     if (message_arena != submessage_arena) {
-      player_moved = ::google::protobuf::internal::GetOwnedMessage(message_arena, player_moved, submessage_arena);
+      players_moved = ::google::protobuf::internal::GetOwnedMessage(message_arena, players_moved, submessage_arena);
     }
-    set_has_player_moved();
-    _impl_.payload_.player_moved_ = player_moved;
+    set_has_players_moved();
+    _impl_.payload_.players_moved_ = players_moved;
   }
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.player_moved)
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.players_moved)
 }
-void ServerPacket::clear_player_moved() {
+void ServerPacket::clear_players_moved() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (payload_case() == kPlayerMoved) {
+  if (payload_case() == kPlayersMoved) {
     if (GetArena() == nullptr) {
-      delete _impl_.payload_.player_moved_;
+      delete _impl_.payload_.players_moved_;
     } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.player_moved_);
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.players_moved_);
     }
     clear_has_payload();
   }
@@ -1095,8 +1095,8 @@ ServerPacket::ServerPacket(
       case kPlayerUpdateAccepted:
         _impl_.payload_.player_update_accepted_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.player_update_accepted_);
         break;
-      case kPlayerMoved:
-        _impl_.payload_.player_moved_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.player_moved_);
+      case kPlayersMoved:
+        _impl_.payload_.players_moved_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.players_moved_);
         break;
       case kPlayerMetadataChanged:
         _impl_.payload_.player_metadata_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.player_metadata_changed_);
@@ -1198,11 +1198,11 @@ void ServerPacket::clear_payload() {
       }
       break;
     }
-    case kPlayerMoved: {
+    case kPlayersMoved: {
       if (GetArena() == nullptr) {
-        delete _impl_.payload_.player_moved_;
+        delete _impl_.payload_.players_moved_;
       } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.player_moved_);
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.players_moved_);
       }
       break;
     }
@@ -1270,9 +1270,9 @@ ServerPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_._has_bits_),
     0, // no _extensions_
-    18, 8,  // max_field_number, fast_idx_mask
+    19, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294705660,  // skipmap
+    4294509052,  // skipmap
     offsetof(decltype(_table_), field_entries),
     11,  // num_field_entries
     9,  // num_aux_entries
@@ -1313,10 +1313,10 @@ ServerPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.player_updated_), _Internal::kOneofCaseOffset + 0, 5, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted player_update_accepted = 16;
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.player_update_accepted_), _Internal::kOneofCaseOffset + 0, 6, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .Dreamsleeve.Protocol.Chat.PlayerMoved player_moved = 17;
-    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.player_moved_), _Internal::kOneofCaseOffset + 0, 7, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.PlayerMetadataChanged player_metadata_changed = 18;
-    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.player_metadata_changed_), _Internal::kOneofCaseOffset + 0, 8, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.player_metadata_changed_), _Internal::kOneofCaseOffset + 0, 7, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.PlayersMoved players_moved = 19;
+    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.players_moved_), _Internal::kOneofCaseOffset + 0, 8, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SessionOpened>()},
@@ -1326,8 +1326,8 @@ ServerPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerLeft>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerUpdated>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted>()},
-      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerMoved>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayersMoved>()},
   }},
   {{
   }},
@@ -1428,15 +1428,15 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
           stream);
       break;
     }
-    case kPlayerMoved: {
-      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-          17, *this_._impl_.payload_.player_moved_, this_._impl_.payload_.player_moved_->GetCachedSize(), target,
-          stream);
-      break;
-    }
     case kPlayerMetadataChanged: {
       target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
           18, *this_._impl_.payload_.player_metadata_changed_, this_._impl_.payload_.player_metadata_changed_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kPlayersMoved: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          19, *this_._impl_.payload_.players_moved_, this_._impl_.payload_.players_moved_->GetCachedSize(), target,
           stream);
       break;
     }
@@ -1525,10 +1525,10 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.player_update_accepted_);
       break;
     }
-    // .Dreamsleeve.Protocol.Chat.PlayerMoved player_moved = 17;
-    case kPlayerMoved: {
+    // .Dreamsleeve.Protocol.Chat.PlayersMoved players_moved = 19;
+    case kPlayersMoved: {
       total_size += 2 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.player_moved_);
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.players_moved_);
       break;
     }
     // .Dreamsleeve.Protocol.Chat.PlayerMetadataChanged player_metadata_changed = 18;
@@ -1639,11 +1639,11 @@ void ServerPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
         break;
       }
-      case kPlayerMoved: {
+      case kPlayersMoved: {
         if (oneof_needs_init) {
-          _this->_impl_.payload_.player_moved_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.player_moved_);
+          _this->_impl_.payload_.players_moved_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.players_moved_);
         } else {
-          _this->_impl_.payload_.player_moved_->MergeFrom(*from._impl_.payload_.player_moved_);
+          _this->_impl_.payload_.players_moved_->MergeFrom(*from._impl_.payload_.players_moved_);
         }
         break;
       }

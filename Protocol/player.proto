@@ -141,3 +141,8 @@ message PlayerMetadataChanged {
 message PlayerMoved { uint64 player_id = 1; PlayerLocation location = 2; }
 
 message PlayerLeft { uint64 player_id = 1; }
+
+// Ordered movement projection for one recipient; omitted location clears visibility.
+message PlayersMoved {
+  repeated PlayerMoved players = 1;
+}

@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 4;
+  inline constexpr std::uint32_t Version = 5;
 
   enum class ErrorCode
   {
@@ -66,9 +66,14 @@ export namespace Dreamsleeve::Client::Wire
     std::uint64_t requestId;
   };
 
+  struct PlayersMoved
+  {
+    std::vector<PlayerLocationUpdated> players;
+  };
+
   // Replies carry required correlation; notifications have no request ID.
   // Own and broadcast chat both apply the same ChatMessagesReceived update.
-  using ServerResponse = std::variant<SessionOpened, ChatAccepted, ChatMessagesReceived, ServerRejection, PlayerUpserted, PlayerRemoved, PlayerLocationUpdated, PlayerMetadataUpdated, PlayerUpdateAccepted>;
+  using ServerResponse = std::variant<SessionOpened, ChatAccepted, ChatMessagesReceived, ServerRejection, PlayerUpserted, PlayerRemoved, PlayersMoved, PlayerMetadataUpdated, PlayerUpdateAccepted>;
 
   // One immutable configuration per network owner. Validate once at startup.
   class ProtocolCodec

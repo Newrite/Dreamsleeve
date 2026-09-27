@@ -17,6 +17,7 @@
         <Compile Include="Authentication.fs" />
         <Compile Include="SessionContracts.fs" />
         <Compile Include="ChatRoomAgent.fs" />
+        <Compile Include="SpatialIndex.fs" />
         <Compile Include="PresenceAgent.fs" />
         <Compile Include="PlayerSession.fs" />
         <Compile Include="SessionTable.fs" />

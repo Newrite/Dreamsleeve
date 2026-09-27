@@ -1,4 +1,4 @@
-﻿namespace Dreamsleeve.Server.Core
+namespace Dreamsleeve.Server.Core
 
 open System
 open Dreamsleeve.Agent
@@ -89,7 +89,7 @@ type PresenceEvent =
     | Snapshot of PlayerSnapshot list
     | Joined of PlayerSnapshot
     | Updated of PlayerSnapshot
-    | Moved of PlayerId * PlayerLocation voption
+    | Moved of (PlayerId * PlayerLocation voption) list
     | MetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | Left of PlayerId
 

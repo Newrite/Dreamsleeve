@@ -295,9 +295,16 @@ private:
 
     Result<void> Receive(PlayerMetadataUpdated& value) { return Apply(value); }
 
-    Result<void> Receive(PlayerLocationUpdated& value)
+    Result<void> Receive(Wire::PlayersMoved& batch)
     {
-      return Apply(value);
+      if (phase != SessionPhase::Ready) return Unexpected("session_not_ready");
+
+      for (const auto& value : batch.players)
+      {
+        auto result = model.Apply(model.Generation(), value);
+        if (!result) return std::unexpected{result.error()};
+      }
+      return Publish();
     }
 
     Result<void> Receive(ChatMessagesReceived& value)

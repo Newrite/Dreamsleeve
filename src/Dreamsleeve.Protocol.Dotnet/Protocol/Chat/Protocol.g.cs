@@ -31,7 +31,7 @@ namespace Dreamsleeve.Protocol.Chat {
             "ZXZlLlByb3RvY29sLkNoYXQuT3BlblNlc3Npb25IABI4CglzZW5kX2NoYXQY",
             "CyABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlNlbmRDaGF0SAAS",
             "QAoNdXBkYXRlX3BsYXllchgMIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29s",
-            "LkNoYXQuVXBkYXRlUGxheWVySABCCQoHcGF5bG9hZCLXBQoMU2VydmVyUGFj",
+            "LkNoYXQuVXBkYXRlUGxheWVySABCCQoHcGF5bG9hZCLtBQoMU2VydmVyUGFj",
             "a2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SFwoKcmVxdWVzdF9pZBgC",
             "IAEoBEgBiAEBEkIKDnNlc3Npb25fb3BlbmVkGAogASgLMiguRHJlYW1zbGVl",
             "dmUuUHJvdG9jb2wuQ2hhdC5TZXNzaW9uT3BlbmVkSAASQgoOY2hhdF9wdWJs",
@@ -44,28 +44,29 @@ namespace Dreamsleeve.Protocol.Chat {
             "dGVkGA8gASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJV",
             "cGRhdGVkSAASUQoWcGxheWVyX3VwZGF0ZV9hY2NlcHRlZBgQIAEoCzIvLkRy",
             "ZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyVXBkYXRlQWNjZXB0ZWRI",
-            "ABI+CgxwbGF5ZXJfbW92ZWQYESABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
-            "bC5DaGF0LlBsYXllck1vdmVkSAASUwoXcGxheWVyX21ldGFkYXRhX2NoYW5n",
-            "ZWQYEiABKAsyMC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllck1l",
-            "dGFkYXRhQ2hhbmdlZEgAQgkKB3BheWxvYWRCDQoLX3JlcXVlc3RfaWQiFgoU",
-            "UGxheWVyVXBkYXRlQWNjZXB0ZWQicAoPUmVxdWVzdFJlamVjdGVkEj0KBGNv",
-            "ZGUYASABKA4yLy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlJlcXVlc3RS",
-            "ZWplY3Rpb25Db2RlEg8KB21lc3NhZ2UYAiABKAkSDQoFZmllbGQYAyABKAkq",
-            "qgMKFFJlcXVlc3RSZWplY3Rpb25Db2RlEiYKIlJFUVVFU1RfUkVKRUNUSU9O",
-            "X0NPREVfVU5TUEVDSUZJRUQQABIqCiZSRVFVRVNUX1JFSkVDVElPTl9DT0RF",
-            "X0lOVkFMSURfUkVRVUVTVBABEiwKKFJFUVVFU1RfUkVKRUNUSU9OX0NPREVf",
-            "U0VTU0lPTl9OT1RfUkVBRFkQAhIvCitSRVFVRVNUX1JFSkVDVElPTl9DT0RF",
-            "X1NFU1NJT05fQUxSRUFEWV9PUEVOEAMSKQolUkVRVUVTVF9SRUpFQ1RJT05f",
-            "Q09ERV9VU0VSTkFNRV9UQUtFThAEEiwKKFJFUVVFU1RfUkVKRUNUSU9OX0NP",
-            "REVfQ0hBTk5FTF9OT1RfRk9VTkQQBRItCilSRVFVRVNUX1JFSkVDVElPTl9D",
-            "T0RFX05PVF9DSEFOTkVMX01FTUJFUhAGEiUKIVJFUVVFU1RfUkVKRUNUSU9O",
-            "X0NPREVfT1ZFUkxPQURFRBAHEjAKLFJFUVVFU1RfUkVKRUNUSU9OX0NPREVf",
-            "QVVUSEVOVElDQVRJT05fRkFJTEVEEAhiBnByb3RvMw=="));
+            "ABJACg1wbGF5ZXJzX21vdmVkGBMgASgLMicuRHJlYW1zbGVldmUuUHJvdG9j",
+            "b2wuQ2hhdC5QbGF5ZXJzTW92ZWRIABJTChdwbGF5ZXJfbWV0YWRhdGFfY2hh",
+            "bmdlZBgSIAEoCzIwLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVy",
+            "TWV0YWRhdGFDaGFuZ2VkSABCCQoHcGF5bG9hZEINCgtfcmVxdWVzdF9pZEoE",
+            "CBEQElIMcGxheWVyX21vdmVkIhYKFFBsYXllclVwZGF0ZUFjY2VwdGVkInAK",
+            "D1JlcXVlc3RSZWplY3RlZBI9CgRjb2RlGAEgASgOMi8uRHJlYW1zbGVldmUu",
+            "UHJvdG9jb2wuQ2hhdC5SZXF1ZXN0UmVqZWN0aW9uQ29kZRIPCgdtZXNzYWdl",
+            "GAIgASgJEg0KBWZpZWxkGAMgASgJKqoDChRSZXF1ZXN0UmVqZWN0aW9uQ29k",
+            "ZRImCiJSRVFVRVNUX1JFSkVDVElPTl9DT0RFX1VOU1BFQ0lGSUVEEAASKgom",
+            "UkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9JTlZBTElEX1JFUVVFU1QQARIsCihS",
+            "RVFVRVNUX1JFSkVDVElPTl9DT0RFX1NFU1NJT05fTk9UX1JFQURZEAISLwor",
+            "UkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9TRVNTSU9OX0FMUkVBRFlfT1BFThAD",
+            "EikKJVJFUVVFU1RfUkVKRUNUSU9OX0NPREVfVVNFUk5BTUVfVEFLRU4QBBIs",
+            "CihSRVFVRVNUX1JFSkVDVElPTl9DT0RFX0NIQU5ORUxfTk9UX0ZPVU5EEAUS",
+            "LQopUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9OT1RfQ0hBTk5FTF9NRU1CRVIQ",
+            "BhIlCiFSRVFVRVNUX1JFSkVDVElPTl9DT0RFX09WRVJMT0FERUQQBxIwCixS",
+            "RVFVRVNUX1JFSkVDVElPTl9DT0RFX0FVVEhFTlRJQ0FUSU9OX0ZBSUxFRBAI",
+            "YgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.RequestRejectionCode), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ClientPacket), global::Dreamsleeve.Protocol.Chat.ClientPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "OpenSession", "SendChat", "UpdatePlayer" }, new[]{ "Payload" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ServerPacket), global::Dreamsleeve.Protocol.Chat.ServerPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "SessionOpened", "ChatPublished", "RequestRejected", "PlayerJoined", "PlayerLeft", "PlayerUpdated", "PlayerUpdateAccepted", "PlayerMoved", "PlayerMetadataChanged" }, new[]{ "Payload", "RequestId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ServerPacket), global::Dreamsleeve.Protocol.Chat.ServerPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "SessionOpened", "ChatPublished", "RequestRejected", "PlayerJoined", "PlayerLeft", "PlayerUpdated", "PlayerUpdateAccepted", "PlayersMoved", "PlayerMetadataChanged" }, new[]{ "Payload", "RequestId" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted), global::Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RequestRejected), global::Dreamsleeve.Protocol.Chat.RequestRejected.Parser, new[]{ "Code", "Message", "Field" }, null, null, null, null)
           }));
@@ -121,7 +122,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
   #region Messages
   /// <summary>
-  /// One serialized envelope per reliable ENet packet. Version 4 replicates full player state and opens sessions
+  /// One serialized envelope per reliable ENet packet. Version 5 replicates full player state and opens sessions
   /// with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
   /// requires reconnecting. Transport Connected alone is not application readiness.
   /// </summary>
@@ -615,8 +616,8 @@ namespace Dreamsleeve.Protocol.Chat {
         case PayloadOneofCase.PlayerUpdateAccepted:
           PlayerUpdateAccepted = other.PlayerUpdateAccepted.Clone();
           break;
-        case PayloadOneofCase.PlayerMoved:
-          PlayerMoved = other.PlayerMoved.Clone();
+        case PayloadOneofCase.PlayersMoved:
+          PlayersMoved = other.PlayersMoved.Clone();
           break;
         case PayloadOneofCase.PlayerMetadataChanged:
           PlayerMetadataChanged = other.PlayerMetadataChanged.Clone();
@@ -755,15 +756,15 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
-    /// <summary>Field number for the "player_moved" field.</summary>
-    public const int PlayerMovedFieldNumber = 17;
+    /// <summary>Field number for the "players_moved" field.</summary>
+    public const int PlayersMovedFieldNumber = 19;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Chat.PlayerMoved PlayerMoved {
-      get { return payloadCase_ == PayloadOneofCase.PlayerMoved ? (global::Dreamsleeve.Protocol.Chat.PlayerMoved) payload_ : null; }
+    public global::Dreamsleeve.Protocol.Chat.PlayersMoved PlayersMoved {
+      get { return payloadCase_ == PayloadOneofCase.PlayersMoved ? (global::Dreamsleeve.Protocol.Chat.PlayersMoved) payload_ : null; }
       set {
         payload_ = value;
-        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.PlayerMoved;
+        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.PlayersMoved;
       }
     }
 
@@ -790,7 +791,7 @@ namespace Dreamsleeve.Protocol.Chat {
       PlayerLeft = 14,
       PlayerUpdated = 15,
       PlayerUpdateAccepted = 16,
-      PlayerMoved = 17,
+      PlayersMoved = 19,
       PlayerMetadataChanged = 18,
     }
     private PayloadOneofCase payloadCase_ = PayloadOneofCase.None;
@@ -831,7 +832,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (!object.Equals(PlayerLeft, other.PlayerLeft)) return false;
       if (!object.Equals(PlayerUpdated, other.PlayerUpdated)) return false;
       if (!object.Equals(PlayerUpdateAccepted, other.PlayerUpdateAccepted)) return false;
-      if (!object.Equals(PlayerMoved, other.PlayerMoved)) return false;
+      if (!object.Equals(PlayersMoved, other.PlayersMoved)) return false;
       if (!object.Equals(PlayerMetadataChanged, other.PlayerMetadataChanged)) return false;
       if (PayloadCase != other.PayloadCase) return false;
       return Equals(_unknownFields, other._unknownFields);
@@ -850,7 +851,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (payloadCase_ == PayloadOneofCase.PlayerLeft) hash ^= PlayerLeft.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.PlayerUpdated) hash ^= PlayerUpdated.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.PlayerUpdateAccepted) hash ^= PlayerUpdateAccepted.GetHashCode();
-      if (payloadCase_ == PayloadOneofCase.PlayerMoved) hash ^= PlayerMoved.GetHashCode();
+      if (payloadCase_ == PayloadOneofCase.PlayersMoved) hash ^= PlayersMoved.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.PlayerMetadataChanged) hash ^= PlayerMetadataChanged.GetHashCode();
       hash ^= (int) payloadCase_;
       if (_unknownFields != null) {
@@ -907,13 +908,13 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(130, 1);
         output.WriteMessage(PlayerUpdateAccepted);
       }
-      if (payloadCase_ == PayloadOneofCase.PlayerMoved) {
-        output.WriteRawTag(138, 1);
-        output.WriteMessage(PlayerMoved);
-      }
       if (payloadCase_ == PayloadOneofCase.PlayerMetadataChanged) {
         output.WriteRawTag(146, 1);
         output.WriteMessage(PlayerMetadataChanged);
+      }
+      if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
+        output.WriteRawTag(154, 1);
+        output.WriteMessage(PlayersMoved);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -961,13 +962,13 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(130, 1);
         output.WriteMessage(PlayerUpdateAccepted);
       }
-      if (payloadCase_ == PayloadOneofCase.PlayerMoved) {
-        output.WriteRawTag(138, 1);
-        output.WriteMessage(PlayerMoved);
-      }
       if (payloadCase_ == PayloadOneofCase.PlayerMetadataChanged) {
         output.WriteRawTag(146, 1);
         output.WriteMessage(PlayerMetadataChanged);
+      }
+      if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
+        output.WriteRawTag(154, 1);
+        output.WriteMessage(PlayersMoved);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -1006,8 +1007,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (payloadCase_ == PayloadOneofCase.PlayerUpdateAccepted) {
         size += 2 + pb::CodedOutputStream.ComputeMessageSize(PlayerUpdateAccepted);
       }
-      if (payloadCase_ == PayloadOneofCase.PlayerMoved) {
-        size += 2 + pb::CodedOutputStream.ComputeMessageSize(PlayerMoved);
+      if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(PlayersMoved);
       }
       if (payloadCase_ == PayloadOneofCase.PlayerMetadataChanged) {
         size += 2 + pb::CodedOutputStream.ComputeMessageSize(PlayerMetadataChanged);
@@ -1073,11 +1074,11 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           PlayerUpdateAccepted.MergeFrom(other.PlayerUpdateAccepted);
           break;
-        case PayloadOneofCase.PlayerMoved:
-          if (PlayerMoved == null) {
-            PlayerMoved = new global::Dreamsleeve.Protocol.Chat.PlayerMoved();
+        case PayloadOneofCase.PlayersMoved:
+          if (PlayersMoved == null) {
+            PlayersMoved = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
           }
-          PlayerMoved.MergeFrom(other.PlayerMoved);
+          PlayersMoved.MergeFrom(other.PlayersMoved);
           break;
         case PayloadOneofCase.PlayerMetadataChanged:
           if (PlayerMetadataChanged == null) {
@@ -1177,15 +1178,6 @@ namespace Dreamsleeve.Protocol.Chat {
             PlayerUpdateAccepted = subBuilder;
             break;
           }
-          case 138: {
-            global::Dreamsleeve.Protocol.Chat.PlayerMoved subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayerMoved();
-            if (payloadCase_ == PayloadOneofCase.PlayerMoved) {
-              subBuilder.MergeFrom(PlayerMoved);
-            }
-            input.ReadMessage(subBuilder);
-            PlayerMoved = subBuilder;
-            break;
-          }
           case 146: {
             global::Dreamsleeve.Protocol.Chat.PlayerMetadataChanged subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayerMetadataChanged();
             if (payloadCase_ == PayloadOneofCase.PlayerMetadataChanged) {
@@ -1193,6 +1185,15 @@ namespace Dreamsleeve.Protocol.Chat {
             }
             input.ReadMessage(subBuilder);
             PlayerMetadataChanged = subBuilder;
+            break;
+          }
+          case 154: {
+            global::Dreamsleeve.Protocol.Chat.PlayersMoved subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
+            if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
+              subBuilder.MergeFrom(PlayersMoved);
+            }
+            input.ReadMessage(subBuilder);
+            PlayersMoved = subBuilder;
             break;
           }
         }
@@ -1285,15 +1286,6 @@ namespace Dreamsleeve.Protocol.Chat {
             PlayerUpdateAccepted = subBuilder;
             break;
           }
-          case 138: {
-            global::Dreamsleeve.Protocol.Chat.PlayerMoved subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayerMoved();
-            if (payloadCase_ == PayloadOneofCase.PlayerMoved) {
-              subBuilder.MergeFrom(PlayerMoved);
-            }
-            input.ReadMessage(subBuilder);
-            PlayerMoved = subBuilder;
-            break;
-          }
           case 146: {
             global::Dreamsleeve.Protocol.Chat.PlayerMetadataChanged subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayerMetadataChanged();
             if (payloadCase_ == PayloadOneofCase.PlayerMetadataChanged) {
@@ -1301,6 +1293,15 @@ namespace Dreamsleeve.Protocol.Chat {
             }
             input.ReadMessage(subBuilder);
             PlayerMetadataChanged = subBuilder;
+            break;
+          }
+          case 154: {
+            global::Dreamsleeve.Protocol.Chat.PlayersMoved subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
+            if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
+              subBuilder.MergeFrom(PlayersMoved);
+            }
+            input.ReadMessage(subBuilder);
+            PlayersMoved = subBuilder;
             break;
           }
         }

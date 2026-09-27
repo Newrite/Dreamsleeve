@@ -33,7 +33,7 @@ type ServerRuntimeMessage =
     | Stop
 
 /// One transport owner. Packet dispatch does not wait for domain agents or route
-/// chat through another shared mailbox. SessionTable contains lifecycle only.
+/// chat through another shared mailbox. SessionTable owns routes and pending transport output.
 [<RequireQualifiedAccess>]
 module ServerRuntime =
     type private Sources = {
@@ -79,6 +79,7 @@ module ServerRuntime =
 
     let private close (options: ServerRuntimeOptions) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
         if entry.Phase <> SessionTable.Closing then
+            entry.Movement.Clear()
             entry.Phase <- SessionTable.Closing
             let deadline = now () + int64 options.ShutdownTimeoutMs
             entry.Deadline <- if state.Stopping then min deadline state.StopDeadline else deadline
@@ -95,17 +96,57 @@ module ServerRuntime =
                 | AgentPostResult.Posted -> ()
                 | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped -> child.Abort()
 
-    let private send (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) response =
-        match ProtocolCodec.encodeServer state.Codec response with
+    let private transmit (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) encoded =
+        match encoded with
         | Error error ->
             state.Logger.LogError("Cannot encode response for {ConnectionId}: {Failure}", entry.ConnectionId, error.Failure)
             close options state context entry
-        | Ok bytes ->
-            match state.Transport.Send(entry.ConnectionId, bytes) with
-            | Ok () -> ()
-            | Error reason ->
-                state.Logger.LogWarning("Closing {ConnectionId}: {Reason}", entry.ConnectionId, reason)
-                close options state context entry
+        | Ok packets ->
+            for bytes in packets do
+                if entry.Phase <> SessionTable.Closing then
+                    match state.Transport.Send(entry.ConnectionId, bytes) with
+                    | Ok () -> ()
+                    | Error reason ->
+                        state.Logger.LogWarning("Closing {ConnectionId}: {Reason}", entry.ConnectionId, reason)
+                        close options state context entry
+
+    let private flushMovement options state context (entry: SessionTable.Entry) =
+        if entry.Movement.Count > 0 then
+            let movements = entry.Movement |> Seq.map (fun pair -> pair.Key, pair.Value) |> List.ofSeq
+            entry.Movement.Clear()
+            ProtocolCodec.encodeMovementPackets state.Codec movements |> transmit options state context entry
+
+    let private queueMovement (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) movements =
+        for playerId, location in movements do
+            if entry.Phase = SessionTable.Ready then
+                // A clear or space transition is a stream boundary. Never replace
+                // it with a later pose while it is waiting for the transport tick.
+                match entry.Movement.TryGetValue playerId with
+                | true, previous ->
+                    match previous, location with
+                    | ValueSome before, ValueSome after when PlayerLocation.isSameSpace before after -> ()
+                    | ValueNone, _ | _, ValueNone | ValueSome _, ValueSome _ -> flushMovement options state context entry
+                | false, _ -> ()
+
+                if entry.Phase = SessionTable.Ready then
+                    if entry.Movement.Count >= options.MaxSessions && not (entry.Movement.ContainsKey playerId) then
+                        state.Logger.LogWarning("Movement output limit exceeded for {ConnectionId}", entry.ConnectionId)
+                        close options state context entry
+                    else
+                        entry.Movement[playerId] <- location
+
+    let private send options state context (entry: SessionTable.Entry) response =
+        match response with
+        | ServerResponse.PlayersMoved movements -> queueMovement options state context entry movements
+        | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
+        | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _ | ServerResponse.PlayerLeft _
+        | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerUpdateAccepted _ ->
+            // Lifecycle/metadata/replies keep their FIFO position relative to movement.
+            flushMovement options state context entry
+            if entry.Phase <> SessionTable.Closing then
+                ProtocolCodec.encodeServer state.Codec response
+                |> Result.map List.singleton
+                |> transmit options state context entry
 
     let private reject (options: ServerRuntimeOptions) state context entry requestId code message =
         send options state context entry (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "" }))
@@ -141,7 +182,7 @@ module ServerRuntime =
                 match response with
                 | ServerResponse.RequestRejected _ -> send options state context entry response
                 | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
-                | ServerResponse.PlayerJoined _ | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMoved _ | ServerResponse.PlayerMetadataChanged _
+                | ServerResponse.PlayerJoined _ | ServerResponse.PlayerUpdated _ | ServerResponse.PlayersMoved _ | ServerResponse.PlayerMetadataChanged _
                 | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _ -> ()
             | Some _ | None -> ()
 
@@ -215,8 +256,8 @@ module ServerRuntime =
                 if SessionTable.clean entry then SessionTable.remove entry state.Table
 
     let private schedule (options: ServerRuntimeOptions) (context: AgentContext<ServerRuntimeMessage>) =
-        let wait (token: CancellationToken) = task { do! Task.Delay(options.PollIntervalMs, token) }
-        context.PipeToSelf(wait, fun _ -> ServerRuntimeMessage.Tick)
+        // A timer is an observation, not an outbound operation to drain on Complete.
+        context.Watch(Task.Delay(options.PollIntervalMs, context.CancellationToken), fun _ -> ServerRuntimeMessage.Tick)
 
     let private initialize (options: ServerRuntimeOptions) globalId authenticator state (context: AgentContext<ServerRuntimeMessage>) =
         match context.Ref.TryReliable() with
@@ -294,7 +335,8 @@ module ServerRuntime =
                     else
                         // A stuck source still requires containment of its lifetime.
                         fail state context $"Session cleanup timed out: {entry.ConnectionId}"
-                | SessionTable.Waiting | SessionTable.Opening | SessionTable.Ready | SessionTable.Closing -> ()
+                | SessionTable.Ready -> flushMovement options state context entry
+                | SessionTable.Waiting | SessionTable.Opening | SessionTable.Closing -> ()
 
             let sourcesStopped =
                 state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.PresenceStopped)

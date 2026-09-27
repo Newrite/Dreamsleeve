@@ -88,16 +88,16 @@ Rename сохраняет generation и остальное состояние. �
 серверную generation в PlayerInfo.
 
 UpdatePlayer не меняет модель. Коррелированный PlayerUpdateAccepted освобождает
-ожидание; периодические PlayerUpdated/PlayerMoved/PlayerMetadataChanged без RequestId приходят также
-автору. PlayerUpdated заменяет полный PlayerInfo, PlayerMoved меняет только
-optional location. PlayerMetadataChanged заменяет только присутствующие части
+ожидание; периодические PlayerUpdated/PlayersMoved/PlayerMetadataChanged без RequestId приходят также
+автору. PlayerUpdated заменяет полный PlayerInfo, PlayersMoved содержит список изменений optional location; вся пачка декодируется
+до применения и публикуется в exchange один раз. PlayerMetadataChanged заменяет только присутствующие части
 actorValues/details, сохраняет остальные поля и отмечает PlayerId в Changes. Bootstrap и PlayerJoined содержат PlayerInfo с координатами,
 отфильтрованными для конкретного наблюдателя.
 
 Свой location возвращается всегда. Чужой location доступен только при наличии
 позиции наблюдателя, в том же пространстве WRLD/CELL (FormKey) и внутри серверного
-радиуса видимости. Выход из радиуса или смена пространства присылает PlayerMoved
-с отсутствующим location; повторный вход восстанавливает позицию даже неподвижной
+радиуса видимости. Выход из радиуса или смена пространства присылает запись
+в PlayersMoved с отсутствующим location; повторный вход восстанавливает позицию даже неподвижной
 цели. Профиль, имя персонажа, actor values и details остаются глобальными, а
 неизвестная позиция не означает выход игрока из онлайна.
 

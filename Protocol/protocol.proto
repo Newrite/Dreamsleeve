@@ -6,7 +6,7 @@ import "chat.proto";
 import "session.proto";
 import "player.proto";
 
-// One serialized envelope per reliable ENet packet. Version 4 replicates full player state and opens sessions
+// One serialized envelope per reliable ENet packet. Version 5 replicates full player state and opens sessions
 // with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
 // requires reconnecting. Transport Connected alone is not application readiness.
 message ClientPacket {
@@ -25,6 +25,8 @@ message ClientPacket {
 message ServerPacket {
   uint32 protocol_version = 1;
   optional uint64 request_id = 2;
+  reserved 17;
+  reserved "player_moved";
   oneof payload {
     SessionOpened session_opened = 10;
     ChatPublished chat_published = 11;
@@ -33,7 +35,7 @@ message ServerPacket {
     PlayerLeft player_left = 14;
     PlayerUpdated player_updated = 15;
     PlayerUpdateAccepted player_update_accepted = 16;
-    PlayerMoved player_moved = 17;
+    PlayersMoved players_moved = 19;
     PlayerMetadataChanged player_metadata_changed = 18;
   }
 }
