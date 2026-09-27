@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Core
 
 open System
 open System.Diagnostics
+open System.Diagnostics.Metrics
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging
@@ -47,6 +48,7 @@ module ServerRuntime =
 
     type private State = {
         Table: SessionTable.State
+        mutable RouteScratch: SessionTable.Entry array
         Codec: ProtocolCodec
         MaxActorValues: int
         Transport: ServerTransport
@@ -112,8 +114,9 @@ module ServerRuntime =
                         state.Logger.LogWarning("Closing {ConnectionId}: {Reason}", entry.ConnectionId, reason)
                         close options state context entry
 
-    let private flushMovement options state context (entry: SessionTable.Entry) =
+    let private flushMovement (reason: Histogram<double>) options state context (entry: SessionTable.Entry) =
         if entry.Movement.Count > 0 then
+            reason.Record(float entry.Movement.Count)
             let movements = Array.zeroCreate<MovementChange> entry.Movement.Count
             let mutable index = 0
             for KeyValue(playerId, location) in entry.Movement do
@@ -132,7 +135,7 @@ module ServerRuntime =
                 | true, previous ->
                     match previous, location with
                     | ValueSome before, ValueSome after when PlayerLocation.isSameSpace before after -> ()
-                    | ValueNone, _ | _, ValueNone | ValueSome _, ValueSome _ -> flushMovement options state context entry
+                    | ValueNone, _ | _, ValueNone | ValueSome _, ValueSome _ -> flushMovement RuntimeMetrics.movementBoundary options state context entry
                 | false, _ -> ()
 
                 if entry.Phase = SessionTable.Ready then
@@ -142,18 +145,25 @@ module ServerRuntime =
                     else
                         entry.Movement[playerId] <- location
 
+    let private sendImmediate reason options state context (entry: SessionTable.Entry) response =
+        // Preserve every existing FIFO barrier until measurements justify a narrower policy.
+        flushMovement reason options state context entry
+        if entry.Phase <> SessionTable.Closing then
+            ProtocolCodec.encodeServer state.Codec response
+            |> Result.map List.singleton
+            |> transmit options state context entry
+
     let private send options state context (entry: SessionTable.Entry) response =
         match response with
         | ServerResponse.PlayersMoved movements -> queueMovement options state context entry movements
-        | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
-        | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _ | ServerResponse.PlayerLeft _
-        | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerUpdateAccepted _ ->
-            // Lifecycle/metadata/replies keep their FIFO position relative to movement.
-            flushMovement options state context entry
-            if entry.Phase <> SessionTable.Closing then
-                ProtocolCodec.encodeServer state.Codec response
-                |> Result.map List.singleton
-                |> transmit options state context entry
+        | ServerResponse.ChatAccepted _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerUpdateAccepted _ ->
+            sendImmediate RuntimeMetrics.movementSettlement options state context entry response
+        | ServerResponse.ChatPublished _ ->
+            sendImmediate RuntimeMetrics.movementChat options state context entry response
+        | ServerResponse.PlayerMetadataChanged _ ->
+            sendImmediate RuntimeMetrics.movementMetadata options state context entry response
+        | ServerResponse.SessionOpened _ | ServerResponse.PlayerJoined _ | ServerResponse.PlayerLeft _ | ServerResponse.PlayerUpdated _ ->
+            sendImmediate RuntimeMetrics.movementLifecycle options state context entry response
 
     let private reject (options: ServerRuntimeOptions) state context entry requestId code message =
         send options state context entry (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "" }))
@@ -313,13 +323,38 @@ module ServerRuntime =
             if SessionTable.clean entry then
                 SessionTable.remove entry state.Table
 
+    // Callbacks may remove routes. Reuse the detached iteration buffer and release
+    // references afterwards; never keep a live Dictionary enumerator across close/reset.
+    let private visitRoutes state visit =
+        let count = state.Table.Connections.Count
+        if state.RouteScratch.Length < count then
+            state.RouteScratch <- Array.zeroCreate (max count (state.RouteScratch.Length * 2))
+        state.Table.Connections.Values.CopyTo(state.RouteScratch, 0)
+
+        try
+            for index in 0 .. count - 1 do visit state.RouteScratch[index]
+        finally
+            Array.Clear(state.RouteScratch, 0, count)
+
+    let private tickRoute (options: ServerRuntimeOptions) time state context (entry: SessionTable.Entry) =
+        match entry.Phase with
+        | SessionTable.Waiting | SessionTable.Opening when time >= entry.Deadline -> close options state context entry
+        | SessionTable.Closing when time >= entry.Deadline ->
+            if SessionTable.domainClean entry then
+                state.Transport.Reset entry.ConnectionId
+                entry.TransportClosed <- true
+                SessionTable.remove entry state.Table
+            else
+                fail state context $"Session cleanup timed out: {entry.ConnectionId}"
+        | SessionTable.Ready -> flushMovement RuntimeMetrics.movementTick options state context entry
+        | SessionTable.Waiting | SessionTable.Opening | SessionTable.Closing -> ()
+
     let private stop (options: ServerRuntimeOptions) state context =
         if not state.Stopping then
             state.Stopping <- true
             state.StopDeadline <- now () + int64 options.ShutdownTimeoutMs
             // Closing changes routes now; transport drain and domain cleanup finish independently.
-            for entry in state.Table.Connections.Values |> Seq.toArray do
-                close options state context entry
+            visitRoutes state (close options state context)
 
     let private tick (options: ServerRuntimeOptions) globalId authenticator state context =
         match state.Transport.Poll() with
@@ -329,21 +364,7 @@ module ServerRuntime =
                 transportEvent options globalId authenticator state context event
 
             let time = now ()
-            for entry in state.Table.Connections.Values |> Seq.toArray do
-                match entry.Phase with
-                | SessionTable.Waiting | SessionTable.Opening when time >= entry.Deadline -> close options state context entry
-                | SessionTable.Closing when time >= entry.Deadline ->
-                    if SessionTable.domainClean entry then
-                        // A non-acknowledging peer cannot keep the route forever.
-                        // Domain cleanup is already confirmed; reset only its transport.
-                        state.Transport.Reset entry.ConnectionId
-                        entry.TransportClosed <- true
-                        SessionTable.remove entry state.Table
-                    else
-                        // A stuck source still requires containment of its lifetime.
-                        fail state context $"Session cleanup timed out: {entry.ConnectionId}"
-                | SessionTable.Ready -> flushMovement options state context entry
-                | SessionTable.Waiting | SessionTable.Opening | SessionTable.Closing -> ()
+            visitRoutes state (tickRoute options time state context)
 
             let sourcesStopped =
                 state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.PresenceStopped)
@@ -450,7 +471,7 @@ module ServerRuntime =
         match errors, ProtocolCodec.create config, ChatChannelId.create 1UL with
         | [], Ok codec, Ok globalId ->
             let state = {
-                Table = SessionTable.create(); Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
+                Table = SessionTable.create(); RouteScratch = Array.empty; Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
                 Transport = transport; Logger = logger
                 Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
             }

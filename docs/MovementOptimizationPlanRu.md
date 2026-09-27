@@ -425,3 +425,11 @@ ValueTask; ticker уже ожидает его напрямую, без AsTask �
 занята другим тяжёлым приложением. До отдельного запуска выполняются сборки и
 функциональные тесты. Шаг 7 (wire cache по повторному профилю), performance-решения
 о route indexes/ACK barriers и количественная оценка ускорения также отложены.
+
+- Шаг 5: runtime переиспользует массив обхода routes, очищает ссылки в finally и
+  допускает удаления из Dictionary во время обхода. Проверки deadline выделены
+  в функцию одной route. Саморевью: visitRoutes не вызывается рекурсивно из visitor;
+  все вызовы принадлежат одному handler. 15/15 ServerRuntime tests прошли.
+  Добавлены movement.flush.{tick,boundary,settlement,chat,metadata,lifecycle}.entries:
+  count показывает число непустых flush, sum — число entries. ACK/lifecycle FIFO
+  не изменён. Индексы dirty/deadline routes отложены до отдельных измерений.
