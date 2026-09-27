@@ -1,0 +1,413 @@
+// Benchmark process only. One owner services every independent peer on one UDP socket.
+#nowarn "104"
+module Dreamsleeve.Server.NetworkBenchmarks.Program
+
+open System
+open System.Collections.Generic
+open System.Diagnostics
+open System.Globalization
+open System.IO
+open System.Net
+open System.Net.Sockets
+open System.Text.Json
+open Enet
+open Google.Protobuf
+open Dreamsleeve.Protocol.Chat
+open Dreamsleeve.Server.Infrastructure.Interop
+
+type private Options = { Port: uint16; Clients: int; Seconds: float; Rate: float; Output: string }
+
+type private Client = {
+    Index: int
+    mutable Peer: EnetPeer
+    Budget: PacketBudget
+    mutable StartedMs: float
+    mutable ConnectedMs: float
+    mutable ReadyMs: float
+    mutable Ready: bool
+    mutable Closed: bool
+    mutable PlayerId: uint64
+    mutable ChannelId: uint64
+    mutable LastMessageId: uint64
+    mutable Received: int
+    Pending: Dictionary<uint64, int>
+    Online: HashSet<uint64>
+}
+
+type private Submission = {
+    Sender: int
+    RequestId: uint64
+    SentMs: float
+    mutable MessageId: uint64
+    mutable Received: int
+    mutable AuthorAckMs: float
+    mutable CompletedMs: float
+}
+
+type private State = {
+    Options: Options
+    Host: EnetHost
+    Clock: Stopwatch
+    Prefix: string
+    Clients: Client array
+    Slots: Dictionary<uint16, Client>
+    Budget: PacketBudget
+    Messages: ResizeArray<Submission>
+    Errors: ResizeArray<string>
+    mutable ErrorCount: int
+    mutable ReadyCount: int
+    mutable Disconnections: int
+    mutable Rejections: int
+    mutable Received: int64
+    mutable SentChatPayloadBytes: int64
+    mutable ReceivedChatPayloadBytes: int64
+    mutable Completed: int
+    mutable NextSender: int
+    mutable Disconnecting: bool
+    mutable PresenceConverged: bool
+    mutable RampMs: float
+    mutable LoadMs: float
+    mutable DrainMs: float
+    mutable BackpressuredMs: float
+    mutable MaxInflight: int
+}
+
+let private now state = state.Clock.Elapsed.TotalMilliseconds
+let private stage name = printfn "STAGE %s" name; Console.Out.Flush()
+
+let private fail state message =
+    state.ErrorCount <- state.ErrorCount + 1
+    if state.Errors.Count < 64 then state.Errors.Add message
+
+let private send state client (message: ClientPacket) =
+    let bytes = message.ToByteArray()
+    match OutgoingPackets.TrySend(client.Peer, ReadOnlySpan<byte>(bytes), state.Budget, client.Budget) with
+    | PacketSendResult.Sent -> true
+    | failure ->
+        fail state (sprintf "Client %d packet admission failed: %A" client.Index failure)
+        false
+
+let private connected state client =
+    client.ConnectedMs <- now state
+    let request = ClientPacket(ProtocolVersion = 1u, RequestId = 1UL,
+                               OpenSession = OpenSession(Username = sprintf "%s%d" state.Prefix client.Index,
+                                                         DisplayName = sprintf "Network bench %d" client.Index))
+    send state client request |> ignore
+
+let private opened state client (packet: ServerPacket) =
+    let welcome = packet.SessionOpened
+    if client.Ready || not packet.HasRequestId || packet.RequestId <> 1UL
+       || welcome.SelfPlayerId = 0UL || welcome.GlobalChannelId = 0UL
+       || not (welcome.Players |> Seq.exists (fun profile -> profile.PlayerId = welcome.SelfPlayerId)) then
+        fail state (sprintf "Client %d invalid session welcome" client.Index)
+    else
+        client.Ready <- true
+        client.ReadyMs <- now state
+        client.PlayerId <- welcome.SelfPlayerId
+        client.ChannelId <- welcome.GlobalChannelId
+        state.ReadyCount <- state.ReadyCount + 1
+        for player in welcome.Players do
+            if not (client.Online.Add player.PlayerId) then fail state "Duplicate player in initial snapshot"
+        // History is outside the measured load. Its tail establishes ordering.
+        if welcome.RecentMessages.Count > 0 then
+            client.LastMessageId <- welcome.RecentMessages[welcome.RecentMessages.Count - 1].MessageId
+
+let private published state client (packet: ServerPacket) =
+    let message = packet.ChatPublished.Message
+    let prefix = state.Prefix + ":"
+    if not client.Ready || isNull message || not (message.Text.StartsWith(prefix, StringComparison.Ordinal)) then
+        fail state (sprintf "Client %d received an unknown publication" client.Index)
+    else
+        match Int32.TryParse(message.Text.AsSpan(prefix.Length)) with
+        | true, sequence when sequence >= 0 && sequence < state.Messages.Count ->
+            let submitted = state.Messages[sequence]
+            let author = state.Clients[submitted.Sender]
+            if message.MessageId <= client.LastMessageId || message.ChannelId <> client.ChannelId
+               || isNull message.Author || message.Author.PlayerId <> author.PlayerId then
+                fail state (sprintf "Client %d duplicate/out-of-order/invalid publication %d" client.Index sequence)
+            elif submitted.MessageId <> 0UL && submitted.MessageId <> message.MessageId then
+                fail state (sprintf "Publication %d has different IDs across recipients" sequence)
+            else
+                submitted.MessageId <- message.MessageId
+                client.LastMessageId <- message.MessageId
+                client.Received <- client.Received + 1
+                submitted.Received <- submitted.Received + 1
+                state.Received <- state.Received + 1L
+                if client.Index = submitted.Sender then
+                    if not packet.HasRequestId || packet.RequestId <> submitted.RequestId
+                       || not (client.Pending.Remove submitted.RequestId) then
+                        fail state (sprintf "Publication %d has unmatched author request ID" sequence)
+                    else
+                        submitted.AuthorAckMs <- now state - submitted.SentMs
+                elif packet.HasRequestId then
+                    fail state (sprintf "Publication %d leaks request ID to another recipient" sequence)
+
+                if submitted.Received = state.Clients.Length then
+                    submitted.CompletedMs <- now state - submitted.SentMs
+                    state.Completed <- state.Completed + 1
+                elif submitted.Received > state.Clients.Length then
+                    fail state (sprintf "Publication %d has excess recipients" sequence)
+        | _ -> fail state (sprintf "Client %d received an unknown benchmark sequence" client.Index)
+
+let private received state client (event: EnetEvent) =
+    use packet = event.Packet
+    if event.ChannelId <> 0uy || (packet.Flags &&& EnetPacketFlag.Reliable) <> EnetPacketFlag.Reliable then
+        fail state (sprintf "Client %d received wrong transport channel/flags" client.Index)
+    else
+        let response = ServerPacket.Parser.ParseFrom(packet.AsSpan().ToArray())
+        if response.ProtocolVersion <> 1u then fail state "Unexpected protocol version"
+        else
+            match response.PayloadCase with
+            | ServerPacket.PayloadOneofCase.SessionOpened -> opened state client response
+            | ServerPacket.PayloadOneofCase.ChatPublished ->
+                state.ReceivedChatPayloadBytes <- state.ReceivedChatPayloadBytes + int64 packet.DataLength
+                published state client response
+            | ServerPacket.PayloadOneofCase.RequestRejected ->
+                state.Rejections <- state.Rejections + 1
+                fail state (sprintf "Client %d rejected request %d: %A (%s)" client.Index response.RequestId
+                                    response.RequestRejected.Code response.RequestRejected.Message)
+            | ServerPacket.PayloadOneofCase.PlayerJoined ->
+                if not client.Ready || isNull response.PlayerJoined.Player
+                   || not (client.Online.Add response.PlayerJoined.Player.PlayerId) then
+                    fail state (sprintf "Client %d received an invalid/duplicate presence join" client.Index)
+            | ServerPacket.PayloadOneofCase.PlayerLeft ->
+                client.Online.Remove response.PlayerLeft.PlayerId |> ignore
+                if not state.Disconnecting then fail state "A player left before benchmark cleanup"
+            | unknown -> fail state (sprintf "Unknown server packet payload: %A" unknown)
+
+let private handle state (event: EnetEvent) =
+    match state.Slots.TryGetValue event.Peer.IncomingPeerId with
+    | false, _ ->
+        if event.Type = EnetEventType.Receive then event.Packet.Dispose()
+        fail state "Event for unknown ENet peer slot"
+    | true, client ->
+        match event.Type with
+        | EnetEventType.Connect -> connected state client
+        | EnetEventType.Receive -> received state client event
+        | EnetEventType.Disconnect ->
+            client.Closed <- true
+            if not state.Disconnecting then
+                state.Disconnections <- state.Disconnections + 1
+                fail state (sprintf "Client %d unexpectedly disconnected" client.Index)
+        | EnetEventType.None -> ()
+        | unknown -> fail state (sprintf "Unknown ENet event: %A" unknown)
+
+let private pump state =
+    let mutable remaining = 4096
+    let mutable waitMs = 1u
+    while remaining > 0 do
+        let mutable event = Unchecked.defaultof<EnetEvent>
+        let result = state.Host.Service(waitMs, &event)
+        waitMs <- 0u
+        if result < 0 then
+            fail state "ENet Service failed"
+            remaining <- 0
+        elif result = 0 then remaining <- 0
+        else
+            remaining <- remaining - 1
+            handle state event
+    state.Host.Flush()
+
+let private address port =
+    let mutable value = Unchecked.defaultof<enet.ENetAddress>
+    let result = enet.ENetAddress.FromIpAddress(IPAddress.Loopback, port, &value)
+    if result <> SocketError.Success then invalidOp (sprintf "Address failed: %A" result)
+    value
+
+let private ramp state =
+    stage "connecting"
+    let remote = address state.Options.Port
+    let mutable started = 0
+    let deadline = now state + 120000.
+    let converged () = state.ReadyCount = state.Clients.Length && (state.Clients |> Array.forall (fun client -> client.Online.Count = state.Clients.Length))
+    while not (converged ()) && state.ErrorCount = 0 && now state < deadline do
+        while started < state.Clients.Length && started - state.ReadyCount < 8 && state.ErrorCount = 0 do
+            let client = state.Clients[started]
+            let mutable peer = Unchecked.defaultof<EnetPeer>
+            if state.Host.TryConnect(remote, 1un, 0u, &peer) then
+                client.Peer <- peer
+                client.StartedMs <- now state
+                state.Slots.Add(peer.IncomingPeerId, client)
+                started <- started + 1
+            else fail state "ENet could not allocate a client peer"
+        pump state
+        for client in state.Clients do
+            if client.Peer.IsCreated && not client.Ready && now state - client.StartedMs > 30000. then
+                fail state (sprintf "Client %d session opening timed out" client.Index)
+    state.RampMs <- now state
+    let expectedPlayers = HashSet<uint64>(state.Clients |> Array.map _.PlayerId)
+    state.PresenceConverged <-
+        converged () && expectedPlayers.Count = state.Clients.Length
+        && (state.Clients |> Array.forall (fun client -> client.Online.SetEquals expectedPlayers))
+    if not state.PresenceConverged then fail state "Not all sessions and online lists converged"
+    else
+        printfn "READY clients=%d ramp_ms=%.3f" state.ReadyCount state.RampMs
+        Console.Out.Flush()
+
+let private serviceFor state durationMs =
+    let deadline = now state + durationMs
+    while now state < deadline && state.ErrorCount = 0 do pump state
+
+let private sendChat state =
+    let mutable chosen = None
+    let mutable checkedPeers = 0
+    while chosen.IsNone && checkedPeers < state.Clients.Length do
+        let candidate = state.Clients[state.NextSender]
+        state.NextSender <- (state.NextSender + 1) % state.Clients.Length
+        checkedPeers <- checkedPeers + 1
+        if candidate.Pending.Count = 0 then chosen <- Some candidate
+
+    match chosen with
+    | None -> false
+    | Some client ->
+        let sequence = state.Messages.Count
+        let requestId = uint64 sequence + 2UL
+        let packet = ClientPacket(ProtocolVersion = 1u, RequestId = requestId,
+                                  SendChat = SendChat(ChannelId = client.ChannelId, Text = sprintf "%s:%d" state.Prefix sequence))
+        let sentMs = now state
+        if send state client packet then
+            state.SentChatPayloadBytes <- state.SentChatPayloadBytes + int64 (packet.CalculateSize())
+            state.Messages.Add {
+                Sender = client.Index; RequestId = requestId; SentMs = sentMs; MessageId = 0UL
+                Received = 0; AuthorAckMs = -1.; CompletedMs = -1.
+            }
+            client.Pending.Add(requestId, sequence)
+            state.MaxInflight <- max state.MaxInflight (state.Messages.Count - state.Completed)
+            true
+        else false
+
+let private load state =
+    stage "idle"
+    serviceFor state 3000.
+    if state.ErrorCount = 0 then
+        stage "load"
+        let started = now state
+        let deadline = started + state.Options.Seconds * 1000.
+        let mutable due = started
+        let interval = if state.Options.Rate > 0. then 1000. / state.Options.Rate else Double.PositiveInfinity
+        while now state < deadline && state.ErrorCount = 0 do
+            let mutable blocked = false
+            while state.Options.Rate > 0. && now state >= due && now state < deadline && not blocked && state.ErrorCount = 0 do
+                if state.Messages.Count - state.Completed < 128 && sendChat state then due <- due + interval
+                else blocked <- true
+            let before = now state
+            pump state
+            if blocked then state.BackpressuredMs <- state.BackpressuredMs + now state - before
+        state.LoadMs <- now state - started
+        printfn "LOAD_DONE sent=%d expected=%d" state.Messages.Count (int64 state.Messages.Count * int64 state.Clients.Length)
+        Console.Out.Flush()
+
+let private drain state =
+    stage "drain"
+    let started = now state
+    let deadline = started + 30000.
+    while state.Completed < state.Messages.Count && state.ErrorCount = 0 && now state < deadline do pump state
+    state.DrainMs <- now state - started
+    if state.Completed <> state.Messages.Count then fail state "Delivery completion timed out or failed"
+    for client in state.Clients do
+        if client.Received <> state.Messages.Count || client.Pending.Count <> 0 then
+            fail state (sprintf "Client %d: received %d of %d; pending author replies %d"
+                                client.Index client.Received state.Messages.Count client.Pending.Count)
+    printfn "DELIVERY_DONE received=%d" state.Received
+    Console.Out.Flush()
+
+let private disconnect state =
+    stage "disconnect"
+    state.Disconnecting <- true
+    for client in state.Clients do
+        if client.Peer.IsCreated && not client.Closed then client.Peer.DisconnectLater 0u
+    state.Host.Flush()
+    let deadline = now state + 10000.
+    let stillConnected () = state.Clients |> Array.exists (fun client -> client.Peer.IsCreated && not client.Closed)
+    while stillConnected () && now state < deadline do pump state
+    if stillConnected () then fail state "Graceful client disconnect timed out"
+    for client in state.Clients do
+        if client.Peer.IsCreated && not client.Closed then client.Peer.DisconnectNow 0u
+
+let private summary (values: float array) =
+    Array.sortInPlace values
+    let percentile fraction =
+        if values.Length = 0 then 0.
+        else values[max 0 (int (ceil (fraction * float values.Length)) - 1)]
+    {| count = values.Length; p50 = percentile 0.50; p95 = percentile 0.95; p99 = percentile 0.99
+       max = if values.Length = 0 then 0. else values[values.Length - 1] |}
+
+let private report state =
+    let output = Path.GetFullPath state.Options.Output
+    Directory.CreateDirectory(Path.GetDirectoryName output) |> ignore
+    let result = {|
+        success = state.ErrorCount = 0 && state.PresenceConverged && state.ReadyCount = state.Clients.Length
+                  && state.Completed = state.Messages.Count && state.Received = int64 state.Messages.Count * int64 state.Clients.Length
+        clients = state.Clients.Length; ready = state.ReadyCount; presenceConverged = state.PresenceConverged; seconds = state.Options.Seconds; requestedRate = state.Options.Rate
+        sent = state.Messages.Count; received = state.Received; expected = int64 state.Messages.Count * int64 state.Clients.Length
+        sentChatPayloadBytes = state.SentChatPayloadBytes
+        receivedChatPayloadBytes = state.ReceivedChatPayloadBytes
+        sentChatPayloadBytesPerSecond = if state.LoadMs = 0. then 0. else float state.SentChatPayloadBytes * 1000. / state.LoadMs
+        receivedChatPayloadBytesPerSecond =
+            if state.LoadMs + state.DrainMs = 0. then 0.
+            else float state.ReceivedChatPayloadBytes * 1000. / (state.LoadMs + state.DrainMs)
+        actualSendRate = if state.LoadMs = 0. then 0. else float state.Messages.Count * 1000. / state.LoadMs
+        rampMs = state.RampMs; loadMs = state.LoadMs; drainMs = state.DrainMs; totalMs = now state
+        backpressuredMs = state.BackpressuredMs; maxInflight = state.MaxInflight; inflightLimit = 128; connectWindow = 8
+        hostCount = 1; socketCount = 1; serviceLoopCount = 1
+        unexpectedDisconnects = state.Disconnections; rejections = state.Rejections; errorCount = state.ErrorCount
+        errors = state.Errors.ToArray()
+        transportConnectMs = state.Clients |> Array.filter _.Ready |> Array.map (fun client -> client.ConnectedMs - client.StartedMs) |> summary
+        applicationOpenMs = state.Clients |> Array.filter _.Ready |> Array.map (fun client -> client.ReadyMs - client.ConnectedMs) |> summary
+        authorAckMs = state.Messages |> Seq.filter (fun item -> item.AuthorAckMs >= 0.) |> Seq.map _.AuthorAckMs |> Seq.toArray |> summary
+        allRecipientsMs = state.Messages |> Seq.filter (fun item -> item.CompletedMs >= 0.) |> Seq.map _.CompletedMs |> Seq.toArray |> summary
+        recipients = state.Clients |> Array.map (fun client -> {| index = client.Index; received = client.Received; lastMessageId = client.LastMessageId |})
+    |}
+    File.WriteAllText(output, JsonSerializer.Serialize(result, JsonSerializerOptions(WriteIndented = true)))
+    stage "done"
+    if result.success then 0 else 1
+
+let private run (options: Options) =
+    if enet.ENET_API.enet_initialize() <> 0 then invalidOp "ENet initialization failed"
+    try
+        use host = EnetHost.Create(address 0us, unativeint options.Clients, 1un, 0u, 0u, EnetHostOption.Ipv4)
+        host.SetMaximumPacketSize(1024un * 1024un)
+        host.SetMaximumWaitingData(32un * 1024un * 1024un)
+        let state = {
+            Options = options; Host = host; Clock = Stopwatch.StartNew(); Prefix = "nb" + Guid.NewGuid().ToString("N").Substring(0, 12)
+            Clients = Array.init options.Clients (fun index -> {
+                Index = index; Peer = Unchecked.defaultof<EnetPeer>; Budget = PacketBudget(16, 1024L * 1024L)
+                StartedMs = 0.; ConnectedMs = 0.; ReadyMs = 0.; Ready = false; Closed = false
+                PlayerId = 0UL; ChannelId = 0UL; LastMessageId = 0UL; Received = 0; Pending = Dictionary(); Online = HashSet()
+            })
+            Slots = Dictionary(); Budget = PacketBudget(4096, 16L * 1024L * 1024L); Messages = ResizeArray(); Errors = ResizeArray()
+            ErrorCount = 0; ReadyCount = 0; Disconnections = 0; Rejections = 0; Received = 0L; SentChatPayloadBytes = 0L; ReceivedChatPayloadBytes = 0L; Completed = 0; NextSender = 0
+            Disconnecting = false; PresenceConverged = false; RampMs = 0.; LoadMs = 0.; DrainMs = 0.; BackpressuredMs = 0.; MaxInflight = 0
+        }
+        try
+            ramp state
+            if state.ErrorCount = 0 then load state
+            if state.ErrorCount = 0 then drain state
+        with error -> fail state (error.ToString())
+        try disconnect state with error -> fail state ("Cleanup: " + error.Message)
+        report state
+    finally enet.ENET_API.enet_deinitialize()
+
+let private parse (args: string array) =
+    let mutable options = { Port = 8778us; Clients = 10; Seconds = 10.; Rate = 10.; Output = "build/network-benchmark.json" }
+    if args.Length % 2 <> 0 then invalidArg "args" "Expected --port P --clients N --seconds D --rate R --output path.json"
+    for index in 0 .. 2 .. args.Length - 1 do
+        let value = args[index + 1]
+        match args[index] with
+        | "--port" -> options <- { options with Port = UInt16.Parse value }
+        | "--clients" -> options <- { options with Clients = Int32.Parse value }
+        | "--seconds" -> options <- { options with Seconds = Double.Parse(value, CultureInfo.InvariantCulture) }
+        | "--rate" -> options <- { options with Rate = Double.Parse(value, CultureInfo.InvariantCulture) }
+        | "--output" -> options <- { options with Output = value }
+        | unknown -> invalidArg "args" ("Unknown option: " + unknown)
+    if options.Port = 0us || options.Clients < 1 || options.Clients > 4095
+       || not (Double.IsFinite options.Seconds) || options.Seconds <= 0. || options.Seconds > 300.
+       || not (Double.IsFinite options.Rate) || options.Rate < 0. || options.Rate > 1000.
+       || options.Rate * options.Seconds > 100000. then
+        invalidArg "args" "Require port>0, clients 1..4095, seconds (0,300], rate [0,1000], at most 100000 messages."
+    options
+
+[<EntryPoint>]
+let main args =
+    try parse args |> run
+    with error -> eprintfn "%s" error.Message; 2

@@ -107,6 +107,10 @@ production-файлы не возвращаются в текущую сборк
 не часть `run_tests.py`. Исходные измерения сохраняются в `build/benchmarks`;
 производительность следует оценивать по сценарию и окружению, а не по числу агентов.
 
+Отдельный прогон через настоящий ENet: `python Scripts/benchmark_enet.py`.
+Требует Release-сборки сервера и `Dreamsleeve.Server.NetworkBenchmarks`.
+[Методика, конфигурация и ограничения](Dreamsleeve.Server.NetworkBenchmarks/README.md).
+
 ## Происхождение и адаптация архивов
 
 Архивы прочитаны из `F:\downloads`; тесты теперь самостоятельны и для запуска
