@@ -4,50 +4,22 @@
 
 import Dreamsleeve.Protocol;
 
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::Unspecified));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::ClientShutdown) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::ClientShutdown));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::ServerShutdown) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::ServerShutdown));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::Kicked) == static_cast<long long>(Dreamsleeve::Protocol::Network::Kicked));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::AuthFailed) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::AuthFailed));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::TimeoutPolicy) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::TimeoutPolicy));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::ProtocolError) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::ProtocolError));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Network::Unspecified));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::ClientShutdown) == static_cast<long long>(Dreamsleeve::Protocol::Network::ClientShutdown));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::ServerShutdown) == static_cast<long long>(Dreamsleeve::Protocol::Network::ServerShutdown));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::Kicked) == static_cast<long long>(Dreamsleeve::Protocol::Network::Kicked));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::AuthFailed) == static_cast<long long>(Dreamsleeve::Protocol::Network::AuthFailed));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::TimeoutPolicy) == static_cast<long long>(Dreamsleeve::Protocol::Network::TimeoutPolicy));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::ProtocolError) == static_cast<long long>(Dreamsleeve::Protocol::Network::ProtocolError));
 static_assert(Dreamsleeve::Protocol::Network::DisconnectReason_ARRAYSIZE == 7);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::InvalidRequest) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_INVALID_REQUEST));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionNotReady) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_NOT_READY));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionAlreadyOpen) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_ALREADY_OPEN));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::UsernameTaken) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_USERNAME_TAKEN));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::ChannelNotFound) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotChannelMember) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::Overloaded) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_OVERLOADED));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 8);
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::InvalidRequest) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_INVALID_REQUEST));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionNotReady) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_NOT_READY));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionAlreadyOpen) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_ALREADY_OPEN));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::UsernameTaken) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_USERNAME_TAKEN));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::ChannelNotFound) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotChannelMember) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Overloaded) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_OVERLOADED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::AuthenticationFailed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 9);

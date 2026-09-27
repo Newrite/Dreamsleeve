@@ -46,8 +46,30 @@
       "MaxControlDeliveries": 128
     }
   },
-  "Profiles": {
-    "MailboxCapacity": 64,
-    "MaxPendingReplies": 64
+  "Database": {
+    "DatabasePath": "data/dreamsleeve.db",
+    "BusyTimeoutSeconds": 5
+  },
+  "Authentication": {
+    "ListenUrl": "http://127.0.0.1:8779",
+    "AllowInsecureLoopback": true,
+    "AllowRegistration": true,
+    "CertificatePath": "",
+    "RequestsPerMinute": 120,
+    "RequestTimeoutSeconds": 15,
+    "Service": {
+      "MailboxCapacity": 64,
+      "MaxConcurrentOperations": 4,
+      "MaxTickets": 4096,
+      "TicketLifetimeSeconds": 60,
+      "PasswordIterations": 210000
+    }
+  },
+  "Logging": {
+    "MinimumLevel": "Information",
+    "Console": true,
+    "FilePath": "logs/server-.json",
+    "FileSizeLimitBytes": 10485760,
+    "RetainedFileCount": 14
   }
 }

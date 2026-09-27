@@ -7,19 +7,23 @@ Every child is started without a visible console and is stopped on every exit pa
 from __future__ import annotations
 
 import argparse
+import json
+import os
+import tempfile
 import re
 import socket
 import subprocess
 import threading
 import time
 import uuid
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class Child:
-    def __init__(self, name: str, command: list[str], log, log_lock: threading.Lock):
+    def __init__(self, name: str, command: list[str], log, log_lock: threading.Lock, env=None):
         self.name = name
         self.lines: list[str] = []
         self.changed = threading.Condition()
@@ -29,7 +33,7 @@ class Child:
         self.process = subprocess.Popen(
             command, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
-            bufsize=1, creationflags=flags,
+            bufsize=1, creationflags=flags, env=env,
         )
         self.record("START " + " ".join(command))
         self.reader = threading.Thread(target=self.read_output, name=f"smoke-{name}", daemon=True)
@@ -109,6 +113,12 @@ def free_udp_port() -> int:
         return probe.getsockname()[1]
 
 
+def free_tcp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
 def check(condition: bool, message: str):
     if not condition:
         raise AssertionError(message)
@@ -133,11 +143,21 @@ def message_once(sender: Child, receiver: Child, marker: str, timeout: float):
         check(count == 1, f"{child.name}: expected one publication for {marker}, got {count}")
 
 
-def smoke(args, log):
+def smoke(args, log, directory: Path):
     children: list[Child] = []
     log_lock = threading.Lock()
     port = args.port or free_udp_port()
     nonce = uuid.uuid4().hex[:10]
+    auth_url = f"http://127.0.0.1:{free_tcp_port()}"
+    client_env = dict(os.environ, DREAMSLEEVE_PASSWORD="smoke-" + uuid.uuid4().hex)
+    config = directory / "server.json"
+    database = directory / "accounts.sqlite"
+    secrets = [client_env["DREAMSLEEVE_PASSWORD"]]
+    config.write_text(json.dumps({
+        "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
+        "Authentication": {"ListenUrl": auth_url, "AllowInsecureLoopback": True, "AllowRegistration": True},
+        "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},
+    }), encoding="utf-8")
 
     def stage(message: str):
         print("PASS " + message, flush=True)
@@ -145,21 +165,40 @@ def smoke(args, log):
             log.write("CHECK " + message + "\n")
             log.flush()
 
-    def start(name: str, command: list[str]):
-        child = Child(name, command, log, log_lock)
+    def start(name: str, command: list[str], env=None):
+        child = Child(name, command, log, log_lock, env)
         children.append(child)
         return child
 
-    try:
-        server = start("server", ["dotnet", str(args.server), "--port", str(port)])
+    def start_server(name: str):
+        server = start(name, ["dotnet", str(args.server), "--port", str(port), "--config", str(config)])
         server.wait_for(lambda lines: any(f"Listening on 127.0.0.1:{port}" in line for line in lines), args.timeout)
-        alice = start("alice", [str(args.client), "--connect", "127.0.0.1", str(port), "smoke_alice", "Smoke Alice"])
+        return server
+
+    def start_client(name: str, username: str, display_name: str | None = None):
+        command = [str(args.client), "--connect", "127.0.0.1", str(port), username, "--auth-url", auth_url]
+        if display_name is not None:
+            command += ["--register", display_name]
+        return start(name, command, client_env)
+
+    try:
+        server = start_server("server")
+        alice = start_client("alice", "smoke_alice", "Smoke Alice")
         alice.phase("Ready", args.timeout)
         alice.wait_for(lambda lines: any(re.fullmatch(r"\d+: Smoke Alice", line) for line in lines), args.timeout, read=True)
         alice_id = next(line.split(":", 1)[0] for line in alice.output() if re.fullmatch(r"\d+: Smoke Alice", line))
         stage("first native client opened a real server session")
+        # A known additional credential lets us assert HTTP ticket log redaction.
+        # It remains unused and is discarded when the server process restarts.
+        request = urllib.request.Request(auth_url + "/auth/login", method="POST",
+            data=json.dumps({"username": "smoke_alice", "password": client_env["DREAMSLEEVE_PASSWORD"]}).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(request, timeout=args.timeout) as response:
+            grant = json.load(response)
+        check(len(grant["sessionTicket"]) == 43, "Login did not issue a valid ticket")
+        secrets.append(grant["sessionTicket"])
 
-        bob = start("bob", [str(args.client), "--connect", "127.0.0.1", str(port), "smoke_bob", "Smoke Bob"])
+        bob = start_client("bob", "smoke_bob", "Smoke Bob")
         bob.phase("Ready", args.timeout)
         bob.wait_for(lambda lines: any(re.fullmatch(r"\d+: Smoke Bob", line) for line in lines), args.timeout, read=True)
         bob_id = next(line.split(":", 1)[0] for line in bob.output() if re.fullmatch(r"\d+: Smoke Bob", line))
@@ -167,7 +206,7 @@ def smoke(args, log):
         alice.wait_for(lambda lines: f"online {bob_id}: Smoke Bob" in lines, args.timeout, read=True)
         stage("both clients see the same online players")
 
-        duplicate = start("duplicate", [str(args.client), "--connect", "127.0.0.1", str(port), "smoke_alice", "Duplicate Alice"])
+        duplicate = start_client("duplicate", "smoke_alice")
         duplicate.wait_for(lambda lines: any("rejected (3):" in line for line in lines), args.timeout, read=True)
         duplicate_start = duplicate.mark()
         duplicate.phase("Disconnected", args.timeout, duplicate_start)
@@ -194,7 +233,7 @@ def smoke(args, log):
         alice.wait_for(lambda lines: any(second in line and line.startswith("[1] ") for line in lines),
                        args.timeout, alice_start, read=True)
         reopened = alice.output(alice_start)
-        check(f"{alice_id}: Smoke Alice" in reopened, "Reconnect changed the process-local profile ID")
+        check(f"{alice_id}: Smoke Alice" in reopened, "Reconnect changed the persisted profile ID")
         check(f"{bob_id}: Smoke Bob" in reopened, "Reconnect missed the other player")
         for marker in (first, second):
             count = sum(marker in line and line.startswith("[1] ") for line in reopened)
@@ -209,12 +248,43 @@ def smoke(args, log):
         check(server.process.returncode == 0, "Server did not shut down successfully")
         alice.phase("Disconnected", args.timeout, alice_start)
         bob.phase("Disconnected", args.timeout, bob_start)
+        stage("server shutdown disconnected both clients")
+        check(database.is_file(), "SQLite database was not created in the temporary directory")
+        server = start_server("server-restarted")
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("connect")
+        alice.phase("Ready", args.timeout, alice_start)
+        bob.send("connect")
+        bob.phase("Ready", args.timeout, bob_start)
+        alice.wait_for(lambda lines: f"{alice_id}: Smoke Alice" in lines, args.timeout, alice_start, read=True)
+        bob.wait_for(lambda lines: f"{bob_id}: Smoke Bob" in lines, args.timeout, bob_start, read=True)
+        check(f"{alice_id}: Smoke Alice" in bob.output(bob_start), "Restart changed Alice's stored identity")
+        message_once(alice, bob, f"smoke-persisted-{nonce}", args.timeout)
+        stage("server restart retained SQLite identities and fresh login tickets reopen working sessions")
+
+        alice_start, bob_start = alice.mark(), bob.mark()
+        server.send("quit")
+        server.process.wait(timeout=args.timeout)
+        check(server.process.returncode == 0, "Restarted server did not shut down successfully")
+        alice.phase("Disconnected", args.timeout, alice_start)
+        bob.phase("Disconnected", args.timeout, bob_start)
         for child in (alice, bob):
             child.send("quit")
             child.process.wait(timeout=args.timeout)
             check(child.process.returncode == 0, f"{child.name} exited unsuccessfully")
             check(not any("session=Faulted" in line or "Protocol error" in line for line in child.output()),
                   f"{child.name} observed a client protocol fault")
+        for child in children:
+            check(not any(secret in line for secret in secrets for line in child.output()),
+                  f"{child.name} exposed an authentication secret in process output")
+        files = list(directory.glob("server-*.json"))
+        check(bool(files), "Structured server log files were not created")
+        for path in files:
+            text = path.read_text(encoding="utf-8-sig")
+            check(not any(secret in text for secret in secrets), "Server file logs exposed an authentication secret")
+            for line in text.splitlines():
+                json.loads(line)
+        stage("structured server logs and process output contain no test password or issued ticket")
         stage("server shutdown disconnected both clients; all processes exited cleanly")
     finally:
         for child in reversed(children):
@@ -234,8 +304,9 @@ def main() -> int:
             parser.error(f"Build the server and native Dev first; missing {artifact}")
     args.log.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with args.log.open("w", encoding="utf-8") as log:
-            smoke(args, log)
+        with tempfile.TemporaryDirectory(prefix="smoke-auth-", dir=ROOT / "build") as directory:
+            with args.log.open("w", encoding="utf-8") as log:
+                smoke(args, log, Path(directory))
     except (AssertionError, OSError, RuntimeError, subprocess.TimeoutExpired) as error:
         print(f"FAIL {error}\nLog: {args.log}", flush=True)
         return 1

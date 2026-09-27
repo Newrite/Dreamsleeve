@@ -45,7 +45,7 @@ public:
       return phase;
     }
 
-    Result<void> Connect(std::string username, std::string displayName)
+    Result<void> Connect(std::string sessionTicket)
     {
       if (phase != SessionPhase::Disconnected && phase != SessionPhase::Faulted)
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "A session is already active")};
@@ -67,7 +67,7 @@ public:
       if (!created) return Fail(created.error());
 
       transport = std::move(*created);
-      opening   = Wire::OpenSession{*requestId, std::move(username), std::move(displayName)};
+      opening   = Wire::OpenSession{*requestId, std::move(sessionTicket)};
       lastRequest = *requestId;
       pendingChats.clear();
       model.ResetSession();
@@ -186,6 +186,7 @@ private:
       if (phase != SessionPhase::Connecting) return Unexpected("connected");
 
       auto packet = codec.Encode(opening);
+      opening.sessionTicket.clear();  // A reconnect must supply a newly issued ticket.
       if (!packet) return std::unexpected{packet.error()};
 
       auto sent = transport->Send(std::move(*packet));

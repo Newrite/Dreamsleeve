@@ -10,3 +10,4 @@ tests/**/obj/
 tests/**/bin/
 **/__pycache__/
 logs/
+data/

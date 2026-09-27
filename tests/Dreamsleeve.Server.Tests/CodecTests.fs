@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.Tests.CodecTests
+﻿module Dreamsleeve.Server.Tests.CodecTests
 
 open System
 open Expecto
@@ -28,7 +28,7 @@ let private message =
 let private parse bytes = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes: byte array)
 let private send requestId text =
     Dreamsleeve.Protocol.Chat.ClientPacket(
-        ProtocolVersion = 1u, RequestId = requestId,
+        ProtocolVersion = ChatCodec.Version, RequestId = requestId,
         SendChat = Dreamsleeve.Protocol.Chat.SendChat(ChannelId = 1UL, Text = text))
 let private decode (packet: Dreamsleeve.Protocol.Chat.ClientPacket) =
     ChatCodec.decodeClient codec (packet.ToByteArray())
@@ -40,17 +40,20 @@ let private welcome = {
 }
 
 let tests = testList "Dreamsleeve.Server.Codec" [
-    testCase "open session canonicalizes names through domain factories" <| fun _ ->
+    testCase "open session carries only an opaque ticket without changing it" <| fun _ ->
+        let ticket = String('a', 41) + "-_"
         let packet = Dreamsleeve.Protocol.Chat.ClientPacket(
-            ProtocolVersion = 1u, RequestId = 42UL,
-            OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(Username = " USER ", DisplayName = " e\u0301 "))
+            ProtocolVersion = ChatCodec.Version, RequestId = 42UL,
+            OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(SessionTicket = ticket))
         let result = decode packet |> ok
         Expect.equal result.RequestId 42UL "request correlation"
         match result.Command with
-        | ChatCommand.OpenSession(username, displayName) ->
-            Expect.equal (Username.value username) "user" "canonical username"
-            Expect.equal (DisplayName.value displayName) "é" "NFC display name"
-        | _ -> failtest "Wrong command"
+        | ChatCommand.OpenSession actual -> Expect.equal actual ticket "credential preserved exactly"
+        | ChatCommand.SendChat _ -> failtest "Wrong command"
+
+        for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
+            packet.OpenSession.SessionTicket <- invalid
+            Expect.equal (decode packet |> error).Failure (ChatCodecFailure.InvalidPayload "session_ticket") "bounded base64url ticket"
 
     testCase "send chat preserves text and full uint64 request IDs" <| fun _ ->
         let result = send UInt64.MaxValue "Привет\nworld" |> decode |> ok
@@ -79,15 +82,15 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         for bytes in [ [||]; [| 0x5auy; 0xffuy |]; Array.zeroCreate (config.MaxPacketBytes + 1) ] do
             Expect.isError (ChatCodec.decodeClient codec bytes) "packet rejected"
         let packet = send 1UL "ok"
-        packet.ProtocolVersion <- 2u
-        Expect.equal (decode packet |> error).Failure (ChatCodecFailure.UnsupportedVersion 2u) "version"
         packet.ProtocolVersion <- 1u
+        Expect.equal (decode packet |> error).Failure (ChatCodecFailure.UnsupportedVersion 1u) "version"
+        packet.ProtocolVersion <- ChatCodec.Version
         packet.RequestId <- 0UL
         Expect.equal (decode packet |> error).Failure (ChatCodecFailure.InvalidEnvelope "request_id") "nonzero correlation"
         packet.RequestId <- 1UL
         packet.ClearPayload()
         Expect.equal (decode packet |> error).Failure (ChatCodecFailure.InvalidPayload "payload") "no known payload"
-        let futurePayload = [| 0x08uy; 0x01uy; 0x10uy; 0x01uy; 0x62uy; 0x00uy |]
+        let futurePayload = [| 0x08uy; byte ChatCodec.Version; 0x10uy; 0x01uy; 0x62uy; 0x00uy |]
         Expect.equal (ChatCodec.decodeClient codec futurePayload |> error).Failure
             (ChatCodecFailure.InvalidPayload "payload") "unknown oneof field is rejected"
         let additiveField = Array.append ((send 1UL "ok").ToByteArray()) [| 0x98uy; 0x06uy; 0x01uy |]
@@ -117,9 +120,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (ChatCodec.encodeServer codec (ChatResponse.ChatAccepted(0UL, message))) "zero chat correlation"
 
     testCase "replies require an ID while presence notifications have no correlation" <| fun _ ->
-        let rejection = { Code = RequestRejectionCode.UsernameTaken; Message = "Отказ"; Field = "text" }
+        let rejection = { Code = RequestRejectionCode.AuthenticationFailed; Message = "Отказ"; Field = "text" }
         let packet = ChatCodec.encodeServer codec (ChatResponse.RequestRejected(9UL, rejection)) |> ok |> parse
-        Expect.equal packet.RequestRejected.Code RequestRejectionCode.UsernameTaken "shared protobuf code"
+        Expect.equal packet.RequestRejected.Code RequestRejectionCode.AuthenticationFailed "shared protobuf code"
         Expect.equal packet.RequestId 9UL "required correlation"
         Expect.isError (ChatCodec.encodeServer codec (ChatResponse.RequestRejected(0UL, rejection))) "zero ID"
         for response in [ChatResponse.PlayerJoined profile; ChatResponse.PlayerLeft (pid 7UL)] do

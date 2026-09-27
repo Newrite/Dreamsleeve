@@ -1,0 +1,16 @@
+[general]
+connection = "Data Source=../../build/sqlhydra/schema.db"
+output = "Generated/AccountSchema.fs"
+namespace = "Dreamsleeve.Server.Infrastructure.AccountSchema"
+cli_mutable = false
+mutable_properties = false
+nullable_property_type = "option"
+
+[sqlhydra_query_integration]
+provider_db_type_attributes = true
+table_declarations = true
+left_joined_views = false
+
+[filters]
+include = ["main/accounts", "main/profiles"]
+exclude = []

@@ -22,8 +22,7 @@ namespace Dreamsleeve::Client::Wire
       void operator()(const OpenSession& value) const
       {
         packet.set_request_id(value.requestId);
-        packet.mutable_open_session()->set_username(value.username);
-        packet.mutable_open_session()->set_display_name(value.displayName);
+        packet.mutable_open_session()->set_session_ticket(value.sessionTicket);
       }
 
       void operator()(const SendChat& value) const
@@ -117,6 +116,14 @@ namespace Dreamsleeve::Client::Wire
     std::visit(RequestWriter{packet}, request);
 
     if (packet.request_id() == 0) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+    if (packet.has_open_session())
+    {
+      const auto& ticket = packet.open_session().session_ticket();
+      if (ticket.size() != 43 || !std::ranges::all_of(ticket, [](unsigned char c) {
+            return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+          }))
+        return Invalid("session_ticket");
+    }
     if (packet.has_send_chat() && packet.send_chat().channel_id() == 0) return Invalid("channel_id");
 
     const auto size = packet.ByteSizeLong();

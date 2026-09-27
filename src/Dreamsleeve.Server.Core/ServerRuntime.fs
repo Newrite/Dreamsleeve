@@ -3,11 +3,12 @@ namespace Dreamsleeve.Server.Core
 open System
 open System.Threading
 open System.Threading.Tasks
+open Microsoft.Extensions.Logging
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
 [<RequireQualifiedAccess>]
-type SessionSource = Chat | Presence | Profiles
+type SessionSource = Chat | Presence | Authentication
 
 type ServerRuntimeSnapshot = {
     Connections: int
@@ -47,7 +48,7 @@ module ServerRuntime =
         Table: SessionTable.State
         Codec: ChatCodec
         Transport: ServerTransport
-        Report: string -> unit
+        Logger: ILogger
         mutable Sources: Sources option
         mutable Stopping: bool
         mutable StopDeadline: int64
@@ -56,8 +57,8 @@ module ServerRuntime =
 
     let private now () = Environment.TickCount64
 
-    let private fail state (context: AgentContext<ServerRuntimeMessage>) reason =
-        state.Report reason
+    let private fail state (context: AgentContext<ServerRuntimeMessage>) (reason: string) =
+        state.Logger.LogError("Server runtime failed: {Reason}", reason)
         context.Abort()
 
     let private cleanup state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
@@ -95,13 +96,13 @@ module ServerRuntime =
     let private send (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) response =
         match ChatCodec.encodeServer state.Codec response with
         | Error error ->
-            state.Report $"Cannot encode response for {entry.ConnectionId}: {error.Failure}"
+            state.Logger.LogError("Cannot encode response for {ConnectionId}: {Failure}", entry.ConnectionId, error.Failure)
             close options state context entry
         | Ok bytes ->
             match state.Transport.Send(entry.ConnectionId, bytes) with
             | Ok () -> ()
             | Error reason ->
-                state.Report $"Closing {entry.ConnectionId}: {reason}"
+                state.Logger.LogWarning("Closing {ConnectionId}: {Reason}", entry.ConnectionId, reason)
                 close options state context entry
 
     let private reject (options: ServerRuntimeOptions) state context entry requestId code message =
@@ -142,17 +143,17 @@ module ServerRuntime =
             | Some _ | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->
-            state.Report $"Session {connectionId}: {reason}"
+            state.Logger.LogInformation("Session {ConnectionId}: {Reason}", connectionId, reason)
             SessionTable.find connectionId state.Table |> Option.iter (close options state context)
         | SessionHostCommand.SlowConsumer connectionId ->
-            state.Report $"Slow consumer {connectionId}."
+            state.Logger.LogWarning("Slow consumer {ConnectionId}", connectionId)
             SessionTable.find connectionId state.Table |> Option.iter (close options state context)
 
-    let private openSession (options: ServerRuntimeOptions) globalId (profiles: Agent<ProfileRequest>) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId username displayName =
+    let private openSession (options: ServerRuntimeOptions) globalId (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket =
         match state.Sources, context.Ref.TryReliable() with
         | Some sources, Some self ->
-            let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; Username = username; DisplayName = displayName }
-            match PlayerSession.start options.Player globalId (profiles.Ref.TryReliable().Value)
+            let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket }
+            match PlayerSession.start options.Player globalId (authenticator.Requests)
                       (sources.Chat.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                       (self.Map ServerRuntimeMessage.Host) request with
             | Error reason -> fail state context reason
@@ -162,7 +163,7 @@ module ServerRuntime =
                 context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
         | None, _ | _, None -> close options state context entry
 
-    let private receive (options: ServerRuntimeOptions) globalId profiles state context entry bytes =
+    let private receive (options: ServerRuntimeOptions) globalId authenticator state context entry bytes =
         match ChatCodec.decodeClient state.Codec bytes with
         | Error error ->
             match error.RequestId with
@@ -170,8 +171,8 @@ module ServerRuntime =
             | Some requestId -> reject options state context entry requestId RequestRejectionCode.InvalidRequest "Invalid request."
         | Ok request ->
             match request.Command, entry.Phase with
-            | ChatCommand.OpenSession(username, displayName), SessionTable.Waiting ->
-                openSession options globalId profiles state context entry request.RequestId username displayName
+            | ChatCommand.OpenSession sessionTicket, SessionTable.Waiting ->
+                openSession options globalId authenticator state context entry request.RequestId sessionTicket
             | ChatCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
                 reject options state context entry request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
             | ChatCommand.SendChat(channelId, text), SessionTable.Ready ->
@@ -186,7 +187,7 @@ module ServerRuntime =
                 reject options state context entry request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
             | (ChatCommand.OpenSession _ | ChatCommand.SendChat _), SessionTable.Closing -> ()
 
-    let private transportEvent (options: ServerRuntimeOptions) globalId profiles state context event =
+    let private transportEvent (options: ServerRuntimeOptions) globalId authenticator state context event =
         match event with
         | ServerTransportEvent.Connected connectionId ->
             if state.Stopping || state.Table.Connections.Count >= options.MaxSessions then
@@ -195,7 +196,7 @@ module ServerRuntime =
                 SessionTable.add connectionId (now () + int64 options.OpenTimeoutMs) state.Table |> ignore
         | ServerTransportEvent.Received(connectionId, bytes) ->
             match SessionTable.find connectionId state.Table with
-            | Some entry when entry.Phase <> SessionTable.Closing -> receive options globalId profiles state context entry bytes
+            | Some entry when entry.Phase <> SessionTable.Closing -> receive options globalId authenticator state context entry bytes
             | Some _ | None -> ()
         | ServerTransportEvent.Disconnected connectionId ->
             match SessionTable.find connectionId state.Table with
@@ -209,7 +210,7 @@ module ServerRuntime =
         let wait (token: CancellationToken) = task { do! Task.Delay(options.PollIntervalMs, token) }
         context.PipeToSelf(wait, fun _ -> ServerRuntimeMessage.Tick)
 
-    let private initialize (options: ServerRuntimeOptions) globalId profiles state (context: AgentContext<ServerRuntimeMessage>) =
+    let private initialize (options: ServerRuntimeOptions) globalId authenticator state (context: AgentContext<ServerRuntimeMessage>) =
         match context.Ref.TryReliable() with
         | None -> fail state context "Runtime requires a reliable mailbox."
         | Some self ->
@@ -222,7 +223,7 @@ module ServerRuntime =
                 | Error error -> fail state context $"Presence startup failed: {error}"
                 | Ok presence ->
                     context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
-                    context.Watch(profiles, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Profiles, outcome))
+                    context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
                     state.Sources <- Some {
                         Chat = chat; Presence = presence
                         ChatCleanup = AgentOutbox(options.MaxSessions, chat.Ref.TryReliable().Value)
@@ -237,7 +238,7 @@ module ServerRuntime =
         | Some entry when entry.ChildStopped -> ()
         | Some entry ->
             match outcome with
-            | Error error when entry.Phase <> SessionTable.Closing -> state.Report $"Player {connectionId} terminated: {error.Message}"
+            | Error error when entry.Phase <> SessionTable.Closing -> state.Logger.LogError(error, "Player session {ConnectionId} terminated", connectionId)
             | Error _ | Ok () -> ()
 
             close options state context entry
@@ -251,7 +252,7 @@ module ServerRuntime =
             match source with
             | SessionSource.Chat -> entry.ChatDetached <- true
             | SessionSource.Presence -> entry.PresenceDetached <- true
-            | SessionSource.Profiles -> ()
+            | SessionSource.Authentication -> ()
 
             if SessionTable.clean entry then
                 SessionTable.remove entry state.Table
@@ -264,12 +265,12 @@ module ServerRuntime =
             for entry in state.Table.Connections.Values |> Seq.toArray do
                 close options state context entry
 
-    let private tick (options: ServerRuntimeOptions) globalId profiles state context =
+    let private tick (options: ServerRuntimeOptions) globalId authenticator state context =
         match state.Transport.Poll() with
         | Error reason -> fail state context $"Transport failed: {reason}"
         | Ok events ->
             for event in events do
-                transportEvent options globalId profiles state context event
+                transportEvent options globalId authenticator state context event
 
             let time = now ()
             for entry in state.Table.Connections.Values |> Seq.toArray do
@@ -317,13 +318,13 @@ module ServerRuntime =
                 match state.Sources, source with
                 | Some sources, SessionSource.Chat -> sources.ChatStopped <- true
                 | Some sources, SessionSource.Presence -> sources.PresenceStopped <- true
-                | Some _, SessionSource.Profiles | None, _ -> ()
+                | Some _, SessionSource.Authentication | None, _ -> ()
 
-    let private handle (options: ServerRuntimeOptions) globalId profiles state (context: AgentContext<ServerRuntimeMessage>) message = task {
+    let private handle (options: ServerRuntimeOptions) globalId authenticator state (context: AgentContext<ServerRuntimeMessage>) message = task {
         match message with
         | ServerRuntimeMessage.Start ->
-            if state.Sources.IsNone && not state.Stopping then initialize options globalId profiles state context
-        | ServerRuntimeMessage.Tick -> tick options globalId profiles state context
+            if state.Sources.IsNone && not state.Stopping then initialize options globalId authenticator state context
+        | ServerRuntimeMessage.Tick -> tick options globalId authenticator state context
         | ServerRuntimeMessage.Host command -> host options state context command
         | ServerRuntimeMessage.PlayerStopped(connectionId, outcome) -> stopped options state context connectionId outcome
         | ServerRuntimeMessage.SourceStopped(source, outcome) -> sourceStopped state context source outcome
@@ -356,7 +357,7 @@ module ServerRuntime =
 
     /// The caller keeps the profile store across restarts and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.
-    let start (options: ServerRuntimeOptions) config (profiles: Agent<ProfileRequest>) transport report =
+    let start (options: ServerRuntimeOptions) config (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let limits = [ options.MaxSessions; options.MailboxCapacity; options.ControlReserve; options.OpenTimeoutMs
                        options.ShutdownTimeoutMs; options.PollIntervalMs; options.Player.MailboxCapacity
                        options.Player.ControlReserve; options.Player.MaxPendingChat; options.Player.MaxBootstrapEvents
@@ -375,7 +376,6 @@ module ServerRuntime =
                 "Transport service wait plus poll interval must fit runtime deadlines."
             if options.Player.MaxPendingChat > Int32.MaxValue - 2 || options.Player.MaxPendingOutput > Int32.MaxValue - 2 then
                 "Session pending capacity plus cleanup reserve overflows."
-            if profiles.Ref.TryReliable().IsNone then "Profile store requires a reliable mailbox."
             for ordinary, reserve in [options.MailboxCapacity, options.ControlReserve; options.Player.MailboxCapacity, options.Player.ControlReserve
                                       options.Chat.MailboxCapacity, options.Chat.ControlReserve; options.Presence.MailboxCapacity, options.Presence.ControlReserve] do
                 if int64 ordinary + int64 reserve > int64 Int32.MaxValue then "Mailbox capacity and control reserve overflow."
@@ -384,11 +384,11 @@ module ServerRuntime =
         match errors, ChatCodec.create config, ChatChannelId.create 1UL with
         | [], Ok codec, Ok globalId ->
             let state = {
-                Table = SessionTable.create(); Codec = codec; Transport = transport; Report = report
+                Table = SessionTable.create(); Codec = codec; Transport = transport; Logger = logger
                 Sources = None; Stopping = false; SourcesStopping = false; StopDeadline = 0L
             }
             let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
-            let agent = Agent.Start(agentOptions, handle options globalId profiles state, isControl = isControl)
+            let agent = Agent.Start(agentOptions, handle options globalId authenticator state, isControl = isControl)
             agent.TryPost ServerRuntimeMessage.Start |> ignore
             Ok agent
         | errors, _, _ -> Error (if errors.IsEmpty then ["Cannot create runtime codec or global channel."] else errors)

@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package Dreamsleeve.Protocol.Chat;
 
-// One serialized envelope per reliable ENet packet. Version 1 is the chat-only
-// application slice. A session belongs to one ENet connection; opening it again
+// One serialized envelope per reliable ENet packet. Version 2 opens sessions
+// with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
 // requires reconnecting. Transport Connected alone is not application readiness.
 message ClientPacket {
   uint32 protocol_version = 1;
@@ -29,10 +29,12 @@ message ServerPacket {
   }
 }
 
-// Development identity negotiation, NOT authentication or proof of ownership.
+// Opaque single-use credential: 32 random bytes encoded as unpadded base64url.
+// Identity comes from the authenticated ticket; do not send player-supplied names.
 message OpenSession {
-  string username = 1;
-  string display_name = 2;
+  reserved 1, 2;
+  reserved "username", "display_name";
+  string session_ticket = 3;
 }
 
 message SendChat {
@@ -76,6 +78,7 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND = 5; // Requested channel does not exist.
   REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER = 6; // Sender may not publish to this channel.
   REQUEST_REJECTION_CODE_OVERLOADED = 7; // Request was not admitted; the session remains usable.
+  REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED = 8; // Missing, expired, invalid or already consumed ticket.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

@@ -13,9 +13,12 @@ Client.Dev работает без Skyrim; `send` добавляет сообщ�
 
 На сервере PlayerSession владеет состоянием одного игрока, ChatRoomAgent — каналом
 и историей, PresenceAgent — онлайном. ServerRuntime владеет транспортом и короткими
-переходами таблицы сессий. Профили пока живут в памяти; настоящей авторизации нет.
-Конфигурация сервера загружается из JSON при запуске. SKSE/PrismaUI, интерполяция,
-БД и интерфейс администрирования остаются следующими этапами.
+переходами таблицы сессий. Учётные записи и профили сохраняются в SQLite;
+вход по паролю выдаёт одноразовый билет для ENet-сессии.
+Конфигурация сервера загружается из JSON при запуске. SKSE/PrismaUI, интерполяция
+и интерфейс администрирования остаются следующими этапами.
+Сервер пишет структурированные логи через Serilog в консоль и JSON-файлы.
+[Авторизация, БД и зависимости](docs/AuthenticationRu.md).
 Контракт: [Protocol/README.ru.md](Protocol/README.ru.md).
 
 Ближайшее направление — работающий `Client.Dev` и сервер без запуска Skyrim.
@@ -31,7 +34,7 @@ Client.Dev работает без Skyrim; `send` добавляет сообщ�
 | `src/Dreamsleeve.Agent` | Последовательные агенты на Channels/Task и примеры |
 | `src/Dreamsleeve.Server.Core` | Runtime, сессии, владельцы чата/онлайна, конфигурация и codec |
 | `src/Dreamsleeve.Server` | Запуск сервера, JSON-конфигурация, остановка по quit/Ctrl+C |
-| `src/Dreamsleeve.Server.Infrastructure` | MemoryProfileStore и адаптер yENet; Interop обслуживает владение native-пакетами и бюджеты |
+| `src/Dreamsleeve.Server.Infrastructure` | SQLite, AuthService и адаптер yENet; Interop обслуживает владение native-пакетами и бюджеты |
 | `Protocol`, `src/Dreamsleeve.Protocol.*` | Рабочая схема protobuf и сгенерированные C++/C# типы |
 | `tests` | Два тестовых проекта: native и managed; общий запуск |
 | `docs` | Решения, спецификации, справочники и помеченные исторические примеры |
@@ -44,7 +47,7 @@ Python 3.10+ и .NET SDK 10. Первый запуск восстанавлив�
 ```powershell
 xmake build Dreamsleeve.Client.Dev
 xmake run Dreamsleeve.Client.Dev --state-demo
-xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player "Player Name"
+xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Player Name"
 dotnet run --project src/Dreamsleeve.Server -c Release
 python Scripts/run_tests.py
 ```
@@ -54,6 +57,10 @@ python Scripts/run_tests.py
 `receive <text>`, `sample`, `read`, `snapshot`, `reset`, `quit`. Отправленный чат
 появляется в модели только после `accept`.
 Формат команд описан в [контракте состояния](src/Dreamsleeve.Client.Core/State/README.ru.md#обмен-с-одним-потребителем).
+При первом запуске `--register` создаёт аккаунт; пароль вводится скрыто. При
+последующих запусках уберите `--register`: вход восстановит профиль из БД.
+Auth HTTP по умолчанию доступен только локально на 127.0.0.1:8779.
+
 Сетевой режим `--connect` принимает `send <text>`, `read`, `disconnect`, `connect`, `quit`.
 Сервер запускается в отдельном терминале; по умолчанию адрес 127.0.0.1:8778. [Контракт runtime](src/Dreamsleeve.Client.Core/README.ru.md).
 Генерация protobuf: `python Scripts/generate_protocol.py --help`.

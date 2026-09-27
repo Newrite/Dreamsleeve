@@ -1,6 +1,6 @@
 # Сервер: владельцы состояния и сетевой runtime
 
-Сервер запускается через `Dreamsleeve.Server`: профильное хранилище в памяти,
+Сервер запускается через `Dreamsleeve.Server`: SQLite, HTTP(S) authentication,
 ServerRuntime, PlayerSession для каждого соединения, ChatRoomAgent и PresenceAgent.
 Общего прикладного маршрутизатора SessionRegistry больше нет.
 
@@ -13,7 +13,7 @@ ServerRuntime, PlayerSession для каждого соединения, ChatRoo
 | PlayerSession | Domain.Player, вход, начальные снимки, квота собственных RequestId, порядок исходящих сообщений |
 | ChatRoomAgent | Членство конкретных соединений, авторство, ID/время сообщения, история и адресная рассылка |
 | PresenceAgent | Онлайн, начальный снимок и последующие Joined/Left |
-| MemoryProfileStore | Профили и выделение PlayerId, отдельный владелец в Infrastructure |
+| AuthService | Допуск account-операций и одноразовые билеты; bounded workers выполняют SQLite и проверку паролей |
 | EnetTransport | Адаптер yENet в том же контуре владения, без второго глобального роутера |
 
 ```mermaid
@@ -23,7 +23,9 @@ flowchart LR
     Player -->|Publish| Chat[ChatRoomAgent]
     Chat -->|Accepted / Published| Player
     Presence[PresenceAgent] -->|snapshot / deltas| Player
-    Player -->|GetOrCreate| Profiles[MemoryProfileStore]
+    HTTP[HTTP register/login] --> Auth[AuthService]
+    Auth --> DB[SQLite workers]
+    Player -->|ConsumeTicket| Auth
     Player -->|Activate / Send| Runtime
 ```
 
@@ -38,13 +40,14 @@ flowchart LR
 
 Каждое транспортное соединение получает новый Guid ConnectionId, независимо от
 повторно используемого ENet peer slot. PlayerId обозначает постоянный профиль,
-RequestId — запрос клиента. Dev-вход по имени не является аутентификацией.
+RequestId — запрос клиента. Вход подтверждается одноразовым билетом от AuthService.
 
-PlayerSession проходит получение профиля → резервирование PlayerId в runtime →
-подписку на чат и онлайн → сбор начальных снимков. MemoryProfileStore.GetOrCreate
-атомарно возвращает существующий профиль или создаёт новый. Повторный вход
-сохраняет PlayerId и DisplayName. FindByUsername/Create остаются отдельными
-операциями хранилища; их не требуется согласовывать в автомате входа.
+HTTP register сохраняет учётную запись и профиль одной транзакцией. Login проверяет
+хеш пароля и выдаёт случайный билет с ограниченным сроком жизни. PlayerSession
+погашает его → резервирует PlayerId в runtime → подписывается на чат и онлайн →
+собирает начальные снимки. Профиль берётся из результата аутентификации, а не
+из имени, присланного клиентом. Повторный вход после перезапуска сохраняет
+PlayerId, Username и DisplayName; старые билеты недействительны.
 
 Оба источника формируют snapshot и подписку в одном обработчике. Их следующие
 события идут после снимка через тот же последовательный путь. PlayerSession
@@ -110,11 +113,12 @@ reliable-данных при сохранении рабочей сессии.
 видит Completion. Переполнение управляющего outbox тоже прекращает источник.
 Потерянный обязательный ответ не превращается в успешное продолжение работы.
 
-Хранилище профилей отдельно использует AgentReplyDispatcher: место под ответ
-резервируется до изменения словаря, затем ответы разным получателям доставляются
-независимо. При исчерпании MaxPendingReplies новые операции ждут; порядок ответов
-не гарантирован, поэтому используется OperationId. Отмена ожидания ответа
-не откатывает уже созданный профиль. Настоящий DB adapter пока не реализован.
+AuthService ограничивает одновременные операции MaxConcurrentOperations и билеты
+MaxTickets. Хеширование и синхронные SQLite-вызовы запускаются через
+AgentReplyDispatcher.createAsyncHandler вне обработчика; завершение приходит
+сообщением с OperationId. Место резервируется до начала работы и остаётся занятым
+до доставки ответа. Отмена ожидания HTTP не откатывает уже принятую регистрацию.
+MemoryProfileStore и прежний контракт профилей перенесены в tests/Fixtures; production их не содержит.
 
 ## Отключение, авария и остановка
 
@@ -131,7 +135,7 @@ Detach в чат и онлайн. Это одновременно аварийн
 нового ConnectionId.
 
 Context.Own отменяет собственных детей при аварии и ждёт их cleanup; Watch
-наблюдает общий profile store без владения. Исходное необработанное исключение
+наблюдает Completion AuthService без владения. Исходное необработанное исключение
 видно через Completion. Ошибка одного игрока изолирована, потеря общей зависимости
 останавливает runtime. Прозрачного перезапуска источников и восстановления истории нет.
 
@@ -144,9 +148,9 @@ Reset неответившего peer и завершает учёт соеди�
 выход закрытых соединений. Источники завершаются после cleanup сессий, transport
 освобождается после фактического Completion runtime.
 
-Хранилище можно оставить живым между перезапусками сети. Перезапуск самого
-MemoryProfileStore или процесса теряет профили и начинает выдачу ID заново.
-Долговременная БД, авторизация, hot reload конфигурации и HTTP-управление ещё не добавлены.
+После остановки HTTP и игрового runtime AuthService дожидается принятых workers.
+Только затем закрываются зависимости и логирование. SQLite сохраняет профили;
+онлайн, чат и билеты остаются в памяти. Hot reload и HTTP-админка не добавлены.
 
 ## Запуск и конфигурация
 
@@ -154,14 +158,15 @@ MemoryProfileStore или процесса теряет профили и нач
 dotnet run --project src/Dreamsleeve.Server -c Release
 dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.json
 dotnet run --project src/Dreamsleeve.Server -c Release -- --config server.json --port 8778
-xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player "Player Name"
+xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Player Name"
 ```
 
-По умолчанию сервер слушает 127.0.0.1:8778. В сетевом Client.Dev доступны
+По умолчанию ENet слушает 127.0.0.1:8778, auth HTTP — 127.0.0.1:8779.
+Пароль вводится скрыто; после регистрации запускайте без --register. В сетевом Client.Dev доступны
 `send <text>`, `read`, `disconnect`, `connect`, `quit`; сервер завершается по `quit`
 или Ctrl+C. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
 
-JSON читается при запуске; можно переопределить часть секций Server/Runtime/Profiles.
+JSON читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging.
 Неуказанные параметры сохраняют значения по умолчанию; неизвестные поля отклоняются.
 `--port` имеет приоритет над файлом. ServerConfig проверяет согласованность transport
 и codec, MaxSessions укладывается в PeerLimit/MaxInitialPlayers, история — в
@@ -169,3 +174,5 @@ MaxRecentMessages. Лимиты не согласуются между клие�
 
 См. [схему протокола](../../../Protocol/README.ru.md),
 [тесты](../../../tests/README.md), [план и расхождения](../../../docs/SessionArchitecturePlanRu.md).
+
+См. [вход, хранение и зависимости](../../../docs/AuthenticationRu.md).

@@ -9,7 +9,7 @@
     <ItemGroup>
         <Compile Include="Config.fs" />
         <Compile Include="ChatCodec.fs" />
-        <Compile Include="ProfileStore.fs" />
+        <Compile Include="Authentication.fs" />
         <Compile Include="SessionContracts.fs" />
         <Compile Include="ChatRoomAgent.fs" />
         <Compile Include="PresenceAgent.fs" />
@@ -23,6 +23,7 @@
         <ProjectReference Include="../Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
         <ProjectReference Include="../Dreamsleeve.Protocol.Dotnet/Dreamsleeve.Protocol.Dotnet.csproj" />
         <PackageReference Include="yENet" Version="1.2.1" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     </ItemGroup>
 
 </Project>

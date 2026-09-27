@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.Tests.PlayerSessionTests
+﻿module Dreamsleeve.Server.Tests.PlayerSessionTests
 
 open System
 open System.Threading.Channels
@@ -31,49 +31,50 @@ let private read (player: Agent<PlayerSessionMessage>) = task {
 type private Fixture = {
     Request: SessionOpenRequest
     Player: Agent<PlayerSessionMessage>
-    Profiles: Channel<ProfileRequest>
+    Authentication: Channel<SessionAuthenticationRequest>
     Chat: Channel<ChatRoomCommand>
     Presence: Channel<PresenceCommand>
     Host: Channel<SessionHostCommand>
 }
 
 let private withPlayer settings run = task {
-    let queries = Channel.CreateUnbounded<ProfileRequest>()
+    let queries = Channel.CreateUnbounded<SessionAuthenticationRequest>()
     let chatCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
-    use profiles = Agent.Start(AgentOptions.create "profiles", collect queries)
+    use authentication = Agent.Start(AgentOptions.create "authentication", collect queries)
     use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
     use presence = Agent.Start(AgentOptions.create "presence", collect presenceCommands)
     use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
     let request = {
         ConnectionId = Guid.NewGuid()
         RequestId = 1UL
-        Username = Username.create 32 "player" |> ok
-        DisplayName = DisplayName.create 64 "Player" |> ok
+        SessionTicket = String('a', 43)
     }
     use player = PlayerSession.start settings globalId
-                     (profiles.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+                     (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
-    let fixture = { Request = request; Player = player; Profiles = queries;
+    let fixture = { Request = request; Player = player; Authentication = queries;
                     Chat = chatCommands; Presence = presenceCommands; Host = hostCommands }
     do! run fixture
     if not player.Completion.IsCompleted then player.Abort()
     let! _ = terminal player.Completion
-    profiles.Complete() |> ignore
+    authentication.Complete() |> ignore
     chat.Complete() |> ignore
     presence.Complete() |> ignore
     host.Complete() |> ignore
-    do! awaitUnit profiles.Completion
+    do! awaitUnit authentication.Completion
     do! awaitUnit chat.Completion
     do! awaitUnit presence.Completion
     do! awaitUnit host.Completion
 }
 
 let private resolve fixture = task {
-    let! query = receive fixture.Profiles
-    let profile = PlayerData.create (PlayerId.create 42UL |> ok) fixture.Request.Username fixture.Request.DisplayName
-    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok (ProfileOutcome.Resolved profile) }
+    let! query = receive fixture.Authentication
+    equal fixture.Request.SessionTicket query.Ticket
+    let profile = PlayerData.create (PlayerId.create 42UL |> ok)
+                      (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok)
+    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok profile }
     let! command = receive fixture.Host
     match command with
     | SessionHostCommand.Reserve(connectionId, playerId, reply) ->
@@ -249,10 +250,10 @@ let tests = testList "PlayerSession" [
 
     case "profile resolution can stop without waiting for its reply" (fun () ->
         withPlayer options (fun fixture -> task {
-            let! query = receive fixture.Profiles
+            let! query = receive fixture.Authentication
             do! post fixture.Player PlayerSessionMessage.Stop
             let! _ = terminal fixture.Player.Completion
-            let! late = query.ReplyTo.PostAsync { OperationId = query.OperationId; Result = Error ProfileStoreError.Canceled }
+            let! late = query.ReplyTo.PostAsync { OperationId = query.OperationId; Result = Error SessionAuthenticationError.Unavailable }
             equal AgentDeliveryResult.Closed late
             equal 0 fixture.Host.Reader.Count
         }))
@@ -273,14 +274,14 @@ let tests = testList "PlayerSession" [
 
             do! update (PlayerUpdate.BeginCharacter name)
             do! update (PlayerUpdate.SetLocation location)
-            do! update (PlayerUpdate.SetActorValues [key, health 80.0f])
+            do! update (PlayerUpdate.SetActorValues [(key, health 80.0f)])
             let! first = read fixture.Player
             let first = ok first
             equal profile first.Data
             equal (ValueSome name) first.CharacterName
             equal (ValueSome location) first.Location
 
-            do! update (PlayerUpdate.SetActorValues [key, health 20.0f])
+            do! update (PlayerUpdate.SetActorValues [(key, health 20.0f)])
             let! second = read fixture.Player
             equal (health 20.0f) (ok second).ActorValues[key]
             equal (health 80.0f) first.ActorValues[key]
@@ -319,49 +320,57 @@ let tests = testList "PlayerSession" [
             equal 0 fixture.Host.Reader.Count
         }))
 
-    case "duplicate Begin cannot issue a second profile request" (fun () ->
+    case "duplicate Begin cannot issue a second authentication request" (fun () ->
         withPlayer options (fun fixture -> task {
-            let! _ = receive fixture.Profiles
+            let! _ = receive fixture.Authentication
             do! post fixture.Player PlayerSessionMessage.Begin
             let! state = read fixture.Player
             equal (Error PlayerStateError.NotReady) state
-            equal 0 fixture.Profiles.Reader.Count
+            equal 0 fixture.Authentication.Reader.Count
         }))
 
-    case "failed profile resolution reports its original diagnostic and closes only this session" (fun () ->
-        withPlayer options (fun fixture -> task {
-            let! query = receive fixture.Profiles
-            let expected = InvalidOperationException("profile database operation failed")
-            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Error (ProfileStoreError.Failed expected) }
-            let! command = receive fixture.Host
-            match command with
-            | SessionHostCommand.Close(connectionId, reason) ->
-                equal fixture.Request.ConnectionId connectionId
-                check (reason.Contains expected.Message) "Original operation failure was lost."
-                check (reason.Contains(expected.GetType().Name)) "Failure type was lost."
-            | other -> failwithf "Expected profile failure: %A" other
-            let! _ = terminal fixture.Player.Completion
-            equal 0 fixture.Chat.Reader.Count
-            equal 0 fixture.Presence.Reader.Count
-        }))
+    case "invalid or unavailable authentication rejects opening before any membership" (fun () -> task {
+        for failure, expectedCode in [
+            SessionAuthenticationError.InvalidTicket, RequestRejectionCode.AuthenticationFailed
+            SessionAuthenticationError.Unavailable, RequestRejectionCode.Overloaded
+        ] do
+            do! withPlayer options (fun fixture -> task {
+                let! query = receive fixture.Authentication
+                do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Error failure }
+                let! rejected = receive fixture.Host
+                match rejected with
+                | SessionHostCommand.Send(connectionId, ChatResponse.RequestRejected(requestId, rejection)) ->
+                    equal fixture.Request.ConnectionId connectionId
+                    equal fixture.Request.RequestId requestId
+                    equal expectedCode rejection.Code
+                    check (not (rejection.Message.Contains fixture.Request.SessionTicket)) "Credential leaked in rejection."
+                | other -> failwithf "Expected authentication rejection: %A" other
+                let! command = receive fixture.Host
+                match command with
+                | SessionHostCommand.Close(connectionId, _) -> equal fixture.Request.ConnectionId connectionId
+                | other -> failwithf "Expected closing after rejection: %A" other
+                let! _ = terminal fixture.Player.Completion
+                equal 0 fixture.Chat.Reader.Count
+                equal 0 fixture.Presence.Reader.Count
+            })
+    })
 
-    case "a closed profile destination cannot leave opening waiting forever" (fun () -> task {
+    case "a closed authentication destination cannot leave opening waiting forever" (fun () -> task {
         let queries, chatCommands, presenceCommands, hostCommands =
-            Channel.CreateUnbounded<ProfileRequest>(), Channel.CreateUnbounded<ChatRoomCommand>(),
+            Channel.CreateUnbounded<SessionAuthenticationRequest>(), Channel.CreateUnbounded<ChatRoomCommand>(),
             Channel.CreateUnbounded<PresenceCommand>(), Channel.CreateUnbounded<SessionHostCommand>()
-        use profiles = Agent.Start(AgentOptions.create "closed-profiles", collect queries)
-        profiles.Complete() |> ignore
-        do! awaitUnit profiles.Completion
+        use authentication = Agent.Start(AgentOptions.create "closed-authentication", collect queries)
+        authentication.Complete() |> ignore
+        do! awaitUnit authentication.Completion
         use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
         use presence = Agent.Start(AgentOptions.create "presence", collect presenceCommands)
         use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
         let request = {
             ConnectionId = Guid.NewGuid(); RequestId = 1UL
-            Username = Username.create 32 "closed" |> ok
-            DisplayName = DisplayName.create 64 "Closed" |> ok
+            SessionTicket = String('b', 43)
         }
         use player = PlayerSession.start options globalId
-                         (profiles.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+                         (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."

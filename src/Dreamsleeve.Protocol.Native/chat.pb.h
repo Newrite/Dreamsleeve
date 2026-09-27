@@ -125,6 +125,7 @@ enum RequestRejectionCode : int {
   REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND = 5,
   REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER = 6,
   REQUEST_REJECTION_CODE_OVERLOADED = 7,
+  REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED = 8,
   RequestRejectionCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   RequestRejectionCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -135,11 +136,11 @@ extern const uint32_t RequestRejectionCode_internal_data_[];
 inline constexpr RequestRejectionCode RequestRejectionCode_MIN =
     static_cast<RequestRejectionCode>(0);
 inline constexpr RequestRejectionCode RequestRejectionCode_MAX =
-    static_cast<RequestRejectionCode>(7);
+    static_cast<RequestRejectionCode>(8);
 inline bool RequestRejectionCode_IsValid(int value) {
-  return 0 <= value && value <= 7;
+  return 0 <= value && value <= 8;
 }
-inline constexpr int RequestRejectionCode_ARRAYSIZE = 7 + 1;
+inline constexpr int RequestRejectionCode_ARRAYSIZE = 8 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_descriptor();
 template <typename T>
 const ::std::string& RequestRejectionCode_Name(T value) {
@@ -150,7 +151,7 @@ const ::std::string& RequestRejectionCode_Name(T value) {
 }
 template <>
 inline const ::std::string& RequestRejectionCode_Name(RequestRejectionCode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 7>(
+  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 8>(
       static_cast<int>(value));
 }
 inline bool RequestRejectionCode_Parse(
@@ -1151,45 +1152,29 @@ class OpenSession final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
-    kUsernameFieldNumber = 1,
-    kDisplayNameFieldNumber = 2,
+    kSessionTicketFieldNumber = 3,
   };
-  // string username = 1;
-  void clear_username() ;
-  const ::std::string& username() const;
+  // string session_ticket = 3;
+  void clear_session_ticket() ;
+  const ::std::string& session_ticket() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_username(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_username();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_username();
-  void set_allocated_username(::std::string* PROTOBUF_NULLABLE value);
+  void set_session_ticket(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_session_ticket();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_session_ticket();
+  void set_allocated_session_ticket(::std::string* PROTOBUF_NULLABLE value);
 
   private:
-  const ::std::string& _internal_username() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_username(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_username();
-
-  public:
-  // string display_name = 2;
-  void clear_display_name() ;
-  const ::std::string& display_name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_display_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_display_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_display_name();
-  void set_allocated_display_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_display_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_display_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_display_name();
+  const ::std::string& _internal_session_ticket() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_session_ticket(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_session_ticket();
 
   public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.OpenSession)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   0, 66,
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   0, 60,
                                    2>
       _table_;
 
@@ -1210,8 +1195,7 @@ class OpenSession final : public ::google::protobuf::Message
         const OpenSession& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr username_;
-    ::google::protobuf::internal::ArenaStringPtr display_name_;
+    ::google::protobuf::internal::ArenaStringPtr session_ticket_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3408,134 +3392,69 @@ inline ServerPacket::PayloadCase ServerPacket::payload_case() const {
 
 // OpenSession
 
-// string username = 1;
-inline void OpenSession::clear_username() {
+// string session_ticket = 3;
+inline void OpenSession::clear_session_ticket() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.username_.ClearToEmpty();
+  _impl_.session_ticket_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000001U);
 }
-inline const ::std::string& OpenSession::username() const
+inline const ::std::string& OpenSession::session_ticket() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.OpenSession.username)
-  return _internal_username();
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.OpenSession.session_ticket)
+  return _internal_session_ticket();
 }
 template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void OpenSession::set_username(Arg_&& arg, Args_... args) {
+PROTOBUF_ALWAYS_INLINE void OpenSession::set_session_ticket(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  _impl_.username_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.OpenSession.username)
+  _impl_.session_ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.OpenSession.session_ticket)
 }
-inline ::std::string* PROTOBUF_NONNULL OpenSession::mutable_username()
+inline ::std::string* PROTOBUF_NONNULL OpenSession::mutable_session_ticket()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::std::string* _s = _internal_mutable_username();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.OpenSession.username)
+  ::std::string* _s = _internal_mutable_session_ticket();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.OpenSession.session_ticket)
   return _s;
 }
-inline const ::std::string& OpenSession::_internal_username() const {
+inline const ::std::string& OpenSession::_internal_session_ticket() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.username_.Get();
+  return _impl_.session_ticket_.Get();
 }
-inline void OpenSession::_internal_set_username(const ::std::string& value) {
+inline void OpenSession::_internal_set_session_ticket(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.username_.Set(value, GetArena());
+  _impl_.session_ticket_.Set(value, GetArena());
 }
-inline ::std::string* PROTOBUF_NONNULL OpenSession::_internal_mutable_username() {
+inline ::std::string* PROTOBUF_NONNULL OpenSession::_internal_mutable_session_ticket() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.username_.Mutable( GetArena());
+  return _impl_.session_ticket_.Mutable( GetArena());
 }
-inline ::std::string* PROTOBUF_NULLABLE OpenSession::release_username() {
+inline ::std::string* PROTOBUF_NULLABLE OpenSession::release_session_ticket() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.OpenSession.username)
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.OpenSession.session_ticket)
   if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
     return nullptr;
   }
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  auto* released = _impl_.username_.Release();
+  auto* released = _impl_.session_ticket_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.username_.Set("", GetArena());
+    _impl_.session_ticket_.Set("", GetArena());
   }
   return released;
 }
-inline void OpenSession::set_allocated_username(::std::string* PROTOBUF_NULLABLE value) {
+inline void OpenSession::set_allocated_session_ticket(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   } else {
     ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
   }
-  _impl_.username_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.username_.IsDefault()) {
-    _impl_.username_.Set("", GetArena());
+  _impl_.session_ticket_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_ticket_.IsDefault()) {
+    _impl_.session_ticket_.Set("", GetArena());
   }
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.OpenSession.username)
-}
-
-// string display_name = 2;
-inline void OpenSession::clear_display_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.display_name_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
-}
-inline const ::std::string& OpenSession::display_name() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.OpenSession.display_name)
-  return _internal_display_name();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void OpenSession::set_display_name(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  _impl_.display_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.OpenSession.display_name)
-}
-inline ::std::string* PROTOBUF_NONNULL OpenSession::mutable_display_name()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::std::string* _s = _internal_mutable_display_name();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.OpenSession.display_name)
-  return _s;
-}
-inline const ::std::string& OpenSession::_internal_display_name() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.display_name_.Get();
-}
-inline void OpenSession::_internal_set_display_name(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.display_name_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL OpenSession::_internal_mutable_display_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.display_name_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE OpenSession::release_display_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.OpenSession.display_name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  auto* released = _impl_.display_name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.display_name_.Set("", GetArena());
-  }
-  return released;
-}
-inline void OpenSession::set_allocated_display_name(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  }
-  _impl_.display_name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.display_name_.IsDefault()) {
-    _impl_.display_name_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.OpenSession.display_name)
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.OpenSession.session_ticket)
 }
 
 // -------------------------------------------------------------------

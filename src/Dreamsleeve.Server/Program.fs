@@ -4,11 +4,11 @@ open System
 open System.Threading
 open System.Threading.Tasks
 open System.Threading.Channels
+open Microsoft.Extensions.Logging
+open Serilog.Extensions.Logging
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
-
-let private report text = printfn "[%s] %s" (DateTimeOffset.Now.ToString("HH:mm:ss")) text
 
 let private printHelp () =
     printfn "Dreamsleeve.Server [--config path.json] [--port 8778]"
@@ -53,7 +53,7 @@ let private waitForStop (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) 
         inputCancellation.Cancel()
 }
 
-let private stopRuntime settings (runtime: Agent<ServerRuntimeMessage>) = task {
+let private stopRuntime settings (logger: ILogger) (runtime: Agent<ServerRuntimeMessage>) = task {
     if not runtime.Completion.IsCompleted then
         use deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(float settings.Runtime.ShutdownTimeoutMs + 2000.0))
         let! admitted = runtime.PostAsync(ServerRuntimeMessage.Stop, deadline.Token)
@@ -64,65 +64,111 @@ let private stopRuntime settings (runtime: Agent<ServerRuntimeMessage>) = task {
         try
             do! runtime.Completion.WaitAsync(deadline.Token)
         with :? OperationCanceledException when deadline.IsCancellationRequested ->
-            report "Shutdown guard elapsed; canceling remaining runtime work."
+            logger.LogWarning("Shutdown guard elapsed; canceling remaining runtime work")
             runtime.Abort()
             do! runtime.Completion
     else
         do! runtime.Completion
 }
 
-let private serve settings profiles transport = task {
-    match ServerRuntime.start settings.Runtime settings.Server profiles transport report with
-    | Error errors ->
-        eprintfn "%s" (String.concat " " errors)
-        return 1
-    | Ok runtime ->
-        let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-        let handler = ConsoleCancelEventHandler(fun _ event ->
-            event.Cancel <- true
-            canceled.TrySetResult() |> ignore)
-        Console.CancelKeyPress.AddHandler handler
-        report (sprintf "Listening on %O:%d. Commands: quit" settings.Server.BindAddress settings.Server.Port)
+let private serve settings authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
+    let web = AuthenticationHttp.build settings authentication log
+    try
+        match ServerRuntime.start settings.Runtime settings.Server (AuthService.authenticator authentication) transport logger with
+        | Error errors ->
+            logger.LogError("Runtime configuration failed: {Errors}", String.concat " " errors)
+            return 1
+        | Ok runtime ->
+            let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+            let handler = ConsoleCancelEventHandler(fun _ event ->
+                event.Cancel <- true
+                canceled.TrySetResult() |> ignore)
+            Console.CancelKeyPress.AddHandler handler
+            use hostStopping = web.Lifetime.ApplicationStopping.Register(fun () -> canceled.TrySetResult() |> ignore)
 
-        try
             try
-                do! waitForStop runtime canceled.Task
-                do! stopRuntime settings runtime
-                return 0
-            with error ->
-                eprintfn "Server stopped: %s" error.Message
-                runtime.Abort()
-                try do! runtime.Completion with _ -> ()
-                return 1
-        finally
-            Console.CancelKeyPress.RemoveHandler handler
+                let mutable exitCode = 0
+                try
+                    do! web.StartAsync()
+                    logger.LogInformation("Listening on {Address}:{Port}. Authentication: {AuthenticationUrl}. Commands: quit",
+                                          settings.Server.BindAddress, settings.Server.Port, settings.Authentication.ListenUrl)
+                    do! waitForStop runtime canceled.Task
+                with error ->
+                    logger.LogError(error, "Server listener failed")
+                    exitCode <- 1
+
+                // Stop HTTP admission before stopping the account agent. Existing
+                // bounded requests may finish while the ENet runtime drains.
+                try do! web.StopAsync()
+                with error ->
+                    logger.LogError(error, "Authentication listener shutdown failed")
+                    exitCode <- 1
+
+                try do! stopRuntime settings logger runtime
+                with error ->
+                    logger.LogError(error, "Game runtime stopped with an error")
+                    runtime.Abort()
+                    try do! runtime.Completion with _ -> ()
+                    exitCode <- 1
+                return exitCode
+            finally
+                Console.CancelKeyPress.RemoveHandler handler
+    finally
+        web.DisposeAsync().AsTask().GetAwaiter().GetResult()
+}
+
+let private stopAuthentication (authentication: Agent<AuthMessage>) = task {
+    if not authentication.Completion.IsCompleted then
+        let! admitted = authentication.PostAsync AuthMessage.Stop
+        match admitted with
+        | AgentPostResult.Posted | AgentPostResult.Closed -> ()
+        | AgentPostResult.Canceled | AgentPostResult.Full | AgentPostResult.Dropped -> authentication.Abort()
+    do! authentication.Completion
 }
 
 let private run settings = task {
-    match MemoryProfileStore.start settings.Profiles with
-    | Error error ->
-        eprintfn "%s" error
-        return 1
-    | Ok profiles ->
-        let! result = task {
-            match EnetTransport.create settings.Server with
-            | Error error ->
-                eprintfn "%s" error
-                return 1
-            | Ok transport ->
-                try
-                    return! serve settings profiles transport
-                finally
-                    // serve awaits the runtime's actual Completion on every path.
-                    transport.Dispose()
-        }
-        profiles.Complete() |> ignore
-        try
-            do! profiles.Completion
-            return result
-        with error ->
-            eprintfn "Profile store stopped: %s" error.Message
+    use log = ServerLogging.create settings.Logging
+    use factory = new SerilogLoggerFactory(log, dispose = false)
+    let logger = factory.CreateLogger("Dreamsleeve.Server")
+
+    try
+        // Migrations and password-hasher startup run before either listener.
+        let! initialized = Task.Run(fun () -> SqliteAccountStore.initialize settings.Database)
+        match initialized with
+        | Error error ->
+            logger.LogError("Database initialization failed: {Failure}", error)
             return 1
+        | Ok () ->
+            logger.LogInformation("Account database ready: {DatabasePath}", settings.Database.DatabasePath)
+            let! started = Task.Run(fun () -> AuthService.start settings.Authentication.Service settings.Database logger TimeProvider.System)
+            match started with
+            | Error error ->
+                logger.LogError("Authentication configuration failed: {Failure}", error)
+                return 1
+            | Ok authentication ->
+                let! result = task {
+                    try
+                        match EnetTransport.create settings.Server with
+                        | Error error ->
+                            logger.LogError("ENet startup failed: {Failure}", error)
+                            return 1
+                        | Ok transport ->
+                            try return! serve settings authentication transport logger log
+                            finally transport.Dispose()
+                    with error ->
+                        logger.LogError(error, "Server startup failed")
+                        return 1
+                }
+                try
+                    do! stopAuthentication authentication
+                    logger.LogInformation("Server stopped with exit code {ExitCode}", result)
+                    return result
+                with error ->
+                    logger.LogError(error, "Authentication agent shutdown failed")
+                    return 1
+    with error ->
+        logger.LogError(error, "Server failed")
+        return 1
 }
 
 [<EntryPoint>]
@@ -140,4 +186,7 @@ let main args =
         | Ok () -> printfn "Wrote %s" path; 0
         | Error error -> eprintfn "%s" error; 2
     | Ok (LaunchCommand.Run settings) ->
-        run settings |> fun work -> work.GetAwaiter().GetResult()
+        try run settings |> fun work -> work.GetAwaiter().GetResult()
+        with error ->
+            eprintfn "Server startup failed: %s" error.Message
+            1

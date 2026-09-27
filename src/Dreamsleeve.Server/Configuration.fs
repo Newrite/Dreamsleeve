@@ -9,10 +9,22 @@ open System.Text.Json.Serialization
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 
+type AuthenticationSettings = {
+    ListenUrl: string
+    AllowInsecureLoopback: bool
+    AllowRegistration: bool
+    CertificatePath: string
+    RequestsPerMinute: int
+    RequestTimeoutSeconds: int
+    Service: AccountServiceOptions
+}
+
 type ApplicationConfig = {
     Server: ServerConfig
     Runtime: ServerRuntimeOptions
-    Profiles: MemoryProfileStoreConfig
+    Database: SqliteAccountStoreConfig
+    Authentication: AuthenticationSettings
+    Logging: LoggingSettings
 }
 
 [<RequireQualifiedAccess>]
@@ -38,7 +50,13 @@ module Configuration =
     let defaults = {
         Server = ServerConfig.defaults
         Runtime = ServerRuntimeOptions.defaults
-        Profiles = { MailboxCapacity = 64; MaxPendingReplies = 64 }
+        Database = { DatabasePath = "data/dreamsleeve.db"; BusyTimeoutSeconds = 5 }
+        Authentication = {
+            ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowRegistration = true
+            CertificatePath = ""; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
+            Service = AuthService.defaults
+        }
+        Logging = ServerLogging.defaults
     }
 
     let private jsonOptions () =
@@ -86,9 +104,10 @@ module Configuration =
         | :? UnauthorizedAccessException as error -> Error error.Message
 
     let private validate (config: ApplicationConfig) =
-        if isNull (box config.Server) || isNull (box config.Runtime) || isNull (box config.Profiles)
+        if isNull (box config.Server) || isNull (box config.Runtime) || isNull (box config.Database) || isNull (box config.Authentication) || isNull (box config.Logging)
            || isNull (box config.Server.ChatInput) || isNull (box config.Runtime.Player)
-           || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence) then
+           || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
+           || isNull (box config.Authentication.Service) then
             Error "Configuration sections cannot be null."
         elif config.Runtime.MaxSessions > config.Server.PeerLimit then
             Error "Runtime.MaxSessions cannot exceed Server.PeerLimit."
@@ -96,12 +115,30 @@ module Configuration =
             Error "Server.MaxInitialPlayers must include every admitted session."
         elif config.Runtime.Chat.HistoryCapacity > config.Server.MaxRecentMessages then
             Error "Server.MaxRecentMessages must include the retained chat history."
-        elif config.Profiles.MailboxCapacity < 1 || config.Profiles.MaxPendingReplies < 1 then
-            Error "Profile mailbox and pending reply capacities must be positive."
+        elif String.IsNullOrWhiteSpace config.Database.DatabasePath
+             || config.Database.BusyTimeoutSeconds < 1 || config.Database.BusyTimeoutSeconds > 30 then
+            Error "Database path must be nonempty and busy timeout 1..30 seconds."
+        elif config.Authentication.RequestsPerMinute < 1 || config.Authentication.RequestsPerMinute > 100000
+             || config.Authentication.RequestTimeoutSeconds < 1 || config.Authentication.RequestTimeoutSeconds > 120
+             || isNull config.Authentication.CertificatePath then
+            Error "Invalid authentication request limits or certificate path."
+        elif not (AuthService.validate config.Authentication.Service).IsEmpty then
+            Error (String.concat " " (AuthService.validate config.Authentication.Service))
         else
-            ServerConfig.validate config.Server
-            |> Result.map (fun _ -> config)
-            |> Result.mapError (String.concat " ")
+            match Uri.TryCreate(config.Authentication.ListenUrl, UriKind.Absolute) with
+            | false, _ -> Error "Authentication.ListenUrl must be an absolute HTTP(S) URL."
+            | true, uri when not (String.IsNullOrEmpty uri.UserInfo) || uri.AbsolutePath <> "/"
+                             || not (String.IsNullOrEmpty uri.Query) || not (String.IsNullOrEmpty uri.Fragment) ->
+                Error "Authentication URL must contain only scheme, host and port."
+            | true, uri when uri.Scheme <> "http" && uri.Scheme <> "https" ->
+                Error "Authentication requires HTTP(S)."
+            | true, uri when uri.Scheme = "http" && not (config.Authentication.AllowInsecureLoopback
+                                  && (uri.Host = "127.0.0.1" || uri.Host = "[::1]" || uri.Host = "::1")) ->
+                Error "Unencrypted authentication is allowed only on an explicitly enabled literal loopback address."
+            | true, _ ->
+                ServerLogging.validate config.Logging
+                |> Result.bind (fun () -> ServerConfig.validate config.Server |> Result.mapError (String.concat " "))
+                |> Result.map (fun _ -> config)
 
     let rec private arguments configFile port (remainingArgs: string list) =
         match remainingArgs with

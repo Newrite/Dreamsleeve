@@ -1,17 +1,33 @@
-# Real ENet network load generator
+﻿# Real ENet network load generator
 
 This executable is a separate process from `Dreamsleeve.Server`. It uses yENet and
 protobuf from the existing Infrastructure references; no production code changes.
-It connects to IPv4 loopback on the selected port.
+It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v2 requires a ticket; no username enters OpenSession.
 
 ```powershell
 dotnet build tests/Dreamsleeve.Server.NetworkBenchmarks -c Release
-dotnet tests/Dreamsleeve.Server.NetworkBenchmarks/bin/Release/net10.0/Dreamsleeve.Server.NetworkBenchmarks.dll --port 8778 --clients 100 --seconds 10 --rate 10 --output build/network-100.json
+dotnet tests/Dreamsleeve.Server.NetworkBenchmarks/bin/Release/net10.0/Dreamsleeve.Server.NetworkBenchmarks.dll --auth-url http://127.0.0.1:8779 --port 8778 --clients 100 --seconds 10 --rate 10 --output build/network-100.json
 ```
 
 Start the server separately with sufficient finite capacities. The command does
 not start, stop or change server configuration. `Scripts/benchmark_enet.py` starts
 both processes and samples their resource usage separately.
+
+Each run registers fresh benchmark accounts through `POST /auth/register`. It obtains
+one ticket through `POST /auth/login` immediately before each peer's ENet connection,
+so tickets do not sit unused throughout a large registration phase. Passwords remain
+in the benchmark process and HTTP bodies; neither passwords nor tickets enter argv,
+logs or result JSON. Plain HTTP is accepted only on loopback; other endpoints require
+HTTPS. The fixed password belongs only to fresh disposable benchmark accounts.
+
+Registration happens before ENet starts and is reported as `registrationMs`. Login
+runs during connection ramp and is separately accumulated in `loginMs`; `rampMs`
+includes it, while transport/application opening timers start after that peer's login.
+The ramp services ENet between batches of at most eight admissions; HTTP waits can
+therefore add service delay to already connecting peers. Steady-state SendChat latency
+starts only after every peer is ready and the idle phase has completed. This tool is
+not an authentication throughput benchmark. Historical protocol-v1 measurements
+remain historical; protocol-v2 opening times are not directly comparable to them.
 
 `--rate` is aggregate SendChat requests per second across all clients; zero means
 idle sessions throughout the load interval. Senders rotate. Connections use one
@@ -20,7 +36,7 @@ opens in flight. These are independent protocol peers and profiles, not 1000 gam
 processes or 1000 independent IP addresses. No packet loss, latency or WAN jitter
 is injected. This measures the server plus local network/protobuf/ENet path.
 
-The generator services incoming events during every phase. Before `READY`, every
+After registration, the generator services incoming events through connection, load and cleanup phases, with the login waits described above. Before `READY`, every
 client must receive its SessionOpened. Self player IDs must be unique, and every
 client's online set must equal the exact set of all N self player IDs. Then it idles for three seconds before starting the requested workload.
 The measured load lasts the requested wall-clock duration; admission pressure may
@@ -43,13 +59,15 @@ opening latency, load/drain durations, actual send rate, time spent at the clien
 admission limits, peak in-flight messages, bounded diagnostic examples (first 64)
 and the full error count. Exit status is 0 for a healthy run, 1 for a failed run
 with a report, and 2 for invalid arguments or failure before a report can be made.
-Connection/open waits are bounded (30s per peer, 120s whole ramp), delivery drain
+HTTP calls are bounded at 30s each. Connection/open waits are bounded (30s per peer,
+max(120s, 2s × clients) whole ramp, including login); delivery drain
 is bounded at 30s, graceful disconnect at 10s. A failed run must not be interpreted
 as a successful throughput result even if it produced partial samples.
 
 Flushed stdout markers, consumed by the external measurement runner:
 
 ```text
+STAGE auth-register
 STAGE connecting
 READY clients=N ramp_ms=X
 STAGE idle
@@ -93,7 +111,11 @@ python Scripts/benchmark_enet.py --clients 100 500 1000 --rates 0 10 100 --secon
 ```
 
 An explicit `--output` must name a new directory. Every case starts a fresh real
-server process and a fresh generator process. The runner keeps full server and
+server process and a fresh generator process. Each case uses its own SQLite database
+in the case directory and an unused loopback HTTP port, explicitly enables test
+registration, and sets a finite 6000 requests/minute rate limit without changing
+production defaults. The real configured password hashing cost is retained. The
+runner keeps full server and
 client logs, the complete server configuration, client verification JSON, 100ms
 process samples, and summaries. Failed cases remain in the results and make the
 runner return a nonzero exit code. Processes started by the runner are cleaned
@@ -128,8 +150,8 @@ one core**: 0.25 means25% of one logical processor, not25% of the whole machine.
 Private bytes and working set cover only the named process, including managed
 and native memory. They are not live managed-heap size. Per-stage medians and
 sampled peaks can miss spikes shorter than100ms; GC and allocation rates are not
-measured. No forced GC is performed. Heap retention and the process-local
-profile store mean memory after disconnect need not return to the startup value.
+measured. No forced GC is performed. Heap retention, connection pools, and the ticket cache mean memory after
+disconnect need not return to the startup value.
 
 Stages are inferred from flushed stdout markers, observed at the next100ms
 sample. Startup is sampled for one second before client launch; after successful
@@ -144,3 +166,13 @@ capacity guarantee**. All peers share one generator loop and socket; client CPU,
 client parsing, scheduler delays and local UDP buffering can limit achieved
 throughput. Both processes compete on the same machine. There is no WAN loss,
 latency injection, production-size gameplay payload, or prolonged soak.
+
+For a short protocol/authentication integration check instead of the full matrix:
+
+```powershell
+python Scripts/benchmark_enet.py --clients 2 --rates 2 --seconds 1 --repetitions 1 --output build/network-auth-smoke
+```
+
+The runner's process deadline also bounds registration and login. If running large
+account counts on a slower machine, increase `--timeout` explicitly; do not lower
+the production password hashing policy to manufacture better chat benchmark results.

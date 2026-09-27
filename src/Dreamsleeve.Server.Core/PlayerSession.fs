@@ -8,7 +8,7 @@ open Dreamsleeve.Server.Domain
 [<RequireQualifiedAccess>]
 type PlayerSessionMessage =
     | Begin
-    | ProfileReplied of ProfileReply
+    | Authenticated of SessionAuthenticationReply
     | IdentityReplied of IdentityAdmission
     | ChatEvent of ChatRoomEvent
     | PresenceEvent of PresenceEvent
@@ -43,7 +43,7 @@ module PlayerSession =
         mutable PresenceAttached: bool
         mutable CloseSent: bool
         Pending: HashSet<uint64>
-        Profiles: AgentOutbox<ProfileRequest>
+        Authentication: AgentOutbox<SessionAuthenticationRequest>
         Chat: AgentOutbox<ChatRoomCommand>
         Presence: AgentOutbox<PresenceCommand>
         Host: AgentOutbox<SessionHostCommand>
@@ -120,37 +120,29 @@ module PlayerSession =
             state.Phase <- Resolving operationId
             let query = {
                 OperationId = operationId
-                Command = ProfileCommand.GetOrCreate(request.Username, request.DisplayName)
-                ReplyTo = address.Map PlayerSessionMessage.ProfileReplied
+                Ticket = request.SessionTicket
+                ReplyTo = address.Map PlayerSessionMessage.Authenticated
             }
-            if not (state.Profiles.TrySend(context, query)) then context.Abort()
+            if not (state.Authentication.TrySend(context, query)) then context.Abort()
         | Starting, None -> context.Abort()
         | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, _ | Closing, _ -> ()
 
-    let private profileReply (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: ProfileReply) =
+    let private authenticated (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: SessionAuthenticationReply) =
         match state.Phase with
         | Resolving operationId when reply.OperationId = operationId ->
             match reply.Result, reliable context with
-            | Ok (ProfileOutcome.Resolved profile), Some address ->
-                if profile.Username <> request.Username then
-                    close request state context "Profile identity does not match the request."
-                else
-                    state.Phase <- Reserving(Player.create profile)
-                    emit options request state context
-                        (SessionHostCommand.Reserve(request.ConnectionId, profile.PlayerId,
-                            address.Map PlayerSessionMessage.IdentityReplied)) |> ignore
+            | Ok profile, Some address ->
+                state.Phase <- Reserving(Player.create profile)
+                emit options request state context
+                    (SessionHostCommand.Reserve(request.ConnectionId, profile.PlayerId,
+                        address.Map PlayerSessionMessage.IdentityReplied)) |> ignore
 
-            | Error ProfileStoreError.UsernameTaken, _ ->
-                rejectOpening options request state context RequestRejectionCode.UsernameTaken "Username is taken."
-            | Error ProfileStoreError.IdExhausted, _ ->
-                close request state context "Profile ID allocation is exhausted."
-            | Error ProfileStoreError.Canceled, _ ->
-                close request state context "Profile resolution was canceled."
-            | Error (ProfileStoreError.Failed error), _ ->
-                close request state context $"Profile resolution failed: {error}"
-            | Ok (ProfileOutcome.Found _ | ProfileOutcome.Created _), _
-            | Ok (ProfileOutcome.Resolved _), None ->
-                close request state context "Unexpected profile reply."
+            | Error SessionAuthenticationError.InvalidTicket, _ ->
+                rejectOpening options request state context RequestRejectionCode.AuthenticationFailed "Session ticket is invalid or expired."
+            | Error SessionAuthenticationError.Unavailable, _ ->
+                rejectOpening options request state context RequestRejectionCode.Overloaded "Authentication is temporarily unavailable."
+            | Ok _, None ->
+                close request state context "Authentication reply cannot be applied."
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
     let private identityReply (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) reply =
@@ -294,7 +286,7 @@ module PlayerSession =
     let private handle (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) message = task {
         match message with
         | PlayerSessionMessage.Begin -> beginResolve request state context
-        | PlayerSessionMessage.ProfileReplied reply -> profileReply options request state context reply
+        | PlayerSessionMessage.Authenticated reply -> authenticated options request state context reply
         | PlayerSessionMessage.IdentityReplied reply -> identityReply options request state context reply
         | PlayerSessionMessage.ChatEvent event -> chatEvent options globalId request state context event
         | PlayerSessionMessage.PresenceEvent event -> presenceEvent options globalId request state context event
@@ -319,7 +311,7 @@ module PlayerSession =
     }
 
     let private isControl = function
-        | PlayerSessionMessage.Begin | PlayerSessionMessage.ProfileReplied _
+        | PlayerSessionMessage.Begin | PlayerSessionMessage.Authenticated _
         | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.ChatDetached _
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.Stop -> true
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Joined _)
@@ -331,7 +323,7 @@ module PlayerSession =
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Left _)
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.Update _ | PlayerSessionMessage.Read _ -> false
 
-    let start (options: PlayerSessionOptions) globalId profiles chat presence host (request: SessionOpenRequest) =
+    let start (options: PlayerSessionOptions) globalId authentication chat presence host (request: SessionOpenRequest) =
         let limits = [options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
@@ -346,7 +338,7 @@ module PlayerSession =
                 PresenceAttached = false
                 CloseSent = false
                 Pending = HashSet()
-                Profiles = AgentOutbox(1, profiles)
+                Authentication = AgentOutbox(1, authentication)
                 Chat = AgentOutbox(options.MaxPendingChat + 2, chat)
                 Presence = AgentOutbox(2, presence)
                 Host = AgentOutbox(options.MaxPendingOutput + 2, host)

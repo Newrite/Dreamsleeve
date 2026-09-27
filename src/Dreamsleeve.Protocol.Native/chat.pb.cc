@@ -146,10 +146,7 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 inline constexpr OpenSession::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        username_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        display_name_(
+        session_ticket_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()) {}
 
@@ -381,11 +378,9 @@ const ::uint32_t
         ~0u,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::OpenSession, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::OpenSession, _impl_.username_),
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::OpenSession, _impl_.display_name_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::OpenSession, _impl_.session_ticket_),
         0,
-        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SendChat, _impl_._has_bits_),
         5, // hasbit index offset
@@ -457,14 +452,14 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::Dreamsleeve::Protocol::Chat::ClientPacket)},
         {13, sizeof(::Dreamsleeve::Protocol::Chat::ServerPacket)},
         {32, sizeof(::Dreamsleeve::Protocol::Chat::OpenSession)},
-        {39, sizeof(::Dreamsleeve::Protocol::Chat::SendChat)},
-        {46, sizeof(::Dreamsleeve::Protocol::Chat::PlayerProfile)},
-        {55, sizeof(::Dreamsleeve::Protocol::Chat::ChatMessage)},
-        {68, sizeof(::Dreamsleeve::Protocol::Chat::SessionOpened)},
-        {79, sizeof(::Dreamsleeve::Protocol::Chat::ChatPublished)},
-        {84, sizeof(::Dreamsleeve::Protocol::Chat::PlayerJoined)},
-        {89, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLeft)},
-        {94, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
+        {37, sizeof(::Dreamsleeve::Protocol::Chat::SendChat)},
+        {44, sizeof(::Dreamsleeve::Protocol::Chat::PlayerProfile)},
+        {53, sizeof(::Dreamsleeve::Protocol::Chat::ChatMessage)},
+        {66, sizeof(::Dreamsleeve::Protocol::Chat::SessionOpened)},
+        {77, sizeof(::Dreamsleeve::Protocol::Chat::ChatPublished)},
+        {82, sizeof(::Dreamsleeve::Protocol::Chat::PlayerJoined)},
+        {87, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLeft)},
+        {92, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_ClientPacket_default_instance_._instance,
@@ -497,43 +492,45 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "r_joined\030\r \001(\0132\'.Dreamsleeve.Protocol.Ch"
     "at.PlayerJoinedH\000\022<\n\013player_left\030\016 \001(\0132%"
     ".Dreamsleeve.Protocol.Chat.PlayerLeftH\000B"
-    "\t\n\007payloadB\r\n\013_request_id\"5\n\013OpenSession"
-    "\022\020\n\010username\030\001 \001(\t\022\024\n\014display_name\030\002 \001(\t"
-    "\",\n\010SendChat\022\022\n\nchannel_id\030\001 \001(\004\022\014\n\004text"
-    "\030\002 \001(\t\"J\n\rPlayerProfile\022\021\n\tplayer_id\030\001 \001"
-    "(\004\022\020\n\010username\030\002 \001(\t\022\024\n\014display_name\030\003 \001"
-    "(\t\"\226\001\n\013ChatMessage\022\022\n\nmessage_id\030\001 \001(\004\022\022"
-    "\n\nchannel_id\030\002 \001(\004\0228\n\006author\030\003 \001(\0132(.Dre"
-    "amsleeve.Protocol.Chat.PlayerProfile\022\014\n\004"
-    "text\030\004 \001(\t\022\027\n\017sent_at_unix_ms\030\005 \001(\003\"\276\001\n\r"
-    "SessionOpened\022\026\n\016self_player_id\030\001 \001(\004\022\031\n"
-    "\021global_channel_id\030\002 \001(\004\0229\n\007players\030\003 \003("
-    "\0132(.Dreamsleeve.Protocol.Chat.PlayerProf"
-    "ile\022\?\n\017recent_messages\030\004 \003(\0132&.Dreamslee"
-    "ve.Protocol.Chat.ChatMessage\"H\n\rChatPubl"
-    "ished\0227\n\007message\030\001 \001(\0132&.Dreamsleeve.Pro"
-    "tocol.Chat.ChatMessage\"H\n\014PlayerJoined\0228"
-    "\n\006player\030\001 \001(\0132(.Dreamsleeve.Protocol.Ch"
-    "at.PlayerProfile\"\037\n\nPlayerLeft\022\021\n\tplayer"
-    "_id\030\001 \001(\004\"p\n\017RequestRejected\022=\n\004code\030\001 \001"
-    "(\0162/.Dreamsleeve.Protocol.Chat.RequestRe"
-    "jectionCode\022\017\n\007message\030\002 \001(\t\022\r\n\005field\030\003 "
-    "\001(\t*\370\002\n\024RequestRejectionCode\022&\n\"REQUEST_"
-    "REJECTION_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_"
-    "REJECTION_CODE_INVALID_REQUEST\020\001\022,\n(REQU"
-    "EST_REJECTION_CODE_SESSION_NOT_READY\020\002\022/"
-    "\n+REQUEST_REJECTION_CODE_SESSION_ALREADY"
-    "_OPEN\020\003\022)\n%REQUEST_REJECTION_CODE_USERNA"
-    "ME_TAKEN\020\004\022,\n(REQUEST_REJECTION_CODE_CHA"
-    "NNEL_NOT_FOUND\020\005\022-\n)REQUEST_REJECTION_CO"
-    "DE_NOT_CHANNEL_MEMBER\020\006\022%\n!REQUEST_REJEC"
-    "TION_CODE_OVERLOADED\020\007b\006proto3"
+    "\t\n\007payloadB\r\n\013_request_id\"I\n\013OpenSession"
+    "\022\026\n\016session_ticket\030\003 \001(\tJ\004\010\001\020\002J\004\010\002\020\003R\010us"
+    "ernameR\014display_name\",\n\010SendChat\022\022\n\nchan"
+    "nel_id\030\001 \001(\004\022\014\n\004text\030\002 \001(\t\"J\n\rPlayerProf"
+    "ile\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010username\030\002 \001(\t"
+    "\022\024\n\014display_name\030\003 \001(\t\"\226\001\n\013ChatMessage\022\022"
+    "\n\nmessage_id\030\001 \001(\004\022\022\n\nchannel_id\030\002 \001(\004\0228"
+    "\n\006author\030\003 \001(\0132(.Dreamsleeve.Protocol.Ch"
+    "at.PlayerProfile\022\014\n\004text\030\004 \001(\t\022\027\n\017sent_a"
+    "t_unix_ms\030\005 \001(\003\"\276\001\n\rSessionOpened\022\026\n\016sel"
+    "f_player_id\030\001 \001(\004\022\031\n\021global_channel_id\030\002"
+    " \001(\004\0229\n\007players\030\003 \003(\0132(.Dreamsleeve.Prot"
+    "ocol.Chat.PlayerProfile\022\?\n\017recent_messag"
+    "es\030\004 \003(\0132&.Dreamsleeve.Protocol.Chat.Cha"
+    "tMessage\"H\n\rChatPublished\0227\n\007message\030\001 \001"
+    "(\0132&.Dreamsleeve.Protocol.Chat.ChatMessa"
+    "ge\"H\n\014PlayerJoined\0228\n\006player\030\001 \001(\0132(.Dre"
+    "amsleeve.Protocol.Chat.PlayerProfile\"\037\n\n"
+    "PlayerLeft\022\021\n\tplayer_id\030\001 \001(\004\"p\n\017Request"
+    "Rejected\022=\n\004code\030\001 \001(\0162/.Dreamsleeve.Pro"
+    "tocol.Chat.RequestRejectionCode\022\017\n\007messa"
+    "ge\030\002 \001(\t\022\r\n\005field\030\003 \001(\t*\252\003\n\024RequestRejec"
+    "tionCode\022&\n\"REQUEST_REJECTION_CODE_UNSPE"
+    "CIFIED\020\000\022*\n&REQUEST_REJECTION_CODE_INVAL"
+    "ID_REQUEST\020\001\022,\n(REQUEST_REJECTION_CODE_S"
+    "ESSION_NOT_READY\020\002\022/\n+REQUEST_REJECTION_"
+    "CODE_SESSION_ALREADY_OPEN\020\003\022)\n%REQUEST_R"
+    "EJECTION_CODE_USERNAME_TAKEN\020\004\022,\n(REQUES"
+    "T_REJECTION_CODE_CHANNEL_NOT_FOUND\020\005\022-\n)"
+    "REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBE"
+    "R\020\006\022%\n!REQUEST_REJECTION_CODE_OVERLOADED"
+    "\020\007\0220\n,REQUEST_REJECTION_CODE_AUTHENTICAT"
+    "ION_FAILED\020\010b\006proto3"
 };
 static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    1870,
+    1940,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
@@ -554,7 +551,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_
   return file_level_enum_descriptors_chat_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t RequestRejectionCode_internal_data_[] = {
-    524288u, 0u, };
+    589824u, 0u, };
 // ===================================================================
 
 class ClientPacket::_Internal {
@@ -1637,8 +1634,7 @@ PROTOBUF_NDEBUG_INLINE OpenSession::Impl_::Impl_(
     [[maybe_unused]] const ::Dreamsleeve::Protocol::Chat::OpenSession& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        username_(arena, from.username_),
-        display_name_(arena, from.display_name_) {}
+        session_ticket_(arena, from.session_ticket_) {}
 
 OpenSession::OpenSession(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -1660,8 +1656,7 @@ PROTOBUF_NDEBUG_INLINE OpenSession::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        username_(arena),
-        display_name_(arena) {}
+        session_ticket_(arena) {}
 
 inline void OpenSession::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -1677,8 +1672,7 @@ inline void OpenSession::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.username_.Destroy();
-  this_._impl_.display_name_.Destroy();
+  this_._impl_.session_ticket_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -1725,16 +1719,16 @@ OpenSession::GetClassData() const {
   return OpenSession_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 0, 66, 2>
+const ::_pbi::TcParseTable<0, 1, 0, 60, 2>
 OpenSession::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(OpenSession, _impl_._has_bits_),
     0, // no _extensions_
-    2, 8,  // max_field_number, fast_idx_mask
+    3, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967292,  // skipmap
+    4294967291,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
+    1,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     OpenSession_class_data_.base(),
@@ -1744,28 +1738,21 @@ OpenSession::_table_ = {
     ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::OpenSession>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // string display_name = 2;
+    // string session_ticket = 3;
     {::_pbi::TcParser::FastUS1,
-     {18, 1, 0,
-      PROTOBUF_FIELD_OFFSET(OpenSession, _impl_.display_name_)}},
-    // string username = 1;
-    {::_pbi::TcParser::FastUS1,
-     {10, 0, 0,
-      PROTOBUF_FIELD_OFFSET(OpenSession, _impl_.username_)}},
+     {26, 0, 0,
+      PROTOBUF_FIELD_OFFSET(OpenSession, _impl_.session_ticket_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // string username = 1;
-    {PROTOBUF_FIELD_OFFSET(OpenSession, _impl_.username_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // string display_name = 2;
-    {PROTOBUF_FIELD_OFFSET(OpenSession, _impl_.display_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string session_ticket = 3;
+    {PROTOBUF_FIELD_OFFSET(OpenSession, _impl_.session_ticket_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
   // no aux_entries
   {{
-    "\45\10\14\0\0\0\0\0"
+    "\45\16\0\0\0\0\0\0"
     "Dreamsleeve.Protocol.Chat.OpenSession"
-    "username"
-    "display_name"
+    "session_ticket"
   }},
 };
 PROTOBUF_NOINLINE void OpenSession::Clear() {
@@ -1776,13 +1763,8 @@ PROTOBUF_NOINLINE void OpenSession::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      _impl_.username_.ClearNonDefaultToEmpty();
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      _impl_.display_name_.ClearNonDefaultToEmpty();
-    }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.session_ticket_.ClearNonDefaultToEmpty();
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1807,23 +1789,13 @@ PROTOBUF_NOINLINE void OpenSession::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // string username = 1;
+  // string session_ticket = 3;
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (!this_._internal_username().empty()) {
-      const ::std::string& _s = this_._internal_username();
+    if (!this_._internal_session_ticket().empty()) {
+      const ::std::string& _s = this_._internal_session_ticket();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Dreamsleeve.Protocol.Chat.OpenSession.username");
-      target = stream->WriteStringMaybeAliased(1, _s, target);
-    }
-  }
-
-  // string display_name = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (!this_._internal_display_name().empty()) {
-      const ::std::string& _s = this_._internal_display_name();
-      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Dreamsleeve.Protocol.Chat.OpenSession.display_name");
-      target = stream->WriteStringMaybeAliased(2, _s, target);
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Dreamsleeve.Protocol.Chat.OpenSession.session_ticket");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
     }
   }
 
@@ -1850,21 +1822,13 @@ PROTOBUF_NOINLINE void OpenSession::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // string username = 1;
+   {
+    // string session_ticket = 3;
+    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!this_._internal_username().empty()) {
+      if (!this_._internal_session_ticket().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
-                                        this_._internal_username());
-      }
-    }
-    // string display_name = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (!this_._internal_display_name().empty()) {
-        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
-                                        this_._internal_display_name());
+                                        this_._internal_session_ticket());
       }
     }
   }
@@ -1886,23 +1850,12 @@ void OpenSession::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!from._internal_username().empty()) {
-        _this->_internal_set_username(from._internal_username());
-      } else {
-        if (_this->_impl_.username_.IsDefault()) {
-          _this->_internal_set_username("");
-        }
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (!from._internal_display_name().empty()) {
-        _this->_internal_set_display_name(from._internal_display_name());
-      } else {
-        if (_this->_impl_.display_name_.IsDefault()) {
-          _this->_internal_set_display_name("");
-        }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!from._internal_session_ticket().empty()) {
+      _this->_internal_set_session_ticket(from._internal_session_ticket());
+    } else {
+      if (_this->_impl_.session_ticket_.IsDefault()) {
+        _this->_internal_set_session_ticket("");
       }
     }
   }
@@ -1925,8 +1878,7 @@ void OpenSession::InternalSwap(OpenSession* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.username_, &other->_impl_.username_, arena);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.display_name_, &other->_impl_.display_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.session_ticket_, &other->_impl_.session_ticket_, arena);
 }
 
 ::google::protobuf::Metadata OpenSession::GetMetadata() const {

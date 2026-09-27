@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.Tests.ServerRuntimeTests
+﻿module Dreamsleeve.Server.Tests.ServerRuntimeTests
 
 open System
 open System.Collections.Concurrent
@@ -7,7 +7,7 @@ open System.Threading.Tasks
 open Google.Protobuf
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Core
-open Dreamsleeve.Server.Infrastructure
+open Microsoft.Extensions.Logging.Abstractions
 open Dreamsleeve.Protocol.Chat
 open Expecto
 open AgentTests
@@ -20,7 +20,33 @@ let private packet requestId payload =
     payload packet
     packet.ToByteArray()
 
-let private opening name = packet 1UL (fun packet -> packet.OpenSession <- OpenSession(Username = name, DisplayName = name))
+let private ticket (name: string) = name.PadRight(43, '_')
+let private opening name = packet 1UL (fun packet -> packet.OpenSession <- OpenSession(SessionTicket = ticket name))
+
+// Authentication is a controlled dependency in runtime tests; account/password/ticket
+// consumption semantics are verified by authentication service tests.
+let private createAuthentication () =
+    let identities =
+        [ "alice"; "bob"; "same"; "abandoned"; "healthy"; "shutdown"; "dependency";
+          "race"; "silent"; "once"; "noack"; "survivor"; "stopnoack" ]
+        |> List.mapi (fun index name ->
+            ticket name,
+            Dreamsleeve.Server.Domain.PlayerData.create
+                (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
+                (Dreamsleeve.Server.Domain.Username.create 32 name |> ok)
+                (Dreamsleeve.Server.Domain.DisplayName.create 64 name |> ok))
+        |> Map.ofList
+    let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
+        OperationId = request.OperationId
+        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok profile | None -> Error SessionAuthenticationError.InvalidTicket)
+    }
+    Agent.Start(AgentOptions.create "fixture-authentication",
+        AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
+
+let private authentication (agent: Agent<SessionAuthenticationRequest>) : SessionAuthenticator = {
+    Requests = agent.Ref.TryReliable().Value
+    Completion = agent.Completion
+}
 let private chat requestId text = packet requestId (fun packet -> packet.SendChat <- SendChat(ChannelId = 1UL, Text = text))
 
 type private Fixture = {
@@ -28,7 +54,7 @@ type private Fixture = {
     Input: ConcurrentQueue<ServerTransportEvent>
     Output: Channel<Guid * ServerPacket>
     Closed: Channel<Guid>
-    Profiles: Agent<ProfileRequest>
+    Authentication: Agent<SessionAuthenticationRequest>
     IgnoreClose: ConcurrentDictionary<Guid, unit>
     Reset: Channel<Guid>
 }
@@ -38,7 +64,7 @@ let private post (agent: Agent<_>) command = task {
     equal AgentPostResult.Posted posted
 }
 
-let private withRuntimeUsing options createProfiles run = task {
+let private withRuntimeUsing options createAuthentication run = task {
     let input = ConcurrentQueue<ServerTransportEvent>()
     let output = Channel.CreateUnbounded<Guid * ServerPacket>()
     let closed = Channel.CreateUnbounded<Guid>()
@@ -60,10 +86,9 @@ let private withRuntimeUsing options createProfiles run = task {
         Reset = fun id -> reset.Writer.TryWrite id |> ignore
         Dispose = ignore
     }
-    use profiles = createProfiles ()
-    let diagnostics = ConcurrentQueue<string>()
-    use runtime = ServerRuntime.start options ServerConfig.defaults profiles transport diagnostics.Enqueue |> ok
-    let fixture = { Runtime = runtime; Input = input; Output = output; Closed = closed; Profiles = profiles; IgnoreClose = ignoreClose; Reset = reset }
+    use authenticator = createAuthentication ()
+    use runtime = ServerRuntime.start options ServerConfig.defaults (authentication authenticator) transport NullLogger.Instance |> ok
+    let fixture = { Runtime = runtime; Input = input; Output = output; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
         if not runtime.Completion.IsCompleted then
@@ -74,7 +99,7 @@ let private withRuntimeUsing options createProfiles run = task {
 }
 
 let private withRuntime options run =
-    withRuntimeUsing options (fun () -> MemoryProfileStore.start { MailboxCapacity = 64; MaxPendingReplies = 64 } |> ok) run
+    withRuntimeUsing options createAuthentication run
 
 let private connect fixture name =
     let id = Guid.NewGuid()
@@ -199,29 +224,29 @@ let tests = testList "ServerRuntime" [
             equal "still alive" response.ChatPublished.Message.Text
         })
     }
-    testTask "shutdown drains children while preserving caller-owned profiles" {
+    testTask "shutdown drains children while preserving caller-owned authenticator" {
         do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
             let first = connect fixture "shutdown"
             let! _ = welcome fixture first
             do! post fixture.Runtime ServerRuntimeMessage.Stop
             do! awaitUnit fixture.Runtime.Completion
-            check (not fixture.Profiles.Completion.IsCompleted) "Runtime stopped shared profile storage."
+            check (not fixture.Authentication.Completion.IsCompleted) "Runtime stopped shared authentication."
         })
     }
     testTask "shared dependency termination is observed and terminates runtime" {
         do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
             let first = connect fixture "dependency"
             let! _ = welcome fixture first
-            fixture.Profiles.Abort()
+            fixture.Authentication.Abort()
             let! failure = terminal fixture.Runtime.Completion
             check failure.IsSome "Dependency loss must be observable."
         })
     }
-    testTask "late profile reply after disconnect cannot revive or reserve the old route" {
-        let requests = Channel.CreateUnbounded<ProfileRequest>()
-        let collect (_: AgentContext<ProfileRequest>) request = task { requests.Writer.TryWrite request |> ignore }
-        let createProfiles () = Agent.Start(AgentOptions.create "controlled-profiles", collect)
-        do! withRuntimeUsing ServerRuntimeOptions.defaults createProfiles (fun fixture -> task {
+    testTask "late authentication reply after disconnect cannot revive or reserve the old route" {
+        let requests = Channel.CreateUnbounded<SessionAuthenticationRequest>()
+        let collect (_: AgentContext<SessionAuthenticationRequest>) request = task { requests.Writer.TryWrite request |> ignore }
+        let createAuthentication () = Agent.Start(AgentOptions.create "controlled-authenticator", collect)
+        do! withRuntimeUsing ServerRuntimeOptions.defaults createAuthentication (fun fixture -> task {
             let abandoned = connect fixture "race"
             let! oldRequest = receive requests
             fixture.Input.Enqueue(ServerTransportEvent.Disconnected abandoned)
@@ -235,8 +260,8 @@ let tests = testList "ServerRuntime" [
                     (Dreamsleeve.Server.Domain.PlayerId.create 42UL |> ok)
                     (Dreamsleeve.Server.Domain.Username.create 32 "race" |> ok)
                     (Dreamsleeve.Server.Domain.DisplayName.create 64 "Race" |> ok)
-            let respond (request: ProfileRequest) =
-                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok (ProfileOutcome.Resolved profile) }
+            let respond (request: SessionAuthenticationRequest) =
+                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok profile }
             equal AgentTryDeliveryResult.Closed (respond oldRequest)
             equal AgentTryDeliveryResult.Posted (respond newRequest)
             let! snapshot = welcome fixture replacement
@@ -246,17 +271,17 @@ let tests = testList "ServerRuntime" [
             equal 1 status.Reservations
         })
     }
-    testTask "one application deadline covers a live store that never replies" {
-        let requests = Channel.CreateUnbounded<ProfileRequest>()
-        let collect (_: AgentContext<ProfileRequest>) request = task { requests.Writer.TryWrite request |> ignore }
+    testTask "one application deadline covers a live authenticator that never replies" {
+        let requests = Channel.CreateUnbounded<SessionAuthenticationRequest>()
+        let collect (_: AgentContext<SessionAuthenticationRequest>) request = task { requests.Writer.TryWrite request |> ignore }
         let options = { ServerRuntimeOptions.defaults with OpenTimeoutMs = 100 }
-        do! withRuntimeUsing options (fun () -> Agent.Start(AgentOptions.create "silent-profiles", collect)) (fun fixture -> task {
+        do! withRuntimeUsing options (fun () -> Agent.Start(AgentOptions.create "silent-authenticator", collect)) (fun fixture -> task {
             let connection = connect fixture "silent"
             let! _ = receive requests
             let! closed = receive fixture.Closed
             equal connection closed
             do! empty fixture
-            check (not fixture.Profiles.Completion.IsCompleted) "A live but silent shared store was killed."
+            check (not fixture.Authentication.Completion.IsCompleted) "A live but silent authenticator was killed."
         })
     }
 
@@ -271,14 +296,14 @@ let tests = testList "ServerRuntime" [
         })
     }
     testCase "transport blocking interval must fit runtime deadlines" (fun () ->
-        use profiles = MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = 1 } |> ok
+        use authenticator = createAuthentication ()
         let transport = {
             Poll = fun () -> failwith "Invalid runtime must not poll."
             Send = fun _ -> failwith "Invalid runtime must not send."
             Close = ignore; Reset = ignore; Dispose = ignore
         }
         let config = { ServerConfig.defaults with ServiceTimeoutMs = UInt32.MaxValue }
-        match ServerRuntime.start ServerRuntimeOptions.defaults config profiles transport ignore with
+        match ServerRuntime.start ServerRuntimeOptions.defaults config (authentication authenticator) transport NullLogger.Instance with
         | Error errors -> check (errors |> List.exists (fun error -> error.Contains "deadlines")) "Deadline validation missing."
         | Ok runtime -> runtime.Abort(); failwith "Invalid runtime started.")
 

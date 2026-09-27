@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 1;
+  inline constexpr std::uint32_t Version = 2;
 
   enum class ErrorCode
   {
@@ -33,8 +33,7 @@ export namespace Dreamsleeve::Client::Wire
   struct OpenSession
   {
     std::uint64_t requestId{};
-    std::string   username;
-    std::string   displayName;
+    std::string   sessionTicket;
   };
 
   using ClientRequest = std::variant<OpenSession, SendChat>;

@@ -1,0 +1,224 @@
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <winhttp.h>
+
+#include "AuthHttp.h"
+#include <glaze/glaze.hpp>
+#include <algorithm>
+#include <cstdint>
+#include <chrono>
+#include <iostream>
+#include <memory>
+#include <utility>
+#include <vector>
+
+namespace Dreamsleeve::Client::Dev::Auth
+{
+    struct LoginRequest { std::string_view username; std::string_view password; };
+    struct RegisterRequest { std::string_view username; std::string_view displayName; std::string_view password; };
+    struct LoginResponse
+    {
+      std::string sessionTicket;
+      std::uint64_t expiresInSeconds{};
+      std::uint64_t playerId{};
+      std::string username;
+      std::string displayName;
+    };
+
+  namespace
+  {
+    struct HandleCloser
+    {
+      void operator()(void* value) const noexcept { if (value) WinHttpCloseHandle(value); }
+    };
+    using Handle = std::unique_ptr<void, HandleCloser>;
+
+    struct Endpoint
+    {
+      std::wstring host;
+      INTERNET_PORT port{};
+      bool secure{};
+    };
+
+    struct HttpResponse { DWORD status{}; std::string body; };
+
+    auto SystemError(std::string_view operation)
+    {
+      return std::unexpected{std::string(operation) + " failed (Windows " + std::to_string(GetLastError()) + ")"};
+    }
+
+    Result<std::wstring> Wide(std::string_view text)
+    {
+      if (text.size() > 8192) return std::unexpected{"Auth URL is too long"};
+      const int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+      if (count == 0) return SystemError("UTF-8 URL conversion");
+      std::wstring result(count, L'\0');
+      if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), count) == 0)
+        return SystemError("UTF-8 URL conversion");
+      return result;
+    }
+
+    Result<Endpoint> ParseUrl(std::string_view url)
+    {
+      auto wide = Wide(url);
+      if (!wide) return std::unexpected{wide.error()};
+      if (wide->find(L'\0') != std::wstring::npos) return std::unexpected{"Invalid auth URL"};
+
+      URL_COMPONENTS parts{};
+      parts.dwStructSize = sizeof(parts);
+      parts.dwSchemeLength = parts.dwHostNameLength = parts.dwUserNameLength = parts.dwPasswordLength =
+        parts.dwUrlPathLength = parts.dwExtraInfoLength = static_cast<DWORD>(-1);
+      if (!WinHttpCrackUrl(wide->c_str(), static_cast<DWORD>(wide->size()), 0, &parts)) return SystemError("Auth URL parsing");
+      if (parts.dwUserNameLength != 0 || parts.dwPasswordLength != 0 || parts.dwExtraInfoLength != 0 || parts.dwHostNameLength == 0)
+        return std::unexpected{"Auth URL must not contain credentials, query or fragment"};
+      const std::wstring_view path{parts.lpszUrlPath, parts.dwUrlPathLength};
+      if (!path.empty() && path != L"/") return std::unexpected{"Auth URL must be an origin without a path"};
+      if (parts.nScheme != INTERNET_SCHEME_HTTP && parts.nScheme != INTERNET_SCHEME_HTTPS)
+        return std::unexpected{"Auth URL requires HTTP or HTTPS"};
+
+      Endpoint result{std::wstring{parts.lpszHostName, parts.dwHostNameLength}, parts.nPort, parts.nScheme == INTERNET_SCHEME_HTTPS};
+      if (!result.secure)
+      {
+        if (_wcsicmp(result.host.c_str(), L"localhost") == 0) result.host = L"127.0.0.1";
+        if (result.host != L"127.0.0.1" && result.host != L"::1" && result.host != L"[::1]")
+          return std::unexpected{"Plain HTTP authentication is permitted only on loopback; use HTTPS remotely"};
+      }
+      return result;
+    }
+
+    Result<HttpResponse> Post(std::string_view url, const wchar_t* path, const std::string& body)
+    {
+      auto endpoint = ParseUrl(url);
+      if (!endpoint) return std::unexpected{endpoint.error()};
+      if (body.size() > 16384) return std::unexpected{"Authentication request is too large"};
+
+      Handle session{WinHttpOpen(L"Dreamsleeve.Client.Dev/2", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME,
+                                 WINHTTP_NO_PROXY_BYPASS, 0)};
+      if (!session) return SystemError("WinHttpOpen");
+      if (!WinHttpSetTimeouts(session.get(), 5000, 5000, 5000, 5000)) return SystemError("Auth timeout configuration");
+      Handle connection{WinHttpConnect(session.get(), endpoint->host.c_str(), endpoint->port, 0)};
+      if (!connection) return SystemError("WinHttpConnect");
+      Handle request{WinHttpOpenRequest(connection.get(), L"POST", path, nullptr, WINHTTP_NO_REFERER,
+                                       WINHTTP_DEFAULT_ACCEPT_TYPES, endpoint->secure ? WINHTTP_FLAG_SECURE : 0)};
+      if (!request) return SystemError("WinHttpOpenRequest");
+
+      DWORD redirects = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+      DWORD disabled = WINHTTP_DISABLE_COOKIES | WINHTTP_DISABLE_AUTHENTICATION;
+      if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_REDIRECT_POLICY, &redirects, sizeof(redirects))
+          || !WinHttpSetOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)))
+        return SystemError("Auth request policy");
+      // HTTPS uses WinHTTP's normal certificate and hostname validation.
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+      constexpr wchar_t headers[] = L"Content-Type: application/json\r\nAccept: application/json\r\n";
+      if (!WinHttpSendRequest(request.get(), headers, static_cast<DWORD>(-1), const_cast<char*>(body.data()),
+                              static_cast<DWORD>(body.size()), static_cast<DWORD>(body.size()), 0)
+          || !WinHttpReceiveResponse(request.get(), nullptr))
+        return SystemError("Authentication request");
+
+      HttpResponse result;
+      DWORD statusSize = sizeof(result.status);
+      if (!WinHttpQueryHeaders(request.get(), WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                               WINHTTP_HEADER_NAME_BY_INDEX, &result.status, &statusSize, WINHTTP_NO_HEADER_INDEX))
+        return SystemError("Authentication status");
+      for (;;)
+      {
+        if (std::chrono::steady_clock::now() >= deadline) return std::unexpected{"Authentication response timed out"};
+        char chunk[4096];
+        DWORD read{};
+        if (!WinHttpReadData(request.get(), chunk, sizeof(chunk), &read)) return SystemError("Authentication response");
+        if (read == 0) break;
+        if (result.body.size() + read > 16384) return std::unexpected{"Authentication response is too large"};
+        result.body.append(chunk, read);
+      }
+      return result;
+    }
+
+    Result<void> CheckPassword(std::string_view password)
+    {
+      if (password.size() < 12 || password.size() > 128) return std::unexpected{"Password must be 12 to 128 UTF-8 bytes"};
+      return {};
+    }
+
+    Result<std::string> PasswordUtf8(std::wstring& value)
+    {
+      const int count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
+      std::string result(count, '\0');
+      const bool converted = count > 0 && WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
+                                                           result.data(), count, nullptr, nullptr) != 0;
+      SecureZeroMemory(value.data(), value.size() * sizeof(wchar_t));
+      if (!converted) return std::unexpected{"Password must contain valid Unicode"};
+      if (auto checked = CheckPassword(result); !checked) return std::unexpected{checked.error()};
+      return result;
+    }
+  }
+
+  Result<void> ValidateUrl(std::string_view url)
+  {
+    auto parsed = ParseUrl(url);
+    if (!parsed) return std::unexpected{parsed.error()};
+    return {};
+  }
+
+  Result<std::string> ReadPassword()
+  {
+    SetLastError(ERROR_SUCCESS);
+    const DWORD required = GetEnvironmentVariableW(L"DREAMSLEEVE_PASSWORD", nullptr, 0);
+    if (required > 0)
+    {
+      if (required > 129) return std::unexpected{"Password exceeds the maximum length"};
+      std::wstring value(required, L'\0');
+      const DWORD read = GetEnvironmentVariableW(L"DREAMSLEEVE_PASSWORD", value.data(), required);
+      if (read == 0 || read >= required) return SystemError("Password environment read");
+      value.resize(read);
+      return PasswordUtf8(value);
+    }
+
+    if (GetLastError() == ERROR_SUCCESS) return std::unexpected{"Password environment value is empty"};
+
+    const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD mode{};
+    if (!GetConsoleMode(input, &mode)) return std::unexpected{"Set DREAMSLEEVE_PASSWORD for redirected input"};
+    if (!SetConsoleMode(input, mode & ~ENABLE_ECHO_INPUT)) return SystemError("Password prompt");
+    std::cout << "Password: " << std::flush;
+    std::wstring value(130, L'\0');
+    DWORD read{};
+    const bool readOk = ReadConsoleW(input, value.data(), static_cast<DWORD>(value.size()), &read, nullptr) != 0;
+    SetConsoleMode(input, mode);
+    std::cout << '\n';
+    if (!readOk) return SystemError("Password input");
+    if (read == value.size()) return std::unexpected{"Password exceeds the maximum length"};
+    value.resize(read);
+    while (!value.empty() && (value.back() == L'\r' || value.back() == L'\n')) value.pop_back();
+    return PasswordUtf8(value);
+  }
+
+  Result<void> Register(std::string_view url, const Credentials& credentials, std::string_view displayName)
+  {
+    if (auto checked = CheckPassword(credentials.password); !checked) return checked;
+    auto body = glz::write_json(RegisterRequest{credentials.username, displayName, credentials.password});
+    if (!body) return std::unexpected{"Cannot encode registration request"};
+    auto response = Post(url, L"/auth/register", *body);
+    SecureZeroMemory(body->data(), body->size());
+    if (!response) return std::unexpected{response.error()};
+    if (response->status != 201) return std::unexpected{"Registration failed (HTTP " + std::to_string(response->status) + ")"};
+    return {};
+  }
+
+  Result<std::string> Login(std::string_view url, const Credentials& credentials)
+  {
+    if (auto checked = CheckPassword(credentials.password); !checked) return std::unexpected{checked.error()};
+    auto body = glz::write_json(LoginRequest{credentials.username, credentials.password});
+    if (!body) return std::unexpected{"Cannot encode login request"};
+    auto response = Post(url, L"/auth/login", *body);
+    SecureZeroMemory(body->data(), body->size());
+    if (!response) return std::unexpected{response.error()};
+    if (response->status != 200) return std::unexpected{"Login failed (HTTP " + std::to_string(response->status) + ")"};
+    LoginResponse decoded;
+    const auto error = glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, response->body);
+    SecureZeroMemory(response->body.data(), response->body.size());
+    if (error || decoded.playerId == 0 || decoded.expiresInSeconds == 0 || decoded.sessionTicket.size() != 43)
+      return std::unexpected{"Invalid login response"};
+    return std::move(decoded.sessionTicket);
+  }
+}

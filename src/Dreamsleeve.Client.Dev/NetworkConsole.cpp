@@ -1,3 +1,4 @@
+#include "AuthHttp.h"
 import std;
 import Dreamsleeve.Client.Runtime;
 import DreamNet.Runtime;
@@ -109,8 +110,24 @@ namespace
     std::atomic_bool   failed{};
   };
 
+  namespace Auth = Dreamsleeve::Client::Dev::Auth;
+
+  void ConnectAuthenticated(ClientRuntime& client, std::string_view authUrl, const Auth::Credentials& credentials)
+  {
+    if (client.Phase() != SessionPhase::Disconnected && client.Phase() != SessionPhase::Faulted)
+    {
+      std::osyncstream(std::cerr) << "A session is already active\n";
+      return;
+    }
+    auto ticket = Auth::Login(authUrl, credentials);
+    if (!ticket)
+      std::osyncstream(std::cerr) << "Auth: " << ticket.error() << '\n';
+    else
+      Report(client.Connect(std::move(*ticket)));
+  }
+
   void RunNetwork(std::stop_token stop, Configuration config, ClientExchange& exchange,
-                  const std::string& username, const std::string& displayName, NetworkControl& control)
+                  const std::string& authUrl, const Auth::Credentials& credentials, NetworkControl& control)
   {
     auto created = ClientRuntime::TryCreate(config, exchange);
     if (!created)
@@ -123,7 +140,7 @@ namespace
     }
 
     auto client = std::move(*created);
-    Report(client->Connect(username, displayName));
+    ConnectAuthenticated(*client, authUrl, credentials);
 
     auto last = SessionPhase::Disconnected;
 
@@ -136,7 +153,10 @@ namespace
       }
 
       for (const auto action : pending)
-        Report(action == Action::Connect ? client->Connect(username, displayName) : client->Disconnect());
+      {
+        if (action == Action::Connect) ConnectAuthenticated(*client, authUrl, credentials);
+        else Report(client->Disconnect());
+      }
 
       Report(client->Poll(10));
 
@@ -160,9 +180,9 @@ namespace
 
 int RunNetworkConsole(int argc, char* argv[])
 {
-  if (argc != 5 && argc != 6)
+  if (argc < 5 || (argc - 5) % 2 != 0)
   {
-    std::cerr << "Usage: Dreamsleeve.Client.Dev --connect <IPv4> <port> <username> [displayName]\n";
+    std::cerr << "Usage: Dreamsleeve.Client.Dev --connect <IPv4> <port> <username> [--auth-url <origin>] [--register <displayName>]\n";
     return 2;
   }
 
@@ -187,7 +207,37 @@ int RunNetworkConsole(int argc, char* argv[])
 
   Configuration config;
   config.serverAddress = *address;
-  const std::string username{argv[4]}, displayName{argc == 6 ? argv[5] : argv[4]};
+  std::string authUrl = "http://127.0.0.1:8779";
+  std::optional<std::string> registerName;
+  for (int index = 5; index < argc; index += 2)
+  {
+    const std::string_view option{argv[index]};
+    if (option == "--auth-url") authUrl = argv[index + 1];
+    else if (option == "--register") registerName = argv[index + 1];
+    else return 2;
+  }
+  if (auto valid = Auth::ValidateUrl(authUrl); !valid)
+  {
+    std::cerr << "Auth: " << valid.error() << '\n';
+    return 2;
+  }
+  auto password = Auth::ReadPassword();
+  if (!password)
+  {
+    std::cerr << "Auth: " << password.error() << '\n';
+    return 2;
+  }
+  const Auth::Credentials credentials{argv[4], std::move(*password)};
+  if (registerName)
+  {
+    auto registered = Auth::Register(authUrl, credentials, *registerName);
+    if (!registered)
+    {
+      std::cerr << "Auth: " << registered.error() << '\n';
+      return 1;
+    }
+    std::cout << "Account registered\n";
+  }
 
   auto exchange = ClientExchange::TryCreate(8, 8);
   if (!exchange)
@@ -197,7 +247,7 @@ int RunNetworkConsole(int argc, char* argv[])
   }
 
   NetworkControl control;
-  std::jthread worker(RunNetwork, config, std::ref(**exchange), std::cref(username), std::cref(displayName), std::ref(control));
+  std::jthread worker(RunNetwork, config, std::ref(**exchange), std::cref(authUrl), std::cref(credentials), std::ref(control));
   std::uint64_t generation{};
   Domain::ChatChannelId channel{};
 

@@ -120,14 +120,24 @@ class Child:
         self.process.stdout.close()
 
 
-def free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as endpoint:
+def free_port(kind=socket.SOCK_DGRAM):
+    with socket.socket(socket.AF_INET, kind) as endpoint:
         endpoint.bind(("127.0.0.1", 0))
         return endpoint.getsockname()[1]
 
 
-def configuration(clients, port, profile):
+def configuration(clients, port, profile, case):
     config = json.loads((ROOT / "src/Dreamsleeve.Server/server.example.json").read_text(encoding="utf-8-sig"))
+    config.pop("Profiles", None)
+    config["Database"] = {"DatabasePath": str((case / "accounts.sqlite").resolve()), "BusyTimeoutSeconds": 5}
+    config["Authentication"] = {
+        "ListenUrl": f"http://127.0.0.1:{free_port(socket.SOCK_STREAM)}",
+        "AllowInsecureLoopback": True, "AllowRegistration": True, "CertificatePath": "",
+        "RequestsPerMinute": 6000, "RequestTimeoutSeconds": 15,
+        "Service": {"MailboxCapacity": 64, "MaxConcurrentOperations": 4, "MaxTickets": 4096,
+                    "TicketLifetimeSeconds": 60, "PasswordIterations": 210000},
+    }
+    config["Logging"]["FilePath"] = str((case / "server-.json").resolve())
     server, runtime = config["Server"], config["Runtime"]
     server.update(Port=port, PeerLimit=max(32, clients))
     runtime.update(MaxSessions=max(32, clients), ControlReserve=max(128, 3 * clients + 4))
@@ -161,7 +171,7 @@ def run_case(args, clients, rate, repetition, destination):
     name = f"n{clients}-r{rate:g}-run{repetition}"
     case = destination / name
     case.mkdir()
-    config = configuration(clients, free_port(), args.profile)
+    config = configuration(clients, free_port(), args.profile, case)
     config_path = case / "server.json"
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     env = os.environ.copy()
@@ -185,7 +195,7 @@ def run_case(args, clients, rate, repetition, destination):
         for _ in range(10):
             samples.append({"seconds": time.monotonic() - started, "phase": phase, "server": server.metrics.sample()})
             time.sleep(0.1)
-        client = Child(["dotnet", str(CLIENT), "--port", str(config["Server"]["Port"]),
+        client = Child(["dotnet", str(CLIENT), "--auth-url", config["Authentication"]["ListenUrl"], "--port", str(config["Server"]["Port"]),
             "--clients", str(clients), "--seconds", str(args.seconds), "--rate", str(rate),
             "--output", str(case / "client.json")], case / "client.log", env)
         while True:

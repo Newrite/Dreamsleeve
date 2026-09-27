@@ -25,7 +25,7 @@ type ChatCodecError = {
 
 [<RequireQualifiedAccess>]
 type ChatCommand =
-    | OpenSession of Username * DisplayName
+    | OpenSession of sessionTicket: string
     | SendChat of ChatChannelId * ChatMessageText
 
 type ChatRequest = {
@@ -63,7 +63,7 @@ type ChatCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ChatCodec =
     [<Literal>]
-    let Version = 1u
+    let Version = 2u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -80,10 +80,12 @@ module ChatCodec =
         | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.OpenSession ->
             let source = packet.OpenSession
 
-            match Username.create limits.Username source.Username, DisplayName.create limits.DisplayName source.DisplayName with
-            | Ok username, Ok displayName ->
-                Ok { RequestId = packet.RequestId; Command = ChatCommand.OpenSession(username, displayName) }
-            | Error error, _ | _, Error error -> Error(domainError error)
+            let ticket = source.SessionTicket
+            if isNull ticket || ticket.Length <> 43
+               || ticket |> Seq.exists (fun ch -> not (Char.IsAsciiLetterOrDigit ch || ch = '-' || ch = '_')) then
+                fail requestId (ChatCodecFailure.InvalidPayload "session_ticket")
+            else
+                Ok { RequestId = packet.RequestId; Command = ChatCommand.OpenSession ticket }
 
         | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.SendChat ->
             let source = packet.SendChat

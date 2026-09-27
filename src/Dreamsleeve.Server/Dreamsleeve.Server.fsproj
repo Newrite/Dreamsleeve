@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -6,13 +6,19 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Logging.fs"/>
         <Compile Include="Configuration.fs"/>
+        <Compile Include="AuthenticationHttp.fs"/>
         <Compile Include="Program.fs"/>
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Dreamsleeve.Server.Core\Dreamsleeve.Server.Core.fsproj" />
       <ProjectReference Include="..\Dreamsleeve.Server.Infrastructure\Dreamsleeve.Server.Infrastructure.fsproj" />
+        <PackageReference Include="Serilog" Version="4.4.0" />
+        <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+        <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     </ItemGroup>
 
 </Project>

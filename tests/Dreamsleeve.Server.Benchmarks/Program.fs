@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.Benchmarks.Program
+﻿module Dreamsleeve.Server.Benchmarks.Program
 
 open System
 open System.Collections.Concurrent
@@ -57,10 +57,10 @@ let private post (agent: Agent<'a>) command = task {
 }
 
 let private start count (probe: Probe) = task {
-    let profiles = MemoryProfileStore.start { MailboxCapacity = 128; MaxPendingReplies = 128 } |> ok
     let ids = Array.init count (fun _ -> Guid.NewGuid())
     let settings = { ServerConfig.defaults with PeerLimit = max 32 count; MaxRecentMessages = 64 }
 #if BASELINE
+    let profiles = MemoryProfileStore.start { MailboxCapacity = 128; MaxPendingReplies = 128 } |> ok
     let codec = ChatCodec.create settings |> ok
     let handleOutput _ output = task {
         match output with
@@ -103,6 +103,22 @@ let private start count (probe: Probe) = task {
         do! guardUnit profiles.Completion
     }
 #else
+    let tickets = Array.init count (fun index -> (sprintf "bench%d" index).PadRight(43, '_'))
+    let identities =
+        tickets |> Array.mapi (fun index ticket ->
+            ticket, PlayerData.create (PlayerId.create (uint64 index + 1UL) |> ok)
+                        (Username.create 32 (sprintf "bench%d" index) |> ok)
+                        (DisplayName.create 64 (sprintf "Bench %d" index) |> ok))
+        |> Map.ofArray
+    let authenticate (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
+        OperationId = request.OperationId
+        Result = match Map.tryFind request.Ticket identities with
+                 | Some profile -> Ok profile
+                 | None -> Error SessionAuthenticationError.InvalidTicket
+    }
+    let authentication = Agent.Start(AgentOptions.create "benchmark-authentication",
+                             AgentReplyDispatcher.createHandler 128 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) authenticate)
+    let authenticator = { Requests = authentication.Ref.TryReliable().Value; Completion = authentication.Completion }
     let incoming = ConcurrentQueue<ServerTransportEvent>()
     let poll () =
         let events = ResizeArray<ServerTransportEvent>()
@@ -123,13 +139,13 @@ let private start count (probe: Probe) = task {
             Player = { ServerRuntimeOptions.defaults.Player with MailboxCapacity = 1024; MaxPendingOutput = 1024 }
             Chat = { ServerRuntimeOptions.defaults.Chat with MailboxCapacity = 256; HistoryCapacity = 64 }
     }
-    let runtime = ServerRuntime.start options settings profiles transport (fun error -> eprintfn "%s" error) |> ok
+    let runtime = ServerRuntime.start options settings authenticator transport Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance |> ok
     for index in 0 .. count - 1 do
         let welcome = probe.Expect(ids[index], 1UL)
         incoming.Enqueue(ServerTransportEvent.Connected ids[index])
         let packet = Dreamsleeve.Protocol.Chat.ClientPacket(
                          ProtocolVersion = ChatCodec.Version, RequestId = 1UL,
-                         OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(Username = sprintf "bench%d" index, DisplayName = sprintf "Bench %d" index))
+                         OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(SessionTicket = tickets[index]))
         incoming.Enqueue(ServerTransportEvent.Received(ids[index], Google.Protobuf.MessageExtensions.ToByteArray packet))
         let! _ = guard welcome
         ()
@@ -151,8 +167,8 @@ let private start count (probe: Probe) = task {
     let stop () : Task = task {
         do! post runtime ServerRuntimeMessage.Stop
         do! guardUnit runtime.Completion
-        profiles.Complete() |> ignore
-        do! guardUnit profiles.Completion
+        authentication.Complete() |> ignore
+        do! guardUnit authentication.Completion
     }
 #endif
 #if BASELINE

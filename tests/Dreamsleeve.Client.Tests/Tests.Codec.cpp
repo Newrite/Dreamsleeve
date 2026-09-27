@@ -61,15 +61,16 @@ TEST_SUITE_BEGIN("Client.Codec");
 TEST_CASE("Client encoding preserves raw input and full width correlation for server validation")
 {
   const auto codec = MakeCodec();
-  const auto hello = codec.Encode(W::OpenSession{42, " User ", " Имя "});
+  const auto hello = codec.Encode(W::OpenSession{42, std::string(43, 'A')});
   REQUIRE(hello);
   CHECK(hello->Flags() == PacketFlag::Reliable);
   P::ClientPacket packet;
   REQUIRE(packet.ParseFromArray(hello->DataBytesView().data(), static_cast<int>(hello->Size())));
-  CHECK(packet.protocol_version() == 1);
+  CHECK(packet.protocol_version() == W::Version);
   CHECK(packet.request_id() == 42);
-  CHECK(packet.open_session().username() == " User ");
-  CHECK(packet.open_session().display_name() == " Имя ");
+  CHECK(packet.open_session().session_ticket() == std::string(43, 'A'));
+  CHECK_FALSE(codec.Encode(W::OpenSession{1, ""}));
+  CHECK_FALSE(codec.Encode(W::OpenSession{1, std::string(43, '/')}));
   auto chat = codec.Encode(SendChat{std::numeric_limits<std::uint64_t>::max(), 1, "Привет\nworld"});
   REQUIRE(chat);
   REQUIRE(packet.ParseFromArray(chat->DataBytesView().data(), static_cast<int>(chat->Size())));
@@ -163,11 +164,11 @@ TEST_CASE("Malformed unsupported and structurally incomplete server packets retu
   CHECK_FALSE(codec.Decode(truncated));
   CHECK_FALSE(codec.Decode(std::vector<std::byte>(config.network.maxPacketBytes + 1)));
   auto packet = Published();
-  packet.set_protocol_version(2);
+  packet.set_protocol_version(1);
   auto result = codec.Decode(Bytes(packet));
   REQUIRE_FALSE(result);
   CHECK(result.error().code == W::ErrorCode::UnsupportedVersion);
-  packet.set_protocol_version(1);
+  packet.set_protocol_version(W::Version);
   packet.mutable_chat_published()->clear_message();
   CHECK_FALSE(codec.Decode(Bytes(packet)));
   packet.mutable_chat_published()->mutable_message();
@@ -187,7 +188,7 @@ TEST_CASE("Malformed unsupported and structurally incomplete server packets retu
   auto bytes = Bytes(packet);
   bytes.insert(bytes.end(), {std::byte{0x98}, std::byte{0x06}, std::byte{0x01}});
   CHECK(codec.Decode(bytes));  // An unknown additive field is allowed within this version.
-  const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{0x01}, std::byte{0x7a}, std::byte{0x00}};
+  const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{0x02}, std::byte{0x7a}, std::byte{0x00}};
   auto                         unknown = codec.Decode(futurePayload);
   REQUIRE_FALSE(unknown);
   CHECK(unknown.error().code == W::ErrorCode::InvalidPayload);
@@ -286,6 +287,11 @@ TEST_CASE("Rejection codes share protobuf names and retain future signed enum va
   auto overloaded = codec.Decode(Bytes(packet));
   REQUIRE(overloaded);
   CHECK(std::get<ServerRejection>(*overloaded).code == RequestRejectionCode::Overloaded);
+
+  rejected->set_code(P::REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED);
+  auto unauthenticated = codec.Decode(Bytes(packet));
+  REQUIRE(unauthenticated);
+  CHECK(std::get<ServerRejection>(*unauthenticated).code == RequestRejectionCode::AuthenticationFailed);
 
   for (const auto code : {0x7FFF0001, -1})
   {

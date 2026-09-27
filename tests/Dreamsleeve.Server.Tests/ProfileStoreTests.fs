@@ -15,7 +15,7 @@ let ok = function Ok value -> value | Error error -> failwithf "%A" error
 let username value = Username.create 32 value |> ok
 let display = DisplayName.create 64 "Player" |> ok
 let start capacity = MemoryProfileStore.start { MailboxCapacity = capacity; MaxPendingReplies = 4 } |> ok
-let request command (reply: AgentRef<ProfileReply>) =
+let request command (reply: AgentRef<ProfileReply>) : ProfileRequest =
     let reliable =
         reply.TryReliable()
         |> Option.defaultWith (fun () -> failwith "Test reply mailbox must be non-dropping.")

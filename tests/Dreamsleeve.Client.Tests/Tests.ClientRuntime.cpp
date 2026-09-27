@@ -90,16 +90,15 @@ namespace
       REQUIRE(done());
     }
 
-    std::uint64_t Open()
+    std::uint64_t Open(char ticketCharacter = 'A')
     {
       const auto count = requests.size();
-      REQUIRE(client->Connect(" USER ", "Player"));
-      CHECK_FALSE(client->Connect("second", "second"));
+      REQUIRE(client->Connect(std::string(43, ticketCharacter)));
+      CHECK_FALSE(client->Connect(std::string(43, 'A')));
       Until([&] { return requests.size() > count; });
       CHECK(client->Phase() == SessionPhase::Opening);
-      CHECK(requests.back().protocol_version() == 1);
-      CHECK(requests.back().open_session().username() == " USER ");
-      CHECK(requests.back().open_session().display_name() == "Player");
+      CHECK(requests.back().protocol_version() == Wire::Version);
+      CHECK(requests.back().open_session().session_ticket() == std::string(43, ticketCharacter));
       CHECK(requests.back().request_id() != 0);
       return requests.back().request_id();
     }
@@ -136,7 +135,7 @@ namespace
   P::ServerPacket Welcome(std::uint64_t requestId)
   {
     P::ServerPacket packet;
-    packet.set_protocol_version(1);
+    packet.set_protocol_version(Wire::Version);
     packet.set_request_id(requestId);
     auto* welcome = packet.mutable_session_opened();
     welcome->set_self_player_id(7);
@@ -175,7 +174,7 @@ namespace
   P::ServerPacket Publication(std::uint64_t requestId, std::uint64_t messageId, std::uint64_t author = 7)
   {
     P::ServerPacket packet;
-    packet.set_protocol_version(1);
+    packet.set_protocol_version(Wire::Version);
     if (requestId != 0) packet.set_request_id(requestId);
     auto* message = packet.mutable_chat_published()->mutable_message();
     message->set_message_id(messageId);
@@ -191,7 +190,7 @@ namespace
   P::ServerPacket Rejection(std::uint64_t requestId)
   {
     P::ServerPacket packet;
-    packet.set_protocol_version(1);
+    packet.set_protocol_version(Wire::Version);
     packet.set_request_id(requestId);
     packet.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_OVERLOADED);
     packet.mutable_request_rejected()->set_message("Busy");
@@ -248,7 +247,7 @@ TEST_CASE("Real transport opens publishes a complete session and reconnects with
   REQUIRE(fixture.client->Disconnect());
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected && fixture.closed; });
   Empty(fixture.Drain());
-  const auto secondId = fixture.Open();
+  const auto secondId = fixture.Open('B');
   CHECK(secondId > firstId);
   fixture.Send(Welcome(secondId));
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
@@ -260,7 +259,7 @@ TEST_CASE("Session rejection retains correlation and permits another connection"
   Fixture         fixture;
   const auto      id = fixture.Open();
   P::ServerPacket rejected;
-  rejected.set_protocol_version(1);
+  rejected.set_protocol_version(Wire::Version);
   rejected.set_request_id(id);
   rejected.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_USERNAME_TAKEN);
   rejected.mutable_request_rejected()->set_message("Username taken");
@@ -282,7 +281,7 @@ TEST_CASE("Terminal opening rejection does not start a competing graceful discon
   Fixture fixture;
   const auto id = fixture.Open();
   P::ServerPacket rejected;
-  rejected.set_protocol_version(1);
+  rejected.set_protocol_version(Wire::Version);
   rejected.set_request_id(id);
   rejected.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_SESSION_ALREADY_OPEN);
   rejected.mutable_request_rejected()->set_message("Player already has a session");
@@ -399,7 +398,7 @@ TEST_CASE("Invalid runtime settings fail before any connection")
 TEST_CASE("Transport connection can be cancelled or time out without opening a session")
 {
   Fixture fixture;
-  REQUIRE(fixture.client->Connect("user", "Player"));
+  REQUIRE(fixture.client->Connect(std::string(43, 'A')));
   SUBCASE("cancel")
   {
     REQUIRE(fixture.client->Disconnect());
@@ -481,7 +480,7 @@ TEST_CASE("Pending chat is bounded and a correlated server rejection frees only 
   CHECK(busy.state.updates.empty());
 
   P::ServerPacket rejected;
-  rejected.set_protocol_version(1);
+  rejected.set_protocol_version(Wire::Version);
   rejected.set_request_id(second);
   rejected.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_OVERLOADED);
   rejected.mutable_request_rejected()->set_message("Channel busy");
@@ -630,7 +629,7 @@ TEST_CASE("Undrained server rejections stop outgoing commands while network clos
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected && fixture.closed; });
 
   CHECK(fixture.requests.size() == 3);
-  CHECK_FALSE(fixture.client->Connect("user", "Player"));
+  CHECK_FALSE(fixture.client->Connect(std::string(43, 'A')));
   CHECK(fixture.client->Phase() == SessionPhase::Disconnected);
   const auto rejected = fixture.Drain();
   REQUIRE(rejected.rejections.size() == 2);
@@ -655,7 +654,7 @@ TEST_CASE("Undrained server rejections stop outgoing commands while network clos
 TEST_CASE("Opening reserves its terminal rejection slot before queued commands or reconnect")
 {
   Fixture fixture{2000, 1, 1024 * 1024, 1};
-  REQUIRE(fixture.client->Connect("user", "Player"));
+  REQUIRE(fixture.client->Connect(std::string(43, 'A')));
   const auto queued = Queue(fixture, 0);
   fixture.Until([&] { return fixture.requests.size() == 1; });
   const auto opening = fixture.requests.front().request_id();
@@ -663,7 +662,7 @@ TEST_CASE("Opening reserves its terminal rejection slot before queued commands o
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected && fixture.closed; });
   REQUIRE(fixture.client->Poll());
 
-  CHECK_FALSE(fixture.client->Connect("user", "Player"));
+  CHECK_FALSE(fixture.client->Connect(std::string(43, 'A')));
   const auto rejected = fixture.Drain();
   REQUIRE(rejected.rejections.size() == 1);
   CHECK(rejected.rejections.front().rejection.requestId == opening);
@@ -674,7 +673,7 @@ TEST_CASE("Opening reserves its terminal rejection slot before queued commands o
   REQUIRE(stale.commandFailures.size() == 1);
   CHECK(stale.commandFailures.front().requestId == queued);
   CHECK(stale.commandFailures.front().code == CommandFailureCode::StaleGeneration);
-  REQUIRE(fixture.client->Connect("user", "Player"));
+  REQUIRE(fixture.client->Connect(std::string(43, 'A')));
   CHECK(fixture.client->Phase() == SessionPhase::Connecting);
   CHECK(fixture.errors.empty());
 }

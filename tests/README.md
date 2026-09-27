@@ -15,7 +15,7 @@ python Scripts/run_tests.py --suite managed
 и .NET 10. После ошибки сборки старый бинарник не запускается; при `all` второй набор
 проверяется и после сбоя первого. Ошибка или отсутствие инструмента дают ненулевой exit code.
 Нужны Python 3.10+, xmake, MSVC с C++23/`import std`, .NET SDK 10 и пакеты при первом
-восстановлении. Loopback-проверкам нужен локальный UDP. Skyrim, PrismaUI и БД не нужны.
+восстановлении. Loopback-проверкам нужен локальный UDP. Skyrim, PrismaUI и отдельный сервер БД не нужны: persistence-тесты создают временные SQLite-файлы.
 
 ## Что проверяется
 
@@ -26,7 +26,8 @@ python Scripts/run_tests.py --suite managed
 | Server Domain/Codec | Правила value objects/хранилищ, bootstrap, доменные ошибки, общий enum отказов, обязательная корреляция, повреждённые пакеты и конфигурация |
 | Agent/Background/Outbox/Lifetimes | Последовательный handler, bounded доставка, отмена, наблюдение Completion, owned children и независимый Watch |
 | Admission | Reliable TryPost Posted/Full/Closed; обычная квота и служебный резерв в одной FIFO; возврат допуска при чтении/остановке; mapped refs |
-| Profiles | Атомарный GetOrCreate, уникальные ID, сохранение офлайн-профиля, асинхронные ответы, полный/закрытый получатель |
+| SQLite/Auth/HTTP | Миграции, rollback регистрации, restart профиля, пароль, one-use/expiry билета, лимиты и HTTP boundaries |
+| Profiles (memory fixture) | Атомарный GetOrCreate, уникальные ID, сохранение офлайн-профиля, асинхронные ответы, полный/закрытый получатель |
 | ChatRoomAgent | Авторские ID/время, один ответ автору, прямые рассылки, снимок перед дельтами, история/курсор, независимые каналы, изоляция медленного подписчика |
 | PresenceAgent | Снимок собственного онлайна, Joined/Left, конфликт личности, старый Detach и закрытие только переполненного подписчика |
 | PlayerSession | Оба порядка bootstrap, ограниченный буфер, персональная квота RequestId, отказ/подтверждение, независимые показания и очистка подписок |
@@ -146,3 +147,6 @@ MSVC/protobuf workaround и проверенные отрицательные к
 в [MsvcProtobufModulesRu.md](../docs/MsvcProtobufModulesRu.md).
 
 Нагрузочные сравнения запускаются отдельно: [методика и скрипт](Dreamsleeve.Server.Benchmarks/README.md), [измеренные результаты](../docs/benchmarks/session-routing-2026-09-27.md).
+
+Auth smoke перезапускает настоящий сервер с той же временной SQLite-базой и проверяет
+сохранение PlayerId. Пароль передаётся через окружение, login выдаёт свежий билет.

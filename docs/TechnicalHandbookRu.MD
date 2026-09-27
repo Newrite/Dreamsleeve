@@ -18,12 +18,13 @@ Protobuf генерируется `Scripts/generate_protocol.py` из `Protocol/
 [Прикладной контракт](../Protocol/README.ru.md) описывает текущий срез.
 Grpc.Tools из ранних примеров не подключён к текущему csproj.
 
-SQLite + SqlHydra/Fling/Migrondi — ранее выбранный проект хранения;
-LiteDB обсуждалась, окончательная замена не принята. Infrastructure содержит
-MemoryProfileStore и адаптер ENet; долговременной БД пока нет. Server загружает
-JSON при старте. Примеры расширенного логирования, hot reload и HTTP-админки ниже
-описывают последующие возможности.
-Текущие зависимости надо сверять с fsproj/csproj и xmake.lua.
+Подключены SQLite + SqlHydra 5 + Migrondi, ASP.NET Identity PasswordHasher и
+Serilog (ILogger, console/JSON file). AuthService обслуживает register/login и
+одноразовые билеты ENet. JSON остаётся действующим форматом конфигурации.
+[Актуальные пакеты и причины отложить остальные](AuthenticationRu.md).
+Примеры Fling, Falco, TOML и расширенных logging adapters ниже — варианты будущего
+развития, а не требования установить все пакеты. SQL-примеры старых API следует
+сверять с SqlHydra 5 и текущим SqliteAccountStore, без SqlKata.
 
 Тесты: `tests/Dreamsleeve.Client.Tests` (doctest) и
 `tests/Dreamsleeve.Server.Tests` (Expecto + Faqt, наборы Agent/Domain/Codec).

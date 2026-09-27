@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.Tests.ConfigurationTests
+﻿module Dreamsleeve.Server.Tests.ConfigurationTests
 
 open System
 open System.IO
@@ -40,4 +40,31 @@ let tests = testList "Server configuration" [
             match Configuration.parse [|"--config"; path|] with
             | Ok (LaunchCommand.Run config) -> Expect.equal config Configuration.defaults "roundtrip all fields"
             | other -> failwithf "Cannot load exported defaults: %A" other)
+    testCase "authentication requires TLS outside explicitly enabled literal loopback" <| fun _ ->
+        for source in [
+            """{"Authentication":{"ListenUrl":"http://0.0.0.0:8779"}}"""
+            """{"Authentication":{"ListenUrl":"http://localhost:8779"}}"""
+            """{"Authentication":{"AllowInsecureLoopback":false}}"""
+            """{"Authentication":{"ListenUrl":"https://user:secret@example.com"}}"""
+            """{"Authentication":{"ListenUrl":"https://example.com/auth"}}"""
+            """{"Authentication":{"ListenUrl":null}}"""
+        ] do
+            withFile source (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) "unsafe or ambiguous binding rejected")
+        withFile """{"Authentication":{"ListenUrl":"https://example.com:9443","AllowInsecureLoopback":false}}""" (fun path ->
+            Expect.isOk (Configuration.parse [|"--config"; path|]) "TLS endpoint accepted")
+
+    testCase "account and logging limits and null settings fail before startup" <| fun _ ->
+        for source in [
+            """{"Authentication":null}"""; """{"Database":null}"""; """{"Logging":null}"""
+            """{"Authentication":{"Service":null}}"""
+            """{"Authentication":{"Service":{"MaxConcurrentOperations":0}}}"""
+            """{"Authentication":{"Service":{"PasswordIterations":1}}}"""
+            """{"Authentication":{"RequestsPerMinute":0}}"""
+            """{"Database":{"DatabasePath":""}}"""
+            """{"Logging":{"MinimumLevel":"bogus"}}"""
+            """{"Logging":{"Console":false,"FilePath":""}}"""
+        ] do
+            withFile source (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) "invalid settings rejected")
 ]

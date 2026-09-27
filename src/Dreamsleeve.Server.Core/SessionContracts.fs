@@ -8,8 +8,7 @@ open Dreamsleeve.Server.Domain
 type SessionOpenRequest = {
     ConnectionId: Guid
     RequestId: uint64
-    Username: Username
-    DisplayName: DisplayName
+    SessionTicket: string
 }
 
 [<RequireQualifiedAccess>]

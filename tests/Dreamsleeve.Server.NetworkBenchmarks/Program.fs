@@ -1,4 +1,4 @@
-// Benchmark process only. One owner services every independent peer on one UDP socket.
+﻿// Benchmark process only. One owner services every independent peer on one UDP socket.
 #nowarn "104"
 module Dreamsleeve.Server.NetworkBenchmarks.Program
 
@@ -9,16 +9,20 @@ open System.Globalization
 open System.IO
 open System.Net
 open System.Net.Sockets
+open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open Enet
 open Google.Protobuf
 open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.Infrastructure.Interop
 
-type private Options = { Port: uint16; Clients: int; Seconds: float; Rate: float; Output: string }
+type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Seconds: float; Rate: float; Output: string }
 
 type private Client = {
     Index: int
+    AccountId: uint64
+    mutable SessionTicket: string
     mutable Peer: EnetPeer
     Budget: PacketBudget
     mutable StartedMs: float
@@ -47,6 +51,9 @@ type private Submission = {
 type private State = {
     Options: Options
     Host: EnetHost
+    Authentication: HttpClient
+    RegistrationMs: float
+    mutable LoginMs: float
     Clock: Stopwatch
     Prefix: string
     Clients: Client array
@@ -75,6 +82,37 @@ type private State = {
 let private now state = state.Clock.Elapsed.TotalMilliseconds
 let private stage name = printfn "STAGE %s" name; Console.Out.Flush()
 
+let private protocolVersion = Dreamsleeve.Server.Core.ChatCodec.Version
+let private password = "NetworkBench-Password-2026!"
+
+let private authPost (http: HttpClient) (path: string) body =
+    use response = http.PostAsJsonAsync(path, body).GetAwaiter().GetResult()
+    if not response.IsSuccessStatusCode then
+        invalidOp (sprintf "Benchmark authentication %s failed: HTTP %d" path (int response.StatusCode))
+    // Never include the request or response body in diagnostics: both can contain credentials.
+    let bytes = response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+    JsonDocument.Parse(ReadOnlyMemory<byte>(bytes))
+
+let private register (http: HttpClient) prefix index =
+    use response = authPost http "auth/register" {|
+        username = sprintf "%s%d" prefix index
+        displayName = sprintf "Network bench %d" index
+        password = password
+    |}
+    response.RootElement.GetProperty("playerId").GetUInt64()
+
+let private login state client =
+    let elapsed = Stopwatch.StartNew()
+    use response = authPost state.Authentication "auth/login" {|
+        username = sprintf "%s%d" state.Prefix client.Index
+        password = password
+    |}
+    let ticket = response.RootElement.GetProperty("sessionTicket").GetString()
+    if isNull ticket || ticket.Length <> 43 || response.RootElement.GetProperty("playerId").GetUInt64() <> client.AccountId then
+        invalidOp "Authentication returned an invalid benchmark identity or ticket."
+    client.SessionTicket <- ticket
+    state.LoginMs <- state.LoginMs + elapsed.Elapsed.TotalMilliseconds
+
 let private fail state message =
     state.ErrorCount <- state.ErrorCount + 1
     if state.Errors.Count < 64 then state.Errors.Add message
@@ -89,15 +127,15 @@ let private send state client (message: ClientPacket) =
 
 let private connected state client =
     client.ConnectedMs <- now state
-    let request = ClientPacket(ProtocolVersion = 1u, RequestId = 1UL,
-                               OpenSession = OpenSession(Username = sprintf "%s%d" state.Prefix client.Index,
-                                                         DisplayName = sprintf "Network bench %d" client.Index))
+    let request = ClientPacket(ProtocolVersion = protocolVersion, RequestId = 1UL,
+                               OpenSession = OpenSession(SessionTicket = client.SessionTicket))
     send state client request |> ignore
+    client.SessionTicket <- ""
 
 let private opened state client (packet: ServerPacket) =
     let welcome = packet.SessionOpened
     if client.Ready || not packet.HasRequestId || packet.RequestId <> 1UL
-       || welcome.SelfPlayerId = 0UL || welcome.GlobalChannelId = 0UL
+       || welcome.SelfPlayerId <> client.AccountId || welcome.GlobalChannelId = 0UL
        || not (welcome.Players |> Seq.exists (fun profile -> profile.PlayerId = welcome.SelfPlayerId)) then
         fail state (sprintf "Client %d invalid session welcome" client.Index)
     else
@@ -155,7 +193,7 @@ let private received state client (event: EnetEvent) =
         fail state (sprintf "Client %d received wrong transport channel/flags" client.Index)
     else
         let response = ServerPacket.Parser.ParseFrom(packet.AsSpan().ToArray())
-        if response.ProtocolVersion <> 1u then fail state "Unexpected protocol version"
+        if response.ProtocolVersion <> protocolVersion then fail state "Unexpected protocol version"
         else
             match response.PayloadCase with
             | ServerPacket.PayloadOneofCase.SessionOpened -> opened state client response
@@ -218,11 +256,14 @@ let private ramp state =
     stage "connecting"
     let remote = address state.Options.Port
     let mutable started = 0
-    let deadline = now state + 120000.
+    let deadline = now state + max 120000. (float state.Clients.Length * 2000.)
     let converged () = state.ReadyCount = state.Clients.Length && (state.Clients |> Array.forall (fun client -> client.Online.Count = state.Clients.Length))
     while not (converged ()) && state.ErrorCount = 0 && now state < deadline do
         while started < state.Clients.Length && started - state.ReadyCount < 8 && state.ErrorCount = 0 do
             let client = state.Clients[started]
+            // Obtain the short-lived ticket immediately before this connection; earlier
+            // clients are already serviced between batches, and no password enters ENet.
+            login state client
             let mutable peer = Unchecked.defaultof<EnetPeer>
             if state.Host.TryConnect(remote, 1un, 0u, &peer) then
                 client.Peer <- peer
@@ -262,7 +303,7 @@ let private sendChat state =
     | Some client ->
         let sequence = state.Messages.Count
         let requestId = uint64 sequence + 2UL
-        let packet = ClientPacket(ProtocolVersion = 1u, RequestId = requestId,
+        let packet = ClientPacket(ProtocolVersion = protocolVersion, RequestId = requestId,
                                   SendChat = SendChat(ChannelId = client.ChannelId, Text = sprintf "%s:%d" state.Prefix sequence))
         let sentMs = now state
         if send state client packet then
@@ -347,6 +388,8 @@ let private report state =
             if state.LoadMs + state.DrainMs = 0. then 0.
             else float state.ReceivedChatPayloadBytes * 1000. / (state.LoadMs + state.DrainMs)
         actualSendRate = if state.LoadMs = 0. then 0. else float state.Messages.Count * 1000. / state.LoadMs
+        registrationMs = state.RegistrationMs; loginMs = state.LoginMs
+        rampIncludesLogin = true
         rampMs = state.RampMs; loadMs = state.LoadMs; drainMs = state.DrainMs; totalMs = now state
         backpressuredMs = state.BackpressuredMs; maxInflight = state.MaxInflight; inflightLimit = 128; connectWindow = 8
         hostCount = 1; socketCount = 1; serviceLoopCount = 1
@@ -363,15 +406,24 @@ let private report state =
     if result.success then 0 else 1
 
 let private run (options: Options) =
+    let prefix = "nb" + Guid.NewGuid().ToString("N").Substring(0, 12)
+    use authentication = new HttpClient(BaseAddress = options.AuthUrl, Timeout = TimeSpan.FromSeconds 30.)
+    stage "auth-register"
+    let registration = Stopwatch.StartNew()
+    let accounts = Array.init options.Clients (register authentication prefix)
+    registration.Stop()
+
     if enet.ENET_API.enet_initialize() <> 0 then invalidOp "ENet initialization failed"
     try
         use host = EnetHost.Create(address 0us, unativeint options.Clients, 1un, 0u, 0u, EnetHostOption.Ipv4)
         host.SetMaximumPacketSize(1024un * 1024un)
         host.SetMaximumWaitingData(32un * 1024un * 1024un)
         let state = {
-            Options = options; Host = host; Clock = Stopwatch.StartNew(); Prefix = "nb" + Guid.NewGuid().ToString("N").Substring(0, 12)
+            Options = options; Host = host; Authentication = authentication
+            RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
+            Clock = Stopwatch.StartNew(); Prefix = prefix
             Clients = Array.init options.Clients (fun index -> {
-                Index = index; Peer = Unchecked.defaultof<EnetPeer>; Budget = PacketBudget(16, 1024L * 1024L)
+                Index = index; AccountId = accounts[index]; SessionTicket = ""; Peer = Unchecked.defaultof<EnetPeer>; Budget = PacketBudget(16, 1024L * 1024L)
                 StartedMs = 0.; ConnectedMs = 0.; ReadyMs = 0.; Ready = false; Closed = false
                 PlayerId = 0UL; ChannelId = 0UL; LastMessageId = 0UL; Received = 0; Pending = Dictionary(); Online = HashSet()
             })
@@ -389,17 +441,20 @@ let private run (options: Options) =
     finally enet.ENET_API.enet_deinitialize()
 
 let private parse (args: string array) =
-    let mutable options = { Port = 8778us; Clients = 10; Seconds = 10.; Rate = 10.; Output = "build/network-benchmark.json" }
-    if args.Length % 2 <> 0 then invalidArg "args" "Expected --port P --clients N --seconds D --rate R --output path.json"
+    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Seconds = 10.; Rate = 10.; Output = "build/network-benchmark.json" }
+    if args.Length % 2 <> 0 then invalidArg "args" "Expected --auth-url URL --port P --clients N --seconds D --rate R --output path.json"
     for index in 0 .. 2 .. args.Length - 1 do
         let value = args[index + 1]
         match args[index] with
+        | "--auth-url" -> options <- { options with AuthUrl = Uri(value.TrimEnd('/') + "/", UriKind.Absolute) }
         | "--port" -> options <- { options with Port = UInt16.Parse value }
         | "--clients" -> options <- { options with Clients = Int32.Parse value }
         | "--seconds" -> options <- { options with Seconds = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--rate" -> options <- { options with Rate = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--output" -> options <- { options with Output = value }
         | unknown -> invalidArg "args" ("Unknown option: " + unknown)
+    if (options.AuthUrl.Scheme <> Uri.UriSchemeHttps && (options.AuthUrl.Scheme <> Uri.UriSchemeHttp || not options.AuthUrl.IsLoopback)) then
+        invalidArg "args" "Authentication URL must use HTTPS, or HTTP on loopback for local benchmarks."
     if options.Port = 0us || options.Clients < 1 || options.Clients > 4095
        || not (Double.IsFinite options.Seconds) || options.Seconds <= 0. || options.Seconds > 300.
        || not (Double.IsFinite options.Rate) || options.Rate < 0. || options.Rate > 1000.
