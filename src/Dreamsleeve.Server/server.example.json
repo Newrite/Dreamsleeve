@@ -7,6 +7,8 @@
     "ServiceTimeoutMs": 10,
     "EventBudget": 64,
     "MaxPacketBytes": 1048576,
+    "ReceiveBufferBytes": 262144,
+    "SendBufferBytes": 262144,
     "MaxWaitingData": 33554432,
     "MaxOutgoingPacketsPerPeer": 256,
     "MaxOutgoingBytesPerPeer": 4194304,

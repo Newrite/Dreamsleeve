@@ -6,7 +6,7 @@ open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.NetworkBenchmarks.Measurements
 
 // One owner, no actors/locks. All clocks are the generator's monotonic clock.
-type Probe(scenario: string, rate: float, ids: uint64 array, now: unit -> float,
+type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array, now: unit -> float,
            send: int -> ClientPacket -> bool, fail: string -> unit) =
     let count = ids.Length
     let indices = ids |> Array.mapi (fun index id -> id, index) |> dict
@@ -158,7 +158,7 @@ type Probe(scenario: string, rate: float, ids: uint64 array, now: unit -> float,
         valid
 
     member _.Report(loadMs) =
-        {| scenario = scenario; clients = count; sourceHz = rate; replicationMs = 100; visibilityDistance = 8192
+        {| scenario = scenario; clients = count; sourceHz = rate; replicationMs = replicationMs; visibilityDistance = 8192
            sentSamples = sent; receivedMovements = received; visibilityClears = cleared
            sentPayloadBytes = sentBytes; receivedPayloadBytes = receivedBytes
            sentPayloadBytesPerSecond = float sentBytes * 1000. / max 1. loadMs

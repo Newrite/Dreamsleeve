@@ -224,12 +224,57 @@ For movement only, the server runs in a separate benchmark process which calls t
 unmodified Dreamsleeve.Server.Program.main with its saved configuration. dotnet exec
 uses the production server.runtimeconfig.json (in particular Server GC), not the
 load generator runtime defaults. The selected runtime config is saved in metadata
-and the host logs its actual GC mode. A MeterListener
-records presence.flush.duration (scheduled replication work) and runtime.tick.duration
-(poll/dispatch tick work). These distributions cover the **whole run**, including setup
-and cleanup, not just the load; tick duration does not include actor scheduling wait.
-The listener has bounded histogram memory and adds measurement overhead. Its counts
-must not be interpreted as a synchronized 10 Hz global simulation tick.
+and the host logs its actual GC mode. Diagnostic schema v2 stores `serverMeasurements`
+and `clientMeasurements`, each containing `byPhase`, `runtimeSamples`, and bounded
+`slowEvents`. Earlier reports retain their original whole-run schema.
+
+The listener records presence flush duration/interval/lateness, runtime tick
+interval/duration, transport poll duration/interval/event count, packet enqueue
+cost/size, pending payload bytes/packets, RTT, reliable bytes in flight, and ENet
+loss-window counters. Socket sizes are read back from the live descriptor. Peer
+statistics are sampled by the owner every 100 ms; no background thread touches ENet.
+Without a listener transport diagnostics do not sample peers or allocate histograms.
+
+Runtime samples include cumulative allocated bytes, GC pause time and generation
+counts, last-GC heap/fragmentation, ThreadPool backlog, and system-wide IPv4 UDP
+statistics. Subtract the first/last **load** samples; phase transitions from the runner
+have up to 100 ms uncertainty. UDP statistics cover the entire machine, not a socket;
+zero receive errors does not prove loss-free delivery. ENet `PacketsLost` is a resetting
+window, not a cumulative loss counter; `TotalSentPackets` counts send attempts even
+when the installed ENet socket implementation reports WouldBlock. Pending bytes
+exclude ENet command/fragment headers. Histograms cost time and use a benchmark-only
+lock. Slow-event timestamps and runtime samples use the same process-local clock.
+Presence interval/lateness use Environment.TickCount64 and have its clock granularity.
+An interval spanning setup/idle must not be treated as steady-state cadence.
+
+Diagnostic options (buffer sizes are per socket, in bytes):
+
+```powershell
+python Scripts/benchmark_enet.py --clients 1000 --rates 10 --scenarios sparse dense --seconds 20 --timeout 600 --profile movement --server-buffer 8388608 --client-buffer 8388608 --output build/benchmarks/buffers8m
+python Scripts/benchmark_enet.py --clients 1000 --rates 30 --scenarios sparse --replication-ms 20 --seconds 20 --timeout 600 --profile movement --output build/benchmarks/cadence
+```
+
+`--replication-ms` changes the server interval and the reported client metadata;
+the source rate is independent. A successful final-state check does not imply the
+configured publication cadence was maintained.
+
+For a separate profile run (never compare its throughput directly with an unprofiled run):
+
+```powershell
+dotnet tool install dotnet-trace --version 10.0.745401 --tool-path build/tools
+python Scripts/benchmark_enet.py --clients 1000 --rates 10 --scenarios sparse --seconds 20 --profile movement --trace-server build/tools/dotnet-trace.exe --output build/benchmarks/profile
+build/tools/dotnet-trace report build/benchmarks/profile/sparse-n1000-r10-run1/server.nettrace topN -n 30
+dotnet run --project tests/Dreamsleeve.TraceReport -c Release -- build/benchmarks/profile/sparse-n1000-r10-run1/server.nettrace build/benchmarks/profile/gc-report.json
+```
+
+The runner starts `dotnet-sampled-thread-time,gc-verbose` at the load marker and saves
+trace/log files. Attachment has latency; rundown/drain may also be present. Stack
+percentages represent sampled **thread time including waits**, not CPU percentages.
+The offline TraceEvent reader separates GC suspensions from SampleProfiler's
+`SuspendOther`, pairing suspend/restart by thread, and reports lost events. Allocation
+Ticks estimate allocation intervals attributed to their triggering type; they are not
+exact object counts or precise per-type totals. The `.nettrace` files remain in ignored
+build output; keep their compact summaries with benchmark reports.
 
 C++ cost is measured independently:
 

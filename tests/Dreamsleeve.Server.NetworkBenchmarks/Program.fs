@@ -17,7 +17,7 @@ open Google.Protobuf
 open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.Infrastructure.Interop
 
-type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Seconds: float; Rate: float; Scenario: string; Output: string }
+type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Seconds: float; Rate: float; ReplicationMs: int; Scenario: string; Output: string }
 
 type private Client = {
     Index: int
@@ -51,6 +51,7 @@ type private Submission = {
 type private State = {
     mutable Movement: Movement.Probe option
     Options: Options
+    Diagnostics: TransportDiagnostics
     Host: EnetHost
     Authentication: HttpClient
     RegistrationMs: float
@@ -239,7 +240,9 @@ let private handle state (event: EnetEvent) =
         | unknown -> fail state (sprintf "Unknown ENet event: %A" unknown)
 
 let private pump state =
+    let started = state.Diagnostics.BeginPoll()
     let mutable remaining = 4096
+    let mutable processed = 0
     let mutable waitMs = 1u
     while remaining > 0 do
         let mutable event = Unchecked.defaultof<EnetEvent>
@@ -251,8 +254,10 @@ let private pump state =
         elif result = 0 then remaining <- 0
         else
             remaining <- remaining - 1
+            processed <- processed + 1
             handle state event
     state.Host.Flush()
+    state.Diagnostics.EndPoll(started, processed, state.Host, state.Budget)
 
 let private address port =
     let mutable value = Unchecked.defaultof<enet.ENetAddress>
@@ -375,7 +380,7 @@ let private drain state =
     Console.Out.Flush()
 
 let private movementLoad state =
-    let probe = Movement.Probe(state.Options.Scenario, state.Options.Rate, state.Clients |> Array.map _.PlayerId,
+    let probe = Movement.Probe(state.Options.Scenario, state.Options.Rate, state.Options.ReplicationMs, state.Clients |> Array.map _.PlayerId,
                                (fun () -> now state), (fun index packet -> send state state.Clients[index] packet), fail state)
     state.Movement <- Some probe
     stage "movement-setup"
@@ -466,6 +471,7 @@ let private report state =
     if result.success then 0 else 1
 
 let private run (options: Options) =
+    use recorder = new Measurements.Recorder(options.Output + ".metrics.json")
     let prefix = "nb" + Guid.NewGuid().ToString("N").Substring(0, 12)
     use authentication = new HttpClient(BaseAddress = options.AuthUrl, Timeout = TimeSpan.FromSeconds 30.)
     stage "auth-register"
@@ -479,13 +485,17 @@ let private run (options: Options) =
     if enet.ENET_API.enet_initialize() <> 0 then invalidOp "ENet initialization failed"
     try
         use host = EnetHost.Create(address 0us, unativeint options.Clients, 1un, 0u, 0u, EnetHostOption.Ipv4)
+        let buffer = Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_CLIENT_BUFFER"
+        if not (String.IsNullOrEmpty buffer) then
+            let bytes = Int32.Parse buffer
+            if not (TransportDiagnostics.ConfigureBuffers(host, bytes, bytes)) then invalidOp "Cannot configure benchmark socket buffers"
         host.SetMaximumPacketSize(1024un * 1024un)
         host.SetMaximumWaitingData(32un * 1024un * 1024un)
         // Movement permits eight pending requests per peer. The aggregate
         // transport budget must accommodate the same finite per-peer window.
         let outgoingPackets = if options.Scenario = "chat" then 4096 else max 4096 (16 * options.Clients)
         let state = {
-            Movement = None; Options = options; Host = host; Authentication = authentication
+            Diagnostics = TransportDiagnostics(); Movement = None; Options = options; Host = host; Authentication = authentication
             RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
             Clock = Stopwatch.StartNew(); Prefix = prefix
             Clients = Array.init options.Clients (fun index -> {
@@ -510,7 +520,7 @@ let private run (options: Options) =
     finally enet.ENET_API.enet_deinitialize()
 
 let private parse (args: string array) =
-    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Seconds = 10.; Rate = 10.; Scenario = "chat"; Output = "build/network-benchmark.json" }
+    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Seconds = 10.; Rate = 10.; ReplicationMs = 100; Scenario = "chat"; Output = "build/network-benchmark.json" }
     if args.Length % 2 <> 0 then invalidArg "args" "Expected --auth-url URL --port P --clients N --seconds D --rate R --output path.json"
     for index in 0 .. 2 .. args.Length - 1 do
         let value = args[index + 1]
@@ -520,12 +530,13 @@ let private parse (args: string array) =
         | "--clients" -> options <- { options with Clients = Int32.Parse value }
         | "--seconds" -> options <- { options with Seconds = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--rate" -> options <- { options with Rate = Double.Parse(value, CultureInfo.InvariantCulture) }
+        | "--replication-ms" -> options <- { options with ReplicationMs = Int32.Parse(value, CultureInfo.InvariantCulture) }
         | "--scenario" -> options <- { options with Scenario = value }
         | "--output" -> options <- { options with Output = value }
         | unknown -> invalidArg "args" ("Unknown option: " + unknown)
     if (options.AuthUrl.Scheme <> Uri.UriSchemeHttps && (options.AuthUrl.Scheme <> Uri.UriSchemeHttp || not options.AuthUrl.IsLoopback)) then
         invalidArg "args" "Authentication URL must use HTTPS, or HTTP on loopback for local benchmarks."
-    if options.Port = 0us || options.Clients < 1 || options.Clients > 4095
+    if options.ReplicationMs < 1 || options.Port = 0us || options.Clients < 1 || options.Clients > 4095
        || not (Double.IsFinite options.Seconds) || options.Seconds <= 0. || options.Seconds > 300.
        || not (Double.IsFinite options.Rate) || options.Rate < 0. || options.Rate > 1000.
        || options.Rate * options.Seconds > 100000. then

@@ -24,6 +24,8 @@ module PresenceAgent =
         LatestIndex: SpatialIndex.State
         PublishedIndex: SpatialIndex.State
         mutable FlushScheduled: bool
+        mutable LastFlush: int64
+        mutable FlushDue: int64
         VisibilityDistanceSquared: double
         Host: AgentOutbox<SessionHostCommand>
     }
@@ -204,6 +206,7 @@ module PresenceAgent =
     let private schedule (config: PresenceOptions) state (context: AgentContext<PresenceCommand>) =
         if not state.FlushScheduled then
             state.FlushScheduled <- true
+            state.FlushDue <- Environment.TickCount64 + int64 config.ReplicationIntervalMs
             // One one-shot observation, rearmed only by a later update. Watch detaches
             // when dispatch ends, so Complete never waits for the replication interval.
             context.Watch(Task.Delay(config.ReplicationIntervalMs, context.CancellationToken), fun _ -> PresenceCommand.Flush)
@@ -234,6 +237,10 @@ module PresenceAgent =
         | PresenceCommand.Update(connectionId, value) -> update config state context connectionId value
         | PresenceCommand.Flush ->
             state.FlushScheduled <- false
+            let time = Environment.TickCount64
+            if state.LastFlush <> 0L then RuntimeMetrics.presenceInterval.Record(float (time - state.LastFlush))
+            RuntimeMetrics.presenceLateness.Record(float (max 0L (time - state.FlushDue)))
+            state.LastFlush <- time
             let started = Stopwatch.GetTimestamp()
             publishDirty state context
             RuntimeMetrics.presenceFlush.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
@@ -261,7 +268,7 @@ module PresenceAgent =
                 LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
                 PublishedIndex = SpatialIndex.create (double config.VisibilityDistance)
                 VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
-                FlushScheduled = false; Host = AgentOutbox(config.MaxControlDeliveries, host)
+                FlushScheduled = false; LastFlush = 0L; FlushDue = 0L; Host = AgentOutbox(config.MaxControlDeliveries, host)
             }
             let options = {
                 AgentOptions.create "presence" with

@@ -180,9 +180,17 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
     case = destination / name
     case.mkdir()
     config = configuration(clients, free_port(), args.profile, case)
+    config["Server"].update(ReceiveBufferBytes=args.server_buffer, SendBufferBytes=args.server_buffer)
+    config["Runtime"]["Presence"]["ReplicationIntervalMs"] = args.replication_ms
     config_path = case / "server.json"
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     env = os.environ.copy()
+    phase_path = case / "phase.txt"
+    phase_path.write_text("startup", encoding="utf-8")
+    env["DREAMSLEEVE_BENCH_PHASE"] = str(phase_path)
+    env["DREAMSLEEVE_BENCH_CLIENT_BUFFER"] = str(args.client_buffer)
+    trace = None
+    trace_log = None
     # Preserve the normal JIT configuration, recording it in the run metadata.
     server = client = None
     samples, errors = [], []
@@ -209,11 +217,18 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
             time.sleep(0.1)
         client = Child(["dotnet", str(CLIENT), "--auth-url", config["Authentication"]["ListenUrl"], "--port", str(config["Server"]["Port"]),
             "--clients", str(clients), "--seconds", str(args.seconds), "--rate", str(rate),
-            "--scenario", scenario, "--output", str(case / "client.json")], case / "client.log", env)
+            "--replication-ms", str(args.replication_ms), "--scenario", scenario, "--output", str(case / "client.json")], case / "client.log", env)
         while True:
             for line in client.output():
                 if line.startswith("STAGE "):
                     phase = line.split(" ", 1)[1]
+                    phase_path.write_text(phase, encoding="utf-8")
+                    if phase == "load" and args.trace_server and trace is None:
+                        trace_log = (case / "trace.log").open("w", encoding="utf-8")
+                        trace = subprocess.Popen([str(args.trace_server.resolve()), "collect", "--process-id", str(server.process.pid),
+                            "--profile", "dotnet-sampled-thread-time,gc-verbose", "--duration", f"00:{(args.seconds + 3) // 60:02d}:{(args.seconds + 3) % 60:02d}",
+                            "--output", str(case / "server.nettrace")], stdout=trace_log, stderr=subprocess.STDOUT,
+                            stdin=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
                 print(f"{name}: {line}", flush=True)
             server_lines.extend(server.output())
             if client.process.poll() is not None:
@@ -243,6 +258,17 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
     except (OSError, RuntimeError, TimeoutError) as error:
         errors.append(str(error))
     finally:
+        if trace:
+            try:
+                trace.communicate(input="\n", timeout=30)
+            except subprocess.TimeoutExpired:
+                trace.kill()
+                trace.wait()
+                errors.append("Profiler stop timed out")
+            if trace.returncode != 0:
+                errors.append(f"Profiler exit code: {trace.returncode}")
+        if trace_log:
+            trace_log.close()
         if client:
             client.stop(graceful=False)
         if server:
@@ -255,7 +281,10 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
     success = not errors and delivery is not None and delivery.get("success") is True
     metrics_path = case / "metrics.json"
     metrics = json.loads(metrics_path.read_text(encoding="utf-8-sig")) if metrics_path.exists() else None
-    result = {"scenario": scenario, "serverInstrumentsWholeRun": metrics, "name": name, "clients": clients, "rate": rate, "repetition": repetition,
+    client_metrics_path = case / "client.json.metrics.json"
+    client_metrics = json.loads(client_metrics_path.read_text(encoding="utf-8")) if client_metrics_path.exists() else None
+    result = {"scenario": scenario, "serverMeasurements": metrics, "clientMeasurements": client_metrics,
+              "name": name, "clients": clients, "rate": rate, "repetition": repetition,
               "profile": args.profile, "success": success, "errors": errors,
               "config": config, "server": aggregate(samples, "server"),
               "clientProcess": aggregate(samples, "client"), "delivery": delivery,
@@ -282,8 +311,14 @@ def main():
     parser.add_argument("--repetitions", type=positive_int, default=1)
     parser.add_argument("--timeout", type=positive_int, default=180)
     parser.add_argument("--profile", choices=["minimal", "scaled", "movement"], default="scaled")
+    parser.add_argument("--server-buffer", type=positive_int, default=262144)
+    parser.add_argument("--client-buffer", type=positive_int, default=262144)
+    parser.add_argument("--replication-ms", type=positive_int, default=100)
+    parser.add_argument("--trace-server", type=Path, help="Path to dotnet-trace; separate profiled runs from baseline")
     parser.add_argument("--output", type=Path, default=ROOT / "build/benchmarks/enet" / datetime.now().strftime("%Y%m%d-%H%M%S"))
     args = parser.parse_args()
+    if args.trace_server and not args.trace_server.is_file():
+        parser.error("dotnet-trace executable not found")
     if os.name != "nt":
         parser.error("Process metrics currently require Windows")
     if any(n > 1000 for n in args.clients) or any(not 0 <= rate <= 1000 for rate in args.rates):
@@ -297,7 +332,9 @@ def main():
     destination = args.output.resolve()
     destination.mkdir(parents=True, exist_ok=False)
     source = [Path(__file__), *sorted((ROOT / "tests/Dreamsleeve.Server.NetworkBenchmarks").glob("*.fs")),
-              ROOT / "src/Dreamsleeve.Server.Core/PresenceAgent.fs", ROOT / "src/Dreamsleeve.Server.Core/RuntimeMetrics.fs"]
+              *sorted((ROOT / "src/Dreamsleeve.Server.Core").glob("*.fs")),
+              ROOT / "src/Dreamsleeve.Server.Infrastructure/EnetTransport.fs",
+              *sorted((ROOT / "src/Dreamsleeve.Server.Infrastructure.Interop").glob("*.cs"))]
     metadata = {
         "measuredAtUtc": datetime.now(timezone.utc).isoformat(),
         "head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -309,6 +346,8 @@ def main():
         "sourceSha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source},
         "binarySha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                          for p in [SERVER, CLIENT, *sorted(CLIENT.parent.glob("Dreamsleeve.*.dll"))]},
+        "diagnostics": {"serverBuffer": args.server_buffer, "clientBuffer": args.client_buffer,
+                        "replicationMs": args.replication_ms, "traceServer": str(args.trace_server) if args.trace_server else None},
         "sampleIntervalMs": 100, "durationSeconds": args.seconds, "runs": [],
     }
     for repetition in range(1, args.repetitions + 1):

@@ -91,6 +91,22 @@ let private withAdapter settings run =
         transport.Dispose()
 
 let tests = testSequenced <| testList "ENet transport" [
+    testCase "socket buffer readback borrows the handle and leaves the host usable" <| fun _ ->
+        withPeers (fun host peer pump ->
+            Expect.isTrue (TransportDiagnostics.ConfigureBuffers(host, 1024 * 1024, 1024 * 1024)) "socket options applied"
+            let struct (receive, send) = TransportDiagnostics.ReadBuffers host
+            Expect.isGreaterThanOrEqual receive (1024 * 1024) "receive buffer granted"
+            Expect.isGreaterThanOrEqual send (1024 * 1024) "send buffer granted"
+            let budget = PacketBudget(2, 1024L)
+            let peerBudget = PacketBudget(2, 1024L)
+            Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>([|1uy|]), budget, peerBudget))
+                PacketSendResult.Sent "borrowed socket was not closed"
+            until (fun () -> budget.Packets = 0) pump)
+
+    testCase "invalid socket buffers are rejected before host allocation" <| fun _ ->
+        Expect.isError (EnetTransport.create { ServerConfig.defaults with ReceiveBufferBytes = 0 }) "invalid receive buffer"
+        Expect.isError (EnetTransport.create { ServerConfig.defaults with SendBufferBytes = -1 }) "invalid send buffer"
+
     testCase "outgoing leases enforce packet and byte budgets, then release after ACK and reset" <| fun _ ->
         withPeers (fun _ peer pump ->
             let hostBudget = PacketBudget(8, 64L)

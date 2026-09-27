@@ -30,6 +30,8 @@ type ServerConfig =
         ServiceTimeoutMs: uint32
         EventBudget: int
         MaxPacketBytes: int
+        ReceiveBufferBytes: int
+        SendBufferBytes: int
         MaxWaitingData: int
         MaxOutgoingPacketsPerPeer: int
         MaxOutgoingBytesPerPeer: int
@@ -53,6 +55,8 @@ module ServerConfig =
             ServiceTimeoutMs = 10u
             EventBudget = 64
             MaxPacketBytes = 1024 * 1024
+            ReceiveBufferBytes = 256 * 1024
+            SendBufferBytes = 256 * 1024
             MaxWaitingData = 32 * 1024 * 1024
             MaxOutgoingPacketsPerPeer = 256
             MaxOutgoingBytesPerPeer = 4 * 1024 * 1024
@@ -101,6 +105,8 @@ module ServerConfig =
                     "PeerLimit must be between 1 and 4095."
                 if config.ChannelLimit < 1 || config.ChannelLimit > 255 then
                     "ChannelLimit must be between 1 and 255."
+                if config.ReceiveBufferBytes < 1 || config.SendBufferBytes < 1 then
+                    "UDP socket buffer sizes must be positive."
                 if config.EventBudget < 1 then
                     "EventBudget must be positive."
                 if config.MaxOutgoingPacketsPerPeer < 1 then

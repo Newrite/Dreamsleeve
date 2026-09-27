@@ -22,6 +22,7 @@ module EnetTransport =
     }
 
     type private State = {
+        Diagnostics: TransportDiagnostics
         Config: ServerConfig
         Host: EnetHost
         Connections: Dictionary<Guid, Connection>
@@ -94,6 +95,7 @@ module EnetTransport =
         if state.Disposed then
             Error "ENet transport is disposed."
         else
+            let started = state.Diagnostics.BeginPoll()
             let events = ResizeArray<ServerTransportEvent>()
             let mutable remaining = state.Config.EventBudget
             let mutable waitMs = state.Config.ServiceTimeoutMs
@@ -118,6 +120,8 @@ module EnetTransport =
                     | unknown when not (Enum.IsDefined unknown) ->
                         error <- Some "ENet returned an unknown event type."
 
+            state.Diagnostics.EndPoll(started, events.Count, state.Host, state.Outgoing)
+
             match error with
             | Some failure -> Error failure
             | None -> Ok (List.ofSeq events)
@@ -132,7 +136,10 @@ module EnetTransport =
             | false, _ -> Error "Connection is closed."
             | true, connection when connection.Closing -> Error "Connection is closing."
             | true, connection ->
-                match OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing) with
+                let started = TransportDiagnostics.BeginSend()
+                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing)
+                TransportDiagnostics.EndSend(started, bytes.Length)
+                match result with
                 | PacketSendResult.Sent -> Ok ()
                 | PacketSendResult.BudgetExceeded -> Error "Outgoing ENet packet budget exceeded."
                 | PacketSendResult.PeerRejected -> Error "ENet peer rejected the outgoing packet."
@@ -166,25 +173,31 @@ module EnetTransport =
             try
                 let host = EnetHost.Create(address, unativeint config.PeerLimit, unativeint config.ChannelLimit,
                                            0u, 0u, EnetHostOption.Ipv4)
-                // Checksums and compression stay disabled, matching the native client.
-                host.SetMaximumPacketSize(unativeint config.MaxPacketBytes)
-                host.SetMaximumWaitingData(unativeint config.MaxWaitingData)
+                if not (TransportDiagnostics.ConfigureBuffers(host, config.ReceiveBufferBytes, config.SendBufferBytes)) then
+                    host.Dispose()
+                    enet.ENET_API.enet_deinitialize()
+                    Error "Could not configure ENet UDP socket buffers."
+                else
+                    // Checksums and compression stay disabled, matching the native client.
+                    host.SetMaximumPacketSize(unativeint config.MaxPacketBytes)
+                    host.SetMaximumWaitingData(unativeint config.MaxWaitingData)
 
-                let state = {
-                    Config = config
-                    Host = host
-                    Connections = Dictionary()
-                    Slots = Dictionary()
-                    Outgoing = PacketBudget(config.MaxOutgoingPackets, int64 config.MaxOutgoingBytes)
-                    Disposed = false
-                }
-                Ok {
-                    Poll = poll state
-                    Send = send state
-                    Close = close state
-                    Reset = reset state
-                    Dispose = dispose state
-                }
+                    let state = {
+                        Diagnostics = TransportDiagnostics()
+                        Config = config
+                        Host = host
+                        Connections = Dictionary()
+                        Slots = Dictionary()
+                        Outgoing = PacketBudget(config.MaxOutgoingPackets, int64 config.MaxOutgoingBytes)
+                        Disposed = false
+                    }
+                    Ok {
+                        Poll = poll state
+                        Send = send state
+                        Close = close state
+                        Reset = reset state
+                        Dispose = dispose state
+                    }
             with
             | :? SocketException as error ->
                 enet.ENET_API.enet_deinitialize()

@@ -55,6 +55,7 @@ module ServerRuntime =
         mutable Stopping: bool
         mutable StopDeadline: int64
         mutable SourcesStopping: bool
+        mutable LastTick: int64
     }
 
     let private now () = Environment.TickCount64
@@ -376,6 +377,8 @@ module ServerRuntime =
             if state.Sources.IsNone && not state.Stopping then initialize options globalId authenticator state context
         | ServerRuntimeMessage.Tick ->
             let started = Stopwatch.GetTimestamp()
+            if state.LastTick <> 0L then RuntimeMetrics.runtimeInterval.Record(Stopwatch.GetElapsedTime(state.LastTick, started).TotalMilliseconds)
+            state.LastTick <- started
             tick options globalId authenticator state context
             RuntimeMetrics.runtimeTick.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
         | ServerRuntimeMessage.Host command -> host options state context command
@@ -442,7 +445,7 @@ module ServerRuntime =
             let state = {
                 Table = SessionTable.create(); Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
                 Transport = transport; Logger = logger
-                Sources = None; Stopping = false; SourcesStopping = false; StopDeadline = 0L
+                Sources = None; Stopping = false; SourcesStopping = false; LastTick = 0L; StopDeadline = 0L
             }
             let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
             let agent = Agent.Start(agentOptions, handle options globalId authenticator state, isControl = isControl)
