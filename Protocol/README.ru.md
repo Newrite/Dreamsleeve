@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 5
+# Прикладной протокол сессии, версия 6
 
 Схемы разделены по назначению:
 
@@ -9,20 +9,31 @@
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
 | [session.proto](session.proto) | OpenSession и начальный SessionOpened |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
-| [network.proto](network.proto) | Причины отключения ENet |
+| [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
 
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Пакетное движение повышает версию до 5. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 6 отделяет движение от команд; версии 1–5 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
-Один ClientPacket/ServerPacket занимает один reliable ENet packet на прикладном
-канале 0. Внешний length prefix не нужен: границу даёт ENet. Обе оболочки содержат
-protocol_version = 3 и oneof payload. Неизвестные дополнительные поля допускаются;
-неизвестный/отсутствующий payload или другая версия дают ошибку codec.
+Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
+Все оболочки содержат protocol_version = 6. Неизвестные дополнительные поля
+допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
+
+| Канал | DeliveryLane | Назначение |
+|---|---|---|
+| 0 | Control | ClientPacket/ServerPacket: сессия, lifecycle, UpdatePlayer и ответы, reliable |
+| 1 | Chat | ClientPacket/ServerPacket: SendChat, ChatPublished и ответы чата, reliable |
+| 2 | Realtime | ClientMovementPacket/ServerMovementPacket: абсолютные pose, unreliable sequenced (flags=0) |
+
+Нужно минимум три согласованных канала. Номера фиксированы в network.proto,
+надёжность задаётся флагом пакета. RequestRejected возвращается на канал исходной
+команды; SessionOpened с историей всегда Control. Между каналами общего порядка нет.
+Flags=0 — не Unsequenced/UnreliableFragment. При исчерпании unreliable sequence
+ENet может внутренне перейти к reliable; прикладного ACK движения при этом нет.
 
 Сессия привязана к одному ENet-соединению. После транспортного Connected клиент
 посылает OpenSession. Только SessionOpened переводит прикладную сессию в Ready.
@@ -57,9 +68,12 @@ plain HTTP допустим только для явно разрешённой 
 | Сервер → клиент | SessionOpened | SelfPlayerId, GlobalChannelId, весь онлайн и хвост истории |
 | Сервер → клиент | ChatPublished | Одно принятое сообщение |
 | Сервер → клиент | RequestRejected | Общий RequestRejectionCode, объяснение, поле |
-| Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SampleMovement / SetActorValues / LeaveGame / SetDetails |
+| Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SetLocation / SetActorValues / LeaveGame / SetDetails |
 | Сервер → клиент | PlayerJoined / PlayerLeft | Полный PlayerInfo нового игрока / ID ушедшего |
-| Сервер → клиент | PlayerUpdated / PlayersMoved / PlayerMetadataChanged | Полный PlayerInfo / только optional location / изменённые actor values и Details |
+| Сервер → клиент | PlayerUpdated / PlayerMetadataChanged | Идентичность и компоненты / изменённые actor values и Details |
+| Сервер → клиент | PlayerVisibilityChanged | Reliable baseline/clear с view_revision и sequence |
+| Клиент → сервер | ClientMovementPacket.sample | context_revision, sequence, pose без RequestId |
+| Сервер → клиент | ServerMovementPacket.movements | PlayerMoved: player_id, view_revision, sequence, pose |
 | Сервер → клиент | PlayerUpdateAccepted | ACK команды UpdatePlayer |
 
 RequestId — ненулевой uint64, назначаемый клиентским API до отправки. Клиент должен
@@ -74,7 +88,10 @@ ChatMessageId, не серверная последовательность и �
 - SessionOpened, PlayerUpdateAccepted и RequestRejected обязательно возвращают ID исходного запроса.
 - ChatPublished содержит RequestId только в копии инициатору. Остальные получают
   то же принятое сообщение без RequestId. ID других клиентов не завершает свои запросы.
-- PlayerJoined/PlayerLeft/PlayerUpdated/PlayersMoved/PlayerMetadataChanged не содержат RequestId. Явный ноль всегда ошибочен.
+- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerVisibilityChanged/PlayerMetadataChanged не содержат RequestId. Явный ноль всегда ошибочен.
+
+Realtime-оболочки вообще не имеют RequestId: samples не занимают pending,
+не требуют PlayerUpdateAccepted, retry или коррелированного отказа.
 
 Optional RequestId существует только в общей protobuf-оболочке и диагностике codec.
 В прикладных ответах наличие ID закреплено вариантом типа:
@@ -102,15 +119,16 @@ Added/Removed из модели. Полная история не копируе
 ## Игровое состояние
 
 PlayerInfo включает неизменяемую идентичность PlayerProfile, optional character_name,
-optional PlayerLocation, actor_values, character_generation и PlayerDetails. SessionOpened
+optional PlayerLocation, actor_values, character_generation, PlayerDetails,
+view_revision и movement_sequence. SessionOpened
 содержит PlayerInfo в поле players=5; старое поле 3 зарезервировано. PlayerJoined тоже
 несёт PlayerInfo. Это несовместимое изменение, закреплённое protocol_version=3.
 
 PlayerLocation содержит Location(FormKey(plugin_name/local_form_id), location_name),
 Position XYZ в world units и Rotation XYZ в радианах. ActorValueEntry имеет key,
 display_name и oneof scalar/resource(current/maximum). Scalar 0 присутствует явно;
-отсутствующий oneof — ошибка. SampleMovement заменяет только location: отсутствие
-положения очищает его. SetActorValues независимо заменяет карту показаний; пустая
+отсутствующий oneof — ошибка. Reliable SetLocation устанавливает пространство и
+начальную позу; отсутствие location очищает положение. SetActorValues независимо заменяет карту показаний; пустая
 карта очищает её. Зарезервирован старый номер 3 объединённого sample_player_state.
 
 PlayerDetails отдельно заменяет расу (NamedForm), optional level, PlayerActivity,
@@ -121,12 +139,37 @@ Discord-строка. Движение и actor values не стирают detai
 контекст и увеличивают character_generation, даже при повторе имени; Rename сохраняет
 остальные поля. Поля профиля клиент изменить этой командой не может.
 
-PlayerUpdateAccepted только завершает команду. Сервер периодически реплицирует
-метаданные PlayerInfo всем, включая автора; location фильтруется по области видимости.
-Для изменения одной лишь location
-используется PlayersMoved без actor values; отсутствие location означает clear.
-Bootstrap содержит весь онлайн с позициями, доступными получателю. Между тиками остаётся последнее состояние, а ACK не создаёт
-локального эха. У всех уведомлений этой репликации отсутствует RequestId.
+PlayerUpdateAccepted завершает reliable-команду, не создавая локальное эхо.
+Автор применяет серверное состояние тем же путём, что остальные наблюдатели.
+PlayerUpdated с view_revision=0 обновляет идентичность/компоненты без переустановки
+позиции текущего персонажа. Новая character_generation сразу сбрасывает старую
+позицию и контекст. Reliable PlayerVisibilityChanged устанавливает baseline/clear;
+PlayerMetadataChanged никогда не меняет позицию.
+
+### Контекст движения и порядок v6
+
+Клиент назначает возрастающий context_revision каждому SetLocation в соединении,
+включая clear и телепорт в том же WRLD/CELL. Сервер принимает номер выше предыдущего
+принятого перехода. BeginCharacter/LeaveGame очищают активный контекст, сохраняя его
+high-water mark. Клиент прекращает старый поток и начинает новый после принятия
+перехода. Отказ отключает локальный поток; следующий локальный переход может
+заново установить положение.
+
+Baseline имеет sequence=0, последующие клиентские измерения — возрастающий
+sequence>=1. Сервер принимает только совпадающий context_revision и больший sequence.
+Старый, повторный или обогнавший переход sample отбрасывается без ответа. Realtime
+не меняет пространство, не создаёт персонажа и не восстанавливает очищенную позицию.
+
+Presence назначает view_revision из счётчика конкретного наблюдателя. Новый вход
+в AOI, контекст/персонаж источника или наблюдателя, новое соединение источника
+получают новый токен; после clear/reentry токен не переиспользуется. PlayerMoved
+применяется только к уже видимой позиции с совпадающим токеном и большим sequence.
+Повтор вниз сохраняет source sequence/time; sequence=0 допустим как повтор baseline.
+Локальные ClientModel generation/revision — отдельные курсоры публикации.
+
+Поздний sample не оживляет clear/Leave и не переносит координаты в другую локацию.
+Новый sample, обогнавший baseline, пропускается: следующий период повторит позицию.
+Не нужно хранить будущие samples, tombstones всех игроков или собирать целый тик.
 
 ## Значения и начальное состояние
 
@@ -159,7 +202,12 @@ OnlinePlayersReplaced, назначает self и передаёт истори�
 и отдельная публикация не позволяют потребителю увидеть промежуточные изменения.
 C++ ClientRuntime реализует этот обработчик, сверяет фазу Opening и RequestId,
 публикует снимок вместе с Ready. Client.Dev --connect использует настоящий транспорт. Модель не содержит специальной
-транзакции для этого сценария. PlayerJoined пока создаёт игрока только с профилем.
+транзакции для этого сценария. PlayerJoined может содержать отфильтрованный baseline.
+
+ChatPublished способен обогнать SessionOpened по своему каналу: runtime хранит такие
+публикации в bounded bootstrap-буфере и применяет после истории через ChatCache.
+Публикация содержит профиль автора; его наличие в онлайне не требуется. Ранний
+realtime отбрасывается и восстанавливается следующим периодом.
 
 ## Границы проверки
 
@@ -168,7 +216,7 @@ C++ ClientRuntime реализует этот обработчик, сверяе
 | Настройка | Default | Где применяется |
 |---|---|---|
 | MaxPacketBytes / network.maxPacketBytes | 1 MiB | Вход/выход codec и ENet maximumPacketSize |
-| Server.MovementPacketTargetBytes | 0 (выключено) | 0 сохраняет пачки до MaxPacketBytes с фрагментацией ENet. Положительное значение включает целевой размер, ограниченный также MTU-бюджетом пира; неделимая запись может фрагментироваться |
+| Server.MovementPacketTargetBytes | 0 (автоматически) | Всегда min(MaxPacketBytes, negotiated MTU budget); положительное значение уменьшает цель. Неделимая запись сверх лимита даёт ошибку, не фрагментируется |
 | MaxWaitingData / network.maxWaitingData | 32 MiB | ENet maximumWaitingData, бюджет ожидающих данных на peer |
 | MaxInitialPlayers / maxInitialPlayers | 4096 | Число игроков в начальном состоянии |
 | MaxRecentMessages / maxRecentMessages | 512 | Число сообщений начальной истории; 0 отключает её |
@@ -182,11 +230,12 @@ C++ ClientRuntime реализует этот обработчик, сверяе
 На C++ [Configuration](../src/Dreamsleeve.Client.Core/Config.ixx) содержит network
 и лимиты начального состояния. `config.network` передаётся в создание DreamNetHost,
 сам config — в `Wire::ProtocolCodec::TryCreate(config)`. Полученный codec сохраняет копию
-проверенных настроек; дальше вызываются `codec.Encode(request)` / `codec.Decode(bytes)`.
+проверенных настроек; дальше вызываются `codec.Encode(request)` / `codec.Decode(bytes, channel)`.
+Для движения — `codec.Encode(sample, negotiatedPayloadBytes)` с flags=0.
 Encode возвращает владеющий DreamNetPacket: TryAllocateWith выделяет буфер ENet,
 protobuf пишет прямо в него. Пакет передаётся через `client.Send(std::move(packet))`
-или `peer.PushPacket(std::move(packet), 0)`, без промежуточного vector и повторного
-копирования через span. Флаг Reliable задан при создании; владение переходит ENet
+или `peer.PushPacket(std::move(packet), channel)`, без промежуточного vector и повторного
+копирования через span. Reliable — для команд, flags=0 — для движения; владение переходит ENet
 только при успешной отправке. Ошибка выделения/записи возвращает PacketCreationFailed.
 Host устанавливает maximumPacketSize/maximumWaitingData до работы с соединениями.
 Отправка span проверяет лимит до копирования; broadcast сообщает ошибку превышения.
@@ -198,8 +247,8 @@ DreamNetPacket проверяет представимость длины в ENe
 config host` после создания yENet host и **до первого Service/Connect**.
 Из этого же config один раз создаётся `ProtocolCodec.create config`; затем используются
 `ProtocolCodec.decodeClient codec bytes` / `ProtocolCodec.encodeServer codec response`.
-EnetTransport применяет лимиты к реальному yENet host; ServerRuntime выполняет
-его Poll/Send/Close как единственный сетевой владелец.
+EnetTransport применяет лимиты к реальному yENet host; все native операции
+Host/Peer выполняет один владелец транспорта.
 
 Конфигурация фиксируется на срок жизни сетевого владельца; менять только codec
 после создания host нельзя. Создание кодека отклоняет некорректные лимиты через Result;
@@ -223,7 +272,8 @@ C++ не повторяет эти бизнес-проверки и не нор�
 Слишком большой, повреждённый или неполный пакет возвращает Result с ошибкой.
 F# перехватывает InvalidProtocolBufferException на границе парсинга, наружу тоже
 возвращает Result. Доменная ошибка сохраняет RequestId для коррелированного отказа.
-Повреждённые пакеты без надёжной корреляции должен завершать runtime через ProtocolError.
+Повреждённые reliable-команды без надёжной корреляции закрывают соединение через
+ProtocolError. Realtime не порождает коррелированные отказы на каждую позицию.
 
 ### Ответственность проверок
 
@@ -345,38 +395,39 @@ MessageId упорядочен внутри канала, идентичност
 
 ### Видимость позиций
 
-В v5 правило видимости сохраняется: PlayerInfo остаётся записью онлайна, optional location в ней
+В v6 правило видимости сохраняется: PlayerInfo остаётся записью онлайна, optional location в ней
 означает положение, доступное конкретному получателю. Сервер передаёт чужие позиции
 только при известной позиции получателя, совпадении WRLD/CELL FormKey и расстоянии
 XYZ <= Runtime.Presence.VisibilityDistance. Себе игрок получает положение всегда.
-На выходе из области запись в PlayersMoved без location очищает положение, но не удаляет
-профиль/персонажа/actor values/Details. При входе приходит актуальная позиция,
-в том числе когда двигался только получатель. Полный Updated, Joined и начальный
-снимок проходят ту же фильтрацию; метаданные не обходят ограничение координат.
+На выходе reliable PlayerVisibilityChanged без location очищает положение, сохраняя
+метаданные. Вход устанавливает baseline с новым токеном, в том числе когда двигался
+только наблюдатель. Joined и начальный снимок содержат доступные позиции;
+metadata не обходит AOI.
+
 Описательные Place-поля остаются глобальными данными таблицы онлайна.
 
 Радиус сервера по умолчанию 8192 Skyrim units, граница включена; 0 допустим.
 Клиентские настройки отображения не отправляются серверу: выключение светлячков
 не является отпиской от пакетов, а больший клиентский радиус не расширяет доставку.
 
-### Репликация компонентов v5
+### Репликация компонентов v6
 
-На интервале рассылки сервер сравнивает Latest с Published. PlayersMoved содержит список актуальных положений для конкретного наблюдателя.
-PlayerMoved — тип элемента списка, а не отдельная ветка ServerPacket. PlayerMetadataChanged
-содержит только изменившиеся компоненты actor_values/details: отсутствующий блок
-не меняет модель, присутствующий заменяет компонент целиком (пустые values очищают).
-Пакет без обоих блоков недопустим. Частичное обновление никогда не меняет координаты.
-Если изменились и движение, и метаданные, отправляются два отдельных уведомления.
-Полный PlayerUpdated используется при изменении профиля, имени или поколения
-персонажа; он включает актуальные компоненты и отфильтрованную location, отдельные
-дельты для него не дублируются. Bootstrap и Joined по-прежнему полные.
+Каждый период Presence рассылает все текущие видимые позиции, включая неподвижных
+игроков и самого автора. Latest/Published и Dirty подавляют повторы метаданных,
+а не движения. Потерянная часть пачки восстанавливается следующим повтором;
+отсутствие записи не означает clear. Срок восстановления при произвольных потерях
+не гарантируется.
 
-Клиентский playerSampleIntervalMs регулирует только движение; серверный
-ReplicationIntervalMs регулирует объединение и рассылку всех изменений. Значение
-по умолчанию у обоих 100 мс. Тики не синхронизируются; автоматического согласования
-настроек нет. Между рассылками сохраняется последнее состояние, неизменившиеся
-компоненты и возврат к опубликованному значению подавляются. Это не heartbeat
-и не доставка каждого промежуточного измерения. Команды чата не объединяются.
+PlayerMetadataChanged включает изменившиеся actor_values/details: отсутствующий
+блок не меняет компонент, присутствующий заменяет целиком. Пакет без обоих блоков
+недопустим. PlayerUpdated применяется для идентичности/имени/поколения персонажа;
+Location=None/ViewRevision=0 не очищает позицию того же персонажа. Lifecycle
+координат устанавливает отдельная reliable-граница.
+
+playerSampleIntervalMs задаёт период повторения последней локальной позы,
+ReplicationIntervalMs — период серверной рассылки актуального состояния. По умолчанию
+оба 100 мс; тики не синхронизированы и автоматически не согласуются. Чат/команды
+обрабатываются независимо. Сохранять все промежуточные samples не требуется.
 
 ### Организация преобразований
 
@@ -391,21 +442,25 @@ ReplicationIntervalMs регулирует объединение и рассы�
 
 На C++ все protobuf-типы остаются в global module fragment обычных .cpp. CodecParts.h
 содержит только внутренние объявления функций и включается после module declaration;
-в публичный .ixx protobuf не попадает. Версия протокола и wire-формат не менялись.
+в публичный .ixx protobuf не попадает.
 
-### Время измерения движения (совместимое расширение v4)
+### Время измерения и пакетирование v6
 
-PlayerLocation.sampled_at_us (tag 4) хранит монотонные микросекунды отправителя.
-Нулевая метка означает отсутствие времени, ненулевая переносится сервером без
-преобразования в PlayerInfo/PlayersMoved. Это не UTC, часы разных игроков не сравниваются.
-C++ ClientExchange.Post заполняет метку до очереди отправки, если адаптер не передал её.
-Новая метка при прежней позиции тоже является измерением. Server replication сохраняет
-последний замер за тик. Нулевая метка замера допускает интерполяцию по приёму; версия соединения при этом должна быть v5.
-Порядок пока обеспечивает reliable ENet channel 0; локальные generation/revision
-защищают потребителя состояния. [Клиентская история](../docs/MovementInterpolationRu.md).
+PlayerLocation.sampled_at_us в baseline и MovementPose.sampled_at_us в realtime —
+монотонные микросекунды источника, не UTC. Часы игроков не сравниваются. Ноль допустим
+и допускает интерполяцию по приёму; порядок задаёт sequence, не timestamp.
+C++ runtime при повторе последней позы назначает новый sequence и текущее время.
+Сервер сохраняет source sequence/time при пересылке, не выдавая повтор за новое
+измерение. Та же sequence не добавляет наблюдение интерполяции.
+[Клиентская история](../docs/MovementInterpolationRu.md).
 
-### Пакетное движение v5
+ClientMovementPacket содержит один MovementSample; ServerMovementPacket — непустой
+список PlayersMoved. Каждая запись самостоятельно применима. Список делится по
+реальному сериализованному размеру с envelope/varint и negotiated MTU. Reliable
+bootstrap может фрагментироваться, realtime — нет. Передача пачки не делает доставку
+атомарной и не требует ожидания окончания всего прикладного тика.
 
-Ветка ServerPacket.players_moved = 19 заменяет одиночную player_moved = 17;
-старые номер и имя reserved. Пустая пачка недопустима, request_id отсутствует.
-Протокол v4 отвергается. [Индекс, границы объединения и деление по размеру](../docs/SpatialReplicationRu.md).
+Старые UpdatePlayer.sample_movement=6, ServerPacket.players_moved=19 и
+PlayerMoved.location=2 зарезервированы. SetLocation использует tag8,
+PlayerVisibilityChanged — tag20; pose/token/sequence движения — отдельные realtime
+оболочки. Старые ветки и v5 одновременно не поддерживаются.

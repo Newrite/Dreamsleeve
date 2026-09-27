@@ -431,7 +431,11 @@ private:
 
     Result<void> Process(std::uint64_t generation, LocalLocation& command)
     {
-      if (phase != SessionPhase::Ready || generation != model.Generation()) return {};
+      if (phase != SessionPhase::Ready || generation != model.Generation())
+      {
+        Wire::SetLocation rejected{0, command.location};
+        return SendPlayerUpdate(generation, rejected);
+      }
       if (contextRevision == std::numeric_limits<std::uint64_t>::max()) return Unexpected("movement_context_exhausted");
       ResetMovement();
       latestMovement = command.location;

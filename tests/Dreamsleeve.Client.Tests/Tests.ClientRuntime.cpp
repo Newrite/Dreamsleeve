@@ -938,4 +938,19 @@ TEST_CASE("Unexpected or reused update ACK is a protocol failure")
   REQUIRE(fixture.errors.size() == 1);
 }
 
+TEST_CASE("Explicit location transitions report invalid session generation while samples remain disposable")
+{
+  Fixture fixture;
+  const auto generation = Ready(fixture);
+  REQUIRE(fixture.exchange->Post({generation - 1, LocalLocation{}}) == CommandPostResult::Queued);
+  REQUIRE(fixture.exchange->Post({generation - 1, LocalMovement{}}) == CommandPostResult::Queued);
+  REQUIRE(fixture.client->Poll());
+  const auto output = fixture.Drain();
+  REQUIRE(output.commandFailures.size() == 1);
+  CHECK(output.commandFailures[0].code == CommandFailureCode::StaleGeneration);
+  CHECK(output.commandFailures[0].requestId != 0);
+  CHECK(fixture.requests.size() == 1);
+  CHECK(fixture.samples.empty());
+}
+
 TEST_SUITE_END();
