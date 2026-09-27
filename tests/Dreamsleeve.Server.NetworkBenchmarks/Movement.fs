@@ -2,23 +2,26 @@ module Dreamsleeve.Server.NetworkBenchmarks.Movement
 
 open System
 open System.Collections.Generic
+open Google.Protobuf
 open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.NetworkBenchmarks.Measurements
 
 // One owner, no actors/locks. All clocks are the generator's monotonic clock.
-type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array, now: unit -> float,
+type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array, offset: int, stride: int, count: int, now: unit -> float,
            send: int -> ClientPacket -> bool, fail: string -> unit) =
-    let count = ids.Length
+    let total = ids.Length
+    let globalIndex index = offset + index * stride
     let indices = ids |> Array.mapi (fun index id -> id, index) |> dict
     let pending = Array.init count (fun _ -> Dictionary<uint64, float * bool>())
     let nextRequest = Array.create count 2UL
     let due = Array.zeroCreate<float> count
-    let latest = Array.zeroCreate<PlayerLocation> count
-    let seen = Array2D.zeroCreate<uint64> count count
-    let seenX = Array2D.zeroCreate<float32> count count
-    let initialized = Array2D.zeroCreate<bool> count count
+    let latest = Array.zeroCreate<PlayerLocation> total
+    let seen = Array2D.zeroCreate<uint64> count total
+    let seenX = Array2D.zeroCreate<float32> count total
+    let initialized = Array2D.zeroCreate<bool> count total
     let mutable initializedCount = 0
-    let ages, acknowledgements = Distribution(), Distribution()
+    let ages, acknowledgements, iterations = Distribution(), Distribution(), Distribution()
+    let mutable crossProcess = 0L
     let mutable measuring = false
     let mutable started = 0.
     let mutable sent = 0L
@@ -64,9 +67,9 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
             SampledAtUs = uint64 (time * 1000.) + 1UL)
 
     let move index time =
-        let location = position index time
+        let location = position (globalIndex index) time
         if submit index (UpdatePlayer(SampleMovement = SampleMovement(Location = location))) then
-            latest[index] <- location
+            latest[globalIndex index] <- location
 
     let observe observer source (location: PlayerLocation) =
         match indices.TryGetValue source with
@@ -83,6 +86,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
                 seenX[observer, index] <- location.Position.X
                 if measuring then
                     received <- received + 1L
+                    if index % stride <> offset then crossProcess <- crossProcess + 1L
                     ages.Add(max 0. (now() - float (location.SampledAtUs - 1UL) / 1000.))
 
     member _.BeginCharacters(serviceBatch: unit -> unit) =
@@ -90,14 +94,14 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
             submit index (UpdatePlayer(BeginCharacter = BeginCharacter(Name = "Benchmark"))) |> ignore
             if index % 16 = 15 then serviceBatch()
 
-    member _.Prepared = initializedCount = count * count && (pending |> Array.forall (fun requests -> requests.Count = 0))
+    member _.Prepared = initializedCount = count * total && (pending |> Array.forall (fun requests -> requests.Count = 0))
 
     member _.Pending = pending |> Array.sumBy _.Count
 
-    member _.Start() =
+    member _.Start(startTime) =
         measuring <- true
-        started <- now()
-        for index in 0 .. count - 1 do due[index] <- started + float index * 1000. / (rate * float count)
+        started <- startTime
+        for index in 0 .. count - 1 do due[index] <- started + float (globalIndex index) * 1000. / (rate * float total)
 
     member _.SendDue() =
         let time = now()
@@ -109,6 +113,8 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
                 due[index] <- time + interval
                 if pending[index].Count >= 8 then throttled <- throttled + 1L
                 else move index time
+
+    member _.RecordIteration(duration) = iterations.Add duration
 
     member _.Stop() = measuring <- false
 
@@ -142,15 +148,23 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
         | ServerPacket.PayloadOneofCase.PlayerMetadataChanged -> ()
         | _ -> fail "Unexpected movement response"
 
+    member _.FinalLocations =
+        Array.init count (fun index -> latest[globalIndex index]) |> Array.map (fun location -> Convert.ToBase64String(location.ToByteArray()))
+
+    member _.SetFinalLocations(locations: string array) =
+        if locations.Length <> total then invalidOp "Incomplete final location manifest"
+        for index in 0 .. total - 1 do
+            latest[index] <- PlayerLocation.Parser.ParseFrom(Convert.FromBase64String locations[index])
+
     member _.Converged() =
         let mutable valid = pending |> Array.forall (fun requests -> requests.Count = 0)
         for observer in 0 .. count - 1 do
-            for source in 0 .. count - 1 do
-                let origin, target = latest[observer], latest[source]
+            for source in 0 .. total - 1 do
+                let origin, target = latest[globalIndex observer], latest[source]
                 if isNull origin || isNull target then valid <- false
                 else
                     let dx = double origin.Position.X - double target.Position.X
-                    let visible = observer = source || (origin.Location.LocationId = target.Location.LocationId && dx * dx <= 8192. * 8192.)
+                    let visible = globalIndex observer = source || (origin.Location.LocationId = target.Location.LocationId && dx * dx <= 8192. * 8192.)
                     if visible then
                         if seen[observer, source] <> target.SampledAtUs || seenX[observer, source] <> target.Position.X then valid <- false
                     elif seen[observer, source] <> 0UL then valid <- false
@@ -165,7 +179,8 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
            receivedPayloadBytesPerSecond = float receivedBytes * 1000. / max 1. loadMs
            actualSamplesPerClientSecond = float sent * 1000. / (max 1. loadMs * float count)
            generatorMissedIntervals = missed; pendingThrottledSamples = throttled; maxPendingPerClient = maxPending
-           initializedPairs = initializedCount; expectedInitializedPairs = count * count
+           initializedPairs = initializedCount; expectedInitializedPairs = count * total
            finalStateConverged = finalConverged; pending = pending |> Array.sumBy _.Count
            deliveryAgeMs = ages.Summary(); ackMs = acknowledgements.Summary()
+           crossProcessMovements = crossProcess; serviceIterationMs = iterations.Summary()
            percentileMethod = "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms" |}

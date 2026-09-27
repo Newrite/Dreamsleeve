@@ -50,6 +50,10 @@ type private Submission = {
 }
 
 type private State = {
+    Group: Coordination.Group
+    AllPlayerIds: uint64 array
+    EventBudgetPerHost: int
+    GlobalOffset: int
     mutable Movement: Movement.Probe option
     Options: Options
     Diagnostics: TransportDiagnostics array
@@ -244,7 +248,7 @@ let private pumpHost state hostIndex =
     let host = state.Hosts[hostIndex]
     let diagnostics = state.Diagnostics[hostIndex]
     let started = diagnostics.BeginPoll()
-    let mutable remaining = max 1 (4096 / state.Hosts.Length)
+    let mutable remaining = state.EventBudgetPerHost
     let mutable processed = 0
     // Multiple sockets are visited without blocking on an idle one.
     let mutable waitMs = if state.Hosts.Length = 1 then 1u else 0u
@@ -280,8 +284,13 @@ let private address port =
     if result <> SocketError.Success then invalidOp (sprintf "Address failed: %A" result)
     value
 
+let private barrierPump state () =
+    if state.ErrorCount > 0 then invalidOp "Worker failed while waiting at a barrier"
+    pump state
+
 let private ramp state =
     stage "connecting"
+    state.Group.Wait("joined", state.Group.Index, barrierPump state)
     let remote = address state.Options.Port
     let mutable started = 0
     let deadline = now state + max 120000. (float state.Clients.Length * 2000.)
@@ -289,7 +298,7 @@ let private ramp state =
     // to preparation, not to the movement load we are trying to measure.
     let admittedConverged () =
         state.ReadyCount = started
-        && (state.Clients |> Array.take started |> Array.forall (fun client -> client.Online.Count = started))
+        && (state.Clients |> Array.take started |> Array.forall (fun client -> client.Online.Count = state.GlobalOffset + started))
 
     let converged () = started = state.Clients.Length && admittedConverged ()
 
@@ -318,9 +327,13 @@ let private ramp state =
             if client.Peer.IsCreated && not client.Ready && now state - client.StartedMs > 30000. then
                 fail state (sprintf "Client %d session opening timed out" client.Index)
     state.RampMs <- now state
-    let expectedPlayers = HashSet<uint64>(state.Clients |> Array.map _.PlayerId)
+    state.Group.Publish("joined", true)
+    state.Group.Wait("joined", state.Group.Workers, barrierPump state)
+    let expectedPlayers = HashSet<uint64>(state.AllPlayerIds)
+    let allOnline () = state.Clients |> Array.forall (fun client -> client.Online.SetEquals expectedPlayers)
+    while not (allOnline()) && state.ErrorCount = 0 && now state < deadline do pump state
     state.PresenceConverged <-
-        converged () && expectedPlayers.Count = state.Clients.Length
+        state.ReadyCount = state.Clients.Length && expectedPlayers.Count = state.AllPlayerIds.Length
         && (state.Clients |> Array.forall (fun client -> client.Online.SetEquals expectedPlayers))
     if not state.PresenceConverged then fail state "Not all sessions and online lists converged"
     else
@@ -395,24 +408,32 @@ let private drain state =
     Console.Out.Flush()
 
 let private movementLoad state =
-    let probe = Movement.Probe(state.Options.Scenario, state.Options.Rate, state.Options.ReplicationMs, state.Clients |> Array.map _.PlayerId,
-                               (fun () -> now state), (fun index packet -> send state state.Clients[index] packet), fail state)
+    let probe = Movement.Probe(state.Options.Scenario, state.Options.Rate, state.Options.ReplicationMs, state.AllPlayerIds, state.Group.Index, state.Group.Workers, state.Clients.Length,
+                               Coordination.now, (fun index packet -> send state state.Clients[index] packet), fail state)
     state.Movement <- Some probe
     stage "movement-setup"
+    state.Group.All("probes", true, barrierPump state) |> ignore
+    state.Group.Wait("characters", state.Group.Index, barrierPump state)
     probe.BeginCharacters(fun () -> serviceFor state 150.)
+    state.Group.Publish("characters", true)
+    state.Group.Wait("characters", state.Group.Workers, barrierPump state)
     let setupDeadline = now state + 30000.
     while not probe.Prepared && state.ErrorCount = 0 && now state < setupDeadline do pump state
     if not probe.Prepared then fail state "Character snapshots did not converge before load"
     serviceFor state 1000.
 
+    stage "armed"
+    let started = state.Group.Start(barrierPump state)
+    while Coordination.now() < started do pump state
     stage "load"
-    let started = now state
-    probe.Start()
-    while now state - started < state.Options.Seconds * 1000. && state.ErrorCount = 0 do
+    probe.Start(started)
+    while Coordination.now() - started < state.Options.Seconds * 1000. && state.ErrorCount = 0 do
+        let iterationStarted = Coordination.now()
         probe.SendDue()
         pump state
+        probe.RecordIteration(Coordination.now() - iterationStarted)
     probe.Stop()
-    state.LoadMs <- now state - started
+    state.LoadMs <- Coordination.now() - started
 
     stage "drain"
     let draining = now state
@@ -420,6 +441,8 @@ let private movementLoad state =
     while probe.Pending > 0 && state.ErrorCount = 0 && now state < deadline do pump state
     if state.ErrorCount = 0 && probe.Pending = 0 then
         probe.FinalSamples(fun () -> pump state)
+        let locations = state.Group.All("final", probe.FinalLocations, barrierPump state) |> Array.transpose |> Array.concat
+        probe.SetFinalLocations locations
         let mutable converged = false
         let mutable nextCheck = now state
         while not converged && state.ErrorCount = 0 && now state < deadline do
@@ -430,6 +453,9 @@ let private movementLoad state =
         if not converged then fail state "Final movement/AOI state did not converge"
     elif state.ErrorCount = 0 then fail state "Movement acknowledgements did not drain"
     state.DrainMs <- now state - draining
+    if state.ErrorCount = 0 then
+        state.Disconnecting <- true
+        state.Group.All("verified", true, barrierPump state) |> ignore
 
 let private disconnect state =
     stage "disconnect"
@@ -472,6 +498,7 @@ let private report state =
         rampIncludesLogin = true; authenticationConcurrency = 4
         rampMs = state.RampMs; loadMs = state.LoadMs; drainMs = state.DrainMs; totalMs = now state
         backpressuredMs = state.BackpressuredMs; maxInflight = state.MaxInflight; inflightLimit = 128; connectWindow = 4
+        workerIndex = state.Group.Index; workerCount = state.Group.Workers; totalClients = state.AllPlayerIds.Length
         hostCount = state.Hosts.Length; socketCount = state.Hosts.Length; serviceLoopCount = 1
         unexpectedDisconnects = state.Disconnections; rejections = state.Rejections; errorCount = state.ErrorCount
         errors = state.Errors.ToArray()
@@ -489,13 +516,18 @@ let private run (options: Options) =
     use recorder = new Measurements.Recorder(options.Output + ".metrics.json")
     let prefix = "nb" + Guid.NewGuid().ToString("N").Substring(0, 12)
     use authentication = new HttpClient(BaseAddress = options.AuthUrl, Timeout = TimeSpan.FromSeconds 30.)
+    let group = Coordination.Group()
     stage "auth-register"
+    group.Wait("accounts", group.Index, fun () -> System.Threading.Thread.Sleep 10)
     let registration = Stopwatch.StartNew()
     let accounts = Array.zeroCreate options.Clients
     System.Threading.Tasks.Parallel.For(0, options.Clients,
         System.Threading.Tasks.ParallelOptions(MaxDegreeOfParallelism = 4),
         fun index -> accounts[index] <- register authentication prefix index) |> ignore
     registration.Stop()
+    let accountGroups = group.All("accounts", accounts, fun () -> System.Threading.Thread.Sleep 10)
+    let allPlayerIds = accountGroups |> Array.transpose |> Array.concat
+    let globalOffset = accountGroups |> Array.take group.Index |> Array.sumBy Array.length
 
     if enet.ENET_API.enet_initialize() <> 0 then invalidOp "ENet initialization failed"
     let hosts = ResizeArray<EnetHost>()
@@ -514,8 +546,15 @@ let private run (options: Options) =
 
         // Movement permits eight pending requests per peer. The aggregate
         // transport budget must accommodate the same finite per-peer window.
-        let outgoingPackets = if options.Scenario = "chat" then 4096 else max 4096 (16 * options.Clients)
+        let outgoingPackets = if options.Scenario = "chat" then 4096 else max (4096 / group.Workers) (16 * options.Clients)
+        let totalHosts =
+            match Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_TOTAL_HOSTS" with
+            | null | "" -> options.Hosts
+            | value -> Int32.Parse value
+
         let state = {
+            EventBudgetPerHost = max 1 (4096 / totalHosts)
+            Group = group; AllPlayerIds = allPlayerIds; GlobalOffset = globalOffset
             Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics()); Movement = None; Options = options; Hosts = hosts.ToArray(); Authentication = authentication
             RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
             Clock = Stopwatch.StartNew(); Prefix = prefix
@@ -524,7 +563,7 @@ let private run (options: Options) =
                 StartedMs = 0.; ConnectedMs = 0.; ReadyMs = 0.; Ready = false; Closed = false
                 PlayerId = 0UL; ChannelId = 0UL; LastMessageId = 0UL; Received = 0; Pending = Dictionary(); Online = HashSet()
             })
-            Slots = Dictionary(); Budget = PacketBudget(outgoingPackets, 16L * 1024L * 1024L); Messages = ResizeArray(); Errors = ResizeArray()
+            Slots = Dictionary(); Budget = PacketBudget(outgoingPackets, 16L * 1024L * 1024L / int64 group.Workers); Messages = ResizeArray(); Errors = ResizeArray()
             ErrorCount = 0; ReadyCount = 0; Disconnections = 0; Rejections = 0; Received = 0L; SentChatPayloadBytes = 0L; ReceivedChatPayloadBytes = 0L; Completed = 0; NextSender = 0
             Disconnecting = false; PresenceConverged = false; RampMs = 0.; LoadMs = 0.; DrainMs = 0.; BackpressuredMs = 0.; MaxInflight = 0
         }

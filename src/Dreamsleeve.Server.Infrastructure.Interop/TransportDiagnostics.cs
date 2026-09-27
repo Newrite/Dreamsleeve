@@ -35,6 +35,7 @@ public sealed class TransportDiagnostics
 
     private static readonly Histogram<double> TimeoutAge = Meter.CreateHistogram<double>("transport.peer.timeout.age.max", "ms");
     private static readonly Histogram<double> ReceiveAge = Meter.CreateHistogram<double>("transport.peer.receive.age.max", "ms");
+    private EnetPeerTrace? peerTrace;
     private long lastPoll;
     private long lastSample;
 
@@ -67,6 +68,7 @@ public sealed class TransportDiagnostics
         if (Environment.TickCount64 - lastSample < 100) return;
         if (lastSample == 0)
         {
+            peerTrace = EnetPeerTrace.Create(host);
             var buffers = ReadBuffers(host);
             ReceiveBuffer.Record(buffers.Receive);
             SendBuffer.Record(buffers.Send);
@@ -81,6 +83,7 @@ public sealed class TransportDiagnostics
         {
             if (!host.TryGetPeer((ushort)i, out var peer)) continue;
             if (peer.State != EnetPeerState.Connected) continue;
+            peerTrace?.Record(host, peer);
             rtt = Math.Max(rtt, peer.RoundTripTime);
             if (peer.EarliestTimeout != 0)
                 timeoutAge = Math.Max(timeoutAge, unchecked(host.ServiceTime - peer.EarliestTimeout));

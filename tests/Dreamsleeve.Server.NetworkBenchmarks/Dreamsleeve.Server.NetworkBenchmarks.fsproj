@@ -6,6 +6,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="Measurements.fs" />
+    <Compile Include="Coordination.fs" />
     <Compile Include="Movement.fs" />
     <Compile Include="Program.fs" />
     <ProjectReference Include="../../src/Dreamsleeve.Server/Dreamsleeve.Server.fsproj" />

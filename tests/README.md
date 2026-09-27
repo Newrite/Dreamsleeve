@@ -190,3 +190,8 @@ Protocol v5: отдельные Move/SetActorValues/SetDetails, объедине
 Task/ValueTask, struct/list/array, HashSet reuse и snapshot actor values. Это
 диагностический executable без новых пакетов, не набор функциональных тестов и
 не замена сетевым бенчмаркам.
+
+Многопроцессное сравнение движения запускает `Scripts/benchmark_enet_workers.py`:
+один сервер, одинаковые суммарные клиенты/сокеты, синхронное измерение и проверка
+межпроцессной доставки. [Методика](Dreamsleeve.Server.NetworkBenchmarks/README.md#multiple-load-processes),
+[результаты 1000 клиентов при 20 Гц](../docs/benchmarks/movement-workers-2026-09-27.md).

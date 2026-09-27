@@ -322,3 +322,97 @@ socket counts, buffers and source/replication rates. Server host count remains o
 among connected peers, `transport.peer.receive.age.max` the greatest time since
 receiving traffic. Both are sampled by the transport owner. They help identify
 retry stalls but are not packet loss counts or definitive disconnect reasons.
+
+## Multiple load processes
+
+`Scripts/benchmark_enet_workers.py` coordinates movement workers on the **same
+Windows machine**, against one unchanged server process. Example:
+
+```powershell
+python -u Scripts/benchmark_enet_workers.py --clients 1000 --hosts 200 --workers 1 4 10 --rate 20 --replication-ms 50 --seconds 30 --repetitions 2 --output build/benchmarks/workers-20hz
+```
+
+`--clients` and `--hosts` are totals, divisible by every worker count. Each worker
+owns N/P clients and H/P sockets. Socket buffers stay 256 KiB by default. Server
+configuration is the existing finite `movement` profile, with packet target 0.
+The client aggregate 16 MiB budget is split between workers, as is the packet
+budget; per-peer windows remain eight pending movement requests. The per-host
+event budget is max(1,4096/H), independent of worker count. These are independent
+processes and service loops, not server sharding.
+
+Workers register, join and begin characters sequentially in the same four-request batches as the
+single-process runner. They exchange an exact ID manifest and validate all N*N
+online/character projections before starting. Global player indices are
+interleaved across workers so a group of 25 includes players from other processes;
+`crossProcessMovements` verifies that cross-process delivery is actually exercised.
+The shared start deadline and sample timestamps use Windows Stopwatch's monotonic
+clock. This clock contract does **not** support distributed machines.
+
+Preparation, shared start and final-state barriers use atomic files in each case's
+`group` directory, outside the measured loop. Each barrier has a 180s deadline;
+the runner gives other workers up to 15s to finish failure reports before stopping
+them if one fails. Clients continue servicing
+ENet while waiting. Final sample manifests let each worker validate every local
+observer against every global source, including AOI removal. No worker leaves
+until all have verified their final state. Complete convergence is still not a
+claim that the requested frequency was sustained.
+
+The measurement phase spans the shared load interval; phase sampling uncertainty
+remains roughly 100ms. Raw per-worker reports, metrics and logs are retained,
+alongside server metrics and CPU/private bytes for each worker and their sum.
+`serviceIterationMs` measures send-due plus servicing all of that worker's sockets.
+The generator retains its non-catch-up schedule: sub-interval slippage can reduce
+actual rate even when `generatorMissedIntervals` is zero. Age includes receiving
+worker processing, and the eight-request window measures end-to-end ACK pressure.
+
+Repeats reverse the process-count order. The first timed iteration includes JIT;
+there is no forced GC or CPU affinity. All processes compete on the same machine.
+Use repeated runs and inspect the server's cadence/queue metrics, not just process
+CPU totals. Increasing workers tests generator parallelism; a clean separate-host
+experiment is still needed before claiming a production server capacity limit.
+
+`--server-buffer` and `--client-buffer` independently override receive/send socket
+buffer sizes for controlled tests (default 262144 bytes each). These only alter
+the saved benchmark configuration, not production defaults. Failed runs may have
+missing worker reports; never divide a partial numerator by the total population.
+
+### UDP/ENet disconnect diagnostics (separate from throughput results)
+
+```powershell
+python -u Scripts/benchmark_enet_workers.py --clients 1000 --hosts 200 --workers 10 --scenario spaces --seconds 30 --udp-trace --output build/benchmarks/udp-only
+python -u Scripts/benchmark_enet_workers.py --clients 1000 --hosts 200 --workers 10 --scenario spaces --seconds 60 --udp-trace --peer-trace --output build/benchmarks/udp-and-enet
+dotnet tests/Dreamsleeve.TraceReport/bin/Release/net10.0/Dreamsleeve.TraceReport.dll --udp path/to/udp.etl path/to/udp-report.json
+```
+
+`--udp-trace` starts an owned, named ETW session through `logman` at load start,
+using TCPIP/AFD drop keywords. It saves PID-to-UDP-port bindings from
+`Get-NetUDPEndpoint`, its own PID manifest, provider configuration and exit logs.
+The runner stops only its own ETW session in `finally`. ETW requires Windows trace
+permissions; a failed start is reported as a failed diagnostic run. The session
+uses a 256 MiB circular file, so check event loss and retention before interpreting
+absence of events. Other system traffic can appear; correlate addresses and
+endpoint identity with benchmark ports, not merely the event-header PID.
+
+The offline `--udp` report decodes Windows event maps (including localized drop
+reasons), groups all AFD drops by endpoint/context/address/size, and retains up to
+200 examples per event kind. `EventsLost=0` is distinct from zero packet drops.
+Raw ETL is kept locally for further inspection; summaries need not include
+unrelated network endpoints or kernel object addresses.
+
+`--peer-trace` sets `DREAMSLEEVE_ENET_TRACE_DIRECTORY` for benchmark children.
+While the existing MeterListener is active, the ENet owner samples suspect peers
+with earliest-timeout age >=250ms at roughly 100ms intervals. Snapshots contain
+connection/slot/remote address, RTT/variance, receive/send age, timeout thresholds,
+flow-control window, in-flight/waiting bytes and the three outgoing queues.
+Queue traversal is capped at 4096 commands; retry count/max attempts and the oldest
+sent command's sequence, command kind, fragment and RTO are recorded. ENet's
+`queueTime` is a queue ordinal, **not a timestamp**. Counts are current snapshots,
+not cumulative attempts or a complete wire-command history.
+
+There is a 20000-record cap per host with an explicit truncation marker. Sampling
+can miss the exact instruction that disconnects a peer: native reset happens
+inside Service before the application receives Disconnect. The snapshots capture
+preceding state. This mode performs synchronous JSON/file I/O and must not be
+used for performance comparisons; confirm drop behavior with ETW alone. No packet
+payloads, passwords or tickets are recorded. With the environment unset, peer
+tracing is inactive and creates no files.
