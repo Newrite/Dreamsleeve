@@ -163,10 +163,10 @@ ClientRuntime: полная замена Sample, scalar zero, ресурсы, ri
 Сетевой smoke проверяет очистку при удалении и восстановление неподвижного источника
 при возвращении наблюдателя, а также отсутствие координат в скрытом PlayerInfo.
 
-Protocol v5: отдельные Move/SetActorValues/SetDetails, объединение последних изменений
-на тике, подавление возврата к опубликованному значению, независимая очистка компонентов
-и применение PlayerMetadataChanged без изменения location проверяются managed/native
-тестами. ENet smoke использует `move`, `values`, `details` и проверяет их независимость.
+Protocol v6: reliable SetLocation/SetActorValues/SetDetails и отдельные repeated
+MovementSample. Managed/native тесты проверяют view/context revisions, старые samples,
+повтор остановившегося игрока, clear/reentry и metadata без отката позиции.
+Транспортные тесты проверяют три канала, MTU, перегрузку и выделенного владельца.
 
 Для воспроизводимой трассы движения без сервера: `xmake run Dreamsleeve.Client.Dev --movement-demo`.
 Реальный ENet smoke также проверяет source timestamp и потребителя MovementView через watch.
@@ -195,3 +195,9 @@ Task/ValueTask, struct/list/array, HashSet reuse и snapshot actor values. Эт�
 один сервер, одинаковые суммарные клиенты/сокеты, синхронное измерение и проверка
 межпроцессной доставки. [Методика](Dreamsleeve.Server.NetworkBenchmarks/README.md#multiple-load-processes),
 [результаты 1000 клиентов при 20 Гц](../docs/benchmarks/movement-workers-2026-09-27.md).
+
+## Изоляция ENet
+
+[Транспортный стенд и измеритель установленной DLL](Dreamsleeve.EnetIsolation/README.md) сравнивают xENet с нативным ENet в одинаковом цикле, отдельно от серверных агентов и кодеков. Запускаются вручную, вне обычной тестовой команды.
+
+[Выделенный владелец ENet](Dreamsleeve.EnetWorkerExperiment/README.md) — regression-проверки production TransportOwner; историческое имя проекта сохранено. A/B полного сервера использует одинаковый v6 с inline и owner.

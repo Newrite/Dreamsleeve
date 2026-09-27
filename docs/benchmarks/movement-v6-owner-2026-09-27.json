@@ -1,0 +1,2086 @@
+{
+  "schemaVersion": 1,
+  "runs": [
+    {
+      "run": "v6-inline-spaces-a",
+      "scenario": "spaces",
+      "success": false,
+      "errors": [
+        "A load worker failed"
+      ],
+      "sourceHz": [
+        19.586732756922256,
+        19.66654884095302
+      ],
+      "ageP95Ms": [
+        5255.574535395262,
+        5308.140280749208
+      ],
+      "gapP95Ms": [
+        4437.533198175604,
+        4481.918530157363
+      ],
+      "maxAgeMs": 5325.149300001562,
+      "maxGapMs": 4498.992499999702,
+      "generatorMissedIntervals": 0,
+      "receivedHzPerVisiblePair": 0.3436441104251528,
+      "criteriaPassed": false,
+      "server": {
+        "sampleCount": 56,
+        "sampleSpanSeconds": 5.546999999998661,
+        "cpuCoreEquivalent": 2.112628447810137,
+        "privateMedianMiB": 434.70703125,
+        "privatePeakMiB": 550.17578125,
+        "workingSetPeakMiB": 590.3671875
+      },
+      "metrics": {
+        "transport.enqueue.duration": {
+          "count": 353272,
+          "max": 17.6133,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 253.28680000061166
+        },
+        "transport.enqueue.bytes": {
+          "count": 353272,
+          "max": 1354,
+          "p50": 521.569561294961,
+          "p95": 1354,
+          "p99": 1354,
+          "sum": 285719104
+        },
+        "presence.flush.duration": {
+          "count": 109,
+          "max": 101.7116,
+          "p50": 17.82804665858489,
+          "p95": 34.593704284836676,
+          "p99": 90.60173452271592,
+          "sum": 2334.3804999999998
+        },
+        "presence.flush.interval": {
+          "count": 108,
+          "max": 110,
+          "p50": 47.45468507012729,
+          "p95": 63.022737687058736,
+          "p99": 94.32113226729362,
+          "sum": 5594
+        },
+        "presence.flush.lateness": {
+          "count": 59,
+          "max": 15.91,
+          "p50": 0.6122260776824651,
+          "p95": 4.012594263858814,
+          "p99": 15.91,
+          "sum": 59.987899999999996
+        },
+        "presence.timer.lateness": {
+          "count": 59,
+          "max": 15.8906,
+          "p50": 0.5962634432499654,
+          "p95": 2.645680386163251,
+          "p99": 15.8906,
+          "sum": 56.34049999999999
+        },
+        "presence.tick.queue": {
+          "count": 108,
+          "max": 2.4998,
+          "p50": 0.030301000000000133,
+          "p95": 0.040604010000000024,
+          "p99": 0.05101005010000015,
+          "sum": 5.165099999999996
+        },
+        "runtime.tick.interval": {
+          "count": 7,
+          "max": 1131.7886,
+          "p50": 746.6762155559777,
+          "p95": 1131.7886,
+          "p99": 1131.7886,
+          "sum": 5261.0989
+        },
+        "runtime.timer.lateness": {
+          "count": 6,
+          "max": 0.9756,
+          "p50": 0.5339777935796781,
+          "p95": 0.9756,
+          "p99": 0.9756,
+          "sum": 3.3798999999999997
+        },
+        "runtime.tick.queue": {
+          "count": 7,
+          "max": 671.8058,
+          "p50": 476.8061608275632,
+          "p95": 671.8058,
+          "p99": 671.8058,
+          "sum": 3530.0674
+        },
+        "transport.poll.interval": {
+          "count": 7,
+          "max": 1131.7864,
+          "p50": 746.6762155559777,
+          "p95": 1131.7864,
+          "p99": 1131.7864,
+          "sum": 5261.098800000001
+        },
+        "transport.poll.duration": {
+          "count": 6,
+          "max": 459.3797,
+          "p50": 269.97762972536816,
+          "p95": 459.3797,
+          "p99": 459.3797,
+          "sum": 1712.8597999999997
+        },
+        "transport.poll.events": {
+          "count": 6,
+          "max": 338,
+          "p50": 237.09790847917392,
+          "p95": 338,
+          "p99": 338,
+          "sum": 1374
+        },
+        "transport.pending.bytes": {
+          "count": 6,
+          "max": 6211348,
+          "p50": 6211348,
+          "p95": 6211348,
+          "p99": 6211348,
+          "sum": 32286765
+        },
+        "transport.pending.packets": {
+          "count": 6,
+          "max": 97472,
+          "p50": 97472,
+          "p95": 97472,
+          "p99": 97472,
+          "sum": 506947
+        },
+        "transport.udp.sent.total": {
+          "count": 6,
+          "max": 922765,
+          "p50": 753473.1277105361,
+          "p95": 922765,
+          "p99": 922765,
+          "sum": 4750413
+        },
+        "transport.udp.received.total": {
+          "count": 6,
+          "max": 669246,
+          "p50": 668669.0308940521,
+          "p95": 669246,
+          "p99": 669246,
+          "sum": 4011636
+        },
+        "transport.peer.rtt.max": {
+          "count": 6,
+          "max": 2131,
+          "p50": 1398.4587883419324,
+          "p95": 2131,
+          "p99": 2131,
+          "sum": 8550
+        },
+        "transport.reliable.inflight.bytes": {
+          "count": 6,
+          "max": 6211348,
+          "p50": 6211348,
+          "p95": 6211348,
+          "p99": 6211348,
+          "sum": 32286765
+        },
+        "transport.peer.loss.window": {
+          "count": 6,
+          "max": 319604,
+          "p50": 123189.81146456419,
+          "p95": 319604,
+          "p99": 319604,
+          "sum": 1038778
+        },
+        "transport.peer.timeout.age.max": {
+          "count": 6,
+          "max": 3781,
+          "p50": 1058.160187575627,
+          "p95": 3781,
+          "p99": 3781,
+          "sum": 10486
+        },
+        "transport.peer.receive.age.max": {
+          "count": 6,
+          "max": 4251,
+          "p50": 1529.5674665382714,
+          "p95": 4251,
+          "p99": 4251,
+          "sum": 12610
+        },
+        "runtime.tick.duration": {
+          "count": 6,
+          "max": 459.7688,
+          "p50": 269.97762972536816,
+          "p95": 459.7688,
+          "p99": 459.7688,
+          "sum": 1715.9203
+        }
+      },
+      "loadDeltas": {
+        "udpReceiveErrors": 0,
+        "allocatedBytes": 3452145280,
+        "gcPauseMs": 333.33299999999997,
+        "gen0": 42,
+        "gen1": 15,
+        "gen2": 7
+      },
+      "workerCpuCores": [
+        0.0732377861907514,
+        0.07605462412116493,
+        0.08732197584281898,
+        0.06478727239951086,
+        0.05633675860827031,
+        0.0901388137732325,
+        0.08168829998199195,
+        0.08450513791240546,
+        0.06760411032992437,
+        0.0901388137732325
+      ],
+      "provenance": {
+        "measuredAtUtc": "2026-09-27T17:01:52.981116+00:00",
+        "args": {
+          "clients": 1000,
+          "hosts": 200,
+          "workers": [
+            10
+          ],
+          "rate": 20,
+          "replication_ms": 50,
+          "seconds": 15,
+          "repetitions": 1,
+          "timeout": 600,
+          "udp_trace": false,
+          "peer_trace": false,
+          "server_benchmark": "build\\enet-inline-server\\Dreamsleeve.Server.NetworkBenchmarks.dll",
+          "enet_probe": null,
+          "worker_send_budget": 2048,
+          "server_buffer": 262144,
+          "client_buffer": 262144,
+          "scenario": "spaces",
+          "output": "build\\benchmarks\\v6-inline-spaces-a"
+        },
+        "head": "7f9f675574304f1b2f24e3c2a83e4f8fcfc7a3bd",
+        "logicalProcessors": 16,
+        "clock": "same-machine Stopwatch monotonic; not a distributed-host runner",
+        "diagnosticBinarySha256": {
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\Dreamsleeve.Server.NetworkBenchmarks.dll": "83d01876864f8f49fb9f030ea87f5e85f2bac83b2cd7849a89ea20737ee79d46",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\Dreamsleeve.Server.Infrastructure.dll": "6d7f05f416e3e4233e101748510616c3f00ca3c66bbe16099bd28bb929dba0d9"
+        },
+        "sourceSha256": {
+          "Scripts\\benchmark_enet_workers.py": "116dde3716e4be920ef9f4530217bed786fc0e6eaa4c8ab2880e89744c324f88",
+          "Scripts\\benchmark_enet.py": "34a85ea44a197a54a606e344f3eacf28dc55dea6a3e6f57a3606c6fa22138cf3",
+          "Scripts\\build_enet_worker_experiment.py": "38de3773913dc1212061fadd676738ee2515ae3b3a7fe3434ef6a40c9ce50734",
+          "src\\Dreamsleeve.Server.Infrastructure\\TransportOwner.fs": "4ec78ac76a7bf95711348e138a668d3ec8076d010c773d9e29d655fdcbe43d5a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Coordination.fs": "41bc94a42251644bb5d0aa4cbd088cf90b93d81e1a8e73cde9d3163675f6132f",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "e80b46ae9e1ab3cac78bdcffb55490e7ff27cdbccf700c5e6b469d58e4921145",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "7413c644be5516c86bb3f8d6fae706f2cbb765b072a18009f85a047a19db0a97",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "031ef0c8eb4cace1aefa914648109a4bb70244aef164f9bffd23e6093882f601"
+        },
+        "binarySha256": {
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "6a1bfce347656f36a67fad540bdc009b38f8d58a37740fc2972d0e1852e51a5c",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "a4e4fa72e2d1a20fd74a3a6023bea6290ab5bd8ab761554b2d068e93775fab6d",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "59eb1289adef43a325b7e0f8946505464275f3e76b29cdb01df0c40c454670b3",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "37e10392e6b1b45171a915ae232658755e9fee6a8c865cef1c4d792ad931420a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "27075036c8e3291f1c2139127e8e0ea8d22d13b14d1d8b4d06c12385d599c59e",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "057f5c1b7464227317e6d88d2ac544e6add5dde63b8ac0330fe2ec2e215e3c9d",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "a4e65ec0d9e868258aeb1333dab8d653c24d415c1b62b3038e29968f05158745",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "83d01876864f8f49fb9f030ea87f5e85f2bac83b2cd7849a89ea20737ee79d46"
+        }
+      }
+    },
+    {
+      "run": "v6-inline-spaces-warm-a",
+      "scenario": "spaces",
+      "success": false,
+      "errors": [
+        "A load worker failed"
+      ],
+      "sourceHz": [
+        19.615271242171545,
+        19.684612757797588
+      ],
+      "ageP95Ms": [
+        3425.76051595803,
+        4805.2954367973025
+      ],
+      "gapP95Ms": [
+        2466.620783205386,
+        3227.1634164155075
+      ],
+      "maxAgeMs": 5670.433799996972,
+      "maxGapMs": 3771.747000001371,
+      "generatorMissedIntervals": 0,
+      "receivedHzPerVisiblePair": 0.9724037298147459,
+      "criteriaPassed": false,
+      "server": {
+        "sampleCount": 54,
+        "sampleSpanSeconds": 5.3439999999973224,
+        "cpuCoreEquivalent": 2.049611714072883,
+        "privateMedianMiB": 248.83984375,
+        "privatePeakMiB": 451.98828125,
+        "workingSetPeakMiB": 499.94921875
+      },
+      "metrics": {
+        "transport.poll.duration": {
+          "count": 24,
+          "max": 295.4662,
+          "p50": 42.00107272595147,
+          "p95": 264.63829989742993,
+          "p99": 295.4662,
+          "sum": 2016.1050000000002
+        },
+        "transport.poll.events": {
+          "count": 24,
+          "max": 221,
+          "p50": 179.20096590693572,
+          "p95": 218.87942378864616,
+          "p99": 221,
+          "sum": 4257
+        },
+        "runtime.tick.duration": {
+          "count": 24,
+          "max": 295.761,
+          "p50": 42.431083453210995,
+          "p95": 267.2946828964042,
+          "p99": 295.761,
+          "sum": 2023.9223000000002
+        },
+        "transport.enqueue.duration": {
+          "count": 289314,
+          "max": 4.5487,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 257.177100000242
+        },
+        "transport.enqueue.bytes": {
+          "count": 289314,
+          "max": 1354,
+          "p50": 1354,
+          "p95": 1354,
+          "p99": 1354,
+          "sum": 308826405
+        },
+        "presence.flush.duration": {
+          "count": 110,
+          "max": 39.532,
+          "p50": 18.59254085339054,
+          "p95": 27.881805470751285,
+          "p99": 34.949641327685036,
+          "sum": 2180.1645999999996
+        },
+        "runtime.tick.interval": {
+          "count": 23,
+          "max": 752.9113,
+          "p50": 107.48434011669967,
+          "p95": 669.1599250267775,
+          "p99": 752.9113,
+          "sum": 4958.995999999999
+        },
+        "runtime.timer.lateness": {
+          "count": 21,
+          "max": 0.9895,
+          "p50": 0.6122260776824651,
+          "p95": 0.9868944241538466,
+          "p99": 0.9895,
+          "sum": 12.6989
+        },
+        "runtime.tick.queue": {
+          "count": 23,
+          "max": 487.4187,
+          "p50": 72.59248603215056,
+          "p95": 431.5516842691306,
+          "p99": 487.4187,
+          "sum": 3214.5251000000003
+        },
+        "transport.poll.interval": {
+          "count": 23,
+          "max": 752.9111,
+          "p50": 107.48434011669967,
+          "p95": 669.1599250267775,
+          "p99": 752.9111,
+          "sum": 4958.9971000000005
+        },
+        "transport.pending.bytes": {
+          "count": 17,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.pending.packets": {
+          "count": 17,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.udp.sent.total": {
+          "count": 17,
+          "max": 1251110,
+          "p50": 1056804.4712009912,
+          "p95": 1251110,
+          "p99": 1251110,
+          "sum": 18280705
+        },
+        "transport.udp.received.total": {
+          "count": 17,
+          "max": 722398,
+          "p50": 722398,
+          "p95": 722398,
+          "p99": 722398,
+          "sum": 12241854
+        },
+        "transport.peer.rtt.max": {
+          "count": 17,
+          "max": 762,
+          "p50": 286.648214315575,
+          "p95": 762,
+          "p99": 762,
+          "sum": 6474
+        },
+        "transport.reliable.inflight.bytes": {
+          "count": 17,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.peer.loss.window": {
+          "count": 17,
+          "max": 12580,
+          "p50": 8730.581052353311,
+          "p95": 12580,
+          "p99": 12580,
+          "sum": 132817
+        },
+        "transport.peer.timeout.age.max": {
+          "count": 17,
+          "max": 4751,
+          "p50": 1101.1663384235487,
+          "p95": 4751,
+          "p99": 4751,
+          "sum": 26633
+        },
+        "transport.peer.receive.age.max": {
+          "count": 17,
+          "max": 5275,
+          "p50": 1656.3852445571497,
+          "p95": 5275,
+          "p99": 5275,
+          "sum": 35803
+        },
+        "presence.flush.interval": {
+          "count": 110,
+          "max": 63,
+          "p50": 47.45468507012729,
+          "p95": 63,
+          "p99": 63,
+          "sum": 5500
+        },
+        "presence.flush.lateness": {
+          "count": 24,
+          "max": 4.8099,
+          "p50": 0.2824319950172338,
+          "p95": 2.8316467253100264,
+          "p99": 4.8099,
+          "sum": 16.8142
+        },
+        "presence.timer.lateness": {
+          "count": 20,
+          "max": 4.7852,
+          "p50": 0.430768783591581,
+          "p95": 2.793709629019828,
+          "p99": 4.7852,
+          "sum": 16.321700000000003
+        },
+        "presence.tick.queue": {
+          "count": 110,
+          "max": 0.0733,
+          "p50": 0.030301000000000133,
+          "p95": 0.05101005010000015,
+          "p99": 0.061520150601000134,
+          "sum": 2.9135
+        }
+      },
+      "loadDeltas": {
+        "udpReceiveErrors": 0,
+        "allocatedBytes": 3469558320,
+        "gcPauseMs": 239.50200000000007,
+        "gen0": 38,
+        "gen1": 20,
+        "gen2": 4
+      },
+      "workerCpuCores": [
+        0.0760198353293794,
+        0.06432447604793642,
+        0.058476796407214926,
+        0.07017215568865791,
+        0.046781437125771944,
+        0.052629116766493435,
+        0.058476796407214926,
+        0.061400636227575675,
+        0.06432447604793642,
+        0.0760198353293794
+      ],
+      "provenance": {
+        "measuredAtUtc": "2026-09-27T17:19:52.691561+00:00",
+        "args": {
+          "clients": 1000,
+          "hosts": 200,
+          "workers": [
+            10
+          ],
+          "rate": 20,
+          "replication_ms": 50,
+          "seconds": 15,
+          "repetitions": 1,
+          "timeout": 600,
+          "warm_positions": true,
+          "udp_trace": false,
+          "peer_trace": false,
+          "server_benchmark": "build\\enet-inline-server\\Dreamsleeve.Server.NetworkBenchmarks.dll",
+          "enet_probe": null,
+          "worker_send_budget": 2048,
+          "server_buffer": 262144,
+          "client_buffer": 262144,
+          "scenario": "spaces",
+          "output": "build\\benchmarks\\v6-inline-spaces-warm-a"
+        },
+        "head": "0b8bf62160f9c6a17ace9a975ef8d4e5612a2eef",
+        "logicalProcessors": 16,
+        "clock": "same-machine Stopwatch monotonic; not a distributed-host runner",
+        "diagnosticBinarySha256": {
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\Dreamsleeve.Server.NetworkBenchmarks.dll": "05e71506408dfb1b47b8fc037b57b8b9fc78e130ce9ea54d95e9ccae27219fa5",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\Dreamsleeve.Server.Infrastructure.dll": "0ac81dea3beaed418f2c387fd5454d5e4b0ce0d16428f97551a4a14ce3407ce6"
+        },
+        "sourceSha256": {
+          "Scripts\\benchmark_enet_workers.py": "70f2b3c77acedce6ebc6a83572de8b7f800e8fe070eb15eebf286e6ea5c30e54",
+          "Scripts\\benchmark_enet.py": "34a85ea44a197a54a606e344f3eacf28dc55dea6a3e6f57a3606c6fa22138cf3",
+          "Scripts\\build_enet_worker_experiment.py": "38de3773913dc1212061fadd676738ee2515ae3b3a7fe3434ef6a40c9ce50734",
+          "src\\Dreamsleeve.Server.Infrastructure\\TransportOwner.fs": "4ec78ac76a7bf95711348e138a668d3ec8076d010c773d9e29d655fdcbe43d5a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Coordination.fs": "41bc94a42251644bb5d0aa4cbd088cf90b93d81e1a8e73cde9d3163675f6132f",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "e80b46ae9e1ab3cac78bdcffb55490e7ff27cdbccf700c5e6b469d58e4921145",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "ec9f398ca659389a932b047d7d7a8e469e328b42d126859e9219e1bd8673a58e",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "40ed76273d6a201a1cd65906636f30691afc071739890023dc75f0194e93a437"
+        },
+        "binarySha256": {
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "7765e271d822a6dc0dc342e9f2e92e7962f1360b8fc6e4e21dd064c81456b011",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "84603330228780e7fd6a686e2d02dd95e83dbcf24114cfa6e9bf74ee3247fa50",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "08eb9c8e81491857f9e034bb590578d47b6e9d6dbc7463f20b388444e4614088",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "5dd24b09335b503c82ba8ad485982aa4929a953fdfe3857be333e29f7ed4627c",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "e42158bbaf82d5b6041c177a69ecb54ff3aaff75174ca6c57d8bbf4180a2e054",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "47717ed234e8d969333e30710f8541f024e59c1c4008e4ffb4bd6d29088fad19",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "57d58975b35cfb85fb53370fb89fff1e680a63b3a72822bc40374533eb35db68",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "05e71506408dfb1b47b8fc037b57b8b9fc78e130ce9ea54d95e9ccae27219fa5"
+        }
+      }
+    },
+    {
+      "run": "v6-inline-sparse-a",
+      "scenario": "sparse",
+      "success": true,
+      "errors": [],
+      "sourceHz": [
+        19.63862071516588,
+        19.68532937663248
+      ],
+      "ageP95Ms": [
+        53.59995196418128,
+        68.32745081709915
+      ],
+      "gapP95Ms": [
+        55.81692895973442,
+        106.41023773930662
+      ],
+      "maxAgeMs": 390.00450000166893,
+      "maxGapMs": 887.0707000046968,
+      "generatorMissedIntervals": 0,
+      "receivedHzPerVisiblePair": 17.870362514151317,
+      "criteriaPassed": false,
+      "server": {
+        "sampleCount": 149,
+        "sampleSpanSeconds": 14.906000000002678,
+        "cpuCoreEquivalent": 0.7767425868776278,
+        "privateMedianMiB": 95.63671875,
+        "privatePeakMiB": 127.69921875,
+        "workingSetPeakMiB": 184.44140625
+      },
+      "metrics": {
+        "transport.enqueue.duration": {
+          "count": 315327,
+          "max": 4.8458,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 171.04000000028444
+        },
+        "transport.enqueue.bytes": {
+          "count": 315327,
+          "max": 828,
+          "p50": 824.8996903468498,
+          "p95": 828,
+          "p99": 828,
+          "sum": 246769187
+        },
+        "presence.flush.duration": {
+          "count": 300,
+          "max": 16.2526,
+          "p50": 6.5377005087582525,
+          "p95": 11.645916636849327,
+          "p99": 12.96895931316941,
+          "sum": 2151.079199999999
+        },
+        "runtime.tick.interval": {
+          "count": 8668,
+          "max": 118.3007,
+          "p50": 1.0675703052211336,
+          "p95": 5.428311262012402,
+          "p99": 8.666588301289265,
+          "sum": 15059.63499999999
+        },
+        "runtime.timer.lateness": {
+          "count": 8324,
+          "max": 0.9998,
+          "p50": 0.4595272361417717,
+          "p95": 0.9477447545866549,
+          "p99": 0.9998,
+          "sum": 3971.498100000008
+        },
+        "runtime.tick.queue": {
+          "count": 8668,
+          "max": 112.4264,
+          "p50": 0.020100000000000007,
+          "p95": 2.3667246711545995,
+          "p99": 5.3646646158538625,
+          "sum": 2632.784400000022
+        },
+        "transport.poll.interval": {
+          "count": 8668,
+          "max": 118.2887,
+          "p50": 1.0675703052211336,
+          "p95": 5.428311262012402,
+          "p99": 8.666588301289265,
+          "sum": 15059.63760000005
+        },
+        "presence.flush.interval": {
+          "count": 300,
+          "max": 63,
+          "p50": 47.45468507012729,
+          "p95": 62.38884919510767,
+          "p99": 62.38884919510767,
+          "sum": 15000
+        },
+        "presence.flush.lateness": {
+          "count": 168,
+          "max": 13.148,
+          "p50": 0.37494067853109736,
+          "p95": 1.2167152171942583,
+          "p99": 3.1906155936008354,
+          "sum": 90.19199999999996
+        },
+        "presence.timer.lateness": {
+          "count": 167,
+          "max": 13.1249,
+          "p50": 0.37494067853109736,
+          "p95": 1.1947675417764936,
+          "p99": 3.067370208900928,
+          "sum": 87.49259999999998
+        },
+        "presence.tick.queue": {
+          "count": 300,
+          "max": 0.2251,
+          "p50": 0.020100000000000007,
+          "p95": 0.040604010000000024,
+          "p99": 0.11566834666531656,
+          "sum": 6.173000000000004
+        },
+        "transport.poll.duration": {
+          "count": 8668,
+          "max": 37.9209,
+          "p50": 0.061520150601000134,
+          "p95": 2.171606934873976,
+          "p99": 4.21612569147448,
+          "sum": 2838.569999999998
+        },
+        "transport.poll.events": {
+          "count": 8668,
+          "max": 256,
+          "p50": 20.005855686520842,
+          "p95": 132.69522641373186,
+          "p99": 237.09790847917392,
+          "sum": 292105
+        },
+        "transport.pending.bytes": {
+          "count": 137,
+          "max": 1537051,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 1482250.0327646008,
+          "sum": 4253868
+        },
+        "transport.pending.packets": {
+          "count": 137,
+          "max": 24178,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 23382.466517940833,
+          "sum": 67008
+        },
+        "transport.udp.sent.total": {
+          "count": 137,
+          "max": 1038541,
+          "p50": 866098.0801449714,
+          "p95": 1025723.9786237137,
+          "p99": 1035981.2284099516,
+          "sum": 118274822
+        },
+        "transport.udp.received.total": {
+          "count": 137,
+          "max": 1021244,
+          "p50": 849032.5066610839,
+          "p95": 1015568.2857660525,
+          "p99": 1021244,
+          "sum": 115895309
+        },
+        "transport.peer.rtt.max": {
+          "count": 137,
+          "max": 291,
+          "p50": 50.43562459296555,
+          "p95": 254.27318494326187,
+          "p99": 291,
+          "sum": 11586
+        },
+        "transport.reliable.inflight.bytes": {
+          "count": 137,
+          "max": 1537051,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 1482250.0327646008,
+          "sum": 4253868
+        },
+        "transport.peer.loss.window": {
+          "count": 137,
+          "max": 66667,
+          "p50": 13129.135709392285,
+          "p95": 57829.095364002416,
+          "p99": 66473.2033699934,
+          "sum": 2609756
+        },
+        "transport.peer.timeout.age.max": {
+          "count": 137,
+          "max": 251,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 249.24329471940177,
+          "sum": 851
+        },
+        "transport.peer.receive.age.max": {
+          "count": 137,
+          "max": 514,
+          "p50": 414.6736665555715,
+          "p95": 506.2008677997608,
+          "p99": 511.27287647775825,
+          "sum": 52823
+        },
+        "runtime.tick.duration": {
+          "count": 8667,
+          "max": 38.3284,
+          "p50": 0.12682503013196977,
+          "p95": 2.3667246711545995,
+          "p99": 4.482200524324491,
+          "sum": 3489.789999999997
+        }
+      },
+      "loadDeltas": {
+        "udpReceiveErrors": 0,
+        "allocatedBytes": 3299390432,
+        "gcPauseMs": 387.38300000000004,
+        "gen0": 83,
+        "gen1": 77,
+        "gen2": 0
+      },
+      "workerCpuCores": [
+        0.038784717563390324,
+        0.04612236683213984,
+        0.039832953173211685,
+        0.034591775124104884,
+        0.0314470682946408,
+        0.034591775124104884,
+        0.038784717563390324,
+        0.038784717563390324,
+        0.03773648195356896,
+        0.0366882463437476
+      ],
+      "provenance": {
+        "measuredAtUtc": "2026-09-27T16:57:19.806867+00:00",
+        "args": {
+          "clients": 1000,
+          "hosts": 200,
+          "workers": [
+            10
+          ],
+          "rate": 20,
+          "replication_ms": 50,
+          "seconds": 15,
+          "repetitions": 1,
+          "timeout": 600,
+          "udp_trace": false,
+          "peer_trace": false,
+          "server_benchmark": "build\\enet-inline-server\\Dreamsleeve.Server.NetworkBenchmarks.dll",
+          "enet_probe": null,
+          "worker_send_budget": 2048,
+          "server_buffer": 262144,
+          "client_buffer": 262144,
+          "scenario": "sparse",
+          "output": "build\\benchmarks\\v6-inline-sparse-a"
+        },
+        "head": "05730bdab6c8f36d5f5b92f27c612d0082d8316e",
+        "logicalProcessors": 16,
+        "clock": "same-machine Stopwatch monotonic; not a distributed-host runner",
+        "diagnosticBinarySha256": {
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\Dreamsleeve.Server.NetworkBenchmarks.dll": "83d01876864f8f49fb9f030ea87f5e85f2bac83b2cd7849a89ea20737ee79d46",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-inline-server\\Dreamsleeve.Server.Infrastructure.dll": "6d7f05f416e3e4233e101748510616c3f00ca3c66bbe16099bd28bb929dba0d9"
+        },
+        "sourceSha256": {
+          "Scripts\\benchmark_enet_workers.py": "116dde3716e4be920ef9f4530217bed786fc0e6eaa4c8ab2880e89744c324f88",
+          "Scripts\\benchmark_enet.py": "34a85ea44a197a54a606e344f3eacf28dc55dea6a3e6f57a3606c6fa22138cf3",
+          "Scripts\\build_enet_worker_experiment.py": "38de3773913dc1212061fadd676738ee2515ae3b3a7fe3434ef6a40c9ce50734",
+          "src\\Dreamsleeve.Server.Infrastructure\\TransportOwner.fs": "4ec78ac76a7bf95711348e138a668d3ec8076d010c773d9e29d655fdcbe43d5a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Coordination.fs": "41bc94a42251644bb5d0aa4cbd088cf90b93d81e1a8e73cde9d3163675f6132f",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "e80b46ae9e1ab3cac78bdcffb55490e7ff27cdbccf700c5e6b469d58e4921145",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "7413c644be5516c86bb3f8d6fae706f2cbb765b072a18009f85a047a19db0a97",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "031ef0c8eb4cace1aefa914648109a4bb70244aef164f9bffd23e6093882f601"
+        },
+        "binarySha256": {
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "6a1bfce347656f36a67fad540bdc009b38f8d58a37740fc2972d0e1852e51a5c",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "a4e4fa72e2d1a20fd74a3a6023bea6290ab5bd8ab761554b2d068e93775fab6d",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "59eb1289adef43a325b7e0f8946505464275f3e76b29cdb01df0c40c454670b3",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "37e10392e6b1b45171a915ae232658755e9fee6a8c865cef1c4d792ad931420a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "27075036c8e3291f1c2139127e8e0ea8d22d13b14d1d8b4d06c12385d599c59e",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "057f5c1b7464227317e6d88d2ac544e6add5dde63b8ac0330fe2ec2e215e3c9d",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "a4e65ec0d9e868258aeb1333dab8d653c24d415c1b62b3038e29968f05158745",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "83d01876864f8f49fb9f030ea87f5e85f2bac83b2cd7849a89ea20737ee79d46"
+        }
+      }
+    },
+    {
+      "run": "v6-owner-spaces-a",
+      "scenario": "spaces",
+      "success": true,
+      "errors": [],
+      "sourceHz": [
+        19.59939234017803,
+        19.664117697578973
+      ],
+      "ageP95Ms": [
+        57.53853872414334,
+        95.27434358996653
+      ],
+      "gapP95Ms": [
+        56.3850982493318,
+        66.96142615145494
+      ],
+      "maxAgeMs": 741.3976000025868,
+      "maxGapMs": 703.3219999969006,
+      "generatorMissedIntervals": 0,
+      "receivedHzPerVisiblePair": 18.65532413283808,
+      "criteriaPassed": true,
+      "server": {
+        "sampleCount": 149,
+        "sampleSpanSeconds": 14.906000000002678,
+        "cpuCoreEquivalent": 2.615347846504293,
+        "privateMedianMiB": 217.359375,
+        "privatePeakMiB": 249.34765625,
+        "workingSetPeakMiB": 291.96484375
+      },
+      "metrics": {
+        "runtime.timer.lateness": {
+          "count": 9413,
+          "max": 0.9999,
+          "p50": 0.5648107472306296,
+          "p95": 0.9477447545866549,
+          "p99": 0.9868944241538466,
+          "sum": 4928.715199999993
+        },
+        "runtime.tick.queue": {
+          "count": 9582,
+          "max": 194.2417,
+          "p50": 0.030301000000000133,
+          "p95": 1.573537550058798,
+          "p99": 4.012594263858814,
+          "sum": 4015.410000000035
+        },
+        "runtime.tick.duration": {
+          "count": 9582,
+          "max": 4.2048,
+          "p50": 0.030301000000000133,
+          "p95": 0.10462212541120453,
+          "p99": 0.2323919403474468,
+          "sum": 381.26420000000087
+        },
+        "transport.poll.duration": {
+          "count": 21741,
+          "max": 20.8485,
+          "p50": 0.020100000000000007,
+          "p95": 3.1906155936008354,
+          "p99": 4.704799849236168,
+          "sum": 7629.061900000174
+        },
+        "transport.poll.events": {
+          "count": 21741,
+          "max": 256,
+          "p50": 1.0067633683953852,
+          "p95": 90.60173452271592,
+          "p99": 188.39302620591704,
+          "sum": 296352
+        },
+        "transport.poll.interval": {
+          "count": 21740,
+          "max": 60.0774,
+          "p50": 0.040604010000000024,
+          "p95": 4.877660989467873,
+          "p99": 6.766100371874138,
+          "sum": 15099.649399999875
+        },
+        "transport.enqueue.duration": {
+          "count": 976417,
+          "max": 40.6891,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 530.0948000008543
+        },
+        "transport.enqueue.bytes": {
+          "count": 976417,
+          "max": 1364,
+          "p50": 1357.3009123954391,
+          "p95": 1364,
+          "p99": 1364,
+          "sum": 957537418
+        },
+        "transport.pending.bytes": {
+          "count": 138,
+          "max": 86272,
+          "p50": 0.010000000000000009,
+          "p95": 204.08550842627199,
+          "p99": 36589.69971478141,
+          "sum": 215194
+        },
+        "transport.pending.packets": {
+          "count": 138,
+          "max": 1348,
+          "p50": 0.010000000000000009,
+          "p95": 29.054522588903726,
+          "p99": 576.2418994728409,
+          "sum": 3392
+        },
+        "transport.udp.sent.total": {
+          "count": 138,
+          "max": 1845405,
+          "p50": 1368832.960265189,
+          "p95": 1808626.9468819525,
+          "p99": 1844980.3686142822,
+          "sum": 189011835
+        },
+        "transport.udp.received.total": {
+          "count": 138,
+          "max": 1236490,
+          "p50": 1067372.5259129999,
+          "p95": 1226917.3439295134,
+          "p99": 1236490,
+          "sum": 146278035
+        },
+        "transport.peer.rtt.max": {
+          "count": 138,
+          "max": 53,
+          "p50": 9.059090549340697,
+          "p95": 13.108648906301108,
+          "p99": 28.17062352545879,
+          "sum": 1419
+        },
+        "transport.reliable.inflight.bytes": {
+          "count": 138,
+          "max": 86272,
+          "p50": 0.010000000000000009,
+          "p95": 204.08550842627199,
+          "p99": 36589.69971478141,
+          "sum": 215194
+        },
+        "transport.peer.loss.window": {
+          "count": 138,
+          "max": 1533,
+          "p50": 435.8772011118218,
+          "p95": 1533,
+          "p99": 1533,
+          "sum": 93567
+        },
+        "transport.peer.timeout.age.max": {
+          "count": 138,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.peer.receive.age.max": {
+          "count": 138,
+          "max": 543,
+          "p50": 467.39149184154826,
+          "p95": 501.17907702946576,
+          "p99": 511.27287647775825,
+          "sum": 58576
+        },
+        "incoming.queue.count": {
+          "count": 138,
+          "max": 5956,
+          "p50": 72.59248603215056,
+          "p95": 256.82591679269444,
+          "p99": 5523.712665800157,
+          "sum": 31818
+        },
+        "incoming.queue.bytes": {
+          "count": 138,
+          "max": 184636,
+          "p50": 2255.2439532067697,
+          "p95": 8224.544326605359,
+          "p99": 171072.8584829231,
+          "sum": 993190
+        },
+        "incoming.queue.age": {
+          "count": 138,
+          "max": 300.6951,
+          "p50": 0.020100000000000007,
+          "p95": 1.4731190013949664,
+          "p99": 280.9804081125133,
+          "sum": 1061.7370999999991
+        },
+        "outgoing.queue.count": {
+          "count": 138,
+          "max": 46601,
+          "p50": 272.68740602262204,
+          "p95": 9085.118256718884,
+          "p99": 39621.484549774534,
+          "sum": 227184
+        },
+        "outgoing.queue.bytes": {
+          "count": 138,
+          "max": 12582801,
+          "p50": 298661.4219491015,
+          "p95": 2830159.449022548,
+          "p99": 12582801,
+          "sum": 108124342
+        },
+        "outgoing.queue.age": {
+          "count": 138,
+          "max": 315.7224,
+          "p50": 2.9477494527336456,
+          "p95": 101.19715570663375,
+          "p99": 272.68740602262204,
+          "sum": 1952.6439999999984
+        },
+        "realtime.dropped": {
+          "count": 138,
+          "max": 7899,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 3101.201591953802,
+          "sum": 13649
+        },
+        "native.send.failures": {
+          "count": 138,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "runtime.tick.interval": {
+          "count": 9581,
+          "max": 197.1549,
+          "p50": 1.1091284683560785,
+          "p95": 2.756148147544384,
+          "p99": 6.030549355493982,
+          "sum": 15098.581599999987
+        },
+        "presence.flush.interval": {
+          "count": 297,
+          "max": 156,
+          "p50": 47.45468507012729,
+          "p95": 62.38884919510767,
+          "p99": 94.32113226729362,
+          "sum": 15109
+        },
+        "presence.flush.lateness": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "presence.timer.lateness": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "presence.tick.queue": {
+          "count": 297,
+          "max": 0.1845,
+          "p50": 0.030301000000000133,
+          "p95": 0.061520150601000134,
+          "p99": 0.16096895536999867,
+          "sum": 8.159099999999993
+        },
+        "presence.flush.duration": {
+          "count": 297,
+          "max": 112.383,
+          "p50": 25.671862787236666,
+          "p95": 35.672229118371504,
+          "p99": 84.438591631827,
+          "sum": 7958.213199999995
+        }
+      },
+      "loadDeltas": {
+        "udpReceiveErrors": 0,
+        "allocatedBytes": 11162708344,
+        "gcPauseMs": 1037.754,
+        "gen0": 227,
+        "gen1": 37,
+        "gen2": 4
+      },
+      "workerCpuCores": [
+        0.10377532537231465,
+        0.10482356098213601,
+        0.11320944586070689,
+        0.11949885951963504,
+        0.11425768147052826,
+        0.10692003220177873,
+        0.10272708976249328,
+        0.10272708976249328,
+        0.10167885415267193,
+        0.08805179122499425
+      ],
+      "provenance": {
+        "measuredAtUtc": "2026-09-27T17:06:31.785496+00:00",
+        "args": {
+          "clients": 1000,
+          "hosts": 200,
+          "workers": [
+            10
+          ],
+          "rate": 20,
+          "replication_ms": 50,
+          "seconds": 15,
+          "repetitions": 1,
+          "timeout": 600,
+          "udp_trace": false,
+          "peer_trace": false,
+          "server_benchmark": "build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll",
+          "enet_probe": null,
+          "worker_send_budget": 2048,
+          "server_buffer": 262144,
+          "client_buffer": 262144,
+          "scenario": "spaces",
+          "output": "build\\benchmarks\\v6-owner-spaces-a"
+        },
+        "head": "7f9f675574304f1b2f24e3c2a83e4f8fcfc7a3bd",
+        "logicalProcessors": 16,
+        "clock": "same-machine Stopwatch monotonic; not a distributed-host runner",
+        "diagnosticBinarySha256": {
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll": "83d01876864f8f49fb9f030ea87f5e85f2bac83b2cd7849a89ea20737ee79d46",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.Infrastructure.dll": "057f5c1b7464227317e6d88d2ac544e6add5dde63b8ac0330fe2ec2e215e3c9d"
+        },
+        "sourceSha256": {
+          "Scripts\\benchmark_enet_workers.py": "116dde3716e4be920ef9f4530217bed786fc0e6eaa4c8ab2880e89744c324f88",
+          "Scripts\\benchmark_enet.py": "34a85ea44a197a54a606e344f3eacf28dc55dea6a3e6f57a3606c6fa22138cf3",
+          "Scripts\\build_enet_worker_experiment.py": "38de3773913dc1212061fadd676738ee2515ae3b3a7fe3434ef6a40c9ce50734",
+          "src\\Dreamsleeve.Server.Infrastructure\\TransportOwner.fs": "4ec78ac76a7bf95711348e138a668d3ec8076d010c773d9e29d655fdcbe43d5a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Coordination.fs": "41bc94a42251644bb5d0aa4cbd088cf90b93d81e1a8e73cde9d3163675f6132f",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "e80b46ae9e1ab3cac78bdcffb55490e7ff27cdbccf700c5e6b469d58e4921145",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "7413c644be5516c86bb3f8d6fae706f2cbb765b072a18009f85a047a19db0a97",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "031ef0c8eb4cace1aefa914648109a4bb70244aef164f9bffd23e6093882f601"
+        },
+        "binarySha256": {
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "6a1bfce347656f36a67fad540bdc009b38f8d58a37740fc2972d0e1852e51a5c",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "a4e4fa72e2d1a20fd74a3a6023bea6290ab5bd8ab761554b2d068e93775fab6d",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "59eb1289adef43a325b7e0f8946505464275f3e76b29cdb01df0c40c454670b3",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "37e10392e6b1b45171a915ae232658755e9fee6a8c865cef1c4d792ad931420a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "27075036c8e3291f1c2139127e8e0ea8d22d13b14d1d8b4d06c12385d599c59e",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "057f5c1b7464227317e6d88d2ac544e6add5dde63b8ac0330fe2ec2e215e3c9d",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "a4e65ec0d9e868258aeb1333dab8d653c24d415c1b62b3038e29968f05158745",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "83d01876864f8f49fb9f030ea87f5e85f2bac83b2cd7849a89ea20737ee79d46"
+        }
+      }
+    },
+    {
+      "run": "v6-owner-spaces-warm-a",
+      "scenario": "spaces",
+      "success": true,
+      "errors": [],
+      "sourceHz": [
+        19.605078430613364,
+        19.65395809359993
+      ],
+      "ageP95Ms": [
+        53.05935838037751,
+        86.15590732362676
+      ],
+      "gapP95Ms": [
+        55.25438510864795,
+        63.022737687058736
+      ],
+      "maxAgeMs": 109.33749999850988,
+      "maxGapMs": 154.9492999985814,
+      "generatorMissedIntervals": 0,
+      "receivedHzPerVisiblePair": 19.420825936335643,
+      "criteriaPassed": true,
+      "server": {
+        "sampleCount": 149,
+        "sampleSpanSeconds": 14.921999999998661,
+        "cpuCoreEquivalent": 2.339247419917111,
+        "privateMedianMiB": 154.15234375,
+        "privatePeakMiB": 193.66796875,
+        "workingSetPeakMiB": 243.38671875
+      },
+      "metrics": {
+        "transport.poll.duration": {
+          "count": 23658,
+          "max": 14.6566,
+          "p50": 0.020100000000000007,
+          "p95": 2.9477494527336456,
+          "p99": 4.482200524324491,
+          "sum": 7658.48340000018
+        },
+        "transport.poll.events": {
+          "count": 23658,
+          "max": 256,
+          "p50": 1.0067633683953852,
+          "p95": 86.15590732362676,
+          "p99": 165.41256869016226,
+          "sum": 294365
+        },
+        "runtime.tick.duration": {
+          "count": 9411,
+          "max": 2.9887,
+          "p50": 0.030301000000000133,
+          "p95": 0.12682503013196977,
+          "p99": 0.2323919403474468,
+          "sum": 374.17600000000033
+        },
+        "transport.poll.interval": {
+          "count": 23658,
+          "max": 16.7219,
+          "p50": 0.040604010000000024,
+          "p95": 4.482200524324491,
+          "p99": 6.463069810651737,
+          "sum": 15000.6071
+        },
+        "runtime.tick.interval": {
+          "count": 9410,
+          "max": 15.7125,
+          "p50": 1.1515219505700358,
+          "p95": 3.1906155936008354,
+          "p99": 5.8920197583511245,
+          "sum": 14999.70349999998
+        },
+        "runtime.timer.lateness": {
+          "count": 9075,
+          "max": 0.9998,
+          "p50": 0.5187898946333447,
+          "p95": 0.9477447545866549,
+          "p99": 0.9998,
+          "sum": 4542.2462000000105
+        },
+        "runtime.tick.queue": {
+          "count": 9410,
+          "max": 15.4052,
+          "p50": 0.030301000000000133,
+          "p95": 2.1402048860138376,
+          "p99": 4.482200524324491,
+          "sum": 4246.251500000016
+        },
+        "presence.flush.interval": {
+          "count": 299,
+          "max": 94,
+          "p50": 47.45468507012729,
+          "p95": 62.38884919510767,
+          "p99": 62.38884919510767,
+          "sum": 15000
+        },
+        "presence.flush.lateness": {
+          "count": 36,
+          "max": 3.9142,
+          "p50": 0.2824319950172338,
+          "p95": 3.4043791049802543,
+          "p99": 3.9142,
+          "sum": 16.9569
+        },
+        "presence.timer.lateness": {
+          "count": 35,
+          "max": 3.366,
+          "p50": 0.26973464853191476,
+          "p95": 3.3607713910695587,
+          "p99": 3.366,
+          "sum": 15.711900000000002
+        },
+        "presence.tick.queue": {
+          "count": 299,
+          "max": 0.5525,
+          "p50": 0.020100000000000007,
+          "p95": 0.05101005010000015,
+          "p99": 0.09368527268436111,
+          "sum": 7.151899999999997
+        },
+        "transport.enqueue.duration": {
+          "count": 896532,
+          "max": 9.5265,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 452.30850000024316
+        },
+        "transport.enqueue.bytes": {
+          "count": 896532,
+          "max": 1364,
+          "p50": 1357.3009123954391,
+          "p95": 1364,
+          "p99": 1364,
+          "sum": 974118760
+        },
+        "incoming.queue.count": {
+          "count": 138,
+          "max": 256,
+          "p50": 68.32745081709915,
+          "p95": 232.40643905418491,
+          "p99": 254.27318494326187,
+          "sum": 11485
+        },
+        "incoming.queue.bytes": {
+          "count": 138,
+          "max": 8192,
+          "p50": 2145.7387043464482,
+          "p95": 7445.477974124701,
+          "p99": 8143.103293668667,
+          "sum": 362726
+        },
+        "incoming.queue.age": {
+          "count": 138,
+          "max": 2.5973,
+          "p50": 0.020100000000000007,
+          "p95": 0.040604010000000024,
+          "p99": 0.8904618694795547,
+          "sum": 5.145300000000003
+        },
+        "outgoing.queue.count": {
+          "count": 138,
+          "max": 1066,
+          "p50": 206.13636351053466,
+          "p95": 858.4345296326901,
+          "p99": 986.8978297787831,
+          "sum": 39600
+        },
+        "outgoing.queue.bytes": {
+          "count": 138,
+          "max": 1141842,
+          "p50": 226037.34388591629,
+          "p95": 919380.6259908781,
+          "p99": 1099715.01112169,
+          "sum": 43124278
+        },
+        "outgoing.queue.age": {
+          "count": 138,
+          "max": 23.4803,
+          "p50": 3.1906155936008354,
+          "p95": 10.91302551316581,
+          "p99": 14.740572998974383,
+          "sum": 537.1863000000001
+        },
+        "realtime.dropped": {
+          "count": 138,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "native.send.failures": {
+          "count": 138,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "presence.flush.duration": {
+          "count": 299,
+          "max": 46.4501,
+          "p50": 24.377362266610984,
+          "p95": 33.892367694183584,
+          "p99": 40.32318568131547,
+          "sum": 7405.535699999993
+        },
+        "transport.pending.bytes": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.pending.packets": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.udp.sent.total": {
+          "count": 137,
+          "max": 2153611,
+          "p50": 1686938.9403046959,
+          "p95": 2120757.5071259714,
+          "p99": 2153611,
+          "sum": 230218685
+        },
+        "transport.udp.received.total": {
+          "count": 137,
+          "max": 1282425,
+          "p50": 1110712.1712329078,
+          "p95": 1276735.1486356119,
+          "p99": 1282425,
+          "sum": 151725001
+        },
+        "transport.peer.rtt.max": {
+          "count": 137,
+          "max": 8,
+          "p50": 8,
+          "p95": 8,
+          "p99": 8,
+          "sum": 1096
+        },
+        "transport.reliable.inflight.bytes": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.peer.loss.window": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.peer.timeout.age.max": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.peer.receive.age.max": {
+          "count": 137,
+          "max": 504,
+          "p50": 491.2841653067993,
+          "p95": 504,
+          "p99": 504,
+          "sum": 65790
+        }
+      },
+      "loadDeltas": {
+        "udpReceiveErrors": 0,
+        "allocatedBytes": 11122161696,
+        "gcPauseMs": 615.1729999999999,
+        "gen0": 193,
+        "gen1": 79,
+        "gen2": 2
+      },
+      "workerCpuCores": [
+        0.11727650449002526,
+        0.09528715989814553,
+        0.10680538801770158,
+        0.09214582495644842,
+        0.10785249966493395,
+        0.12565339766788422,
+        0.10471116472323684,
+        0.08586315507305421,
+        0.08795737836751895,
+        0.09424004825091316
+      ],
+      "provenance": {
+        "measuredAtUtc": "2026-09-27T17:15:14.789308+00:00",
+        "args": {
+          "clients": 1000,
+          "hosts": 200,
+          "workers": [
+            10
+          ],
+          "rate": 20,
+          "replication_ms": 50,
+          "seconds": 15,
+          "repetitions": 1,
+          "timeout": 600,
+          "warm_positions": true,
+          "udp_trace": false,
+          "peer_trace": false,
+          "server_benchmark": "build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll",
+          "enet_probe": null,
+          "worker_send_budget": 2048,
+          "server_buffer": 262144,
+          "client_buffer": 262144,
+          "scenario": "spaces",
+          "output": "build\\benchmarks\\v6-owner-spaces-warm-a"
+        },
+        "head": "7f9f675574304f1b2f24e3c2a83e4f8fcfc7a3bd",
+        "logicalProcessors": 16,
+        "clock": "same-machine Stopwatch monotonic; not a distributed-host runner",
+        "diagnosticBinarySha256": {
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll": "05e71506408dfb1b47b8fc037b57b8b9fc78e130ce9ea54d95e9ccae27219fa5",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.Infrastructure.dll": "47717ed234e8d969333e30710f8541f024e59c1c4008e4ffb4bd6d29088fad19"
+        },
+        "sourceSha256": {
+          "Scripts\\benchmark_enet_workers.py": "70f2b3c77acedce6ebc6a83572de8b7f800e8fe070eb15eebf286e6ea5c30e54",
+          "Scripts\\benchmark_enet.py": "34a85ea44a197a54a606e344f3eacf28dc55dea6a3e6f57a3606c6fa22138cf3",
+          "Scripts\\build_enet_worker_experiment.py": "38de3773913dc1212061fadd676738ee2515ae3b3a7fe3434ef6a40c9ce50734",
+          "src\\Dreamsleeve.Server.Infrastructure\\TransportOwner.fs": "4ec78ac76a7bf95711348e138a668d3ec8076d010c773d9e29d655fdcbe43d5a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Coordination.fs": "41bc94a42251644bb5d0aa4cbd088cf90b93d81e1a8e73cde9d3163675f6132f",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "e80b46ae9e1ab3cac78bdcffb55490e7ff27cdbccf700c5e6b469d58e4921145",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "ec9f398ca659389a932b047d7d7a8e469e328b42d126859e9219e1bd8673a58e",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "40ed76273d6a201a1cd65906636f30691afc071739890023dc75f0194e93a437"
+        },
+        "binarySha256": {
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "7765e271d822a6dc0dc342e9f2e92e7962f1360b8fc6e4e21dd064c81456b011",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "84603330228780e7fd6a686e2d02dd95e83dbcf24114cfa6e9bf74ee3247fa50",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "08eb9c8e81491857f9e034bb590578d47b6e9d6dbc7463f20b388444e4614088",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "5dd24b09335b503c82ba8ad485982aa4929a953fdfe3857be333e29f7ed4627c",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "e42158bbaf82d5b6041c177a69ecb54ff3aaff75174ca6c57d8bbf4180a2e054",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "47717ed234e8d969333e30710f8541f024e59c1c4008e4ffb4bd6d29088fad19",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "57d58975b35cfb85fb53370fb89fff1e680a63b3a72822bc40374533eb35db68",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "05e71506408dfb1b47b8fc037b57b8b9fc78e130ce9ea54d95e9ccae27219fa5"
+        }
+      }
+    },
+    {
+      "run": "v6-owner-sparse-a",
+      "scenario": "sparse",
+      "success": false,
+      "errors": [
+        "Case deadline exceeded"
+      ],
+      "server": null,
+      "metrics": {},
+      "workerCpuCores": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "provenance": {
+        "measuredAtUtc": "2026-09-27T16:47:08.958153+00:00",
+        "args": {
+          "clients": 1000,
+          "hosts": 200,
+          "workers": [
+            10
+          ],
+          "rate": 20,
+          "replication_ms": 50,
+          "seconds": 15,
+          "repetitions": 1,
+          "timeout": 180,
+          "udp_trace": false,
+          "peer_trace": false,
+          "server_benchmark": "build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll",
+          "enet_probe": null,
+          "worker_send_budget": 2048,
+          "server_buffer": 262144,
+          "client_buffer": 262144,
+          "scenario": "sparse",
+          "output": "build\\benchmarks\\v6-owner-sparse-a"
+        },
+        "head": "05730bdab6c8f36d5f5b92f27c612d0082d8316e",
+        "logicalProcessors": 16,
+        "clock": "same-machine Stopwatch monotonic; not a distributed-host runner",
+        "diagnosticBinarySha256": {
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll": "16895b7f952f52d5b0254e33e82ca98d69c5a502e91ec53b76b39ee459456e1e",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.Infrastructure.dll": "a27bc8f1b3ed9d12cd5c81ba0ff829faf8f91361af66e79744e2535ca671d1ce"
+        },
+        "sourceSha256": {
+          "Scripts\\benchmark_enet_workers.py": "116dde3716e4be920ef9f4530217bed786fc0e6eaa4c8ab2880e89744c324f88",
+          "Scripts\\benchmark_enet.py": "34a85ea44a197a54a606e344f3eacf28dc55dea6a3e6f57a3606c6fa22138cf3",
+          "Scripts\\build_enet_worker_experiment.py": "38de3773913dc1212061fadd676738ee2515ae3b3a7fe3434ef6a40c9ce50734",
+          "src\\Dreamsleeve.Server.Infrastructure\\TransportOwner.fs": "4ec78ac76a7bf95711348e138a668d3ec8076d010c773d9e29d655fdcbe43d5a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Coordination.fs": "932a5d4b46a22e10827719ecf289e27b556aea0312f4c5708f1d389e30d3fca1",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "e80b46ae9e1ab3cac78bdcffb55490e7ff27cdbccf700c5e6b469d58e4921145",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "7413c644be5516c86bb3f8d6fae706f2cbb765b072a18009f85a047a19db0a97",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "031ef0c8eb4cace1aefa914648109a4bb70244aef164f9bffd23e6093882f601"
+        },
+        "binarySha256": {
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "bd08949838be2de36751de4a3b355d36d14edfc118af87cf17be59bc2f64dc7f",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "3aec290fc27d3e905d9372a0561f6a990a74d6300fc6d3bb3569d276919ff91b",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "4125765f631d254686700aa794f26163717706b4a401b3879a8112b786e808fa",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "c331cfff5e7d9722aa83942cbb6201d9499f69f6f8f84a51bc867d1e6b225de7",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "694de19686cd58559482d1a011d434e65eefe0f0ae3a198d57fa277dc88219b1",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "a27bc8f1b3ed9d12cd5c81ba0ff829faf8f91361af66e79744e2535ca671d1ce",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "752f5312cb8ed43913f788b30e0b7cf72d70ca5e48615b6135e026d6ea60d528",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "16895b7f952f52d5b0254e33e82ca98d69c5a502e91ec53b76b39ee459456e1e"
+        }
+      }
+    },
+    {
+      "run": "v6-owner-sparse-b",
+      "scenario": "sparse",
+      "success": false,
+      "errors": [
+        "Server exited during case",
+        "Server exit code: 4294967295"
+      ],
+      "server": null,
+      "metrics": {},
+      "workerCpuCores": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "provenance": {
+        "measuredAtUtc": "2026-09-27T16:50:44.656788+00:00",
+        "args": {
+          "clients": 1000,
+          "hosts": 200,
+          "workers": [
+            10
+          ],
+          "rate": 20,
+          "replication_ms": 50,
+          "seconds": 15,
+          "repetitions": 1,
+          "timeout": 600,
+          "udp_trace": false,
+          "peer_trace": false,
+          "server_benchmark": "build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll",
+          "enet_probe": null,
+          "worker_send_budget": 2048,
+          "server_buffer": 262144,
+          "client_buffer": 262144,
+          "scenario": "sparse",
+          "output": "build\\benchmarks\\v6-owner-sparse-b"
+        },
+        "head": "05730bdab6c8f36d5f5b92f27c612d0082d8316e",
+        "logicalProcessors": 16,
+        "clock": "same-machine Stopwatch monotonic; not a distributed-host runner",
+        "diagnosticBinarySha256": {
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll": "16895b7f952f52d5b0254e33e82ca98d69c5a502e91ec53b76b39ee459456e1e",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.Infrastructure.dll": "a27bc8f1b3ed9d12cd5c81ba0ff829faf8f91361af66e79744e2535ca671d1ce"
+        },
+        "sourceSha256": {
+          "Scripts\\benchmark_enet_workers.py": "116dde3716e4be920ef9f4530217bed786fc0e6eaa4c8ab2880e89744c324f88",
+          "Scripts\\benchmark_enet.py": "34a85ea44a197a54a606e344f3eacf28dc55dea6a3e6f57a3606c6fa22138cf3",
+          "Scripts\\build_enet_worker_experiment.py": "38de3773913dc1212061fadd676738ee2515ae3b3a7fe3434ef6a40c9ce50734",
+          "src\\Dreamsleeve.Server.Infrastructure\\TransportOwner.fs": "4ec78ac76a7bf95711348e138a668d3ec8076d010c773d9e29d655fdcbe43d5a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Coordination.fs": "932a5d4b46a22e10827719ecf289e27b556aea0312f4c5708f1d389e30d3fca1",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "e80b46ae9e1ab3cac78bdcffb55490e7ff27cdbccf700c5e6b469d58e4921145",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "7413c644be5516c86bb3f8d6fae706f2cbb765b072a18009f85a047a19db0a97",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "031ef0c8eb4cace1aefa914648109a4bb70244aef164f9bffd23e6093882f601"
+        },
+        "binarySha256": {
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "bd08949838be2de36751de4a3b355d36d14edfc118af87cf17be59bc2f64dc7f",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "3aec290fc27d3e905d9372a0561f6a990a74d6300fc6d3bb3569d276919ff91b",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "4125765f631d254686700aa794f26163717706b4a401b3879a8112b786e808fa",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "c331cfff5e7d9722aa83942cbb6201d9499f69f6f8f84a51bc867d1e6b225de7",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "694de19686cd58559482d1a011d434e65eefe0f0ae3a198d57fa277dc88219b1",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "a27bc8f1b3ed9d12cd5c81ba0ff829faf8f91361af66e79744e2535ca671d1ce",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "752f5312cb8ed43913f788b30e0b7cf72d70ca5e48615b6135e026d6ea60d528",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "16895b7f952f52d5b0254e33e82ca98d69c5a502e91ec53b76b39ee459456e1e"
+        }
+      }
+    },
+    {
+      "run": "v6-owner-sparse-c",
+      "scenario": "sparse",
+      "success": true,
+      "errors": [],
+      "sourceHz": [
+        19.62088278692909,
+        19.661548055650254
+      ],
+      "ageP95Ms": [
+        51.469480647284165,
+        63.022737687058736
+      ],
+      "gapP95Ms": [
+        53.59995196418128,
+        56.3850982493318
+      ],
+      "maxAgeMs": 155.7960999980569,
+      "maxGapMs": 135.4257000014186,
+      "generatorMissedIntervals": 0,
+      "receivedHzPerVisiblePair": 19.57188994849595,
+      "criteriaPassed": true,
+      "server": {
+        "sampleCount": 149,
+        "sampleSpanSeconds": 14.906999999999243,
+        "cpuCoreEquivalent": 0.8846515060039357,
+        "privateMedianMiB": 95.80078125,
+        "privatePeakMiB": 118.43359375,
+        "workingSetPeakMiB": 175.44140625
+      },
+      "metrics": {
+        "transport.enqueue.duration": {
+          "count": 311632,
+          "max": 4.6942,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 188.3979000002424
+        },
+        "transport.enqueue.bytes": {
+          "count": 311632,
+          "max": 828,
+          "p50": 824.8996903468498,
+          "p95": 828,
+          "p99": 828,
+          "sum": 246198575
+        },
+        "transport.poll.interval": {
+          "count": 57528,
+          "max": 15.0749,
+          "p50": 0.030301000000000133,
+          "p95": 1.599272925559386,
+          "p99": 2.756148147544384,
+          "sum": 15001.106699999917
+        },
+        "transport.poll.duration": {
+          "count": 57528,
+          "max": 8.4561,
+          "p50": 0.020100000000000007,
+          "p95": 0.14947421323762233,
+          "p99": 1.5228286933230053,
+          "sum": 3746.4999000000007
+        },
+        "transport.poll.events": {
+          "count": 57528,
+          "max": 256,
+          "p50": 1.0067633683953852,
+          "p95": 28.17062352545879,
+          "p99": 80.2918883351285,
+          "sum": 294473
+        },
+        "runtime.tick.interval": {
+          "count": 11011,
+          "max": 27.4151,
+          "p50": 1.088246008273345,
+          "p95": 2.047851924839282,
+          "p99": 3.108043910989937,
+          "sum": 15020.897900000076
+        },
+        "runtime.timer.lateness": {
+          "count": 10817,
+          "max": 0.9998,
+          "p50": 0.37494067853109736,
+          "p95": 0.9477447545866549,
+          "p99": 0.9998,
+          "sum": 4782.547999999991
+        },
+        "runtime.tick.queue": {
+          "count": 11011,
+          "max": 26.2996,
+          "p50": 0.020100000000000007,
+          "p95": 0.3613274044862351,
+          "p99": 0.9477447545866549,
+          "sum": 851.5609999999975
+        },
+        "runtime.tick.duration": {
+          "count": 11011,
+          "max": 13.7576,
+          "p50": 0.030301000000000133,
+          "p95": 0.05101005010000015,
+          "p99": 0.11566834666531656,
+          "sum": 371.2074000000008
+        },
+        "presence.flush.interval": {
+          "count": 300,
+          "max": 63,
+          "p50": 47.45468507012729,
+          "p95": 63,
+          "p99": 63,
+          "sum": 15000
+        },
+        "presence.flush.lateness": {
+          "count": 40,
+          "max": 0.7316,
+          "p50": 0.3613274044862351,
+          "p95": 0.5187898946333447,
+          "p99": 0.7316,
+          "sum": 13.793400000000002
+        },
+        "presence.timer.lateness": {
+          "count": 40,
+          "max": 0.7129,
+          "p50": 0.3478489153329061,
+          "p95": 0.5187898946333447,
+          "p99": 0.7129,
+          "sum": 13.210499999999998
+        },
+        "presence.tick.queue": {
+          "count": 300,
+          "max": 0.2179,
+          "p50": 0.020100000000000007,
+          "p95": 0.040604010000000024,
+          "p99": 0.05101005010000015,
+          "sum": 6.132199999999999
+        },
+        "presence.flush.duration": {
+          "count": 300,
+          "max": 16.445,
+          "p50": 6.689208288984293,
+          "p95": 11.152477325980442,
+          "p99": 14.430421526295836,
+          "sum": 2286.2421999999997
+        },
+        "transport.pending.bytes": {
+          "count": 137,
+          "max": 40053,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 40053
+        },
+        "transport.pending.packets": {
+          "count": 137,
+          "max": 627,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 627
+        },
+        "transport.udp.sent.total": {
+          "count": 137,
+          "max": 1273351,
+          "p50": 1099715.01112169,
+          "p95": 1264094.1966689217,
+          "p99": 1273351,
+          "sum": 150125392
+        },
+        "transport.udp.received.total": {
+          "count": 137,
+          "max": 1236610,
+          "p50": 1067372.5259129999,
+          "p95": 1226917.3439295134,
+          "p99": 1236610,
+          "sum": 145452260
+        },
+        "transport.peer.rtt.max": {
+          "count": 137,
+          "max": 8,
+          "p50": 8,
+          "p95": 8,
+          "p99": 8,
+          "sum": 1096
+        },
+        "transport.reliable.inflight.bytes": {
+          "count": 137,
+          "max": 40053,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 40053
+        },
+        "transport.peer.loss.window": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.peer.timeout.age.max": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "transport.peer.receive.age.max": {
+          "count": 137,
+          "max": 505,
+          "p50": 414.6736665555715,
+          "p95": 505,
+          "p99": 505,
+          "sum": 52690
+        },
+        "incoming.queue.count": {
+          "count": 137,
+          "max": 256,
+          "p50": 24.126101254070285,
+          "p95": 135.38250046464793,
+          "p99": 212.41280246126743,
+          "sum": 5012
+        },
+        "incoming.queue.bytes": {
+          "count": 137,
+          "max": 7936,
+          "p50": 746.6762155559777,
+          "p95": 4306.99659339902,
+          "p99": 6607.371109091002,
+          "sum": 158161
+        },
+        "incoming.queue.age": {
+          "count": 137,
+          "max": 1.5529,
+          "p50": 0.010000000000000009,
+          "p95": 0.030301000000000133,
+          "p99": 0.030301000000000133,
+          "sum": 2.4862999999999995
+        },
+        "outgoing.queue.count": {
+          "count": 137,
+          "max": 2344,
+          "p50": 0.010000000000000009,
+          "p95": 292.4299434233179,
+          "p99": 431.5516842691306,
+          "sum": 7285
+        },
+        "outgoing.queue.bytes": {
+          "count": 137,
+          "max": 976238,
+          "p50": 0.010000000000000009,
+          "p95": 232886.53174400306,
+          "p99": 346736.80001852196,
+          "sum": 5007415
+        },
+        "outgoing.queue.age": {
+          "count": 137,
+          "max": 56.6117,
+          "p50": 0.010000000000000009,
+          "p95": 5.82378193896151,
+          "p99": 7.493669602907284,
+          "sum": 127.2907
+        },
+        "realtime.dropped": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "native.send.failures": {
+          "count": 137,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        }
+      },
+      "loadDeltas": {
+        "udpReceiveErrors": 0,
+        "allocatedBytes": 3349708952,
+        "gcPauseMs": 390.279,
+        "gen0": 91,
+        "gen1": 67,
+        "gen2": 0
+      },
+      "workerCpuCores": [
+        0.041926611658954296,
+        0.028300462869794152,
+        0.029348628161268007,
+        0.03354128932716344,
+        0.026204132286846437,
+        0.025155966995372578,
+        0.03249312403568958,
+        0.03249312403568958,
+        0.03458945461863729,
+        0.029348628161268007
+      ],
+      "provenance": {
+        "measuredAtUtc": "2026-09-27T16:52:52.395201+00:00",
+        "args": {
+          "clients": 1000,
+          "hosts": 200,
+          "workers": [
+            10
+          ],
+          "rate": 20,
+          "replication_ms": 50,
+          "seconds": 15,
+          "repetitions": 1,
+          "timeout": 600,
+          "udp_trace": false,
+          "peer_trace": false,
+          "server_benchmark": "build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll",
+          "enet_probe": null,
+          "worker_send_budget": 2048,
+          "server_buffer": 262144,
+          "client_buffer": 262144,
+          "scenario": "sparse",
+          "output": "build\\benchmarks\\v6-owner-sparse-c"
+        },
+        "head": "05730bdab6c8f36d5f5b92f27c612d0082d8316e",
+        "logicalProcessors": 16,
+        "clock": "same-machine Stopwatch monotonic; not a distributed-host runner",
+        "diagnosticBinarySha256": {
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.NetworkBenchmarks.dll": "83d01876864f8f49fb9f030ea87f5e85f2bac83b2cd7849a89ea20737ee79d46",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+          "S:\\Programming\\Dreamsleeve\\build\\enet-worker-server\\Dreamsleeve.Server.Infrastructure.dll": "057f5c1b7464227317e6d88d2ac544e6add5dde63b8ac0330fe2ec2e215e3c9d"
+        },
+        "sourceSha256": {
+          "Scripts\\benchmark_enet_workers.py": "116dde3716e4be920ef9f4530217bed786fc0e6eaa4c8ab2880e89744c324f88",
+          "Scripts\\benchmark_enet.py": "34a85ea44a197a54a606e344f3eacf28dc55dea6a3e6f57a3606c6fa22138cf3",
+          "Scripts\\build_enet_worker_experiment.py": "38de3773913dc1212061fadd676738ee2515ae3b3a7fe3434ef6a40c9ce50734",
+          "src\\Dreamsleeve.Server.Infrastructure\\TransportOwner.fs": "4ec78ac76a7bf95711348e138a668d3ec8076d010c773d9e29d655fdcbe43d5a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Coordination.fs": "41bc94a42251644bb5d0aa4cbd088cf90b93d81e1a8e73cde9d3163675f6132f",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "e80b46ae9e1ab3cac78bdcffb55490e7ff27cdbccf700c5e6b469d58e4921145",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "7413c644be5516c86bb3f8d6fae706f2cbb765b072a18009f85a047a19db0a97",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "031ef0c8eb4cace1aefa914648109a4bb70244aef164f9bffd23e6093882f601"
+        },
+        "binarySha256": {
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "6a1bfce347656f36a67fad540bdc009b38f8d58a37740fc2972d0e1852e51a5c",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "a4e4fa72e2d1a20fd74a3a6023bea6290ab5bd8ab761554b2d068e93775fab6d",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "59eb1289adef43a325b7e0f8946505464275f3e76b29cdb01df0c40c454670b3",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "37e10392e6b1b45171a915ae232658755e9fee6a8c865cef1c4d792ad931420a",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "27075036c8e3291f1c2139127e8e0ea8d22d13b14d1d8b4d06c12385d599c59e",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "057f5c1b7464227317e6d88d2ac544e6add5dde63b8ac0330fe2ec2e215e3c9d",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "a4e65ec0d9e868258aeb1333dab8d653c24d415c1b62b3038e29968f05158745",
+          "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "83d01876864f8f49fb9f030ea87f5e85f2bac83b2cd7849a89ea20737ee79d46"
+        }
+      }
+    }
+  ]
+}
