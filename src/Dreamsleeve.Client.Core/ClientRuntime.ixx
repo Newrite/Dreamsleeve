@@ -21,18 +21,8 @@ public:
 
     static Result<Ptr> TryCreate(Configuration config, ClientExchange& exchange)
     {
-      if (config.chatCapacity == 0 || config.maxPendingChatRequests == 0 || config.maxPendingPlayerUpdates == 0 || config.playerSampleIntervalMs == 0 || config.sessionTimeoutMs == 0 || config.connectTimeoutMs == 0 || config.disconnectTimeoutMs == 0)
-        return std::unexpected{
-            DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Session timeouts, chat and pending request capacities must be positive")
-        };
-
-      if (!config.movement.Valid() || config.maxPendingMovementSamples == 0)
-        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Invalid movement history configuration")};
-
-      if (!std::isfinite(config.visibilityDistance) || config.visibilityDistance < 0)
-        return std::unexpected{
-            DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Visibility distance must be finite and nonnegative")
-        };
+      if (auto field = config.InvalidSetting())
+        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidConfig, std::string{*field})};
 
       auto codec = Wire::ProtocolCodec::TryCreate(config);
       if (!codec) return std::unexpected{codec.error()};

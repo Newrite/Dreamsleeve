@@ -83,7 +83,8 @@ Configuration.maxPendingMovementSamples — 4096 наблюдений до пу�
 Задержка неотрицательна, maxGap больше delay и не больше часа (безопасное преобразование
 в длительности), historyCapacity не меньше двух, teleportDistance положителен и конечен.
 Runtime и MovementView.TryCreate возвращают ошибку для неверной конфигурации.
-Внешний загрузчик C++ конфигурации по-прежнему не реализован.
+LoadClientSettings читает JSON по пути, переданному конечным клиентом; секция
+interpolation содержит delayMs/maxGapMs/historyCapacity/teleportDistance.
 
 Серверный ReplicationInterval и клиентский playerSampleIntervalMs — независимые
 периоды передачи с общим ориентиром 50 мс (20 Гц) по умолчанию. Клиент повторяет последнюю позу, сервер повторяет все актуальные

@@ -5,15 +5,12 @@
 
 #include "AuthHttp.h"
 #include <glaze/glaze.hpp>
-#include <algorithm>
 #include <cstdint>
 #include <chrono>
-#include <iostream>
 #include <memory>
 #include <utility>
-#include <vector>
 
-namespace Dreamsleeve::Client::Dev::Auth
+namespace Dreamsleeve::Client::Auth
 {
     struct LoginRequest { std::string_view username; std::string_view password; };
     struct RegisterRequest { std::string_view username; std::string_view displayName; std::string_view password; };
@@ -93,7 +90,7 @@ namespace Dreamsleeve::Client::Dev::Auth
       if (!endpoint) return std::unexpected{endpoint.error()};
       if (body.size() > 16384) return std::unexpected{"Authentication request is too large"};
 
-      Handle session{WinHttpOpen(L"Dreamsleeve.Client.Dev/2", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME,
+      Handle session{WinHttpOpen(L"Dreamsleeve.Client/6", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME,
                                  WINHTTP_NO_PROXY_BYPASS, 0)};
       if (!session) return SystemError("WinHttpOpen");
       if (!WinHttpSetTimeouts(session.get(), 5000, 5000, 5000, 5000)) return SystemError("Auth timeout configuration");
@@ -140,17 +137,7 @@ namespace Dreamsleeve::Client::Dev::Auth
       return {};
     }
 
-    Result<std::string> PasswordUtf8(std::wstring& value)
-    {
-      const int count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
-      std::string result(count, '\0');
-      const bool converted = count > 0 && WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
-                                                           result.data(), count, nullptr, nullptr) != 0;
-      SecureZeroMemory(value.data(), value.size() * sizeof(wchar_t));
-      if (!converted) return std::unexpected{"Password must contain valid Unicode"};
-      if (auto checked = CheckPassword(result); !checked) return std::unexpected{checked.error()};
-      return result;
-    }
+
   }
 
   Result<void> ValidateUrl(std::string_view url)
@@ -158,39 +145,6 @@ namespace Dreamsleeve::Client::Dev::Auth
     auto parsed = ParseUrl(url);
     if (!parsed) return std::unexpected{parsed.error()};
     return {};
-  }
-
-  Result<std::string> ReadPassword()
-  {
-    SetLastError(ERROR_SUCCESS);
-    const DWORD required = GetEnvironmentVariableW(L"DREAMSLEEVE_PASSWORD", nullptr, 0);
-    if (required > 0)
-    {
-      if (required > 129) return std::unexpected{"Password exceeds the maximum length"};
-      std::wstring value(required, L'\0');
-      const DWORD read = GetEnvironmentVariableW(L"DREAMSLEEVE_PASSWORD", value.data(), required);
-      if (read == 0 || read >= required) return SystemError("Password environment read");
-      value.resize(read);
-      return PasswordUtf8(value);
-    }
-
-    if (GetLastError() == ERROR_SUCCESS) return std::unexpected{"Password environment value is empty"};
-
-    const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
-    DWORD mode{};
-    if (!GetConsoleMode(input, &mode)) return std::unexpected{"Set DREAMSLEEVE_PASSWORD for redirected input"};
-    if (!SetConsoleMode(input, mode & ~ENABLE_ECHO_INPUT)) return SystemError("Password prompt");
-    std::cout << "Password: " << std::flush;
-    std::wstring value(130, L'\0');
-    DWORD read{};
-    const bool readOk = ReadConsoleW(input, value.data(), static_cast<DWORD>(value.size()), &read, nullptr) != 0;
-    SetConsoleMode(input, mode);
-    std::cout << '\n';
-    if (!readOk) return SystemError("Password input");
-    if (read == value.size()) return std::unexpected{"Password exceeds the maximum length"};
-    value.resize(read);
-    while (!value.empty() && (value.back() == L'\r' || value.back() == L'\n')) value.pop_back();
-    return PasswordUtf8(value);
   }
 
   Result<void> Register(std::string_view url, const Credentials& credentials, std::string_view displayName)

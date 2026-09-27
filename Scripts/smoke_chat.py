@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 import tempfile
 import re
@@ -195,18 +196,73 @@ def smoke(args, log, directory: Path):
         return server
 
     def start_client(name: str, username: str, display_name: str | None = None):
-        command = [str(args.client), "--connect", "127.0.0.1", str(port), username, "--auth-url", auth_url]
+        if name == "alice":
+            client_config = directory / "client settings.json"
+            client_config.write_text(json.dumps({"version": 1, "serverIp": "127.0.0.1", "serverPort": port,
+                                                  "authUrl": auth_url}), encoding="utf-8")
+            command = [str(args.client), "--config", str(client_config), username]
+        else:
+            command = [str(args.client), "--connect", "127.0.0.1", str(port), username, "--auth-url", auth_url]
         if display_name is not None:
             command += ["--register", display_name]
         return start(name, command, client_env)
 
+    def check_canceled_registration():
+        entered, release = threading.Event(), threading.Event()
+        requests = []
+
+        class DelayedAuth(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                requests.append(self.path)
+                entered.set()
+                release.wait(args.timeout)
+                # Even a late failure belongs to the canceled operation.
+                self.send_response(500)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+        endpoint = ThreadingHTTPServer(("127.0.0.1", 0), DelayedAuth)
+        thread = threading.Thread(target=endpoint.serve_forever, daemon=True)
+        thread.start()
+        canceled = None
+        try:
+            canceled = start("canceled-auth", [str(args.client), "--connect", "127.0.0.1", str(port),
+                "cancel_test", "--auth-url", f"http://127.0.0.1:{endpoint.server_port}", "--register", "Canceled"], client_env)
+            check(entered.wait(args.timeout), "Client did not start registration")
+            mark = canceled.mark()
+            canceled.send("disconnect")
+            # A subsequent read proves the consumer processed disconnect while HTTP is blocked.
+            canceled.send("read")
+            canceled.phase("Disconnected", args.timeout, mark)
+            mark = canceled.mark()
+            release.set()
+            canceled.phase("Disconnected", args.timeout, mark)
+            canceled.send("quit")
+            canceled.process.wait(timeout=args.timeout)
+            check(canceled.process.returncode == 0, "Canceled auth did not stop cleanly")
+            check(requests == ["/auth/register"], "Canceled registration proceeded to login")
+            check("session=Connecting" not in canceled.output(), "Canceled auth opened an ENet connection")
+            stage("disconnect during HTTP registration suppresses subsequent login and ENet connect")
+        finally:
+            release.set()
+            if canceled is not None:
+                canceled.stop()
+            endpoint.shutdown()
+            endpoint.server_close()
+            thread.join(timeout=args.timeout)
+
     try:
+        check_canceled_registration()
         server = start_server("server")
         alice = start_client("alice", "smoke_alice", "Smoke Alice")
         alice.phase("Ready", args.timeout)
         alice.wait_for(lambda lines: any(re.fullmatch(r"\d+: Smoke Alice", line) for line in lines), args.timeout, read=True)
         alice_id = next(line.split(":", 1)[0] for line in alice.output() if re.fullmatch(r"\d+: Smoke Alice", line))
-        stage("first native client opened a real server session")
+        stage("native client loaded a caller-provided configuration path and opened a real server session")
         # A known additional credential lets us assert HTTP ticket log redaction.
         # It remains unused and is discarded when the server process restarts.
         request = urllib.request.Request(auth_url + "/auth/login", method="POST",

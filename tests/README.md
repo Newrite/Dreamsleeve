@@ -201,3 +201,9 @@ Task/ValueTask, struct/list/array, HashSet reuse и snapshot actor values. Эт�
 [Транспортный стенд и измеритель установленной DLL](Dreamsleeve.EnetIsolation/README.md) сравнивают xENet с нативным ENet в одинаковом цикле, отдельно от серверных агентов и кодеков. Запускаются вручную, вне обычной тестовой команды.
 
 [Выделенный владелец ENet](Dreamsleeve.EnetWorkerExperiment/README.md) — regression-проверки production TransportOwner; историческое имя проекта сохранено. A/B полного сервера использует одинаковый v6 с inline и owner.
+
+Клиентский общий запуск проверяется в Tests.ClientApplication.cpp: путь к файлу,
+частичные overrides/defaults, строгая схема/лимиты, ошибка auth и повторный вход,
+остановка без соединения и при принятом входе. ENet smoke запускает Alice через --config с путём,
+содержащим пробел, и Bob через прежний --connect; оба используют ClientApplication. Отдельный задержанный
+HTTP-ответ проверяет, что Disconnect во время регистрации не запускает затем login/ENet.

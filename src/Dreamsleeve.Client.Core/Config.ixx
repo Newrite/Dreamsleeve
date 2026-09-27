@@ -48,6 +48,25 @@ export namespace Dreamsleeve::Client
     MovementSettings movement{};
     std::size_t maxPendingMovementSamples{4096};
 
+    std::optional<std::string_view> InvalidSetting() const noexcept
+    {
+      if (auto field = InvalidProtocolSetting()) return field;
+      if (network.maxPeers != 1) return "network.maxPeers";
+      if (network.channelLimit > 255) return "network.channelLimit";
+      if (serverAddress.GetPort() == 0) return "serverAddress.port";
+      if (chatCapacity == 0) return "chatCapacity";
+      if (maxPendingChatRequests == 0) return "maxPendingChatRequests";
+      if (maxPendingPlayerUpdates == 0) return "maxPendingPlayerUpdates";
+      if (playerSampleIntervalMs == 0) return "playerSampleIntervalMs";
+      if (sessionTimeoutMs == 0) return "sessionTimeoutMs";
+      if (connectTimeoutMs == 0) return "connectTimeoutMs";
+      if (disconnectTimeoutMs == 0) return "disconnectTimeoutMs";
+      if (!movement.Valid()) return "movement";
+      if (maxPendingMovementSamples == 0) return "maxPendingMovementSamples";
+      if (!std::isfinite(visibilityDistance) || visibilityDistance < 0) return "visibilityDistance";
+      return std::nullopt;
+    }
+
     std::optional<std::string_view> InvalidProtocolSetting() const noexcept
     {
       if (network.channelLimit < 3) return "channelLimit";

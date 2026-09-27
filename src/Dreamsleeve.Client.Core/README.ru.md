@@ -1,17 +1,82 @@
 # Клиентский сетевой владелец
 
 `Dreamsleeve.Client.Runtime` соединяет DreamNetClient, codec, ClientModel и
-ClientExchange. Его создают и вызывают на одном сетевом потоке; сам класс не
-создаёт потоков. DreamNetRuntime и ClientExchange должны пережить ClientRuntime.
-Игровой/UI-поток использует только Exchange, без доступа к модели и transport.
+ClientExchange. После создания им владеет один сетевой поток; сам класс не создаёт потоков. DreamNetRuntime и ClientExchange должны пережить ClientRuntime.
+Игровой/UI-поток получает изменения через Exchange и статус через ClientApplication,
+без доступа к модели и transport.
+
+## Общий запуск и конфигурационный файл
+
+`import Dreamsleeve.Client.Application;` экспортирует `ClientSettings`,
+`LoadClientSettings(path)`, `ClientApplication` и существующий Exchange/Runtime.
+[client.example.json](client.example.json) показывает все настройки файла версии 1.
+Путь типа `std::filesystem::path` выбирает конечный клиент или SKSE-плагин:
+библиотека не ищет файл в cwd/Data/AppData и не создаёт его автоматически.
+Относительный путь имеет обычную семантику файловой системы вызывающей программы.
+
+Отсутствие/ошибка чтения файла, неизвестные поля, неверные типы и недопустимые
+значения возвращают `std::unexpected`. Размер файла ограничен 64 KiB.
+Частичный объект (включая `{}`) дополняется defaults: 20 Гц, три канала,
+один peer, прежние лимиты и настройки интерполяции. `serverIp` — IPv4,
+`serverPort` — порт ENet; `authUrl` — HTTP(S) origin. Прямое создание
+`ClientSettings` проходит ту же проверку при запуске. Hot reload отсутствует.
+Пароля и одноразового билета в схеме файла нет.
+
+```cpp
+// finalConfigPath передан конечным приложением; ошибки обрабатывает оно же.
+auto settings = Dreamsleeve::Client::LoadClientSettings(finalConfigPath);
+if (!settings) return HandleError(settings.error());
+auto app = Dreamsleeve::Client::ClientApplication::TryCreate(std::move(*settings));
+if (!app) return HandleError(app.error());
+auto accepted = (*app)->Connect({username, password});
+// Для регистрации с последующим входом: Connect({username, password}, displayName).
+```
+
+TryCreate проверяет настройки, владеет ENet runtime, Exchange и сетевым потоком.
+Connect принимает операцию без HTTP на вызывающем потоке. Одновременно допускается
+одна операция входа; новая отклоняется, пока идёт auth, disconnect или активна
+сессия. Каждый повторный Connect требует учётных данных и получает свежий билет;
+общий объект не сохраняет пароль для автоматических повторов.
+
+`Status()` возвращает текущие phase/authenticating/stopped и последнюю ошибку
+запуска сессии/HTTP/transport; следующий принятый Connect очищает эту ошибку.
+`Exchange().Drain(output)` выдаёт прежние снимки, изменения и отказы команд,
+`Exchange().Post(...)` принимает игровые/UI-команды. Потребитель по-прежнему один:
+игровой поток вычитывает изменения для себя и UI. MovementView также принадлежит
+потребителю, не сетевому потоку.
+
+`Disconnect()` отменяет ожидающий вход и закрывает текущую сессию; после завершения
+можно вызвать Connect снова. `Stop()` — окончательная идемпотентная остановка с join,
+также вызывается деструктором. Новый запуск после Stop требует нового объекта.
+Синхронный WinHTTP выполняется только на worker до открытия ENet-сессии;
+Disconnect/Stop не прерывают WinHTTP внутри системного вызова, ожидая его timeout.
+Отменённый результат не используется для последующего открытия сессии.
+
+Опциональный StatusHandler предназначен для диагностики и вызывается на worker
+без удержания mutex. Он не должен блокировать, бросать исключения или вызывать
+Stop/уничтожать объект. Для UI нужно читать Status на игровом потоке.
+Connect/Disconnect/Stop вызывает один владелец приложения; Status/Exchange
+предназначены для обмена с сетевым потоком. В Core нет вывода в консоль,
+чтения пароля из окружения или выбора файлов логирования.
+
+Client.Dev использует тот же объект. Чтение пароля осталось в консольном адаптере:
+
+```powershell
+xmake run Dreamsleeve.Client.Dev --config "path/to/client.json" player
+xmake run Dreamsleeve.Client.Dev --config "path/to/client.json" player --register "Player Name"
+```
+
+Прежний `--connect <IPv4> <port> <username>` сохранён. Его `--config <path>`
+загружает остальные настройки; позиционные IPv4/port и явный `--auth-url` затем
+переопределяют файл независимо от порядка опций. Без файла используются defaults.
 
 ## Вход и завершение
 
 `ClientRuntime::TryCreate(config, exchange)` проверяет настройки codec, таймауты
 и ёмкость чата. `Connect(sessionTicket)` создаёт новый транспортный host
 из той же конфигурации и начинает подключение. При каждом новом входе вызывающий
-код передаёт новый одноразовый билет, полученный из HTTP login; Core не знает пароль
-и не выполняет HTTP. `Poll(waitMs)` обслуживает ENet;
+код передаёт новый одноразовый билет, полученный из HTTP login; ClientRuntime не знает пароль
+и не выполняет HTTP; общий ClientApplication получает билет через AuthHttp. `Poll(waitMs)` обслуживает ENet;
 его нужно вызывать регулярно. Общий Exchange.NextRequestId() выдаёт ненулевые ID для OpenSession, SendChat и UpdatePlayer.
 Счётчик не сбрасывается при переподключении; исчерпание возвращает пустой результат.
 
@@ -43,7 +108,7 @@ Connecting он отменяет попытку. Поздние данные п�
 Configuration задаёт адрес сервера (default 127.0.0.1:8778), один peer, таймауты
 connect/disconnect/session (5000/2000/5000 ms), ёмкость чата (512) и существующие
 лимиты codec/ENet. Одна конфигурация используется для host и codec, в течение
-сессии не меняется. Загрузчика конфигурации из файла пока нет.
+сессии не меняется. LoadClientSettings читает JSON по переданному вызывающей стороной пути.
 
 Poll обслуживает SendChat и RequestSnapshot из Exchange. Для отправки producer
 берёт ID через NextRequestId(), затем Post({generation, SendChat{ID, channel, text}}).

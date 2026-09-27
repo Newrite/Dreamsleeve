@@ -143,3 +143,12 @@ package --vulnerable --include-transitive --no-restore --format json` с дос�
 Короткий сетевой runner с двумя клиентами: ready=2, sent=2, received=expected=4,
 errors/rejections/unexpected disconnects=0. Это проверка нового auth-пути,
 не повтор прежних нагрузочных измерений; исторические benchmark-отчёты сохранены.
+
+## Общий клиентский запуск
+
+HTTP-регистрация/вход вынесены из Client.Dev в Client.Core/AuthHttp. ClientApplication
+выполняет их на сетевом worker до Connect(ticket), управляет Disconnect/Stop и
+возвращает наблюдаемый статус без консольного вывода. Ввод пароля из консоли или
+DREAMSLEEVE_PASSWORD остаётся только в Dev; игровой UI передаёт credentials явно.
+Конфиг не содержит пароль/билет, его путь выбирает конечный клиент.
+[API и формат файла](../src/Dreamsleeve.Client.Core/README.ru.md#общий-запуск-и-конфигурационный-файл).

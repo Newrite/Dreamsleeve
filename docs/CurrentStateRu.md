@@ -21,7 +21,9 @@ HTML/CSS/JS-интерфейс можно реализовать позже с �
 
 - Сервер: F# / .NET 10+, yENet (выбран вместо zENet), Channels/Task-агенты.
 - Клиент: C++23, модули, native ENet 1.3.18, xmake/MSVC, protobuf, spdlog, Glaze.
-- `Client.Core` содержит DreamNet, домен и модель без зависимостей от Skyrim.
+- `Client.Core` содержит DreamNet, домен, модель, AuthHttp и ClientApplication без зависимостей от Skyrim.
+  ClientApplication владеет сетевым потоком и входом; JSON читает LoadClientSettings
+  по пути, который передаёт конечный клиент. Client.Dev использует этот общий запуск.
   `Client` предназначен для SKSE/CommonLib, преобразования игровых типов,
   светлячков и PrismaUI. Пока это заглушка static library, не готовая DLL.
 - `DreamNetClient` — автомат одного транспортного соединения. `Poll` обрабатывает
@@ -202,7 +204,7 @@ SKSE-адаптер и автоматический игровой frame hook п
 | DreamNet | Обёртки ресурсов, автомат соединения, ограниченный Poll, отправка/приём и тесты loopback |
 | F# Domain / Agent | Реализованы и имеют регрессионные тесты |
 | C++ Domain / State | Игроки, ограниченный ChatCache, модель, StateUpdate, очереди и ClientExchange для одного потребителя |
-| Client.Dev | Два потока; --connect для реального входа по ENet, отдельное синтетическое демо |
+| Client.Dev | Общий ClientApplication, --config/--connect, консольный ввод пароля и отдельное синтетическое демо |
 | Server | ENet runtime, HTTP auth, JSON-конфигурация, Serilog, PlayerSession, ChatRoomAgent, PresenceAgent и жизненный цикл |
 | Protobuf / codec | Protocol/*.proto v6: вход, полные PlayerInfo/история, чат, онлайн, телеметрия и отказы; C++ encode/decode и F# decode/encode реализованы |
 | UI / Skyrim | Будущие адаптеры; в Core игровых зависимостей нет |

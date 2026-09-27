@@ -92,6 +92,7 @@ target("Dreamsleeve.Client.Core")
     add_cpp_files("src/Dreamsleeve.Client.Core")
 
     add_deps("Dreamsleeve.Protocol.Native")
+    add_syslinks("winhttp", {public = true})
 
     add_packages("enet", {public = true})
     add_packages("spdlog", {public = true})
@@ -114,7 +115,6 @@ target("Dreamsleeve.Client.Dev")
     set_kind("binary")
     set_group("Apps")
 
-    add_syslinks("winhttp")
     add_includedirs("src/Dreamsleeve.Client.Dev")
     add_visible_headers("src/Dreamsleeve.Client.Dev")
     add_cpp_files("src/Dreamsleeve.Client.Dev")
@@ -132,6 +132,3 @@ target("Dreamsleeve.Client.Tests")
 
     add_deps("Dreamsleeve.Client.Core")
     add_packages("doctest")
-    add_includedirs("src/Dreamsleeve.Client.Dev")
-    add_files("src/Dreamsleeve.Client.Dev/AuthHttp.cpp")
-    add_syslinks("winhttp")

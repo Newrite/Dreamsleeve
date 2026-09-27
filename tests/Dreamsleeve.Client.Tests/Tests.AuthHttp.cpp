@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
 #include "AuthHttp.h"
 
-namespace Auth = Dreamsleeve::Client::Dev::Auth;
+namespace Auth = Dreamsleeve::Client::Auth;
 
-TEST_SUITE_BEGIN("Client.Dev.Auth");
+TEST_SUITE_BEGIN("Client.Auth");
 
 TEST_CASE("Password endpoints require HTTPS except explicitly loopback development origins")
 {

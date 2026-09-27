@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
     return result;
   }
 
-  if (argc >= 2 && std::string_view{argv[1]} == "--connect")
+  if (argc >= 2 && (std::string_view{argv[1]} == "--connect" || std::string_view{argv[1]} == "--config"))
   {
     const int result = RunNetworkConsole(argc, argv);
     ShutdownLogger();
@@ -72,7 +72,7 @@ int main(int argc, char* argv[])
   }
   if (argc > 2 || (argc == 2 && std::string_view{argv[1]} != "--state-demo"))
   {
-    spdlog::error("Usage: Dreamsleeve.Client.Dev [--state-demo | --movement-demo | --movement-benchmark] | --connect <IPv4> <port> <username> [--auth-url <origin>] [--register <displayName>]");
+    spdlog::error("Usage: Dreamsleeve.Client.Dev [--state-demo | --movement-demo | --movement-benchmark] | --connect <IPv4> <port> <username> [--config <path>] [--auth-url <origin>] [--register <displayName>] | --config <path> <username>");
     ShutdownLogger();
     return 2;
   }

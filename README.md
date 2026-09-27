@@ -93,3 +93,9 @@ Auth HTTP по умолчанию доступен только локально
 Для файла настроек: `dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.json`,
 затем запуск с `--config server.json`. Частичные переопределения допустимы;
 загрузка выполняется только при старте, автоматического reload нет.
+
+Клиентский JSON можно передать конечному приложению явно:
+`xmake run Dreamsleeve.Client.Dev --config "path/to/client.json" player`.
+[Полный пример](src/Dreamsleeve.Client.Core/client.example.json) и
+[общий запуск для Dev/SKSE](src/Dreamsleeve.Client.Core/README.ru.md#общий-запуск-и-конфигурационный-файл).
+Путь выбирает вызывающая сторона; пароли в файле не сохраняются.
