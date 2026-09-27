@@ -55,6 +55,44 @@ let private complete (agent: Agent<'T>) = task {
 }
 
 let tests = testList "Outbox" [
+    case "direct admission and queued fallback preserve FIFO and map each accepted message once" (fun () -> task {
+        let seen, mapped = ConcurrentQueue<int>(), ConcurrentQueue<int>()
+        use destination = Agent.Start(options "destination" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
+        let! release = holdAgent destination
+        let address = destination.Ref.TryReliable().Value.Map(fun value ->
+            mapped.Enqueue value
+            AgentTests.Message.Record value)
+        let outbox = AgentOutbox<int>(2, address)
+        let failures = Channel.CreateUnbounded<AgentSendFailure>()
+        use owner = Agent.Start(options "owner" (AgentMailbox.boundedWait 1), handle outbox failures)
+
+        let! accepted = enqueue owner [1; 2; 3; 4]
+        equal ([true; true; true; false], 2) accepted
+        equal [|1; 2|] (mapped.ToArray())
+        release.SetResult()
+        do! eventually (fun () -> outbox.IsEmpty && seen.Count = 3)
+        let! direct = enqueue owner [4]
+        equal ([true], 0) direct
+        do! complete owner
+        do! complete destination
+        equal [|1; 2; 3; 4|] (seen.ToArray())
+        equal [|1; 2; 3; 4|] (mapped.ToArray())
+        equal 0 failures.Reader.Count
+    })
+
+    case "direct delivery cannot bypass the non-dropping owner requirement" (fun () -> task {
+        let seen = ConcurrentQueue<int>()
+        use destination = Agent.Start(AgentOptions.create "destination", ordinaryHandler seen)
+        let outbox = AgentOutbox<AgentTests.Message>(1, destination.Ref.TryReliable().Value)
+        let send context value = task { outbox.TrySend(context, AgentTests.Message.Record value) |> ignore }
+        use owner = Agent.Start(options "dropping-owner" (AgentMailbox.bounded 1 BoundedChannelFullMode.DropWrite), send)
+        owner.TryPost 1 |> ignore
+        let! _ = terminal owner.Completion
+        check owner.Completion.IsFaulted "Unsupported owner must fail even when the destination is free."
+        do! complete destination
+        equal 0 seen.Count
+    })
+
     case "bounded FIFO sends keep the owner responsive and Complete drains them" (fun () -> task {
         let seen = ConcurrentQueue<int>()
         use destination = Agent.Start(options "destination" (AgentMailbox.boundedWait 1), ordinaryHandler seen)

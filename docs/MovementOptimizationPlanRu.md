@@ -411,3 +411,17 @@ ValueTask; ticker уже ожидает его напрямую, без AsTask �
   результатные Task. Саморевью: failed admission + capture notification атомарны
   под прежним gate; cancellation отдельного writer не отменяет общий сигнал.
   Добавлен сценарий с 64 ожидающими writers и отменой одного; managed suite 270/270.
+
+- Шаг 4b: готовые сообщения обходятся без worker/TCS, когда admission завершается
+  синхронно и нет предыдущей ожидающей отправки. Уточнение плана: вместо связки
+  TryPost + PostAsync используется один PostAsync с проверкой IsCompletedSuccessfully;
+  это сохраняет ровно один вызов mapper при заполнении очереди. Slow path остаётся
+  tracked/bounded; I/O execute по-прежнему вынесен с handler. Саморевью дополнительно
+  сохранило запрет dropping owner и проверку cancellation после получения слота,
+  до изменения состояния. Проверки direct → pending → direct, mapper once,
+  FIFO/Complete/Abort и ошибки: managed suite 272/272.
+
+**Уточнение пользователя после шага 4:** финальные бенчмарки отложены, пока машина
+занята другим тяжёлым приложением. До отдельного запуска выполняются сборки и
+функциональные тесты. Шаг 7 (wire cache по повторному профилю), performance-решения
+о route indexes/ACK barriers и количественная оценка ускорения также отложены.

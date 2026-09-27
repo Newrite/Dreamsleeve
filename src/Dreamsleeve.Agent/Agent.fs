@@ -450,6 +450,8 @@ type AgentContext<'Message>
     // Ends non-owning observations after dispatch, including graceful completion.
     member internal _.DispatchStopped = dispatchStoppedToken
 
+    member internal _.IsNonDropping = reliableMailbox
+
     // Library workers only. Application state remains in the handler.
     member internal _.StartDelivery(operation: CancellationToken -> Task<unit>) =
         startBackgroundImpl operation

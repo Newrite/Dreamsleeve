@@ -272,3 +272,9 @@ AgentOutbox. Его владелец отдельно ограничивает �
 объединяются. Callback строит только сообщение, не читает mutable state агента.
 Complete/Abort останавливают worker. `startWithTimeProvider` позволяет проверять
 расписание без wall-clock sleeps. Timestamp поля AgentTick относятся к TimeProvider.
+
+
+Готовая отправка outbox использует синхронный admission, если предыдущие отправки
+уже завершены. При ожидании места работает прежний bounded tracked путь; mapper
+вызывается один раз. Completion означает admission, не выполнение получателем.
+TCS общего admission notification создаётся только при реальном ожидании writers.

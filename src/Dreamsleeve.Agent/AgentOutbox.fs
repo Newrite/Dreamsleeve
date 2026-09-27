@@ -1,4 +1,4 @@
-﻿namespace Dreamsleeve.Agent
+namespace Dreamsleeve.Agent
 
 open System
 open System.Threading
@@ -16,68 +16,113 @@ type internal AgentDeliveryWindow(capacity: int, ordered: bool) =
     do
         if capacity < 1 then invalidArg (nameof capacity) "Delivery capacity must be positive."
 
+    let requireReliableOwner (context: AgentContext<'Request>) =
+        if not context.IsNonDropping then
+            invalidOp "Tracked delivery requires a non-dropping owner mailbox."
+
     let slots = new SemaphoreSlim(capacity, capacity)
     let mutable tail: Task = Task.CompletedTask
 
-    let deliver (previous: Task) (finished: TaskCompletionSource<unit>) (destination: ReliableAgentRef<'Reply>)
-                (execute: CancellationToken -> Task<'Reply>)
-                (onFailure: AgentSendFailure -> Task<unit>) (token: CancellationToken) = task {
+    let observe (admission: Task<AgentDeliveryResult>) onFailure (token: CancellationToken) = task {
+        let! outcome = task {
+            try
+                let! result = admission
+                return
+                    match result with
+                    | AgentDeliveryResult.Posted -> None
+                    | AgentDeliveryResult.Closed -> Some AgentSendFailure.Closed
+                    | AgentDeliveryResult.Canceled -> Some AgentSendFailure.Canceled
+            with error -> return Some (AgentSendFailure.Faulted error)
+        }
+
+        match outcome with
+        | Some failure when not token.IsCancellationRequested -> do! onFailure failure
+        | Some _ | None -> ()
+    }
+
+    let admit (destination: ReliableAgentRef<'Reply>) reply token =
+        try destination.PostAsync(reply, cancellationToken = token)
+        with error -> Task.FromException<AgentDeliveryResult>(error)
+
+    let deliver (previous: Task) (finished: TaskCompletionSource<unit>) operation (token: CancellationToken) = task {
         try
             do! previous.WaitAsync token
-            token.ThrowIfCancellationRequested()
-            let! reply = execute token
-            let! outcome = task {
-                try
-                    let! result = destination.PostAsync(reply, cancellationToken = token)
-                    return
-                        match result with
-                        | AgentDeliveryResult.Posted -> None
-                        | AgentDeliveryResult.Closed -> Some AgentSendFailure.Closed
-                        | AgentDeliveryResult.Canceled -> Some AgentSendFailure.Canceled
-                with error -> return Some (AgentSendFailure.Faulted error)
-            }
-            match outcome with
-            | Some failure when not token.IsCancellationRequested -> do! onFailure failure
-            | Some _ | None -> ()
+            do! operation token
         finally
             finished.TrySetResult() |> ignore
             slots.Release() |> ignore
     }
 
-    let launch (context: AgentContext<'Request>) destination createOperation onFailure =
+    let launch (context: AgentContext<'Request>) operation =
+        let finished = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let previous = if ordered then tail else Task.CompletedTask
+        if ordered then tail <- finished.Task
+
         try
-            context.CancellationToken.ThrowIfCancellationRequested()
-            let operation = createOperation ()
-            let finished = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-            let previous = if ordered then tail else Task.CompletedTask
-            if ordered then tail <- finished.Task
-            context.StartDelivery(deliver previous finished destination operation onFailure)
+            context.StartDelivery(deliver previous finished operation)
         with error ->
+            finished.TrySetResult() |> ignore
             slots.Release() |> ignore
             raise error
+
+    // Reservation is already owned. Map/post once, including the transition to waiting.
+    let sendReady (context: AgentContext<'Request>) destination reply onFailure =
+        let token = context.CancellationToken
+        if token.IsCancellationRequested then
+            slots.Release() |> ignore
+            token.ThrowIfCancellationRequested()
+
+        if not ordered || tail.IsCompleted then
+            let admission = admit destination reply token
+            if admission.IsCompletedSuccessfully && admission.Result = AgentDeliveryResult.Posted then
+                slots.Release() |> ignore
+            else
+                // Even if Abort races us, observe the operation that already started.
+                launch context (observe admission onFailure)
+        else
+            let send (token: CancellationToken) = task {
+                token.ThrowIfCancellationRequested()
+                do! observe (admit destination reply token) onFailure token
+            }
+            launch context send
 
     member _.Count = capacity - slots.CurrentCount
 
     // Only the owning handler schedules sends; workers only release reservations.
     member _.TrySend(context: AgentContext<'Request>, destination, reply, onFailure) =
+        requireReliableOwner context
         if slots.Wait(0) then
-            launch context destination (fun () -> fun _ -> Task.FromResult reply) onFailure
+            sendReady context destination reply onFailure
             true
         else
             false
 
     member _.Send(context: AgentContext<'Request>, destination, createReply, onFailure) = task {
+        requireReliableOwner context
         do! slots.WaitAsync context.CancellationToken
-        let createOperation () =
-            let reply = createReply ()
-            fun _ -> Task.FromResult reply
+        let reply =
+            try
+                // A released reservation can race Abort after WaitAsync succeeds.
+                context.CancellationToken.ThrowIfCancellationRequested()
+                createReply ()
+            with error ->
+                slots.Release() |> ignore
+                raise error
 
-        launch context destination createOperation onFailure
+        sendReady context destination reply onFailure
     }
 
     member _.SendAsync(context: AgentContext<'Request>, destination, execute, onFailure) = task {
+        requireReliableOwner context
         do! slots.WaitAsync context.CancellationToken
-        launch context destination (fun () -> execute) onFailure
+        let run (token: CancellationToken) = task {
+            token.ThrowIfCancellationRequested()
+            let! reply = execute token
+            do! observe (admit destination reply token) onFailure token
+        }
+
+        // I/O (including its synchronous prefix) still starts outside the owning handler.
+        launch context run
     }
 
     member _.AbortAfterDrain(context: AgentContext<'Request>) =
