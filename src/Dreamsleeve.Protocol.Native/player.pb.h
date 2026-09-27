@@ -82,6 +82,14 @@ class Location;
 struct LocationDefaultTypeInternal;
 extern LocationDefaultTypeInternal _Location_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull Location_class_data_;
+class MovementPose;
+struct MovementPoseDefaultTypeInternal;
+extern MovementPoseDefaultTypeInternal _MovementPose_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull MovementPose_class_data_;
+class MovementSample;
+struct MovementSampleDefaultTypeInternal;
+extern MovementSampleDefaultTypeInternal _MovementSample_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull MovementSample_class_data_;
 class NamedForm;
 struct NamedFormDefaultTypeInternal;
 extern NamedFormDefaultTypeInternal _NamedForm_default_instance_;
@@ -126,6 +134,10 @@ class PlayerUpdated;
 struct PlayerUpdatedDefaultTypeInternal;
 extern PlayerUpdatedDefaultTypeInternal _PlayerUpdated_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull PlayerUpdated_class_data_;
+class PlayerVisibilityChanged;
+struct PlayerVisibilityChangedDefaultTypeInternal;
+extern PlayerVisibilityChangedDefaultTypeInternal _PlayerVisibilityChanged_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull PlayerVisibilityChanged_class_data_;
 class PlayersMoved;
 struct PlayersMovedDefaultTypeInternal;
 extern PlayersMovedDefaultTypeInternal _PlayersMoved_default_instance_;
@@ -146,10 +158,10 @@ class Rotation;
 struct RotationDefaultTypeInternal;
 extern RotationDefaultTypeInternal _Rotation_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull Rotation_class_data_;
-class SampleMovement;
-struct SampleMovementDefaultTypeInternal;
-extern SampleMovementDefaultTypeInternal _SampleMovement_default_instance_;
-extern const ::google::protobuf::internal::ClassDataFull SampleMovement_class_data_;
+class SetPlayerLocation;
+struct SetPlayerLocationDefaultTypeInternal;
+extern SetPlayerLocationDefaultTypeInternal _SetPlayerLocation_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SetPlayerLocation_class_data_;
 class UpdatePlayer;
 struct UpdatePlayerDefaultTypeInternal;
 extern UpdatePlayerDefaultTypeInternal _UpdatePlayer_default_instance_;
@@ -1152,7 +1164,7 @@ class PlayerLeft final : public ::google::protobuf::Message
     return *reinterpret_cast<const PlayerLeft*>(
         &_PlayerLeft_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(PlayerLeft& a, PlayerLeft& b) { a.Swap(&b); }
   inline void Swap(PlayerLeft* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1837,7 +1849,7 @@ class LeaveGame final : public ::google::protobuf::internal::ZeroFieldsBase
     return *reinterpret_cast<const LeaveGame*>(
         &_LeaveGame_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(LeaveGame& a, LeaveGame& b) { a.Swap(&b); }
   inline void Swap(LeaveGame* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2324,6 +2336,230 @@ class NamedForm final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull NamedForm_class_data_;
 // -------------------------------------------------------------------
 
+class MovementPose final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.MovementPose) */ {
+ public:
+  inline MovementPose() : MovementPose(nullptr) {}
+  ~MovementPose() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MovementPose* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MovementPose));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR MovementPose(::google::protobuf::internal::ConstantInitialized);
+
+  inline MovementPose(const MovementPose& from) : MovementPose(nullptr, from) {}
+  inline MovementPose(MovementPose&& from) noexcept
+      : MovementPose(nullptr, ::std::move(from)) {}
+  inline MovementPose& operator=(const MovementPose& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MovementPose& operator=(MovementPose&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const MovementPose& default_instance() {
+    return *reinterpret_cast<const MovementPose*>(
+        &_MovementPose_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(MovementPose& a, MovementPose& b) { a.Swap(&b); }
+  inline void Swap(MovementPose* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MovementPose* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  MovementPose* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MovementPose>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MovementPose& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MovementPose& from) { MovementPose::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MovementPose* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.MovementPose"; }
+
+  explicit MovementPose(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MovementPose(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MovementPose& from);
+  MovementPose(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MovementPose&& from) noexcept
+      : MovementPose(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPositionFieldNumber = 1,
+    kRotationFieldNumber = 2,
+    kSampledAtUsFieldNumber = 3,
+  };
+  // .Dreamsleeve.Protocol.Chat.Position position = 1;
+  bool has_position() const;
+  void clear_position() ;
+  const ::Dreamsleeve::Protocol::Chat::Position& position() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE release_position();
+  ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NONNULL mutable_position();
+  void set_allocated_position(::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_position(::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE unsafe_arena_release_position();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::Position& _internal_position() const;
+  ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NONNULL _internal_mutable_position();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.Rotation rotation = 2;
+  bool has_rotation() const;
+  void clear_rotation() ;
+  const ::Dreamsleeve::Protocol::Chat::Rotation& rotation() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE release_rotation();
+  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL mutable_rotation();
+  void set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE unsafe_arena_release_rotation();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::Rotation& _internal_rotation() const;
+  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL _internal_mutable_rotation();
+
+  public:
+  // uint64 sampled_at_us = 3;
+  void clear_sampled_at_us() ;
+  ::uint64_t sampled_at_us() const;
+  void set_sampled_at_us(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sampled_at_us() const;
+  void _internal_set_sampled_at_us(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.MovementPose)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   2, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MovementPose& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE position_;
+    ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE rotation_;
+    ::uint64_t sampled_at_us_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_player_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull MovementPose_class_data_;
+// -------------------------------------------------------------------
+
 class Location final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.Location) */ {
  public:
@@ -2796,6 +3032,237 @@ class ActorValueEntry final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull ActorValueEntry_class_data_;
+// -------------------------------------------------------------------
+
+class PlayerMoved final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.PlayerMoved) */ {
+ public:
+  inline PlayerMoved() : PlayerMoved(nullptr) {}
+  ~PlayerMoved() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PlayerMoved* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayerMoved));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR PlayerMoved(::google::protobuf::internal::ConstantInitialized);
+
+  inline PlayerMoved(const PlayerMoved& from) : PlayerMoved(nullptr, from) {}
+  inline PlayerMoved(PlayerMoved&& from) noexcept
+      : PlayerMoved(nullptr, ::std::move(from)) {}
+  inline PlayerMoved& operator=(const PlayerMoved& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PlayerMoved& operator=(PlayerMoved&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const PlayerMoved& default_instance() {
+    return *reinterpret_cast<const PlayerMoved*>(
+        &_PlayerMoved_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(PlayerMoved& a, PlayerMoved& b) { a.Swap(&b); }
+  inline void Swap(PlayerMoved* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PlayerMoved* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  PlayerMoved* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PlayerMoved>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PlayerMoved& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PlayerMoved& from) { PlayerMoved::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PlayerMoved* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.PlayerMoved"; }
+
+  explicit PlayerMoved(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PlayerMoved(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayerMoved& from);
+  PlayerMoved(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayerMoved&& from) noexcept
+      : PlayerMoved(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPoseFieldNumber = 5,
+    kPlayerIdFieldNumber = 1,
+    kViewRevisionFieldNumber = 3,
+    kSequenceFieldNumber = 4,
+  };
+  // .Dreamsleeve.Protocol.Chat.MovementPose pose = 5;
+  bool has_pose() const;
+  void clear_pose() ;
+  const ::Dreamsleeve::Protocol::Chat::MovementPose& pose() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE release_pose();
+  ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NONNULL mutable_pose();
+  void set_allocated_pose(::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pose(::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE unsafe_arena_release_pose();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::MovementPose& _internal_pose() const;
+  ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NONNULL _internal_mutable_pose();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 view_revision = 3;
+  void clear_view_revision() ;
+  ::uint64_t view_revision() const;
+  void set_view_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_view_revision() const;
+  void _internal_set_view_revision(::uint64_t value);
+
+  public:
+  // uint64 sequence = 4;
+  void clear_sequence() ;
+  ::uint64_t sequence() const;
+  void set_sequence(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sequence() const;
+  void _internal_set_sequence(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayerMoved)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 4,
+                                   1, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PlayerMoved& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE pose_;
+    ::uint64_t player_id_;
+    ::uint64_t view_revision_;
+    ::uint64_t sequence_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_player_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull PlayerMoved_class_data_;
 // -------------------------------------------------------------------
 
 class PlayerLocation final : public ::google::protobuf::Message
@@ -3294,6 +3761,225 @@ class PlayerDetails final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull PlayerDetails_class_data_;
 // -------------------------------------------------------------------
 
+class MovementSample final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.MovementSample) */ {
+ public:
+  inline MovementSample() : MovementSample(nullptr) {}
+  ~MovementSample() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MovementSample* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MovementSample));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR MovementSample(::google::protobuf::internal::ConstantInitialized);
+
+  inline MovementSample(const MovementSample& from) : MovementSample(nullptr, from) {}
+  inline MovementSample(MovementSample&& from) noexcept
+      : MovementSample(nullptr, ::std::move(from)) {}
+  inline MovementSample& operator=(const MovementSample& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MovementSample& operator=(MovementSample&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const MovementSample& default_instance() {
+    return *reinterpret_cast<const MovementSample*>(
+        &_MovementSample_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(MovementSample& a, MovementSample& b) { a.Swap(&b); }
+  inline void Swap(MovementSample* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MovementSample* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  MovementSample* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MovementSample>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MovementSample& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MovementSample& from) { MovementSample::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MovementSample* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.MovementSample"; }
+
+  explicit MovementSample(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MovementSample(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MovementSample& from);
+  MovementSample(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MovementSample&& from) noexcept
+      : MovementSample(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPoseFieldNumber = 3,
+    kContextRevisionFieldNumber = 1,
+    kSequenceFieldNumber = 2,
+  };
+  // .Dreamsleeve.Protocol.Chat.MovementPose pose = 3;
+  bool has_pose() const;
+  void clear_pose() ;
+  const ::Dreamsleeve::Protocol::Chat::MovementPose& pose() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE release_pose();
+  ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NONNULL mutable_pose();
+  void set_allocated_pose(::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pose(::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE unsafe_arena_release_pose();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::MovementPose& _internal_pose() const;
+  ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NONNULL _internal_mutable_pose();
+
+  public:
+  // uint64 context_revision = 1;
+  void clear_context_revision() ;
+  ::uint64_t context_revision() const;
+  void set_context_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_context_revision() const;
+  void _internal_set_context_revision(::uint64_t value);
+
+  public:
+  // uint64 sequence = 2;
+  void clear_sequence() ;
+  ::uint64_t sequence() const;
+  void set_sequence(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sequence() const;
+  void _internal_set_sequence(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.MovementSample)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   1, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MovementSample& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE pose_;
+    ::uint64_t context_revision_;
+    ::uint64_t sequence_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_player_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull MovementSample_class_data_;
+// -------------------------------------------------------------------
+
 class ActorValues final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.ActorValues) */ {
  public:
@@ -3349,7 +4035,7 @@ class ActorValues final : public ::google::protobuf::Message
     return *reinterpret_cast<const ActorValues*>(
         &_ActorValues_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(ActorValues& a, ActorValues& b) { a.Swap(&b); }
   inline void Swap(ActorValues* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3491,30 +4177,30 @@ class ActorValues final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull ActorValues_class_data_;
 // -------------------------------------------------------------------
 
-class SampleMovement final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.SampleMovement) */ {
+class SetPlayerLocation final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.SetPlayerLocation) */ {
  public:
-  inline SampleMovement() : SampleMovement(nullptr) {}
-  ~SampleMovement() PROTOBUF_FINAL;
+  inline SetPlayerLocation() : SetPlayerLocation(nullptr) {}
+  ~SetPlayerLocation() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(SampleMovement* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(SetPlayerLocation* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(SampleMovement));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetPlayerLocation));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR SampleMovement(::google::protobuf::internal::ConstantInitialized);
+  explicit PROTOBUF_CONSTEXPR SetPlayerLocation(::google::protobuf::internal::ConstantInitialized);
 
-  inline SampleMovement(const SampleMovement& from) : SampleMovement(nullptr, from) {}
-  inline SampleMovement(SampleMovement&& from) noexcept
-      : SampleMovement(nullptr, ::std::move(from)) {}
-  inline SampleMovement& operator=(const SampleMovement& from) {
+  inline SetPlayerLocation(const SetPlayerLocation& from) : SetPlayerLocation(nullptr, from) {}
+  inline SetPlayerLocation(SetPlayerLocation&& from) noexcept
+      : SetPlayerLocation(nullptr, ::std::move(from)) {}
+  inline SetPlayerLocation& operator=(const SetPlayerLocation& from) {
     CopyFrom(from);
     return *this;
   }
-  inline SampleMovement& operator=(SampleMovement&& from) noexcept {
+  inline SetPlayerLocation& operator=(SetPlayerLocation&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -3542,13 +4228,13 @@ class SampleMovement final : public ::google::protobuf::Message
   static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const SampleMovement& default_instance() {
-    return *reinterpret_cast<const SampleMovement*>(
-        &_SampleMovement_default_instance_);
+  static const SetPlayerLocation& default_instance() {
+    return *reinterpret_cast<const SetPlayerLocation*>(
+        &_SetPlayerLocation_default_instance_);
   }
   static constexpr int kIndexInFileMessages = 13;
-  friend void swap(SampleMovement& a, SampleMovement& b) { a.Swap(&b); }
-  inline void Swap(SampleMovement* PROTOBUF_NONNULL other) {
+  friend void swap(SetPlayerLocation& a, SetPlayerLocation& b) { a.Swap(&b); }
+  inline void Swap(SetPlayerLocation* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -3556,7 +4242,7 @@ class SampleMovement final : public ::google::protobuf::Message
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(SampleMovement* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(SetPlayerLocation* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -3564,13 +4250,13 @@ class SampleMovement final : public ::google::protobuf::Message
 
   // implements Message ----------------------------------------------
 
-  SampleMovement* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<SampleMovement>(arena);
+  SetPlayerLocation* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetPlayerLocation>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const SampleMovement& from);
+  void CopyFrom(const SetPlayerLocation& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const SampleMovement& from) { SampleMovement::MergeImpl(*this, from); }
+  void MergeFrom(const SetPlayerLocation& from) { SetPlayerLocation::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -3606,17 +4292,17 @@ class SampleMovement final : public ::google::protobuf::Message
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(SampleMovement* PROTOBUF_NONNULL other);
+  void InternalSwap(SetPlayerLocation* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.SampleMovement"; }
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.SetPlayerLocation"; }
 
-  explicit SampleMovement(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  SampleMovement(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SampleMovement& from);
-  SampleMovement(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SampleMovement&& from) noexcept
-      : SampleMovement(arena) {
+  explicit SetPlayerLocation(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetPlayerLocation(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetPlayerLocation& from);
+  SetPlayerLocation(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetPlayerLocation&& from) noexcept
+      : SetPlayerLocation(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -3633,9 +4319,10 @@ class SampleMovement final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
-    kLocationFieldNumber = 1,
+    kLocationFieldNumber = 2,
+    kContextRevisionFieldNumber = 1,
   };
-  // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 1;
+  // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 2;
   bool has_location() const;
   void clear_location() ;
   const ::Dreamsleeve::Protocol::Chat::PlayerLocation& location() const;
@@ -3650,7 +4337,215 @@ class SampleMovement final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL _internal_mutable_location();
 
   public:
-  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SampleMovement)
+  // uint64 context_revision = 1;
+  void clear_context_revision() ;
+  ::uint64_t context_revision() const;
+  void set_context_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_context_revision() const;
+  void _internal_set_context_revision(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SetPlayerLocation)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   1, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetPlayerLocation& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE location_;
+    ::uint64_t context_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_player_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SetPlayerLocation_class_data_;
+// -------------------------------------------------------------------
+
+class PlayersMoved final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.PlayersMoved) */ {
+ public:
+  inline PlayersMoved() : PlayersMoved(nullptr) {}
+  ~PlayersMoved() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PlayersMoved* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayersMoved));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR PlayersMoved(::google::protobuf::internal::ConstantInitialized);
+
+  inline PlayersMoved(const PlayersMoved& from) : PlayersMoved(nullptr, from) {}
+  inline PlayersMoved(PlayersMoved&& from) noexcept
+      : PlayersMoved(nullptr, ::std::move(from)) {}
+  inline PlayersMoved& operator=(const PlayersMoved& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PlayersMoved& operator=(PlayersMoved&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const PlayersMoved& default_instance() {
+    return *reinterpret_cast<const PlayersMoved*>(
+        &_PlayersMoved_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(PlayersMoved& a, PlayersMoved& b) { a.Swap(&b); }
+  inline void Swap(PlayersMoved* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PlayersMoved* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  PlayersMoved* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PlayersMoved>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PlayersMoved& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PlayersMoved& from) { PlayersMoved::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PlayersMoved* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.PlayersMoved"; }
+
+  explicit PlayersMoved(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PlayersMoved(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayersMoved& from);
+  PlayersMoved(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayersMoved&& from) noexcept
+      : PlayersMoved(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayersFieldNumber = 1,
+  };
+  // repeated .Dreamsleeve.Protocol.Chat.PlayerMoved players = 1;
+  int players_size() const;
+  private:
+  int _internal_players_size() const;
+
+  public:
+  void clear_players() ;
+  ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NONNULL mutable_players(int index);
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerMoved>* PROTOBUF_NONNULL mutable_players();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerMoved>& _internal_players() const;
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerMoved>* PROTOBUF_NONNULL _internal_mutable_players();
+  public:
+  const ::Dreamsleeve::Protocol::Chat::PlayerMoved& players(int index) const;
+  ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NONNULL add_players();
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerMoved>& players() const;
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayersMoved)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
@@ -3673,43 +4568,43 @@ class SampleMovement final : public ::google::protobuf::Message
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const SampleMovement& from_msg);
+        const PlayersMoved& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE location_;
+    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::PlayerMoved > players_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_player_2eproto;
 };
 
-extern const ::google::protobuf::internal::ClassDataFull SampleMovement_class_data_;
+extern const ::google::protobuf::internal::ClassDataFull PlayersMoved_class_data_;
 // -------------------------------------------------------------------
 
-class PlayerMoved final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.PlayerMoved) */ {
+class PlayerVisibilityChanged final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged) */ {
  public:
-  inline PlayerMoved() : PlayerMoved(nullptr) {}
-  ~PlayerMoved() PROTOBUF_FINAL;
+  inline PlayerVisibilityChanged() : PlayerVisibilityChanged(nullptr) {}
+  ~PlayerVisibilityChanged() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(PlayerMoved* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(PlayerVisibilityChanged* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayerMoved));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayerVisibilityChanged));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR PlayerMoved(::google::protobuf::internal::ConstantInitialized);
+  explicit PROTOBUF_CONSTEXPR PlayerVisibilityChanged(::google::protobuf::internal::ConstantInitialized);
 
-  inline PlayerMoved(const PlayerMoved& from) : PlayerMoved(nullptr, from) {}
-  inline PlayerMoved(PlayerMoved&& from) noexcept
-      : PlayerMoved(nullptr, ::std::move(from)) {}
-  inline PlayerMoved& operator=(const PlayerMoved& from) {
+  inline PlayerVisibilityChanged(const PlayerVisibilityChanged& from) : PlayerVisibilityChanged(nullptr, from) {}
+  inline PlayerVisibilityChanged(PlayerVisibilityChanged&& from) noexcept
+      : PlayerVisibilityChanged(nullptr, ::std::move(from)) {}
+  inline PlayerVisibilityChanged& operator=(const PlayerVisibilityChanged& from) {
     CopyFrom(from);
     return *this;
   }
-  inline PlayerMoved& operator=(PlayerMoved&& from) noexcept {
+  inline PlayerVisibilityChanged& operator=(PlayerVisibilityChanged&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -3737,13 +4632,13 @@ class PlayerMoved final : public ::google::protobuf::Message
   static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const PlayerMoved& default_instance() {
-    return *reinterpret_cast<const PlayerMoved*>(
-        &_PlayerMoved_default_instance_);
+  static const PlayerVisibilityChanged& default_instance() {
+    return *reinterpret_cast<const PlayerVisibilityChanged*>(
+        &_PlayerVisibilityChanged_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 20;
-  friend void swap(PlayerMoved& a, PlayerMoved& b) { a.Swap(&b); }
-  inline void Swap(PlayerMoved* PROTOBUF_NONNULL other) {
+  static constexpr int kIndexInFileMessages = 23;
+  friend void swap(PlayerVisibilityChanged& a, PlayerVisibilityChanged& b) { a.Swap(&b); }
+  inline void Swap(PlayerVisibilityChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -3751,7 +4646,7 @@ class PlayerMoved final : public ::google::protobuf::Message
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(PlayerMoved* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(PlayerVisibilityChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -3759,13 +4654,13 @@ class PlayerMoved final : public ::google::protobuf::Message
 
   // implements Message ----------------------------------------------
 
-  PlayerMoved* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<PlayerMoved>(arena);
+  PlayerVisibilityChanged* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PlayerVisibilityChanged>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const PlayerMoved& from);
+  void CopyFrom(const PlayerVisibilityChanged& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const PlayerMoved& from) { PlayerMoved::MergeImpl(*this, from); }
+  void MergeFrom(const PlayerVisibilityChanged& from) { PlayerVisibilityChanged::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -3801,17 +4696,17 @@ class PlayerMoved final : public ::google::protobuf::Message
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(PlayerMoved* PROTOBUF_NONNULL other);
+  void InternalSwap(PlayerVisibilityChanged* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.PlayerMoved"; }
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged"; }
 
-  explicit PlayerMoved(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  PlayerMoved(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayerMoved& from);
-  PlayerMoved(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayerMoved&& from) noexcept
-      : PlayerMoved(arena) {
+  explicit PlayerVisibilityChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PlayerVisibilityChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayerVisibilityChanged& from);
+  PlayerVisibilityChanged(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayerVisibilityChanged&& from) noexcept
+      : PlayerVisibilityChanged(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -3828,10 +4723,12 @@ class PlayerMoved final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
-    kLocationFieldNumber = 2,
+    kLocationFieldNumber = 4,
     kPlayerIdFieldNumber = 1,
+    kViewRevisionFieldNumber = 2,
+    kSequenceFieldNumber = 3,
   };
-  // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 2;
+  // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 4;
   bool has_location() const;
   void clear_location() ;
   const ::Dreamsleeve::Protocol::Chat::PlayerLocation& location() const;
@@ -3856,11 +4753,31 @@ class PlayerMoved final : public ::google::protobuf::Message
   void _internal_set_player_id(::uint64_t value);
 
   public:
-  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayerMoved)
+  // uint64 view_revision = 2;
+  void clear_view_revision() ;
+  ::uint64_t view_revision() const;
+  void set_view_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_view_revision() const;
+  void _internal_set_view_revision(::uint64_t value);
+
+  public:
+  // uint64 sequence = 3;
+  void clear_sequence() ;
+  ::uint64_t sequence() const;
+  void set_sequence(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sequence() const;
+  void _internal_set_sequence(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
                                    1, 0,
                                    2>
       _table_;
@@ -3879,18 +4796,20 @@ class PlayerMoved final : public ::google::protobuf::Message
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const PlayerMoved& from_msg);
+        const PlayerVisibilityChanged& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE location_;
     ::uint64_t player_id_;
+    ::uint64_t view_revision_;
+    ::uint64_t sequence_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_player_2eproto;
 };
 
-extern const ::google::protobuf::internal::ClassDataFull PlayerMoved_class_data_;
+extern const ::google::protobuf::internal::ClassDataFull PlayerVisibilityChanged_class_data_;
 // -------------------------------------------------------------------
 
 class PlayerMetadataChanged final : public ::google::protobuf::Message
@@ -3948,7 +4867,7 @@ class PlayerMetadataChanged final : public ::google::protobuf::Message
     return *reinterpret_cast<const PlayerMetadataChanged*>(
         &_PlayerMetadataChanged_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(PlayerMetadataChanged& a, PlayerMetadataChanged& b) { a.Swap(&b); }
   inline void Swap(PlayerMetadataChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4265,6 +5184,8 @@ class PlayerInfo final : public ::google::protobuf::Message
     kLocationFieldNumber = 3,
     kDetailsFieldNumber = 6,
     kCharacterGenerationFieldNumber = 5,
+    kViewRevisionFieldNumber = 7,
+    kMovementSequenceFieldNumber = 8,
   };
   // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry actor_values = 4;
   int actor_values_size() const;
@@ -4354,12 +5275,32 @@ class PlayerInfo final : public ::google::protobuf::Message
   void _internal_set_character_generation(::uint64_t value);
 
   public:
+  // uint64 view_revision = 7;
+  void clear_view_revision() ;
+  ::uint64_t view_revision() const;
+  void set_view_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_view_revision() const;
+  void _internal_set_view_revision(::uint64_t value);
+
+  public:
+  // uint64 movement_sequence = 8;
+  void clear_movement_sequence() ;
+  ::uint64_t movement_sequence() const;
+  void set_movement_sequence(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_movement_sequence() const;
+  void _internal_set_movement_sequence(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayerInfo)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
-                                   4, 59,
+  static const ::google::protobuf::internal::TcParseTable<3, 8,
+                                   4, 67,
                                    2>
       _table_;
 
@@ -4386,6 +5327,8 @@ class PlayerInfo final : public ::google::protobuf::Message
     ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE location_;
     ::Dreamsleeve::Protocol::Chat::PlayerDetails* PROTOBUF_NULLABLE details_;
     ::uint64_t character_generation_;
+    ::uint64_t view_revision_;
+    ::uint64_t movement_sequence_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4453,13 +5396,13 @@ class UpdatePlayer final : public ::google::protobuf::Message
   enum ActionCase {
     kBeginCharacter = 1,
     kRenameCharacter = 2,
-    kSampleMovement = 6,
+    kSetLocation = 8,
     kSetActorValues = 7,
     kLeaveGame = 4,
     kSetDetails = 5,
     ACTION_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(UpdatePlayer& a, UpdatePlayer& b) { a.Swap(&b); }
   inline void Swap(UpdatePlayer* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4548,7 +5491,7 @@ class UpdatePlayer final : public ::google::protobuf::Message
   enum : int {
     kBeginCharacterFieldNumber = 1,
     kRenameCharacterFieldNumber = 2,
-    kSampleMovementFieldNumber = 6,
+    kSetLocationFieldNumber = 8,
     kSetActorValuesFieldNumber = 7,
     kLeaveGameFieldNumber = 4,
     kSetDetailsFieldNumber = 5,
@@ -4591,23 +5534,23 @@ class UpdatePlayer final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::RenameCharacter* PROTOBUF_NONNULL _internal_mutable_rename_character();
 
   public:
-  // .Dreamsleeve.Protocol.Chat.SampleMovement sample_movement = 6;
-  bool has_sample_movement() const;
+  // .Dreamsleeve.Protocol.Chat.SetPlayerLocation set_location = 8;
+  bool has_set_location() const;
   private:
-  bool _internal_has_sample_movement() const;
+  bool _internal_has_set_location() const;
 
   public:
-  void clear_sample_movement() ;
-  const ::Dreamsleeve::Protocol::Chat::SampleMovement& sample_movement() const;
-  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NULLABLE release_sample_movement();
-  ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NONNULL mutable_sample_movement();
-  void set_allocated_sample_movement(::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_sample_movement(::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NULLABLE value);
-  ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NULLABLE unsafe_arena_release_sample_movement();
+  void clear_set_location() ;
+  const ::Dreamsleeve::Protocol::Chat::SetPlayerLocation& set_location() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NULLABLE release_set_location();
+  ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NONNULL mutable_set_location();
+  void set_allocated_set_location(::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_set_location(::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NULLABLE unsafe_arena_release_set_location();
 
   private:
-  const ::Dreamsleeve::Protocol::Chat::SampleMovement& _internal_sample_movement() const;
-  ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NONNULL _internal_mutable_sample_movement();
+  const ::Dreamsleeve::Protocol::Chat::SetPlayerLocation& _internal_set_location() const;
+  ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NONNULL _internal_mutable_set_location();
 
   public:
   // .Dreamsleeve.Protocol.Chat.ActorValues set_actor_values = 7;
@@ -4674,7 +5617,7 @@ class UpdatePlayer final : public ::google::protobuf::Message
   class _Internal;
   void set_has_begin_character();
   void set_has_rename_character();
-  void set_has_sample_movement();
+  void set_has_set_location();
   void set_has_set_actor_values();
   void set_has_leave_game();
   void set_has_set_details();
@@ -4706,7 +5649,7 @@ class UpdatePlayer final : public ::google::protobuf::Message
       ::google::protobuf::internal::ConstantInitialized _constinit_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE begin_character_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE rename_character_;
-      ::google::protobuf::Message* PROTOBUF_NULLABLE sample_movement_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE set_location_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE set_actor_values_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE leave_game_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE set_details_;
@@ -4720,203 +5663,6 @@ class UpdatePlayer final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull UpdatePlayer_class_data_;
-// -------------------------------------------------------------------
-
-class PlayersMoved final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.PlayersMoved) */ {
- public:
-  inline PlayersMoved() : PlayersMoved(nullptr) {}
-  ~PlayersMoved() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(PlayersMoved* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayersMoved));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR PlayersMoved(::google::protobuf::internal::ConstantInitialized);
-
-  inline PlayersMoved(const PlayersMoved& from) : PlayersMoved(nullptr, from) {}
-  inline PlayersMoved(PlayersMoved&& from) noexcept
-      : PlayersMoved(nullptr, ::std::move(from)) {}
-  inline PlayersMoved& operator=(const PlayersMoved& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline PlayersMoved& operator=(PlayersMoved&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  static const PlayersMoved& default_instance() {
-    return *reinterpret_cast<const PlayersMoved*>(
-        &_PlayersMoved_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 22;
-  friend void swap(PlayersMoved& a, PlayersMoved& b) { a.Swap(&b); }
-  inline void Swap(PlayersMoved* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(PlayersMoved* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  PlayersMoved* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<PlayersMoved>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const PlayersMoved& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const PlayersMoved& from) { PlayersMoved::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(PlayersMoved* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.PlayersMoved"; }
-
-  explicit PlayersMoved(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  PlayersMoved(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayersMoved& from);
-  PlayersMoved(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayersMoved&& from) noexcept
-      : PlayersMoved(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kPlayersFieldNumber = 1,
-  };
-  // repeated .Dreamsleeve.Protocol.Chat.PlayerMoved players = 1;
-  int players_size() const;
-  private:
-  int _internal_players_size() const;
-
-  public:
-  void clear_players() ;
-  ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NONNULL mutable_players(int index);
-  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerMoved>* PROTOBUF_NONNULL mutable_players();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerMoved>& _internal_players() const;
-  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerMoved>* PROTOBUF_NONNULL _internal_mutable_players();
-  public:
-  const ::Dreamsleeve::Protocol::Chat::PlayerMoved& players(int index) const;
-  ::Dreamsleeve::Protocol::Chat::PlayerMoved* PROTOBUF_NONNULL add_players();
-  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerMoved>& players() const;
-  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayersMoved)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 1,
-                                   1, 0,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const PlayersMoved& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::PlayerMoved > players_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_player_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataFull PlayersMoved_class_data_;
 // -------------------------------------------------------------------
 
 class PlayerUpdated final : public ::google::protobuf::Message
@@ -4974,7 +5720,7 @@ class PlayerUpdated final : public ::google::protobuf::Message
     return *reinterpret_cast<const PlayerUpdated*>(
         &_PlayerUpdated_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(PlayerUpdated& a, PlayerUpdated& b) { a.Swap(&b); }
   inline void Swap(PlayerUpdated* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5169,7 +5915,7 @@ class PlayerJoined final : public ::google::protobuf::Message
     return *reinterpret_cast<const PlayerJoined*>(
         &_PlayerJoined_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(PlayerJoined& a, PlayerJoined& b) { a.Swap(&b); }
   inline void Swap(PlayerJoined* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6723,6 +7469,56 @@ inline void PlayerInfo::set_allocated_details(::Dreamsleeve::Protocol::Chat::Pla
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerInfo.details)
 }
 
+// uint64 view_revision = 7;
+inline void PlayerInfo::clear_view_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.view_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000040U);
+}
+inline ::uint64_t PlayerInfo::view_revision() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerInfo.view_revision)
+  return _internal_view_revision();
+}
+inline void PlayerInfo::set_view_revision(::uint64_t value) {
+  _internal_set_view_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerInfo.view_revision)
+}
+inline ::uint64_t PlayerInfo::_internal_view_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.view_revision_;
+}
+inline void PlayerInfo::_internal_set_view_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.view_revision_ = value;
+}
+
+// uint64 movement_sequence = 8;
+inline void PlayerInfo::clear_movement_sequence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.movement_sequence_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000080U);
+}
+inline ::uint64_t PlayerInfo::movement_sequence() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerInfo.movement_sequence)
+  return _internal_movement_sequence();
+}
+inline void PlayerInfo::set_movement_sequence(::uint64_t value) {
+  _internal_set_movement_sequence(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerInfo.movement_sequence)
+}
+inline ::uint64_t PlayerInfo::_internal_movement_sequence() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.movement_sequence_;
+}
+inline void PlayerInfo::_internal_set_movement_sequence(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.movement_sequence_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // NamedForm
@@ -7865,30 +8661,55 @@ inline void RenameCharacter::set_allocated_name(::std::string* PROTOBUF_NULLABLE
 
 // -------------------------------------------------------------------
 
-// SampleMovement
+// SetPlayerLocation
 
-// .Dreamsleeve.Protocol.Chat.PlayerLocation location = 1;
-inline bool SampleMovement::has_location() const {
+// uint64 context_revision = 1;
+inline void SetPlayerLocation::clear_context_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.context_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t SetPlayerLocation::context_revision() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SetPlayerLocation.context_revision)
+  return _internal_context_revision();
+}
+inline void SetPlayerLocation::set_context_revision(::uint64_t value) {
+  _internal_set_context_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SetPlayerLocation.context_revision)
+}
+inline ::uint64_t SetPlayerLocation::_internal_context_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.context_revision_;
+}
+inline void SetPlayerLocation::_internal_set_context_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.context_revision_ = value;
+}
+
+// .Dreamsleeve.Protocol.Chat.PlayerLocation location = 2;
+inline bool SetPlayerLocation::has_location() const {
   bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
   PROTOBUF_ASSUME(!value || _impl_.location_ != nullptr);
   return value;
 }
-inline void SampleMovement::clear_location() {
+inline void SetPlayerLocation::clear_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.location_ != nullptr) _impl_.location_->Clear();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000001U);
 }
-inline const ::Dreamsleeve::Protocol::Chat::PlayerLocation& SampleMovement::_internal_location() const {
+inline const ::Dreamsleeve::Protocol::Chat::PlayerLocation& SetPlayerLocation::_internal_location() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   const ::Dreamsleeve::Protocol::Chat::PlayerLocation* p = _impl_.location_;
   return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::PlayerLocation&>(::Dreamsleeve::Protocol::Chat::_PlayerLocation_default_instance_);
 }
-inline const ::Dreamsleeve::Protocol::Chat::PlayerLocation& SampleMovement::location() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SampleMovement.location)
+inline const ::Dreamsleeve::Protocol::Chat::PlayerLocation& SetPlayerLocation::location() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SetPlayerLocation.location)
   return _internal_location();
 }
-inline void SampleMovement::unsafe_arena_set_allocated_location(
+inline void SetPlayerLocation::unsafe_arena_set_allocated_location(
     ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (GetArena() == nullptr) {
@@ -7900,9 +8721,9 @@ inline void SampleMovement::unsafe_arena_set_allocated_location(
   } else {
     ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.SampleMovement.location)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.SetPlayerLocation.location)
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE SampleMovement::release_location() {
+inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE SetPlayerLocation::release_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
@@ -7921,16 +8742,16 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE SampleMo
   }
   return released;
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE SampleMovement::unsafe_arena_release_location() {
+inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE SetPlayerLocation::unsafe_arena_release_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SampleMovement.location)
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SetPlayerLocation.location)
 
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
   ::Dreamsleeve::Protocol::Chat::PlayerLocation* temp = _impl_.location_;
   _impl_.location_ = nullptr;
   return temp;
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL SampleMovement::_internal_mutable_location() {
+inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL SetPlayerLocation::_internal_mutable_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.location_ == nullptr) {
     auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::PlayerLocation>(GetArena());
@@ -7938,14 +8759,14 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL SampleMov
   }
   return _impl_.location_;
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL SampleMovement::mutable_location()
+inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL SetPlayerLocation::mutable_location()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   ::Dreamsleeve::Protocol::Chat::PlayerLocation* _msg = _internal_mutable_location();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SampleMovement.location)
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SetPlayerLocation.location)
   return _msg;
 }
-inline void SampleMovement::set_allocated_location(::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE value) {
+inline void SetPlayerLocation::set_allocated_location(::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE value) {
   ::google::protobuf::Arena* message_arena = GetArena();
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (message_arena == nullptr) {
@@ -7963,7 +8784,387 @@ inline void SampleMovement::set_allocated_location(::Dreamsleeve::Protocol::Chat
   }
 
   _impl_.location_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerLocation*>(value);
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SampleMovement.location)
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SetPlayerLocation.location)
+}
+
+// -------------------------------------------------------------------
+
+// MovementPose
+
+// .Dreamsleeve.Protocol.Chat.Position position = 1;
+inline bool MovementPose::has_position() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.position_ != nullptr);
+  return value;
+}
+inline void MovementPose::clear_position() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.position_ != nullptr) _impl_.position_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::Position& MovementPose::_internal_position() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::Position* p = _impl_.position_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::Position&>(::Dreamsleeve::Protocol::Chat::_Position_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::Position& MovementPose::position() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MovementPose.position)
+  return _internal_position();
+}
+inline void MovementPose::unsafe_arena_set_allocated_position(
+    ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.position_);
+  }
+  _impl_.position_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Position*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.position)
+}
+inline ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE MovementPose::release_position() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::Position* released = _impl_.position_;
+  _impl_.position_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE MovementPose::unsafe_arena_release_position() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.MovementPose.position)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::Position* temp = _impl_.position_;
+  _impl_.position_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NONNULL MovementPose::_internal_mutable_position() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.position_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::Position>(GetArena());
+    _impl_.position_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Position*>(p);
+  }
+  return _impl_.position_;
+}
+inline ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NONNULL MovementPose::mutable_position()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::Position* _msg = _internal_mutable_position();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.MovementPose.position)
+  return _msg;
+}
+inline void MovementPose::set_allocated_position(::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.position_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.position_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Position*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.position)
+}
+
+// .Dreamsleeve.Protocol.Chat.Rotation rotation = 2;
+inline bool MovementPose::has_rotation() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.rotation_ != nullptr);
+  return value;
+}
+inline void MovementPose::clear_rotation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.rotation_ != nullptr) _impl_.rotation_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::Rotation& MovementPose::_internal_rotation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::Rotation* p = _impl_.rotation_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::Rotation&>(::Dreamsleeve::Protocol::Chat::_Rotation_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::Rotation& MovementPose::rotation() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+  return _internal_rotation();
+}
+inline void MovementPose::unsafe_arena_set_allocated_rotation(
+    ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.rotation_);
+  }
+  _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+}
+inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE MovementPose::release_rotation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::Dreamsleeve::Protocol::Chat::Rotation* released = _impl_.rotation_;
+  _impl_.rotation_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE MovementPose::unsafe_arena_release_rotation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::Dreamsleeve::Protocol::Chat::Rotation* temp = _impl_.rotation_;
+  _impl_.rotation_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL MovementPose::_internal_mutable_rotation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.rotation_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::Rotation>(GetArena());
+    _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(p);
+  }
+  return _impl_.rotation_;
+}
+inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL MovementPose::mutable_rotation()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::Dreamsleeve::Protocol::Chat::Rotation* _msg = _internal_mutable_rotation();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+  return _msg;
+}
+inline void MovementPose::set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.rotation_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+}
+
+// uint64 sampled_at_us = 3;
+inline void MovementPose::clear_sampled_at_us() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sampled_at_us_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint64_t MovementPose::sampled_at_us() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MovementPose.sampled_at_us)
+  return _internal_sampled_at_us();
+}
+inline void MovementPose::set_sampled_at_us(::uint64_t value) {
+  _internal_set_sampled_at_us(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.MovementPose.sampled_at_us)
+}
+inline ::uint64_t MovementPose::_internal_sampled_at_us() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sampled_at_us_;
+}
+inline void MovementPose::_internal_set_sampled_at_us(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sampled_at_us_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MovementSample
+
+// uint64 context_revision = 1;
+inline void MovementSample::clear_context_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.context_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t MovementSample::context_revision() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MovementSample.context_revision)
+  return _internal_context_revision();
+}
+inline void MovementSample::set_context_revision(::uint64_t value) {
+  _internal_set_context_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.MovementSample.context_revision)
+}
+inline ::uint64_t MovementSample::_internal_context_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.context_revision_;
+}
+inline void MovementSample::_internal_set_context_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.context_revision_ = value;
+}
+
+// uint64 sequence = 2;
+inline void MovementSample::clear_sequence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sequence_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint64_t MovementSample::sequence() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MovementSample.sequence)
+  return _internal_sequence();
+}
+inline void MovementSample::set_sequence(::uint64_t value) {
+  _internal_set_sequence(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.MovementSample.sequence)
+}
+inline ::uint64_t MovementSample::_internal_sequence() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sequence_;
+}
+inline void MovementSample::_internal_set_sequence(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sequence_ = value;
+}
+
+// .Dreamsleeve.Protocol.Chat.MovementPose pose = 3;
+inline bool MovementSample::has_pose() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.pose_ != nullptr);
+  return value;
+}
+inline void MovementSample::clear_pose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pose_ != nullptr) _impl_.pose_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MovementPose& MovementSample::_internal_pose() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::MovementPose* p = _impl_.pose_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::MovementPose&>(::Dreamsleeve::Protocol::Chat::_MovementPose_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MovementPose& MovementSample::pose() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MovementSample.pose)
+  return _internal_pose();
+}
+inline void MovementSample::unsafe_arena_set_allocated_pose(
+    ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pose_);
+  }
+  _impl_.pose_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MovementPose*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.MovementSample.pose)
+}
+inline ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE MovementSample::release_pose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MovementPose* released = _impl_.pose_;
+  _impl_.pose_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE MovementSample::unsafe_arena_release_pose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.MovementSample.pose)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MovementPose* temp = _impl_.pose_;
+  _impl_.pose_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NONNULL MovementSample::_internal_mutable_pose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pose_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::MovementPose>(GetArena());
+    _impl_.pose_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MovementPose*>(p);
+  }
+  return _impl_.pose_;
+}
+inline ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NONNULL MovementSample::mutable_pose()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MovementPose* _msg = _internal_mutable_pose();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.MovementSample.pose)
+  return _msg;
+}
+inline void MovementSample::set_allocated_pose(::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pose_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.pose_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MovementPose*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.MovementSample.pose)
 }
 
 // -------------------------------------------------------------------
@@ -8198,85 +9399,85 @@ inline ::Dreamsleeve::Protocol::Chat::RenameCharacter* PROTOBUF_NONNULL UpdatePl
   return _msg;
 }
 
-// .Dreamsleeve.Protocol.Chat.SampleMovement sample_movement = 6;
-inline bool UpdatePlayer::has_sample_movement() const {
-  return action_case() == kSampleMovement;
+// .Dreamsleeve.Protocol.Chat.SetPlayerLocation set_location = 8;
+inline bool UpdatePlayer::has_set_location() const {
+  return action_case() == kSetLocation;
 }
-inline bool UpdatePlayer::_internal_has_sample_movement() const {
-  return action_case() == kSampleMovement;
+inline bool UpdatePlayer::_internal_has_set_location() const {
+  return action_case() == kSetLocation;
 }
-inline void UpdatePlayer::set_has_sample_movement() {
-  _impl_._oneof_case_[0] = kSampleMovement;
+inline void UpdatePlayer::set_has_set_location() {
+  _impl_._oneof_case_[0] = kSetLocation;
 }
-inline void UpdatePlayer::clear_sample_movement() {
+inline void UpdatePlayer::clear_set_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (action_case() == kSampleMovement) {
+  if (action_case() == kSetLocation) {
     if (GetArena() == nullptr) {
-      delete _impl_.action_.sample_movement_;
+      delete _impl_.action_.set_location_;
     } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.sample_movement_);
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.set_location_);
     }
     clear_has_action();
   }
 }
-inline ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NULLABLE UpdatePlayer::release_sample_movement() {
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.UpdatePlayer.sample_movement)
-  if (action_case() == kSampleMovement) {
+inline ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NULLABLE UpdatePlayer::release_set_location() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.UpdatePlayer.set_location)
+  if (action_case() == kSetLocation) {
     clear_has_action();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SampleMovement*>(_impl_.action_.sample_movement_);
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetPlayerLocation*>(_impl_.action_.set_location_);
     if (GetArena() != nullptr) {
       temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
     }
-    _impl_.action_.sample_movement_ = nullptr;
+    _impl_.action_.set_location_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline const ::Dreamsleeve::Protocol::Chat::SampleMovement& UpdatePlayer::_internal_sample_movement() const {
-  return action_case() == kSampleMovement ? static_cast<const ::Dreamsleeve::Protocol::Chat::SampleMovement&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SampleMovement*>(_impl_.action_.sample_movement_))
-                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SampleMovement&>(::Dreamsleeve::Protocol::Chat::_SampleMovement_default_instance_);
+inline const ::Dreamsleeve::Protocol::Chat::SetPlayerLocation& UpdatePlayer::_internal_set_location() const {
+  return action_case() == kSetLocation ? static_cast<const ::Dreamsleeve::Protocol::Chat::SetPlayerLocation&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetPlayerLocation*>(_impl_.action_.set_location_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SetPlayerLocation&>(::Dreamsleeve::Protocol::Chat::_SetPlayerLocation_default_instance_);
 }
-inline const ::Dreamsleeve::Protocol::Chat::SampleMovement& UpdatePlayer::sample_movement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.UpdatePlayer.sample_movement)
-  return _internal_sample_movement();
+inline const ::Dreamsleeve::Protocol::Chat::SetPlayerLocation& UpdatePlayer::set_location() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.UpdatePlayer.set_location)
+  return _internal_set_location();
 }
-inline ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NULLABLE UpdatePlayer::unsafe_arena_release_sample_movement() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.UpdatePlayer.sample_movement)
-  if (action_case() == kSampleMovement) {
+inline ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NULLABLE UpdatePlayer::unsafe_arena_release_set_location() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.UpdatePlayer.set_location)
+  if (action_case() == kSetLocation) {
     clear_has_action();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SampleMovement*>(_impl_.action_.sample_movement_);
-    _impl_.action_.sample_movement_ = nullptr;
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetPlayerLocation*>(_impl_.action_.set_location_);
+    _impl_.action_.set_location_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline void UpdatePlayer::unsafe_arena_set_allocated_sample_movement(
-    ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NULLABLE value) {
+inline void UpdatePlayer::unsafe_arena_set_allocated_set_location(
+    ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NULLABLE value) {
   // We rely on the oneof clear method to free the earlier contents
   // of this oneof. We can directly use the pointer we're given to
   // set the new value.
   clear_action();
   if (value) {
-    set_has_sample_movement();
-    _impl_.action_.sample_movement_ = reinterpret_cast<::google::protobuf::Message*>(value);
+    set_has_set_location();
+    _impl_.action_.set_location_ = reinterpret_cast<::google::protobuf::Message*>(value);
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.UpdatePlayer.sample_movement)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.UpdatePlayer.set_location)
 }
-inline ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NONNULL UpdatePlayer::_internal_mutable_sample_movement() {
-  if (action_case() != kSampleMovement) {
+inline ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NONNULL UpdatePlayer::_internal_mutable_set_location() {
+  if (action_case() != kSetLocation) {
     clear_action();
-    set_has_sample_movement();
-    _impl_.action_.sample_movement_ = reinterpret_cast<::google::protobuf::Message*>(
-        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SampleMovement>(GetArena()));
+    set_has_set_location();
+    _impl_.action_.set_location_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SetPlayerLocation>(GetArena()));
   }
-  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SampleMovement*>(_impl_.action_.sample_movement_);
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetPlayerLocation*>(_impl_.action_.set_location_);
 }
-inline ::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NONNULL UpdatePlayer::mutable_sample_movement()
+inline ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* PROTOBUF_NONNULL UpdatePlayer::mutable_set_location()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::Dreamsleeve::Protocol::Chat::SampleMovement* _msg = _internal_mutable_sample_movement();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.UpdatePlayer.sample_movement)
+  ::Dreamsleeve::Protocol::Chat::SetPlayerLocation* _msg = _internal_mutable_set_location();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.UpdatePlayer.set_location)
   return _msg;
 }
 
@@ -8997,28 +10198,256 @@ inline void PlayerMoved::_internal_set_player_id(::uint64_t value) {
   _impl_.player_id_ = value;
 }
 
-// .Dreamsleeve.Protocol.Chat.PlayerLocation location = 2;
-inline bool PlayerMoved::has_location() const {
+// uint64 view_revision = 3;
+inline void PlayerMoved::clear_view_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.view_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint64_t PlayerMoved::view_revision() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerMoved.view_revision)
+  return _internal_view_revision();
+}
+inline void PlayerMoved::set_view_revision(::uint64_t value) {
+  _internal_set_view_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerMoved.view_revision)
+}
+inline ::uint64_t PlayerMoved::_internal_view_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.view_revision_;
+}
+inline void PlayerMoved::_internal_set_view_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.view_revision_ = value;
+}
+
+// uint64 sequence = 4;
+inline void PlayerMoved::clear_sequence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sequence_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline ::uint64_t PlayerMoved::sequence() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerMoved.sequence)
+  return _internal_sequence();
+}
+inline void PlayerMoved::set_sequence(::uint64_t value) {
+  _internal_set_sequence(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerMoved.sequence)
+}
+inline ::uint64_t PlayerMoved::_internal_sequence() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sequence_;
+}
+inline void PlayerMoved::_internal_set_sequence(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sequence_ = value;
+}
+
+// .Dreamsleeve.Protocol.Chat.MovementPose pose = 5;
+inline bool PlayerMoved::has_pose() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.pose_ != nullptr);
+  return value;
+}
+inline void PlayerMoved::clear_pose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pose_ != nullptr) _impl_.pose_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MovementPose& PlayerMoved::_internal_pose() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::MovementPose* p = _impl_.pose_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::MovementPose&>(::Dreamsleeve::Protocol::Chat::_MovementPose_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MovementPose& PlayerMoved::pose() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerMoved.pose)
+  return _internal_pose();
+}
+inline void PlayerMoved::unsafe_arena_set_allocated_pose(
+    ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pose_);
+  }
+  _impl_.pose_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MovementPose*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.PlayerMoved.pose)
+}
+inline ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE PlayerMoved::release_pose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MovementPose* released = _impl_.pose_;
+  _impl_.pose_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE PlayerMoved::unsafe_arena_release_pose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.PlayerMoved.pose)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MovementPose* temp = _impl_.pose_;
+  _impl_.pose_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NONNULL PlayerMoved::_internal_mutable_pose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pose_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::MovementPose>(GetArena());
+    _impl_.pose_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MovementPose*>(p);
+  }
+  return _impl_.pose_;
+}
+inline ::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NONNULL PlayerMoved::mutable_pose()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MovementPose* _msg = _internal_mutable_pose();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.PlayerMoved.pose)
+  return _msg;
+}
+inline void PlayerMoved::set_allocated_pose(::Dreamsleeve::Protocol::Chat::MovementPose* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pose_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.pose_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MovementPose*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerMoved.pose)
+}
+
+// -------------------------------------------------------------------
+
+// PlayerVisibilityChanged
+
+// uint64 player_id = 1;
+inline void PlayerVisibilityChanged::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t PlayerVisibilityChanged::player_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.player_id)
+  return _internal_player_id();
+}
+inline void PlayerVisibilityChanged::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.player_id)
+}
+inline ::uint64_t PlayerVisibilityChanged::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void PlayerVisibilityChanged::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 view_revision = 2;
+inline void PlayerVisibilityChanged::clear_view_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.view_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint64_t PlayerVisibilityChanged::view_revision() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.view_revision)
+  return _internal_view_revision();
+}
+inline void PlayerVisibilityChanged::set_view_revision(::uint64_t value) {
+  _internal_set_view_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.view_revision)
+}
+inline ::uint64_t PlayerVisibilityChanged::_internal_view_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.view_revision_;
+}
+inline void PlayerVisibilityChanged::_internal_set_view_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.view_revision_ = value;
+}
+
+// uint64 sequence = 3;
+inline void PlayerVisibilityChanged::clear_sequence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sequence_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline ::uint64_t PlayerVisibilityChanged::sequence() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.sequence)
+  return _internal_sequence();
+}
+inline void PlayerVisibilityChanged::set_sequence(::uint64_t value) {
+  _internal_set_sequence(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.sequence)
+}
+inline ::uint64_t PlayerVisibilityChanged::_internal_sequence() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sequence_;
+}
+inline void PlayerVisibilityChanged::_internal_set_sequence(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sequence_ = value;
+}
+
+// .Dreamsleeve.Protocol.Chat.PlayerLocation location = 4;
+inline bool PlayerVisibilityChanged::has_location() const {
   bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
   PROTOBUF_ASSUME(!value || _impl_.location_ != nullptr);
   return value;
 }
-inline void PlayerMoved::clear_location() {
+inline void PlayerVisibilityChanged::clear_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.location_ != nullptr) _impl_.location_->Clear();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000001U);
 }
-inline const ::Dreamsleeve::Protocol::Chat::PlayerLocation& PlayerMoved::_internal_location() const {
+inline const ::Dreamsleeve::Protocol::Chat::PlayerLocation& PlayerVisibilityChanged::_internal_location() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   const ::Dreamsleeve::Protocol::Chat::PlayerLocation* p = _impl_.location_;
   return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::PlayerLocation&>(::Dreamsleeve::Protocol::Chat::_PlayerLocation_default_instance_);
 }
-inline const ::Dreamsleeve::Protocol::Chat::PlayerLocation& PlayerMoved::location() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerMoved.location)
+inline const ::Dreamsleeve::Protocol::Chat::PlayerLocation& PlayerVisibilityChanged::location() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.location)
   return _internal_location();
 }
-inline void PlayerMoved::unsafe_arena_set_allocated_location(
+inline void PlayerVisibilityChanged::unsafe_arena_set_allocated_location(
     ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (GetArena() == nullptr) {
@@ -9030,9 +10459,9 @@ inline void PlayerMoved::unsafe_arena_set_allocated_location(
   } else {
     ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.PlayerMoved.location)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.location)
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE PlayerMoved::release_location() {
+inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE PlayerVisibilityChanged::release_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
@@ -9051,16 +10480,16 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE PlayerMo
   }
   return released;
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE PlayerMoved::unsafe_arena_release_location() {
+inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE PlayerVisibilityChanged::unsafe_arena_release_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.PlayerMoved.location)
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.location)
 
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
   ::Dreamsleeve::Protocol::Chat::PlayerLocation* temp = _impl_.location_;
   _impl_.location_ = nullptr;
   return temp;
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL PlayerMoved::_internal_mutable_location() {
+inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL PlayerVisibilityChanged::_internal_mutable_location() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.location_ == nullptr) {
     auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::PlayerLocation>(GetArena());
@@ -9068,14 +10497,14 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL PlayerMov
   }
   return _impl_.location_;
 }
-inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL PlayerMoved::mutable_location()
+inline ::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NONNULL PlayerVisibilityChanged::mutable_location()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   ::Dreamsleeve::Protocol::Chat::PlayerLocation* _msg = _internal_mutable_location();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.PlayerMoved.location)
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.location)
   return _msg;
 }
-inline void PlayerMoved::set_allocated_location(::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE value) {
+inline void PlayerVisibilityChanged::set_allocated_location(::Dreamsleeve::Protocol::Chat::PlayerLocation* PROTOBUF_NULLABLE value) {
   ::google::protobuf::Arena* message_arena = GetArena();
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (message_arena == nullptr) {
@@ -9093,7 +10522,7 @@ inline void PlayerMoved::set_allocated_location(::Dreamsleeve::Protocol::Chat::P
   }
 
   _impl_.location_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerLocation*>(value);
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerMoved.location)
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.location)
 }
 
 // -------------------------------------------------------------------

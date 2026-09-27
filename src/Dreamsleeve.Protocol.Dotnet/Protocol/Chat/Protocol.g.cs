@@ -31,7 +31,7 @@ namespace Dreamsleeve.Protocol.Chat {
             "ZXZlLlByb3RvY29sLkNoYXQuT3BlblNlc3Npb25IABI4CglzZW5kX2NoYXQY",
             "CyABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlNlbmRDaGF0SAAS",
             "QAoNdXBkYXRlX3BsYXllchgMIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29s",
-            "LkNoYXQuVXBkYXRlUGxheWVySABCCQoHcGF5bG9hZCLtBQoMU2VydmVyUGFj",
+            "LkNoYXQuVXBkYXRlUGxheWVySABCCQoHcGF5bG9hZCKZBgoMU2VydmVyUGFj",
             "a2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SFwoKcmVxdWVzdF9pZBgC",
             "IAEoBEgBiAEBEkIKDnNlc3Npb25fb3BlbmVkGAogASgLMiguRHJlYW1zbGVl",
             "dmUuUHJvdG9jb2wuQ2hhdC5TZXNzaW9uT3BlbmVkSAASQgoOY2hhdF9wdWJs",
@@ -44,31 +44,39 @@ namespace Dreamsleeve.Protocol.Chat {
             "dGVkGA8gASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJV",
             "cGRhdGVkSAASUQoWcGxheWVyX3VwZGF0ZV9hY2NlcHRlZBgQIAEoCzIvLkRy",
             "ZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyVXBkYXRlQWNjZXB0ZWRI",
-            "ABJACg1wbGF5ZXJzX21vdmVkGBMgASgLMicuRHJlYW1zbGVldmUuUHJvdG9j",
-            "b2wuQ2hhdC5QbGF5ZXJzTW92ZWRIABJTChdwbGF5ZXJfbWV0YWRhdGFfY2hh",
-            "bmdlZBgSIAEoCzIwLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVy",
-            "TWV0YWRhdGFDaGFuZ2VkSABCCQoHcGF5bG9hZEINCgtfcmVxdWVzdF9pZEoE",
-            "CBEQElIMcGxheWVyX21vdmVkIhYKFFBsYXllclVwZGF0ZUFjY2VwdGVkInAK",
-            "D1JlcXVlc3RSZWplY3RlZBI9CgRjb2RlGAEgASgOMi8uRHJlYW1zbGVldmUu",
-            "UHJvdG9jb2wuQ2hhdC5SZXF1ZXN0UmVqZWN0aW9uQ29kZRIPCgdtZXNzYWdl",
-            "GAIgASgJEg0KBWZpZWxkGAMgASgJKqoDChRSZXF1ZXN0UmVqZWN0aW9uQ29k",
-            "ZRImCiJSRVFVRVNUX1JFSkVDVElPTl9DT0RFX1VOU1BFQ0lGSUVEEAASKgom",
-            "UkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9JTlZBTElEX1JFUVVFU1QQARIsCihS",
-            "RVFVRVNUX1JFSkVDVElPTl9DT0RFX1NFU1NJT05fTk9UX1JFQURZEAISLwor",
-            "UkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9TRVNTSU9OX0FMUkVBRFlfT1BFThAD",
-            "EikKJVJFUVVFU1RfUkVKRUNUSU9OX0NPREVfVVNFUk5BTUVfVEFLRU4QBBIs",
-            "CihSRVFVRVNUX1JFSkVDVElPTl9DT0RFX0NIQU5ORUxfTk9UX0ZPVU5EEAUS",
-            "LQopUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9OT1RfQ0hBTk5FTF9NRU1CRVIQ",
-            "BhIlCiFSRVFVRVNUX1JFSkVDVElPTl9DT0RFX09WRVJMT0FERUQQBxIwCixS",
-            "RVFVRVNUX1JFSkVDVElPTl9DT0RFX0FVVEhFTlRJQ0FUSU9OX0ZBSUxFRBAI",
-            "YgZwcm90bzM="));
+            "ABJXChlwbGF5ZXJfdmlzaWJpbGl0eV9jaGFuZ2VkGBQgASgLMjIuRHJlYW1z",
+            "bGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJWaXNpYmlsaXR5Q2hhbmdlZEgA",
+            "ElMKF3BsYXllcl9tZXRhZGF0YV9jaGFuZ2VkGBIgASgLMjAuRHJlYW1zbGVl",
+            "dmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJNZXRhZGF0YUNoYW5nZWRIAEIJCgdw",
+            "YXlsb2FkQg0KC19yZXF1ZXN0X2lkSgQIERASSgQIExAUUgxwbGF5ZXJfbW92",
+            "ZWRSDXBsYXllcnNfbW92ZWQiFgoUUGxheWVyVXBkYXRlQWNjZXB0ZWQicAoP",
+            "UmVxdWVzdFJlamVjdGVkEj0KBGNvZGUYASABKA4yLy5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5DaGF0LlJlcXVlc3RSZWplY3Rpb25Db2RlEg8KB21lc3NhZ2UY",
+            "AiABKAkSDQoFZmllbGQYAyABKAkiawoUQ2xpZW50TW92ZW1lbnRQYWNrZXQS",
+            "GAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRI5CgZzYW1wbGUYAiABKAsyKS5E",
+            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk1vdmVtZW50U2FtcGxlImwKFFNl",
+            "cnZlck1vdmVtZW50UGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0S",
+            "OgoJbW92ZW1lbnRzGAIgASgLMicuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5QbGF5ZXJzTW92ZWQqqgMKFFJlcXVlc3RSZWplY3Rpb25Db2RlEiYKIlJF",
+            "UVVFU1RfUkVKRUNUSU9OX0NPREVfVU5TUEVDSUZJRUQQABIqCiZSRVFVRVNU",
+            "X1JFSkVDVElPTl9DT0RFX0lOVkFMSURfUkVRVUVTVBABEiwKKFJFUVVFU1Rf",
+            "UkVKRUNUSU9OX0NPREVfU0VTU0lPTl9OT1RfUkVBRFkQAhIvCitSRVFVRVNU",
+            "X1JFSkVDVElPTl9DT0RFX1NFU1NJT05fQUxSRUFEWV9PUEVOEAMSKQolUkVR",
+            "VUVTVF9SRUpFQ1RJT05fQ09ERV9VU0VSTkFNRV9UQUtFThAEEiwKKFJFUVVF",
+            "U1RfUkVKRUNUSU9OX0NPREVfQ0hBTk5FTF9OT1RfRk9VTkQQBRItCilSRVFV",
+            "RVNUX1JFSkVDVElPTl9DT0RFX05PVF9DSEFOTkVMX01FTUJFUhAGEiUKIVJF",
+            "UVVFU1RfUkVKRUNUSU9OX0NPREVfT1ZFUkxPQURFRBAHEjAKLFJFUVVFU1Rf",
+            "UkVKRUNUSU9OX0NPREVfQVVUSEVOVElDQVRJT05fRkFJTEVEEAhiBnByb3Rv",
+            "Mw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.RequestRejectionCode), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ClientPacket), global::Dreamsleeve.Protocol.Chat.ClientPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "OpenSession", "SendChat", "UpdatePlayer" }, new[]{ "Payload" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ServerPacket), global::Dreamsleeve.Protocol.Chat.ServerPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "SessionOpened", "ChatPublished", "RequestRejected", "PlayerJoined", "PlayerLeft", "PlayerUpdated", "PlayerUpdateAccepted", "PlayersMoved", "PlayerMetadataChanged" }, new[]{ "Payload", "RequestId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ServerPacket), global::Dreamsleeve.Protocol.Chat.ServerPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "SessionOpened", "ChatPublished", "RequestRejected", "PlayerJoined", "PlayerLeft", "PlayerUpdated", "PlayerUpdateAccepted", "PlayerVisibilityChanged", "PlayerMetadataChanged" }, new[]{ "Payload", "RequestId" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted), global::Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RequestRejected), global::Dreamsleeve.Protocol.Chat.RequestRejected.Parser, new[]{ "Code", "Message", "Field" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RequestRejected), global::Dreamsleeve.Protocol.Chat.RequestRejected.Parser, new[]{ "Code", "Message", "Field" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ClientMovementPacket), global::Dreamsleeve.Protocol.Chat.ClientMovementPacket.Parser, new[]{ "ProtocolVersion", "Sample" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ServerMovementPacket), global::Dreamsleeve.Protocol.Chat.ServerMovementPacket.Parser, new[]{ "ProtocolVersion", "Movements" }, null, null, null, null)
           }));
     }
     #endregion
@@ -122,7 +130,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
   #region Messages
   /// <summary>
-  /// One serialized envelope per reliable ENet packet. Version 5 replicates full player state and opens sessions
+  /// Control/chat envelope. Version 6 separates repeated realtime poses from reliable commands. Opens sessions
   /// with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
   /// requires reconnecting. Transport Connected alone is not application readiness.
   /// </summary>
@@ -616,8 +624,8 @@ namespace Dreamsleeve.Protocol.Chat {
         case PayloadOneofCase.PlayerUpdateAccepted:
           PlayerUpdateAccepted = other.PlayerUpdateAccepted.Clone();
           break;
-        case PayloadOneofCase.PlayersMoved:
-          PlayersMoved = other.PlayersMoved.Clone();
+        case PayloadOneofCase.PlayerVisibilityChanged:
+          PlayerVisibilityChanged = other.PlayerVisibilityChanged.Clone();
           break;
         case PayloadOneofCase.PlayerMetadataChanged:
           PlayerMetadataChanged = other.PlayerMetadataChanged.Clone();
@@ -756,15 +764,15 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
-    /// <summary>Field number for the "players_moved" field.</summary>
-    public const int PlayersMovedFieldNumber = 19;
+    /// <summary>Field number for the "player_visibility_changed" field.</summary>
+    public const int PlayerVisibilityChangedFieldNumber = 20;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Chat.PlayersMoved PlayersMoved {
-      get { return payloadCase_ == PayloadOneofCase.PlayersMoved ? (global::Dreamsleeve.Protocol.Chat.PlayersMoved) payload_ : null; }
+    public global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged PlayerVisibilityChanged {
+      get { return payloadCase_ == PayloadOneofCase.PlayerVisibilityChanged ? (global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged) payload_ : null; }
       set {
         payload_ = value;
-        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.PlayersMoved;
+        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.PlayerVisibilityChanged;
       }
     }
 
@@ -791,7 +799,7 @@ namespace Dreamsleeve.Protocol.Chat {
       PlayerLeft = 14,
       PlayerUpdated = 15,
       PlayerUpdateAccepted = 16,
-      PlayersMoved = 19,
+      PlayerVisibilityChanged = 20,
       PlayerMetadataChanged = 18,
     }
     private PayloadOneofCase payloadCase_ = PayloadOneofCase.None;
@@ -832,7 +840,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (!object.Equals(PlayerLeft, other.PlayerLeft)) return false;
       if (!object.Equals(PlayerUpdated, other.PlayerUpdated)) return false;
       if (!object.Equals(PlayerUpdateAccepted, other.PlayerUpdateAccepted)) return false;
-      if (!object.Equals(PlayersMoved, other.PlayersMoved)) return false;
+      if (!object.Equals(PlayerVisibilityChanged, other.PlayerVisibilityChanged)) return false;
       if (!object.Equals(PlayerMetadataChanged, other.PlayerMetadataChanged)) return false;
       if (PayloadCase != other.PayloadCase) return false;
       return Equals(_unknownFields, other._unknownFields);
@@ -851,7 +859,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (payloadCase_ == PayloadOneofCase.PlayerLeft) hash ^= PlayerLeft.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.PlayerUpdated) hash ^= PlayerUpdated.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.PlayerUpdateAccepted) hash ^= PlayerUpdateAccepted.GetHashCode();
-      if (payloadCase_ == PayloadOneofCase.PlayersMoved) hash ^= PlayersMoved.GetHashCode();
+      if (payloadCase_ == PayloadOneofCase.PlayerVisibilityChanged) hash ^= PlayerVisibilityChanged.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.PlayerMetadataChanged) hash ^= PlayerMetadataChanged.GetHashCode();
       hash ^= (int) payloadCase_;
       if (_unknownFields != null) {
@@ -912,9 +920,9 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(146, 1);
         output.WriteMessage(PlayerMetadataChanged);
       }
-      if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
-        output.WriteRawTag(154, 1);
-        output.WriteMessage(PlayersMoved);
+      if (payloadCase_ == PayloadOneofCase.PlayerVisibilityChanged) {
+        output.WriteRawTag(162, 1);
+        output.WriteMessage(PlayerVisibilityChanged);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -966,9 +974,9 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(146, 1);
         output.WriteMessage(PlayerMetadataChanged);
       }
-      if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
-        output.WriteRawTag(154, 1);
-        output.WriteMessage(PlayersMoved);
+      if (payloadCase_ == PayloadOneofCase.PlayerVisibilityChanged) {
+        output.WriteRawTag(162, 1);
+        output.WriteMessage(PlayerVisibilityChanged);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -1007,8 +1015,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (payloadCase_ == PayloadOneofCase.PlayerUpdateAccepted) {
         size += 2 + pb::CodedOutputStream.ComputeMessageSize(PlayerUpdateAccepted);
       }
-      if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
-        size += 2 + pb::CodedOutputStream.ComputeMessageSize(PlayersMoved);
+      if (payloadCase_ == PayloadOneofCase.PlayerVisibilityChanged) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(PlayerVisibilityChanged);
       }
       if (payloadCase_ == PayloadOneofCase.PlayerMetadataChanged) {
         size += 2 + pb::CodedOutputStream.ComputeMessageSize(PlayerMetadataChanged);
@@ -1074,11 +1082,11 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           PlayerUpdateAccepted.MergeFrom(other.PlayerUpdateAccepted);
           break;
-        case PayloadOneofCase.PlayersMoved:
-          if (PlayersMoved == null) {
-            PlayersMoved = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
+        case PayloadOneofCase.PlayerVisibilityChanged:
+          if (PlayerVisibilityChanged == null) {
+            PlayerVisibilityChanged = new global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged();
           }
-          PlayersMoved.MergeFrom(other.PlayersMoved);
+          PlayerVisibilityChanged.MergeFrom(other.PlayerVisibilityChanged);
           break;
         case PayloadOneofCase.PlayerMetadataChanged:
           if (PlayerMetadataChanged == null) {
@@ -1187,13 +1195,13 @@ namespace Dreamsleeve.Protocol.Chat {
             PlayerMetadataChanged = subBuilder;
             break;
           }
-          case 154: {
-            global::Dreamsleeve.Protocol.Chat.PlayersMoved subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
-            if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
-              subBuilder.MergeFrom(PlayersMoved);
+          case 162: {
+            global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged();
+            if (payloadCase_ == PayloadOneofCase.PlayerVisibilityChanged) {
+              subBuilder.MergeFrom(PlayerVisibilityChanged);
             }
             input.ReadMessage(subBuilder);
-            PlayersMoved = subBuilder;
+            PlayerVisibilityChanged = subBuilder;
             break;
           }
         }
@@ -1295,13 +1303,13 @@ namespace Dreamsleeve.Protocol.Chat {
             PlayerMetadataChanged = subBuilder;
             break;
           }
-          case 154: {
-            global::Dreamsleeve.Protocol.Chat.PlayersMoved subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
-            if (payloadCase_ == PayloadOneofCase.PlayersMoved) {
-              subBuilder.MergeFrom(PlayersMoved);
+          case 162: {
+            global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged subBuilder = new global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged();
+            if (payloadCase_ == PayloadOneofCase.PlayerVisibilityChanged) {
+              subBuilder.MergeFrom(PlayerVisibilityChanged);
             }
             input.ReadMessage(subBuilder);
-            PlayersMoved = subBuilder;
+            PlayerVisibilityChanged = subBuilder;
             break;
           }
         }
@@ -1743,6 +1751,497 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 26: {
             Field = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Realtime channel: no request correlation or per-sample acceptance.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ClientMovementPacket : pb::IMessage<ClientMovementPacket>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ClientMovementPacket> _parser = new pb::MessageParser<ClientMovementPacket>(() => new ClientMovementPacket());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ClientMovementPacket> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.ProtocolReflection.Descriptor.MessageTypes[4]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ClientMovementPacket() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ClientMovementPacket(ClientMovementPacket other) : this() {
+      protocolVersion_ = other.protocolVersion_;
+      sample_ = other.sample_ != null ? other.sample_.Clone() : null;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ClientMovementPacket Clone() {
+      return new ClientMovementPacket(this);
+    }
+
+    /// <summary>Field number for the "protocol_version" field.</summary>
+    public const int ProtocolVersionFieldNumber = 1;
+    private uint protocolVersion_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ProtocolVersion {
+      get { return protocolVersion_; }
+      set {
+        protocolVersion_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "sample" field.</summary>
+    public const int SampleFieldNumber = 2;
+    private global::Dreamsleeve.Protocol.Chat.MovementSample sample_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.MovementSample Sample {
+      get { return sample_; }
+      set {
+        sample_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ClientMovementPacket);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ClientMovementPacket other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ProtocolVersion != other.ProtocolVersion) return false;
+      if (!object.Equals(Sample, other.Sample)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ProtocolVersion != 0) hash ^= ProtocolVersion.GetHashCode();
+      if (sample_ != null) hash ^= Sample.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ProtocolVersion != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ProtocolVersion);
+      }
+      if (sample_ != null) {
+        output.WriteRawTag(18);
+        output.WriteMessage(Sample);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ProtocolVersion != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ProtocolVersion);
+      }
+      if (sample_ != null) {
+        output.WriteRawTag(18);
+        output.WriteMessage(Sample);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ProtocolVersion != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ProtocolVersion);
+      }
+      if (sample_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Sample);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ClientMovementPacket other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ProtocolVersion != 0) {
+        ProtocolVersion = other.ProtocolVersion;
+      }
+      if (other.sample_ != null) {
+        if (sample_ == null) {
+          Sample = new global::Dreamsleeve.Protocol.Chat.MovementSample();
+        }
+        Sample.MergeFrom(other.Sample);
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ProtocolVersion = input.ReadUInt32();
+            break;
+          }
+          case 18: {
+            if (sample_ == null) {
+              Sample = new global::Dreamsleeve.Protocol.Chat.MovementSample();
+            }
+            input.ReadMessage(Sample);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ProtocolVersion = input.ReadUInt32();
+            break;
+          }
+          case 18: {
+            if (sample_ == null) {
+              Sample = new global::Dreamsleeve.Protocol.Chat.MovementSample();
+            }
+            input.ReadMessage(Sample);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ServerMovementPacket : pb::IMessage<ServerMovementPacket>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ServerMovementPacket> _parser = new pb::MessageParser<ServerMovementPacket>(() => new ServerMovementPacket());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ServerMovementPacket> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.ProtocolReflection.Descriptor.MessageTypes[5]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ServerMovementPacket() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ServerMovementPacket(ServerMovementPacket other) : this() {
+      protocolVersion_ = other.protocolVersion_;
+      movements_ = other.movements_ != null ? other.movements_.Clone() : null;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ServerMovementPacket Clone() {
+      return new ServerMovementPacket(this);
+    }
+
+    /// <summary>Field number for the "protocol_version" field.</summary>
+    public const int ProtocolVersionFieldNumber = 1;
+    private uint protocolVersion_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ProtocolVersion {
+      get { return protocolVersion_; }
+      set {
+        protocolVersion_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "movements" field.</summary>
+    public const int MovementsFieldNumber = 2;
+    private global::Dreamsleeve.Protocol.Chat.PlayersMoved movements_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.PlayersMoved Movements {
+      get { return movements_; }
+      set {
+        movements_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ServerMovementPacket);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ServerMovementPacket other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ProtocolVersion != other.ProtocolVersion) return false;
+      if (!object.Equals(Movements, other.Movements)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ProtocolVersion != 0) hash ^= ProtocolVersion.GetHashCode();
+      if (movements_ != null) hash ^= Movements.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ProtocolVersion != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ProtocolVersion);
+      }
+      if (movements_ != null) {
+        output.WriteRawTag(18);
+        output.WriteMessage(Movements);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ProtocolVersion != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ProtocolVersion);
+      }
+      if (movements_ != null) {
+        output.WriteRawTag(18);
+        output.WriteMessage(Movements);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ProtocolVersion != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ProtocolVersion);
+      }
+      if (movements_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Movements);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ServerMovementPacket other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ProtocolVersion != 0) {
+        ProtocolVersion = other.ProtocolVersion;
+      }
+      if (other.movements_ != null) {
+        if (movements_ == null) {
+          Movements = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
+        }
+        Movements.MergeFrom(other.Movements);
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ProtocolVersion = input.ReadUInt32();
+            break;
+          }
+          case 18: {
+            if (movements_ == null) {
+              Movements = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
+            }
+            input.ReadMessage(Movements);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ProtocolVersion = input.ReadUInt32();
+            break;
+          }
+          case 18: {
+            if (movements_ == null) {
+              Movements = new global::Dreamsleeve.Protocol.Chat.PlayersMoved();
+            }
+            input.ReadMessage(Movements);
             break;
           }
         }

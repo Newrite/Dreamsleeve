@@ -11,3 +11,9 @@ enum DisconnectReason {
   TimeoutPolicy = 5;
   ProtocolError = 6;
 }
+// Fixed wire channel IDs. Reliability is selected per packet by the adapter.
+enum DeliveryLane {
+  Control = 0;
+  Chat = 1;
+  Realtime = 2;
+}

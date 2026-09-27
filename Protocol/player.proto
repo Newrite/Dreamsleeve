@@ -41,6 +41,8 @@ message PlayerInfo {
   repeated ActorValueEntry actor_values = 4;
   uint64 character_generation = 5;
   PlayerDetails details = 6;
+  uint64 view_revision = 7;
+  uint64 movement_sequence = 8;
 }
 
 enum ActivityKind {
@@ -105,8 +107,22 @@ message BeginCharacter { string name = 1; }
 
 message RenameCharacter { string name = 1; }
 
-message SampleMovement {
-  PlayerLocation location = 1; // Absence clears current position; WRLD/CELL travels with coordinates.
+// Control channel: establishes a new coordinate context, or clears it.
+message SetPlayerLocation {
+  uint64 context_revision = 1;
+  PlayerLocation location = 2;
+}
+
+// Repeated absolute pose; location identity is established reliably.
+message MovementPose {
+  Position position = 1;
+  Rotation rotation = 2;
+  uint64 sampled_at_us = 3;
+}
+message MovementSample {
+  uint64 context_revision = 1;
+  uint64 sequence = 2;
+  MovementPose pose = 3;
 }
 
 message ActorValues { repeated ActorValueEntry values = 1; } // Full replacement, including empty.
@@ -114,12 +130,12 @@ message ActorValues { repeated ActorValueEntry values = 1; } // Full replacement
 message LeaveGame {}
 
 message UpdatePlayer {
-  reserved 3;
-  reserved "sample_player_state";
+  reserved 3, 6;
+  reserved "sample_player_state", "sample_movement";
   oneof action {
     BeginCharacter begin_character = 1;
     RenameCharacter rename_character = 2;
-    SampleMovement sample_movement = 6;
+    SetPlayerLocation set_location = 8;
     ActorValues set_actor_values = 7;
     LeaveGame leave_game = 4;
     PlayerDetails set_details = 5;
@@ -138,11 +154,26 @@ message PlayerMetadataChanged {
 }
 
 // Location-only replication avoids resending unchanged actor values.
-message PlayerMoved { uint64 player_id = 1; PlayerLocation location = 2; }
+message PlayerMoved {
+  uint64 player_id = 1;
+  reserved 2;
+  reserved "location";
+  uint64 view_revision = 3;
+  uint64 sequence = 4;
+  MovementPose pose = 5;
+}
+
+// Reliable baseline/clear. A realtime sample cannot establish visibility.
+message PlayerVisibilityChanged {
+  uint64 player_id = 1;
+  uint64 view_revision = 2;
+  uint64 sequence = 3;
+  PlayerLocation location = 4;
+}
 
 message PlayerLeft { uint64 player_id = 1; }
 
-// Ordered movement projection for one recipient; omitted location clears visibility.
+// Independent absolute poses for one recipient. Omission never clears visibility.
 message PlayersMoved {
   repeated PlayerMoved players = 1;
 }

@@ -53,6 +53,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_netw
 namespace Dreamsleeve {
 namespace Protocol {
 namespace Network {
+enum DeliveryLane : int;
+extern const uint32_t DeliveryLane_internal_data_[];
 enum DisconnectReason : int;
 extern const uint32_t DisconnectReason_internal_data_[];
 }  // namespace Network
@@ -60,6 +62,9 @@ extern const uint32_t DisconnectReason_internal_data_[];
 }  // namespace Dreamsleeve
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::Dreamsleeve::Protocol::Network::DeliveryLane_internal_data_>
+    internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Network::DeliveryLane>;
 template <>
 internal::EnumTraitsT<::Dreamsleeve::Protocol::Network::DisconnectReason_internal_data_>
     internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Network::DisconnectReason>;
@@ -110,6 +115,43 @@ inline bool DisconnectReason_Parse(
   return ::google::protobuf::internal::ParseNamedEnum<DisconnectReason>(DisconnectReason_descriptor(), name,
                                            value);
 }
+enum DeliveryLane : int {
+  Control = 0,
+  Chat = 1,
+  Realtime = 2,
+  DeliveryLane_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  DeliveryLane_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t DeliveryLane_internal_data_[];
+inline constexpr DeliveryLane DeliveryLane_MIN =
+    static_cast<DeliveryLane>(0);
+inline constexpr DeliveryLane DeliveryLane_MAX =
+    static_cast<DeliveryLane>(2);
+inline bool DeliveryLane_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int DeliveryLane_ARRAYSIZE = 2 + 1;
+const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL DeliveryLane_descriptor();
+template <typename T>
+const ::std::string& DeliveryLane_Name(T value) {
+  static_assert(::std::is_same<T, DeliveryLane>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to DeliveryLane_Name().");
+  return DeliveryLane_Name(static_cast<DeliveryLane>(value));
+}
+template <>
+inline const ::std::string& DeliveryLane_Name(DeliveryLane value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<DeliveryLane_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+inline bool DeliveryLane_Parse(
+    ::absl::string_view name, DeliveryLane* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<DeliveryLane>(DeliveryLane_descriptor(), name,
+                                           value);
+}
 
 // ===================================================================
 
@@ -145,6 +187,12 @@ struct is_proto_enum<::Dreamsleeve::Protocol::Network::DisconnectReason> : std::
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::Dreamsleeve::Protocol::Network::DisconnectReason>() {
   return ::Dreamsleeve::Protocol::Network::DisconnectReason_descriptor();
+}
+template <>
+struct is_proto_enum<::Dreamsleeve::Protocol::Network::DeliveryLane> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::Dreamsleeve::Protocol::Network::DeliveryLane>() {
+  return ::Dreamsleeve::Protocol::Network::DeliveryLane_descriptor();
 }
 
 }  // namespace protobuf

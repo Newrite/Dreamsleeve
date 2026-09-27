@@ -28,10 +28,11 @@ namespace Dreamsleeve.Protocol.Network {
             "Ko0BChBEaXNjb25uZWN0UmVhc29uEg8KC1Vuc3BlY2lmaWVkEAASEgoOQ2xp",
             "ZW50U2h1dGRvd24QARISCg5TZXJ2ZXJTaHV0ZG93bhACEgoKBktpY2tlZBAD",
             "Eg4KCkF1dGhGYWlsZWQQBBIRCg1UaW1lb3V0UG9saWN5EAUSEQoNUHJvdG9j",
-            "b2xFcnJvchAGYgZwcm90bzM="));
+            "b2xFcnJvchAGKjMKDERlbGl2ZXJ5TGFuZRILCgdDb250cm9sEAASCAoEQ2hh",
+            "dBABEgwKCFJlYWx0aW1lEAJiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Network.DisconnectReason), }, null, null));
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Network.DisconnectReason), typeof(global::Dreamsleeve.Protocol.Network.DeliveryLane), }, null, null));
     }
     #endregion
 
@@ -45,6 +46,15 @@ namespace Dreamsleeve.Protocol.Network {
     [pbr::OriginalName("AuthFailed")] AuthFailed = 4,
     [pbr::OriginalName("TimeoutPolicy")] TimeoutPolicy = 5,
     [pbr::OriginalName("ProtocolError")] ProtocolError = 6,
+  }
+
+  /// <summary>
+  /// Fixed wire channel IDs. Reliability is selected per packet by the adapter.
+  /// </summary>
+  public enum DeliveryLane {
+    [pbr::OriginalName("Control")] Control = 0,
+    [pbr::OriginalName("Chat")] Chat = 1,
+    [pbr::OriginalName("Realtime")] Realtime = 2,
   }
 
   #endregion

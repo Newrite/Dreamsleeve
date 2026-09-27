@@ -6,7 +6,7 @@ import "chat.proto";
 import "session.proto";
 import "player.proto";
 
-// One serialized envelope per reliable ENet packet. Version 5 replicates full player state and opens sessions
+// Control/chat envelope. Version 6 separates repeated realtime poses from reliable commands. Opens sessions
 // with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
 // requires reconnecting. Transport Connected alone is not application readiness.
 message ClientPacket {
@@ -25,8 +25,8 @@ message ClientPacket {
 message ServerPacket {
   uint32 protocol_version = 1;
   optional uint64 request_id = 2;
-  reserved 17;
-  reserved "player_moved";
+  reserved 17, 19;
+  reserved "player_moved", "players_moved";
   oneof payload {
     SessionOpened session_opened = 10;
     ChatPublished chat_published = 11;
@@ -35,7 +35,7 @@ message ServerPacket {
     PlayerLeft player_left = 14;
     PlayerUpdated player_updated = 15;
     PlayerUpdateAccepted player_update_accepted = 16;
-    PlayersMoved players_moved = 19;
+    PlayerVisibilityChanged player_visibility_changed = 20;
     PlayerMetadataChanged player_metadata_changed = 18;
   }
 }
@@ -64,4 +64,14 @@ message RequestRejected {
   RequestRejectionCode code = 1;
   string message = 2;
   string field = 3;
+}
+
+// Realtime channel: no request correlation or per-sample acceptance.
+message ClientMovementPacket {
+  uint32 protocol_version = 1;
+  MovementSample sample = 2;
+}
+message ServerMovementPacket {
+  uint32 protocol_version = 1;
+  PlayersMoved movements = 2;
 }
