@@ -79,7 +79,7 @@ ChatMessageId, не серверная последовательность и �
 Optional RequestId существует только в общей protobuf-оболочке и диагностике codec.
 В прикладных ответах наличие ID закреплено вариантом типа:
 
-- F# ChatResponse.SessionOpened, ChatAccepted и RequestRejected принимают обязательный uint64 ID.
+- F# ServerResponse.SessionOpened, ChatAccepted и RequestRejected принимают обязательный uint64 ID.
 - F# ChatPublished, PlayerJoined и PlayerLeft — уведомления без поля RequestId.
 - C++ ServerResponse — variant; SessionOpened, ChatAccepted и ServerRejection содержат ID,
   ChatMessagesReceived, PlayerUpserted и PlayerRemoved — без него.
@@ -90,7 +90,7 @@ ChatMessagesReceived в поле changes. Владелец завершает о
 changes в ту же модель, куда поступают сообщения других игроков. Само подтверждение
 не добавляет сообщение вторым путём.
 
-Ноль остаётся недопустимым ID, его проверяет codec. ChatCodecError.RequestId остаётся
+Ноль остаётся недопустимым ID, его проверяет codec. ProtocolCodecError.RequestId остаётся
 option: пустой или повреждённый пакет может не содержать достоверной корреляции.
 Транспортная ошибка соединения не является ServerRejection без ID.
 
@@ -180,7 +180,7 @@ C++ ClientRuntime реализует этот обработчик, сверяе
 
 На C++ [Configuration](../src/Dreamsleeve.Client.Core/Config.ixx) содержит network
 и лимиты начального состояния. `config.network` передаётся в создание DreamNetHost,
-сам config — в `Wire::Codec::TryCreate(config)`. Полученный codec сохраняет копию
+сам config — в `Wire::ProtocolCodec::TryCreate(config)`. Полученный codec сохраняет копию
 проверенных настроек; дальше вызываются `codec.Encode(request)` / `codec.Decode(bytes)`.
 Encode возвращает владеющий DreamNetPacket: TryAllocateWith выделяет буфер ENet,
 protobuf пишет прямо в него. Пакет передаётся через `client.Send(std::move(packet))`
@@ -195,8 +195,8 @@ DreamNetPacket проверяет представимость длины в ENe
 На F# [ServerConfig](../src/Dreamsleeve.Server.Core/Config.fs) — общий источник
 параметров: `ServerConfig.validate config`, затем `ServerConfig.applyPacketLimits
 config host` после создания yENet host и **до первого Service/Connect**.
-Из этого же config один раз создаётся `ChatCodec.create config`; затем используются
-`ChatCodec.decodeClient codec bytes` / `ChatCodec.encodeServer codec response`.
+Из этого же config один раз создаётся `ProtocolCodec.create config`; затем используются
+`ProtocolCodec.decodeClient codec bytes` / `ProtocolCodec.encodeServer codec response`.
 EnetTransport применяет лимиты к реальному yENet host; ServerRuntime выполняет
 его Poll/Send/Close как единственный сетевой владелец.
 
@@ -280,14 +280,14 @@ F# использует тип, сгенерированный protoc для .NE
 
 ## Полнота обработки вариантов
 
-Матчинги F# ChatResponse явно перечисляют все DU-варианты; проверки значений стоят
+Матчинги F# ServerResponse явно перечисляют все DU-варианты; проверки значений стоят
 внутри веток, без общего `_ -> None`. В Server.Core FS0025 включён как ошибка сборки.
 Входной protobuf PayloadOneofCase перечисляется явно, включая None. Неименованные
 числовые значения обрабатываются веткой `unknown when not (Enum.IsDefined unknown)`.
-В ChatCodec.fs подавлен только FS0104 о неименованных enum-значениях; новый именованный
+В ProtocolCodec.fs и PlayerCodec.fs подавлен только FS0104 о неименованных enum-значениях; новый именованный
 вариант по-прежнему требует обработки и вызывает FS0025.
 
-В C++ ChatCodec.cpp включены ошибки C4061/C4062 после generated headers.
+В C++ реализациях кодека включены ошибки C4061/C4062 после generated headers.
 PAYLOAD_NOT_SET обработан явно; default оставлен для неизвестных значений, но не
 скрывает новые именованные enum-варианты. Visitor ClientRequest также явно отличает
 OpenSession и SendChat через две перегрузки RequestWriter::operator(), без generic
@@ -302,15 +302,15 @@ fallback. Новая альтернатива требует перегрузк�
 
 ## Реализация и генерация
 
-- C++: [ChatCodec.ixx](../src/Dreamsleeve.Client.Core/Protocol/ChatCodec.ixx),
+- C++: [ProtocolCodec.ixx](../src/Dreamsleeve.Client.Core/Protocol/ProtocolCodec.ixx),
   Codec::TryCreate(config), Encode(OpenSession | SendChat) → DreamNetPacket, Decode(bytes) → ServerResponse.
-- F#: [ChatCodec.fs](../src/Dreamsleeve.Server.Core/ChatCodec.fs),
+- F#: [ProtocolCodec.fs](../src/Dreamsleeve.Server.Core/Protocol/ProtocolCodec.fs),
   create config → codec, decodeClient codec → проверенная команда, encodeServer codec → bytes.
 - C++ protobuf headers подключаются только в .cpp реализации. Они не попадают
   в интерфейс модуля: [C1001 воспроизведён на MSVC 19.51.36260](../docs/MsvcProtobufModulesRu.md)
   после обновления Visual Studio 18.10.2. Переименование интерфейса в .cpp
   с /interface также вызывает C1001; работает отдельная единица реализации
-  (`module Dreamsleeve.Client.Codec;`) при интерфейсе без protobuf.
+  (`module Dreamsleeve.Client.ProtocolCodec;`) при интерфейсе без protobuf.
 
 ```powershell
 python Scripts/generate_protocol.py
@@ -376,3 +376,18 @@ ReplicationIntervalMs регулирует объединение и рассы�
 настроек нет. Между рассылками сохраняется последнее состояние, неизменившиеся
 компоненты и возврат к опубликованному значению подавляются. Это не heartbeat
 и не доставка каждого промежуточного измерения. Команды чата не объединяются.
+
+### Организация преобразований
+
+Публичная точка входа — ProtocolCodec (F# type/module и C++ Wire::ProtocolCodec,
+модуль Dreamsleeve.Client.ProtocolCodec). Она владеет одной проверенной конфигурацией,
+парсингом/сериализацией оболочки, версией, лимитом пакета, корреляцией и диспетчеризацией.
+Внутренние ChatCodec, PlayerCodec и SessionCodec выполняют преобразования своих
+сообщений; SessionCodec использует преобразования игроков и истории чата. Отдельных
+экземпляров, DI или конфигураций на каждую часть нет. Серверные общие типы находятся
+в Protocol/ProtocolTypes.fs: ClientCommand, ClientRequest, ServerResponse, SessionWelcome
+и RequestRejection; ошибки — ProtocolCodecError/ProtocolCodecFailure.
+
+На C++ все protobuf-типы остаются в global module fragment обычных .cpp. CodecParts.h
+содержит только внутренние объявления функций и включается после module declaration;
+в публичный .ixx protobuf не попадает. Версия протокола и wire-формат не менялись.

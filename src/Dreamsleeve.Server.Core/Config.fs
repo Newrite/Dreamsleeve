@@ -116,7 +116,7 @@ module ServerConfig =
 
         if List.isEmpty errors then Ok config else Error errors
 
-    /// Apply before serving any peers. Create ChatCodec from the same config before serving peers.
+    /// Apply before serving any peers. Create ProtocolCodec from the same config before serving peers.
     let applyPacketLimits config (host: Enet.EnetHost) =
         match validate config with
         | Error errors -> Error errors

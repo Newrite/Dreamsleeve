@@ -122,7 +122,7 @@ let private ready fixture = task {
 let private applyUpdate fixture requestId command = task {
     do! post fixture.Player (PlayerSessionMessage.Update(requestId, command))
     let! accepted = receive fixture.Host
-    equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerUpdateAccepted requestId)) accepted
+    equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerUpdateAccepted requestId)) accepted
     let! change = receive fixture.Presence
     match change with
     | PresenceCommand.Update(connectionId, current) ->
@@ -135,7 +135,7 @@ let private rejectUpdate fixture requestId command = task {
     do! post fixture.Player (PlayerSessionMessage.Update(requestId, command))
     let! rejected = receive fixture.Host
     match rejected with
-    | SessionHostCommand.Send(_, ChatResponse.RequestRejected(id, rejection)) ->
+    | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, rejection)) ->
         equal requestId id
         equal RequestRejectionCode.InvalidRequest rejection.Code
     | other -> failwithf "Expected update refusal: %A" other
@@ -175,10 +175,10 @@ let tests = testList "PlayerSession" [
             | SessionHostCommand.Activate(_, _, welcome) -> equal [] welcome.RecentMessages
             | other -> failwithf "Expected welcome first: %A" other
             let! second = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.ChatPublished message)) second
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.ChatPublished message)) second
             do! deliver presence.Events (PresenceEvent.Left profile.PlayerId)
             let! third = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerLeft profile.PlayerId)) third
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerLeft profile.PlayerId)) third
         }))
 
     case "presence snapshot and later delta remain ordered while chat snapshot is delayed" (fun () ->
@@ -192,7 +192,7 @@ let tests = testList "PlayerSession" [
             | SessionHostCommand.Activate(_, _, value) -> equal [playerSnapshot profile] value.Players
             | other -> failwithf "%A" other
             let! delta = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerLeft profile.PlayerId)) delta
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerLeft profile.PlayerId)) delta
         }))
 
     case "personal quota and rejection settle one request without closing the player" (fun () ->
@@ -207,7 +207,7 @@ let tests = testList "PlayerSession" [
             do! post fixture.Player (PlayerSessionMessage.SendChat(3UL, globalId, text))
             let! overloaded = receive fixture.Host
             match overloaded with
-            | SessionHostCommand.Send(_, ChatResponse.RequestRejected(id, reason)) ->
+            | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, reason)) ->
                 equal 3UL id
                 equal RequestRejectionCode.Overloaded reason.Code
             | other -> failwithf "%A" other
@@ -216,7 +216,7 @@ let tests = testList "PlayerSession" [
             let rejection = { Code = RequestRejectionCode.NotChannelMember; Message = "refused"; Field = "" }
             do! deliver chat.Events (ChatRoomEvent.Rejected(2UL, rejection))
             let! rejected = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.RequestRejected(2UL, rejection))) rejected
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.RequestRejected(2UL, rejection))) rejected
             do! post fixture.Player (PlayerSessionMessage.SendChat(4UL, globalId, text))
             let! next = receive fixture.Chat
             match next with
@@ -225,7 +225,7 @@ let tests = testList "PlayerSession" [
             let message = publication profile 1UL
             do! deliver chat.Events (ChatRoomEvent.Accepted(4UL, message))
             let! accepted = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.ChatAccepted(4UL, message))) accepted
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.ChatAccepted(4UL, message))) accepted
             let! state = read fixture.Player
             equal profile (ok state).Data
         }))
@@ -262,7 +262,7 @@ let tests = testList "PlayerSession" [
             do! deliver reply IdentityAdmission.AlreadyInUse
             let! rejected = receive fixture.Host
             match rejected with
-            | SessionHostCommand.Send(_, ChatResponse.RequestRejected(id, reason)) ->
+            | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, reason)) ->
                 equal fixture.Request.RequestId id
                 equal RequestRejectionCode.SessionAlreadyOpen reason.Code
             | other -> failwithf "%A" other
@@ -303,7 +303,7 @@ let tests = testList "PlayerSession" [
                 nextRequestId <- nextRequestId + 1UL
                 do! post fixture.Player (PlayerSessionMessage.Update(requestId, value))
                 let! accepted = receive fixture.Host
-                equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerUpdateAccepted requestId)) accepted
+                equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerUpdateAccepted requestId)) accepted
                 let! change = receive fixture.Presence
                 match change with
                 | PresenceCommand.Update(connectionId, current) ->
@@ -380,7 +380,7 @@ let tests = testList "PlayerSession" [
                 do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Error failure }
                 let! rejected = receive fixture.Host
                 match rejected with
-                | SessionHostCommand.Send(connectionId, ChatResponse.RequestRejected(requestId, rejection)) ->
+                | SessionHostCommand.Send(connectionId, ServerResponse.RequestRejected(requestId, rejection)) ->
                     equal fixture.Request.ConnectionId connectionId
                     equal fixture.Request.RequestId requestId
                     equal expectedCode rejection.Code
@@ -442,7 +442,7 @@ let tests = testList "PlayerSession" [
             // Only the source's publication updates the author's outbound state.
             do! deliver presence.Events (PresenceEvent.Updated cleared)
             let! replicated = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerUpdated cleared)) replicated
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerUpdated cleared)) replicated
         }))
 
     case "telemetry request ID cannot settle another pending chat command" (fun () ->
@@ -503,10 +503,10 @@ let tests = testList "PlayerSession" [
                 do! post fixture.Player (PlayerSessionMessage.Update(requestId, PlayerUpdate.RenameCharacter name))
                 let! answer = receive fixture.Host
                 match answer with
-                | SessionHostCommand.Send(_, ChatResponse.PlayerUpdateAccepted id) ->
+                | SessionHostCommand.Send(_, ServerResponse.PlayerUpdateAccepted id) ->
                     equal requestId id
                     expected <- name
-                | SessionHostCommand.Send(_, ChatResponse.RequestRejected(id, rejection)) ->
+                | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, rejection)) ->
                     equal requestId id
                     equal RequestRejectionCode.Overloaded rejection.Code
                     refused <- refused + 1

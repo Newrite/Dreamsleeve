@@ -1,4 +1,4 @@
-export module Dreamsleeve.Client.Codec;
+export module Dreamsleeve.Client.ProtocolCodec;
 
 import std;
 export import Dreamsleeve.Client.Exchange;
@@ -71,11 +71,11 @@ export namespace Dreamsleeve::Client::Wire
   using ServerResponse = std::variant<SessionOpened, ChatAccepted, ChatMessagesReceived, ServerRejection, PlayerUpserted, PlayerRemoved, PlayerLocationUpdated, PlayerMetadataUpdated, PlayerUpdateAccepted>;
 
   // One immutable configuration per network owner. Validate once at startup.
-  class Codec
+  class ProtocolCodec
   {
 public:
 
-    static Result<Codec> TryCreate(Configuration config);
+    static Result<ProtocolCodec> TryCreate(Configuration config);
 
     // Serializes directly into the owning ENet packet; send with PushPacket/Send.
     Result<DreamNetPacket> Encode(const ClientRequest& request) const;
@@ -83,7 +83,7 @@ public:
 
 private:
 
-    explicit Codec(Configuration config) : config(std::move(config)) {}
+    explicit ProtocolCodec(Configuration config) : config(std::move(config)) {}
 
     Configuration config;
   };

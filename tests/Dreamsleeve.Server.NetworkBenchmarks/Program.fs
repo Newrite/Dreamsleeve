@@ -82,7 +82,7 @@ type private State = {
 let private now state = state.Clock.Elapsed.TotalMilliseconds
 let private stage name = printfn "STAGE %s" name; Console.Out.Flush()
 
-let private protocolVersion = Dreamsleeve.Server.Core.ChatCodec.Version
+let private protocolVersion = Dreamsleeve.Server.Core.ProtocolCodec.Version
 let private password = "NetworkBench-Password-2026!"
 
 let private authPost (http: HttpClient) (path: string) body =

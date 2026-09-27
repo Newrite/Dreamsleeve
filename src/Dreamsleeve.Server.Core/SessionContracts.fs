@@ -44,8 +44,8 @@ type IdentityAdmission =
 [<RequireQualifiedAccess>]
 type SessionHostCommand =
     | Reserve of Guid * PlayerId * ReliableAgentRef<IdentityAdmission>
-    | Activate of Guid * requestId: uint64 * ChatSessionOpened
-    | Send of Guid * ChatResponse
+    | Activate of Guid * requestId: uint64 * SessionWelcome
+    | Send of Guid * ServerResponse
     | Close of Guid * reason: string
     | SlowConsumer of Guid
 
@@ -67,7 +67,7 @@ type ChatRoomEvent =
     | JoinFailed of string
     | Accepted of requestId: uint64 * ChatMessage
     | Published of ChatMessage
-    | Rejected of requestId: uint64 * ChatRequestRejected
+    | Rejected of requestId: uint64 * RequestRejection
 
 type ChatSubmission = {
     ConnectionId: Guid

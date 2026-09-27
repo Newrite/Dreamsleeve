@@ -26,7 +26,7 @@ module PlayerSession =
         Player: Player
         mutable Chat: ChatSnapshot option
         mutable Online: PlayerSnapshot list option
-        Buffered: ResizeArray<ChatResponse>
+        Buffered: ResizeArray<ServerResponse>
     }
 
     type private Phase =
@@ -107,7 +107,7 @@ module PlayerSession =
 
     let private reject (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
         let rejection = { Code = code; Message = message; Field = "" }
-        send options request state context (ChatResponse.RequestRejected(requestId, rejection))
+        send options request state context (ServerResponse.RequestRejected(requestId, rejection))
 
     let private rejectOpening (options: PlayerSessionOptions) (request: SessionOpenRequest) state context code message =
         reject options request state context request.RequestId code message
@@ -218,18 +218,18 @@ module PlayerSession =
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 rejectOpening options request state context RequestRejectionCode.SessionNotReady reason
         | ChatRoomEvent.Published message ->
-            publish options request state context (ChatResponse.ChatPublished message)
+            publish options request state context (ServerResponse.ChatPublished message)
         | ChatRoomEvent.Accepted(requestId, message) ->
             match state.Phase with
             | Active _ when state.Pending.Remove requestId ->
-                send options request state context (ChatResponse.ChatAccepted(requestId, message))
+                send options request state context (ServerResponse.ChatAccepted(requestId, message))
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected chat acceptance."
         | ChatRoomEvent.Rejected(requestId, rejection) ->
             match state.Phase with
             | Active _ when state.Pending.Remove requestId ->
-                send options request state context (ChatResponse.RequestRejected(requestId, rejection))
+                send options request state context (ServerResponse.RequestRejected(requestId, rejection))
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected chat rejection."
@@ -244,11 +244,11 @@ module PlayerSession =
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected presence snapshot."
-        | PresenceEvent.Joined player -> publish options request state context (ChatResponse.PlayerJoined player)
-        | PresenceEvent.Updated player -> publish options request state context (ChatResponse.PlayerUpdated player)
-        | PresenceEvent.MetadataChanged(playerId, values, details) -> publish options request state context (ChatResponse.PlayerMetadataChanged(playerId, values, details))
-        | PresenceEvent.Moved(playerId, location) -> publish options request state context (ChatResponse.PlayerMoved(playerId, location))
-        | PresenceEvent.Left playerId -> publish options request state context (ChatResponse.PlayerLeft playerId)
+        | PresenceEvent.Joined player -> publish options request state context (ServerResponse.PlayerJoined player)
+        | PresenceEvent.Updated player -> publish options request state context (ServerResponse.PlayerUpdated player)
+        | PresenceEvent.MetadataChanged(playerId, values, details) -> publish options request state context (ServerResponse.PlayerMetadataChanged(playerId, values, details))
+        | PresenceEvent.Moved(playerId, location) -> publish options request state context (ServerResponse.PlayerMoved(playerId, location))
+        | PresenceEvent.Left playerId -> publish options request state context (ServerResponse.PlayerLeft playerId)
 
     let private sendChat (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context requestId channelId text =
         match state.Phase, reliable context with
@@ -301,7 +301,7 @@ module PlayerSession =
                     state.Phase <- Active updated
                     // This settles the request only. Author and observers apply the
                     // same coalesced presence update to their local models later.
-                    send options request state context (ChatResponse.PlayerUpdateAccepted requestId)
+                    send options request state context (ServerResponse.PlayerUpdateAccepted requestId)
                 else
                     reject options request state context requestId RequestRejectionCode.Overloaded "Player update admission is full."
         | Closing -> ()

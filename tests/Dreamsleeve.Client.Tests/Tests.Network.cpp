@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "protocol.pb.h"
 
-import Dreamsleeve.Client.Codec;
+import Dreamsleeve.Client.ProtocolCodec;
 import DreamNet.Address;
 import DreamNet.Core;
 import DreamNet.Event;
@@ -501,7 +501,7 @@ TEST_CASE("Invalid host packet budgets are rejected before creating a socket")
 TEST_CASE("Chat codec serializes directly into a transferable reliable ENet packet")
 {
   auto connected = CreateConnectedHosts();
-  auto codec = Dreamsleeve::Client::Wire::Codec::TryCreate({});
+  auto codec = Dreamsleeve::Client::Wire::ProtocolCodec::TryCreate({});
   REQUIRE(codec);
   auto packet = codec->Encode(Dreamsleeve::Client::SendChat{42, 1, "Привет"});
   REQUIRE(packet);

@@ -79,3 +79,9 @@ ChatCodec.cpp уже является частью C++-модуля: `module Dre
 [tests/README](../tests/README.md). После следующего обновления сначала повторить
 минимальную пробу, затем проверить импорт типов потребителем и полную сборку;
 только после успеха убирать зеркало и ProtocolContract.cpp.
+
+После разделения кодека текущий публичный модуль называется
+`Dreamsleeve.Client.ProtocolCodec` (`ProtocolCodec.ixx`). Реализации распределены
+по ProtocolCodec.cpp, PlayerCodec.cpp, ChatCodec.cpp и SessionCodec.cpp. Приведённые
+выше результаты диагностики относятся к прежним именам; граница protobuf остаётся
+той же: generated headers только в global module fragment `.cpp`, без экспорта в IFC.

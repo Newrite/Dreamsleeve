@@ -1,7 +1,7 @@
 export module Dreamsleeve.Client.Runtime;
 
 import std;
-export import Dreamsleeve.Client.Codec;
+export import Dreamsleeve.Client.ProtocolCodec;
 export import DreamNet.Client;
 import DreamNet.Core;
 
@@ -31,7 +31,7 @@ public:
             DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Visibility distance must be finite and nonnegative")
         };
 
-      auto codec = Wire::Codec::TryCreate(config);
+      auto codec = Wire::ProtocolCodec::TryCreate(config);
       if (!codec) return std::unexpected{codec.error()};
 
       return Ptr{new ClientRuntime(std::move(config), std::move(*codec), exchange)};
@@ -142,7 +142,7 @@ private:
 
     using Clock = std::chrono::steady_clock;
 
-    ClientRuntime(Configuration settings, Wire::Codec codec, ClientExchange& exchange)
+    ClientRuntime(Configuration settings, Wire::ProtocolCodec codec, ClientExchange& exchange)
         : config(std::move(settings)),
           codec(std::move(codec)),
           exchange(exchange)
@@ -405,7 +405,7 @@ private:
     }
 
     Configuration            config;
-    Wire::Codec              codec;
+    Wire::ProtocolCodec              codec;
     ClientExchange&          exchange;
     DreamNetClient::Ptr      transport;
     ClientModel              model;

@@ -144,7 +144,7 @@ let private start count (probe: Probe) = task {
         let welcome = probe.Expect(ids[index], 1UL)
         incoming.Enqueue(ServerTransportEvent.Connected ids[index])
         let packet = Dreamsleeve.Protocol.Chat.ClientPacket(
-                         ProtocolVersion = ChatCodec.Version, RequestId = 1UL,
+                         ProtocolVersion = ProtocolCodec.Version, RequestId = 1UL,
                          OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(SessionTicket = tickets[index]))
         incoming.Enqueue(ServerTransportEvent.Received(ids[index], Google.Protobuf.MessageExtensions.ToByteArray packet))
         let! _ = guard welcome
@@ -213,7 +213,7 @@ let private start count (probe: Probe) = task {
 
 #if !BASELINE
 let private startRooms roomCount count (probe: Probe) = task {
-    let codec = ChatCodec.create ServerConfig.defaults |> ok
+    let codec = ProtocolCodec.create ServerConfig.defaults |> ok
     let ids = Array.init count (fun _ -> Guid.NewGuid())
     let ready = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
     let mutable joined = 0
@@ -222,9 +222,9 @@ let private startRooms roomCount count (probe: Probe) = task {
         | ChatRoomEvent.Joined _ ->
             if Interlocked.Increment(&joined) = count * roomCount then ready.TrySetResult() |> ignore
         | ChatRoomEvent.Accepted(requestId, message) ->
-            probe.Receive(ids[index], ChatCodec.encodeServer codec (ChatResponse.ChatAccepted(requestId, message)) |> ok)
+            probe.Receive(ids[index], ProtocolCodec.encodeServer codec (ServerResponse.ChatAccepted(requestId, message)) |> ok)
         | ChatRoomEvent.Published message ->
-            probe.Receive(ids[index], ChatCodec.encodeServer codec (ChatResponse.ChatPublished message) |> ok)
+            probe.Receive(ids[index], ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok)
         | ChatRoomEvent.JoinFailed reason -> ready.TrySetException(InvalidOperationException reason) |> ignore
         | ChatRoomEvent.Rejected(_, reason) -> failwithf "Room benchmark rejected: %A" reason
     }

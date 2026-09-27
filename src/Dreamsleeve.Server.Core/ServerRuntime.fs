@@ -46,7 +46,7 @@ module ServerRuntime =
 
     type private State = {
         Table: SessionTable.State
-        Codec: ChatCodec
+        Codec: ProtocolCodec
         MaxActorValues: int
         Transport: ServerTransport
         Logger: ILogger
@@ -95,7 +95,7 @@ module ServerRuntime =
                 | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped -> child.Abort()
 
     let private send (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) response =
-        match ChatCodec.encodeServer state.Codec response with
+        match ProtocolCodec.encodeServer state.Codec response with
         | Error error ->
             state.Logger.LogError("Cannot encode response for {ConnectionId}: {Failure}", entry.ConnectionId, error.Failure)
             close options state context entry
@@ -107,7 +107,7 @@ module ServerRuntime =
                 close options state context entry
 
     let private reject (options: ServerRuntimeOptions) state context entry requestId code message =
-        send options state context entry (ChatResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "" }))
+        send options state context entry (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "" }))
 
     let private host (options: ServerRuntimeOptions) state context command =
         match command with
@@ -130,7 +130,7 @@ module ServerRuntime =
                 else
                     // Mark ready in the same handler that queues the welcome packet.
                     entry.Phase <- SessionTable.Ready
-                    send options state context entry (ChatResponse.SessionOpened(requestId, welcome))
+                    send options state context entry (ServerResponse.SessionOpened(requestId, welcome))
             | Some _ | None -> ()
 
         | SessionHostCommand.Send(connectionId, response) ->
@@ -138,10 +138,10 @@ module ServerRuntime =
             | Some entry when entry.Phase = SessionTable.Ready -> send options state context entry response
             | Some entry when entry.Phase = SessionTable.Opening ->
                 match response with
-                | ChatResponse.RequestRejected _ -> send options state context entry response
-                | ChatResponse.SessionOpened _ | ChatResponse.ChatAccepted _ | ChatResponse.ChatPublished _
-                | ChatResponse.PlayerJoined _ | ChatResponse.PlayerUpdated _ | ChatResponse.PlayerMoved _ | ChatResponse.PlayerMetadataChanged _
-                | ChatResponse.PlayerUpdateAccepted _ | ChatResponse.PlayerLeft _ -> ()
+                | ServerResponse.RequestRejected _ -> send options state context entry response
+                | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
+                | ServerResponse.PlayerJoined _ | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMoved _ | ServerResponse.PlayerMetadataChanged _
+                | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _ -> ()
             | Some _ | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->
@@ -175,24 +175,24 @@ module ServerRuntime =
         | None -> close options state context entry
 
     let private receive (options: ServerRuntimeOptions) globalId authenticator state context entry bytes =
-        match ChatCodec.decodeClient state.Codec bytes with
+        match ProtocolCodec.decodeClient state.Codec bytes with
         | Error error ->
             match error.RequestId with
             | None -> close options state context entry
             | Some requestId -> reject options state context entry requestId RequestRejectionCode.InvalidRequest "Invalid request."
         | Ok request ->
             match request.Command, entry.Phase with
-            | ChatCommand.OpenSession sessionTicket, SessionTable.Waiting ->
+            | ClientCommand.OpenSession sessionTicket, SessionTable.Waiting ->
                 openSession options state.MaxActorValues globalId authenticator state context entry request.RequestId sessionTicket
-            | ChatCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
+            | ClientCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
                 reject options state context entry request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
-            | ChatCommand.SendChat(channelId, text), SessionTable.Ready ->
+            | ClientCommand.SendChat(channelId, text), SessionTable.Ready ->
                 forward options state context entry request.RequestId (PlayerSessionMessage.SendChat(request.RequestId, channelId, text))
-            | ChatCommand.UpdatePlayer update, SessionTable.Ready ->
+            | ClientCommand.UpdatePlayer update, SessionTable.Ready ->
                 forward options state context entry request.RequestId (PlayerSessionMessage.Update(request.RequestId, update))
-            | (ChatCommand.SendChat _ | ChatCommand.UpdatePlayer _), (SessionTable.Waiting | SessionTable.Opening) ->
+            | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _), (SessionTable.Waiting | SessionTable.Opening) ->
                 reject options state context entry request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
-            | (ChatCommand.OpenSession _ | ChatCommand.SendChat _ | ChatCommand.UpdatePlayer _), SessionTable.Closing -> ()
+            | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _), SessionTable.Closing -> ()
 
     let private transportEvent (options: ServerRuntimeOptions) globalId authenticator state context event =
         match event with
@@ -391,7 +391,7 @@ module ServerRuntime =
                 if int64 ordinary + int64 reserve > int64 Int32.MaxValue then "Mailbox capacity and control reserve overflow."
             match ServerConfig.validate config with Ok _ -> () | Error errors -> yield! errors
         ]
-        match errors, ChatCodec.create config, ChatChannelId.create 1UL with
+        match errors, ProtocolCodec.create config, ChatChannelId.create 1UL with
         | [], Ok codec, Ok globalId ->
             let state = {
                 Table = SessionTable.create(); Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues

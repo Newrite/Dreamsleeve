@@ -16,7 +16,7 @@ let private ok = function Ok value -> value | Error error -> failwithf "%A" erro
 let private receive (channel: Channel<'T>) = channel.Reader.ReadAsync().AsTask().WaitAsync guard
 
 let private packet requestId payload =
-    let packet = ClientPacket(ProtocolVersion = ChatCodec.Version, RequestId = requestId)
+    let packet = ClientPacket(ProtocolVersion = ProtocolCodec.Version, RequestId = requestId)
     payload packet
     packet.ToByteArray()
 

@@ -16,8 +16,8 @@ let private error = function
     | Error value -> value
     | Ok _ -> failtest "Expected error"
 
-let private codec = ChatCodec.create config |> ok
-let private configured settings = ChatCodec.create settings |> ok
+let private codec = ProtocolCodec.create config |> ok
+let private configured settings = ProtocolCodec.create settings |> ok
 
 let private pid raw = PlayerId.create raw |> ok
 let private channel = ChatChannelId.create 1UL |> ok
@@ -29,10 +29,10 @@ let private message =
 let private parse bytes = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes: byte array)
 let private send requestId text =
     Dreamsleeve.Protocol.Chat.ClientPacket(
-        ProtocolVersion = ChatCodec.Version, RequestId = requestId,
+        ProtocolVersion = ProtocolCodec.Version, RequestId = requestId,
         SendChat = Dreamsleeve.Protocol.Chat.SendChat(ChannelId = 1UL, Text = text))
 let private decode (packet: Dreamsleeve.Protocol.Chat.ClientPacket) =
-    ChatCodec.decodeClient codec (packet.ToByteArray())
+    ProtocolCodec.decodeClient codec (packet.ToByteArray())
 let private welcome = {
     SelfPlayerId = pid 7UL
     GlobalChannelId = channel
@@ -42,7 +42,7 @@ let private welcome = {
 
 let private updatePacket action =
     Dreamsleeve.Protocol.Chat.ClientPacket(
-        ProtocolVersion = ChatCodec.Version, RequestId = 91UL, UpdatePlayer = action)
+        ProtocolVersion = ProtocolCodec.Version, RequestId = 91UL, UpdatePlayer = action)
 
 let private update action = updatePacket action |> decode
 
@@ -66,42 +66,42 @@ let private scalarEntry key scalar =
 
 let private playerUpdate result =
     match (result |> ok).Command with
-    | ChatCommand.UpdatePlayer value -> value
-    | ChatCommand.OpenSession _ | ChatCommand.SendChat _ -> failtest "Expected player update"
+    | ClientCommand.UpdatePlayer value -> value
+    | ClientCommand.OpenSession _ | ClientCommand.SendChat _ -> failtest "Expected player update"
 
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
 let tests = testList "Dreamsleeve.Server.Codec" [
     testCase "metadata replication encodes omitted and empty components independently" <| fun _ ->
-        let packet = ChatCodec.encodeServer codec (ChatResponse.PlayerMetadataChanged(pid 7UL, ValueSome Map.empty, ValueNone)) |> ok |> parse
+        let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueSome Map.empty, ValueNone)) |> ok |> parse
         Expect.isNotNull packet.PlayerMetadataChanged.ActorValues "Present empty means clear."
         Expect.isNull packet.PlayerMetadataChanged.Details "Absent details means preserve."
-        let packet = ChatCodec.encodeServer codec (ChatResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueSome PlayerDetails.empty)) |> ok |> parse
+        let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueSome PlayerDetails.empty)) |> ok |> parse
         Expect.isNull packet.PlayerMetadataChanged.ActorValues "Absent values mean preserve."
         Expect.isNotNull packet.PlayerMetadataChanged.Details "Details reset is explicit."
-        Expect.isError (ChatCodec.encodeServer codec (ChatResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueNone))) "Empty patch is not an update."
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueNone))) "Empty patch is not an update."
 
 
     testCase "open session carries only an opaque ticket without changing it" <| fun _ ->
         let ticket = String('a', 41) + "-_"
         let packet = Dreamsleeve.Protocol.Chat.ClientPacket(
-            ProtocolVersion = ChatCodec.Version, RequestId = 42UL,
+            ProtocolVersion = ProtocolCodec.Version, RequestId = 42UL,
             OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(SessionTicket = ticket))
         let result = decode packet |> ok
         Expect.equal result.RequestId 42UL "request correlation"
         match result.Command with
-        | ChatCommand.OpenSession actual -> Expect.equal actual ticket "credential preserved exactly"
-        | ChatCommand.SendChat _ | ChatCommand.UpdatePlayer _ -> failtest "Wrong command"
+        | ClientCommand.OpenSession actual -> Expect.equal actual ticket "credential preserved exactly"
+        | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ -> failtest "Wrong command"
 
         for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
             packet.OpenSession.SessionTicket <- invalid
-            Expect.equal (decode packet |> error).Failure (ChatCodecFailure.InvalidPayload "session_ticket") "bounded base64url ticket"
+            Expect.equal (decode packet |> error).Failure (ProtocolCodecFailure.InvalidPayload "session_ticket") "bounded base64url ticket"
 
     testCase "send chat preserves text and full uint64 request IDs" <| fun _ ->
         let result = send UInt64.MaxValue "Привет\nworld" |> decode |> ok
         Expect.equal result.RequestId UInt64.MaxValue "no signed narrowing"
         match result.Command with
-        | ChatCommand.SendChat(channelId, text) ->
+        | ClientCommand.SendChat(channelId, text) ->
             Expect.equal channelId channel "channel"
             Expect.equal (ChatMessageText.value text) "Привет\nworld" "original multiline text"
         | _ -> failtest "Wrong command"
@@ -110,37 +110,37 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let failure = send 9UL "   " |> decode |> error
         Expect.equal failure.RequestId (Some 9UL) "can reject the initiating request"
         match failure.Failure with
-        | ChatCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.Missing)) -> ()
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.Missing)) -> ()
         | _ -> failtestf "Unexpected error %A" failure
         let packet = send 10UL "ok"
         packet.SendChat.ChannelId <- 0UL
         match (decode packet |> error).Failure with
-        | ChatCodecFailure.InvalidDomain(DomainError.InvalidId "ChatChannelId") -> ()
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidId "ChatChannelId") -> ()
         | value -> failtestf "Unexpected error %A" value
         let shortLimits = { config with ChatInput = { config.ChatInput with MessageText = 1 } }
-        Expect.isError (ChatCodec.decodeClient (configured shortLimits) ((send 11UL "long").ToByteArray())) "host-supplied limit"
+        Expect.isError (ProtocolCodec.decodeClient (configured shortLimits) ((send 11UL "long").ToByteArray())) "host-supplied limit"
 
     testCase "malformed oversized unsupported and empty envelopes fail at the boundary" <| fun _ ->
         for bytes in [ [||]; [| 0x5auy; 0xffuy |]; Array.zeroCreate (config.MaxPacketBytes + 1) ] do
-            Expect.isError (ChatCodec.decodeClient codec bytes) "packet rejected"
+            Expect.isError (ProtocolCodec.decodeClient codec bytes) "packet rejected"
         let packet = send 1UL "ok"
         packet.ProtocolVersion <- 1u
-        Expect.equal (decode packet |> error).Failure (ChatCodecFailure.UnsupportedVersion 1u) "version"
-        packet.ProtocolVersion <- ChatCodec.Version
+        Expect.equal (decode packet |> error).Failure (ProtocolCodecFailure.UnsupportedVersion 1u) "version"
+        packet.ProtocolVersion <- ProtocolCodec.Version
         packet.RequestId <- 0UL
-        Expect.equal (decode packet |> error).Failure (ChatCodecFailure.InvalidEnvelope "request_id") "nonzero correlation"
+        Expect.equal (decode packet |> error).Failure (ProtocolCodecFailure.InvalidEnvelope "request_id") "nonzero correlation"
         packet.RequestId <- 1UL
         packet.ClearPayload()
-        Expect.equal (decode packet |> error).Failure (ChatCodecFailure.InvalidPayload "payload") "no known payload"
-        let futurePayload = [| 0x08uy; byte ChatCodec.Version; 0x10uy; 0x01uy; 0x9auy; 0x06uy; 0x00uy |]
-        Expect.equal (ChatCodec.decodeClient codec futurePayload |> error).Failure
-            (ChatCodecFailure.InvalidPayload "payload") "unknown oneof field is rejected"
+        Expect.equal (decode packet |> error).Failure (ProtocolCodecFailure.InvalidPayload "payload") "no known payload"
+        let futurePayload = [| 0x08uy; byte ProtocolCodec.Version; 0x10uy; 0x01uy; 0x9auy; 0x06uy; 0x00uy |]
+        Expect.equal (ProtocolCodec.decodeClient codec futurePayload |> error).Failure
+            (ProtocolCodecFailure.InvalidPayload "payload") "unknown oneof field is rejected"
         let additiveField = Array.append ((send 1UL "ok").ToByteArray()) [| 0x98uy; 0x06uy; 0x01uy |]
-        Expect.isOk (ChatCodec.decodeClient codec additiveField) "unknown additive field preserves a known command"
+        Expect.isOk (ProtocolCodec.decodeClient codec additiveField) "unknown additive field preserves a known command"
 
     testCase "accepted chat differs only in recipient correlation and includes no history" <| fun _ ->
-        let broadcast = ChatCodec.encodeServer codec (ChatResponse.ChatPublished message) |> ok |> parse
-        let own = ChatCodec.encodeServer codec (ChatResponse.ChatAccepted(42UL, message)) |> ok |> parse
+        let broadcast = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok |> parse
+        let own = ProtocolCodec.encodeServer codec (ServerResponse.ChatAccepted(42UL, message)) |> ok |> parse
         Expect.isFalse broadcast.HasRequestId "others have no request ID"
         Expect.equal own.RequestId 42UL "author correlation"
         Expect.equal own.ChatPublished broadcast.ChatPublished "same accepted event"
@@ -150,7 +150,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isNull own.SessionOpened "no history in normal publication"
 
     testCase "welcome requires unique online IDs self membership and ordered channel history" <| fun _ ->
-        let encode value = ChatCodec.encodeServer codec (ChatResponse.SessionOpened(1UL, value))
+        let encode value = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, value))
         let packet = encode welcome |> ok |> parse
         Expect.equal packet.SessionOpened.Players.Count 1 "online"
         Expect.equal packet.SessionOpened.RecentMessages.Count 1 "initial retained history"
@@ -158,41 +158,41 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (encode { welcome with Players = [snapshot; snapshot] }) "duplicate player"
         Expect.isError (encode { welcome with RecentMessages = [message; message] }) "duplicate/out-of-order message"
         Expect.isError (encode { welcome with Players = List.replicate (config.MaxInitialPlayers + 1) snapshot }) "count bound"
-        Expect.isError (ChatCodec.encodeServer codec (ChatResponse.SessionOpened(0UL, welcome))) "zero correlation"
-        Expect.isError (ChatCodec.encodeServer codec (ChatResponse.ChatAccepted(0UL, message))) "zero chat correlation"
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(0UL, welcome))) "zero correlation"
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.ChatAccepted(0UL, message))) "zero chat correlation"
 
     testCase "replies require an ID while presence notifications have no correlation" <| fun _ ->
         let rejection = { Code = RequestRejectionCode.AuthenticationFailed; Message = "Отказ"; Field = "text" }
-        let packet = ChatCodec.encodeServer codec (ChatResponse.RequestRejected(9UL, rejection)) |> ok |> parse
+        let packet = ProtocolCodec.encodeServer codec (ServerResponse.RequestRejected(9UL, rejection)) |> ok |> parse
         Expect.equal packet.RequestRejected.Code RequestRejectionCode.AuthenticationFailed "shared protobuf code"
         Expect.equal packet.RequestId 9UL "required correlation"
-        Expect.isError (ChatCodec.encodeServer codec (ChatResponse.RequestRejected(0UL, rejection))) "zero ID"
-        for response in [ChatResponse.PlayerJoined snapshot; ChatResponse.PlayerLeft (pid 7UL)] do
-            let packet = ChatCodec.encodeServer codec response |> ok |> parse
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.RequestRejected(0UL, rejection))) "zero ID"
+        for response in [ServerResponse.PlayerJoined snapshot; ServerResponse.PlayerLeft (pid 7UL)] do
+            let packet = ProtocolCodec.encodeServer codec response |> ok |> parse
             Expect.isFalse packet.HasRequestId "notifications cannot carry a request ID"
 
     testCase "configured byte limits apply at the exact boundary in both directions" <| fun _ ->
         let bytes = (send 1UL "hello").ToByteArray()
         let exact = { config with MaxPacketBytes = bytes.Length }
-        Expect.isOk (ChatCodec.decodeClient (configured exact) bytes) "exact input limit"
+        Expect.isOk (ProtocolCodec.decodeClient (configured exact) bytes) "exact input limit"
         let small = { exact with MaxPacketBytes = bytes.Length - 1 }
-        Expect.equal (ChatCodec.decodeClient (configured small) bytes |> error).Failure ChatCodecFailure.PacketTooLarge "one byte too large"
-        let response = (ChatResponse.ChatPublished message)
-        let encoded = ChatCodec.encodeServer codec response |> ok
+        Expect.equal (ProtocolCodec.decodeClient (configured small) bytes |> error).Failure ProtocolCodecFailure.PacketTooLarge "one byte too large"
+        let response = (ServerResponse.ChatPublished message)
+        let encoded = ProtocolCodec.encodeServer codec response |> ok
         let exact = { config with MaxPacketBytes = encoded.Length }
-        Expect.isOk (ChatCodec.encodeServer (configured exact) response) "exact output limit"
+        Expect.isOk (ProtocolCodec.encodeServer (configured exact) response) "exact output limit"
         let small = { exact with MaxPacketBytes = encoded.Length - 1 }
-        Expect.equal (ChatCodec.encodeServer (configured small) response |> error).Failure ChatCodecFailure.PacketTooLarge "output above configured limit"
+        Expect.equal (ProtocolCodec.encodeServer (configured small) response |> error).Failure ProtocolCodecFailure.PacketTooLarge "output above configured limit"
 
     testCase "bootstrap counts and empty initial history are configurable" <| fun _ ->
         let second = PlayerData.create (pid 8UL) profile.Username profile.DisplayName |> Player.create |> Player.snapshot
-        let response = ChatResponse.SessionOpened(1UL, { welcome with Players = [snapshot; second] })
-        Expect.isOk (ChatCodec.encodeServer (configured { config with MaxInitialPlayers = 2 }) response) "two unique players"
-        Expect.isError (ChatCodec.encodeServer (configured { config with MaxInitialPlayers = 1 }) response) "configured count"
+        let response = ServerResponse.SessionOpened(1UL, { welcome with Players = [snapshot; second] })
+        Expect.isOk (ProtocolCodec.encodeServer (configured { config with MaxInitialPlayers = 2 }) response) "two unique players"
+        Expect.isError (ProtocolCodec.encodeServer (configured { config with MaxInitialPlayers = 1 }) response) "configured count"
         let noHistory = { config with MaxRecentMessages = 0 }
-        Expect.isError (ChatCodec.encodeServer (configured noHistory) response) "history disabled"
-        let response = ChatResponse.SessionOpened(1UL, { welcome with RecentMessages = [] })
-        Expect.isOk (ChatCodec.encodeServer (configured noHistory) response) "empty history allowed"
+        Expect.isError (ProtocolCodec.encodeServer (configured noHistory) response) "history disabled"
+        let response = ServerResponse.SessionOpened(1UL, { welcome with RecentMessages = [] })
+        Expect.isOk (ProtocolCodec.encodeServer (configured noHistory) response) "empty history allowed"
 
     testCase "invalid config prevents codec creation" <| fun _ ->
         for invalid in [
@@ -213,7 +213,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             { config with PlayerInput = { config.PlayerInput with ActivityKey = 0 } }
         ] do
             Expect.isError (ServerConfig.validate invalid) "startup validation"
-            Expect.isError (ChatCodec.create invalid) "codec startup validation"
+            Expect.isError (ProtocolCodec.create invalid) "codec startup validation"
 
     testCase "one config sets yENet packet budgets and codec boundaries" <| fun _ ->
         Expect.equal (enet.ENET_API.enet_initialize()) 0 "initialize ENet"
@@ -224,7 +224,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             ServerConfig.applyPacketLimits settings host |> ok
             Expect.equal host.MaximumPacketSize (unativeint bytes.Length) "actual host packet limit"
             Expect.equal host.MaximumWaitingData (unativeint (bytes.Length * 2)) "actual host waiting budget"
-            Expect.isOk (ChatCodec.decodeClient (configured settings) bytes) "codec uses same config"
+            Expect.isOk (ProtocolCodec.decodeClient (configured settings) bytes) "codec uses same config"
             Expect.isError (ServerConfig.applyPacketLimits { settings with MaxPacketBytes = 0 } host) "reject invalid config"
             Expect.equal host.MaximumPacketSize (unativeint bytes.Length) "no partial mutation"
         finally
@@ -232,14 +232,14 @@ let tests = testList "Dreamsleeve.Server.Codec" [
 
     testCase "server emits only defined nonzero rejection codes" <| fun _ ->
         let encode code =
-            ChatCodec.encodeServer codec
-                (ChatResponse.RequestRejected(9UL, { Code = code; Message = "Rejected"; Field = "text" }))
+            ProtocolCodec.encodeServer codec
+                (ServerResponse.RequestRejected(9UL, { Code = code; Message = "Rejected"; Field = "text" }))
         for code in Enum.GetValues<RequestRejectionCode>() do
             if code <> RequestRejectionCode.Unspecified then
                 let packet = encode code |> ok |> parse
                 Expect.equal packet.RequestRejected.Code code "generated enum survives serialization"
         for invalid in [RequestRejectionCode.Unspecified; enum<RequestRejectionCode> 0x7FFF0001; enum<RequestRejectionCode> -1] do
-            Expect.equal (encode invalid |> error).Failure (ChatCodecFailure.InvalidPayload "code") "do not invent server codes"
+            Expect.equal (encode invalid |> error).Failure (ProtocolCodecFailure.InvalidPayload "code") "do not invent server codes"
     testCase "player lifecycle commands preserve character names and require an action" <| fun _ ->
         let name = "  Nerevar  "
         let beginAction = Dreamsleeve.Protocol.Chat.UpdatePlayer(BeginCharacter = Dreamsleeve.Protocol.Chat.BeginCharacter(Name = name))
@@ -250,7 +250,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let leave = Dreamsleeve.Protocol.Chat.UpdatePlayer(LeaveGame = Dreamsleeve.Protocol.Chat.LeaveGame())
         Expect.equal (update leave |> playerUpdate) PlayerUpdate.LeaveGame "leave is explicit"
         Expect.equal (update (Dreamsleeve.Protocol.Chat.UpdatePlayer()) |> error).Failure
-            (ChatCodecFailure.InvalidPayload "update_player.action") "missing oneof rejected"
+            (ProtocolCodecFailure.InvalidPayload "update_player.action") "missing oneof rejected"
         beginAction.BeginCharacter.Name <- " "
         Expect.isError (update beginAction) "character name is required"
 
@@ -269,7 +269,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (ActorValueState.tryMaximum health |> ValueOption.map ActorValue.value) (ValueSome 100.0f) "maximum preserved"
         zero.ClearValue()
         Expect.equal (valuesPacket [zero] |> update |> error).Failure
-            (ChatCodecFailure.InvalidPayload "actor_value.value") "unset is not scalar zero"
+            (ProtocolCodecFailure.InvalidPayload "actor_value.value") "unset is not scalar zero"
 
     testCase "present zero coordinates are distinct from an unknown location" <| fun _ ->
         let decoded = movementPacket (wireLocation()) |> update |> playerUpdate |> apply
@@ -287,7 +287,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             | 2 -> broken.Position <- null
             | _ -> broken.Rotation <- null
             Expect.equal (movementPacket broken |> update |> error).Failure
-                (ChatCodecFailure.InvalidPayload "location") "partial location rejected"
+                (ProtocolCodecFailure.InvalidPayload "location") "partial location rejected"
 
     testCase "nonfinite telemetry rejects the complete sample and preserves request correlation" <| fun _ ->
         for bad in [Single.NaN; Single.PositiveInfinity; Single.NegativeInfinity] do
@@ -303,7 +303,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 let failure = movementPacket place |> update |> error
                 Expect.equal failure.RequestId (Some 91UL) "caller can reject without applying the sample"
                 match failure.Failure with
-                | ChatCodecFailure.InvalidDomain(DomainError.NonFiniteNumber _) -> ()
+                | ProtocolCodecFailure.InvalidDomain(DomainError.NonFiniteNumber _) -> ()
                 | value -> failtestf "Unexpected failure %A" value
             for entry in [
                 scalarEntry "skyrim:health" bad
@@ -316,17 +316,17 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let first = scalarEntry "Skyrim:Health" 1.0f
         let duplicate = scalarEntry "skyrim:health" 2.0f
         Expect.equal (valuesPacket [first; duplicate] |> update |> error).Failure
-            (ChatCodecFailure.InvalidPayload "actor_values.duplicate_key") "case does not create another stat"
+            (ProtocolCodecFailure.InvalidPayload "actor_values.duplicate_key") "case does not create another stat"
         let one = configured {config with PlayerInput = {config.PlayerInput with MaxActorValues = 1}}
         let request entries = valuesPacket entries |> updatePacket |> fun packet -> packet.ToByteArray()
-        Expect.isOk (ChatCodec.decodeClient one (request [first])) "exact configured count"
-        Expect.equal (ChatCodec.decodeClient one (request [first; scalarEntry "avg:health" 1.0f]) |> error).Failure
-            (ChatCodecFailure.InvalidPayload "actor_values.count") "cannot grow state past the configured count"
+        Expect.isOk (ProtocolCodec.decodeClient one (request [first])) "exact configured count"
+        Expect.equal (ProtocolCodec.decodeClient one (request [first; scalarEntry "avg:health" 1.0f]) |> error).Failure
+            (ProtocolCodecFailure.InvalidPayload "actor_values.count") "cannot grow state past the configured count"
 
     testCase "configured telemetry text limits apply before domain commands are created" <| fun _ ->
         let decodeWith limits action =
             let parser = configured {config with PlayerInput = limits}
-            ChatCodec.decodeClient parser ((updatePacket action).ToByteArray())
+            ProtocolCodec.decodeClient parser ((updatePacket action).ToByteArray())
 
         let limits = config.PlayerInput
         let shortName = {limits with CharacterName = 1}
@@ -353,9 +353,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let started = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Nerevar" |> ok)
         let sampled = valuesPacket [scalarEntry "skyrim:health" 0.0f] |> update |> playerUpdate
         let state = started |> Player.applyUpdate sampled |> Player.snapshot
-        let joined = ChatCodec.encodeServer codec (ChatResponse.PlayerJoined state) |> ok |> parse
-        let changed = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
-        let boot = ChatCodec.encodeServer codec (ChatResponse.SessionOpened(1UL, {welcome with Players = [state]})) |> ok |> parse
+        let joined = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined state) |> ok |> parse
+        let changed = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+        let boot = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, {welcome with Players = [state]})) |> ok |> parse
         Expect.equal joined.PlayerJoined.Player changed.PlayerUpdated.Player "same complete state"
         Expect.equal boot.SessionOpened.Players[0] joined.PlayerJoined.Player "bootstrap agrees with replication"
         Expect.equal changed.PlayerUpdated.Player.CharacterGeneration 1UL "save generation retained"
@@ -363,13 +363,13 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal changed.PlayerUpdated.Player.ActorValues[0].ValueCase Dreamsleeve.Protocol.Chat.ActorValueEntry.ValueOneofCase.Scalar "zero is a present scalar"
         Expect.isFalse changed.HasRequestId "periodic replication is a notification"
 
-        let ack = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdateAccepted 91UL) |> ok |> parse
+        let ack = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdateAccepted 91UL) |> ok |> parse
         Expect.equal ack.RequestId 91UL "admitted command has its own acknowledgement"
         Expect.isNotNull ack.PlayerUpdateAccepted "empty but present acknowledgement"
-        Expect.isError (ChatCodec.encodeServer codec (ChatResponse.PlayerUpdateAccepted 0UL)) "zero acknowledgement ID rejected"
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdateAccepted 0UL)) "zero acknowledgement ID rejected"
 
         for place in [state.Location; ValueNone] do
-            let moved = ChatCodec.encodeServer codec (ChatResponse.PlayerMoved(pid 7UL, place)) |> ok |> parse
+            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayerMoved(pid 7UL, place)) |> ok |> parse
             Expect.isFalse moved.HasRequestId "movement has no command correlation"
             Expect.equal moved.PlayerMoved.PlayerId 7UL "identity retained"
             Expect.equal (isNull moved.PlayerMoved.Location) place.IsNone "unknown location survives"
@@ -386,7 +386,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 NearbyMarkerName = "", MarkerKind = "CITY", IsInterior = true),
             GameStartedAtUnixMs = 0L)
         let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-        let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+        let encoded = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
 
         let actual = encoded.PlayerUpdated.Player.Details
         Expect.equal actual.Race.Form.PluginName "skyrim.esm" "race key is canonical"
@@ -408,13 +408,13 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             if kind = Dreamsleeve.Protocol.Chat.ActivityKind.Menu then activity.MenuKey <- "InventoryMenu"
             let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = activity)
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-            let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+            let encoded = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             Expect.equal encoded.PlayerUpdated.Player.Details.Activity.Kind kind "activity mapping"
         for difficulty in Enum.GetValues<Dreamsleeve.Protocol.Chat.LockDifficulty>() do
             let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity(
                 Kind = Dreamsleeve.Protocol.Chat.ActivityKind.Lockpicking, LockDifficulty = difficulty))
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-            let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+            let encoded = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             Expect.equal encoded.PlayerUpdated.Player.Details.Activity.LockDifficulty difficulty "difficulty mapping"
 
     testCase "zero and absent level survive client command and server replication" <| fun _ ->
@@ -423,7 +423,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             level |> ValueOption.iter (fun value -> source.Level <- value)
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
             Expect.equal state.Details.Level level "Client-reported level is preserved."
-            let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+            let encoded = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             let actual = encoded.PlayerUpdated.Player.Details
             Expect.equal actual.HasLevel level.IsSome "Presence survives replication."
             level |> ValueOption.iter (fun value -> Expect.equal actual.Level value "Level survives replication.")

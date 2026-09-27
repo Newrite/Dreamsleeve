@@ -8,7 +8,11 @@
 
     <ItemGroup>
         <Compile Include="Config.fs" />
-        <Compile Include="ChatCodec.fs" />
+        <Compile Include="Protocol/ProtocolTypes.fs" />
+        <Compile Include="Protocol/PlayerCodec.fs" />
+        <Compile Include="Protocol/ChatCodec.fs" />
+        <Compile Include="Protocol/SessionCodec.fs" />
+        <Compile Include="Protocol/ProtocolCodec.fs" />
         <Compile Include="Authentication.fs" />
         <Compile Include="SessionContracts.fs" />
         <Compile Include="ChatRoomAgent.fs" />

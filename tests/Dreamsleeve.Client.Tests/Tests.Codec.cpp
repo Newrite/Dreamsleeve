@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "protocol.pb.h"
 import std;
-import Dreamsleeve.Client.Codec;
+import Dreamsleeve.Client.ProtocolCodec;
 
 namespace
 {
@@ -11,9 +11,9 @@ namespace
   const Configuration config{};
   namespace P = Dreamsleeve::Protocol::Chat;
 
-  W::Codec MakeCodec(Configuration settings = config)
+  W::ProtocolCodec MakeCodec(Configuration settings = config)
   {
-    auto result = W::Codec::TryCreate(std::move(settings));
+    auto result = W::ProtocolCodec::TryCreate(std::move(settings));
     REQUIRE(result);
     return std::move(*result);
   }
@@ -263,7 +263,7 @@ TEST_CASE("Invalid protocol configuration prevents codec creation")
         settings.maxRecentMessages = static_cast<std::size_t>(std::numeric_limits<int>::max()) + 1;
         break;
     }
-    auto result = W::Codec::TryCreate(settings);
+    auto result = W::ProtocolCodec::TryCreate(settings);
     REQUIRE_FALSE(result);
     CHECK(result.error().code == W::ErrorCode::InvalidConfig);
   }
@@ -431,7 +431,7 @@ TEST_CASE("Actor value limits are configured for both outgoing samples and incom
   settings.maxActorValues = 65;
   CHECK(MakeCodec(settings).Decode(Bytes(packet)));
   settings.maxActorValues = 0;
-  CHECK_FALSE(W::Codec::TryCreate(settings));
+  CHECK_FALSE(W::ProtocolCodec::TryCreate(settings));
 }
 
 TEST_CASE("Player update correlation is distinct from uncorrelated full and compact replication")
