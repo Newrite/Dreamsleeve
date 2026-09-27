@@ -14,8 +14,12 @@ python Scripts/run_tests.py --suite managed
 активную конфигурацию xmake (Windows x64 releasedbg по умолчанию), managed — Release
 и .NET 10. После ошибки сборки старый бинарник не запускается; при `all` второй набор
 проверяется и после сбоя первого. Ошибка или отсутствие инструмента дают ненулевой exit code.
-Нужны Python 3.10+, xmake, MSVC с C++23/`import std`, .NET SDK 10 и пакеты при первом
+Нужны Python 3.11+, xmake, MSVC с C++23/`import std`, .NET SDK 10 и пакеты при первом
 восстановлении. Loopback-проверкам нужен локальный UDP. Skyrim, PrismaUI и отдельный сервер БД не нужны: persistence-тесты создают временные SQLite-файлы.
+
+Для smoke-скриптов и бенчмарков установите зависимости из корня репозитория:
+`python -m pip install -r Scripts/requirements.txt`. Они записывают настройки в TOML;
+отчёты измерений остаются JSON.
 
 ## Что проверяется
 
@@ -96,7 +100,7 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 bob --register "Bob"
 
 В Client.Dev: `send <text>`, `read`, `disconnect`, `connect`, `quit`.
 `--state-demo` остаётся локальной демонстрацией синтетических серверных событий.
-Параметры сервера и JSON: [Core README](../src/Dreamsleeve.Server.Core/README.ru.md).
+Параметры сервера и TOML: [Core README](../src/Dreamsleeve.Server.Core/README.ru.md).
 
 ## Измерения
 

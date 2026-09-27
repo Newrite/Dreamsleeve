@@ -9,8 +9,8 @@ PlayerSession погашает билет и получает профиль, з
 ## Запуск и восстановление
 
 ```powershell
-dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.json
-dotnet run --project src/Dreamsleeve.Server -c Release -- --config server.json
+dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.toml
+dotnet run --project src/Dreamsleeve.Server -c Release -- --config server.toml
 xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Player Name"
 # Следующие входы, в том числе после перезапуска сервера:
 xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player
@@ -28,7 +28,7 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player
 Онлайн, история чата и одноразовые ENet-билеты не сохраняются. DisplayName при login не перезаписывается.
 Аккаунт и профиль имеют отдельные ID; миграция уже позволяет развивать их отдельно.
 
-Конфигурация JSON читается до запуска listeners, неизвестные поля отклоняются.
+Конфигурация TOML читается до запуска listeners, неизвестные поля отклоняются.
 Секции: Server, Runtime, Database, Authentication, Logging. Миграции из `db/migrations`
 копируются в выходной каталог и применяются до допуска клиентов. Неизвестная версия,
 чужой application_id или повреждённая схема останавливают startup.
@@ -114,8 +114,8 @@ Expecto и Faqt сохраняют текущие версии; массовог
 - Fling отложен до сложных связанных агрегатов; две строки регистрации не требуют ORM-слоя.
 - Falco/Markup/Htmx отложены до реальной SSR-админки.
 - FSharp.Logf не нужен для текущих именованных структурированных ILogger-шаблонов.
-- Serilog.Settings.Configuration не добавлен: logger уже настраивается валидируемой типизированной секцией JSON.
-- Tomlyn не добавлен: переход JSON → TOML не нужен для авторизации.
+- Serilog.Settings.Configuration не добавлен: logger уже настраивается валидируемой типизированной секцией TOML.
+- Tomlyn 2.10.1 читает и записывает файловую конфигурацию сервера в TOML.
 - FsToolkit.ErrorHandling приходит транзитивно через Migrondi; прямой зависимости без использования нет.
 
 Migrondi также приносит другие DB providers транзитивно. Это цена выбранного runner,
@@ -185,11 +185,11 @@ Credential Manager хранит одну выбранную учётную за�
 пользователем Windows (`CRED_TYPE_GENERIC`, `CRED_PERSIST_LOCAL_MACHINE`). Имя цели
 `Dreamsleeve/Auth/v1/<scheme>/<host>/<port>` нормализует регистр host и default port;
 HTTP и HTTPS разделены. Blob содержит username и токен, не пароль. В конфиге/env
-токена нет. Путь к игровому JSON по-прежнему передаёт конечное приложение.
+токена нет. Путь к игровому TOML по-прежнему передаёт конечное приложение.
 Доступ к Credential Manager выполняется сетевым worker, не UI.
 
-Первый запуск Dev: `--config client.json player --remember` (при необходимости
-`--register "Player"`). Далее достаточно `--config client.json`, без username,
+Первый запуск Dev: `--config client.toml player --remember` (при необходимости
+`--register "Player"`). Далее достаточно `--config client.toml`, без username,
 пароля или env. Без `--remember` старый dev-сценарий остаётся одноразовым входом.
 Команды: `resume`, `signout`, `forget`, `reset-password <code>` (новый пароль
 запрашивается скрыто). Переменная пароля оставлена только для автоматизации тестов.

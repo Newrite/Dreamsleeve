@@ -4,6 +4,7 @@ Uses unique temporary loopback endpoints and removes its credential on every exi
 """
 import ctypes
 import json
+import tomli_w
 import os
 import re
 import tempfile
@@ -26,13 +27,13 @@ def run(directory, log):
     credential_target = f"Dreamsleeve/Auth/v1/http/127.0.0.1/{auth_port}"
     client = ROOT / "build/windows/x64/releasedbg/Dreamsleeve.Client.Dev.exe"
     server_dll = ROOT / "src/Dreamsleeve.Server/bin/Release/net10.0/Dreamsleeve.Server.dll"
-    server_config = directory / "server.json"
-    client_config = directory / "client.json"
-    server_config.write_text(json.dumps({
+    server_config = directory / "server.toml"
+    client_config = directory / "client.toml"
+    server_config.write_text(tomli_w.dumps({
         "Server": {"Port": port}, "Database": {"DatabasePath": str(directory / "accounts.db")},
         "Authentication": {"ListenUrl": origin, "RequestsPerMinute": 1000},
-        "Logging": {"FilePath": str(directory / "server-.json")}}))
-    client_config.write_text(json.dumps({"serverPort": port, "authUrl": origin}))
+        "Logging": {"FilePath": str(directory / "server-.json")}}), encoding="utf-8")
+    client_config.write_text(tomli_w.dumps({"serverPort": port, "authUrl": origin}), encoding="utf-8")
     lock, children = threading.Lock(), []
     env = os.environ.copy()
     env.pop("DREAMSLEEVE_PASSWORD", None)

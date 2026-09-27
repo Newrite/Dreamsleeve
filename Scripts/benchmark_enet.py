@@ -12,6 +12,8 @@ from ctypes import wintypes
 from datetime import datetime, timezone
 import hashlib
 import json
+import tomli_w
+import tomllib
 import os
 import platform
 from pathlib import Path
@@ -127,7 +129,7 @@ def free_port(kind=socket.SOCK_DGRAM):
 
 
 def configuration(clients, port, profile, case):
-    config = json.loads((ROOT / "src/Dreamsleeve.Server/server.example.json").read_text(encoding="utf-8-sig"))
+    config = tomllib.loads((ROOT / "src/Dreamsleeve.Server/server.example.toml").read_text(encoding="utf-8-sig"))
     config.pop("Profiles", None)
     config["Database"] = {"DatabasePath": str((case / "accounts.sqlite").resolve()), "BusyTimeoutSeconds": 5}
     config["Authentication"] = {
@@ -184,8 +186,8 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
     config["Runtime"]["Presence"]["ReplicationIntervalMs"] = args.replication_ms
     if args.movement_packet_target is not None:
         config["Server"]["MovementPacketTargetBytes"] = args.movement_packet_target
-    config_path = case / "server.json"
-    config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    config_path = case / "server.toml"
+    config_path.write_text(tomli_w.dumps(config) + "\n", encoding="utf-8")
     env = os.environ.copy()
     phase_path = case / "phase.txt"
     phase_path.write_text("startup", encoding="utf-8")

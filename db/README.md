@@ -55,7 +55,7 @@ through Migrondi, then invokes the pinned SqlHydra.Cli. Configuration lives in
 `src/Dreamsleeve.Server.Infrastructure/sqlhydra-sqlite.toml`; output is
 `Generated/AccountSchema.fs`. Check generated changes into Git. Ordinary builds
 compile the checked-in file and do not need a live database or installed codegen
-tool. The TOML file configures the generator only; runtime configuration is JSON.
+tool. The TOML file configures the generator only; runtime configuration is TOML.
 
 Pinned packages: Microsoft.Data.Sqlite **10.0.12**, Migrondi.Core **1.3.0**,
 SqlHydra.Query and SqlHydra.Cli **5.0.0**. The CLI version was verified by actual

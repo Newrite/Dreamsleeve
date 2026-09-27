@@ -11,8 +11,8 @@ open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 
 let private printHelp () =
-    printfn "Dreamsleeve.Server [--config path.json] [--port 8778]"
-    printfn "Dreamsleeve.Server --write-config path.json"
+    printfn "Dreamsleeve.Server [--config path.toml] [--port 8778]"
+    printfn "Dreamsleeve.Server --write-config path.toml"
     printfn "Configuration is read at startup. Commands: quit | reset-password <username> | revoke-access <username>."
 
 // Console.In may implement ReadLineAsync synchronously. One background reader

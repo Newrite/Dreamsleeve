@@ -192,8 +192,8 @@ Reset неответившего peer и завершает учёт соеди�
 
 ```powershell
 dotnet run --project src/Dreamsleeve.Server -c Release
-dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.json
-dotnet run --project src/Dreamsleeve.Server -c Release -- --config server.json --port 8778
+dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.toml
+dotnet run --project src/Dreamsleeve.Server -c Release -- --config server.toml --port 8778
 xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Player Name"
 ```
 
@@ -202,7 +202,7 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Pla
 `send <text>`, `read`, команды наблюдений персонажа, `disconnect`, `connect`, `quit`; сервер завершается по `quit`
 или Ctrl+C. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
 
-JSON читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging.
+TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging.
 Неуказанные параметры сохраняют значения по умолчанию; неизвестные поля отклоняются.
 `--port` имеет приоритет над файлом. ServerConfig проверяет согласованность transport
 и codec, MaxSessions укладывается в PeerLimit/MaxInitialPlayers, история — в

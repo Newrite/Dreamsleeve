@@ -3,9 +3,10 @@ namespace Dreamsleeve.Server
 open System
 open System.IO
 open System.Net
-open System.Text.Json
-open System.Text.Json.Nodes
-open System.Text.Json.Serialization
+open System.Globalization
+open Microsoft.FSharp.Reflection
+open Tomlyn
+open Tomlyn.Model
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 
@@ -35,18 +36,6 @@ type LaunchCommand =
 
 [<RequireQualifiedAccess>]
 module Configuration =
-    type private AddressConverter() =
-        inherit JsonConverter<IPAddress>()
-        override _.Read(reader: byref<Utf8JsonReader>, _, _) =
-            if reader.TokenType <> JsonTokenType.String then
-                raise (JsonException "BindAddress must be an IP address string.")
-
-            match IPAddress.TryParse(reader.GetString()) with
-            | true, value -> value
-            | false, _ -> raise (JsonException "BindAddress must be an IP address string.")
-
-        override _.Write(writer, value, _) = writer.WriteStringValue(value.ToString())
-
     let defaults = {
         Server = ServerConfig.defaults
         Runtime = ServerRuntimeOptions.defaults
@@ -59,44 +48,75 @@ module Configuration =
         Logging = ServerLogging.defaults
     }
 
-    let private jsonOptions () =
-        let options = JsonSerializerOptions(WriteIndented = true, PropertyNameCaseInsensitive = true,
-                                           UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)
-        options.Converters.Add(AddressConverter())
-        options
+    // Records remain immutable domain settings. TOML overrides only supplied fields.
+    let rec private overlay path (current: obj) (input: obj) : Result<obj, string> =
+        let target = current.GetType()
+        let invalid () = Error $"Invalid TOML value or type: {path}"
+        if FSharpType.IsRecord target then
+            match input with
+            | :? TomlTable as table ->
+                let fields = FSharpType.GetRecordFields target
+                match table.Keys |> Seq.tryFind (fun name -> fields |> Array.forall (fun field -> field.Name <> name)) with
+                | Some name -> Error $"Unknown setting: {path}{name}"
+                | None ->
+                    let values = fields |> Array.map (fun field ->
+                        let value = field.GetValue current
+                        match table.TryGetValue field.Name with
+                        | true, replacement -> overlay (path + field.Name + ".") value replacement
+                        | false, _ -> Ok value)
+                    match values |> Array.tryPick (function Error error -> Some error | Ok _ -> None) with
+                    | Some error -> Error error
+                    | None -> Ok (FSharpValue.MakeRecord(target, values |> Array.choose (function Ok value -> Some value | Error _ -> None)))
+            | _ -> invalid ()
+        elif current :? IPAddress then
+            match input with
+            | :? string as text ->
+                match IPAddress.TryParse text with true, address -> Ok (box address) | false, _ -> invalid ()
+            | _ -> invalid ()
+        elif target = typeof<string> || target = typeof<bool> then
+            if input.GetType() = target then Ok input else invalid ()
+        else
+            let floating = target = typeof<single> || target = typeof<double>
+            let number = input :? int64 || (floating && input :? double)
+            if not number then invalid ()
+            else
+                try
+                    let value = Convert.ChangeType(input, target, CultureInfo.InvariantCulture)
+                    if floating && not (Double.IsFinite(Convert.ToDouble(value, CultureInfo.InvariantCulture))) then invalid ()
+                    else Ok value
+                with
+                | :? OverflowException | :? InvalidCastException -> invalid ()
 
-    // A startup file can override a subset of nested settings; omitted values
-    // retain their documented defaults. Unknown fields still fail deserialization.
-    let rec private merge (target: JsonObject) (patch: JsonObject) =
-        for entry in patch do
-            let name =
-                target |> Seq.tryPick (fun existing ->
-                    if String.Equals(existing.Key, entry.Key, StringComparison.OrdinalIgnoreCase) then Some existing.Key else None)
-                |> Option.defaultValue entry.Key
-
-            match target[name], entry.Value with
-            | (:? JsonObject as nested), (:? JsonObject as updated) -> merge nested updated
-            | _, value -> target[name] <- if isNull value then null else value.DeepClone()
+    let rec private toTableValue (value: obj) : obj =
+        let valueType = value.GetType()
+        if FSharpType.IsRecord valueType then
+            let table = TomlTable()
+            for field in FSharpType.GetRecordFields valueType do
+                table.Add(field.Name, toTableValue (field.GetValue value))
+            box table
+        elif value :? IPAddress then box (string value)
+        else value
 
     let private load path =
         try
-            let options = jsonOptions ()
-            let target = JsonSerializer.SerializeToNode(defaults, options).AsObject()
-            let patch = JsonNode.Parse(File.ReadAllText path)
-            match patch with
-            | :? JsonObject as overrides ->
-                merge target overrides
-                Ok (target.Deserialize<ApplicationConfig>(options))
-            | _ -> Error "The configuration root must be a JSON object."
+            if FileInfo(path).Length > 65536L then Error "Server configuration must not exceed 65536 bytes."
+            else
+                let source = File.ReadAllText path
+                // DOM deserialization alone does not reject duplicate TOML keys.
+                let document = Tomlyn.Parsing.SyntaxParser.Parse(source, path, true)
+                if document.HasErrors then Error $"Invalid TOML configuration: {document.Diagnostics}"
+                else
+                    let table = TomlSerializer.Deserialize<TomlTable>(source)
+                    overlay "" (box defaults) (box table) |> Result.map unbox<ApplicationConfig>
         with
-        | :? JsonException as error -> Error (sprintf "Invalid configuration: %s" error.Message)
-        | :? ArgumentException as error -> Error (sprintf "Cannot read configuration: %s" error.Message)
-        | :? IOException as error -> Error (sprintf "Cannot read configuration: %s" error.Message)
-        | :? UnauthorizedAccessException as error -> Error (sprintf "Cannot read configuration: %s" error.Message)
+        | :? TomlException as error -> Error $"Invalid TOML configuration: {error.Message}"
+        | :? ArgumentException as error -> Error $"Cannot read configuration: {error.Message}"
+        | :? IOException as error -> Error $"Cannot read configuration: {error.Message}"
+        | :? UnauthorizedAccessException as error -> Error $"Cannot read configuration: {error.Message}"
 
     let writeDefaults path =
         try
-            File.WriteAllText(path, JsonSerializer.Serialize(defaults, jsonOptions ()) + Environment.NewLine)
+            File.WriteAllText(path, TomlSerializer.Serialize(toTableValue (box defaults)))
             Ok ()
         with
         | :? ArgumentException as error -> Error error.Message

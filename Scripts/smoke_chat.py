@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import tomli_w
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 import tempfile
@@ -170,10 +171,10 @@ def smoke(args, log, directory: Path):
     nonce = uuid.uuid4().hex[:10]
     auth_url = f"http://127.0.0.1:{free_tcp_port()}"
     client_env = dict(os.environ, DREAMSLEEVE_PASSWORD="smoke-" + uuid.uuid4().hex)
-    config = directory / "server.json"
+    config = directory / "server.toml"
     database = directory / "accounts.sqlite"
     secrets = [client_env["DREAMSLEEVE_PASSWORD"]]
-    config.write_text(json.dumps({
+    config.write_text(tomli_w.dumps({
         "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
         "Authentication": {"ListenUrl": auth_url, "AllowInsecureLoopback": True, "AllowRegistration": True},
         "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},
@@ -197,8 +198,8 @@ def smoke(args, log, directory: Path):
 
     def start_client(name: str, username: str, display_name: str | None = None):
         if name == "alice":
-            client_config = directory / "client settings.json"
-            client_config.write_text(json.dumps({"version": 1, "serverIp": "127.0.0.1", "serverPort": port,
+            client_config = directory / "client settings.toml"
+            client_config.write_text(tomli_w.dumps({"version": 1, "serverIp": "127.0.0.1", "serverPort": port,
                                                   "authUrl": auth_url}), encoding="utf-8")
             command = [str(args.client), "--config", str(client_config), username]
         else:

@@ -176,7 +176,7 @@ the same capacities at every N to keep the allocated ENet host comparable:
 | Server.MaxOutgoingBytes | 64 MiB |
 | Runtime.OpenTimeoutMs / ShutdownTimeoutMs | 30000 / 10000 |
 
-Other values come from the checked-in `server.example.json`, including each
+Other values come from the checked-in `server.example.toml`, including each
 player's mailbox/output limits128 and the per-peer outgoing limit256 packets.
 Limits are finite and are not automatically raised when a run fails. `minimal`
 changes only peer/session counts and the required lifecycle control reserve,
@@ -255,7 +255,7 @@ mailbox/output = max(256, 2*N+128), bootstrap = max(128,N), presence mailbox 819
 runtime mailbox 65536, ENet per-peer 4096 packets/16 MiB, global 262144 packets/256 MiB.
 Other scaled settings remain (1000 sessions, event budget 512, service timeout 0).
 These are experimental settings written to each result directory; production
-server.example.json is unchanged. Large queues do not establish a sustainable rate.
+server.example.toml is unchanged. Large queues do not establish a sustainable rate.
 
 For movement only, the server runs in a separate benchmark process which calls the
 unmodified Dreamsleeve.Server.Program.main with its saved configuration. dotnet exec
@@ -476,3 +476,5 @@ SetLocation burst. Warmup is excluded from load metrics; subsequent AOI changes 
 Reports retain `warmPositions` and the runner arguments. Compare owner/inline only
 with the same warmup setting, and report cold admission stress separately from
 steady-state delivery. This option does not change production behavior.
+
+Python smoke/benchmark scripts require Python 3.11+ and `python -m pip install -r Scripts/requirements.txt` (run from the repository root). Configuration files are written as TOML; measurement reports remain JSON.

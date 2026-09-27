@@ -1,0 +1,100 @@
+# Omitted settings retain defaults. Keys are case-sensitive.
+[Server]
+BindAddress = "127.0.0.1"
+Port = 8778
+PeerLimit = 32
+ChannelLimit = 3
+ServiceTimeoutMs = 0
+EventBudget = 64
+MaxPacketBytes = 1048576
+MovementPacketTargetBytes = 0
+ReceiveBufferBytes = 262144
+SendBufferBytes = 262144
+MaxWaitingData = 33554432
+MaxOutgoingPacketsPerPeer = 256
+MaxOutgoingBytesPerPeer = 4194304
+MaxOutgoingPackets = 4096
+MaxOutgoingBytes = 33554432
+MaxInitialPlayers = 4096
+MaxRecentMessages = 512
+
+[Server.Worker]
+QueueCapacity = 65536
+QueueBytes = 16777216
+SendCommandsPerPass = 2048
+SendBytesPerPass = 4194304
+WorkBudgetMs = 2
+IdleWaitMs = 1
+
+[Server.ChatInput]
+Username = 32
+DisplayName = 64
+MessageText = 2000
+
+[Server.PlayerInput]
+CharacterName = 128
+PluginName = 260
+LocationName = 256
+ActorValueKey = 128
+ActorValueName = 128
+MaxActorValues = 64
+DetailsText = 256
+ActivityKey = 64
+
+[Runtime]
+MaxSessions = 32
+MailboxCapacity = 256
+ControlReserve = 128
+OpenTimeoutMs = 10000
+ShutdownTimeoutMs = 1500
+PollIntervalMs = 1
+
+[Runtime.Player]
+MailboxCapacity = 128
+ControlReserve = 32
+MaxPendingChat = 16
+MaxPendingUpdates = 16
+MaxBootstrapEvents = 128
+MaxPendingOutput = 128
+
+[Runtime.Chat]
+MailboxCapacity = 256
+ControlReserve = 64
+HistoryCapacity = 512
+MaxControlDeliveries = 128
+
+[Runtime.Presence]
+MailboxCapacity = 128
+ControlReserve = 64
+MaxControlDeliveries = 128
+ReplicationIntervalMs = 50
+VisibilityDistance = 8192
+
+[Database]
+DatabasePath = "data/dreamsleeve.db"
+BusyTimeoutSeconds = 5
+
+[Authentication]
+ListenUrl = "http://127.0.0.1:8779"
+AllowInsecureLoopback = true
+AllowRegistration = true
+CertificatePath = ""
+RequestsPerMinute = 120
+RequestTimeoutSeconds = 15
+
+[Authentication.Service]
+MailboxCapacity = 64
+MaxConcurrentOperations = 4
+MaxTickets = 4096
+TicketLifetimeSeconds = 60
+PasswordIterations = 210000
+SavedLoginDays = 30
+MaxSavedLogins = 8
+ResetLifetimeMinutes = 15
+
+[Logging]
+MinimumLevel = "Information"
+Console = true
+FilePath = "logs/server-.json"
+FileSizeLimitBytes = 10485760
+RetainedFileCount = 14

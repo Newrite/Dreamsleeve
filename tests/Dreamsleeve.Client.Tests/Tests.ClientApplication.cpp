@@ -9,11 +9,11 @@ namespace
   struct SettingsFixture
   {
     std::filesystem::path path = std::filesystem::temp_directory_path() /
-      (L"dreamsleeve-config-" + std::to_wstring(std::chrono::steady_clock::now().time_since_epoch().count()) + L"-тест.json");
+      (L"dreamsleeve-config-" + std::to_wstring(std::chrono::steady_clock::now().time_since_epoch().count()) + L"-тест.toml");
     ~SettingsFixture() { std::error_code error; std::filesystem::remove(path, error); }
-    auto Load(std::string_view json)
+    auto Load(std::string_view source)
     {
-      { std::ofstream file{path, std::ios::binary}; file << json; }
+      { std::ofstream file{path, std::ios::binary}; file << source; }
       return LoadClientSettings(path);
     }
   };
@@ -29,18 +29,30 @@ namespace
 
 TEST_SUITE_BEGIN("Client.Application");
 
-TEST_CASE("Configuration path is caller-owned and partial JSON preserves defaults")
+TEST_CASE("Configuration path is caller-owned and partial TOML preserves defaults")
 {
   SettingsFixture fixture;
   CHECK_FALSE(LoadClientSettings(fixture.path));
-  auto defaults = fixture.Load("{}");
+  auto defaults = fixture.Load("# defaults\n");
   REQUIRE(defaults);
   CHECK(defaults->client.playerSampleIntervalMs == 50);
   CHECK(defaults->client.network.channelLimit == 3);
 
-  auto loaded = fixture.Load(R"({"serverIp":"127.0.0.2","serverPort":9000,"commandCapacity":12,
-    "client":{"showFireflies":false,"playerSampleIntervalMs":25,"network":{"maxPacketBytes":2048}},
-    "interpolation":{"delayMs":75,"historyCapacity":16}})");
+  auto loaded = fixture.Load(R"(serverIp = "127.0.0.2"
+serverPort = 9000
+commandCapacity = 12
+
+[client]
+showFireflies = false
+playerSampleIntervalMs = 25
+
+[client.network]
+maxPacketBytes = 2048
+
+[interpolation]
+delayMs = 75
+historyCapacity = 16
+)");
   REQUIRE(loaded);
   CHECK(loaded->client.serverAddress.GetPort() == 9000);
   CHECK(loaded->client.serverAddress.ToIpString().value() == "127.0.0.2");
@@ -56,18 +68,59 @@ TEST_CASE("Configuration path is caller-owned and partial JSON preserves default
 TEST_CASE("Configuration rejects malformed files, unknown fields and invalid bounds before startup")
 {
   SettingsFixture fixture;
-  for (auto json : {"", "[]", "null", "{", "{} {}", "{} trailing", R"({"password":"must-not-be-stored"})", R"({"version":2})",
-    R"({"client":{"typo":3}})", R"({"client":null})", R"({"serverPort":0})", R"({"serverPort":65536})",
-    R"({"serverIp":"not-an-ip"})", R"({"client":{"playerSampleIntervalMs":0}})",
-    R"({"commandCapacity":0})", R"({"stateCapacity":0})", R"({"client":{"network":{"maxPeers":2}}})",
-    R"({"client":{"network":{"channelLimit":2}}})", R"({"client":{"network":{"maxWaitingData":1}}})",
-    R"({"interpolation":{"delayMs":-1}})", R"({"interpolation":{"maxGapMs":100}})",
-    R"({"client":{"visibilityDistance":-1}})", R"({"authUrl":"http://192.168.1.2:8779"})"})
+  for (auto source : { "[]", "null", "{", "{} {}", "{} trailing", R"(password = "must-not-be-stored"
+)", R"(version = 2
+)",
+    R"([client]
+typo = 3
+)", R"(client = 0
+)", R"(serverPort = 0
+)", R"(serverPort = 65536
+)",
+    R"(serverIp = "not-an-ip"
+)", R"([client]
+playerSampleIntervalMs = 0
+)",
+    R"(commandCapacity = 0
+)", R"(stateCapacity = 0
+)", R"([client.network]
+maxPeers = 2
+)",
+    R"([client.network]
+channelLimit = 2
+)", R"([client.network]
+maxWaitingData = 1
+)",
+    R"([interpolation]
+delayMs = -1
+)", R"([interpolation]
+maxGapMs = 100
+)",
+    R"([client]
+visibilityDistance = -1
+)", R"(authUrl = "http://192.168.1.2:8779"
+)"})
   {
-    CAPTURE(json);
-    CHECK_FALSE(fixture.Load(json));
+    CAPTURE(source);
+    CHECK_FALSE(fixture.Load(source));
   }
   CHECK_FALSE(fixture.Load(std::string(65537, ' ')));
+}
+
+TEST_CASE("TOML supports comments inline tables and rejects ambiguous scalar values")
+{
+  SettingsFixture fixture;
+  REQUIRE(fixture.Load(""));
+  auto loaded = fixture.Load("serverPort = 9_001 # comment\nclient = { showFireflies = false }\n");
+  REQUIRE(loaded);
+  CHECK(loaded->client.serverAddress.GetPort() == 9001);
+  CHECK_FALSE(loaded->client.showFireflies);
+  for (const auto source : {"serverPort=9000\nserverPort=9001", "serverPort=9000.5", "serverPort='9000'",
+       "serverPort=-1", "ServerPort=9000", "client.visibilityDistance=nan", "client.visibilityDistance=inf", "{}"})
+  {
+    CAPTURE(source);
+    CHECK_FALSE(fixture.Load(source));
+  }
 }
 
 TEST_CASE("Application owns startup and final shutdown without a connection")

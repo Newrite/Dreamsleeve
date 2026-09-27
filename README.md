@@ -23,7 +23,7 @@ unreliable sequenced канал в том же WRLD/CELL и радиусе ви�
 (50 мс), ориентир для расчётов нагрузки. Reliable baseline/clear задаёт контекст видимости;
 автор получает своё состояние тем же путём. Чат использует отдельный reliable-канал.
 [Контракт и границы телеметрии](docs/PlayerTelemetryPlanRu.md).
-Конфигурация сервера загружается из JSON при запуске. Клиент хранит поток измерений
+Конфигурация сервера загружается из TOML при запуске. Клиент хранит поток измерений
 и вычисляет интерполированные положения на потоке потребителя; [демо и настройки](docs/MovementInterpolationRu.md).
 SKSE/PrismaUI и интерфейс администрирования остаются следующими этапами.
 Сервер пишет структурированные логи через Serilog в консоль и JSON-файлы.
@@ -42,7 +42,7 @@ SKSE/PrismaUI и интерфейс администрирования оста�
 | `src/Dreamsleeve.Server.Domain` | F#/.NET 10: проверяемые значения, игроки, ограниченная история чата |
 | `src/Dreamsleeve.Agent` | Последовательные агенты на Channels/Task и примеры |
 | `src/Dreamsleeve.Server.Core` | Runtime, сессии, владельцы чата/онлайна, конфигурация и codec |
-| `src/Dreamsleeve.Server` | Запуск сервера, JSON-конфигурация, остановка по quit/Ctrl+C |
+| `src/Dreamsleeve.Server` | Запуск сервера, TOML-конфигурация, остановка по quit/Ctrl+C |
 | `src/Dreamsleeve.Server.Infrastructure` | SQLite, AuthService и адаптер yENet; Interop обслуживает владение native-пакетами и бюджеты |
 | `Protocol`, `src/Dreamsleeve.Protocol.*` | Рабочая схема protobuf и сгенерированные C++/C# типы |
 | `tests` | Два тестовых проекта: native и managed; общий запуск |
@@ -90,12 +90,15 @@ Auth HTTP по умолчанию доступен только локально
 принятыми только потому, что для них существует пример кода.
 
 Серверная архитектура и запуск: [владельцы состояния и runtime](src/Dreamsleeve.Server.Core/README.ru.md).
-Для файла настроек: `dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.json`,
-затем запуск с `--config server.json`. Частичные переопределения допустимы;
+Для файла настроек: `dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.toml`,
+затем запуск с `--config server.toml`. Частичные переопределения допустимы;
 загрузка выполняется только при старте, автоматического reload нет.
+Оба загрузчика читают UTF-8 TOML размером до 64 KiB. Имена ключей чувствительны
+к регистру; неизвестные/повторные ключи и неверные типы отклоняются. Пустой файл
+сохраняет defaults. Старые JSON-конфиги нужно перенести в TOML.
 
-Клиентский JSON можно передать конечному приложению явно:
-`xmake run Dreamsleeve.Client.Dev --config "path/to/client.json" player`.
-[Полный пример](src/Dreamsleeve.Client.Core/client.example.json) и
+Клиентский TOML можно передать конечному приложению явно:
+`xmake run Dreamsleeve.Client.Dev --config "path/to/client.toml" player`.
+[Полный пример](src/Dreamsleeve.Client.Core/client.example.toml) и
 [общий запуск для Dev/SKSE](src/Dreamsleeve.Client.Core/README.ru.md#общий-запуск-и-конфигурационный-файл).
 Путь выбирает вызывающая сторона; пароли в файле не сохраняются.

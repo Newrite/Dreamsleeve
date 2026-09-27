@@ -8,6 +8,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import tomli_w
 import os
 from pathlib import Path
 import subprocess
@@ -33,8 +34,8 @@ def run(args, workers, repetition, destination):
         SendCommandsPerPass=args.worker_send_budget, SendBytesPerPass=4 * 1024 * 1024,
         WorkBudgetMs=2, IdleWaitMs=1)
     config["Runtime"]["Presence"]["ReplicationIntervalMs"] = args.replication_ms
-    config_path = case / "server.json"
-    config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    config_path = case / "server.toml"
+    config_path.write_text(tomli_w.dumps(config), encoding="utf-8")
     phase_path = case / "phase.txt"
     phase_path.write_text("startup", encoding="utf-8")
     env = os.environ.copy()

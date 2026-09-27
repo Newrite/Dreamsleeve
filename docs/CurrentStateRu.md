@@ -22,7 +22,7 @@ HTML/CSS/JS-интерфейс можно реализовать позже с �
 - Сервер: F# / .NET 10+, yENet (выбран вместо zENet), Channels/Task-агенты.
 - Клиент: C++23, модули, native ENet 1.3.18, xmake/MSVC, protobuf, spdlog, Glaze.
 - `Client.Core` содержит DreamNet, домен, модель, AuthHttp и ClientApplication без зависимостей от Skyrim.
-  ClientApplication владеет сетевым потоком и входом; JSON читает LoadClientSettings
+  ClientApplication владеет сетевым потоком и входом; TOML читает LoadClientSettings
   по пути, который передаёт конечный клиент. Client.Dev использует этот общий запуск.
   `Client` предназначен для SKSE/CommonLib, преобразования игровых типов,
   светлячков и PrismaUI. Пока это заглушка static library, не готовая DLL.
@@ -40,7 +40,7 @@ HTML/CSS/JS-интерфейс можно реализовать позже с �
   Client.Dev --connect использует его на отдельном потоке, синтетическое демо сохранено.
 - Размер пакета задаётся конфигурацией и применяется и в codec, и в ENet host;
   также настраиваются буфер ожидающих данных, начальные списки и серверные лимиты строк.
-  Сервер загружает JSON до старта владельца. Автоматическое согласование лимитов
+  Сервер загружает TOML до старта владельца. Автоматическое согласование лимитов
   между сторонами и hot reload пока не реализованы; настройки фиксируются при старте. См. [контракт](../Protocol/README.ru.md).
 - Коды отказа команд определяет общий RequestRejectionCode в protocol.proto. F# и C++
   используют сгенерированные типы. Сервер выдаёт определённые ненулевые коды;
@@ -208,7 +208,7 @@ SKSE-адаптер и автоматический игровой frame hook п
 | F# Domain / Agent | Реализованы и имеют регрессионные тесты |
 | C++ Domain / State | Игроки, ограниченный ChatCache, модель, StateUpdate, очереди и ClientExchange для одного потребителя |
 | Client.Dev | Общий ClientApplication, --config/--connect, консольный ввод пароля и отдельное синтетическое демо |
-| Server | ENet runtime, HTTP auth, JSON-конфигурация, Serilog, PlayerSession, ChatRoomAgent, PresenceAgent и жизненный цикл |
+| Server | ENet runtime, HTTP auth, TOML-конфигурация, Serilog, PlayerSession, ChatRoomAgent, PresenceAgent и жизненный цикл |
 | Protobuf / codec | Protocol/*.proto v6: вход, полные PlayerInfo/история, чат, онлайн, телеметрия и отказы; C++ encode/decode и F# decode/encode реализованы |
 | UI / Skyrim | Будущие адаптеры; в Core игровых зависимостей нет |
 | Persistence | SQLite accounts/profiles, Migrondi, SqlHydra; MemoryProfileStore только для изолированных тестов |

@@ -74,6 +74,14 @@
                 url = "https://github.com/xmake-io/xmake-repo.git"
             },
             version = "v1.17.0"
+        },
+        ["toml++ 3.4.0#f56260b5"] = {
+            repo = {
+                branch = "master",
+                commit = "e97add9a9781124ffc3804f50e5d03a1b5cb4a65",
+                url = "https://github.com/xmake-io/xmake-repo.git"
+            },
+            version = "v3.4.0"
         }
     }
 }

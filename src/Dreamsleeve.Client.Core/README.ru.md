@@ -16,17 +16,18 @@ ClientExchange. После создания им владеет один сет�
 
 `import Dreamsleeve.Client.Application;` экспортирует `ClientSettings`,
 `LoadClientSettings(path)`, `ClientApplication` и существующий Exchange/Runtime.
-[client.example.json](client.example.json) показывает все настройки файла версии 1.
+[client.example.toml](client.example.toml) показывает все настройки файла версии 1.
 Путь типа `std::filesystem::path` выбирает конечный клиент или SKSE-плагин:
 библиотека не ищет файл в cwd/Data/AppData и не создаёт его автоматически.
 Относительный путь имеет обычную семантику файловой системы вызывающей программы.
 
 Отсутствие/ошибка чтения файла, неизвестные поля, неверные типы и недопустимые
 значения возвращают `std::unexpected`. Размер файла ограничен 64 KiB.
-Частичный объект (включая `{}`) дополняется defaults: 20 Гц, три канала,
+Частичный или пустой TOML дополняется defaults: 20 Гц, три канала,
 один peer, прежние лимиты и настройки интерполяции. `serverIp` — IPv4,
 `serverPort` — порт ENet; `authUrl` — HTTP(S) origin. Прямое создание
 `ClientSettings` проходит ту же проверку при запуске. Hot reload отсутствует.
+Файл читается как UTF-8 через toml++ 3.4.0; имена ключей чувствительны к регистру.
 Пароля и одноразового билета в схеме файла нет.
 
 ```cpp
@@ -70,8 +71,8 @@ ClientApplication не содержит собственной синхрони�
 Client.Dev использует тот же объект. Чтение пароля осталось в консольном адаптере:
 
 ```powershell
-xmake run Dreamsleeve.Client.Dev --config "path/to/client.json" player
-xmake run Dreamsleeve.Client.Dev --config "path/to/client.json" player --register "Player Name"
+xmake run Dreamsleeve.Client.Dev --config "path/to/client.toml" player
+xmake run Dreamsleeve.Client.Dev --config "path/to/client.toml" player --register "Player Name"
 ```
 
 Прежний `--connect <IPv4> <port> <username>` сохранён. Его `--config <path>`
@@ -116,7 +117,7 @@ Connecting он отменяет попытку. Поздние данные п�
 Configuration задаёт адрес сервера (default 127.0.0.1:8778), один peer, таймауты
 connect/disconnect/session (5000/2000/5000 ms), ёмкость чата (512) и существующие
 лимиты codec/ENet. Одна конфигурация используется для host и codec, в течение
-сессии не меняется. LoadClientSettings читает JSON по переданному вызывающей стороной пути.
+сессии не меняется. LoadClientSettings читает TOML по переданному вызывающей стороной пути.
 
 Poll обслуживает SendChat и RequestSnapshot из Exchange. Для отправки producer
 берёт ID через NextRequestId(), затем Post({generation, SendChat{ID, channel, text}}).

@@ -1,5 +1,7 @@
 module;
-#include <glaze/glaze.hpp>
+#define TOML_EXCEPTIONS 0
+#include <toml++/toml.hpp>
+#include <glaze/core/reflect.hpp>
 
 export module Dreamsleeve.Client.Settings;
 
@@ -21,7 +23,7 @@ export namespace Dreamsleeve::Client
 }
 
 // Address and chrono values have explicit file representations; protocol/domain
-// objects retain their existing types and never depend on the JSON library.
+// objects retain their existing types and never depend on the TOML library.
 template <>
 struct glz::meta<Dreamsleeve::Client::Configuration>
 {
@@ -62,11 +64,6 @@ namespace Dreamsleeve::Client
   namespace SettingsDetail
   {
 
-    struct JsonOptions : glz::opts
-    {
-      bool validate_trailing_whitespace = true;
-    };
-
     struct InterpolationFile
     {
       std::int64_t delayMs{MovementSettings{}.delay.count()};
@@ -87,6 +84,64 @@ namespace Dreamsleeve::Client
       std::size_t       stateCapacity{ClientSettings{}.stateCapacity};
     };
 
+    // Reuse the field metadata, without serializing an intermediate JSON document.
+    template <class T>
+    std::expected<void, std::string> Read(const toml::node& node, T& value, const std::string& path)
+    {
+      if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, bool>)
+      {
+        if (auto parsed = node.value<T>())
+        {
+          value = std::move(*parsed);
+          return {};
+        }
+      }
+      else if constexpr (std::is_integral_v<T>)
+      {
+        if (node.is_integer())
+        {
+          if (auto parsed = node.value<std::int64_t>(); parsed && std::in_range<T>(*parsed))
+          {
+            value = static_cast<T>(*parsed);
+            return {};
+          }
+        }
+      }
+      else if constexpr (std::is_floating_point_v<T>)
+      {
+        if (node.is_integer() || node.is_floating_point())
+        {
+          if (auto parsed = node.value<double>(); parsed && std::isfinite(*parsed) && std::abs(*parsed) <= std::numeric_limits<T>::max())
+          {
+            value = static_cast<T>(*parsed);
+            return {};
+          }
+        }
+      }
+      else
+      {
+        const auto* table = node.as_table();
+        if (!table) return std::unexpected{"Expected TOML table: " + path};
+
+        for (const auto& [key, item] : *table)
+        {
+          if (std::ranges::find(glz::reflect<T>::keys, key.str()) == std::ranges::end(glz::reflect<T>::keys))
+            return std::unexpected{"Unknown setting: " + path + std::string{key.str()}};
+        }
+
+        std::expected<void, std::string> result;
+        std::size_t index{};
+        glz::for_each_field(value, [&](auto& field) {
+          const auto key = glz::reflect<T>::keys[index++];
+          if (const auto* child = table->get(key); child && result)
+            result = Read(*child, field, path + std::string{key} + ".");
+        });
+        return result;
+      }
+
+      return std::unexpected{"Invalid setting type or numeric range: " + path};
+    }
+
   }
 
   export std::expected<void, std::string> ValidateClientSettings(const ClientSettings& settings)
@@ -102,15 +157,16 @@ namespace Dreamsleeve::Client
     std::ifstream input{path, std::ios::binary | std::ios::ate};
     if (!input) return std::unexpected{"Cannot open client configuration"};
     const auto length = input.tellg();
-    if (length <= 0 || length > 65536) return std::unexpected{"Client configuration must contain 1..65536 bytes"};
+    if (length < 0 || length > 65536) return std::unexpected{"Client configuration must contain 0..65536 bytes"};
 
-    std::string json(static_cast<std::size_t>(length), '\0');
+    std::string source(static_cast<std::size_t>(length), '\0');
     input.seekg(0);
-    if (!input.read(json.data(), static_cast<std::streamsize>(json.size()))) return std::unexpected{"Cannot read client configuration"};
+    if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read client configuration"};
 
     SettingsDetail::SettingsFile file;
-    if (glz::read<SettingsDetail::JsonOptions{}>(file, json))
-      return std::unexpected{"Invalid client JSON: syntax, field type or unknown field"};
+    auto parsed = toml::parse(source);
+    if (!parsed) return std::unexpected{"Invalid client TOML: " + std::string{parsed.error().description()}};
+    if (auto loaded = SettingsDetail::Read(parsed.table(), file, ""); !loaded) return std::unexpected{loaded.error()};
     if (file.version != 1) return std::unexpected{"Unsupported client configuration version"};
     if (file.serverIp.find('\0') != std::string::npos) return std::unexpected{"Invalid serverIp"};
     auto address = DreamNetAddress::TryParseIp(file.serverIp, file.serverPort);
