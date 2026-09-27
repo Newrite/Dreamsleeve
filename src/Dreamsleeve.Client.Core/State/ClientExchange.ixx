@@ -1,6 +1,7 @@
 export module Dreamsleeve.Client.Exchange;
 
 import std;
+export import Dreamsleeve.Client.Auth;
 export import Dreamsleeve.Client.StateUpdateQueue;
 
 export namespace Dreamsleeve::Client
@@ -52,7 +53,16 @@ export namespace Dreamsleeve::Client
   struct RequestSnapshot
   {};
 
-  using ClientCommand = std::variant<SendChat, LocalMovement, LocalLocation, LocalActorValues, CharacterStarted, CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot>;
+  using ClientCommand = std::variant<
+    SendChat,
+    LocalMovement,
+    LocalLocation,
+    LocalActorValues,
+    CharacterStarted,
+    CharacterRenamed,
+    PlayerDetailsChanged,
+    GameExited,
+    RequestSnapshot>;
 
   struct QueuedClientCommand
   {
@@ -94,17 +104,39 @@ export namespace Dreamsleeve::Client
     CommandFailureCode code{};
   };
 
+  using Credentials = Auth::Credentials;
+
+  struct ClientStatus
+  {
+    SessionPhase phase{SessionPhase::Disconnected};
+    bool         authenticating{};
+    bool         stopped{};
+    std::string  error;
+  };
+
+  struct LoginRequest
+  {
+    Credentials                credentials;
+    std::optional<std::string> registerName;
+  };
+
+  struct ClientControl
+  {
+    std::optional<LoginRequest> login;
+    bool                        disconnect{};
+  };
+
   struct ClientOutput
   {
     StateUpdateBatch state;
-    SessionPhase     phase{SessionPhase::Disconnected};
+    ClientStatus     status;
     // Not reconstructible from a snapshot. Original generation is retained.
     std::vector<ServerRejectionEvent> rejections;
-    std::vector<CommandFailure>        commandFailures;
-    bool                              stopped{};
+    std::vector<CommandFailure>       commandFailures;
   };
 
-  // One network/model owner and one game/UI consumer. The host owns the pump
+  // One network owner and one application main thread (also the UI consumer).
+  // The sole synchronization boundary. The host owns the pump
   // and lifetime: this boundary creates no threads, transport or callbacks.
   class ClientExchange final
   {
@@ -130,6 +162,91 @@ public:
     ClientExchange(const ClientExchange&)            = delete;
     ClientExchange& operator=(const ClientExchange&) = delete;
 
+    // Main thread. Lifecycle has a reserved slot, independent of game-command
+    // capacity and reply backpressure. Admission does not mean authentication.
+    std::expected<void, std::string> PostLogin(Credentials credentials, std::optional<std::string> registerName = std::nullopt)
+    {
+      std::lock_guard lock{mutex};
+      if (inputClosed) return std::unexpected{"Client input is closed"};
+      if (
+        status.authenticating || disconnectRequested ||
+        (status.phase != SessionPhase::Disconnected && status.phase != SessionPhase::Faulted))
+        return std::unexpected{"A connection operation or session is already active"};
+
+      loginCanceled         = false;
+      status.authenticating = true;
+      status.error.clear();
+      pendingLogin.emplace(LoginRequest{std::move(credentials), std::move(registerName)});
+      wake.notify_one();
+      return {};
+    }
+
+    // Main thread. Cancellation remains visible while HTTP runs on the owner.
+    void RequestDisconnect()
+    {
+      std::lock_guard lock{mutex};
+      if (stopRequested || status.stopped) return;
+      loginCanceled       = true;
+      disconnectRequested = true;
+      wake.notify_one();
+    }
+
+    void RequestStop()
+    {
+      std::lock_guard lock{mutex};
+      inputClosed   = true;
+      stopRequested = true;
+      loginCanceled = true;
+      pendingLogin.reset();
+      wake.notify_one();
+    }
+
+    ClientStatus Status() const
+    {
+      std::lock_guard lock{mutex};
+      return status;
+    }
+
+    // Network owner only.
+    ClientControl TakeControl()
+    {
+      std::lock_guard lock{mutex};
+      ClientControl   result{std::move(pendingLogin), std::exchange(disconnectRequested, false)};
+      pendingLogin.reset();
+      return result;
+    }
+
+    bool LoginCanceled() const
+    {
+      std::lock_guard lock{mutex};
+      return loginCanceled;
+    }
+
+    bool StopRequested() const
+    {
+      std::lock_guard lock{mutex};
+      return stopRequested;
+    }
+
+    void CompleteLogin(std::string error = {})
+    {
+      std::lock_guard lock{mutex};
+      status.authenticating = false;
+      if (!loginCanceled && !error.empty()) status.error = std::move(error);
+    }
+
+    void PublishError(std::string error)
+    {
+      std::lock_guard lock{mutex};
+      status.error = std::move(error);
+    }
+
+    void WaitForControl()
+    {
+      std::unique_lock lock{mutex};
+      wake.wait_for(lock, std::chrono::milliseconds{10}, [&] { return stopRequested || pendingLogin.has_value() || disconnectRequested; });
+    }
+
     // Shared by the network owner and its UI producer. Never reset on reconnect.
     std::optional<std::uint64_t> NextRequestId()
     {
@@ -147,8 +264,9 @@ public:
 
       // Capture before queueing/coalescing, never at encode time. An adapter may
       // supply its earlier sampling time using the same monotonic convention.
-      if (auto* movement = std::get_if<LocalMovement>(&command.command);
-          movement && movement->location && movement->location->sampledAtUs == 0)
+      if (
+        auto* movement = std::get_if<LocalMovement>(&command.command);
+        movement && movement->location && movement->location->sampledAtUs == 0)
       {
         movement->location->sampledAtUs = static_cast<std::uint64_t>(
           std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
@@ -156,11 +274,13 @@ public:
 
       if (std::holds_alternative<LocalMovement>(command.command) && !commands.empty())
       {
-        auto& last = commands.back();
+        auto&       last     = commands.back();
         const auto* previous = std::get_if<LocalMovement>(&last.command);
-        const auto& next = std::get<LocalMovement>(command.command);
-        const bool sameContext = previous && ((!previous->location && !next.location) ||
-          (previous->location && next.location && previous->location->location.locationId == next.location->location.locationId));
+        const auto& next     = std::get<LocalMovement>(command.command);
+        const bool  sameContext =
+          previous &&
+          ((!previous->location && !next.location) ||
+           (previous->location && next.location && previous->location->location.locationId == next.location->location.locationId));
         if (last.generation == command.generation && sameContext)
         {
           last = std::move(command);
@@ -183,9 +303,9 @@ public:
       std::lock_guard lock{mutex};
       // Every taken command may fail locally or produce a server rejection.
       // Existing requests retain their result slots until a reply arrives.
-      const auto free = maxCommands - pendingFailures.size() - pendingRejections.size();
+      const auto free      = maxCommands - pendingFailures.size() - pendingRejections.size();
       const auto available = pendingReplies >= free ? 0 : free - pendingReplies;
-      auto count = std::min(commands.size(), available);
+      auto       count     = std::min(commands.size(), available);
       if (count == commands.size())
         commands.swap(output);
       else
@@ -222,8 +342,8 @@ public:
     // results; a concurrent Drain can only free room between check and insertion.
     [[nodiscard]] bool Publish(ClientModel& model, bool requestSnapshot = false, std::optional<SessionPhase> nextPhase = std::nullopt)
     {
-      const bool accepted = CanAcceptReplies(model.PendingServerRejectionCount());
-      auto rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
+      const bool                       accepted   = CanAcceptReplies(model.PendingServerRejectionCount());
+      auto                             rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
       std::optional<ClientStateUpdate> update;
 
       if (requestSnapshot || needsInitialSnapshot)
@@ -236,7 +356,7 @@ public:
         update = TakeStateUpdate(model, scratch);
 
       std::lock_guard lock{mutex};
-      if (nextPhase) phase = *nextPhase;
+      if (nextPhase) status.phase = *nextPhase;
       if (update && state->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired) state->Publish(model.Snapshot());
 
       pendingRejections.insert(
@@ -250,7 +370,7 @@ public:
     void PublishPhase(SessionPhase value)
     {
       std::lock_guard lock{mutex};
-      phase = value;
+      status.phase = value;
     }
 
     // Consumer side: drain once per frame, then route locally to UI/presence.
@@ -263,8 +383,7 @@ public:
       state->TakeAll(output.state);
       pendingRejections.swap(output.rejections);
       pendingFailures.swap(output.commandFailures);
-      output.stopped = stopped;
-      output.phase   = phase;
+      output.status = status;
     }
 
     // Either side. Accepted commands remain available for the owner to handle.
@@ -280,22 +399,32 @@ public:
     void Finish()
     {
       std::lock_guard lock{mutex};
-      inputClosed = true;
-      stopped     = true;
+      inputClosed   = true;
+      stopRequested = true;
+      loginCanceled = true;
+      pendingLogin.reset();
+      commands.clear();
+      status.authenticating = false;
+      status.stopped        = true;
+      wake.notify_one();
     }
 
 private:
 
     ClientExchange(std::size_t capacity, StateUpdateQueue::Ptr queue) : maxCommands{capacity}, state{std::move(queue)} {}
 
-    std::mutex                        mutex;
+    mutable std::mutex                mutex;
+    std::condition_variable           wake;
     const std::size_t                 maxCommands;
     std::vector<QueuedClientCommand>  commands;
     bool                              inputClosed{};
     std::uint64_t                     nextRequestId{1};
     std::vector<CommandFailure>       pendingFailures;
-    bool                              stopped{};
-    SessionPhase                      phase{SessionPhase::Disconnected};
+    ClientStatus                      status;
+    std::optional<LoginRequest>       pendingLogin;
+    bool                              disconnectRequested{};
+    bool                              loginCanceled{};
+    bool                              stopRequested{};
     StateUpdateQueue::Ptr             state;
     std::vector<ServerRejectionEvent> pendingRejections;
     ChangeBatch                       scratch;                     // Owner only.

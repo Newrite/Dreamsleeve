@@ -13,11 +13,11 @@ export namespace Dreamsleeve::Client
   // An absent location is a visibility/lifecycle boundary and clears history.
   struct MovementObservation final
   {
-    Domain::PlayerId playerId{};
-    std::uint64_t characterGeneration{};
-    MovementClock::time_point receivedAt{};
+    Domain::PlayerId                      playerId{};
+    std::uint64_t                         characterGeneration{};
+    MovementClock::time_point             receivedAt{};
     std::optional<Domain::PlayerLocation> location;
-    std::uint64_t viewRevision{};
+    std::uint64_t                         viewRevision{};
   };
 
   struct ChatMessagesAdded final
@@ -66,7 +66,7 @@ export namespace Dreamsleeve::Client
 
     // Exact visible cache transitions. Unlike invalidations, these are ordered:
     // applying them in sequence reproduces the native chat cache contents.
-    std::vector<ChatContentChange> chatContent;
+    std::vector<ChatContentChange>   chatContent;
     std::vector<MovementObservation> movement;
 
     bool Empty() const noexcept

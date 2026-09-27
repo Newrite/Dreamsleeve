@@ -6,15 +6,14 @@ namespace
 
   using namespace Dreamsleeve::Client;
 
-  // Dev-only synthetic server and scheduling harness. Every model access occurs
-  // on worker; Invoke waits only to make console commands/demo reproducible.
-  class DevOwner final
+  // Deterministic synthetic server. The demo runs entirely on the main thread.
+  class StateDemo final
   {
 public:
 
-    explicit DevOwner(ClientExchange& exchange) : exchange{exchange}, worker{[this](std::stop_token stop) { Run(stop); }} {}
+    explicit StateDemo(ClientExchange& exchange) : exchange{exchange} {}
 
-    ~DevOwner()
+    ~StateDemo()
     {
       exchange.CloseInput();
       Invoke([this](ClientModel& model) {
@@ -23,28 +22,15 @@ public:
         return true;
       });
 
-      worker.request_stop();
-      wake.notify_one();
-      worker.join();
+      exchange.Finish();
     }
 
     bool Invoke(std::function<bool(ClientModel&)> action)
     {
-      std::packaged_task<bool(ClientModel&)> task{[this, action = std::move(action)](ClientModel& model) {
-        const bool pumped = Pump(model);
-        const bool result = action(model);
-        const bool published = exchange.Publish(model);
-        return pumped && result && published;
-      }};
-
-      auto completion = task.get_future();
-      {
-        std::lock_guard lock{mutex};
-        pending.emplace(std::move(task));
-      }
-
-      wake.notify_one();
-      return completion.get();
+      const bool pumped    = Pump(model);
+      const bool result    = action(model);
+      const bool published = exchange.Publish(model);
+      return pumped && result && published;
     }
 
     bool Receive(ClientModel& model, std::string text)
@@ -149,34 +135,11 @@ private:
       return ok;
     }
 
-    void Run(std::stop_token stop)
-    {
-      ClientModel model;
-
-      for (;;)
-      {
-        std::optional<std::packaged_task<bool(ClientModel&)>> task;
-        {
-          std::unique_lock lock{mutex};
-          wake.wait(lock, stop, [&] { return pending.has_value(); });
-          if (!pending) break;
-          task.swap(pending);
-        }
-
-        (*task)(model);
-      }
-
-      exchange.Finish();
-    }
-
-    ClientExchange&                                       exchange;
-    std::mutex                                            mutex;
-    std::condition_variable_any                           wake;
-    std::optional<std::packaged_task<bool(ClientModel&)>> pending;
-    std::vector<QueuedClientCommand>                      commands;
-    std::deque<SendChat>                                  awaitingServer;
-    Domain::ChatMessageId                                 nextMessage{1};
-    std::jthread                                          worker;
+    ClientExchange&                  exchange;
+    ClientModel                      model;
+    std::vector<QueuedClientCommand> commands;
+    std::deque<SendChat>             awaitingServer;
+    Domain::ChatMessageId            nextMessage{1};
   };
 
   void PrintMessage(const Domain::ChatMessage& message)
@@ -217,7 +180,7 @@ private:
       std::cout << " rejection generation=" << event.generation << " request=" << event.rejection.requestId << ": "
                 << event.rejection.message << '\n';
 
-    if (output.stopped) std::cout << "owner stopped and joined\n";
+    if (output.status.stopped) std::cout << "owner stopped\n";
   }
 
   int RunCommands(std::istream& input, bool echo)
@@ -230,7 +193,7 @@ private:
     std::uint64_t generation{};
     bool          failed{};
     {
-      DevOwner owner{*exchange};
+      StateDemo owner{*exchange};
       if (!owner.Invoke([&](ClientModel& model) { return owner.Reset(model); })) return 1;
 
       exchange->Drain(output);
@@ -322,7 +285,7 @@ private:
 
 int RunStateConsole(bool demo)
 {
-  std::cout << "One consumer, one model owner thread. Synthetic server; no network connection.\n"
+  std::cout << "Synthetic state demo on the main thread; no network connection.\n"
             << "send <text> | accept | reject | receive <text> | sample | read | snapshot | reset | quit\n";
   if (!demo) return RunCommands(std::cin, false);
 

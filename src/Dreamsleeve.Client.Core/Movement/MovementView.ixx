@@ -6,18 +6,22 @@ export import Dreamsleeve.Client.Config;
 
 export namespace Dreamsleeve::Client
 {
+
   // Game-thread owned. Apply drained state once per frame, then Sample at the
   // frame time. No access to the live network model and no background worker.
   class MovementView final
   {
-  public:
+public:
+
     using Clock = MovementClock;
-    using Ptr = std::unique_ptr<MovementView>;
+    using Ptr   = std::unique_ptr<MovementView>;
 
     static Domain::Result<Ptr> TryCreate(MovementSettings settings = {})
     {
       if (!settings.Valid())
-        return std::unexpected{Domain::Error{Domain::ErrorCode::InvalidConfig, "movement"}};
+        return std::unexpected{
+            Domain::Error{Domain::ErrorCode::InvalidConfig, "movement"}
+        };
 
       return Ptr{new MovementView{settings}};
     }
@@ -40,13 +44,12 @@ export namespace Dreamsleeve::Client
       if (found == tracks.end()) return std::nullopt;
 
       const auto& samples = found->second.samples;
-      const auto target = now - settings.delay;
+      const auto  target  = now - settings.delay;
       if (target <= samples.front().time) return samples.front().location;
 
       for (std::size_t index = 1; index < samples.size(); ++index)
       {
-        if (target <= samples[index].time)
-          return Interpolate(samples[index - 1], samples[index], target);
+        if (target <= samples[index].time) return Interpolate(samples[index - 1], samples[index], target);
       }
 
       // No extrapolation: a stopped/lost stream holds the last known location.
@@ -59,18 +62,19 @@ export namespace Dreamsleeve::Client
       return found == tracks.end() ? 0 : found->second.samples.size();
     }
 
-  private:
+private:
+
     struct SamplePoint
     {
-      Clock::time_point time;
+      Clock::time_point      time;
       Domain::PlayerLocation location;
     };
 
     struct Track
     {
-      std::uint64_t viewRevision{};
-      std::uint64_t characterGeneration{};
-      Clock::time_point receivedAt{};
+      std::uint64_t           viewRevision{};
+      std::uint64_t           characterGeneration{};
+      Clock::time_point       receivedAt{};
       std::deque<SamplePoint> samples;
     };
 
@@ -78,34 +82,37 @@ export namespace Dreamsleeve::Client
 
     static float Angle(float first, float second, double alpha)
     {
-      constexpr auto turn = 2.0 * std::numbers::pi;
-      const auto difference = std::remainder(static_cast<double>(second) - first, turn);
+      constexpr auto turn       = 2.0 * std::numbers::pi;
+      const auto     difference = std::remainder(static_cast<double>(second) - first, turn);
       return static_cast<float>(std::remainder(first + difference * alpha, turn));
     }
 
     static Domain::PlayerLocation Interpolate(const SamplePoint& first, const SamplePoint& second, Clock::time_point target)
     {
-      const double alpha = std::chrono::duration<double>(target - first.time).count() /
-                           std::chrono::duration<double>(second.time - first.time).count();
-      auto result = second.location;
-      const auto& a = first.location;
-      const auto& b = second.location;
-      result.position = {
-        static_cast<float>(std::lerp(static_cast<double>(a.position.X), static_cast<double>(b.position.X), alpha)),
-        static_cast<float>(std::lerp(static_cast<double>(a.position.Y), static_cast<double>(b.position.Y), alpha)),
-        static_cast<float>(std::lerp(static_cast<double>(a.position.Z), static_cast<double>(b.position.Z), alpha))};
-      result.rotation = {Angle(a.rotation.X, b.rotation.X, alpha), Angle(a.rotation.Y, b.rotation.Y, alpha),
-                         Angle(a.rotation.Z, b.rotation.Z, alpha)};
-      result.sampledAtUs = 0; // A rendered pose is not a new source measurement.
+      const double alpha =
+        std::chrono::duration<double>(target - first.time).count() / std::chrono::duration<double>(second.time - first.time).count();
+      auto        result = second.location;
+      const auto& a      = first.location;
+      const auto& b      = second.location;
+      result.position    = {
+          static_cast<float>(std::lerp(static_cast<double>(a.position.X), static_cast<double>(b.position.X), alpha)),
+          static_cast<float>(std::lerp(static_cast<double>(a.position.Y), static_cast<double>(b.position.Y), alpha)),
+          static_cast<float>(std::lerp(static_cast<double>(a.position.Z), static_cast<double>(b.position.Z), alpha))
+      };
+      result.rotation =
+        {Angle(a.rotation.X, b.rotation.X, alpha), Angle(a.rotation.Y, b.rotation.Y, alpha), Angle(a.rotation.Z, b.rotation.Z, alpha)};
+      result.sampledAtUs = 0;  // A rendered pose is not a new source measurement.
       return result;
     }
 
     bool Discontinuous(const Track& track, const MovementObservation& observation) const
     {
       const auto& previous = track.samples.back().location;
-      const auto& next = *observation.location;
-      if (track.viewRevision != observation.viewRevision || track.characterGeneration != observation.characterGeneration ||
-          previous.location.locationId != next.location.locationId) return true;
+      const auto& next     = *observation.location;
+      if (
+        track.viewRevision != observation.viewRevision || track.characterGeneration != observation.characterGeneration ||
+        previous.location.locationId != next.location.locationId)
+        return true;
 
       if (observation.receivedAt - track.receivedAt > settings.maxGap) return true;
 
@@ -118,9 +125,9 @@ export namespace Dreamsleeve::Client
     std::optional<Clock::time_point> MapTime(const Track& track, const MovementObservation& observation) const
     {
       const auto& previous = track.samples.back();
-      const auto stamp = observation.location->sampledAtUs;
-      const auto oldStamp = previous.location.sampledAtUs;
-      auto time = observation.receivedAt;
+      const auto  stamp    = observation.location->sampledAtUs;
+      const auto  oldStamp = previous.location.sampledAtUs;
+      auto        time     = observation.receivedAt;
       if (stamp != 0 && oldStamp != 0)
       {
         // The model has already checked context and sample sequence.
@@ -128,19 +135,18 @@ export namespace Dreamsleeve::Client
         if (stamp < oldStamp) return std::nullopt;
 
         const auto elapsed = stamp - oldStamp;
-        const auto maxUs = static_cast<std::uint64_t>(
-          std::chrono::duration_cast<std::chrono::microseconds>(settings.maxGap).count());
+        const auto maxUs   = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(settings.maxGap).count());
         if (elapsed > maxUs) return std::nullopt;
 
         time = previous.time + std::chrono::microseconds{elapsed};
       }
-      else if ((stamp == 0) != (oldStamp == 0)) return std::nullopt;
+      else if ((stamp == 0) != (oldStamp == 0))
+        return std::nullopt;
 
       // A visibility entry/snapshot can seed an old source measurement at a
       // recent receive time. Do not stretch its next segment into the future
       // beyond our interpolation budget. Ordinary jitter within delay is kept.
-      if (time - observation.receivedAt > settings.delay || observation.receivedAt - time > settings.maxGap)
-        return std::nullopt;
+      if (time - observation.receivedAt > settings.delay || observation.receivedAt - time > settings.maxGap) return std::nullopt;
 
       return time;
     }
@@ -154,26 +160,29 @@ export namespace Dreamsleeve::Client
       }
 
       auto& track = tracks[observation.playerId];
-      if (!track.samples.empty() && track.characterGeneration == observation.characterGeneration && track.viewRevision == observation.viewRevision &&
-          track.samples.back().location == *observation.location) return;
+      if (
+        !track.samples.empty() && track.characterGeneration == observation.characterGeneration &&
+        track.viewRevision == observation.viewRevision && track.samples.back().location == *observation.location)
+        return;
 
-      const auto mapped = track.samples.empty() || Discontinuous(track, observation)
-        ? std::nullopt : MapTime(track, observation);
-      const auto time = mapped.value_or(observation.receivedAt);
-      if (!mapped) track.samples.clear();
+      const auto mapped = track.samples.empty() || Discontinuous(track, observation) ? std::nullopt : MapTime(track, observation);
+      const auto time   = mapped.value_or(observation.receivedAt);
+      if (!mapped)
+        track.samples.clear();
       else if (time <= track.samples.back().time)
       {
         // Co-timed observations replace, so interpolation never divides by zero.
         track.samples.back().location = *observation.location;
-        track.receivedAt = observation.receivedAt;
+        track.receivedAt              = observation.receivedAt;
         return;
       }
 
-      track.viewRevision = observation.viewRevision;
+      track.viewRevision        = observation.viewRevision;
       track.characterGeneration = observation.characterGeneration;
-      track.receivedAt = observation.receivedAt;
+      track.receivedAt          = observation.receivedAt;
       track.samples.push_back({time, *observation.location});
-      while (track.samples.size() > settings.historyCapacity) track.samples.pop_front();
+      while (track.samples.size() > settings.historyCapacity)
+        track.samples.pop_front();
     }
 
     void Replace(const std::vector<Domain::Player>& players, Clock::time_point now)
@@ -194,7 +203,7 @@ export namespace Dreamsleeve::Client
 
       Replace(snapshot.players, snapshot.observedAt == Clock::time_point{} ? now : snapshot.observedAt);
       generation = snapshot.generation;
-      revision = snapshot.revision;
+      revision   = snapshot.revision;
       hasCursor = ready = true;
     }
 
@@ -204,25 +213,30 @@ export namespace Dreamsleeve::Client
       if (!ready || delta.generation != generation)
       {
         tracks.clear();
-        ready = false;
+        ready      = false;
         generation = delta.generation;
-        revision = delta.revision;
-        hasCursor = true;
-        return; // The state queue must recover with a snapshot before deltas.
+        revision   = delta.revision;
+        hasCursor  = true;
+        return;  // The state queue must recover with a snapshot before deltas.
       }
 
-      if (delta.playersReplaced) Replace(delta.players, delta.observedAt == Clock::time_point{} ? now : delta.observedAt);
-      else for (const auto& observation : delta.movement) Observe(observation);
+      if (delta.playersReplaced)
+        Replace(delta.players, delta.observedAt == Clock::time_point{} ? now : delta.observedAt);
+      else
+        for (const auto& observation : delta.movement)
+          Observe(observation);
 
-      for (const auto id : delta.removedPlayers) tracks.erase(id);
+      for (const auto id : delta.removedPlayers)
+        tracks.erase(id);
       revision = delta.revision;
     }
 
-    MovementSettings settings;
+    MovementSettings                            settings;
     std::unordered_map<Domain::PlayerId, Track> tracks;
-    std::uint64_t generation{};
-    std::uint64_t revision{};
-    bool hasCursor{};
-    bool ready{};
+    std::uint64_t                               generation{};
+    std::uint64_t                               revision{};
+    bool                                        hasCursor{};
+    bool                                        ready{};
   };
+
 }

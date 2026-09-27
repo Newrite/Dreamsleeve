@@ -6,71 +6,79 @@ import std;
 
 export namespace Protocol::Network
 {
+
   enum class DisconnectReason : std::uint32_t
   {
-    Unspecified = 0,
+    Unspecified    = 0,
     ClientShutdown = 1,
     ServerShutdown = 2,
-    Kicked = 3,
-    AuthFailed = 4,
-    TimeoutPolicy = 5,
-    ProtocolError = 6,
+    Kicked         = 3,
+    AuthFailed     = 4,
+    TimeoutPolicy  = 5,
+    ProtocolError  = 6,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class RequestRejectionCode : std::int32_t
   {
-    Unspecified = 0,
-    InvalidRequest = 1,
-    SessionNotReady = 2,
-    SessionAlreadyOpen = 3,
-    UsernameTaken = 4,
-    ChannelNotFound = 5,
-    NotChannelMember = 6,
-    Overloaded = 7,
+    Unspecified          = 0,
+    InvalidRequest       = 1,
+    SessionNotReady      = 2,
+    SessionAlreadyOpen   = 3,
+    UsernameTaken        = 4,
+    ChannelNotFound      = 5,
+    NotChannelMember     = 6,
+    Overloaded           = 7,
     AuthenticationFailed = 8,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class ActivityKind : std::int32_t
   {
-    Unknown = 0,
-    Exploring = 1,
-    Combat = 2,
-    Talking = 3,
-    Bartering = 4,
-    Training = 5,
-    Reading = 6,
+    Unknown     = 0,
+    Exploring   = 1,
+    Combat      = 2,
+    Talking     = 3,
+    Bartering   = 4,
+    Training    = 5,
+    Reading     = 6,
     Lockpicking = 7,
-    Crafting = 8,
+    Crafting    = 8,
     UsingObject = 9,
-    Riding = 10,
-    Sneaking = 11,
-    Swimming = 12,
-    Flying = 13,
-    Dead = 14,
-    Ragdoll = 15,
-    Menu = 16,
-    NewGame = 17,
-    Loading = 18,
+    Riding      = 10,
+    Sneaking    = 11,
+    Swimming    = 12,
+    Flying      = 13,
+    Dead        = 14,
+    Ragdoll     = 15,
+    Menu        = 16,
+    NewGame     = 17,
+    Loading     = 18,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class LockDifficulty : std::int32_t
   {
-    Unknown = 0,
-    Unlocked = 1,
-    VeryEasy = 2,
-    Easy = 3,
-    Average = 4,
-    Hard = 5,
-    VeryHard = 6,
+    Unknown     = 0,
+    Unlocked    = 1,
+    VeryEasy    = 2,
+    Easy        = 3,
+    Average     = 4,
+    Hard        = 5,
+    VeryHard    = 6,
     RequiresKey = 7,
   };
+
 }

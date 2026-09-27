@@ -225,7 +225,7 @@ TEST_CASE("Owner receives commands and publishes final output before joined shut
   CHECK(applied);
   CHECK(accepted);
   CHECK(exhausted);
-  CHECK(final.stopped);
+  CHECK(final.status.stopped);
   REQUIRE(initial.state.updates.size() == 1);
   CHECK(std::holds_alternative<ClientSnapshot>(initial.state.updates[0]));
   REQUIRE(final.state.updates.size() == 1);
@@ -324,7 +324,7 @@ TEST_CASE("Rejection overflow is explicit and retry preserves correlation and te
   CHECK(model.PendingServerRejectionCount() == 1);
   ClientOutput output;
   exchange->Drain(output);
-  CHECK(output.phase == SessionPhase::Faulted);
+  CHECK(output.status.phase == SessionPhase::Faulted);
   REQUIRE(output.state.updates.size() == 1);
   CHECK(std::get<ClientSnapshot>(output.state.updates.front()).players.empty());
   REQUIRE(output.commandFailures.size() == 1);
@@ -358,6 +358,88 @@ TEST_CASE("Movement coalescing preserves space changes and explicit reliable bou
   CHECK(std::get<LocalMovement>(commands[0].command).location->position.X == 10);
   CHECK(std::holds_alternative<LocalLocation>(commands[2].command));
   CHECK(std::holds_alternative<GameExited>(commands[4].command));
+}
+
+TEST_CASE("Lifecycle admission and cancellation are independent of full game and reply queues")
+{
+  auto exchange = Exchange(1, 1);
+  REQUIRE(exchange->Post({0, RequestSnapshot{}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->PublishCommandFailure({0, 1, CommandFailureCode::SessionNotReady}));
+  REQUIRE(exchange->PostLogin({"player", "password-value"}));
+  CHECK_FALSE(exchange->PostLogin({"other", "password-value"}));
+  auto control = exchange->TakeControl();
+  REQUIRE(control.login);
+  CHECK(exchange->Status().authenticating);
+
+  exchange->RequestDisconnect();
+  CHECK(exchange->LoginCanceled());
+  CHECK(exchange->TakeControl().disconnect);
+  CHECK_FALSE(exchange->PostLogin({"other", "password-value"}));
+  exchange->CompleteLogin("late failure from canceled HTTP");
+  CHECK(exchange->Status().error.empty());
+  REQUIRE(exchange->PostLogin({"player", "new-password"}));
+  CHECK_FALSE(exchange->LoginCanceled());
+
+  exchange->RequestStop();
+  CHECK(exchange->StopRequested());
+  CHECK(exchange->LoginCanceled());
+  CHECK_FALSE(exchange->TakeControl().login);
+  CHECK_FALSE(exchange->PostLogin({"player", "new-password"}));
+  exchange->Finish();
+  ClientOutput output;
+  exchange->Drain(output);
+  CHECK(output.status.stopped);
+  CHECK_FALSE(output.status.authenticating);
+  CHECK(output.commandFailures.size() == 1);
+}
+
+TEST_CASE("Network status and drained status are one shared publication")
+{
+  auto exchange = Exchange();
+  REQUIRE(exchange->PostLogin({"player", "password-value"}));
+  REQUIRE(exchange->TakeControl().login);
+  exchange->PublishPhase(SessionPhase::Connecting);
+  exchange->CompleteLogin();
+  exchange->PublishError("transport failure");
+  exchange->PublishPhase(SessionPhase::Faulted);
+  ClientOutput output;
+  exchange->Drain(output);
+  CHECK(output.status.phase == exchange->Status().phase);
+  CHECK(output.status.error == exchange->Status().error);
+  CHECK_FALSE(output.status.authenticating);
+  REQUIRE(exchange->PostLogin({"player", "password-value"}));
+  CHECK(exchange->Status().error.empty());
+}
+
+TEST_CASE("Main thread drains coherent phase and snapshots during concurrent owner publication")
+{
+  auto exchange = Exchange(2, 1);
+  std::atomic_bool accepted{true};
+  std::jthread owner{[&] {
+    ClientModel model;
+    for (int i = 0; i < 256; ++i)
+    {
+      model.ResetSession();
+      const auto phase = model.Generation() % 2 == 0 ? SessionPhase::Ready : SessionPhase::Disconnected;
+      if (!exchange->Publish(model, true, phase)) accepted = false;
+    }
+    exchange->Finish();
+  }};
+  ClientOutput output;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  do
+  {
+    exchange->Drain(output);
+    for (const auto& update : output.state.updates)
+    {
+      REQUIRE(std::holds_alternative<ClientSnapshot>(update));
+      const auto generation = std::get<ClientSnapshot>(update).generation;
+      CHECK(output.status.phase == (generation % 2 == 0 ? SessionPhase::Ready : SessionPhase::Disconnected));
+    }
+    std::this_thread::yield();
+  } while (!output.status.stopped && std::chrono::steady_clock::now() < deadline);
+  CHECK(output.status.stopped);
+  CHECK(accepted);
 }
 
 TEST_SUITE_END();

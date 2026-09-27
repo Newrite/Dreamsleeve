@@ -10,12 +10,15 @@ module Dreamsleeve.Client.ProtocolCodec;
 
 namespace Dreamsleeve::Client::Wire
 {
+
   using namespace Detail;
   static_assert(static_cast<int>(Channel::Control) == ::Dreamsleeve::Protocol::Network::Control);
   static_assert(static_cast<int>(Channel::Chat) == ::Dreamsleeve::Protocol::Network::Chat);
   static_assert(static_cast<int>(Channel::Realtime) == ::Dreamsleeve::Protocol::Network::Realtime);
+
   namespace
   {
+
     // No catch-all overload: adding a ClientRequest alternative must fail to compile.
     struct RequestWriter
     {
@@ -63,8 +66,9 @@ namespace Dreamsleeve::Client::Wire
 
     if (packet.has_send_chat() && packet.send_chat().channel_id() == 0) return Invalid("channel_id");
 
-    if (packet.has_update_player() && packet.update_player().has_set_actor_values() &&
-        static_cast<std::size_t>(packet.update_player().set_actor_values().values_size()) > config.maxActorValues)
+    if (
+      packet.has_update_player() && packet.update_player().has_set_actor_values() &&
+      static_cast<std::size_t>(packet.update_player().set_actor_values().values_size()) > config.maxActorValues)
       return Invalid("actor_values");
 
     const auto size = packet.ByteSizeLong();
@@ -83,8 +87,10 @@ namespace Dreamsleeve::Client::Wire
     if (sample.contextRevision == 0 || sample.sequence == 0) return Invalid("movement");
     const auto& p = sample.pose.position;
     const auto& r = sample.pose.rotation;
-    if (!std::isfinite(p.X) || !std::isfinite(p.Y) || !std::isfinite(p.Z) ||
-        !std::isfinite(r.X) || !std::isfinite(r.Y) || !std::isfinite(r.Z)) return Invalid("pose");
+    if (
+      !std::isfinite(p.X) || !std::isfinite(p.Y) || !std::isfinite(p.Z) || !std::isfinite(r.X) || !std::isfinite(r.Y) ||
+      !std::isfinite(r.Z))
+      return Invalid("pose");
     P::ClientMovementPacket packet;
     packet.set_protocol_version(Version);
     packet.mutable_sample()->set_context_revision(sample.contextRevision);
@@ -92,9 +98,10 @@ namespace Dreamsleeve::Client::Wire
     WritePose(*packet.mutable_sample()->mutable_pose(), sample.pose);
     const auto size = packet.ByteSizeLong();
     if (size > std::min(maxPayloadBytes, config.network.maxPacketBytes)) return Failure(ErrorCode::PacketTooLarge, "movement");
-    auto result = DreamNetPacket::TryAllocateWith(size, [&](std::span<std::byte> buffer) {
-      return packet.SerializeToArray(buffer.data(), static_cast<int>(buffer.size()));
-    }, PacketFlag::None);
+    auto result = DreamNetPacket::TryAllocateWith(
+      size,
+      [&](std::span<std::byte> buffer) { return packet.SerializeToArray(buffer.data(), static_cast<int>(buffer.size())); },
+      PacketFlag::None);
     if (!result) return Failure(ErrorCode::PacketCreationFailed, "movement");
     return std::move(*result);
   }

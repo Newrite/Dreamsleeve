@@ -8,7 +8,9 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   inline auto Failure(ErrorCode code, std::string field)
   {
-    return std::unexpected{Error{code, std::move(field)}};
+    return std::unexpected{
+        Error{code, std::move(field)}
+    };
   }
 
   inline auto Invalid(std::string field)
@@ -16,18 +18,19 @@ namespace Dreamsleeve::Client::Wire::Detail
     return Failure(ErrorCode::InvalidPayload, std::move(field));
   }
 
-  void WritePose(P::MovementPose&, const Domain::MovementPose&);
-  Result<PlayerLocationUpdated> ReadVisibility(const P::PlayerVisibilityChanged&);
-  void WritePlayerUpdate(P::UpdatePlayer&, const PlayerUpdate&);
-  Result<Domain::PlayerData> Profile(const P::PlayerProfile&);
-  Result<Domain::Player> Player(const Configuration&, const P::PlayerInfo&);
-  Result<PlayerMetadataUpdated> ReadMetadata(const Configuration&, const P::PlayerMetadataChanged&);
+  void                           WritePose(P::MovementPose&, const Domain::MovementPose&);
+  Result<PlayerLocationUpdated>  ReadVisibility(const P::PlayerVisibilityChanged&);
+  void                           WritePlayerUpdate(P::UpdatePlayer&, const PlayerUpdate&);
+  Result<Domain::PlayerData>     Profile(const P::PlayerProfile&);
+  Result<Domain::Player>         Player(const Configuration&, const P::PlayerInfo&);
+  Result<PlayerMetadataUpdated>  ReadMetadata(const Configuration&, const P::PlayerMetadataChanged&);
   Result<PlayerMovementReceived> ReadMovement(const P::PlayerMoved&);
 
-  void WriteChat(P::SendChat&, const SendChat&);
+  void                        WriteChat(P::SendChat&, const SendChat&);
   Result<Domain::ChatMessage> Message(const P::ChatMessage&);
 
-  void WriteSession(P::OpenSession&, const OpenSession&);
-  bool ValidTicket(std::string_view);
+  void                  WriteSession(P::OpenSession&, const OpenSession&);
+  bool                  ValidTicket(std::string_view);
   Result<SessionOpened> Welcome(const Configuration&, std::uint64_t, const P::SessionOpened&);
+
 }

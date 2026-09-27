@@ -42,25 +42,25 @@ export namespace Dreamsleeve::Client
 
   struct PlayerMetadataUpdated
   {
-    Domain::PlayerId playerId;
+    Domain::PlayerId                         playerId;
     std::optional<Domain::ActorValueStorage> actorValues;
-    std::optional<Domain::PlayerDetails> details;
+    std::optional<Domain::PlayerDetails>     details;
   };
 
   struct PlayerLocationUpdated
   {
     PlayerId                      playerId;
     std::optional<PlayerLocation> location;
-    std::uint64_t viewRevision{};
-    std::uint64_t sequence{};
+    std::uint64_t                 viewRevision{};
+    std::uint64_t                 sequence{};
   };
 
   struct PlayerMovementReceived
   {
-    PlayerId playerId;
+    PlayerId      playerId;
     std::uint64_t viewRevision;
     std::uint64_t sequence;
-    MovementPose pose;
+    MovementPose  pose;
   };
 
   struct PlayerCharacterRenamed
@@ -138,7 +138,7 @@ export namespace Dreamsleeve::Client
     std::optional<PlayerId>        selfPlayerId;
     std::vector<Player>            players;
     std::vector<ChatCacheSnapshot> chats;
-    MovementClock::time_point observedAt{};
+    MovementClock::time_point      observedAt{};
   };
 
   // All methods, including Snapshot/Generation, belong to one serial owner.
@@ -148,6 +148,7 @@ export namespace Dreamsleeve::Client
 public:
 
     explicit ClientModel(std::size_t movementCapacity = 4096) : maxMovementObservations{movementCapacity} {}
+
     ClientModel(const ClientModel&)            = delete;
     ClientModel& operator=(const ClientModel&) = delete;
     ClientModel(ClientModel&&)                 = default;
@@ -218,15 +219,20 @@ public:
 
     // Capture this generation when starting an async request/decoder job, not
     // when its result finishes. Late work from the previous session is rejected.
-    Domain::OperationResult Apply(std::uint64_t updateGeneration, const ClientUpdate& update, MovementClock::time_point receivedAt = MovementClock::now())
+    Domain::OperationResult Apply(
+      std::uint64_t             updateGeneration,
+      const ClientUpdate&       update,
+      MovementClock::time_point receivedAt = MovementClock::now())
     {
       if (updateGeneration != generation)
       {
         return std::unexpected(Domain::Error{Domain::ErrorCode::StaleGeneration, "generation"});
       }
 
-      if (const auto* sample = std::get_if<PlayerMovementReceived>(&update);
-          sample && !players.CanApplyMovement(sample->playerId, sample->viewRevision, sample->sequence)) return {};
+      if (
+        const auto* sample = std::get_if<PlayerMovementReceived>(&update);
+        sample && !players.CanApplyMovement(sample->playerId, sample->viewRevision, sample->sequence))
+        return {};
 
       auto result = std::visit([this](const auto& value) { return ApplyOne(value); }, update);
       if (result)
@@ -234,10 +240,12 @@ public:
         // A successful operation advances revision even if it was an idempotent
         // duplicate. This is a local publication marker, not a server sequence.
         ++revision;
-        std::visit([this, receivedAt](const auto& value) {
-          MarkUpdate(value);
-          RecordMovement(value, receivedAt);
-        }, update);
+        std::visit(
+          [this, receivedAt](const auto& value) {
+            MarkUpdate(value);
+            RecordMovement(value, receivedAt);
+          },
+          update);
       }
 
       return result;
@@ -362,14 +370,17 @@ private:
 
       if constexpr (std::is_same_v<Update, PlayerUpserted>)
         AppendMovement(update.player.data.playerId, receivedAt);
-      else if constexpr (std::is_same_v<Update, PlayerLocationUpdated> || std::is_same_v<Update, PlayerMovementReceived> || std::is_same_v<Update, PlayerRemoved> ||
-                         std::is_same_v<Update, PlayerCharacterStarted> || std::is_same_v<Update, PlayerGameStateCleared>)
+      else if constexpr (
+        std::is_same_v<Update, PlayerLocationUpdated> || std::is_same_v<Update, PlayerMovementReceived> ||
+        std::is_same_v<Update, PlayerRemoved> || std::is_same_v<Update, PlayerCharacterStarted> ||
+        std::is_same_v<Update, PlayerGameStateCleared>)
         AppendMovement(update.playerId, receivedAt);
-      else if constexpr (std::is_same_v<Update, SelfPlayerAssigned> || std::is_same_v<Update, OnlinePlayersReplaced> ||
-                         std::is_same_v<Update, PlayerProfileUpdated> || std::is_same_v<Update, PlayerMetadataUpdated> ||
-                         std::is_same_v<Update, PlayerCharacterRenamed> || std::is_same_v<Update, PlayerActorValuesUpdated> ||
-                         std::is_same_v<Update, ChatMessagesReceived> || std::is_same_v<Update, ChatHistoryReceived> ||
-                         std::is_same_v<Update, ServerRejection>)
+      else if constexpr (
+        std::is_same_v<Update, SelfPlayerAssigned> || std::is_same_v<Update, OnlinePlayersReplaced> ||
+        std::is_same_v<Update, PlayerProfileUpdated> || std::is_same_v<Update, PlayerMetadataUpdated> ||
+        std::is_same_v<Update, PlayerCharacterRenamed> || std::is_same_v<Update, PlayerActorValuesUpdated> ||
+        std::is_same_v<Update, ChatMessagesReceived> || std::is_same_v<Update, ChatHistoryReceived> ||
+        std::is_same_v<Update, ServerRejection>)
       {
         // No new motion, or a complete online replacement already supersedes it.
       }
@@ -610,7 +621,7 @@ private:
       return {};
     }
 
-    std::size_t                       maxMovementObservations;
+    std::size_t                        maxMovementObservations;
     PlayerStore                        players;
     std::map<ChatChannelId, ChatCache> chats;
     std::vector<ServerRejectionEvent>  serverRejections;

@@ -19,7 +19,7 @@ export namespace Dreamsleeve::Client
     bool                           requiresSnapshot{};
   };
 
-  // One model owner publishes; one consumer drains and applies batches in order.
+  // Unsynchronized buffer. ClientExchange owns it and serializes every access.
   // Capacity bounds queued envelopes, not the bytes inside their payloads.
   class StateUpdateQueue final
   {
@@ -44,7 +44,6 @@ public:
 
     StatePublishResult Publish(ClientStateUpdate update)
     {
-      std::lock_guard lock{mutex};
       if (std::holds_alternative<ClientSnapshot>(update))
       {
         // A fresh snapshot supersedes everything not yet taken by the consumer.
@@ -69,7 +68,6 @@ public:
 
     bool RequiresSnapshot() const
     {
-      std::lock_guard lock{mutex};
       return requiresSnapshot;
     }
 
@@ -77,7 +75,6 @@ public:
     {
       output.updates.clear();
 
-      std::lock_guard lock{mutex};
       pending.swap(output.updates);
       output.requiresSnapshot = requiresSnapshot;
     }
@@ -87,7 +84,6 @@ private:
     explicit StateUpdateQueue(std::size_t capacity) : maxPending{capacity} {}
 
     const std::size_t              maxPending;
-    mutable std::mutex             mutex;
     std::vector<ClientStateUpdate> pending;
     bool                           requiresSnapshot{true};
   };

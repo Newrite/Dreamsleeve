@@ -1,9 +1,14 @@
-#include "AuthHttp.h"
 #include <glaze/glaze.hpp>
 import std;
 import Dreamsleeve.Client.Application;
 import Dreamsleeve.Client.MovementView;
-namespace Dreamsleeve::Client::Dev { Auth::Result<std::string> ReadPassword(); }
+
+namespace Dreamsleeve::Client::Dev
+{
+
+  Auth::Result<std::string> ReadPassword();
+
+}
 
 namespace
 {
@@ -52,8 +57,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | send <text> | begin <name> | rename <name> | "
-    "move <json> | location <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | send <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
 
   bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
@@ -123,7 +127,12 @@ namespace
     return true;
   }
 
-  void Print(ClientExchange& exchange, std::uint64_t& generation, Domain::ChatChannelId& channel, MovementView& movement, bool verbose = true)
+  void Print(
+    ClientExchange&        exchange,
+    std::uint64_t&         generation,
+    Domain::ChatChannelId& channel,
+    MovementView&          movement,
+    bool                   verbose = true)
   {
     ClientOutput output;
     exchange.Drain(output);
@@ -131,7 +140,9 @@ namespace
     if (!verbose && output.state.updates.empty() && output.rejections.empty() && output.commandFailures.empty()) return;
 
     std::osyncstream console(std::cout);
-    console << "session=" << PhaseName(output.phase) << '\n';
+    console << "session=" << PhaseName(output.status.phase) << '\n';
+    if (output.status.authenticating) console << "auth=Pending\n";
+    if (!output.status.error.empty()) console << "Client: " << output.status.error << '\n';
 
     for (const auto& update : output.state.updates)
     {
@@ -185,13 +196,17 @@ namespace
       std::cout << "pose " << id << " absent\n";
   }
 
-  bool ReadMovement(const std::string& line, ClientExchange& exchange, std::uint64_t& generation,
-                    Domain::ChatChannelId& channel, MovementView& movement)
+  bool ReadMovement(
+    const std::string&     line,
+    ClientExchange&        exchange,
+    std::uint64_t&         generation,
+    Domain::ChatChannelId& channel,
+    MovementView&          movement)
   {
     std::istringstream input{line};
-    std::string command;
-    Domain::PlayerId id{};
-    int durationMs{};
+    std::string        command;
+    Domain::PlayerId   id{};
+    int                durationMs{};
     if (!(input >> command >> id)) return false;
     if (command == "pose")
     {
@@ -211,17 +226,16 @@ namespace
     return true;
   }
 
-
 }
 
 int RunNetworkConsole(int argc, char* argv[])
 {
-  const bool fromFile = argc >= 2 && std::string_view{argv[1]} == "--config";
-  const int optionStart = fromFile ? 4 : 5;
+  const bool fromFile    = argc >= 2 && std::string_view{argv[1]} == "--config";
+  const int  optionStart = fromFile ? 4 : 5;
   if (argc < optionStart || (argc - optionStart) % 2 != 0)
   {
-    std::cerr << "Usage: --connect <IPv4> <port> <username> [--config <path>] [--auth-url <origin>] [--register <name>]\n"
-                 "       --config <path> <username> [--auth-url <origin>] [--register <name>]\n";
+    std::cerr
+      << "Usage: --connect <IPv4> <port> <username> [--config <path>] [--auth-url <origin>] [--register <name>]\n" "       --config <path> <username> [--auth-url <origin>] [--register <name>]\n";
     return 2;
   }
 
@@ -232,28 +246,40 @@ int RunNetworkConsole(int argc, char* argv[])
   for (int index = optionStart; index < argc; index += 2)
   {
     const std::string_view option{argv[index]};
-    if (option == "--config" && !fromFile) configPath = argv[index + 1];
-    else if (option == "--auth-url") authUrl = argv[index + 1];
-    else if (option == "--register") registerName = argv[index + 1];
-    else return 2;
+    if (option == "--config" && !fromFile)
+      configPath = argv[index + 1];
+    else if (option == "--auth-url")
+      authUrl = argv[index + 1];
+    else if (option == "--register")
+      registerName = argv[index + 1];
+    else
+      return 2;
   }
 
   ClientSettings settings;
   if (configPath)
   {
     auto loaded = LoadClientSettings(*configPath);
-    if (!loaded) { std::cerr << loaded.error() << '\n'; return 2; }
+    if (!loaded)
+    {
+      std::cerr << loaded.error() << '\n';
+      return 2;
+    }
     settings = std::move(*loaded);
   }
   if (authUrl) settings.authUrl = std::move(*authUrl);
   if (!fromFile)
   {
-    unsigned port{};
+    unsigned               port{};
     const std::string_view rawPort{argv[3]};
-    const auto parsed = std::from_chars(rawPort.data(), rawPort.data() + rawPort.size(), port);
+    const auto             parsed = std::from_chars(rawPort.data(), rawPort.data() + rawPort.size(), port);
     if (parsed.ec != std::errc{} || parsed.ptr != rawPort.data() + rawPort.size() || port == 0 || port > 65535) return 2;
     auto address = DreamNetAddress::TryParseIp(argv[2], static_cast<Port>(port));
-    if (!address) { PrintError(address.error()); return 2; }
+    if (!address)
+    {
+      PrintError(address.error());
+      return 2;
+    }
     settings.client.serverAddress = *address;
   }
   if (auto valid = ValidateClientSettings(settings); !valid)
@@ -263,28 +289,32 @@ int RunNetworkConsole(int argc, char* argv[])
   }
 
   auto password = Dreamsleeve::Client::Dev::ReadPassword();
-  if (!password) { std::cerr << "Auth: " << password.error() << '\n'; return 2; }
+  if (!password)
+  {
+    std::cerr << "Auth: " << password.error() << '\n';
+    return 2;
+  }
   const Credentials credentials{argv[fromFile ? 3 : 4], std::move(*password)};
-  auto movement = MovementView::TryCreate(settings.client.movement);
+  auto              movement = MovementView::TryCreate(settings.client.movement);
   if (!movement)
   {
     PrintError(movement.error());
     return 1;
   }
 
-  auto application = ClientApplication::TryCreate(std::move(settings), [](const ApplicationStatus& status) {
-    std::osyncstream output(std::cout);
-    output << "session=" << PhaseName(status.phase) << '\n';
-    if (!status.error.empty()) output << "Client: " << status.error << '\n';
-  });
-  if (!application) { std::cerr << application.error() << '\n'; return 1; }
+  auto application = ClientApplication::TryCreate(std::move(settings));
+  if (!application)
+  {
+    std::cerr << application.error() << '\n';
+    return 1;
+  }
   auto& exchange = (*application)->Exchange();
   if (auto started = (*application)->Connect(credentials, registerName); !started)
   {
     std::cerr << started.error() << '\n';
     return 1;
   }
-  std::uint64_t generation{};
+  std::uint64_t         generation{};
   Domain::ChatChannelId channel{};
 
   std::cout << "Real ENet connection. " << Commands;
@@ -300,7 +330,8 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     else if (line == "connect" || line == "disconnect")
     {
-      if (line == "disconnect") (*application)->Disconnect();
+      if (line == "disconnect")
+        (*application)->Disconnect();
       else if (auto connected = (*application)->Connect(credentials); !connected)
         std::cout << connected.error() << '\n';
     }
@@ -312,7 +343,10 @@ int RunNetworkConsole(int argc, char* argv[])
         std::cout << "Request IDs exhausted\n";
       else
       {
-        const auto posted = exchange.Post({generation, SendChat{*requestId, channel, line.substr(5)}});
+        const auto posted = exchange.Post({
+            generation,
+            SendChat{*requestId, channel, line.substr(5)}
+        });
         if (posted == CommandPostResult::Queued)
           std::cout << "request " << *requestId << " queued\n";
         else

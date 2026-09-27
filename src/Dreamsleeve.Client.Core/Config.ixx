@@ -12,8 +12,8 @@ export namespace Dreamsleeve::Client
   {
     std::chrono::milliseconds delay{150};
     std::chrono::milliseconds maxGap{1000};
-    std::size_t historyCapacity{32};
-    double teleportDistance{2048.0};
+    std::size_t               historyCapacity{32};
+    double                    teleportDistance{2048.0};
 
     bool Valid() const noexcept
     {
@@ -26,8 +26,8 @@ export namespace Dreamsleeve::Client
   struct Configuration
   {
     NetConfig       network{[] {
-      auto value     = NetConfig::Default();
-      value.maxPeers = 1;
+      auto value         = NetConfig::Default();
+      value.maxPeers     = 1;
       value.channelLimit = 3;
       return value;
     }()};
@@ -43,10 +43,10 @@ export namespace Dreamsleeve::Client
     std::size_t     maxActorValues{64};
     TimeOutMs       playerSampleIntervalMs{50};
     // Future game-view preferences. They do not change server subscriptions.
-    double          visibilityDistance{8192.0};
-    bool            showFireflies{true};
+    double           visibilityDistance{8192.0};
+    bool             showFireflies{true};
     MovementSettings movement{};
-    std::size_t maxPendingMovementSamples{4096};
+    std::size_t      maxPendingMovementSamples{4096};
 
     std::optional<std::string_view> InvalidSetting() const noexcept
     {

@@ -259,12 +259,12 @@ TEST_CASE("Real transport opens publishes a complete session and reconnects with
   Fixture    fixture;
   const auto firstId = fixture.Open();
   auto       waiting = fixture.Drain();
-  CHECK(waiting.phase == SessionPhase::Opening);
+  CHECK(waiting.status.phase == SessionPhase::Opening);
   Empty(waiting);
   fixture.Send(Welcome(firstId));
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
   auto ready = fixture.Drain();
-  CHECK(ready.phase == SessionPhase::Ready);
+  CHECK(ready.status.phase == SessionPhase::Ready);
   REQUIRE(ready.state.updates.size() == 1);
   const auto& snapshot = std::get<ClientSnapshot>(ready.state.updates[0]);
   CHECK(snapshot.selfPlayerId == 7);
@@ -360,7 +360,7 @@ TEST_CASE("Invalid session responses never publish partially initialized state")
   fixture.Send(packet);
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
   const auto output = fixture.Drain();
-  CHECK(output.phase == SessionPhase::Faulted);
+  CHECK(output.status.phase == SessionPhase::Faulted);
   Empty(output);
   REQUIRE(fixture.errors.size() == 1);
   // A failed entry does not poison the next host or application attempt.
@@ -538,7 +538,7 @@ TEST_CASE("Pending chat is bounded and a correlated server rejection frees only 
   REQUIRE(output.rejections.size() == 1);
   CHECK(output.rejections.front().rejection.requestId == second);
   CHECK(output.rejections.front().rejection.code == RequestRejectionCode::Overloaded);
-  CHECK(output.phase == SessionPhase::Ready);
+  CHECK(output.status.phase == SessionPhase::Ready);
   CHECK(output.state.updates.empty());
 
   const auto next = Queue(fixture, generation);

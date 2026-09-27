@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
-#include "AuthHttp.h"
+import std;
+import Dreamsleeve.Client.Auth;
 
 namespace Auth = Dreamsleeve::Client::Auth;
 

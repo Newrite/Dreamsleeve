@@ -27,10 +27,10 @@ export namespace Dreamsleeve::Client
     std::vector<Domain::Player>   players;
     std::vector<Domain::PlayerId> removedPlayers;
     // Reconcile channel existence/resets before replaying ordered content.
-    std::vector<ChatStateChange>   chats;
-    std::vector<ChatContentChange> chatContent;
+    std::vector<ChatStateChange>     chats;
+    std::vector<ChatContentChange>   chatContent;
     std::vector<MovementObservation> movement;
-    MovementClock::time_point observedAt{};
+    MovementClock::time_point        observedAt{};
   };
 
   using ClientStateUpdate = std::variant<ClientSnapshot, ClientStateDelta>;
@@ -76,7 +76,7 @@ export namespace Dreamsleeve::Client
     }
 
     delta.chatContent = std::move(scratch.chatContent);
-    delta.movement = std::move(scratch.movement);
+    delta.movement    = std::move(scratch.movement);
 
     return ClientStateUpdate{std::move(delta)};
   }

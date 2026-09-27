@@ -198,7 +198,7 @@ TEST_CASE("State queue restores chat contents after overflow and delivers subseq
   CHECK(messages == model.FindChat(1)->messages);
 }
 
-TEST_CASE("State queue hands off coherent ordered batches between two threads")
+TEST_CASE("State buffer preserves ordered batches under externally serialized access")
 {
   auto                            queue = Queue(2);
   std::barrier                    phase{2};

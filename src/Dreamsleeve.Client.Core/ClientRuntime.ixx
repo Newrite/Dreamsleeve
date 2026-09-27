@@ -64,8 +64,8 @@ public:
       auto                 created = DreamNetClient::TryCreate(transportConfig);
       if (!created) return Fail(created.error());
 
-      transport = std::move(*created);
-      opening   = Wire::OpenSession{*requestId, std::move(sessionTicket)};
+      transport   = std::move(*created);
+      opening     = Wire::OpenSession{*requestId, std::move(sessionTicket)};
       lastRequest = *requestId;
       pendingChats.clear();
       pendingUpdates.clear();
@@ -157,7 +157,7 @@ private:
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
-      phase = value;
+      phase          = value;
       auto published = Publish(true);
       if (!published) SetPhase(SessionPhase::Faulted);
       return published;
@@ -217,9 +217,11 @@ private:
         return {};  // A terminal reply may have closed the session earlier in this batch.
       if (received.channelId > 2) return Unexpected("channel");
       const auto channel = static_cast<Wire::Channel>(received.channelId);
-      const auto flags = received.packet.Flags();
-      if (PacketFlags::HasFlag(flags, PacketFlag::Unsequenced) ||
-          (channel != Wire::Channel::Realtime && !PacketFlags::HasFlag(flags, PacketFlag::Reliable))) return Unexpected("delivery");
+      const auto flags   = received.packet.Flags();
+      if (
+        PacketFlags::HasFlag(flags, PacketFlag::Unsequenced) ||
+        (channel != Wire::Channel::Realtime && !PacketFlags::HasFlag(flags, PacketFlag::Reliable)))
+        return Unexpected("delivery");
 
       auto response = codec.Decode(received.packet.DataBytesView(), channel);
       if (!response) return std::unexpected{response.error()};
@@ -303,19 +305,26 @@ private:
       if (phase != SessionPhase::Ready || pendingUpdates.erase(accepted.requestId) == 0) return Unexpected("request_id");
       if (accepted.requestId == pendingLocation)
       {
-        pendingLocation = 0;
-        movementReady = latestMovement.has_value();
+        pendingLocation  = 0;
+        movementReady    = latestMovement.has_value();
         nextPlayerSample = {};
       }
       return {};
     }
 
-    Result<void> Receive(PlayerMetadataUpdated& value) { return Apply(value); }
-    Result<void> Receive(PlayerLocationUpdated& value) { return Apply(value); }
+    Result<void> Receive(PlayerMetadataUpdated& value)
+    {
+      return Apply(value);
+    }
+
+    Result<void> Receive(PlayerLocationUpdated& value)
+    {
+      return Apply(value);
+    }
 
     Result<void> Receive(Wire::PlayersMoved& batch)
     {
-      if (phase != SessionPhase::Ready) return {}; // Realtime may overtake reliable bootstrap.
+      if (phase != SessionPhase::Ready) return {};  // Realtime may overtake reliable bootstrap.
 
       for (const auto& value : batch.players)
       {
@@ -369,11 +378,13 @@ private:
     {
       if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
       if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
-      if (command.requestId <= lastRequest || pendingUpdates.contains(command.requestId)) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      if (command.requestId <= lastRequest || pendingUpdates.contains(command.requestId))
+        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
 
       lastRequest = command.requestId;
       if (!model.FindChatState(command.channelId)) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
-      if (pendingChats.size() >= config.maxPendingChatRequests) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+      if (pendingChats.size() >= config.maxPendingChatRequests)
+        return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
       auto packet = codec.Encode(command);
       if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
@@ -394,8 +405,7 @@ private:
     Result<void> SendPlayerUpdate(std::uint64_t generation, T& command, bool locationTransition = false)
     {
       const auto requestId = exchange.NextRequestId();
-      if (!requestId)
-        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Request IDs exhausted")};
+      if (!requestId) return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Request IDs exhausted")};
       if (generation != model.Generation()) return RejectCommand(generation, *requestId, CommandFailureCode::StaleGeneration);
       if (phase != SessionPhase::Ready) return RejectCommand(generation, *requestId, CommandFailureCode::SessionNotReady);
       if (pendingUpdates.size() >= config.maxPendingPlayerUpdates) return RejectCommand(generation, *requestId, CommandFailureCode::Busy);
@@ -413,8 +423,8 @@ private:
     void ResetMovement()
     {
       latestMovement.reset();
-      pendingLocation = 0;
-      movementReady = false;
+      pendingLocation  = 0;
+      movementReady    = false;
       movementSequence = 0;
       nextPlayerSample = {};
     }
@@ -430,7 +440,7 @@ private:
       ResetMovement();
       latestMovement = command.location;
       Wire::SetLocation transition{++contextRevision, command.location};
-      auto result = SendPlayerUpdate(generation, transition, true);
+      auto              result = SendPlayerUpdate(generation, transition, true);
       if (!result || pendingLocation == 0) ResetMovement();
       return result;
     }
@@ -438,8 +448,7 @@ private:
     Result<void> Process(std::uint64_t generation, LocalMovement& command)
     {
       if (phase != SessionPhase::Ready || generation != model.Generation()) return {};
-      if (!command.location || !latestMovement ||
-          command.location->location.locationId != latestMovement->location.locationId)
+      if (!command.location || !latestMovement || command.location->location.locationId != latestMovement->location.locationId)
       {
         LocalLocation transition{command.location};
         return Process(generation, transition);
@@ -452,25 +461,44 @@ private:
     {
       if (phase != SessionPhase::Ready || !movementReady || !latestMovement || Clock::now() < nextPlayerSample) return {};
       if (movementSequence == std::numeric_limits<std::uint64_t>::max()) return Unexpected("movement_sequence_exhausted");
-      const auto now = Clock::now();
+      const auto now   = Clock::now();
       nextPlayerSample = now + std::chrono::milliseconds(config.playerSampleIntervalMs);
-      const auto sampledAt = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count());
-      auto packet = codec.Encode(Wire::MovementSample{contextRevision, ++movementSequence,
-        {latestMovement->position, latestMovement->rotation, sampledAt}}, transport->MaxUnfragmentedPayloadBytes());
+      const auto sampledAt =
+        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count());
+      auto packet = codec.Encode(
+        Wire::MovementSample{
+            contextRevision,
+            ++movementSequence,
+            {latestMovement->position, latestMovement->rotation, sampledAt}
+      },
+        transport->MaxUnfragmentedPayloadBytes());
       if (!packet) return Fail(packet.error());
       auto sent = transport->Send(std::move(*packet), static_cast<ChannelId>(Wire::Channel::Realtime));
       if (!sent) return Fail(sent.error());
       return {};
     }
 
-    Result<void> Process(std::uint64_t generation, LocalActorValues& command) { return SendPlayerUpdate(generation, command); }
+    Result<void> Process(std::uint64_t generation, LocalActorValues& command)
+    {
+      return SendPlayerUpdate(generation, command);
+    }
+
     Result<void> Process(std::uint64_t generation, CharacterStarted& command)
     {
       if (generation == model.Generation()) ResetMovement();
       return SendPlayerUpdate(generation, command);
     }
-    Result<void> Process(std::uint64_t generation, CharacterRenamed& command) { return SendPlayerUpdate(generation, command); }
-    Result<void> Process(std::uint64_t generation, PlayerDetailsChanged& command) { return SendPlayerUpdate(generation, command); }
+
+    Result<void> Process(std::uint64_t generation, CharacterRenamed& command)
+    {
+      return SendPlayerUpdate(generation, command);
+    }
+
+    Result<void> Process(std::uint64_t generation, PlayerDetailsChanged& command)
+    {
+      return SendPlayerUpdate(generation, command);
+    }
+
     Result<void> Process(std::uint64_t generation, GameExited& command)
     {
       if (generation == model.Generation()) ResetMovement();
@@ -493,26 +521,26 @@ private:
       return firstError;
     }
 
-    Configuration            config;
-    Wire::ProtocolCodec              codec;
-    ClientExchange&          exchange;
-    DreamNetClient::Ptr      transport;
-    ClientModel              model;
-    SessionPhase             phase{SessionPhase::Disconnected};
-    Wire::OpenSession        opening;
-    std::uint64_t            lastRequest{};
+    Configuration                                            config;
+    Wire::ProtocolCodec                                      codec;
+    ClientExchange&                                          exchange;
+    DreamNetClient::Ptr                                      transport;
+    ClientModel                                              model;
+    SessionPhase                                             phase{SessionPhase::Disconnected};
+    Wire::OpenSession                                        opening;
+    std::uint64_t                                            lastRequest{};
     std::unordered_map<std::uint64_t, Domain::ChatChannelId> pendingChats;
-    std::unordered_set<std::uint64_t> pendingUpdates;
-    std::vector<QueuedClientCommand> commands;
-    Clock::time_point        deadline{};
-    Clock::time_point        nextPlayerSample{};
-    std::optional<Domain::PlayerLocation> latestMovement;
-    std::uint64_t contextRevision{};
-    std::uint64_t movementSequence{};
-    std::uint64_t pendingLocation{};
-    bool movementReady{};
-    std::vector<ChatMessagesReceived> earlyChat;
-    std::vector<ClientEvent> events;
+    std::unordered_set<std::uint64_t>                        pendingUpdates;
+    std::vector<QueuedClientCommand>                         commands;
+    Clock::time_point                                        deadline{};
+    Clock::time_point                                        nextPlayerSample{};
+    std::optional<Domain::PlayerLocation>                    latestMovement;
+    std::uint64_t                                            contextRevision{};
+    std::uint64_t                                            movementSequence{};
+    std::uint64_t                                            pendingLocation{};
+    bool                                                     movementReady{};
+    std::vector<ChatMessagesReceived>                        earlyChat;
+    std::vector<ClientEvent>                                 events;
   };
 
 }

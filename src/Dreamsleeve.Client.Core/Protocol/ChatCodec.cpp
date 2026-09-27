@@ -9,6 +9,7 @@ module Dreamsleeve.Client.ProtocolCodec;
 
 namespace Dreamsleeve::Client::Wire::Detail
 {
+
   Result<Domain::ChatMessage> Message(const P::ChatMessage& message)
   {
     if (message.message_id() == 0 || message.channel_id() == 0) return Invalid("message");
@@ -31,4 +32,5 @@ namespace Dreamsleeve::Client::Wire::Detail
     target.set_channel_id(value.channelId);
     target.set_text(value.text);
   }
+
 }

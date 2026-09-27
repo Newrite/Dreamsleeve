@@ -8,22 +8,39 @@ int RunMovementDemo()
 {
   using namespace Dreamsleeve::Client;
   using namespace std::chrono_literals;
-  const auto epoch = MovementClock::time_point{};
-  auto exchange = ClientExchange::TryCreate(8, 8);
-  auto movement = MovementView::TryCreate();
+  const auto epoch    = MovementClock::time_point{};
+  auto       exchange = ClientExchange::TryCreate(8, 8);
+  auto       movement = MovementView::TryCreate();
   if (!exchange || !movement) return 1;
 
-  ClientModel model;
-  Domain::Player player{.data = {7, "demo", "Demo"}, .characterGeneration = 1};
+  ClientModel    model;
+  Domain::Player player{
+      .data                = {7, "demo", "Demo"},
+      .characterGeneration = 1
+  };
   if (!model.Apply(1, PlayerUpserted{player}, epoch) || !(*exchange)->Publish(model)) return 1;
 
   ClientOutput output;
   (*exchange)->Drain(output);
   (*movement)->Apply(output.state, epoch);
-  struct Delivery { int source; int arrival; float x; };
+
+  struct Delivery
+  {
+    int   source;
+    int   arrival;
+    float x;
+  };
+
   constexpr Delivery deliveries[] = {
-    {0, 100, 0}, {100, 240, 10}, {200, 270, 20}, {300, 450, 30},
-    {400, 490, 40}, {500, 650, 50}, {1600, 1750, 5000}, {1700, 1810, 5010}};
+      {0,    100,  0   },
+      {100,  240,  10  },
+      {200,  270,  20  },
+      {300,  450,  30  },
+      {400,  490,  40  },
+      {500,  650,  50  },
+      {1600, 1750, 5000},
+      {1700, 1810, 5010}
+  };
   std::size_t next{};
 
   std::cout << "frame_ms,rendered_x,history_size\n";
@@ -31,10 +48,13 @@ int RunMovementDemo()
   {
     while (next < std::size(deliveries) && deliveries[next].arrival <= frame)
     {
-      const auto& delivery = deliveries[next++];
+      const auto&            delivery = deliveries[next++];
       Domain::PlayerLocation location{
-        {{"skyrim.esm", 0x3c}, "Tamriel"}, {delivery.x, 0, 0}, {},
-        1000000 + static_cast<std::uint64_t>(delivery.source) * 1000};
+          {{"skyrim.esm", 0x3c}, "Tamriel"},
+          {delivery.x, 0, 0},
+          {},
+          1000000 + static_cast<std::uint64_t>(delivery.source) * 1000
+      };
       if (!model.Apply(1, PlayerLocationUpdated{7, location}, epoch + std::chrono::milliseconds{delivery.arrival})) return 1;
     }
     if (!(*exchange)->Publish(model)) return 1;

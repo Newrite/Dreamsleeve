@@ -93,38 +93,38 @@ export namespace Domain
 
   struct MovementPose
   {
-    Position position{};
-    Rotation rotation{};
+    Position      position{};
+    Rotation      rotation{};
     std::uint64_t sampledAtUs{};
   };
 
   struct PlayerLocation
   {
-    Location location{};
-    Position position{};
-    Rotation rotation{};
-    std::uint64_t sampledAtUs{}; // Sender monotonic clock, not UTC.
+    Location      location{};
+    Position      position{};
+    Rotation      rotation{};
+    std::uint64_t sampledAtUs{};  // Sender monotonic clock, not UTC.
 
     bool operator==(const PlayerLocation&) const = default;
   };
 
-  using ActivityKind = ::Protocol::Chat::ActivityKind;
+  using ActivityKind   = ::Protocol::Chat::ActivityKind;
   using LockDifficulty = ::Protocol::Chat::LockDifficulty;
 
   struct NamedForm
   {
-    FormKey form{};
+    FormKey     form{};
     std::string name{};
-    bool operator==(const NamedForm&) const = default;
+    bool        operator==(const NamedForm&) const = default;
   };
 
   struct PlayerActivity
   {
-    ActivityKind kind{ActivityKind::Unknown};
+    ActivityKind               kind{ActivityKind::Unknown};
     std::optional<std::string> targetName;
-    LockDifficulty lockDifficulty{LockDifficulty::Unknown};
+    LockDifficulty             lockDifficulty{LockDifficulty::Unknown};
     std::optional<std::string> menuKey;
-    bool operator==(const PlayerActivity&) const = default;
+    bool                       operator==(const PlayerActivity&) const = default;
   };
 
   struct PlaceDescription
@@ -133,18 +133,18 @@ export namespace Domain
     std::string locationName;
     std::string nearbyMarkerName;
     std::string markerKind;
-    bool isInterior{};
-    bool operator==(const PlaceDescription&) const = default;
+    bool        isInterior{};
+    bool        operator==(const PlaceDescription&) const = default;
   };
 
   struct PlayerDetails
   {
-    std::optional<NamedForm> race;
-    std::optional<std::uint32_t> level;
-    PlayerActivity activity{};
+    std::optional<NamedForm>        race;
+    std::optional<std::uint32_t>    level;
+    PlayerActivity                  activity{};
     std::optional<PlaceDescription> place;
-    std::optional<std::int64_t> gameStartedAtUnixMs;
-    bool operator==(const PlayerDetails&) const = default;
+    std::optional<std::int64_t>     gameStartedAtUnixMs;
+    bool                            operator==(const PlayerDetails&) const = default;
   };
 
   struct PlayerData final
@@ -164,8 +164,8 @@ export namespace Domain
     ActorValueStorage             actorValues{};
     std::uint64_t                 characterGeneration{};
     PlayerDetails                 details{};
-    std::uint64_t viewRevision{};
-    std::uint64_t movementSequence{};
+    std::uint64_t                 viewRevision{};
+    std::uint64_t                 movementSequence{};
 
     bool operator==(const Player&) const = default;
   };

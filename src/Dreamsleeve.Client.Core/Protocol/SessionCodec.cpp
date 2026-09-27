@@ -9,6 +9,7 @@ module Dreamsleeve.Client.ProtocolCodec;
 
 namespace Dreamsleeve::Client::Wire::Detail
 {
+
   Result<SessionOpened> Welcome(const Configuration& config, std::uint64_t requestId, const P::SessionOpened& source)
   {
     if (source.self_player_id() == 0 || source.global_channel_id() == 0) return Invalid("session_opened");
@@ -45,7 +46,8 @@ namespace Dreamsleeve::Client::Wire::Detail
   bool ValidTicket(std::string_view ticket)
   {
     return ticket.size() == 43 && std::ranges::all_of(ticket, [](unsigned char c) {
-      return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
-    });
+             return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+           });
   }
+
 }

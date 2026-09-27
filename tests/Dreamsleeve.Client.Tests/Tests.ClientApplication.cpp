@@ -81,7 +81,7 @@ TEST_CASE("Application owns startup and final shutdown without a connection")
   CHECK_FALSE((*app)->Connect({"player", "password-do-not-log"}));
   ClientOutput output;
   (*app)->Exchange().Drain(output);
-  CHECK(output.stopped);
+  CHECK(output.status.stopped);
 }
 
 TEST_CASE("Authentication errors are observable and a subsequent explicit login is allowed")
