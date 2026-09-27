@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
   if (argc > 2 || (argc == 2 && std::string_view{argv[1]} != "--state-demo"))
   {
     spdlog::error(
-      "Usage: Dreamsleeve.Client.Dev [--state-demo | --movement-demo | --movement-benchmark] | --connect <IPv4> <port> <username> [--config <path>] [--auth-url <origin>] [--register <displayName>] | --config <path> <username>");
+      "Usage: Dreamsleeve.Client.Dev [--state-demo | --movement-demo | --movement-benchmark] | --connect <IPv4> <port> [username] [--config <path>] [--auth-url <origin>] [--register <displayName>] [--remember] | --config <path> [username] [--remember]");
     ShutdownLogger();
     return 2;
   }

@@ -14,7 +14,7 @@ type SqliteAccountStoreConfig = {
 [<RequireQualifiedAccess>]
 module internal SqliteDatabase =
     [<Literal>]
-    let SchemaVersion = 1L
+    let SchemaVersion = 2L
 
     [<Literal>]
     let ApplicationId = 1146309718L
@@ -49,8 +49,11 @@ module internal SqliteDatabase =
         else
             // Preparing the actual projection catches missing/renamed columns before accepting clients.
             use command = connection.CreateCommand()
-            command.CommandText <- "SELECT a.id, a.username, a.password_hash, p.player_id, p.account_id, p.display_name FROM accounts a JOIN profiles p ON p.account_id = a.id LIMIT 0"
+            command.CommandText <- "SELECT a.id, a.username, c.password_hash, p.player_id, p.account_id, p.display_name FROM accounts a LEFT JOIN account_passwords c ON c.account_id=a.id JOIN profiles p ON p.account_id = a.id LIMIT 0"
             use reader = command.ExecuteReader()
+            reader.Close()
+            command.CommandText <- "SELECT t.token_hash, t.account_id, t.kind, t.expires_at, i.provider, i.subject, i.account_id FROM auth_tokens t LEFT JOIN account_identities i ON i.account_id=t.account_id LIMIT 0"
+            use credentials = command.ExecuteReader()
             Ok ()
 
     /// Called before listeners start. SQLite and Migrondi execute synchronously;

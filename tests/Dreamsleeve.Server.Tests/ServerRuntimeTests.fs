@@ -182,6 +182,25 @@ let private empty fixture = task {
 
 [<Tests>]
 let tests = testList "ServerRuntime" [
+    testTask "account revocation closes its ready session without closing another ready player" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
+            let alice = connect fixture "alice"
+            do! post fixture.Runtime (tick ())
+            let! _ = welcome fixture alice
+            let bob = connect fixture "bob"
+            do! post fixture.Runtime (tick ())
+            let! _ = welcome fixture bob
+            let playerId = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
+            do! post fixture.Runtime (ServerRuntimeMessage.RevokePlayer playerId)
+            let! closed = receive fixture.Closed
+            equal alice closed
+            let! state = stats fixture
+            equal 1 state.Ready
+            do! post fixture.Runtime ServerRuntimeMessage.Stop
+            do! awaitUnit fixture.Runtime.Completion
+        })
+    }
+
     testTask "transport notification admits input independently of deadline timer" {
         let settings = { ServerRuntimeOptions.defaults with PollIntervalMs = 1000000; OpenTimeoutMs = 2000000; ShutdownTimeoutMs = 2000000 }
         do! withRuntime settings (fun fixture -> task {

@@ -5,6 +5,13 @@ ClientExchange. После создания им владеет один сет�
 Игровой/UI-поток получает изменения и статус через Exchange,
 без доступа к модели и transport.
 
+Сохранённый вход: `Connect(credentials, std::nullopt, true)`, затем при следующем
+запуске `ConnectSaved()`. `SignOut()` отзывает токен и удаляет запись Windows;
+`Disconnect()` сохраняет её. `ForgetSavedLogin()` — явное локальное удаление без сети.
+`ResetPassword(code, password)` завершает административный сброс.
+Статус содержит типизированные authOperation/authFailure и savedLogin/savedUsername;
+пароль и токен UI обратно не выдаются. [Полный контракт](../../docs/AuthenticationRu.md).
+
 ## Общий запуск и конфигурационный файл
 
 `import Dreamsleeve.Client.Application;` экспортирует `ClientSettings`,
@@ -35,7 +42,7 @@ auto accepted = (*app)->Connect({username, password});
 TryCreate проверяет настройки, владеет ENet runtime, Exchange и сетевым потоком.
 Connect принимает операцию без HTTP на вызывающем потоке. Одновременно допускается
 одна операция входа; новая отклоняется, пока идёт auth, disconnect или активна
-сессия. Каждый повторный Connect требует учётных данных и получает свежий билет;
+сессия. Connect по паролю получает свежий билет; ConnectSaved восстанавливает вход через Credential Manager;
 общий объект не сохраняет пароль для автоматических повторов.
 
 `Status()` возвращает текущие phase/authenticating/stopped и последнюю ошибку

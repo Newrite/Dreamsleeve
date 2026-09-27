@@ -71,7 +71,95 @@ let private stop (service: Agent<AuthMessage>) = task {
     equal (Some AgentStopReason.Completed) service.StopReason
 }
 
+let private remember service = task {
+    let! result = access service (AccountAccessCommand.RememberLogin(username "player", password))
+    match result with
+    | Ok (AccountAccessResult.SignedIn grant) -> return grant
+    | other -> return failtestf "Remember failed: %A" other
+}
+
 let tests = testList "Authentication service" [
+    case "saved login survives service restart and logout revokes only its own tickets" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use first = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
+        let! profile = register first
+        let! saved = remember first
+        equal 43 saved.RememberToken.Length
+        do! stop first
+
+        use second = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
+        let! resumed = access second (AccountAccessCommand.Resume saved.RememberToken)
+        let grant = match resumed with Ok (AccountAccessResult.SignedIn value) -> value | other -> failtestf "%A" other
+        equal profile grant.Profile
+        let! independent = login second
+        let! signedOut = access second (AccountAccessCommand.Logout saved.RememberToken)
+        equal (Ok AccountAccessResult.Completed) signedOut
+        let! denied = access second (AccountAccessCommand.Resume saved.RememberToken)
+        equal (Error AccountAccessError.InvalidCredentials) denied
+        let! ticketDenied = consume second grant.SessionTicket
+        equal (Error SessionAuthenticationError.InvalidTicket) ticketDenied
+        let! otherTicket = consume second independent.SessionTicket
+        equal (Ok profile) otherTicket
+        do! stop second
+    })
+
+    case "reset codes are one-use and revoke saved access and outstanding tickets" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
+        let! _ = register service
+        let! saved = remember service
+        let! issued = access service (AccountAccessCommand.CreatePasswordReset(username "player"))
+        let code = match issued with Ok (AccountAccessResult.PasswordResetCreated code) -> code | other -> failtestf "%A" other
+        let! oldTicket = consume service saved.SessionTicket
+        equal (Error SessionAuthenticationError.InvalidTicket) oldTicket
+        let! oldSaved = access service (AccountAccessCommand.Resume saved.RememberToken)
+        equal (Error AccountAccessError.InvalidCredentials) oldSaved
+        let replacement = "replacement-password-2026"
+        let! changed = access service (AccountAccessCommand.ResetPassword(code, replacement))
+        equal (Ok AccountAccessResult.Completed) changed
+        let! duplicate = access service (AccountAccessCommand.ResetPassword(code, password))
+        equal (Error AccountAccessError.InvalidCredentials) duplicate
+        let! oldPassword = access service (AccountAccessCommand.Login(username "player", password))
+        equal (Error AccountAccessError.InvalidCredentials) oldPassword
+        let! newPassword = access service (AccountAccessCommand.Login(username "player", replacement))
+        match newPassword with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
+        do! stop service
+    })
+
+    case "reissued and expired reset codes cannot change a password" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use service = start database.Config settings TimeProvider.System
+        let! _ = register service
+        let! first = access service (AccountAccessCommand.CreatePasswordReset(username "player"))
+        let! second = access service (AccountAccessCommand.CreatePasswordReset(username "player"))
+        let code = function Ok (AccountAccessResult.PasswordResetCreated code) -> code | other -> failtestf "%A" other
+        let! replaced = access service (AccountAccessCommand.ResetPassword(code first, "replacement-password"))
+        equal (Error AccountAccessError.InvalidCredentials) replaced
+        database.Execute "UPDATE auth_tokens SET expires_at=0 WHERE kind=1"
+        let! expired = access service (AccountAccessCommand.ResetPassword(code second, "replacement-password"))
+        equal (Error AccountAccessError.InvalidCredentials) expired
+        let! _ = login service
+        do! stop service
+    })
+
+    case "saved token expiry and per-account limit are enforced" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use service = start database.Config { settings with MaxSavedLogins = 1; MaxTickets = 10 } TimeProvider.System
+        let! _ = register service
+        let! old = remember service
+        let! current = remember service
+        let! evicted = access service (AccountAccessCommand.Resume old.RememberToken)
+        equal (Error AccountAccessError.InvalidCredentials) evicted
+        database.Execute "UPDATE auth_tokens SET expires_at=0"
+        let! expired = access service (AccountAccessCommand.Resume current.RememberToken)
+        equal (Error AccountAccessError.InvalidCredentials) expired
+        do! stop service
+    })
+
     case "password validation counts UTF-8 bytes and keeps whitespace significant" (fun () -> task {
         check (AuthService.validPassword " 1234567890 ") "Boundary spaces are part of the password."
         check (AuthService.validPassword (String.replicate 6 "я")) "Six Cyrillic characters are twelve UTF-8 bytes."

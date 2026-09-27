@@ -213,3 +213,9 @@ HTTP-ответ проверяет, что Disconnect во время регис
 отменённого HTTP-входа, единый статус в Status/Drain и согласованная выдача состояния
 при одновременных Publish/Drain. StateUpdateQueue сама не синхронизирует доступ;
 её отдельные тесты сериализуют обращения снаружи.
+
+Сохранённый вход: `Tests.CredentialStore.cpp` использует уникальную запись Windows
+и удаляет её при завершении; AuthServiceTests проверяет restart, TTL, лимит устройств,
+отзыв билетов и одноразовый reset. SqliteAccountStoreTests проверяет миграцию v1 → v2.
+`python Scripts/smoke_saved_auth.py` проходит полный путь через native Core, Credential
+Manager, HTTP, SQLite и ENet, включая отзыв живой сессии администратором.

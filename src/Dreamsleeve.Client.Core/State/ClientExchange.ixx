@@ -106,23 +106,43 @@ export namespace Dreamsleeve::Client
 
   using Credentials = Auth::Credentials;
 
+  enum class AuthOperation { None, PasswordLogin, Resume, SignOut, ForgetSavedLogin, ResetPassword };
+
   struct ClientStatus
   {
     SessionPhase phase{SessionPhase::Disconnected};
     bool         authenticating{};
     bool         stopped{};
     std::string  error;
+    Auth::FailureCode authFailure{};
+    AuthOperation authOperation{};
+    bool savedLogin{};
+    std::string savedUsername;
   };
 
-  struct LoginRequest
+  struct PasswordLogin
   {
-    Credentials                credentials;
+    static constexpr auto Operation = AuthOperation::PasswordLogin;
+    Credentials credentials;
     std::optional<std::string> registerName;
+    bool remember{};
   };
+
+  struct ResumeLogin { static constexpr auto Operation = AuthOperation::Resume; };
+  struct SignOutAccount { static constexpr auto Operation = AuthOperation::SignOut; };
+  struct ForgetLogin { static constexpr auto Operation = AuthOperation::ForgetSavedLogin; };
+  struct ResetAccountPassword
+  {
+    static constexpr auto Operation = AuthOperation::ResetPassword;
+    std::string code;
+    std::string password;
+  };
+
+  using AuthenticationRequest = std::variant<PasswordLogin, ResumeLogin, SignOutAccount, ForgetLogin, ResetAccountPassword>;
 
   struct ClientControl
   {
-    std::optional<LoginRequest> login;
+    std::optional<AuthenticationRequest> authentication;
     bool                        disconnect{};
   };
 
@@ -164,19 +184,27 @@ public:
 
     // Main thread. Lifecycle has a reserved slot, independent of game-command
     // capacity and reply backpressure. Admission does not mean authentication.
-    std::expected<void, std::string> PostLogin(Credentials credentials, std::optional<std::string> registerName = std::nullopt)
+    std::expected<void, std::string> PostLogin(Credentials credentials, std::optional<std::string> registerName = std::nullopt, bool remember = false)
+    {
+      return PostAuthentication(PasswordLogin{std::move(credentials), std::move(registerName), remember});
+    }
+
+    std::expected<void, std::string> PostAuthentication(AuthenticationRequest request)
     {
       std::lock_guard lock{mutex};
       if (inputClosed) return std::unexpected{"Client input is closed"};
-      if (
-        status.authenticating || disconnectRequested ||
-        (status.phase != SessionPhase::Disconnected && status.phase != SessionPhase::Faulted))
+      const auto operation = std::visit([](const auto& value) { return value.Operation; }, request);
+      const bool activeAllowed = operation == AuthOperation::SignOut || operation == AuthOperation::ForgetSavedLogin;
+      if (status.authenticating || disconnectRequested ||
+          (!activeAllowed && status.phase != SessionPhase::Disconnected && status.phase != SessionPhase::Faulted))
         return std::unexpected{"A connection operation or session is already active"};
 
-      loginCanceled         = false;
+      authenticationCanceled = false;
       status.authenticating = true;
+      status.authOperation = operation;
+      status.authFailure = Auth::FailureCode::None;
       status.error.clear();
-      pendingLogin.emplace(LoginRequest{std::move(credentials), std::move(registerName)});
+      pendingAuthentication.emplace(std::move(request));
       wake.notify_one();
       return {};
     }
@@ -186,7 +214,7 @@ public:
     {
       std::lock_guard lock{mutex};
       if (stopRequested || status.stopped) return;
-      loginCanceled       = true;
+      authenticationCanceled       = true;
       disconnectRequested = true;
       wake.notify_one();
     }
@@ -196,8 +224,8 @@ public:
       std::lock_guard lock{mutex};
       inputClosed   = true;
       stopRequested = true;
-      loginCanceled = true;
-      pendingLogin.reset();
+      authenticationCanceled = true;
+      pendingAuthentication.reset();
       wake.notify_one();
     }
 
@@ -211,15 +239,15 @@ public:
     ClientControl TakeControl()
     {
       std::lock_guard lock{mutex};
-      ClientControl   result{std::move(pendingLogin), std::exchange(disconnectRequested, false)};
-      pendingLogin.reset();
+      ClientControl   result{std::move(pendingAuthentication), std::exchange(disconnectRequested, false)};
+      pendingAuthentication.reset();
       return result;
     }
 
-    bool LoginCanceled() const
+    bool AuthenticationCanceled() const
     {
       std::lock_guard lock{mutex};
-      return loginCanceled;
+      return authenticationCanceled;
     }
 
     bool StopRequested() const
@@ -228,11 +256,23 @@ public:
       return stopRequested;
     }
 
-    void CompleteLogin(std::string error = {})
+    void CompleteAuthentication(std::string error = {}, Auth::FailureCode failure = Auth::FailureCode::None)
     {
       std::lock_guard lock{mutex};
       status.authenticating = false;
-      if (!loginCanceled && !error.empty()) status.error = std::move(error);
+      if (authenticationCanceled) status.authFailure = Auth::FailureCode::Canceled;
+      else
+      {
+        status.authFailure = failure;
+        if (!error.empty()) status.error = std::move(error);
+      }
+    }
+
+    void PublishSavedLogin(bool available, std::string username = {})
+    {
+      std::lock_guard lock{mutex};
+      status.savedLogin = available;
+      status.savedUsername = std::move(username);
     }
 
     void PublishError(std::string error)
@@ -244,7 +284,7 @@ public:
     void WaitForControl()
     {
       std::unique_lock lock{mutex};
-      wake.wait_for(lock, std::chrono::milliseconds{10}, [&] { return stopRequested || pendingLogin.has_value() || disconnectRequested; });
+      wake.wait_for(lock, std::chrono::milliseconds{10}, [&] { return stopRequested || pendingAuthentication.has_value() || disconnectRequested; });
     }
 
     // Shared by the network owner and its UI producer. Never reset on reconnect.
@@ -401,8 +441,8 @@ public:
       std::lock_guard lock{mutex};
       inputClosed   = true;
       stopRequested = true;
-      loginCanceled = true;
-      pendingLogin.reset();
+      authenticationCanceled = true;
+      pendingAuthentication.reset();
       commands.clear();
       status.authenticating = false;
       status.stopped        = true;
@@ -421,9 +461,9 @@ private:
     std::uint64_t                     nextRequestId{1};
     std::vector<CommandFailure>       pendingFailures;
     ClientStatus                      status;
-    std::optional<LoginRequest>       pendingLogin;
+    std::optional<AuthenticationRequest>       pendingAuthentication;
     bool                              disconnectRequested{};
-    bool                              loginCanceled{};
+    bool                              authenticationCanceled{};
     bool                              stopRequested{};
     StateUpdateQueue::Ptr             state;
     std::vector<ServerRejectionEvent> pendingRejections;

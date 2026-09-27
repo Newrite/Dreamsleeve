@@ -23,7 +23,7 @@ module AuthenticationHttp =
     let private MaxBodyBytes = 4096
 
     [<RequireQualifiedAccess>]
-    type private Operation = Register | Login
+    type private Operation = Register | Login | Resume | Logout | ResetPassword
 
     let private error (status: int) (code: string) (message: string) : IResult =
         Results.Json({| code = code; message = message |}, statusCode = status)
@@ -39,17 +39,35 @@ module AuthenticationHttp =
     let private command settings operation (body: JsonElement) =
         if body.ValueKind <> JsonValueKind.Object then Error (invalid ())
         else
-            let username = Username.create settings.Server.ChatInput.Username (field body "username")
-            let password = field body "password"
-            if not (AuthService.validPassword password) then Error (invalid ())
-            else
-                match username, operation with
-                | Error _, _ -> Error (invalid ())
-                | Ok username, Operation.Login -> Ok (AccountAccessCommand.Login(username, password))
-                | Ok username, Operation.Register ->
-                    match DisplayName.create settings.Server.ChatInput.DisplayName (field body "displayName") with
-                    | Ok displayName -> Ok (AccountAccessCommand.Register(username, displayName, password))
+            match operation with
+            | Operation.Resume | Operation.Logout ->
+                let secret = field body "token"
+                if not (AuthService.validToken secret) then Error (invalid ())
+                elif operation = Operation.Resume then Ok (AccountAccessCommand.Resume secret)
+                else Ok (AccountAccessCommand.Logout secret)
+            | Operation.ResetPassword ->
+                let code, password = field body "code", field body "password"
+                if AuthService.validToken code && AuthService.validPassword password then
+                    Ok (AccountAccessCommand.ResetPassword(code, password))
+                else Error (invalid ())
+            | Operation.Register | Operation.Login ->
+                let username = Username.create settings.Server.ChatInput.Username (field body "username")
+                let password = field body "password"
+                if not (AuthService.validPassword password) then Error (invalid ())
+                else
+                    match username with
                     | Error _ -> Error (invalid ())
+                    | Ok username ->
+                        if operation = Operation.Register then
+                            match DisplayName.create settings.Server.ChatInput.DisplayName (field body "displayName") with
+                            | Ok displayName -> Ok (AccountAccessCommand.Register(username, displayName, password))
+                            | Error _ -> Error (invalid ())
+                        else
+                            match body.TryGetProperty "rememberMe" with
+                            | false, _ -> Ok (AccountAccessCommand.Login(username, password))
+                            | true, value when value.ValueKind = JsonValueKind.False -> Ok (AccountAccessCommand.Login(username, password))
+                            | true, value when value.ValueKind = JsonValueKind.True -> Ok (AccountAccessCommand.RememberLogin(username, password))
+                            | true, _ -> Error (invalid ())
 
     let private read settings operation (context: HttpContext) token = task {
         if not (context.Request.HasJsonContentType()) then
@@ -80,8 +98,10 @@ module AuthenticationHttp =
         | Ok (AccountAccessResult.SignedIn grant) ->
             Results.Json({| playerId = PlayerId.value grant.Profile.PlayerId; username = Username.value grant.Profile.Username
                             displayName = DisplayName.value grant.Profile.DisplayName; sessionTicket = grant.SessionTicket
-                            expiresInSeconds = grant.ExpiresInSeconds |})
-        | Error AccountAccessError.InvalidCredentials -> error 401 "invalid_credentials" "Invalid username or password."
+                            expiresInSeconds = grant.ExpiresInSeconds; rememberToken = grant.RememberToken |})
+        | Ok AccountAccessResult.Completed -> Results.NoContent()
+        | Ok (AccountAccessResult.PasswordResetCreated _) -> unavailable () // Never exposed by a public route.
+        | Error AccountAccessError.InvalidCredentials -> error 401 "invalid_credentials" "Invalid or expired credentials."
         | Error AccountAccessError.UsernameTaken -> error 409 "username_taken" "Username is already registered."
         | Error AccountAccessError.Busy -> error 503 "busy" "Authentication is busy. Try again later."
         | Error AccountAccessError.Unavailable -> unavailable ()
@@ -168,4 +188,7 @@ module AuthenticationHttp =
         app.UseRateLimiter() |> ignore
         app.MapPost("/auth/register", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.Register)) |> ignore
         app.MapPost("/auth/login", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.Login)) |> ignore
+        app.MapPost("/auth/resume", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.Resume)) |> ignore
+        app.MapPost("/auth/logout", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.Logout)) |> ignore
+        app.MapPost("/auth/reset-password", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.ResetPassword)) |> ignore
         app

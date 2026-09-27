@@ -11,18 +11,55 @@ module Version =
 
 module main =
 
-    type accounts =
-        { id: int64
-          username: string
+    type account_identities =
+        { provider: string
+          subject: string
+          account_id: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "provider"; Value = box this.provider; ProviderDbType = None }
+                  { WriteColumn.Name = "subject"; Value = box this.subject; ProviderDbType = None }
+                  { WriteColumn.Name = "account_id"; Value = box this.account_id; ProviderDbType = None } ]
+
+    let account_identities = table<account_identities>
+
+    type account_passwords =
+        { account_id: int64
           password_hash: string }
 
         interface IWriteColumns with
             member this.WriteColumns =
-                [ { WriteColumn.Name = "id"; Value = box this.id; ProviderDbType = None }
-                  { WriteColumn.Name = "username"; Value = box this.username; ProviderDbType = None }
+                [ { WriteColumn.Name = "account_id"; Value = box this.account_id; ProviderDbType = None }
                   { WriteColumn.Name = "password_hash"; Value = box this.password_hash; ProviderDbType = None } ]
 
+    let account_passwords = table<account_passwords>
+
+    type accounts =
+        { id: int64
+          username: string }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "id"; Value = box this.id; ProviderDbType = None }
+                  { WriteColumn.Name = "username"; Value = box this.username; ProviderDbType = None } ]
+
     let accounts = table<accounts>
+
+    type auth_tokens =
+        { token_hash: string
+          account_id: int64
+          kind: int64
+          expires_at: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "token_hash"; Value = box this.token_hash; ProviderDbType = None }
+                  { WriteColumn.Name = "account_id"; Value = box this.account_id; ProviderDbType = None }
+                  { WriteColumn.Name = "kind"; Value = box this.kind; ProviderDbType = None }
+                  { WriteColumn.Name = "expires_at"; Value = box this.expires_at; ProviderDbType = None } ]
+
+    let auth_tokens = table<auth_tokens>
 
     type profiles =
         { player_id: int64

@@ -54,6 +54,28 @@ type Database() =
             if Directory.Exists directory then Directory.Delete(directory, true)
 
 let tests = testList "SQLite accounts" [
+    testCase "provider identity and saved session do not require a password credential" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        database.Execute "INSERT INTO accounts(id,username) VALUES(17,'external'); INSERT INTO profiles VALUES(23,17,'External'); INSERT INTO account_identities VALUES('steam','verified-subject',17)"
+        let identity = SqliteAccountStore.findIdentity database.Config "steam" "verified-subject" token |> ok |> Option.get
+        Expect.equal identity.AccountId 17L "Provider resolves an account, not a display name."
+        Expect.isNone (SqliteAccountStore.find database.Config (username "external") token |> ok) "No implicit password login."
+        SqliteAccountStore.remember database.Config identity.AccountId "test-token-hash" 0L 100L 8 token |> ok
+        let resumed = SqliteAccountStore.resume database.Config "test-token-hash" 1L token |> ok
+        Expect.equal resumed identity "Provider-independent token restores the same identity.")
+
+    testCase "version one database migrates without changing credentials or player identity" (fun () ->
+        use database = new Database()
+        // Reconstruct the deployed v1 schema and migration marker, then run normal startup.
+        database.Execute "CREATE TABLE accounts(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL); CREATE TABLE profiles(player_id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER NOT NULL UNIQUE REFERENCES accounts(id), display_name TEXT NOT NULL); CREATE TABLE __migrondi_migrations(id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL, timestamp BIGINT NOT NULL); INSERT INTO __migrondi_migrations VALUES (1, '1790467200000_accounts', 1790467200000); INSERT INTO accounts VALUES (17, 'legacy', 'legacy-hash'); INSERT INTO profiles VALUES (23,17,'Legacy'); PRAGMA application_id=1146309718; PRAGMA user_version=1"
+        SqliteAccountStore.initialize database.Config |> ok
+        let restored = SqliteAccountStore.find database.Config (username "legacy") token |> ok |> Option.get
+        Expect.equal restored.AccountId 17L "Account identity survives migration."
+        Expect.equal (PlayerId.value restored.Profile.PlayerId) 23UL "Player identity survives migration."
+        Expect.equal restored.PasswordHash "legacy-hash" "Password credential survives migration."
+        Expect.equal (database.Scalar "SELECT count(*) FROM account_identities WHERE provider='password' AND subject='legacy'") 1L "Local identity migrated.")
+
     testCase "restart preserves profile identity display name and password hash" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
@@ -67,8 +89,8 @@ let tests = testList "SQLite accounts" [
         Expect.equal restored.Profile profile "Persisted profile is unchanged."
         Expect.equal restored.PasswordHash "stored-password-hash" "The opaque password hash survives restart."
         Expect.isGreaterThan restored.AccountId 0L "Account IDs are positive."
-        Expect.equal (database.Scalar "PRAGMA user_version") 1L "The applied schema is recorded."
-        Expect.equal (database.Scalar "SELECT count(*) FROM __migrondi_migrations") 1L "Repeated startup does not reapply migration.")
+        Expect.equal (database.Scalar "PRAGMA user_version") 2L "The applied schema is recorded."
+        Expect.equal (database.Scalar "SELECT count(*) FROM __migrondi_migrations") 2L "Repeated startup does not reapply migration.")
 
     testCase "duplicate canonical username does not create an orphan profile or change its hash" (fun () ->
         use database = new Database()
@@ -128,10 +150,10 @@ let tests = testList "SQLite accounts" [
 
     testCase "a newer schema is rejected before changing the database" (fun () ->
         use database = new Database()
-        database.Execute "PRAGMA user_version = 2"
+        database.Execute "PRAGMA user_version = 3"
 
         Expect.isError (SqliteAccountStore.initialize database.Config) "Older binaries must not open a newer schema."
-        Expect.equal (database.Scalar "PRAGMA user_version") 2L "The version is preserved."
+        Expect.equal (database.Scalar "PRAGMA user_version") 3L "The version is preserved."
         Expect.equal (database.Scalar "SELECT count(*) FROM sqlite_master WHERE type = 'table'") 0L "No migrations were applied.")
 
     testCase "another application database and damaged schema are rejected" (fun () ->

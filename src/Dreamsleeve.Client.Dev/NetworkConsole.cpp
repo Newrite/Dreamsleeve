@@ -57,7 +57,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | send <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
 
   bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
@@ -142,6 +142,9 @@ namespace
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.status.phase) << '\n';
     if (output.status.authenticating) console << "auth=Pending\n";
+    else console << "auth=Idle operation=" << static_cast<int>(output.status.authOperation)
+                 << " failure=" << static_cast<int>(output.status.authFailure)
+                 << " saved=" << output.status.savedLogin << '\n';
     if (!output.status.error.empty()) console << "Client: " << output.status.error << '\n';
 
     for (const auto& update : output.state.updates)
@@ -231,30 +234,28 @@ namespace
 int RunNetworkConsole(int argc, char* argv[])
 {
   const bool fromFile    = argc >= 2 && std::string_view{argv[1]} == "--config";
-  const int  optionStart = fromFile ? 4 : 5;
-  if (argc < optionStart || (argc - optionStart) % 2 != 0)
-  {
-    std::cerr
-      << "Usage: --connect <IPv4> <port> <username> [--config <path>] [--auth-url <origin>] [--register <name>]\n" "       --config <path> <username> [--auth-url <origin>] [--register <name>]\n";
-    return 2;
-  }
-
+  const int usernameIndex = fromFile ? 3 : 4;
+  if (argc < usernameIndex) return 2;
+  const bool hasUsername = argc > usernameIndex && !std::string_view{argv[usernameIndex]}.starts_with("--");
+  const int optionStart = usernameIndex + (hasUsername ? 1 : 0);
+  bool remember = false;
+  bool saved = !hasUsername;
   std::optional<std::filesystem::path> configPath;
   if (fromFile) configPath = argv[2];
   std::optional<std::string> authUrl;
   std::optional<std::string> registerName;
-  for (int index = optionStart; index < argc; index += 2)
+  for (int index = optionStart; index < argc; ++index)
   {
     const std::string_view option{argv[index]};
-    if (option == "--config" && !fromFile)
-      configPath = argv[index + 1];
-    else if (option == "--auth-url")
-      authUrl = argv[index + 1];
-    else if (option == "--register")
-      registerName = argv[index + 1];
-    else
-      return 2;
+    if (option == "--remember") { remember = true; continue; }
+    if (option == "--saved") { saved = true; continue; }
+    if (index + 1 >= argc) return 2;
+    if (option == "--config" && !fromFile) configPath = argv[++index];
+    else if (option == "--auth-url") authUrl = argv[++index];
+    else if (option == "--register") registerName = argv[++index];
+    else return 2;
   }
+  if (saved && registerName) return 2;
 
   ClientSettings settings;
   if (configPath)
@@ -288,13 +289,17 @@ int RunNetworkConsole(int argc, char* argv[])
     return 2;
   }
 
-  auto password = Dreamsleeve::Client::Dev::ReadPassword();
-  if (!password)
+  Credentials credentials;
+  if (!saved)
   {
-    std::cerr << "Auth: " << password.error() << '\n';
-    return 2;
+    auto password = Dreamsleeve::Client::Dev::ReadPassword();
+    if (!password)
+    {
+      std::cerr << "Auth: " << password.error() << '\n';
+      return 2;
+    }
+    credentials = {argv[usernameIndex], std::move(*password)};
   }
-  const Credentials credentials{argv[fromFile ? 3 : 4], std::move(*password)};
   auto              movement = MovementView::TryCreate(settings.client.movement);
   if (!movement)
   {
@@ -309,7 +314,7 @@ int RunNetworkConsole(int argc, char* argv[])
     return 1;
   }
   auto& exchange = (*application)->Exchange();
-  if (auto started = (*application)->Connect(credentials, registerName); !started)
+  if (auto started = saved ? (*application)->ConnectSaved() : (*application)->Connect(credentials, registerName, remember); !started)
   {
     std::cerr << started.error() << '\n';
     return 1;
@@ -332,8 +337,21 @@ int RunNetworkConsole(int argc, char* argv[])
     {
       if (line == "disconnect")
         (*application)->Disconnect();
-      else if (auto connected = (*application)->Connect(credentials); !connected)
+      else if (auto connected = (saved || remember) ? (*application)->ConnectSaved() : (*application)->Connect(credentials); !connected)
         std::cout << connected.error() << '\n';
+    }
+    else if (line == "resume" || line == "signout" || line == "forget")
+    {
+      auto result = line == "resume" ? (*application)->ConnectSaved() :
+                    line == "signout" ? (*application)->SignOut() : (*application)->ForgetSavedLogin();
+      if (!result) std::cout << result.error() << '\n';
+    }
+    else if (line.starts_with("reset-password "))
+    {
+      auto password = Dreamsleeve::Client::Dev::ReadPassword();
+      if (!password) std::cout << password.error() << '\n';
+      else if (auto result = (*application)->ResetPassword(line.substr(15), std::move(*password)); !result)
+        std::cout << result.error() << '\n';
     }
     else if (line.starts_with("send ") || line.starts_with("chat "))
     {

@@ -392,3 +392,14 @@ batching: в прежней версии настройка MovementPacketTarget
 сошлись. На 1000 клиентах с группами по 25 получено 9,78 Гц и p95 130 мс.
 Плотные 500 и boundaries/1000 остаются перегруженными: сходимость после drain
 не означает устойчивые 10 Гц. Ни шардирование, ни настройки GC не добавлялись.
+
+## Сохранённая аутентификация
+
+Client.Core использует Windows Credential Manager для токена входа на выбранный
+сервер: ConnectSaved не требует повторного пароля/env. UI имеет Connect с remember,
+SignOut, ForgetSavedLogin и ResetPassword, читает типизированный результат через
+Exchange. SQLite schema v2 разделяет аккаунты, password credentials и provider
+identities; токены и reset-коды хранятся только как хеши. Серверная консоль поддерживает
+reset-password/revoke-access, отзыв закрывает игровое соединение. Будущая админка
+вызывает тот же доверенный API. Steam-проверка пока не реализована; общий grant и
+игровая сессия от способа входа не зависят. См. AuthenticationRu.md.

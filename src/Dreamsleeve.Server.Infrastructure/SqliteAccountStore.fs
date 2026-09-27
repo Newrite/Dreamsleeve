@@ -8,6 +8,11 @@ open SqlHydra.Query
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure.AccountSchema
 
+type StoredIdentity = {
+    AccountId: int64
+    Profile: PlayerData
+}
+
 type StoredAccount = {
     AccountId: int64
     Profile: PlayerData
@@ -17,6 +22,7 @@ type StoredAccount = {
 [<RequireQualifiedAccess>]
 type AccountStoreError =
     | UsernameTaken
+    | InvalidCredential
     | Canceled
     | Failed of exn
 
@@ -59,18 +65,19 @@ module SqliteAccountStore =
             let query = select {
                 for account in main.accounts do
                 join profile in main.profiles on (account.id = profile.account_id)
+                join password in main.account_passwords on (account.id = password.account_id)
                 where (account.username = name)
-                select (account, profile)
+                select (account, profile, password)
             }
 
             match context.SelectOne query with
             | None -> Ok None
-            | Some (account, profile) ->
+            | Some (account, profile, password) ->
                 toProfile username profile
-                |> Result.map (fun data -> Some { AccountId = account.id; Profile = data; PasswordHash = account.password_hash }))
+                |> Result.map (fun data -> Some { AccountId = account.id; Profile = data; PasswordHash = password.password_hash }))
 
-    let private insertAccount (context: QueryContext) username passwordHash =
-        let row: main.accounts = { id = 0L; username = Username.value username; password_hash = passwordHash }
+    let private insertAccount (context: QueryContext) username =
+        let row: main.accounts = { id = 0L; username = Username.value username }
         let query = insert {
             for account in main.accounts do
             entity row
@@ -87,9 +94,16 @@ module SqliteAccountStore =
             use transaction = context.Connection.BeginTransaction()
             context.Transaction <- Some transaction
 
-            match insertAccount context username passwordHash with
+            match insertAccount context username with
             | Error error -> Error error
             | Ok accountId ->
+                let password: main.account_passwords = { account_id = accountId; password_hash = passwordHash }
+                let credential = insert {
+                    for row in main.account_passwords do
+                    entity password
+                }
+                context.Insert credential |> ignore
+
                 let row: main.profiles = {
                     player_id = 0L
                     account_id = accountId
@@ -108,18 +122,116 @@ module SqliteAccountStore =
                     if token.IsCancellationRequested then
                         Error AccountStoreError.Canceled
                     else
+                        use identity = context.Connection.CreateCommand()
+                        identity.Transaction <- transaction
+                        identity.CommandText <- "INSERT INTO account_identities(provider, subject, account_id) VALUES ('password', @name, @id)"
+                        identity.Parameters.Add(SqliteParameter("@name", Username.value username)) |> ignore
+                        identity.Parameters.Add(SqliteParameter("@id", accountId)) |> ignore
+                        identity.ExecuteNonQuery() |> ignore
                         transaction.Commit()
                         Ok profile)
 
-    /// A concurrent password change wins over a stale rehash. A missed compare
-    /// is deliberately a successful no-op; it must never overwrite the new hash.
+    // These statements express transactional credential checks/deletes directly.
+    // All values are parameters; each operation runs on an admitted account worker.
+    let private command (context: QueryContext) sql (parameters: (string * obj) list) =
+        let command = context.Connection.CreateCommand()
+        context.Transaction |> Option.iter (fun transaction -> command.Transaction <- transaction)
+        command.CommandText <- sql
+        for name, value in parameters do command.Parameters.Add(SqliteParameter(name, value)) |> ignore
+        command
+
+    let private execute context sql parameters =
+        use statement = command context sql parameters
+        statement.ExecuteNonQuery()
+
+    /// Compare-and-swap prevents a stale rehash from overwriting changed credentials.
     let rehash config (username: Username) expectedHash replacementHash token =
         withContext config token (fun context ->
-            let name = Username.value username
-            let query = update {
-                for account in main.accounts do
-                set account.password_hash replacementHash
-                where (account.username = name && account.password_hash = expectedHash)
-            }
-            context.Update query |> ignore
+            execute context "UPDATE account_passwords SET password_hash=@replacement WHERE password_hash=@expected AND account_id=(SELECT id FROM accounts WHERE username=@name)"
+                [ "@replacement", box replacementHash; "@expected", box expectedHash; "@name", box (Username.value username) ] |> ignore
             Ok ())
+
+    let private readIdentity (reader: System.Data.Common.DbDataReader) =
+        if not (reader.Read()) then Ok None
+        else
+            match Username.create Int32.MaxValue (reader.GetString 1), PlayerId.create (uint64 (reader.GetInt64 2)), DisplayName.create Int32.MaxValue (reader.GetString 3) with
+            | Ok username, Ok playerId, Ok displayName when reader.GetInt64 0 > 0L ->
+                Ok (Some { AccountId = reader.GetInt64 0; Profile = PlayerData.create playerId username displayName })
+            | _ -> invalidData "Invalid stored account identity."
+
+    let findAccount config (username: Username) token =
+        withContext config token (fun context ->
+            use statement = command context
+                                "SELECT a.id, a.username, p.player_id, p.display_name FROM accounts a JOIN profiles p ON p.account_id=a.id WHERE a.username=@name"
+                                [ "@name", box (Username.value username) ]
+            use reader = statement.ExecuteReader()
+            readIdentity reader)
+
+    /// The provider adapter must verify its proof before resolving this mapping.
+    let findIdentity config provider subject token =
+        withContext config token (fun context ->
+            use statement = command context
+                                "SELECT a.id, a.username, p.player_id, p.display_name FROM account_identities i JOIN accounts a ON a.id=i.account_id JOIN profiles p ON p.account_id=a.id WHERE i.provider=@provider AND i.subject=@subject"
+                                [ "@provider", box provider; "@subject", box subject ]
+            use reader = statement.ExecuteReader()
+            readIdentity reader)
+
+    let private accountForToken context kind hash now =
+        use statement = command context
+                            "SELECT a.id, a.username, p.player_id, p.display_name FROM auth_tokens t JOIN accounts a ON a.id=t.account_id JOIN profiles p ON p.account_id=a.id WHERE t.token_hash=@hash AND t.kind=@kind AND t.expires_at>@now"
+                            [ "@hash", box hash; "@kind", box kind; "@now", box now ]
+        use reader = statement.ExecuteReader()
+        readIdentity reader |> Result.bind (function Some account -> Ok account | None -> Error AccountStoreError.InvalidCredential)
+
+    let private insertToken context accountId kind hash expires =
+        execute context "INSERT INTO auth_tokens(token_hash, account_id, kind, expires_at) VALUES (@hash, @id, @kind, @expires)"
+            [ "@hash", box hash; "@id", box accountId; "@kind", box kind; "@expires", box expires ] |> ignore
+
+    let remember config accountId hash now expires maxTokens token =
+        withContext config token (fun context ->
+            use transaction = context.Connection.BeginTransaction()
+            context.Transaction <- Some transaction
+            execute context "DELETE FROM auth_tokens WHERE expires_at<=@now" [ "@now", box now ] |> ignore
+            // Keep storage bounded per account. Oldest remembered devices expire first.
+            execute context "DELETE FROM auth_tokens WHERE token_hash IN (SELECT token_hash FROM auth_tokens WHERE account_id=@id AND kind=0 ORDER BY expires_at DESC LIMIT -1 OFFSET @keep)"
+                [ "@id", box accountId; "@keep", box (maxTokens - 1) ] |> ignore
+            insertToken context accountId 0 hash expires
+            transaction.Commit()
+            Ok ())
+
+    let resume config hash now token =
+        withContext config token (fun context -> accountForToken context 0 hash now)
+
+    let logout config hash token =
+        withContext config token (fun context ->
+            execute context "DELETE FROM auth_tokens WHERE token_hash=@hash AND kind=0" [ "@hash", box hash ] |> ignore
+            Ok ())
+
+    let revoke config accountId token =
+        withContext config token (fun context ->
+            execute context "DELETE FROM auth_tokens WHERE account_id=@id" [ "@id", box accountId ] |> ignore
+            Ok ())
+
+    let createReset config accountId hash expires token =
+        withContext config token (fun context ->
+            use transaction = context.Connection.BeginTransaction()
+            context.Transaction <- Some transaction
+            execute context "DELETE FROM auth_tokens WHERE account_id=@id" [ "@id", box accountId ] |> ignore
+            insertToken context accountId 1 hash expires
+            transaction.Commit()
+            Ok ())
+
+    let resetPassword config hash now passwordHash token =
+        withContext config token (fun context ->
+            use transaction = context.Connection.BeginTransaction()
+            context.Transaction <- Some transaction
+            match accountForToken context 1 hash now with
+            | Error error -> Error error
+            | Ok account ->
+                execute context "INSERT INTO account_passwords(account_id, password_hash) VALUES (@id, @password) ON CONFLICT(account_id) DO UPDATE SET password_hash=excluded.password_hash"
+                    [ "@password", box passwordHash; "@id", box account.AccountId ] |> ignore
+                execute context "INSERT INTO account_identities(provider, subject, account_id) VALUES ('password', @name, @id) ON CONFLICT(provider, subject) DO NOTHING"
+                    [ "@name", box (Username.value account.Profile.Username); "@id", box account.AccountId ] |> ignore
+                execute context "DELETE FROM auth_tokens WHERE account_id=@id" [ "@id", box account.AccountId ] |> ignore
+                transaction.Commit()
+                Ok account.Profile)

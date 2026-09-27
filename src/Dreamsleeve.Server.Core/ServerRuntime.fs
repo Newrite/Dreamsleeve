@@ -31,6 +31,7 @@ type ServerRuntimeMessage =
     | CleanupFailed of AgentSendFailure
     | Read of ReplyChannel<ServerRuntimeSnapshot>
     | FindPlayer of Guid * ReplyChannel<AgentRef<PlayerSessionMessage> option>
+    | RevokePlayer of PlayerId
     | Stop
 
 /// Routes managed transport events without waiting for domain agents.
@@ -408,6 +409,10 @@ module ServerRuntime =
         | ServerRuntimeMessage.SourceStopped(source, outcome) -> sourceStopped state context source outcome
         | ServerRuntimeMessage.Detached(source, connectionId) -> detached state source connectionId
         | ServerRuntimeMessage.CleanupFailed failure -> fail state context $"Session cleanup delivery failed: {failure}"
+        | ServerRuntimeMessage.RevokePlayer playerId ->
+            // Close pending authentication too: a consumed ticket's reply may still be in flight.
+            let affected = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.PlayerId = Some playerId || entry.Phase = SessionTable.Opening) |> Seq.toArray
+            for entry in affected do close options state context entry
         | ServerRuntimeMessage.Stop -> stop options state context
         | ServerRuntimeMessage.Read reply ->
             reply.Reply {
@@ -431,7 +436,7 @@ module ServerRuntime =
         | ServerRuntimeMessage.FindPlayer _ | ServerRuntimeMessage.TransportReady -> false
         | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick _ | ServerRuntimeMessage.Host _
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
-        | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.Stop -> true
+        | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.RevokePlayer _ | ServerRuntimeMessage.Stop -> true
 
     /// The caller owns authentication separately and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.

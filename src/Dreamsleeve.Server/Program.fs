@@ -13,7 +13,7 @@ open Dreamsleeve.Server.Infrastructure
 let private printHelp () =
     printfn "Dreamsleeve.Server [--config path.json] [--port 8778]"
     printfn "Dreamsleeve.Server --write-config path.json"
-    printfn "Configuration is read at startup. Commands: quit (or Ctrl+C)."
+    printfn "Configuration is read at startup. Commands: quit | reset-password <username> | revoke-access <username>."
 
 // Console.In may implement ReadLineAsync synchronously. One background reader
 // keeps console waiting separate from runtime failure/Ctrl+C observation.
@@ -29,7 +29,7 @@ let private readConsole (writer: ChannelWriter<string option>) (token: Cancellat
     | :? OperationCanceledException -> writer.TryComplete() |> ignore
     | error -> writer.TryComplete(error) |> ignore
 
-let private waitForStop (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) = task {
+let private waitForStop usernameLimit (authentication: Agent<AuthMessage>) (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) = task {
     use inputCancellation = new CancellationTokenSource()
     let input = Channel.CreateBounded<string option>(BoundedChannelOptions(1, SingleReader = true, SingleWriter = true))
     let _reader = Task.Run(Action(readConsole input.Writer inputCancellation.Token))
@@ -45,7 +45,20 @@ let private waitForStop (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) 
                 match line with
                 | None -> stopping <- true
                 | Some value when value.Trim().Equals("quit", StringComparison.OrdinalIgnoreCase) -> stopping <- true
-                | Some value when value.Trim().Length > 0 -> printfn "Commands: quit"
+                | Some value when value.Trim().Length > 0 ->
+                    let parts = value.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)
+                    if parts.Length = 2 && (parts[0] = "reset-password" || parts[0] = "revoke-access") then
+                        match Dreamsleeve.Server.Domain.Username.create usernameLimit parts[1] with
+                        | Error _ -> printfn "Invalid username."
+                        | Ok username ->
+                            let command = if parts[0] = "reset-password" then AccountAccessCommand.CreatePasswordReset username else AccountAccessCommand.RevokeAccount username
+                            let! result = authentication.AskAsync(fun reply -> AuthMessage.Access(command, reply))
+                            match result with
+                            | Ok (AccountAccessResult.PasswordResetCreated code) -> printfn "One-time reset code (deliver privately): %s" code
+                            | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
+                            | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) -> printfn "Unexpected administrative result."
+                            | Error error -> printfn "Administrative operation failed: %A" error
+                    else printfn "Commands: quit | reset-password <username> | revoke-access <username>"
                 | Some _ -> ()
             else
                 stopping <- true
@@ -89,10 +102,11 @@ let private serve settings authentication transport (logger: ILogger) (log: Seri
             try
                 let mutable exitCode = 0
                 try
+                    let! _ = authentication.PostAsync(AuthMessage.SetRevocationTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.RevokePlayer))
                     do! web.StartAsync()
                     logger.LogInformation("Listening on {Address}:{Port}. Authentication: {AuthenticationUrl}. Commands: quit",
                                           settings.Server.BindAddress, settings.Server.Port, settings.Authentication.ListenUrl)
-                    do! waitForStop runtime canceled.Task
+                    do! waitForStop settings.Server.ChatInput.Username authentication runtime canceled.Task
                 with error ->
                     logger.LogError(error, "Server listener failed")
                     exitCode <- 1

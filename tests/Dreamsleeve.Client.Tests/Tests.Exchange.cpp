@@ -368,22 +368,22 @@ TEST_CASE("Lifecycle admission and cancellation are independent of full game and
   REQUIRE(exchange->PostLogin({"player", "password-value"}));
   CHECK_FALSE(exchange->PostLogin({"other", "password-value"}));
   auto control = exchange->TakeControl();
-  REQUIRE(control.login);
+  REQUIRE(control.authentication);
   CHECK(exchange->Status().authenticating);
 
   exchange->RequestDisconnect();
-  CHECK(exchange->LoginCanceled());
+  CHECK(exchange->AuthenticationCanceled());
   CHECK(exchange->TakeControl().disconnect);
   CHECK_FALSE(exchange->PostLogin({"other", "password-value"}));
-  exchange->CompleteLogin("late failure from canceled HTTP");
+  exchange->CompleteAuthentication("late failure from canceled HTTP");
   CHECK(exchange->Status().error.empty());
   REQUIRE(exchange->PostLogin({"player", "new-password"}));
-  CHECK_FALSE(exchange->LoginCanceled());
+  CHECK_FALSE(exchange->AuthenticationCanceled());
 
   exchange->RequestStop();
   CHECK(exchange->StopRequested());
-  CHECK(exchange->LoginCanceled());
-  CHECK_FALSE(exchange->TakeControl().login);
+  CHECK(exchange->AuthenticationCanceled());
+  CHECK_FALSE(exchange->TakeControl().authentication);
   CHECK_FALSE(exchange->PostLogin({"player", "new-password"}));
   exchange->Finish();
   ClientOutput output;
@@ -397,9 +397,9 @@ TEST_CASE("Network status and drained status are one shared publication")
 {
   auto exchange = Exchange();
   REQUIRE(exchange->PostLogin({"player", "password-value"}));
-  REQUIRE(exchange->TakeControl().login);
+  REQUIRE(exchange->TakeControl().authentication);
   exchange->PublishPhase(SessionPhase::Connecting);
-  exchange->CompleteLogin();
+  exchange->CompleteAuthentication();
   exchange->PublishError("transport failure");
   exchange->PublishPhase(SessionPhase::Faulted);
   ClientOutput output;

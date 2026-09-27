@@ -92,7 +92,7 @@ target("Dreamsleeve.Client.Core")
     add_cpp_files("src/Dreamsleeve.Client.Core")
 
     add_deps("Dreamsleeve.Protocol.Native")
-    add_syslinks("winhttp", {public = true})
+    add_syslinks("winhttp", "advapi32", {public = true})
 
     add_packages("enet", {public = true})
     add_packages("spdlog", {public = true})

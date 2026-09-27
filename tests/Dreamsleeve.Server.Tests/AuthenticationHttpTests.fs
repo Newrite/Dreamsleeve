@@ -23,7 +23,7 @@ let private password = "Boundary-Password-2026!"
 let private profile = PlayerData.create (PlayerId.create 42UL |> ok)
                           (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok)
 let private ticket = String('a', 43)
-let private signedIn = Ok (AccountAccessResult.SignedIn { Profile = profile; SessionTicket = ticket; ExpiresInSeconds = 60 })
+let private signedIn = Ok (AccountAccessResult.SignedIn { Profile = profile; SessionTicket = ticket; ExpiresInSeconds = 60; RememberToken = "" })
 
 let private withHost customize execute run = task {
     let received = ConcurrentQueue<AccountAccessCommand>()
@@ -33,7 +33,7 @@ let private withHost customize execute run = task {
             received.Enqueue command
             execute command reply
         | AuthMessage.Start | AuthMessage.Finished _ | AuthMessage.ConsumeTicket _
-        | AuthMessage.WorkersStopped _ | AuthMessage.Stop -> failwith "Unexpected test authentication control."
+        | AuthMessage.WorkersStopped _ | AuthMessage.SetRevocationTarget _ | AuthMessage.RevocationFailed _ | AuthMessage.Stop -> failwith "Unexpected test authentication control."
     }
     use auth = Agent.Start(AgentOptions.create "http-test-auth", handle)
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()
@@ -69,11 +69,38 @@ let private code (response: HttpResponseMessage) = task {
 }
 
 let tests = testSequenced (testList "Authentication HTTP" [
+    case "remember resume logout and reset map to dedicated public commands" (fun () ->
+        let execute command (response: ReplyChannel<_>) =
+            match command with
+            | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ -> response.Reply signedIn
+            | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _ -> response.Reply (Ok AccountAccessResult.Completed)
+            | AccountAccessCommand.Register _ | AccountAccessCommand.Login _
+            | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ -> failtest "Unexpected public command"
+        withHost id execute (fun http received -> task {
+            use! remembered = post http "auth/login" {| username = "player"; password = password; rememberMe = true |}
+            status 200 remembered
+            use! resumed = post http "auth/resume" {| token = ticket |}
+            status 200 resumed
+            use! loggedOut = post http "auth/logout" {| token = ticket |}
+            status 204 loggedOut
+            use! reset = post http "auth/reset-password" {| code = ticket; password = password |}
+            status 204 reset
+            equal [| AccountAccessCommand.RememberLogin(Username.create 32 "player" |> ok, password)
+                     AccountAccessCommand.Resume ticket; AccountAccessCommand.Logout ticket
+                     AccountAccessCommand.ResetPassword(ticket, password) |] (received.ToArray())
+            use! invalidRemember = post http "auth/login" {| username = "player"; password = password; rememberMe = "true" |}
+            status 400 invalidRemember
+            use! admin = post http "auth/create-password-reset" {| username = "player" |}
+            status 404 admin
+        }))
+
     case "register and login validate domain input and return profiles without credential diagnostics" (fun () ->
         let execute command (response: ReplyChannel<_>) =
             match command with
             | AccountAccessCommand.Register _ -> response.Reply(Ok (AccountAccessResult.Registered profile))
             | AccountAccessCommand.Login _ -> response.Reply signedIn
+            | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ | AccountAccessCommand.Logout _
+            | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ -> failtest "Unexpected command"
         withHost id execute (fun http received -> task {
             use! created = post http "auth/register" {|
                 username = " PLAYER "; displayName = " e\u0301 "; password = password
@@ -88,7 +115,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
                 equal "player" (Username.value username)
                 equal "é" (DisplayName.value displayName)
                 equal password actualPassword
-            | AccountAccessCommand.Login _ -> failwith "Wrong registration command."
+            | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ | AccountAccessCommand.Logout _
+            | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ -> failwith "Wrong registration command."
 
             use! loggedIn = post http "auth/login" credentials
             status 200 loggedIn

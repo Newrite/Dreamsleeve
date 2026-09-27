@@ -6,7 +6,7 @@ are separate positive `INTEGER PRIMARY KEY AUTOINCREMENT` values. Their supporte
 range is `1..Int64.MaxValue`; the network still carries player IDs as `uint64`.
 Deleting an account cascades to its profile and never reuses committed IDs.
 
-`accounts.password_hash` contains the opaque ASP.NET Core Identity password hash.
+`account_passwords.password_hash` contains the opaque ASP.NET Core Identity password hash.
 Passwords, hashing, tickets and authorization are owned by the account service,
 outside the database functions. A password rehash uses compare-and-swap against
 the hash that was verified, so stale work cannot overwrite newer credentials.
@@ -71,3 +71,11 @@ The tests use isolated temporary databases. They cover restart persistence,
 canonical username conflicts, concurrent registration, full rollback on a profile
 insert failure, password hash compare-and-swap, cancellation, unsupported/damaged
 schema rejection, and ID non-reuse after deletion.
+
+Schema v2 moves optional password credentials out of accounts and adds
+`account_identities(provider, subject, account_id)` for verified provider mappings.
+`auth_tokens` stores SHA-256 hashes, account IDs, kind (0 saved login / 1 reset code),
+and absolute UTC expiry. Raw bearer tokens are never persisted in SQLite. The reset
+transaction consumes its code, replaces the password hash and revokes all account tokens.
+The account service also invalidates in-memory tickets and notifies the game runtime.
+Do not bypass that service by modifying live authentication rows from an admin UI.
