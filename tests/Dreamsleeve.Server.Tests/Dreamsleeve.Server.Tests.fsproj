@@ -25,6 +25,7 @@
     <Compile Include="PresenceAgentTests.fs" />
     <Compile Include="ServerRuntimeTests.fs" />
     <Compile Include="EnetTransportTests.fs" />
+    <Compile Include="TransportOwnerTests.fs" />
     <Compile Include="ConfigurationTests.fs" />
     <Compile Include="AuthenticationHttpTests.fs" />
     <Compile Include="Program.fs" />

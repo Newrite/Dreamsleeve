@@ -7,7 +7,9 @@ open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 
 let private movementBatch items =
-    items |> List.map (fun (id, location) -> ({ PlayerId = id; Location = location }: Dreamsleeve.Server.Domain.MovementChange)) |> List.toArray
+    items |> List.map (fun (id, location) ->
+        let pose = match location with ValueSome value -> MovementPose.ofLocation value | ValueNone -> { Position = Position.zero; Rotation = Rotation.zero; SampledAtUs = 0UL }
+        ({ PlayerId = id; ViewRevision = 1UL; Sequence = 0UL; Pose = pose }: Dreamsleeve.Server.Domain.MovementChange)) |> List.toArray
 
 let private config = ServerConfig.defaults
 
@@ -29,6 +31,7 @@ let private snapshot = Player.create profile |> Player.snapshot
 let private message =
     ChatMessage.create (ChatMessageId.create UInt64.MaxValue |> ok) channel profile
         (ChatMessageText.create 2000 "Привет\nworld" |> ok) (DateTimeOffset.FromUnixTimeMilliseconds(-1L))
+let private parseMovement bytes = Dreamsleeve.Protocol.Chat.ServerMovementPacket.Parser.ParseFrom(bytes: byte array)
 let private parse bytes = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes: byte array)
 let private send requestId text =
     Dreamsleeve.Protocol.Chat.ClientPacket(
@@ -49,8 +52,8 @@ let private updatePacket action =
 
 let private update action = updatePacket action |> decode
 
-let private movementPacket place =
-    Dreamsleeve.Protocol.Chat.UpdatePlayer(SampleMovement = Dreamsleeve.Protocol.Chat.SampleMovement(Location = place))
+let private locationPacket place =
+    Dreamsleeve.Protocol.Chat.UpdatePlayer(SetLocation = Dreamsleeve.Protocol.Chat.SetPlayerLocation(ContextRevision = 1UL, Location = place))
 
 let private valuesPacket entries =
     let values = Dreamsleeve.Protocol.Chat.ActorValues()
@@ -78,25 +81,25 @@ let tests = testList "Dreamsleeve.Server.Codec" [
     testCase "movement batches split exactly within configured packet limits" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
         let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved movements) |> ok
-        for limit in [12; 127; 128; packet.Length - 1; packet.Length] do
+        for limit in [32; 127; 128; packet.Length - 1; packet.Length] do
             let small = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = limit } |> ok
             let packets = ProtocolCodec.encodeMovementPackets small Int32.MaxValue movements |> ok
             let decoded = packets |> List.collect (fun bytes ->
                 Expect.isLessThanOrEqual bytes.Length limit "Application limit includes the whole envelope."
-                let value = parse bytes
-                Expect.isFalse value.HasRequestId "Notification batch."
-                value.PlayersMoved.Players |> Seq.map _.PlayerId |> List.ofSeq)
+                let value = parseMovement bytes
+                value.Movements.Players |> Seq.map _.PlayerId |> List.ofSeq)
             Expect.equal decoded [1UL .. 130UL] "Every entry exactly once and in order."
         let tiny = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = 1 } |> ok
         Expect.isError (ProtocolCodec.encodeMovementPackets tiny Int32.MaxValue movements) "An unsplittable entry fails before any send."
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch []))) "Empty batch is invalid."
 
-    testCase "default batching does not amplify packet count to avoid transport fragmentation" <| fun _ ->
+    testCase "default batching splits realtime below the transport fragmentation threshold" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 200UL -> pid id, ValueNone]
         let expected = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved movements) |> ok
         let packets = ProtocolCodec.encodeMovementPackets codec 548 movements |> ok
         Expect.isGreaterThan expected.Length 548 "Fixture crosses the transport fragmentation threshold."
-        Expect.equal packets [expected] "Default keeps one valid reliable packet; ENet owns fragmentation."
+        Expect.isGreaterThan packets.Length 1 "Realtime splits at MTU even without an explicit target."
+        for bytes in packets do Expect.isLessThanOrEqual bytes.Length 548 "No reliable fragmentation fallback."
 
     testCase "movement target is clamped by negotiated transport and application budgets" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
@@ -106,37 +109,29 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             let budget = min target (min transport application)
             let ids = packets |> List.collect (fun bytes ->
                 Expect.isLessThanOrEqual bytes.Length budget "Whole protobuf envelope fits."
-                (parse bytes).PlayersMoved.Players |> Seq.map _.PlayerId |> Seq.toList)
+                (parseMovement bytes).Movements.Players |> Seq.map _.PlayerId |> Seq.toList)
             Expect.isGreaterThan packets.Length 1 "Fixture requires splitting."
             Expect.equal ids [1UL .. 130UL] "Splitting preserves every entry and order."
         Expect.isError (ProtocolCodec.encodeMovementPackets codec 0 movements) "Unavailable peer cannot encode movement."
 
-    testCase "an indivisible movement can fragment alone but cannot bypass application limit" <| fun _ ->
-        let wire = wireLocation ()
-        wire.Location.LocationId.PluginName <- String.replicate 240 "a" + ".esm"
-        wire.Location.LocationName <- String.replicate 128 "界"
-        let location = wire |> movementPacket |> update |> playerUpdate |> apply |> _.Location
-        let single = movementBatch [pid 2UL, location]
-        let singleSize = (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved single) |> ok).Length
-        let movements = movementBatch [pid 1UL, ValueNone; pid 2UL, location; pid 3UL, ValueNone]
-        let configured = configured { config with MovementPacketTargetBytes = 1200 }
-        let packets = ProtocolCodec.encodeMovementPackets configured 548 movements |> ok
-        Expect.equal (packets |> List.map (fun bytes -> (parse bytes).PlayersMoved.Players.Count)) [1; 1; 1] "Fallback is isolated."
-        Expect.isGreaterThan singleSize 548 "Long labels exceed the negotiated payload budget."
-        Expect.equal packets[1].Length singleSize "Large entry is retained intact."
-        let strict = ProtocolCodec.create { config with MaxPacketBytes = singleSize - 1 } |> ok
-        Expect.isError (ProtocolCodec.encodeMovementPackets strict 548 movements) "No partial result when any entry exceeds the strict cap."
+    testCase "indivisible realtime never falls back to fragmentation" <| fun _ ->
+        let single = movementBatch [pid UInt64.MaxValue, ValueNone]
+        let size = (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved single) |> ok).Length
+        Expect.isOk (ProtocolCodec.encodeMovementPackets codec size single) "Exact MTU boundary fits."
+        Expect.isError (ProtocolCodec.encodeMovementPackets codec (size - 1) single) "Oversized entry rejects the entire batch."
+        let strict = configured { config with MaxPacketBytes = size - 1 }
+        Expect.isError (ProtocolCodec.encodeMovementPackets strict 548 single) "Application cap also applies."
 
     testCase "source movement timestamp survives domain and both replication shapes" <| fun _ ->
         for stamp in [0UL; 123456789UL; UInt64.MaxValue] do
             let wire = wireLocation()
             wire.SampledAtUs <- stamp
-            let state = movementPacket wire |> update |> playerUpdate |> apply
+            let state = locationPacket wire |> update |> playerUpdate |> apply
             let location = state.Location |> ValueOption.get
             Expect.equal location.SampledAtUs stamp "No clock conversion on the server."
 
-            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, state.Location])) |> ok |> parse
-            Expect.equal moved.PlayersMoved.Players[0].Location.SampledAtUs stamp "Compact movement retains time."
+            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, state.Location])) |> ok |> parseMovement
+            Expect.equal moved.Movements.Players[0].Pose.SampledAtUs stamp "Compact movement retains time."
             let full = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             Expect.equal full.PlayerUpdated.Player.Location.SampledAtUs stamp "Snapshots retain the same measurement."
 
@@ -340,12 +335,12 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             (ProtocolCodecFailure.InvalidPayload "actor_value.value") "unset is not scalar zero"
 
     testCase "present zero coordinates are distinct from an unknown location" <| fun _ ->
-        let decoded = movementPacket (wireLocation()) |> update |> playerUpdate |> apply
+        let decoded = locationPacket (wireLocation()) |> update |> playerUpdate |> apply
         let place = decoded.Location |> ValueOption.get
         Expect.equal place.Position Position.zero "all-zero coordinates are valid"
         Expect.equal place.Rotation Rotation.zero "all-zero radians are valid"
         Expect.equal (PluginName.value place.Location.LocationId.PluginName) "skyrim.esm" "canonical identity"
-        let noLocation = movementPacket null |> update |> playerUpdate |> apply
+        let noLocation = locationPacket null |> update |> playerUpdate |> apply
         Expect.equal noLocation.Location ValueNone "unknown is represented by presence"
         for field in [0; 1; 2; 3] do
             let broken = wireLocation()
@@ -354,7 +349,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             | 1 -> broken.Location.LocationId <- null
             | 2 -> broken.Position <- null
             | _ -> broken.Rotation <- null
-            Expect.equal (movementPacket broken |> update |> error).Failure
+            Expect.equal (locationPacket broken |> update |> error).Failure
                 (ProtocolCodecFailure.InvalidPayload "location") "partial location rejected"
 
     testCase "nonfinite telemetry rejects the complete sample and preserves request correlation" <| fun _ ->
@@ -368,7 +363,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 | 3 -> place.Rotation.X <- bad
                 | 4 -> place.Rotation.Y <- bad
                 | _ -> place.Rotation.Z <- bad
-                let failure = movementPacket place |> update |> error
+                let failure = locationPacket place |> update |> error
                 Expect.equal failure.RequestId (Some 91UL) "caller can reject without applying the sample"
                 match failure.Failure with
                 | ProtocolCodecFailure.InvalidDomain(DomainError.NonFiniteNumber _) -> ()
@@ -403,8 +398,8 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (decodeWith shortName (beginName "Жа")) "character limit"
 
         let place = wireLocation()
-        Expect.isError (decodeWith {limits with PluginName = 2} (movementPacket place)) "plugin key limit"
-        Expect.isError (decodeWith {limits with LocationName = 2} (movementPacket place)) "place label limit"
+        Expect.isError (decodeWith {limits with PluginName = 2} (locationPacket place)) "plugin key limit"
+        Expect.isError (decodeWith {limits with LocationName = 2} (locationPacket place)) "place label limit"
 
         let entry = scalarEntry "skyrim:health" 0.0f
         entry.DisplayName <- "Health"
@@ -436,12 +431,12 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isNotNull ack.PlayerUpdateAccepted "empty but present acknowledgement"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdateAccepted 0UL)) "zero acknowledgement ID rejected"
 
-        for place in [state.Location; ValueNone] do
-            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, place])) |> ok |> parse
-            Expect.isFalse moved.HasRequestId "movement has no command correlation"
-            Expect.equal moved.PlayersMoved.Players[0].PlayerId 7UL "identity retained"
-            Expect.equal (isNull moved.PlayersMoved.Players[0].Location) place.IsNone "unknown location survives"
-            Expect.isNull moved.PlayerUpdated "movement does not resend actor values"
+        let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone])) |> ok |> parseMovement
+        Expect.equal moved.Movements.Players[0].PlayerId 7UL "Realtime identity."
+        Expect.equal moved.Movements.Players[0].ViewRevision 1UL "Visibility revision."
+        let clear = ProtocolCodec.encodeServer codec (ServerResponse.PlayerVisibilityChanged {
+            PlayerId = pid 7UL; ViewRevision = 2UL; Sequence = 0UL; Location = ValueNone }) |> ok |> parse
+        Expect.isNull clear.PlayerVisibilityChanged.Location "Visibility clears are reliable control."
 
     testCase "rich details roundtrip preserves optional zero time and descriptive places" <| fun _ ->
         let source = Dreamsleeve.Protocol.Chat.PlayerDetails(
@@ -517,4 +512,42 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             let timestamp = valid()
             timestamp.GameStartedAtUnixMs <- boundary
             Expect.isOk (update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = timestamp))) "DateTimeOffset boundary is valid"
+    testCase "realtime decoding validates independent context and sequence without request correlation" <| fun _ ->
+        let sample () = Dreamsleeve.Protocol.Chat.MovementSample(ContextRevision = 3UL, Sequence = 9UL,
+            Pose = Dreamsleeve.Protocol.Chat.MovementPose(Position = Dreamsleeve.Protocol.Chat.Position(),
+                Rotation = Dreamsleeve.Protocol.Chat.Rotation(), SampledAtUs = UInt64.MaxValue))
+        let packet = Dreamsleeve.Protocol.Chat.ClientMovementPacket(ProtocolVersion = ProtocolCodec.Version, Sample = sample())
+        let decode () = ProtocolCodec.decodeMovement codec (packet.ToByteArray())
+        let actual = decode() |> ok
+        Expect.equal actual.ContextRevision 3UL "Coordinate context retained."
+        Expect.equal actual.Sequence 9UL "No request ID is involved."
+        Expect.equal actual.Pose.SampledAtUs UInt64.MaxValue "Clock retained without signed narrowing."
+        for malformed in [0; 1; 2; 3; 4] do
+            packet.Sample <- sample()
+            match malformed with
+            | 0 -> packet.Sample.ContextRevision <- 0UL
+            | 1 -> packet.Sample.Sequence <- 0UL
+            | 2 -> packet.Sample.Pose <- null
+            | 3 -> packet.Sample.Pose.Position <- null
+            | _ -> packet.Sample.Pose.Position.X <- Single.NaN
+            let rejected = decode() |> error
+            Expect.equal rejected.RequestId None "Malformed telemetry cannot create a command response."
+        packet.Sample <- null
+        Expect.isError (decode()) "Missing sample rejected."
+        packet.Sample <- sample()
+        packet.ProtocolVersion <- ProtocolCodec.Version - 1u
+        Expect.isError (decode()) "Old protocol rejected."
+        for bytes in [null; [||]; [|0xffuy|]; Array.zeroCreate (config.MaxPacketBytes + 1)] do
+            Expect.isError (ProtocolCodec.decodeMovement codec bytes) "Boundary rejects malformed or oversized telemetry."
+
+    testCase "delivery lanes isolate chat control and realtime" <| fun _ ->
+        Expect.equal (send 1UL "hello" |> decode |> ok |> ProtocolCodec.requestLane) DeliveryLane.Chat "Chat request."
+        let location = locationPacket (wireLocation()) |> update |> ok
+        Expect.equal (ProtocolCodec.requestLane location) DeliveryLane.Control "Location is reliable control."
+        let rejection = { Code = RequestRejectionCode.Overloaded; Message = "busy"; Field = "" }
+        for response in [ServerResponse.ChatPublished message; ServerResponse.ChatAccepted(1UL, message); ServerResponse.ChatRejected(1UL, rejection)] do
+            Expect.equal (ProtocolCodec.responseLane response) DeliveryLane.Chat "Chat response remains on chat channel."
+        for response in [ServerResponse.PlayerJoined snapshot; ServerResponse.PlayerUpdateAccepted 1UL; ServerResponse.RequestRejected(1UL, rejection)] do
+            Expect.equal (ProtocolCodec.responseLane response) DeliveryLane.Control "Lifecycle and command replies."
+        Expect.equal (ProtocolCodec.responseLane (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone]))) DeliveryLane.Realtime "Movement envelope is independent."
 ]

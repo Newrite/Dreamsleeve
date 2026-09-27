@@ -10,11 +10,22 @@ open Dreamsleeve.Server.Domain
 /// Owns online membership and the latest detached state used by snapshot and deltas.
 [<RequireQualifiedAccess>]
 module PresenceAgent =
+    type private View = {
+        SourceConnection: Guid
+        SourceCharacter: uint64
+        SourceContext: uint64
+        ObserverCharacter: uint64
+        ObserverContext: uint64
+        Revision: uint64
+    }
+
     type private Member = {
         ConnectionId: Guid
         Events: ReliableAgentRef<PresenceEvent>
         mutable Latest: PlayerSnapshot
         mutable Published: PlayerSnapshot
+        Views: Dictionary<PlayerId, View>
+        mutable NextRevision: uint64
     }
 
     type private State = {
@@ -24,7 +35,6 @@ module PresenceAgent =
         Candidates: HashSet<Guid>
         Movements: ResizeArray<MovementChange>
         LatestIndex: SpatialIndex.State
-        PublishedIndex: SpatialIndex.State
         mutable Ticker: AgentTicker option
         mutable LastFlush: int64
         VisibilityDistanceSquared: double
@@ -44,7 +54,7 @@ module PresenceAgent =
             state.Players.Remove playerId |> ignore
             state.Dirty.Remove playerId |> ignore
             SpatialIndex.remove connectionId state.LatestIndex
-            SpatialIndex.remove connectionId state.PublishedIndex
+            for observer in state.Members.Values do observer.Views.Remove playerId |> ignore
             Some playerId
 
     let private deliver state context (subscriber: Member) event =
@@ -82,12 +92,43 @@ module PresenceAgent =
                 | ValueSome _ | ValueNone -> ValueNone
             | ValueNone, _ | _, ValueNone -> ValueNone
 
-    let private project state observer (source: PlayerSnapshot) =
-        { source with Location = visibleLocation state observer source }
+    let private nextRevision observer =
+        observer.NextRevision <- observer.NextRevision + 1UL
+        observer.NextRevision
+
+    let private sameView observer source view =
+        view.SourceConnection = source.ConnectionId
+        && view.SourceCharacter = source.Latest.CharacterGeneration
+        && view.SourceContext = source.Latest.MovementContext
+        && view.ObserverCharacter = observer.Latest.CharacterGeneration
+        && view.ObserverContext = observer.Latest.MovementContext
+
+    let private establishView observer source =
+        let playerId = source.Latest.Data.PlayerId
+        match observer.Views.TryGetValue playerId with
+        | true, view when sameView observer source view -> view, false
+        | true, _ | false, _ ->
+            let view = {
+                SourceConnection = source.ConnectionId
+                SourceCharacter = source.Latest.CharacterGeneration
+                SourceContext = source.Latest.MovementContext
+                ObserverCharacter = observer.Latest.CharacterGeneration
+                ObserverContext = observer.Latest.MovementContext
+                Revision = nextRevision observer
+            }
+            observer.Views[playerId] <- view
+            view, true
+
+    let private project state observer source =
+        match visibleLocation state observer.Latest source.Latest with
+        | ValueNone -> { source.Latest with Location = ValueNone; ViewRevision = 0UL }
+        | ValueSome location ->
+            let view, _ = establishView observer source
+            { source.Latest with Location = ValueSome location; ViewRevision = view.Revision }
 
     let private snapshot state observer =
         state.Members.Values
-        |> Seq.map (fun memberState -> project state observer memberState.Latest)
+        |> Seq.map (project state observer)
         |> Seq.sortBy _.Data.PlayerId
         |> List.ofSeq
 
@@ -103,7 +144,7 @@ module PresenceAgent =
     let private publishGlobal state context observer source =
         if state.Members.ContainsKey observer.ConnectionId && state.Members.ContainsKey source.ConnectionId then
             if not (identityEqual source.Published source.Latest) then
-                deliverDelta state context observer (PresenceEvent.Updated(project state observer.Latest source.Latest))
+                deliverDelta state context observer (PresenceEvent.Updated { source.Latest with Location = ValueNone; ViewRevision = 0UL })
             else
                 let values =
                     if source.Published.ActorValues = source.Latest.ActorValues then ValueNone
@@ -113,56 +154,80 @@ module PresenceAgent =
                     else ValueSome source.Latest.Details
                 deliverDelta state context observer (PresenceEvent.MetadataChanged(source.Latest.Data.PlayerId, values, details))
 
-    let private publishMovement state context (changed: HashSet<Guid>) observer =
+    let private publishMovement state context sendSamples observer =
         let candidates = state.Candidates
         candidates.Clear()
-        SpatialIndex.neighbors observer.Published.Location state.PublishedIndex candidates
         SpatialIndex.neighbors observer.Latest.Location state.LatestIndex candidates
         candidates.Add observer.ConnectionId |> ignore
-        let observerMoved = observer.Published.Location <> observer.Latest.Location
+        // Include old visible pairs so leaving the radius clears their baselines.
+        for playerId in observer.Views.Keys do
+            match state.Players.TryGetValue playerId with
+            | true, connectionId -> candidates.Add connectionId |> ignore
+            | false, _ -> ()
+
         let movements = state.Movements
         movements.Clear()
-
         for id in candidates do
             match state.Members.TryGetValue id with
-            | true, source when (observerMoved || changed.Contains id) && identityEqual source.Published source.Latest ->
-                let previous = visibleLocation state observer.Published source.Published
-                let latest = visibleLocation state observer.Latest source.Latest
-                if previous <> latest then movements.Add { PlayerId = source.Latest.Data.PlayerId; Location = latest }
+            | true, source when state.Members.ContainsKey observer.ConnectionId ->
+                let playerId = source.Latest.Data.PlayerId
+                match visibleLocation state observer.Latest source.Latest with
+                | ValueSome location ->
+                    let view, changed = establishView observer source
+                    if changed then
+                        let baseline = {
+                            PlayerId = playerId; ViewRevision = view.Revision
+                            Sequence = source.Latest.MovementSequence; Location = ValueSome location
+                        }
+                        deliverDelta state context observer (PresenceEvent.VisibilityChanged baseline)
+
+                    if sendSamples then
+                        movements.Add {
+                            PlayerId = playerId; ViewRevision = view.Revision
+                            Sequence = source.Latest.MovementSequence; Pose = MovementPose.ofLocation location
+                        }
+                | ValueNone ->
+                    if observer.Views.Remove playerId then
+                        let cleared = {
+                            PlayerId = playerId; ViewRevision = nextRevision observer
+                            Sequence = 0UL; Location = ValueNone
+                        }
+                        deliverDelta state context observer (PresenceEvent.VisibilityChanged cleared)
             | true, _ | false, _ -> ()
 
         if movements.Count > 0 && state.Members.ContainsKey observer.ConnectionId then
-            // Only one recipient's candidate set and batch are built at a time.
-            // A slow recipient's Left cannot be followed by its stale coordinates.
             let ordered = movements.ToArray()
             Array.sortInPlaceBy (fun (change: MovementChange) -> change.PlayerId) ordered
-            // The detached array belongs to the recipient. Scratch must not retain samples.
-            movements.Clear()
-            candidates.Clear()
-            deliverDelta state context observer (PresenceEvent.Moved ordered)
+            match observer.Events.TryPost (PresenceEvent.Moved ordered) with
+            | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Full -> ()
+            | AgentTryDeliveryResult.Closed ->
+                match remove state observer.ConnectionId with
+                | Some playerId -> broadcast state context None (PresenceEvent.Left playerId)
+                | None -> ()
 
-    let private publishDirty state context =
-        if state.Dirty.Count > 0 then
-            // Both spatial indexes and baselines stay frozen for the whole flush.
-            let members = state.Members.Values |> Seq.toArray
-            let changed = members |> Array.filter (fun memberState -> state.Dirty.Contains memberState.Latest.Data.PlayerId)
-            let changedIds = HashSet<Guid>(changed |> Seq.map _.ConnectionId)
-            state.Dirty.Clear()
-            let globalChanges =
-                changed |> Array.filter (fun source ->
-                    not (identityEqual source.Published source.Latest)
-                    || source.Published.ActorValues <> source.Latest.ActorValues
-                    || source.Published.Details <> source.Latest.Details)
+        movements.Clear()
+        candidates.Clear()
 
-            for observer in members do
-                for source in globalChanges do publishGlobal state context observer source
-                if state.Members.ContainsKey observer.ConnectionId then
-                    publishMovement state context changedIds observer
+    let private publishDirty state context sendSamples =
+        // A single agent turn freezes latest state for all observers. Dirty only
+        // controls metadata; positions repeat even when every source has stopped.
+        let members = state.Members.Values |> Seq.toArray
+        let changed = members |> Array.filter (fun memberState -> state.Dirty.Contains memberState.Latest.Data.PlayerId)
+        state.Dirty.Clear()
+        let globalChanges =
+            changed |> Array.filter (fun source ->
+                not (identityEqual source.Published source.Latest)
+                || source.Published.ActorValues <> source.Latest.ActorValues
+                || source.Published.Details <> source.Latest.Details)
 
-            for memberState in changed do
-                if state.Members.ContainsKey memberState.ConnectionId then
-                    memberState.Published <- memberState.Latest
-                    SpatialIndex.set memberState.ConnectionId memberState.Published.Location state.PublishedIndex
+        for observer in members do
+            for source in globalChanges do publishGlobal state context observer source
+            if state.Members.ContainsKey observer.ConnectionId then
+                publishMovement state context sendSamples observer
+
+        for memberState in changed do
+            if state.Members.ContainsKey memberState.ConnectionId then
+                memberState.Published <- memberState.Latest
 
     let private join state context (subscription: PresenceSubscription) =
         let existedBefore = state.Members.ContainsKey subscription.ConnectionId
@@ -181,7 +246,7 @@ module PresenceAgent =
             // Bring existing recipients to the same baseline before handing a new
             // subscriber the latest snapshot. Otherwise B -> join -> A could leave
             // the new subscriber at B when A equals the old published baseline.
-            publishDirty state context
+            publishDirty state context false
             // A slow existing subscriber removed by this flush must stay removed.
             if not existedBefore || state.Members.ContainsKey subscription.ConnectionId then
                 let existing = state.Members.ContainsKey subscription.ConnectionId
@@ -191,13 +256,13 @@ module PresenceAgent =
                     | false, _ -> {
                         ConnectionId = subscription.ConnectionId; Events = subscription.Events
                         Latest = subscription.Snapshot; Published = subscription.Snapshot
+                        Views = Dictionary(); NextRevision = 0UL
                       }
                 state.Members[subscription.ConnectionId] <- memberState
                 state.Players[subscription.Snapshot.Data.PlayerId] <- subscription.ConnectionId
                 SpatialIndex.set memberState.ConnectionId memberState.Latest.Location state.LatestIndex
-                SpatialIndex.set memberState.ConnectionId memberState.Published.Location state.PublishedIndex
 
-                match deliver state context memberState (PresenceEvent.Snapshot(snapshot state memberState.Latest)) with
+                match deliver state context memberState (PresenceEvent.Snapshot(snapshot state memberState)) with
                 | Some playerId when existing -> broadcast state context None (PresenceEvent.Left playerId)
                 | Some _ -> ()
                 | None when not existing ->
@@ -206,7 +271,7 @@ module PresenceAgent =
                         if recipient.ConnectionId <> subscription.ConnectionId
                            && state.Members.ContainsKey recipient.ConnectionId
                            && state.Members.ContainsKey subscription.ConnectionId then
-                            let joined = project state recipient.Latest memberState.Latest
+                            let joined = project state recipient memberState
                             deliverDelta state context recipient (PresenceEvent.Joined joined)
                 | None -> ()
 
@@ -236,11 +301,13 @@ module PresenceAgent =
 
     let private handle config state (context: AgentContext<PresenceCommand>) command = task {
         match command with
-        | PresenceCommand.Join subscription -> join state context subscription
+        | PresenceCommand.Join subscription ->
+            join state context subscription
+            schedule config state context
         | PresenceCommand.Update(connectionId, value) -> update config state context connectionId value
         | PresenceCommand.Flush notification ->
             let time = Environment.TickCount64
-            if state.Dirty.Count > 0 then
+            if state.Members.Count > 0 then
                 if state.LastFlush <> 0L then RuntimeMetrics.presenceInterval.Record(float (time - state.LastFlush))
                 state.LastFlush <- time
             else
@@ -250,7 +317,7 @@ module PresenceAgent =
             RuntimeMetrics.presenceTimerLateness.Record(Stopwatch.GetElapsedTime(notification.DueTimestamp, notification.QueuedTimestamp).TotalMilliseconds)
             RuntimeMetrics.presenceQueueDelay.Record(Stopwatch.GetElapsedTime(notification.QueuedTimestamp).TotalMilliseconds)
             let started = Stopwatch.GetTimestamp()
-            publishDirty state context
+            publishDirty state context true
             RuntimeMetrics.presenceFlush.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
             state.Ticker |> Option.iter _.Acknowledge()
         | PresenceCommand.Detach request -> detach state context request
@@ -276,7 +343,6 @@ module PresenceAgent =
                 Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
                 Candidates = HashSet(); Movements = ResizeArray()
                 LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
-                PublishedIndex = SpatialIndex.create (double config.VisibilityDistance)
                 VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
                 Ticker = None; LastFlush = 0L; Host = AgentOutbox(config.MaxControlDeliveries, host)
             }

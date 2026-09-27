@@ -51,11 +51,11 @@ let private until condition pump =
 let private withPeersAtMtu mtu run =
     Expect.equal (enet.ENET_API.enet_initialize()) 0 "initialize"
     try
-        use server = EnetHost.Create(address 0us, 1un, 2un, 0u, 0u, EnetHostOption.Ipv4)
-        use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 2un, 0u, 0u, EnetHostOption.Ipv4)
+        use server = EnetHost.Create(address 0us, 1un, 3un, 0u, 0u, EnetHostOption.Ipv4)
+        use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 3un, 0u, 0u, EnetHostOption.Ipv4)
         Expect.isTrue (client.SetMtu mtu) "Set proposed MTU before connect."
         let mutable clientPeer = Unchecked.defaultof<EnetPeer>
-        Expect.isTrue (client.TryConnect(server.Address, 2un, 0u, &clientPeer)) "begin connect"
+        Expect.isTrue (client.TryConnect(server.Address, 3un, 0u, &clientPeer)) "begin connect"
         let mutable serverPeer = None
         let mutable clientReady = false
         let pump () =
@@ -74,11 +74,11 @@ let private withPeers run = withPeersAtMtu 1392u run
 
 let private withAdapter settings run =
     let config = { settings with Port = freePort (); ServiceTimeoutMs = 0u }
-    let transport = EnetTransport.create config |> ok
+    let transport = EnetTransport.createInline config |> ok
     try
-        use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 2un, 0u, 0u, EnetHostOption.Ipv4)
+        use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 3un, 0u, 0u, EnetHostOption.Ipv4)
         let mutable peer = Unchecked.defaultof<EnetPeer>
-        Expect.isTrue (client.TryConnect(address config.Port, 2un, 0u, &peer)) "begin connect"
+        Expect.isTrue (client.TryConnect(address config.Port, 3un, 0u, &peer)) "begin connect"
         let events = ResizeArray<ServerTransportEvent>()
         let packets = ResizeArray<byte array>()
         let pump () =
@@ -129,8 +129,8 @@ let tests = testSequenced <| testList "ENet transport" [
             until (fun () -> budget.Packets = 0) pump)
 
     testCase "invalid socket buffers are rejected before host allocation" <| fun _ ->
-        Expect.isError (EnetTransport.create { ServerConfig.defaults with ReceiveBufferBytes = 0 }) "invalid receive buffer"
-        Expect.isError (EnetTransport.create { ServerConfig.defaults with SendBufferBytes = -1 }) "invalid send buffer"
+        Expect.isError (EnetTransport.createInline { ServerConfig.defaults with ReceiveBufferBytes = 0 }) "invalid receive buffer"
+        Expect.isError (EnetTransport.createInline { ServerConfig.defaults with SendBufferBytes = -1 }) "invalid send buffer"
 
     testCase "outgoing leases enforce packet and byte budgets, then release after ACK and reset" <| fun _ ->
         withPeers (fun _ peer pump ->
@@ -155,6 +155,57 @@ let tests = testSequenced <| testList "ENet transport" [
             Expect.equal (send ()) PacketSendResult.PeerRejected "disconnected peer rejected send"
             Expect.equal (hostBudget.Packets, peerBudget.Packets) (0, 0) "rejected packet freed once")
 
+    testCase "realtime leaves native packet headroom at both host and peer admission" <| fun _ ->
+        for hostLimit, peerLimit in [4, 16; 16, 4] do
+            withPeers (fun _ peer _ ->
+                let hostBudget = PacketBudget(hostLimit, 64L)
+                let peerBudget = PacketBudget(peerLimit, 64L)
+                let bytes = [|1uy; 2uy; 3uy; 4uy|]
+                let sample () = OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget, 2uy, false)
+                for _ in 1 .. 3 do Expect.equal (sample()) PacketSendResult.Sent "Realtime fits below reserved slot."
+                Expect.equal (sample()) PacketSendResult.BudgetExceeded "Realtime cannot consume last reliable slot."
+                Expect.equal (hostBudget.Packets, peerBudget.Packets) (3, 3) "Refused sample reserves neither budget."
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget))
+                    PacketSendResult.Sent "Legacy four-argument send remains reliable and uses full capacity."
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget))
+                    PacketSendResult.BudgetExceeded "Reliable also respects the original total cap."
+                peer.Reset()
+                Expect.equal (hostBudget.Packets, hostBudget.Bytes, peerBudget.Packets, peerBudget.Bytes)
+                    (0, 0L, 0, 0L) "Reset releases mixed reliable and realtime leases exactly once.")
+
+    testCase "realtime leaves native byte headroom independently of packet count" <| fun _ ->
+        for hostBytes, peerBytes in [8L, 64L; 64L, 8L] do
+            withPeers (fun _ peer _ ->
+                let hostBudget = PacketBudget(16, hostBytes)
+                let peerBudget = PacketBudget(16, peerBytes)
+                let sample = [|1uy; 2uy; 3uy|]
+                for _ in 1 .. 2 do
+                    Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(sample), hostBudget, peerBudget, 2uy, false))
+                        PacketSendResult.Sent "Realtime may occupy three quarters of bytes."
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>([|1uy|]), hostBudget, peerBudget, 2uy, false))
+                    PacketSendResult.BudgetExceeded "Realtime leaves reliable byte reserve."
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>([|4uy; 5uy|]), hostBudget, peerBudget))
+                    PacketSendResult.Sent "Reliable fills remaining bytes without raising budget."
+                Expect.equal (hostBudget.Bytes, peerBudget.Bytes) (8L, 8L) "Both budgets include actual retained payloads."
+                peer.Reset()
+                Expect.equal (hostBudget.Bytes, peerBudget.Bytes) (0L, 0L) "All bytes released.")
+
+    testCase "configured native host headroom reserves several reliable packet slots" <| fun _ ->
+        withPeers (fun _ peer _ ->
+            let hostBudget = PacketBudget(4, 64L, 2)
+            let peerBudget = PacketBudget(16, 64L)
+            let bytes = [|1uy|]
+            for _ in 1 .. 2 do
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget, 2uy, false))
+                    PacketSendResult.Sent "Realtime below configured headroom."
+            Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget, 2uy, false))
+                PacketSendResult.BudgetExceeded "Host leaves both reliable slots available."
+            for _ in 1 .. 2 do
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget))
+                    PacketSendResult.Sent "Reliable uses reserved slot."
+            peer.Reset()
+            Expect.equal (hostBudget.Packets, peerBudget.Packets) (0, 0) "All leases released.")
+
     testCase "disposing a host releases outstanding outgoing packet leases" <| fun _ ->
         let hostBudget = PacketBudget(1, 16L)
         let peerBudget = PacketBudget(2, 16L)
@@ -174,26 +225,26 @@ let tests = testSequenced <| testList "ENet transport" [
             try Expect.isTrue (peer.TrySend(0uy, &packet)) "client send"
             finally if packet.IsCreated then packet.Dispose()
             until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received _ -> true | _ -> false)) pump
-            let received = events |> Seq.pick (function ServerTransportEvent.Received(id, payload) -> Some(id, payload) | _ -> None)
-            Expect.equal received (connection, bytes) "detached exact payload"
+            let received = events |> Seq.pick (function ServerTransportEvent.Received(id, lane, payload) -> Some(id, lane, payload) | _ -> None)
+            Expect.equal received (connection, DeliveryLane.Control, bytes) "detached exact payload"
 
-            transport.Send(connection, bytes) |> ok
-            Expect.isError (transport.Send(connection, bytes)) "unacknowledged send still consumes capacity"
+            transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = bytes }) |> ok
+            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = bytes })) "unacknowledged send still consumes capacity"
             until (fun () -> packets.Count = 1) pump
             let mutable admitted = false
             until (fun () -> admitted) (fun () ->
                 pump ()
-                admitted <- Result.isOk (transport.Send(connection, bytes)))
+                admitted <- Result.isOk (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = bytes })))
             Expect.isTrue admitted "ACK restores budget"
             transport.Close connection
-            Expect.isError (transport.Send(connection, bytes)) "closed connection never reaches reused peer")
+            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = bytes })) "closed connection never reaches reused peer")
 
     testCase "graceful close delivers the queued reliable reply before disconnect" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ transport _ _ connection events packets pump ->
             let reply = [|11uy; 22uy; 33uy|]
-            transport.Send(connection, reply) |> ok
+            transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = reply }) |> ok
             transport.Close connection
-            Expect.isError (transport.Send(connection, reply)) "closing route rejects new sends"
+            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = reply })) "closing route rejects new sends"
             until (fun () -> events.Contains(ServerTransportEvent.Disconnected connection)) pump
             Expect.equal (List.ofSeq packets) [reply] "already queued reply survived close")
 
@@ -202,13 +253,13 @@ let tests = testSequenced <| testList "ENet transport" [
             transport.Close connection
             until (fun () -> events.Contains(ServerTransportEvent.Disconnected connection)) pump
             let mutable replacement = Unchecked.defaultof<EnetPeer>
-            Expect.isTrue (client.TryConnect(address settings.Port, 2un, 0u, &replacement)) "reconnect"
+            Expect.isTrue (client.TryConnect(address settings.Port, 3un, 0u, &replacement)) "reconnect"
             until (fun () -> events |> Seq.filter (function ServerTransportEvent.Connected _ -> true | _ -> false) |> Seq.length = 2) pump
             let next = events |> Seq.pick (function ServerTransportEvent.Connected id when id <> connection -> Some id | _ -> None)
             transport.Close connection
             transport.Reset connection
-            Expect.isError (transport.Send(connection, [|1uy|])) "old route stays invalid"
-            transport.Send(next, [|2uy|]) |> ok
+            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = [|1uy|] })) "old route stays invalid"
+            transport.Send(next, { Lane = DeliveryLane.Control; Bytes = [|2uy|] }) |> ok
             until (fun () -> packets.Count = 1) pump
             Expect.equal packets[0] [|2uy|] "old close/reset cannot affect replacement")
 
@@ -219,16 +270,38 @@ let tests = testSequenced <| testList "ENet transport" [
             finally if packet.IsCreated then packet.Dispose()
             until (fun () -> events.Contains(ServerTransportEvent.Disconnected connection)) pump
             Expect.isFalse (events |> Seq.exists (function ServerTransportEvent.Received _ -> true | _ -> false)) "unreliable packet not dispatched"
-            Expect.isError (transport.Send(connection, [|1uy|])) "route reset")
+            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = [|1uy|] })) "route reset")
 
-    testCase "wrong ENet channel disconnects the connection instead of entering the application" <| fun _ ->
+    testCase "chat and realtime use independent channels without reliable-only rejection" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ transport _ peer connection events _ pump ->
-            let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>([|1uy|]), EnetPacketFlag.Reliable)
-            try Expect.isTrue (peer.TrySend(1uy, &packet)) "send wrong channel"
-            finally if packet.IsCreated then packet.Dispose()
-            until (fun () -> events.Contains(ServerTransportEvent.Disconnected connection)) pump
-            Expect.isFalse (events |> Seq.exists (function ServerTransportEvent.Received _ -> true | _ -> false)) "packet not dispatched"
-            Expect.isError (transport.Send(connection, [|1uy|])) "route removed")
+            for lane in [DeliveryLane.Chat; DeliveryLane.Realtime] do
+                let flags = if lane = DeliveryLane.Realtime then enum<EnetPacketFlag> 0 else EnetPacketFlag.Reliable
+                let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>([|byte lane|]), flags)
+                try Expect.isTrue (peer.TrySend(byte lane, &packet)) "send on agreed channel"
+                finally if packet.IsCreated then packet.Dispose()
+                until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received(_, actual, _) -> actual = lane | _ -> false)) pump
+            Expect.isFalse (events.Contains(ServerTransportEvent.Disconnected connection)) "supported channels retain connection"
+            let oversized = Array.zeroCreate<byte> (transport.MaxUnfragmentedPayloadBytes connection + 1)
+            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Realtime; Bytes = oversized })) "realtime never fragments"
+            transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = oversized }) |> ok)
+
+    testCase "a peer negotiating fewer than three channels is not admitted" <| fun _ ->
+        let settings = { ServerConfig.defaults with Port = freePort (); ServiceTimeoutMs = 0u }
+        let transport = EnetTransport.createInline settings |> ok
+        try
+            use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 2un, 0u, 0u, EnetHostOption.Ipv4)
+            let mutable peer = Unchecked.defaultof<EnetPeer>
+            Expect.isTrue (client.TryConnect(address settings.Port, 2un, 0u, &peer)) "connect old peer"
+            let events = ResizeArray<ServerTransportEvent>()
+            let mutable stopped = false
+            let pump () =
+                events.AddRange(transport.Poll() |> ok)
+                service client (fun event ->
+                    if event.Type = EnetEventType.Disconnect then stopped <- true
+                    discard event)
+            until (fun () -> stopped) pump
+            Expect.equal events.Count 0 "incompatible peer is never visible to the application"
+        finally transport.Dispose()
 
     testCase "invalid outgoing budgets fail before host allocation" <| fun _ ->
         for settings in [
@@ -237,5 +310,5 @@ let tests = testSequenced <| testList "ENet transport" [
             { ServerConfig.defaults with MaxOutgoingBytesPerPeer = 1 }
             { ServerConfig.defaults with MaxOutgoingBytes = 1 }
         ] do
-            Expect.isError (EnetTransport.create settings) "invalid transport config"
+            Expect.isError (EnetTransport.createInline settings) "invalid transport config"
 ]

@@ -20,6 +20,16 @@ type PlayerInputLimits = {
     ActivityKey: int
 }
 
+/// Limits apply to handoff memory and our admission pass, not to the duration of ENet Service.
+type TransportWorkerOptions = {
+    QueueCapacity: int
+    QueueBytes: int
+    SendCommandsPerPass: int
+    SendBytesPerPass: int
+    WorkBudgetMs: int
+    IdleWaitMs: int
+}
+
 /// Supplied before starting the network owner; fixed for the host/session lifetime.
 type ServerConfig =
     {
@@ -29,8 +39,9 @@ type ServerConfig =
         ChannelLimit: int
         ServiceTimeoutMs: uint32
         EventBudget: int
+        Worker: TransportWorkerOptions
         MaxPacketBytes: int
-        /// Zero keeps application-size batches; positive values opt into MTU-aware splitting.
+        /// Zero uses the negotiated MTU; positive values can lower the realtime payload target.
         MovementPacketTargetBytes: int
         ReceiveBufferBytes: int
         SendBufferBytes: int
@@ -53,9 +64,12 @@ module ServerConfig =
             BindAddress = IPAddress.Loopback
             Port = 8778us
             PeerLimit = 32
-            ChannelLimit = 2
-            ServiceTimeoutMs = 10u
+            ChannelLimit = 3
+            ServiceTimeoutMs = 0u
             EventBudget = 64
+            Worker = { QueueCapacity = 65536; QueueBytes = 16 * 1024 * 1024
+                       SendCommandsPerPass = 2048; SendBytesPerPass = 4 * 1024 * 1024
+                       WorkBudgetMs = 2; IdleWaitMs = 1 }
             MaxPacketBytes = 1024 * 1024
             MovementPacketTargetBytes = 0
             ReceiveBufferBytes = 256 * 1024
@@ -107,10 +121,19 @@ module ServerConfig =
                     "Port must be between 1 and 65535."
                 if config.PeerLimit < 1 || config.PeerLimit > 4095 then
                     "PeerLimit must be between 1 and 4095."
-                if config.ChannelLimit < 1 || config.ChannelLimit > 255 then
-                    "ChannelLimit must be between 1 and 255."
+                if config.ChannelLimit < 3 || config.ChannelLimit > 255 then
+                    "ChannelLimit must be between 3 and 255."
                 if config.ReceiveBufferBytes < 1 || config.SendBufferBytes < 1 then
                     "UDP socket buffer sizes must be positive."
+                if config.ServiceTimeoutMs <> 0u then "ServiceTimeoutMs must be zero; the owner uses an interruptible idle wait."
+                if isNull (box config.Worker) then "Worker settings must not be null."
+                else
+                    if config.Worker.QueueCapacity < 1 || int64 config.Worker.QueueCapacity + 2L * int64 config.PeerLimit + 2L > int64 System.Int32.MaxValue then
+                        "Worker.QueueCapacity must be positive and leave room for lifecycle reserve."
+                    if config.Worker.QueueBytes < config.MaxPacketBytes then "Worker.QueueBytes must allow a maximum-size packet."
+                    if config.Worker.SendCommandsPerPass < 1 || config.Worker.SendBytesPerPass < 1 || config.Worker.WorkBudgetMs < 1 then
+                        "Worker admission budgets must be positive."
+                    if config.Worker.IdleWaitMs < 1 || config.Worker.IdleWaitMs > 10 then "Worker.IdleWaitMs must be between 1 and 10."
                 if config.EventBudget < 1 then
                     "EventBudget must be positive."
                 if config.MaxOutgoingPacketsPerPeer < 1 then

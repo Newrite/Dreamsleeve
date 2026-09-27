@@ -308,14 +308,14 @@ let private stateTests =
             let extraKey = actorKey "avg:extra"
             let original = Player.create (profile 1UL "First") |> Player.applyUpdate (PlayerUpdate.BeginCharacter name)
             let place = location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero
-            let first = original |> Player.applyUpdate (PlayerUpdate.Move(ValueSome place)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health 120.0f; extraKey, health 5.0f]))
+            let first = original |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome place)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health 120.0f; extraKey, health 5.0f]))
 
             let before = Player.snapshot first
             let valuesOnly = first |> Player.applyUpdate (PlayerUpdate.SetActorValues Map.empty)
             Expect.equal valuesOnly.Location first.Location "Values do not touch movement."
-            let movedOnly = first |> Player.applyUpdate (PlayerUpdate.Move ValueNone)
+            let movedOnly = first |> Player.applyUpdate (PlayerUpdate.SetLocation(2UL, ValueNone))
             Expect.equal (Player.actorValuesSnapshot movedOnly) before.ActorValues "Movement does not touch values."
-            let second = first |> Player.applyUpdate (PlayerUpdate.Move ValueNone) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health -5.0f]))
+            let second = first |> Player.applyUpdate (PlayerUpdate.SetLocation(2UL, ValueNone)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health -5.0f]))
 
             Expect.equal second.Location ValueNone "unknown position replaces a previous known location"
             Expect.equal (Player.actorValueCount second) 1 "a missing key is removed, not retained forever"
@@ -446,5 +446,21 @@ let private chatTests =
             Expect.notEqual value.Author.DisplayName renamed.DisplayName "Renaming profile does not rewrite message"
     ]
 
+let private movementTests = testList "Movement" [
+    testCase "sample sequence is independent of zero source timestamp and cannot establish context" <| fun _ ->
+        let player = Player.create (profile 1UL "First")
+        let place = location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero
+        let sample = { ContextRevision = 1UL; Sequence = 1UL; Pose = MovementPose.ofLocation place }
+        Expect.equal (Player.tryApplyMovement sample player |> ValueOption.map Player.snapshot) ValueNone "No location baseline."
+        let located = player |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome place))
+        let moved = Player.tryApplyMovement sample located |> ValueOption.get
+        Expect.equal moved.MovementSequence 1UL "Zero timestamp is still an ordered sample."
+        Expect.equal (Player.tryApplyMovement sample moved |> ValueOption.map Player.snapshot) ValueNone "Duplicate sequence is ignored."
+        let cleared = Player.clearGameState moved
+        Expect.equal cleared.MovementHighWater 1UL "Character changes preserve transition highwater."
+        Expect.equal cleared.MovementContext 0UL "Old samples are disabled."
+        Expect.equal (Player.tryApplyMovement { sample with Sequence = 2UL } cleared |> ValueOption.map Player.snapshot) ValueNone "Late sample cannot revive a character."
+]
+
 let tests =
-    testList "Dreamsleeve.Server.Domain" [ textTests; spatialTests; stateTests; chatTests ]
+    testList "Dreamsleeve.Server.Domain" [ textTests; spatialTests; stateTests; chatTests; movementTests ]

@@ -17,16 +17,21 @@ type PlayerStateError =
     | Closed
     | Busy
 
-/// The adapter and the runtime share one sequential owner of every transport call.
+/// Managed events handed off by the transport owner.
 [<RequireQualifiedAccess>]
 type ServerTransportEvent =
     | Connected of Guid
-    | Received of Guid * byte array
+    | Received of Guid * DeliveryLane * byte array
     | Disconnected of Guid
+    | Failed of Guid * reason: string
 
 type ServerTransport = {
     Poll: unit -> Result<ServerTransportEvent list, string>
-    Send: Guid * byte array -> Result<unit, string>
+    /// Nonblocking wakeup; false means consumer admission failed and notification must be retried.
+    SetReadyHandler: (unit -> bool) -> unit
+    /// Success transfers immutable payload ownership to the handoff queue; callers
+    /// must not mutate/reuse Bytes. Admission is not acknowledgement of delivery.
+    Send: Guid * TransportPacket -> Result<unit, string>
     /// Current transport payload budget before fragmentation; zero for unavailable connections.
     MaxUnfragmentedPayloadBytes: Guid -> int
     /// Stop new sends and drain accepted reliable packets; Poll eventually reports Disconnected.
@@ -92,6 +97,7 @@ type PresenceEvent =
     | Joined of PlayerSnapshot
     | Updated of PlayerSnapshot
     | Moved of MovementChange array
+    | VisibilityChanged of VisibilityChange
     | MetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | Left of PlayerId
 

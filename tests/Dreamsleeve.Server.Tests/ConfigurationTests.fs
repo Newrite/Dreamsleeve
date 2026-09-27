@@ -23,15 +23,28 @@ let tests = testList "Server configuration" [
                 Expect.equal config.Server.MaxOutgoingBytes Configuration.defaults.Server.MaxOutgoingBytes "omitted budget preserved"
             | other -> failwithf "Expected valid config: %A" other)
 
-    testCase "movement packet target supports opt-out and rejects negative values" <| fun _ ->
+    testCase "movement target supports automatic MTU and rejects negative values" <| fun _ ->
         withFile """{"Server":{"MovementPacketTargetBytes":900}}""" (fun path ->
             match Configuration.parse [|"--config"; path|] with
             | Ok (LaunchCommand.Run config) -> Expect.equal config.Server.MovementPacketTargetBytes 900 "Configured target."
             | other -> failwithf "%A" other)
         withFile """{"Server":{"MovementPacketTargetBytes":0}}""" (fun path ->
-            Expect.isOk (Configuration.parse [|"--config"; path|]) "Zero disables the optional MTU target.")
+            Expect.isOk (Configuration.parse [|"--config"; path|]) "Zero uses the negotiated MTU target.")
         withFile """{"Server":{"MovementPacketTargetBytes":-1}}""" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "Invalid target rejected at startup.")
+
+    testCase "transport owner rejects unbounded or blocking configuration" <| fun _ ->
+        for source in [
+            """{"Server":{"Worker":null}}"""
+            """{"Server":{"Worker":{"QueueCapacity":0}}}"""
+            """{"Server":{"Worker":{"QueueBytes":1}}}"""
+            """{"Server":{"Worker":{"SendCommandsPerPass":0}}}"""
+            """{"Server":{"Worker":{"IdleWaitMs":11}}}"""
+            """{"Server":{"ServiceTimeoutMs":1}}"""
+            """{"Server":{"ChannelLimit":2}}"""
+        ] do
+            withFile source (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) "invalid transport config")
 
     testCase "unknown properties, wrong types and null sections are rejected" <| fun _ ->
         for source in ["{\"Server\":{\"Typo\":1}}"; "{\"Runtime\":null}"; "{\"Server\":null}"; "{\"Server\":{\"BindAddress\":42}}"; "[]"] do

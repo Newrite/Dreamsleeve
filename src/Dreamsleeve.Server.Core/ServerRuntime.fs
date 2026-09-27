@@ -2,7 +2,6 @@ namespace Dreamsleeve.Server.Core
 
 open System
 open System.Diagnostics
-open System.Diagnostics.Metrics
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging
@@ -24,6 +23,7 @@ type ServerRuntimeSnapshot = {
 type ServerRuntimeMessage =
     | Start
     | Tick of AgentTick
+    | TransportReady
     | Host of SessionHostCommand
     | PlayerStopped of Guid * Result<unit, exn>
     | SourceStopped of SessionSource * Result<unit, exn>
@@ -33,8 +33,8 @@ type ServerRuntimeMessage =
     | FindPlayer of Guid * ReplyChannel<AgentRef<PlayerSessionMessage> option>
     | Stop
 
-/// One transport owner. Packet dispatch does not wait for domain agents or route
-/// chat through another shared mailbox. SessionTable owns routes and pending transport output.
+/// Routes managed transport events without waiting for domain agents.
+/// Native ENet servicing belongs to the transport worker.
 [<RequireQualifiedAccess>]
 module ServerRuntime =
     type private Sources = {
@@ -83,7 +83,6 @@ module ServerRuntime =
 
     let private close (options: ServerRuntimeOptions) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
         if entry.Phase <> SessionTable.Closing then
-            entry.Movement.Clear()
             entry.Phase <- SessionTable.Closing
             let deadline = now () + int64 options.ShutdownTimeoutMs
             entry.Deadline <- if state.Stopping then min deadline state.StopDeadline else deadline
@@ -100,7 +99,7 @@ module ServerRuntime =
                 | AgentPostResult.Posted -> ()
                 | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped -> child.Abort()
 
-    let private transmit (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) encoded =
+    let private transmit (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) lane encoded =
         match encoded with
         | Error error ->
             state.Logger.LogError("Cannot encode response for {ConnectionId}: {Failure}", entry.ConnectionId, error.Failure)
@@ -108,67 +107,32 @@ module ServerRuntime =
         | Ok packets ->
             for bytes in packets do
                 if entry.Phase <> SessionTable.Closing then
-                    match state.Transport.Send(entry.ConnectionId, bytes) with
+                    match state.Transport.Send(entry.ConnectionId, { Lane = lane; Bytes = bytes }) with
                     | Ok () -> ()
+                    | Error _ when lane = DeliveryLane.Realtime -> () // Next period repairs a dropped pose.
                     | Error reason ->
                         state.Logger.LogWarning("Closing {ConnectionId}: {Reason}", entry.ConnectionId, reason)
                         close options state context entry
 
-    let private flushMovement (reason: Histogram<double>) options state context (entry: SessionTable.Entry) =
-        if entry.Movement.Count > 0 then
-            reason.Record(float entry.Movement.Count)
-            let movements = Array.zeroCreate<MovementChange> entry.Movement.Count
-            let mutable index = 0
-            for KeyValue(playerId, location) in entry.Movement do
-                movements[index] <- { PlayerId = playerId; Location = location }
-                index <- index + 1
-            entry.Movement.Clear()
-            let payloadBudget = state.Transport.MaxUnfragmentedPayloadBytes entry.ConnectionId
-            ProtocolCodec.encodeMovementPackets state.Codec payloadBudget movements
-            |> transmit options state context entry
-
-    let private queueMovement (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) (movements: MovementChange array) =
-        for movement in movements do
-            let playerId, location = movement.PlayerId, movement.Location
-            if entry.Phase = SessionTable.Ready then
-                // A clear or space transition is a stream boundary. Never replace
-                // it with a later pose while it is waiting for the transport tick.
-                match entry.Movement.TryGetValue playerId with
-                | true, previous ->
-                    match previous, location with
-                    | ValueSome before, ValueSome after when PlayerLocation.isSameSpace before after -> ()
-                    | ValueNone, _ | _, ValueNone | ValueSome _, ValueSome _ -> flushMovement RuntimeMetrics.movementBoundary options state context entry
-                | false, _ -> ()
-
-                if entry.Phase = SessionTable.Ready then
-                    if entry.Movement.Count >= options.MaxSessions && not (entry.Movement.ContainsKey playerId) then
-                        state.Logger.LogWarning("Movement output limit exceeded for {ConnectionId}", entry.ConnectionId)
-                        close options state context entry
-                    else
-                        entry.Movement[playerId] <- location
-
-    let private sendImmediate reason options state context (entry: SessionTable.Entry) response =
-        // Preserve every existing FIFO barrier until measurements justify a narrower policy.
-        flushMovement reason options state context entry
-        if entry.Phase <> SessionTable.Closing then
-            ProtocolCodec.encodeServer state.Codec response
-            |> Result.map List.singleton
-            |> transmit options state context entry
-
     let private send options state context (entry: SessionTable.Entry) response =
-        match response with
-        | ServerResponse.PlayersMoved movements -> queueMovement options state context entry movements
-        | ServerResponse.ChatAccepted _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerUpdateAccepted _ ->
-            sendImmediate RuntimeMetrics.movementSettlement options state context entry response
-        | ServerResponse.ChatPublished _ ->
-            sendImmediate RuntimeMetrics.movementChat options state context entry response
-        | ServerResponse.PlayerMetadataChanged _ ->
-            sendImmediate RuntimeMetrics.movementMetadata options state context entry response
-        | ServerResponse.SessionOpened _ | ServerResponse.PlayerJoined _ | ServerResponse.PlayerLeft _ | ServerResponse.PlayerUpdated _ ->
-            sendImmediate RuntimeMetrics.movementLifecycle options state context entry response
+        let encoded =
+            match response with
+            | ServerResponse.PlayersMoved movements ->
+                let budget = state.Transport.MaxUnfragmentedPayloadBytes entry.ConnectionId
+                ProtocolCodec.encodeMovementPackets state.Codec budget movements
+            | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
+            | ServerResponse.ChatRejected _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
+            | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
+            | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _ ->
+                ProtocolCodec.encodeServer state.Codec response |> Result.map List.singleton
+        transmit options state context entry (ProtocolCodec.responseLane response) encoded
 
-    let private reject (options: ServerRuntimeOptions) state context entry requestId code message =
-        send options state context entry (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "" }))
+    let private reject options state context entry lane requestId code message =
+        let rejection = { Code = code; Message = message; Field = "" }
+        let response =
+            if lane = DeliveryLane.Chat then ServerResponse.ChatRejected(requestId, rejection)
+            else ServerResponse.RequestRejected(requestId, rejection)
+        send options state context entry response
 
     let private host (options: ServerRuntimeOptions) state context command =
         match command with
@@ -202,7 +166,8 @@ module ServerRuntime =
                 | ServerResponse.RequestRejected _ -> send options state context entry response
                 | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
                 | ServerResponse.PlayerJoined _ | ServerResponse.PlayerUpdated _ | ServerResponse.PlayersMoved _ | ServerResponse.PlayerMetadataChanged _
-                | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _ -> ()
+                | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
+                | ServerResponse.ChatRejected _ | ServerResponse.PlayerVisibilityChanged _ -> ()
             | Some _ | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->
@@ -226,34 +191,56 @@ module ServerRuntime =
                 context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
         | None, _ | _, None -> close options state context entry
 
-    let private forward (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) requestId message =
+    let private forward (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) lane requestId message =
         match entry.Child with
         | Some child ->
             match child.TryPost message with
             | AgentPostResult.Posted -> ()
-            | AgentPostResult.Full -> reject options state context entry requestId RequestRejectionCode.Overloaded "Session input is full."
+            | AgentPostResult.Full -> reject options state context entry lane requestId RequestRejectionCode.Overloaded "Session input is full."
             | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped -> close options state context entry
         | None -> close options state context entry
 
-    let private receive (options: ServerRuntimeOptions) globalId authenticator state context entry bytes =
-        match ProtocolCodec.decodeClient state.Codec bytes with
-        | Error error ->
-            match error.RequestId with
-            | None -> close options state context entry
-            | Some requestId -> reject options state context entry requestId RequestRejectionCode.InvalidRequest "Invalid request."
-        | Ok request ->
-            match request.Command, entry.Phase with
-            | ClientCommand.OpenSession sessionTicket, SessionTable.Waiting ->
-                openSession options state.MaxActorValues globalId authenticator state context entry request.RequestId sessionTicket
-            | ClientCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
-                reject options state context entry request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
-            | ClientCommand.SendChat(channelId, text), SessionTable.Ready ->
-                forward options state context entry request.RequestId (PlayerSessionMessage.SendChat(request.RequestId, channelId, text))
-            | ClientCommand.UpdatePlayer update, SessionTable.Ready ->
-                forward options state context entry request.RequestId (PlayerSessionMessage.Update(request.RequestId, update))
-            | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _), (SessionTable.Waiting | SessionTable.Opening) ->
-                reject options state context entry request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
-            | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _), SessionTable.Closing -> ()
+    let private receiveSample state (entry: SessionTable.Entry) bytes =
+        if entry.Phase = SessionTable.Ready then
+            match ProtocolCodec.decodeMovement state.Codec bytes, entry.Child with
+            | Ok sample, Some child ->
+                // A dropped sample is repaired by the next periodic absolute pose.
+                child.TryPost(PlayerSessionMessage.SampleMovement sample) |> ignore
+            | Error _, _ | _, None -> ()
+
+    let private receive (options: ServerRuntimeOptions) globalId authenticator state context entry lane bytes =
+        if lane = DeliveryLane.Realtime then receiveSample state entry bytes
+        else
+            match ProtocolCodec.decodeClient state.Codec bytes with
+            | Error error ->
+                match error.RequestId with
+                | None -> close options state context entry
+                | Some requestId -> reject options state context entry lane requestId RequestRejectionCode.InvalidRequest "Invalid request."
+            | Ok request when ProtocolCodec.requestLane request <> lane -> close options state context entry
+            | Ok request ->
+                match request.Command, entry.Phase with
+                | ClientCommand.OpenSession sessionTicket, SessionTable.Waiting ->
+                    openSession options state.MaxActorValues globalId authenticator state context entry request.RequestId sessionTicket
+                | ClientCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
+                    reject options state context entry lane request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
+                | ClientCommand.SendChat(channelId, text), SessionTable.Ready ->
+                    forward options state context entry lane request.RequestId (PlayerSessionMessage.SendChat(request.RequestId, channelId, text))
+                | ClientCommand.UpdatePlayer update, SessionTable.Ready ->
+                    forward options state context entry lane request.RequestId (PlayerSessionMessage.Update(request.RequestId, update))
+                | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _), (SessionTable.Waiting | SessionTable.Opening) ->
+                    reject options state context entry lane request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
+                | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _), SessionTable.Closing -> ()
+
+    let private disconnected options state context connectionId =
+        match SessionTable.find connectionId state.Table with
+        | None -> ()
+        | Some entry ->
+            if entry.Phase <> SessionTable.Closing then
+                state.Logger.LogInformation("Transport disconnected {ConnectionId} during {Phase}", connectionId, entry.Phase)
+
+            entry.TransportClosed <- true
+            close options state context entry
+            if SessionTable.clean entry then SessionTable.remove entry state.Table
 
     let private transportEvent (options: ServerRuntimeOptions) globalId authenticator state context event =
         match event with
@@ -262,20 +249,14 @@ module ServerRuntime =
                 state.Transport.Close connectionId
             elif not (state.Table.Connections.ContainsKey connectionId) then
                 SessionTable.add connectionId (now () + int64 options.OpenTimeoutMs) state.Table |> ignore
-        | ServerTransportEvent.Received(connectionId, bytes) ->
+        | ServerTransportEvent.Received(connectionId, lane, bytes) ->
             match SessionTable.find connectionId state.Table with
-            | Some entry when entry.Phase <> SessionTable.Closing -> receive options globalId authenticator state context entry bytes
+            | Some entry when entry.Phase <> SessionTable.Closing -> receive options globalId authenticator state context entry lane bytes
             | Some _ | None -> ()
-        | ServerTransportEvent.Disconnected connectionId ->
-            match SessionTable.find connectionId state.Table with
-            | None -> ()
-            | Some entry ->
-                if entry.Phase <> SessionTable.Closing then
-                    state.Logger.LogInformation("Transport disconnected {ConnectionId} during {Phase}", connectionId, entry.Phase)
-
-                entry.TransportClosed <- true
-                close options state context entry
-                if SessionTable.clean entry then SessionTable.remove entry state.Table
+        | ServerTransportEvent.Failed(connectionId, reason) ->
+            state.Logger.LogWarning("Transport failed for {ConnectionId}: {Reason}", connectionId, reason)
+            disconnected options state context connectionId
+        | ServerTransportEvent.Disconnected connectionId -> disconnected options state context connectionId
 
     let private schedule (options: ServerRuntimeOptions) state context =
         if state.Ticker.IsNone then
@@ -301,6 +282,8 @@ module ServerRuntime =
                         PresenceCleanup = AgentOutbox(options.MaxSessions, presence.Ref.TryReliable().Value)
                         ChatStopped = false; PresenceStopped = false
                     }
+                    state.Transport.SetReadyHandler(fun () ->
+                        context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentPostResult.Posted)
                     schedule options state context
 
     let private stopped (options: ServerRuntimeOptions) state context connectionId (outcome: Result<unit, exn>) =
@@ -353,8 +336,7 @@ module ServerRuntime =
                 SessionTable.remove entry state.Table
             else
                 fail state context $"Session cleanup timed out: {entry.ConnectionId}"
-        | SessionTable.Ready -> flushMovement RuntimeMetrics.movementTick options state context entry
-        | SessionTable.Waiting | SessionTable.Opening | SessionTable.Closing -> ()
+        | SessionTable.Ready | SessionTable.Waiting | SessionTable.Opening | SessionTable.Closing -> ()
 
     let private stop (options: ServerRuntimeOptions) state context =
         if not state.Stopping then
@@ -363,20 +345,24 @@ module ServerRuntime =
             // Closing changes routes now; transport drain and domain cleanup finish independently.
             visitRoutes state (close options state context)
 
-    let private tick (options: ServerRuntimeOptions) globalId authenticator state context =
+    let private drain (options: ServerRuntimeOptions) globalId authenticator state context =
         match state.Transport.Poll() with
         | Error reason -> fail state context $"Transport failed: {reason}"
         | Ok events ->
             for event in events do
                 transportEvent options globalId authenticator state context event
 
-            let time = now ()
-            visitRoutes state (tickRoute options time state context)
+    let private tick (options: ServerRuntimeOptions) globalId authenticator state context =
+        // Fallback polling also supports non-notifying test transports.
+        drain options globalId authenticator state context
 
-            let sourcesStopped =
-                state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.PresenceStopped)
-            if state.Stopping && time >= state.StopDeadline && (state.Table.Connections.Count > 0 || not sourcesStopped) then
-                fail state context "Server shutdown timed out."
+        let time = now ()
+        visitRoutes state (tickRoute options time state context)
+
+        let sourcesStopped =
+            state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.PresenceStopped)
+        if state.Stopping && time >= state.StopDeadline && (state.Table.Connections.Count > 0 || not sourcesStopped) then
+            fail state context "Server shutdown timed out."
 
     let private finish state (context: AgentContext<ServerRuntimeMessage>) =
         if state.Stopping && (state.Table.Connections.Values |> Seq.forall SessionTable.domainClean) then
@@ -407,6 +393,7 @@ module ServerRuntime =
         match message with
         | ServerRuntimeMessage.Start ->
             if state.Sources.IsNone && not state.Stopping then initialize options globalId authenticator state context
+        | ServerRuntimeMessage.TransportReady -> drain options globalId authenticator state context
         | ServerRuntimeMessage.Tick notification ->
             let started = Stopwatch.GetTimestamp()
             if state.LastTick <> 0L then RuntimeMetrics.runtimeInterval.Record(Stopwatch.GetElapsedTime(state.LastTick, started).TotalMilliseconds)
@@ -441,7 +428,7 @@ module ServerRuntime =
 
     let private isControl = function
         | ServerRuntimeMessage.Host(SessionHostCommand.Send _) | ServerRuntimeMessage.Read _
-        | ServerRuntimeMessage.FindPlayer _ -> false
+        | ServerRuntimeMessage.FindPlayer _ | ServerRuntimeMessage.TransportReady -> false
         | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick _ | ServerRuntimeMessage.Host _
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
         | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.Stop -> true

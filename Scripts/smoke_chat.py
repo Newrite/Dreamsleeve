@@ -250,10 +250,17 @@ def smoke(args, log, directory: Path):
         bob.wait_for(lambda lines: any(re.fullmatch(r"\d+: Smoke Bob", line) for line in lines), args.timeout, read=True)
         bob_id = next(line.split(":", 1)[0] for line in bob.output() if re.fullmatch(r"\d+: Smoke Bob", line))
         check(f"{alice_id}: Smoke Alice" in bob.output(), "Second client bootstrap missed the first player")
-        alice.wait_for(lambda lines: f"online {bob_id}: Smoke Bob" in lines, args.timeout, read=True)
+        alice.wait_for(lambda lines: bool(player_states(lines, bob_id)), args.timeout, read=True)
         late_join = wait_player(bob, alice_id, lambda state: state.get("characterName") == "Nerevar", args.timeout)
-        filtered = {key: value for key, value in authoritative.items() if key != "location"}
-        check(late_join == filtered, "Late-join metadata changed or location leaked to an observer without position")
+        def metadata(state):
+            return {key: value for key, value in state.items()
+                    if key not in ("location", "viewRevision", "movementSequence")}
+
+        def pose(state):
+            return {key: value for key, value in state["location"].items() if key != "sampledAtUs"}
+
+        check(metadata(late_join) == metadata(authoritative) and not late_join.get("location"),
+              "Late-join metadata changed or location leaked to an observer without position")
         check(all(not state.get("location") for state in player_states(bob.output(), alice_id)),
               "Bootstrap exposed location before the observer had a position")
         stage("late join receives global PlayerInfo metadata without leaking positions to an unlocated observer")
@@ -264,7 +271,9 @@ def smoke(args, log, directory: Path):
         observer_sample["location"]["position"]["X"] = 0
         bob.send("move " + json.dumps({"location": observer_sample["location"]}))
         visible = wait_player(bob, alice_id, lambda state: state.get("location") is not None, args.timeout, bob_start)
-        check(visible == authoritative, "Entering range missed the stationary player's full game state")
+        check(metadata(visible) == metadata(authoritative) and pose(visible) == pose(authoritative),
+              "Entering range missed the stationary player's full game state")
+        check(visible.get("viewRevision", 0) > 0, "Visible position has no reliable baseline revision")
         wait_player(alice, bob_id, lambda state: state.get("location") is not None, args.timeout, alice_start)
         stage("an observer entering the same space receives the stationary player's location")
 
@@ -399,7 +408,7 @@ def smoke(args, log, directory: Path):
         for marker in (first, second):
             count = sum(marker in line and line.startswith("[1] ") for line in reopened)
             check(count == 1, f"Reconnect history must contain {marker} once; got {count}")
-        bob.wait_for(lambda lines: f"online {alice_id}: Smoke Alice" in lines, args.timeout, bob_start, read=True)
+        bob.wait_for(lambda lines: bool(player_states(lines, alice_id)), args.timeout, bob_start, read=True)
         message_once(alice, bob, f"smoke-reconnected-{nonce}", args.timeout)
         stage("same-username reconnect retained profile/history and can publish again")
 

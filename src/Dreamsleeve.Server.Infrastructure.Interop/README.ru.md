@@ -1,4 +1,4 @@
-﻿# Владение исходящими пакетами ENet
+# Владение исходящими пакетами ENet
 
 Небольшая C#-граница для managed function pointer, который принимает yENet в `EnetPacket.Create`. Сам адаптер, poll, маршруты и управление соединениями остаются в F# `EnetTransport`.
 
@@ -16,3 +16,12 @@
 При подключённом MeterListener метрики `Dreamsleeve.Transport` измеряют Poll,
 постановку пакетов и раз в 100 мс — очереди/RTT/счётчики ENet. Все обращения к
 host/peer происходят на владельце транспорта. Эти метрики не вводят отдельного агента.
+
+`OutgoingPackets.TrySend` получает канал и reliability от классификатора протокола:
+Control/Chat reliable, Realtime sequenced flags=0. Предел realtime проверяется
+до admission по согласованному payload MTU; reliable snapshot может фрагментироваться.
+
+`EnetPump.Service` — узкий вызов host_service с null event и timeout=0. После
+protocol pump адаптер ограниченно извлекает готовые события через CheckEvents.
+Все native операции, включая создание и Dispose, выполняет TransportOwner.
+Предел прохода worker не ограничивает длительность внутреннего Service.

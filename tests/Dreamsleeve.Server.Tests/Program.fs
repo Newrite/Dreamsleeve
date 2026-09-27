@@ -23,6 +23,7 @@ let main argv =
         PlayerSessionTests.tests
         ServerRuntimeTests.tests
         EnetTransportTests.tests
+        TransportOwnerTests.tests
         ConfigurationTests.tests
         AuthenticationHttpTests.tests
     ]

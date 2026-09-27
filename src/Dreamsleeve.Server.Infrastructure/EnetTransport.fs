@@ -10,7 +10,7 @@ open Enet
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure.Interop
 
-/// Poll/Send/Close/Dispose share the ServerRuntime owner. No agent or peer escapes it.
+/// Raw ENet state stays on its owner. Production create supplies a dedicated thread.
 [<RequireQualifiedAccess>]
 module EnetTransport =
     type private Connection = {
@@ -52,22 +52,25 @@ module EnetTransport =
         | true, _ | false, _ -> ()
 
     let private connected state (events: ResizeArray<ServerTransportEvent>) (peer: EnetPeer) =
-        match state.Slots.TryGetValue peer.IncomingPeerId with
-        | true, previous ->
-            remove state previous
-            events.Add(ServerTransportEvent.Disconnected previous.Id)
-        | false, _ -> ()
+        if peer.ChannelCount < 3un then
+            peer.DisconnectNow(0u)
+        else
+            match state.Slots.TryGetValue peer.IncomingPeerId with
+            | true, previous ->
+                remove state previous
+                events.Add(ServerTransportEvent.Disconnected previous.Id)
+            | false, _ -> ()
 
-        let connection = {
-            Id = Guid.NewGuid()
-            Peer = peer
-            ConnectId = peer.ConnectId
-            Outgoing = PacketBudget(state.Config.MaxOutgoingPacketsPerPeer, int64 state.Config.MaxOutgoingBytesPerPeer)
-            Closing = false
-        }
-        state.Connections.Add(connection.Id, connection)
-        state.Slots.Add(peer.IncomingPeerId, connection)
-        events.Add(ServerTransportEvent.Connected connection.Id)
+            let connection = {
+                Id = Guid.NewGuid()
+                Peer = peer
+                ConnectId = peer.ConnectId
+                Outgoing = PacketBudget(state.Config.MaxOutgoingPacketsPerPeer, int64 state.Config.MaxOutgoingBytesPerPeer)
+                Closing = false
+            }
+            state.Connections.Add(connection.Id, connection)
+            state.Slots.Add(peer.IncomingPeerId, connection)
+            events.Add(ServerTransportEvent.Connected connection.Id)
 
     let private disconnected state (events: ResizeArray<ServerTransportEvent>) (peer: EnetPeer) =
         // ENet may reset connectID before delivering Disconnect; the slot remains valid.
@@ -82,13 +85,17 @@ module EnetTransport =
 
         match state.Slots.TryGetValue event.Peer.IncomingPeerId with
         | true, connection when connection.ConnectId = event.Peer.ConnectId && not connection.Closing ->
-            if event.ChannelId <> 0uy
-               || (packet.Flags &&& EnetPacketFlag.Reliable) <> EnetPacketFlag.Reliable
-               || packet.DataLength > unativeint state.Config.MaxPacketBytes then
+            let reliable = (packet.Flags &&& EnetPacketFlag.Reliable) = EnetPacketFlag.Reliable
+            let unsequenced = (packet.Flags &&& EnetPacketFlag.Unsequenced) = EnetPacketFlag.Unsequenced
+            if event.ChannelId > byte DeliveryLane.Realtime || unsequenced
+               || (event.ChannelId <> byte DeliveryLane.Realtime && not reliable)
+               || packet.DataLength > unativeint state.Config.MaxPacketBytes
+               || (event.ChannelId = byte DeliveryLane.Realtime
+                   && packet.DataLength > unativeint (OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer)) then
                 reset state connection.Id
                 events.Add(ServerTransportEvent.Disconnected connection.Id)
             else
-                events.Add(ServerTransportEvent.Received(connection.Id, packet.AsSpan().ToArray()))
+                events.Add(ServerTransportEvent.Received(connection.Id, enum<DeliveryLane>(int event.ChannelId), packet.AsSpan().ToArray()))
         | true, _ | false, _ -> ()
 
     let private poll state () =
@@ -98,13 +105,12 @@ module EnetTransport =
             let started = state.Diagnostics.BeginPoll()
             let events = ResizeArray<ServerTransportEvent>()
             let mutable remaining = state.Config.EventBudget
-            let mutable waitMs = state.Config.ServiceTimeoutMs
-            let mutable error = None
+            let mutable error =
+                if EnetPump.Service(state.Host) < 0 then Some "ENet protocol pump failed." else None
 
             while remaining > 0 && error.IsNone do
                 let mutable event = Unchecked.defaultof<EnetEvent>
-                let result = state.Host.Service(waitMs, &event)
-                waitMs <- 0u
+                let result = state.Host.CheckEvents(&event)
 
                 if result < 0 then
                     error <- Some "ENet service failed."
@@ -134,18 +140,22 @@ module EnetTransport =
                 OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer
             | true, _ | false, _ -> 0
 
-    let private send state (connectionId, bytes: byte array) =
+    let private send state (connectionId, packet: TransportPacket) =
+        let bytes = packet.Bytes
         if state.Disposed then
             Error "ENet transport is disposed."
+        elif not (Enum.IsDefined packet.Lane) then Error "Invalid delivery lane."
         elif isNull bytes || bytes.Length = 0 || bytes.Length > state.Config.MaxPacketBytes then
             Error "Outgoing packet size is outside the configured limits."
         else
             match state.Connections.TryGetValue connectionId with
             | false, _ -> Error "Connection is closed."
             | true, connection when connection.Closing -> Error "Connection is closing."
+            | true, connection when packet.Lane = DeliveryLane.Realtime && bytes.Length > OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer ->
+                Error "Realtime payload exceeds negotiated MTU."
             | true, connection ->
                 let started = TransportDiagnostics.BeginSend()
-                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing)
+                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing, byte packet.Lane, packet.Lane <> DeliveryLane.Realtime)
                 TransportDiagnostics.EndSend(started, bytes.Length)
                 match result with
                 | PacketSendResult.Sent ->
@@ -198,11 +208,12 @@ module EnetTransport =
                         Host = host
                         Connections = Dictionary()
                         Slots = Dictionary()
-                        Outgoing = PacketBudget(config.MaxOutgoingPackets, int64 config.MaxOutgoingBytes)
+                        Outgoing = PacketBudget(config.MaxOutgoingPackets, int64 config.MaxOutgoingBytes, max 1 (min config.PeerLimit (max 1 (config.MaxOutgoingPackets / 8))))
                         Disposed = false
                     }
                     Ok {
                         Poll = poll state
+                        SetReadyHandler = ignore
                         Send = send state
                         MaxUnfragmentedPayloadBytes = maxUnfragmentedPayloadBytes state
                         Close = close state
@@ -217,7 +228,12 @@ module EnetTransport =
                 enet.ENET_API.enet_deinitialize()
                 Error (sprintf "ENet host configuration failed: %s" error.Message)
 
-    let create config =
+    let createInline config =
         match ServerConfig.validate config with
         | Error errors -> Error (String.concat " " errors)
         | Ok settings -> allocate settings
+
+    let create config =
+        match ServerConfig.validate config with
+        | Error errors -> Error (String.concat " " errors)
+        | Ok settings -> TransportOwner.create settings (fun () -> allocate settings)

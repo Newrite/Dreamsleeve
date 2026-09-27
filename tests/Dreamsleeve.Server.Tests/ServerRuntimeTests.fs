@@ -12,9 +12,6 @@ open Dreamsleeve.Protocol.Chat
 open Expecto
 open AgentTests
 
-let private movementBatch items =
-    items |> List.map (fun (id, location) -> ({ PlayerId = id; Location = location }: Dreamsleeve.Server.Domain.MovementChange)) |> List.toArray
-
 let private tick () =
     let now = System.Diagnostics.Stopwatch.GetTimestamp()
     ServerRuntimeMessage.Tick { DueTimestamp = now; QueuedTimestamp = now }
@@ -65,13 +62,17 @@ let private playerLocation x =
 
 let private telemetry requestId x =
     packet requestId (fun packet ->
-        packet.UpdatePlayer <- UpdatePlayer(SampleMovement = SampleMovement(Location = playerLocation x)))
+        packet.UpdatePlayer <- UpdatePlayer(SetLocation = SetPlayerLocation(ContextRevision = requestId, Location = playerLocation x)))
 
 
 type private Fixture = {
     Runtime: Agent<ServerRuntimeMessage>
+    Notify: unit -> bool
     Input: ConcurrentQueue<ServerTransportEvent>
     Output: Channel<Guid * ServerPacket>
+    Movement: Channel<Guid * ServerMovementPacket>
+    Sent: ConcurrentQueue<DeliveryLane>
+    SendFailures: ConcurrentDictionary<DeliveryLane, string>
     Closed: Channel<Guid>
     Authentication: Agent<SessionAuthenticationRequest>
     IgnoreClose: ConcurrentDictionary<Guid, unit>
@@ -84,8 +85,12 @@ let private post (agent: Agent<_>) command = task {
 }
 
 let private withRuntimeUsing options createAuthentication run = task {
+    let mutable ready = fun () -> false
     let input = ConcurrentQueue<ServerTransportEvent>()
     let output = Channel.CreateUnbounded<Guid * ServerPacket>()
+    let movement = Channel.CreateUnbounded<Guid * ServerMovementPacket>()
+    let sent = ConcurrentQueue<DeliveryLane>()
+    let failures = ConcurrentDictionary<DeliveryLane, string>()
     let closed = Channel.CreateUnbounded<Guid>()
     let reset = Channel.CreateUnbounded<Guid>()
     let ignoreClose = ConcurrentDictionary<Guid, unit>()
@@ -95,20 +100,29 @@ let private withRuntimeUsing options createAuthentication run = task {
         while events.Count < 64 && input.TryDequeue(&value) do
             match value with
             | ServerTransportEvent.Disconnected id -> closed.Writer.TryWrite id |> ignore
-            | ServerTransportEvent.Connected _ | ServerTransportEvent.Received _ -> ()
+            | ServerTransportEvent.Connected _ | ServerTransportEvent.Received _ | ServerTransportEvent.Failed _ -> ()
             events.Add value
         Ok (List.ofSeq events)
     let transport = {
         MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
+        SetReadyHandler = fun handler -> ready <- handler
         Poll = poll
-        Send = fun (id, bytes) -> output.Writer.TryWrite(id, ServerPacket.Parser.ParseFrom bytes) |> ignore; Ok ()
+        Send = fun (id, packet) ->
+            sent.Enqueue packet.Lane
+            match failures.TryGetValue packet.Lane with
+            | true, reason -> Error reason
+            | false, _ ->
+                if packet.Lane = DeliveryLane.Realtime then
+                    movement.Writer.TryWrite(id, ServerMovementPacket.Parser.ParseFrom packet.Bytes) |> ignore
+                else output.Writer.TryWrite(id, ServerPacket.Parser.ParseFrom packet.Bytes) |> ignore
+                Ok ()
         Close = fun id -> if not (ignoreClose.ContainsKey id) then input.Enqueue(ServerTransportEvent.Disconnected id)
         Reset = fun id -> reset.Writer.TryWrite id |> ignore
         Dispose = ignore
     }
     use authenticator = createAuthentication ()
     use runtime = ServerRuntime.start options ServerConfig.defaults (authentication authenticator) transport NullLogger.Instance |> ok
-    let fixture = { Runtime = runtime; Input = input; Output = output; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
+    let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
         if not runtime.Completion.IsCompleted then
@@ -121,10 +135,18 @@ let private withRuntimeUsing options createAuthentication run = task {
 let private withRuntime options run =
     withRuntimeUsing options createAuthentication run
 
+let private incoming (id, bytes) =
+    let lane =
+        try
+            if (ClientPacket.Parser.ParseFrom(bytes: byte array)).PayloadCase = ClientPacket.PayloadOneofCase.SendChat then DeliveryLane.Chat
+            else DeliveryLane.Control
+        with :? InvalidProtocolBufferException -> DeliveryLane.Control
+    ServerTransportEvent.Received(id, lane, bytes)
+
 let private connect fixture name =
     let id = Guid.NewGuid()
     fixture.Input.Enqueue(ServerTransportEvent.Connected id)
-    fixture.Input.Enqueue(ServerTransportEvent.Received(id, opening name))
+    fixture.Input.Enqueue(incoming(id, opening name))
     id
 
 let private nextWhere fixture predicate = task {
@@ -160,50 +182,38 @@ let private empty fixture = task {
 
 [<Tests>]
 let tests = testList "ServerRuntime" [
-    testTask "pending movement coalesces within a space but preserves stream and lifecycle boundaries" {
-        let settings = { ServerRuntimeOptions.defaults with MaxSessions = 2; PollIntervalMs = 1000000; OpenTimeoutMs = 2000000; ShutdownTimeoutMs = 2000000 }
+    testTask "transport notification admits input independently of deadline timer" {
+        let settings = { ServerRuntimeOptions.defaults with PollIntervalMs = 1000000; OpenTimeoutMs = 2000000; ShutdownTimeoutMs = 2000000 }
+        do! withRuntime settings (fun fixture -> task {
+            let! _ = stats fixture // Start registered the wakeup before this read.
+            let alice = connect fixture "alice"
+            check (fixture.Notify()) "Ready notification must be admitted."
+            let! _ = welcome fixture alice
+            fixture.Input.Enqueue(ServerTransportEvent.Failed(alice, "native send rejected"))
+            check (fixture.Notify()) "Failure must wake runtime without a tick."
+            do! empty fixture
+            do! post fixture.Runtime ServerRuntimeMessage.Stop
+            do! awaitUnit fixture.Runtime.Completion
+        })
+    }
+    testTask "ready movement is sent on realtime without waiting for runtime tick or settlement" {
+        let settings = { ServerRuntimeOptions.defaults with PollIntervalMs = 1000000; OpenTimeoutMs = 2000000; ShutdownTimeoutMs = 2000000 }
         do! withRuntime settings (fun fixture -> task {
             let alice = connect fixture "alice"
             do! post fixture.Runtime (tick ())
             let! _ = welcome fixture alice
             let pid = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
-            let space name =
-                Dreamsleeve.Server.Domain.FormKey.create
-                    (Dreamsleeve.Server.Domain.PluginName.create 255 name |> ok)
-                    (Dreamsleeve.Server.Domain.LocalFormId.create 60u |> ok)
-            let location name x =
-                Dreamsleeve.Server.Domain.PlayerLocation.create
-                    (Dreamsleeve.Server.Domain.Location.create (space name) (Dreamsleeve.Server.Domain.LocationName.create 128 "Place" |> ok))
-                    (Dreamsleeve.Server.Domain.Position.create x 0.f 0.f |> ok)
-                    Dreamsleeve.Server.Domain.Rotation.zero
-            let move value = ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved (movementBatch [pid, value])))
-            do! post fixture.Runtime (move (ValueSome (location "Skyrim.esm" 1.f)))
-            do! post fixture.Runtime (move (ValueSome (location "Skyrim.esm" 2.f)))
-            let! _ = stats fixture
+            let point = Dreamsleeve.Server.Domain.Position.create 2.f 0.f 0.f |> ok
+            let change: Dreamsleeve.Server.Domain.MovementChange = {
+                PlayerId = pid; ViewRevision = 1UL; Sequence = 1UL
+                Pose = { Position = point; Rotation = Dreamsleeve.Server.Domain.Rotation.zero; SampledAtUs = 1UL }
+            }
+            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved [|change|])))
+            let! target, value = receive fixture.Movement
+            equal alice target
+            equal 2.f value.Movements.Players[0].Pose.Position.X
             equal 0 fixture.Output.Reader.Count
-            do! post fixture.Runtime (move ValueNone)
-            let! _, beforeClear = receive fixture.Output
-            equal 2.f beforeClear.PlayersMoved.Players[0].Location.Position.X
-            do! post fixture.Runtime (move (ValueSome (location "Skyrim.esm" 3.f)))
-            let! _, clear = receive fixture.Output
-            check (isNull clear.PlayersMoved.Players[0].Location) "Clear remains before reappearance."
-            do! post fixture.Runtime (move (ValueSome (location "Other.esm" 4.f)))
-            let! _, beforeSpace = receive fixture.Output
-            equal 3.f beforeSpace.PlayersMoved.Players[0].Location.Position.X
-            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayerLeft pid)))
-            let! _, beforeLeft = receive fixture.Output
-            let! _, left = receive fixture.Output
-            equal 4.f beforeLeft.PlayersMoved.Players[0].Location.Position.X
-            equal ServerPacket.PayloadOneofCase.PlayerLeft left.PayloadCase
-            do! post fixture.Runtime (move (ValueSome (location "Other.esm" 5.f)))
-            do! post fixture.Runtime (tick ())
-            let! _, onTick = receive fixture.Output
-            equal 5.f onTick.PlayersMoved.Players[0].Location.Position.X
-
-            let oversized = movementBatch [for id in 1UL .. 3UL -> Dreamsleeve.Server.Domain.PlayerId.create id |> ok, ValueNone]
-            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved oversized)))
-            let! state = stats fixture
-            equal 1 state.Closing
+            check (fixture.Sent |> Seq.contains DeliveryLane.Realtime) "Movement uses its own channel."
             do! post fixture.Runtime ServerRuntimeMessage.Stop
             let deadline = Environment.TickCount64 + 5000L
             while not fixture.Runtime.Completion.IsCompleted && Environment.TickCount64 < deadline do
@@ -212,7 +222,6 @@ let tests = testList "ServerRuntime" [
             do! awaitUnit fixture.Runtime.Completion
         })
     }
-
     testTask "two clients receive one authoritative publication each and reconnect retains identity" {
         do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
             let alice = connect fixture "alice"
@@ -220,7 +229,7 @@ let tests = testList "ServerRuntime" [
             let bob = connect fixture "bob"
             let! b = welcome fixture bob
             equal 2 b.Players.Count
-            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, chat 2UL "hello"))
+            fixture.Input.Enqueue(incoming(alice, chat 2UL "hello"))
 
             let messages = ResizeArray<Guid * ServerPacket>()
             while messages.Count < 2 do
@@ -289,10 +298,10 @@ let tests = testList "ServerRuntime" [
             let! _ = welcome fixture first
             let malformed = Guid.NewGuid()
             fixture.Input.Enqueue(ServerTransportEvent.Connected malformed)
-            fixture.Input.Enqueue(ServerTransportEvent.Received(malformed, [|255uy|]))
+            fixture.Input.Enqueue(incoming(malformed, [|255uy|]))
             let! closed = receive fixture.Closed
             equal malformed closed
-            fixture.Input.Enqueue(ServerTransportEvent.Received(first, chat 2UL "still alive"))
+            fixture.Input.Enqueue(incoming(first, chat 2UL "still alive"))
             let! _, response = nextWhere fixture (fun id p -> id = first && p.PayloadCase = ServerPacket.PayloadOneofCase.ChatPublished)
             equal "still alive" response.ChatPublished.Message.Text
         })
@@ -363,7 +372,7 @@ let tests = testList "ServerRuntime" [
             let id = connect fixture "once"
             let! _ = welcome fixture id
             do! post fixture.Runtime ServerRuntimeMessage.Start
-            fixture.Input.Enqueue(ServerTransportEvent.Received(id, chat 2UL "one source"))
+            fixture.Input.Enqueue(incoming(id, chat 2UL "one source"))
             let! _, response = nextWhere fixture (fun _ p -> p.PayloadCase = ServerPacket.PayloadOneofCase.ChatPublished)
             equal "one source" response.ChatPublished.Message.Text
         })
@@ -372,6 +381,7 @@ let tests = testList "ServerRuntime" [
         use authenticator = createAuthentication ()
         let transport = {
             MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
+            SetReadyHandler = ignore
             Poll = fun () -> failwith "Invalid runtime must not poll."
             Send = fun _ -> failwith "Invalid runtime must not send."
             Close = ignore; Reset = ignore; Dispose = ignore
@@ -395,7 +405,7 @@ let tests = testList "ServerRuntime" [
             let! status = stats fixture
             equal 1 status.Ready
             equal 1 status.Reservations
-            fixture.Input.Enqueue(ServerTransportEvent.Received(healthy, chat 2UL "survived"))
+            fixture.Input.Enqueue(incoming(healthy, chat 2UL "survived"))
             let! _, response = nextWhere fixture (fun id p -> id = healthy && p.PayloadCase = ServerPacket.PayloadOneofCase.ChatPublished)
             equal "survived" response.ChatPublished.Message.Text
         })
@@ -413,67 +423,59 @@ let tests = testList "ServerRuntime" [
         })
     }
 
-    testTask "authenticated source owns telemetry and both author and observer receive replication" {
-        let options = { ServerRuntimeOptions.defaults with Presence = { ServerRuntimeOptions.defaults.Presence with ReplicationIntervalMs = 10 } }
-        do! withRuntime options (fun fixture -> task {
+    testTask "realtime transport saturation does not close the session or block control" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
+            let id = connect fixture "alice"
+            let! _ = welcome fixture id
+            let pid = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
+            let change: Dreamsleeve.Server.Domain.MovementChange = {
+                PlayerId = pid; ViewRevision = 1UL; Sequence = 1UL
+                Pose = { Position = Dreamsleeve.Server.Domain.Position.create 0.f 0.f 0.f |> ok
+                         Rotation = Dreamsleeve.Server.Domain.Rotation.zero; SampledAtUs = 0UL }
+            }
+            fixture.SendFailures[DeliveryLane.Realtime] <- "Outgoing budget full"
+            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayersMoved [|change|])))
+            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayerLeft pid)))
+            let! _, response = nextWhere fixture (fun _ p -> p.PayloadCase = ServerPacket.PayloadOneofCase.PlayerLeft)
+            equal 1UL response.PlayerLeft.PlayerId
+            let! state = stats fixture
+            equal 1 state.Ready
+            equal 0 state.Closing
+        })
+    }
+    testTask "movement has no acceptance and repeats to both author and visible observer" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
             let alice = connect fixture "alice"
             let! a = welcome fixture alice
             let bob = connect fixture "bob"
             let! _ = welcome fixture bob
-            fixture.Input.Enqueue(ServerTransportEvent.Received(bob, beginCharacter 2UL "Observer"))
-            fixture.Input.Enqueue(ServerTransportEvent.Received(bob, telemetry 3UL 0.0f))
-            let mutable observerReady = false
-            while not observerReady do
-                let! id, response = receive fixture.Output
-                observerReady <- id = bob && response.RequestId = 3UL
-            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, beginCharacter 2UL "Nerevar"))
-            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, telemetry 3UL 10.0f))
-            let replicated = System.Collections.Generic.Dictionary<Guid, PlayerInfo>()
-            let located = System.Collections.Generic.HashSet<Guid>()
-            let mutable accepted = false
-            while located.Count < 2 || not accepted do
-                let! id, response = receive fixture.Output
-                if id = alice && response.RequestId = 3UL then
-                    equal ServerPacket.PayloadOneofCase.PlayerUpdateAccepted response.PayloadCase
-                    accepted <- true
-                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
-                     && response.PlayerUpdated.Player.Profile.PlayerId = a.SelfPlayerId then
-                    let current = response.PlayerUpdated.Player
-                    replicated[id] <- current
-                    if not (isNull current.Location) && current.Location.Position.X = 10.0f then located.Add id |> ignore
-                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayersMoved
-                     && response.PlayersMoved.Players[0].PlayerId = a.SelfPlayerId then
-                    replicated[id].Location <- response.PlayersMoved.Players[0].Location
-                    if response.PlayersMoved.Players[0].Location.Position.X = 10.0f then located.Add id |> ignore
-            equal (set [alice; bob]) (replicated.Keys |> Set.ofSeq)
-            for KeyValue(_, current) in replicated do
-                equal a.SelfPlayerId current.Profile.PlayerId
-                equal "Nerevar" current.CharacterName
-                equal 1UL current.CharacterGeneration
-                equal 10.0f current.Location.Position.X
-                equal 0 current.ActorValues.Count
-
-            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, telemetry 4UL 20.0f))
-            let moved = ResizeArray<Guid>()
-            let mutable movedAccepted = false
-            while moved.Count < 2 || not movedAccepted do
-                let! id, response = receive fixture.Output
-                if id = alice && response.RequestId = 4UL then
-                    equal ServerPacket.PayloadOneofCase.PlayerUpdateAccepted response.PayloadCase
-                    movedAccepted <- true
-                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayersMoved then
-                    equal a.SelfPlayerId response.PlayersMoved.Players[0].PlayerId
-                    equal 20.0f response.PlayersMoved.Players[0].Location.Position.X
-                    moved.Add id
-            equal (set [alice; bob]) (Set.ofSeq moved)
-
+            for id in [alice; bob] do
+                fixture.Input.Enqueue(incoming(id, beginCharacter 2UL "Character"))
+                fixture.Input.Enqueue(incoming(id, telemetry 3UL 0.f))
+            let! _ = nextWhere fixture (fun id p -> id = alice && p.HasRequestId && p.RequestId = 3UL)
+            let sample = ClientMovementPacket(ProtocolVersion = ProtocolCodec.Version,
+                Sample = MovementSample(ContextRevision = 3UL, Sequence = 1UL,
+                    Pose = MovementPose(Position = Position(X = 20.f, Y = 2.f, Z = 3.f), Rotation = Rotation(), SampledAtUs = 123UL)))
+            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, DeliveryLane.Realtime, sample.ToByteArray()))
+            let observed = System.Collections.Generic.HashSet<Guid>()
+            while observed.Count < 2 do
+                let! id, packet = receive fixture.Movement
+                if packet.Movements.Players |> Seq.exists (fun value -> value.PlayerId = a.SelfPlayerId && value.Sequence = 1UL && value.Pose.Position.X = 20.f) then
+                    observed.Add id |> ignore
+            equal (set [alice; bob]) (Set.ofSeq observed)
+            // No new upstream sample: a subsequent period still repairs a lost final position.
+            let mutable repeated = false
+            while not repeated do
+                let! _, packet = receive fixture.Movement
+                repeated <- packet.Movements.Players |> Seq.exists (fun value -> value.PlayerId = a.SelfPlayerId && value.Sequence = 1UL)
+            let mutable output = Unchecked.defaultof<Guid * ServerPacket>
+            while fixture.Output.Reader.TryRead(&output) do
+                let _, response = output
+                check (not response.HasRequestId || response.RequestId <= 3UL) "No movement request or ACK generated."
             let late = connect fixture "healthy"
             let! initial = welcome fixture late
             let current = initial.Players |> Seq.find (fun value -> value.Profile.PlayerId = a.SelfPlayerId)
             check (isNull current.Location) "Unlocated late join must not receive remote coordinates."
-            equal 0 current.ActorValues.Count
-            equal "Nerevar" current.CharacterName
         })
     }
-
 ]

@@ -169,8 +169,12 @@ module internal PlayerCodec =
             CharacterName.create limits.CharacterName source.RenameCharacter.Name
             |> Result.map PlayerUpdate.RenameCharacter
             |> Result.mapError ProtocolCodecFailure.InvalidDomain
-        | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.SampleMovement ->
-            decodeLocation limits source.SampleMovement.Location |> Result.map PlayerUpdate.Move
+        | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.SetLocation ->
+            if source.SetLocation.ContextRevision = 0UL then
+                Error(ProtocolCodecFailure.InvalidPayload "context_revision")
+            else
+                decodeLocation limits source.SetLocation.Location
+                |> Result.map (fun location -> PlayerUpdate.SetLocation(source.SetLocation.ContextRevision, location))
         | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.SetActorValues ->
             decodeActorValues limits source.SetActorValues.Values |> Result.map PlayerUpdate.SetActorValues
         | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.LeaveGame -> Ok PlayerUpdate.LeaveGame
@@ -180,6 +184,19 @@ module internal PlayerCodec =
             Error(ProtocolCodecFailure.InvalidPayload "update_player.action")
         | unknown when not (Enum.IsDefined unknown) ->
             Error(ProtocolCodecFailure.InvalidPayload "update_player.action")
+
+    let decodeMovement (source: Dreamsleeve.Protocol.Chat.MovementSample) =
+        if isNull source || source.ContextRevision = 0UL || source.Sequence = 0UL then
+            Error(ProtocolCodecFailure.InvalidPayload "movement_sample")
+        elif isNull source.Pose || isNull source.Pose.Position || isNull source.Pose.Rotation then
+            Error(ProtocolCodecFailure.InvalidPayload "pose")
+        else
+            let point, angles = source.Pose.Position, source.Pose.Rotation
+            match Position.create point.X point.Y point.Z, Rotation.create angles.X angles.Y angles.Z with
+            | Ok position, Ok rotation ->
+                Ok { ContextRevision = source.ContextRevision; Sequence = source.Sequence
+                     Pose = { Position = position; Rotation = rotation; SampledAtUs = source.Pose.SampledAtUs } }
+            | Error error, _ | _, Error error -> Error(ProtocolCodecFailure.InvalidDomain error)
 
     let profile (value: PlayerData) =
         Dreamsleeve.Protocol.Chat.PlayerProfile(
@@ -274,7 +291,8 @@ module internal PlayerCodec =
 
     let player (value: PlayerSnapshot) =
         let result = Dreamsleeve.Protocol.Chat.PlayerInfo(
-            Profile = profile value.Data, CharacterGeneration = value.CharacterGeneration,
+            Profile = profile value.Data,
+            ViewRevision = value.ViewRevision, MovementSequence = value.MovementSequence, CharacterGeneration = value.CharacterGeneration,
             Details = details value.Details)
 
         value.CharacterName |> ValueOption.iter (fun name -> result.CharacterName <- CharacterName.value name)
@@ -292,7 +310,20 @@ module internal PlayerCodec =
         metadata |> ValueOption.iter (fun value -> changed.Details <- details value)
         changed
 
-    let moved playerId place =
-        let result = Dreamsleeve.Protocol.Chat.PlayerMoved(PlayerId = PlayerId.value playerId)
-        place |> ValueOption.iter (fun value -> result.Location <- location value)
+    let pose (value: MovementPose) =
+        Dreamsleeve.Protocol.Chat.MovementPose(
+            Position = Dreamsleeve.Protocol.Chat.Position(
+                X = WorldUnit.value value.Position.X, Y = WorldUnit.value value.Position.Y, Z = WorldUnit.value value.Position.Z),
+            Rotation = Dreamsleeve.Protocol.Chat.Rotation(
+                X = Radian.value value.Rotation.X, Y = Radian.value value.Rotation.Y, Z = Radian.value value.Rotation.Z),
+            SampledAtUs = value.SampledAtUs)
+
+    let moved (value: MovementChange) =
+        Dreamsleeve.Protocol.Chat.PlayerMoved(PlayerId = PlayerId.value value.PlayerId,
+            ViewRevision = value.ViewRevision, Sequence = value.Sequence, Pose = pose value.Pose)
+
+    let visibility (value: VisibilityChange) =
+        let result = Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged(
+            PlayerId = PlayerId.value value.PlayerId, ViewRevision = value.ViewRevision, Sequence = value.Sequence)
+        value.Location |> ValueOption.iter (fun current -> result.Location <- location current)
         result

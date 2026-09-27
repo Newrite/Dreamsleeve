@@ -32,6 +32,9 @@ type PlayerSnapshot = {
     CharacterName: CharacterName voption
     Details: PlayerDetails
     Location: PlayerLocation voption
+    MovementContext: uint64
+    MovementSequence: uint64
+    ViewRevision: uint64
     ActorValues: Map<ActorValueKey, ActorValueInfo>
 }
 
@@ -41,7 +44,7 @@ type PlayerSnapshot = {
 type PlayerUpdate =
     | BeginCharacter of CharacterName
     | RenameCharacter of CharacterName
-    | Move of PlayerLocation voption
+    | SetLocation of contextRevision: uint64 * PlayerLocation voption
     | SetActorValues of Map<ActorValueKey, ActorValueInfo>
     | SetDetails of PlayerDetails
     | LeaveGame
@@ -56,6 +59,9 @@ type Player =
         characterName: CharacterName voption
         details: PlayerDetails
         location: PlayerLocation voption
+        movementContext: uint64
+        movementSequence: uint64
+        movementHighWater: uint64
         actorValues: ActorValueStorage
     }
     member this.Data = this.data
@@ -63,6 +69,9 @@ type Player =
     member this.CharacterName = this.characterName
     member this.Details = this.details
     member this.Location = this.location
+    member this.MovementContext = this.movementContext
+    member this.MovementSequence = this.movementSequence
+    member this.MovementHighWater = this.movementHighWater
 
 [<RequireQualifiedAccess>]
 module Player =
@@ -72,6 +81,9 @@ module Player =
           characterName = ValueNone
           details = PlayerDetails.empty
           location = ValueNone
+          movementContext = 0UL
+          movementSequence = 0UL
+          movementHighWater = 0UL
           actorValues = ActorValueStorage.create () }
 
     /// Changing a profile never changes the identity of an existing player.
@@ -103,6 +115,8 @@ module Player =
             characterName = ValueNone
             details = PlayerDetails.empty
             location = ValueNone
+            movementContext = 0UL
+            movementSequence = 0UL
             actorValues = ActorValueStorage.create () }
 
     /// Explicitly start a new character, even when its name matches the old one.
@@ -118,10 +132,27 @@ module Player =
         match update with
         | PlayerUpdate.BeginCharacter name -> beginCharacter name player
         | PlayerUpdate.RenameCharacter name -> withCharacterName name player
-        | PlayerUpdate.Move location -> { player with location = location }
+        | PlayerUpdate.SetLocation(context, location) ->
+            { player with
+                location = location
+                movementContext = if location.IsSome then context else 0UL
+                movementSequence = 0UL
+                movementHighWater = context }
         | PlayerUpdate.SetActorValues values -> replaceActorValues values player
         | PlayerUpdate.SetDetails details -> { player with details = details }
         | PlayerUpdate.LeaveGame -> clearGameState player
+
+    /// Reordered, duplicated or early realtime samples are normal packet loss,
+    /// not failed commands. Reliable transitions alone establish the location.
+    let tryApplyMovement (sample: MovementSample) (player: Player) =
+        match player.location with
+        | ValueSome location when sample.ContextRevision <> 0UL
+                                  && sample.ContextRevision = player.movementContext
+                                  && sample.Sequence > player.movementSequence ->
+            ValueSome { player with
+                            location = ValueSome (MovementPose.apply sample.Pose location)
+                            movementSequence = sample.Sequence }
+        | ValueSome _ | ValueNone -> ValueNone
 
     let setActorValue key info (player: Player) =
         ActorValueStorage.set key info player.actorValues
@@ -152,4 +183,7 @@ module Player =
           CharacterName = player.characterName
           Details = player.details
           Location = player.location
+          MovementContext = player.movementContext
+          MovementSequence = player.movementSequence
+          ViewRevision = 0UL
           ActorValues = actorValuesSnapshot player }

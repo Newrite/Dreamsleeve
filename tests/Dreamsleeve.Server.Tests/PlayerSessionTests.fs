@@ -207,7 +207,7 @@ let tests = testList "PlayerSession" [
             do! post fixture.Player (PlayerSessionMessage.SendChat(3UL, globalId, text))
             let! overloaded = receive fixture.Host
             match overloaded with
-            | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, reason)) ->
+            | SessionHostCommand.Send(_, ServerResponse.ChatRejected(id, reason)) ->
                 equal 3UL id
                 equal RequestRejectionCode.Overloaded reason.Code
             | other -> failwithf "%A" other
@@ -216,7 +216,7 @@ let tests = testList "PlayerSession" [
             let rejection = { Code = RequestRejectionCode.NotChannelMember; Message = "refused"; Field = "" }
             do! deliver chat.Events (ChatRoomEvent.Rejected(2UL, rejection))
             let! rejected = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.RequestRejected(2UL, rejection))) rejected
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.ChatRejected(2UL, rejection))) rejected
             do! post fixture.Player (PlayerSessionMessage.SendChat(4UL, globalId, text))
             let! next = receive fixture.Chat
             match next with
@@ -313,7 +313,7 @@ let tests = testList "PlayerSession" [
             }
 
             do! update (PlayerUpdate.BeginCharacter name)
-            do! update (PlayerUpdate.Move(ValueSome location))
+            do! update (PlayerUpdate.SetLocation(1UL, ValueSome location))
             do! update (PlayerUpdate.SetActorValues(Map.ofList [(key, health 80.0f)]))
             let! first = read fixture.Player
             let first = ok first
@@ -340,6 +340,47 @@ let tests = testList "PlayerSession" [
             equal 0 fixture.Host.Reader.Count
             do! post fixture.Player PlayerSessionMessage.Stop
             do! finish fixture
+        }))
+
+    case "movement samples need an accepted context and never produce acknowledgements" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! _, _, _ = ready fixture
+            let name = CharacterName.create 128 "Nerevar" |> ok
+            let form = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)
+            let location = PlayerLocation.create (Location.create form (LocationName.create 128 "Whiterun" |> ok)) Position.zero Rotation.zero
+            let pose = { Position = Position.create 10.0f 20.0f 30.0f |> ok; Rotation = Rotation.zero; SampledAtUs = 0UL }
+            let sample context sequence = PlayerSessionMessage.SampleMovement { ContextRevision = context; Sequence = sequence; Pose = pose }
+            do! post fixture.Player (sample 1UL 1UL)
+            let! _ = read fixture.Player
+            equal 0 fixture.Host.Reader.Count
+            equal 0 fixture.Presence.Reader.Count
+            let! _ = applyUpdate fixture 2UL (PlayerUpdate.BeginCharacter name)
+            let! _ = applyUpdate fixture 3UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
+            do! post fixture.Player (sample 2UL 10UL) // Realtime overtook its reliable transition.
+            do! post fixture.Player (sample 1UL 1UL)
+            let! updated = receive fixture.Presence
+            match updated with
+            | PresenceCommand.Update(_, current) ->
+                equal 1UL current.MovementSequence
+                equal pose.Position current.Location.Value.Position
+            | other -> failwithf "%A" other
+            do! post fixture.Player (sample 1UL 1UL)
+            do! post fixture.Player (sample 1UL 0UL)
+            let! current = read fixture.Player
+            equal 1UL (ok current).MovementSequence
+            equal 0 fixture.Host.Reader.Count
+            equal 0 fixture.Presence.Reader.Count
+            let! _ = applyUpdate fixture 4UL (PlayerUpdate.BeginCharacter name)
+            do! rejectUpdate fixture 5UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
+            do! post fixture.Player (sample 1UL 2UL)
+            let! current = read fixture.Player
+            equal ValueNone (ok current).Location
+            let! _ = applyUpdate fixture 6UL (PlayerUpdate.SetLocation(2UL, ValueSome location))
+            do! post fixture.Player (sample 1UL 99UL)
+            let! current = read fixture.Player
+            equal 0UL (ok current).MovementSequence
+            equal 0 fixture.Host.Reader.Count
+            equal 0 fixture.Presence.Reader.Count
         }))
 
     case "duplicate pending ID on another channel closes without settling the original as a refusal" (fun () ->

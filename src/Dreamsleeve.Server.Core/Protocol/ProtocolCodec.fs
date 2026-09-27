@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 5u
+    let Version = 6u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -59,17 +59,41 @@ module ProtocolCodec =
                     decodePayload config packet
             with :? InvalidProtocolBufferException -> fail None ProtocolCodecFailure.MalformedPacket
 
+    let requestLane (request: ClientRequest) =
+        match request.Command with
+        | ClientCommand.SendChat _ -> DeliveryLane.Chat
+        | ClientCommand.OpenSession _ | ClientCommand.UpdatePlayer _ -> DeliveryLane.Control
+
+    let responseLane = function
+        | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _ | ServerResponse.ChatRejected _ -> DeliveryLane.Chat
+        | ServerResponse.PlayersMoved _ -> DeliveryLane.Realtime
+        | ServerResponse.SessionOpened _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
+        | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
+        | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _ -> DeliveryLane.Control
+
+    let decodeMovement (codec: ProtocolCodec) (bytes: byte array) =
+        if isNull bytes || bytes.Length = 0 then fail None ProtocolCodecFailure.EmptyPacket
+        elif bytes.Length > codec.Config.MaxPacketBytes then fail None ProtocolCodecFailure.PacketTooLarge
+        else
+            try
+                let packet = Dreamsleeve.Protocol.Chat.ClientMovementPacket.Parser.ParseFrom(bytes)
+                if packet.ProtocolVersion <> Version then fail None (ProtocolCodecFailure.UnsupportedVersion packet.ProtocolVersion)
+                else PlayerCodec.decodeMovement packet.Sample |> Result.mapError (fun error -> { RequestId = None; Failure = error })
+            with :? InvalidProtocolBufferException -> fail None ProtocolCodecFailure.MalformedPacket
+
     // Optional only at the wire/error boundary; response cases carry their own
     // required correlation, while notifications cannot be given a request ID.
     let private responseRequestId = function
         | ServerResponse.SessionOpened(requestId, _)
         | ServerResponse.ChatAccepted(requestId, _)
         | ServerResponse.PlayerUpdateAccepted requestId
-        | ServerResponse.RequestRejected(requestId, _) -> Some requestId
+        | ServerResponse.RequestRejected(requestId, _)
+        | ServerResponse.ChatRejected(requestId, _) -> Some requestId
         | ServerResponse.ChatPublished _
         | ServerResponse.PlayerJoined _
         | ServerResponse.PlayerUpdated _
         | ServerResponse.PlayerMetadataChanged _
+        | ServerResponse.PlayerVisibilityChanged _
         | ServerResponse.PlayersMoved _
         | ServerResponse.PlayerLeft _ -> None
 
@@ -82,12 +106,16 @@ module ProtocolCodec =
                 if SessionCodec.validWelcome config value then None
                 else Some(ProtocolCodecFailure.InvalidPayload "session_opened")
 
-            | ServerResponse.RequestRejected(_, value) ->
+            | ServerResponse.RequestRejected(_, value)
+            | ServerResponse.ChatRejected(_, value) ->
                 if value.Code = RequestRejectionCode.Unspecified || not (Enum.IsDefined value.Code) then
                     Some(ProtocolCodecFailure.InvalidPayload "code")
                 elif isNull value.Message || isNull value.Field then
                     Some(ProtocolCodecFailure.InvalidPayload "rejection")
                 else None
+
+            | ServerResponse.PlayerVisibilityChanged value ->
+                if value.ViewRevision = 0UL then Some(ProtocolCodecFailure.InvalidPayload "view_revision") else None
 
             | ServerResponse.PlayerMetadataChanged(_, values, details) ->
                 if values.IsNone && details.IsNone then Some(ProtocolCodecFailure.InvalidPayload "player_metadata_changed")
@@ -127,52 +155,59 @@ module ProtocolCodec =
                 packet.PlayerUpdated <- Dreamsleeve.Protocol.Chat.PlayerUpdated(Player = PlayerCodec.player value)
             | ServerResponse.PlayerMetadataChanged(playerId, values, metadata) ->
                 packet.PlayerMetadataChanged <- PlayerCodec.metadataChanged playerId values metadata
-            | ServerResponse.PlayersMoved movements ->
-                packet.PlayersMoved <- Dreamsleeve.Protocol.Chat.PlayersMoved()
-                for movement in movements do
-                    packet.PlayersMoved.Players.Add(PlayerCodec.moved movement.PlayerId movement.Location)
+            | ServerResponse.PlayersMoved _ -> ()
+            | ServerResponse.PlayerVisibilityChanged value ->
+                packet.PlayerVisibilityChanged <- PlayerCodec.visibility value
             | ServerResponse.PlayerUpdateAccepted _ ->
                 packet.PlayerUpdateAccepted <- Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted()
             | ServerResponse.PlayerLeft value ->
                 packet.PlayerLeft <- Dreamsleeve.Protocol.Chat.PlayerLeft(PlayerId = PlayerId.value value)
 
-            | ServerResponse.RequestRejected(_, value) ->
+            | ServerResponse.RequestRejected(_, value)
+            | ServerResponse.ChatRejected(_, value) ->
                 packet.RequestRejected <- Dreamsleeve.Protocol.Chat.RequestRejected(Code = value.Code, Message = value.Message, Field = value.Field)
 
-            if packet.CalculateSize() > config.MaxPacketBytes then
-                fail requestId ProtocolCodecFailure.PacketTooLarge
-            else
-                Ok(packet.ToByteArray())
+            let encoded: IMessage =
+                match response with
+                | ServerResponse.PlayersMoved movements ->
+                    let batch = Dreamsleeve.Protocol.Chat.PlayersMoved()
+                    for movement in movements do batch.Players.Add(PlayerCodec.moved movement)
+                    Dreamsleeve.Protocol.Chat.ServerMovementPacket(ProtocolVersion = Version, Movements = batch)
+                | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
+                | ServerResponse.ChatRejected _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
+                | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
+                | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _ -> packet
 
-    /// Split at entry boundaries within the application cap. A positive target
-    /// additionally opts into splitting within the peer MTU budget.
-    /// An indivisible entry may fragment, but never exceed MaxPacketBytes.
-    /// No partial send on failure; array order is preserved.
+            if encoded.CalculateSize() > config.MaxPacketBytes then fail requestId ProtocolCodecFailure.PacketTooLarge
+            else Ok(encoded.ToByteArray())
+
+    /// Each realtime packet fits the negotiated payload budget. Entries are
+    /// independent; loss of one part never prevents applying the other parts.
     let encodeMovementPackets (codec: ProtocolCodec) maxUnfragmentedPayloadBytes (movements: MovementChange array) =
         let target =
-            if codec.Config.MovementPacketTargetBytes = 0 then codec.Config.MaxPacketBytes
+            if codec.Config.MovementPacketTargetBytes = 0 then min codec.Config.MaxPacketBytes maxUnfragmentedPayloadBytes
             else min codec.Config.MaxPacketBytes (min codec.Config.MovementPacketTargetBytes maxUnfragmentedPayloadBytes)
         let packets = ResizeArray<byte array>()
         let mutable batch = Dreamsleeve.Protocol.Chat.PlayersMoved()
         let mutable payloadSize = 0
         let mutable tooLarge = false
         let headerSize =
-            CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.ServerPacket.ProtocolVersionFieldNumber)
+            CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.ServerMovementPacket.ProtocolVersionFieldNumber)
             + CodedOutputStream.ComputeUInt32Size(Version)
-            + CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.ServerPacket.PlayersMovedFieldNumber)
+            + CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.ServerMovementPacket.MovementsFieldNumber)
         let envelopeSize size = headerSize + CodedOutputStream.ComputeLengthSize(size) + size
         let flush () =
             if batch.Players.Count > 0 then
-                let packet = Dreamsleeve.Protocol.Chat.ServerPacket(ProtocolVersion = Version, PlayersMoved = batch)
+                let packet = Dreamsleeve.Protocol.Chat.ServerMovementPacket(ProtocolVersion = Version, Movements = batch)
                 packets.Add(packet.ToByteArray())
                 batch <- Dreamsleeve.Protocol.Chat.PlayersMoved()
                 payloadSize <- 0
 
         for movement in movements do
-            let item = PlayerCodec.moved movement.PlayerId movement.Location
+            let item = PlayerCodec.moved movement
             let size = CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.PlayersMoved.PlayersFieldNumber)
                        + CodedOutputStream.ComputeMessageSize(item)
-            if envelopeSize size > codec.Config.MaxPacketBytes then
+            if envelopeSize size > target then
                 tooLarge <- true
             else
                 if envelopeSize (payloadSize + size) > target then flush()
@@ -183,9 +218,4 @@ module ProtocolCodec =
         if maxUnfragmentedPayloadBytes < 1 then fail None (ProtocolCodecFailure.InvalidPayload "transport_payload_budget")
         elif tooLarge then fail None ProtocolCodecFailure.PacketTooLarge
         elif packets.Count = 0 then fail None (ProtocolCodecFailure.InvalidPayload "players_moved")
-        else
-            for packet in packets do
-                if packet.Length > target then
-                    RuntimeMetrics.movementTargetExceeded.Record(float packet.Length)
-
-            Ok (List.ofSeq packets)
+        else Ok (List.ofSeq packets)

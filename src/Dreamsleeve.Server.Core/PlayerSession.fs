@@ -16,6 +16,7 @@ type PlayerSessionMessage =
     | PresenceDetached of Guid
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
     | Update of requestId: uint64 * PlayerUpdate
+    | SampleMovement of MovementSample
     | Read of ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
     | Stop
 
@@ -108,6 +109,10 @@ module PlayerSession =
     let private reject (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
         let rejection = { Code = code; Message = message; Field = "" }
         send options request state context (ServerResponse.RequestRejected(requestId, rejection))
+
+    let private rejectChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
+        let rejection = { Code = code; Message = message; Field = "" }
+        send options request state context (ServerResponse.ChatRejected(requestId, rejection))
 
     let private rejectOpening (options: PlayerSessionOptions) (request: SessionOpenRequest) state context code message =
         reject options request state context request.RequestId code message
@@ -229,7 +234,7 @@ module PlayerSession =
         | ChatRoomEvent.Rejected(requestId, rejection) ->
             match state.Phase with
             | Active _ when state.Pending.Remove requestId ->
-                send options request state context (ServerResponse.RequestRejected(requestId, rejection))
+                send options request state context (ServerResponse.ChatRejected(requestId, rejection))
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected chat rejection."
@@ -247,7 +252,15 @@ module PlayerSession =
         | PresenceEvent.Joined player -> publish options request state context (ServerResponse.PlayerJoined player)
         | PresenceEvent.Updated player -> publish options request state context (ServerResponse.PlayerUpdated player)
         | PresenceEvent.MetadataChanged(playerId, values, details) -> publish options request state context (ServerResponse.PlayerMetadataChanged(playerId, values, details))
-        | PresenceEvent.Moved movements -> publish options request state context (ServerResponse.PlayersMoved movements)
+        | PresenceEvent.VisibilityChanged change ->
+            publish options request state context (ServerResponse.PlayerVisibilityChanged change)
+        | PresenceEvent.Moved movements ->
+            // Early realtime can be dropped: opening owns a reliable baseline and
+            // the next period repeats all currently visible samples.
+            match state.Phase with
+            | Active _ when state.Host.Count < options.MaxPendingOutput ->
+                state.Host.TrySend(context, SessionHostCommand.Send(request.ConnectionId, ServerResponse.PlayersMoved movements)) |> ignore
+            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
         | PresenceEvent.Left playerId -> publish options request state context (ServerResponse.PlayerLeft playerId)
 
     let private sendChat (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context requestId channelId text =
@@ -257,9 +270,9 @@ module PlayerSession =
                 // A second reply with this ID could settle the original request.
                 close request state context "Request ID is invalid or already pending."
             elif channelId <> globalId then
-                reject options request state context requestId RequestRejectionCode.ChannelNotFound "Channel does not exist."
+                rejectChat options request state context requestId RequestRejectionCode.ChannelNotFound "Channel does not exist."
             elif state.Pending.Count >= options.MaxPendingChat then
-                reject options request state context requestId RequestRejectionCode.Overloaded "Too many pending chat requests."
+                rejectChat options request state context requestId RequestRejectionCode.Overloaded "Too many pending chat requests."
             else
                 let submission = {
                     ConnectionId = request.ConnectionId
@@ -270,10 +283,10 @@ module PlayerSession =
                 if state.Chat.TrySend(context, ChatRoomCommand.Publish submission) then
                     state.Pending.Add requestId |> ignore
                 else
-                    reject options request state context requestId RequestRejectionCode.Overloaded "Channel admission is full."
+                    rejectChat options request state context requestId RequestRejectionCode.Overloaded "Channel admission is full."
         | Closing, _ -> ()
         | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
-            reject options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
+            rejectChat options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
 
     let private validUpdate maxActorValues command (player: Player) =
         match command with
@@ -281,7 +294,8 @@ module PlayerSession =
         | PlayerUpdate.RenameCharacter _ -> player.CharacterName.IsSome
         | PlayerUpdate.SetDetails details ->
             player.CharacterName.IsSome || (details.Race.IsNone && details.Level.IsNone)
-        | PlayerUpdate.Move _ -> player.CharacterName.IsSome
+        | PlayerUpdate.SetLocation(revision, _) ->
+            player.CharacterName.IsSome && revision > player.MovementHighWater
         | PlayerUpdate.SetActorValues values ->
             player.CharacterName.IsSome && values.Count <= maxActorValues
 
@@ -308,6 +322,17 @@ module PlayerSession =
         | Starting | Resolving _ | Reserving _ | Opening _ ->
             reject options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
 
+    let private sampleMovement (options: PlayerSessionOptions) (request: SessionOpenRequest) state context sample =
+        match state.Phase with
+        | Active player when state.Presence.Count < options.MaxPendingUpdates ->
+            match Player.tryApplyMovement sample player with
+            | ValueSome updated ->
+                let change = PresenceCommand.Update(request.ConnectionId, Player.snapshot updated)
+                if state.Presence.TrySend(context, change) then
+                    state.Phase <- Active updated
+            | ValueNone -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
+
     let private handle (options: PlayerSessionOptions) maxActorValues globalId (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) message = task {
         match message with
         | PlayerSessionMessage.Begin -> beginResolve request state context
@@ -325,6 +350,8 @@ module PlayerSession =
             sendChat options globalId request state context requestId channelId text
         | PlayerSessionMessage.Update(requestId, command) ->
             update options maxActorValues request state context requestId command
+        | PlayerSessionMessage.SampleMovement sample ->
+            sampleMovement options request state context sample
         | PlayerSessionMessage.Read reply ->
             match state.Phase with
             | Active player -> reply.Reply(Ok (Player.snapshot player))
@@ -343,8 +370,9 @@ module PlayerSession =
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Rejected _)
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Snapshot _) -> true
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Published _)
-        | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.MetadataChanged _ | PresenceEvent.Left _)
-        | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.Update _ | PlayerSessionMessage.Read _ -> false
+        | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.VisibilityChanged _ | PresenceEvent.MetadataChanged _ | PresenceEvent.Left _)
+        | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _
+        | PlayerSessionMessage.Read _ -> false
 
     let start (options: PlayerSessionOptions) maxActorValues globalId authentication chat presence host (request: SessionOpenRequest) =
         let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;

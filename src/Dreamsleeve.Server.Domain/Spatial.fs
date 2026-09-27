@@ -139,6 +139,26 @@ module PlayerLocation =
             | ValueSome squared -> Ok (squared <= radius64 * radius64)
             | ValueNone -> Ok false
 
-/// A detached batch element. Location is an immutable shared sample; ValueNone clears it.
+/// An absolute sample within a location established by a reliable command.
 [<Struct>]
-type MovementChange = { PlayerId: PlayerId; Location: PlayerLocation voption }
+type MovementPose = { Position: Position; Rotation: Rotation; SampledAtUs: uint64 }
+
+[<Struct>]
+type MovementSample = { ContextRevision: uint64; Sequence: uint64; Pose: MovementPose }
+
+/// A periodic downstream sample. It never establishes visibility or a location.
+[<Struct>]
+type MovementChange = { PlayerId: PlayerId; ViewRevision: uint64; Sequence: uint64; Pose: MovementPose }
+
+/// Reliable baseline or clear for one observer's view of a player.
+[<Struct>]
+type VisibilityChange = { PlayerId: PlayerId; ViewRevision: uint64; Sequence: uint64; Location: PlayerLocation voption }
+
+[<RequireQualifiedAccess>]
+module MovementPose =
+    let ofLocation (location: PlayerLocation) =
+        { Position = location.Position; Rotation = location.Rotation; SampledAtUs = location.SampledAtUs }
+
+    let apply (pose: MovementPose) (location: PlayerLocation) =
+        PlayerLocation.create location.Location pose.Position pose.Rotation
+        |> PlayerLocation.withSampleTime pose.SampledAtUs

@@ -6,14 +6,19 @@ namespace Dreamsleeve.Server.Infrastructure.Interop;
 
 // All access, including ENet's final packet-release callback, belongs to the
 // transport owner. Count payloads retained by ENet, including unacknowledged sends.
-public sealed class PacketBudget(int maximumPackets, long maximumBytes)
+public sealed class PacketBudget(int maximumPackets, long maximumBytes, int reliablePacketReserve = 1)
 {
     public int Packets { get; private set; }
     public long Bytes { get; private set; }
 
-    internal bool TryReserve(int length)
+    internal bool TryReserve(int length, bool reliable)
     {
-        if (Packets >= maximumPackets || length > maximumBytes - Bytes)
+        // Realtime cannot occupy the reliable headroom. These are admission
+        // limits within the existing total budget, not additional memory.
+        var packetLimit = reliable ? maximumPackets
+            : maximumPackets - Math.Max(1, Math.Min(maximumPackets, reliablePacketReserve));
+        var byteLimit = reliable ? maximumBytes : maximumBytes - Math.Max(1L, maximumBytes / 4);
+        if (Packets >= packetLimit || length > byteLimit - Bytes)
             return false;
 
         ++Packets;
@@ -65,12 +70,15 @@ public static unsafe class OutgoingPackets
     }
 
     public static PacketSendResult TrySend(EnetPeer peer, ReadOnlySpan<byte> bytes,
-        PacketBudget hostBudget, PacketBudget peerBudget)
+        PacketBudget hostBudget, PacketBudget peerBudget) => TrySend(peer, bytes, hostBudget, peerBudget, 0, true);
+
+    public static PacketSendResult TrySend(EnetPeer peer, ReadOnlySpan<byte> bytes,
+        PacketBudget hostBudget, PacketBudget peerBudget, byte channel, bool reliable)
     {
-        if (!hostBudget.TryReserve(bytes.Length))
+        if (!hostBudget.TryReserve(bytes.Length, reliable))
             return PacketSendResult.BudgetExceeded;
 
-        if (!peerBudget.TryReserve(bytes.Length))
+        if (!peerBudget.TryReserve(bytes.Length, reliable))
         {
             hostBudget.Release(bytes.Length);
             return PacketSendResult.BudgetExceeded;
@@ -84,14 +92,14 @@ public static unsafe class OutgoingPackets
         {
             var lease = new Lease(hostBudget, peerBudget, bytes.Length);
             handle = GCHandle.Alloc(lease);
-            packet = EnetPacket.Create(bytes, EnetPacketFlag.Reliable,
+            packet = EnetPacket.Create(bytes, reliable ? EnetPacketFlag.Reliable : default,
                 &Released, (void*)GCHandle.ToIntPtr(handle));
             if (!packet.IsCreated)
                 return PacketSendResult.PeerRejected;
 
             packetOwnsLease = true;
 
-            return peer.TrySend(0, ref packet)
+            return peer.TrySend(channel, ref packet)
                 ? PacketSendResult.Sent
                 : PacketSendResult.PeerRejected;
         }

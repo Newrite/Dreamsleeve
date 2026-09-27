@@ -19,6 +19,11 @@ type ProtocolCodecError = {
     Failure: ProtocolCodecFailure
 }
 
+type DeliveryLane = Dreamsleeve.Protocol.Network.DeliveryLane
+
+/// A detached encoded packet. Only the transport adapter chooses native flags.
+type TransportPacket = { Lane: DeliveryLane; Bytes: byte array }
+
 [<RequireQualifiedAccess>]
 type ClientCommand =
     | OpenSession of sessionTicket: string
@@ -50,11 +55,13 @@ type ServerResponse =
     | SessionOpened of requestId: uint64 * session: SessionWelcome
     | ChatAccepted of requestId: uint64 * message: ChatMessage
     | ChatPublished of ChatMessage
+    | ChatRejected of requestId: uint64 * rejection: RequestRejection
     | RequestRejected of requestId: uint64 * rejection: RequestRejection
     | PlayerJoined of PlayerSnapshot
     | PlayerLeft of PlayerId
     | PlayerUpdated of PlayerSnapshot
     | PlayersMoved of MovementChange array
+    | PlayerVisibilityChanged of VisibilityChange
     | PlayerMetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | PlayerUpdateAccepted of requestId: uint64
 
