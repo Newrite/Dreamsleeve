@@ -112,12 +112,7 @@ module Player =
     /// Build a replacement storage before publishing the replacement player. No
     /// observer can see a partially replaced set of readings.
     let replaceActorValues (entries: Map<ActorValueKey, ActorValueInfo>) (player: Player) =
-        let values = ActorValueStorage.create ()
-
-        for KeyValue(key, info) in entries do
-            ActorValueStorage.set key info values
-
-        { player with actorValues = values }
+        { player with actorValues = ActorValueStorage.ofSnapshot entries }
 
     let applyUpdate update player =
         match update with

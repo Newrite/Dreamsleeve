@@ -389,3 +389,10 @@ unreliable-sequenced канал, server generation/sequence и восстано�
 ожидают несколько writers, Completion также наблюдают несколько владельцев:
 здесь остаётся Task/TCS. Однопотребительское ожидание PeriodicTimer возвращает
 ValueTask; ticker уже ожидает его напрямую, без AsTask и собственного source pool.
+
+- Шаг 2: ActorValueStorage кеширует immutable Map, инвалидирует её на всех мутациях
+  и сохраняет готовую карту при replacement. Mutable Dictionary остаётся у владельца.
+  Саморевью: published snapshots не меняются при set/setMany/remove/clear;
+  BeginCharacter/Leave создают отдельный storage. Domain suite: 44/44.
+  Повторные пробы: Player.snapshot с 0/32/64 actor values теперь выделяет 80 B/op
+  во всех трёх случаях (раньше 248 / 10648 / 25712).

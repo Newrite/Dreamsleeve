@@ -66,34 +66,53 @@ module ActorValueInfo =
 [<NoEquality; NoComparison>]
 type ActorValueStorage = private {
     values: Dictionary<ActorValueKey, ActorValueInfo>
+    mutable projection: Map<ActorValueKey, ActorValueInfo> voption
 }
 
 [<RequireQualifiedAccess>]
 module ActorValueStorage =
-    let create () : ActorValueStorage = { values = Dictionary<ActorValueKey, ActorValueInfo>() }
+    let create () : ActorValueStorage =
+        { values = Dictionary(); projection = ValueSome Map.empty }
+
+    /// Retain the immutable input projection while making storage independently mutable.
+    let ofSnapshot (entries: Map<ActorValueKey, ActorValueInfo>) : ActorValueStorage =
+        let values = Dictionary<ActorValueKey, ActorValueInfo>(entries.Count)
+        for KeyValue(key, info) in entries do values.Add(key, info)
+
+        { values = values; projection = ValueSome entries }
 
     let count (storage: ActorValueStorage) = storage.values.Count
 
-    let set key info (storage: ActorValueStorage) = storage.values[key] <- info
+    let set key info (storage: ActorValueStorage) =
+        storage.values[key] <- info
+        storage.projection <- ValueNone
 
     /// Apply an already materialized, validated batch. The sender must finish
     /// building the array before handing it to the owning agent and must not
     /// mutate it afterwards. Repeated keys use the last supplied value.
     let setMany (entries: (ActorValueKey * ActorValueInfo) array) (storage: ActorValueStorage) =
         for key, info in entries do
-            storage.values[key] <- info
+            set key info storage
 
     let tryFind key (storage: ActorValueStorage) =
         match storage.values.TryGetValue key with
         | true, info -> ValueSome info
         | false, _ -> ValueNone
 
-    let remove key (storage: ActorValueStorage) = storage.values.Remove key
+    let remove key (storage: ActorValueStorage) =
+        let removed = storage.values.Remove key
+        if removed then storage.projection <- ValueNone
+        removed
 
-    let clear (storage: ActorValueStorage) = storage.values.Clear()
+    let clear (storage: ActorValueStorage) =
+        storage.values.Clear()
+        storage.projection <- ValueSome Map.empty
 
     /// Detached immutable snapshot; subsequent storage updates do not change it.
     let snapshot (storage: ActorValueStorage) : Map<ActorValueKey, ActorValueInfo> =
-        storage.values
-        |> Seq.map (fun entry -> entry.Key, entry.Value)
-        |> Map.ofSeq
+        match storage.projection with
+        | ValueSome projection -> projection
+        | ValueNone ->
+            let projection = storage.values |> Seq.map (fun entry -> entry.Key, entry.Value) |> Map.ofSeq
+            storage.projection <- ValueSome projection
+            projection

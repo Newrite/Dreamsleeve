@@ -228,6 +228,28 @@ let private stateTests =
                 Expect.isError (ActorValueState.resource bad 100.0f) "Current must be finite"
                 Expect.isError (ActorValueState.resource 100.0f bad) "Maximum must be finite"
 
+        testCase "storage reuses immutable projections and invalidates every mutation" <| fun _ ->
+            let key = actorKey "av:health"
+            let other = actorKey "av:magicka"
+            let original = Map.ofList [key, health 50.0f]
+            let storage = ActorValueStorage.ofSnapshot original
+            let snapshot () = ActorValueStorage.snapshot storage
+
+            Expect.isTrue (obj.ReferenceEquals(original, snapshot ())) "The supplied immutable projection is reusable"
+            ActorValueStorage.set key (health 25.0f) storage
+            let changed = snapshot ()
+            Expect.equal changed[key] (health 25.0f) "set invalidates the cache"
+            Expect.isTrue (obj.ReferenceEquals(changed, snapshot ())) "Repeated snapshots reuse their map"
+            Expect.equal original[key] (health 50.0f) "Previously published map stays immutable"
+
+            ActorValueStorage.setMany [| key, health 10.0f; other, health 30.0f |] storage
+            Expect.equal (snapshot () |> Map.count) 2 "setMany invalidates the cache"
+            ActorValueStorage.remove key storage |> ignore
+            Expect.isFalse (snapshot () |> Map.containsKey key) "remove invalidates the cache"
+            ActorValueStorage.clear storage
+            Expect.isTrue (snapshot () |> Map.isEmpty) "clear publishes an empty map"
+            Expect.equal changed[key] (health 25.0f) "Intermediate snapshots also stay detached"
+
         testCase "storage snapshots detach from later updates and removals" <| fun _ ->
             let storage = ActorValueStorage.create ()
             let key = actorKey "skyrim:health"
