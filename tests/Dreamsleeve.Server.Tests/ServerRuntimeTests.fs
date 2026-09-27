@@ -12,6 +12,10 @@ open Dreamsleeve.Protocol.Chat
 open Expecto
 open AgentTests
 
+let private tick () =
+    let now = System.Diagnostics.Stopwatch.GetTimestamp()
+    ServerRuntimeMessage.Tick { DueTimestamp = now; QueuedTimestamp = now }
+
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private receive (channel: Channel<'T>) = channel.Reader.ReadAsync().AsTask().WaitAsync guard
 
@@ -156,7 +160,7 @@ let tests = testList "ServerRuntime" [
         let settings = { ServerRuntimeOptions.defaults with MaxSessions = 2; PollIntervalMs = 1000000; OpenTimeoutMs = 2000000; ShutdownTimeoutMs = 2000000 }
         do! withRuntime settings (fun fixture -> task {
             let alice = connect fixture "alice"
-            do! post fixture.Runtime ServerRuntimeMessage.Tick
+            do! post fixture.Runtime (tick ())
             let! _ = welcome fixture alice
             let pid = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
             let space name =
@@ -188,7 +192,7 @@ let tests = testList "ServerRuntime" [
             equal 4.f beforeLeft.PlayersMoved.Players[0].Location.Position.X
             equal ServerPacket.PayloadOneofCase.PlayerLeft left.PayloadCase
             do! post fixture.Runtime (move (ValueSome (location "Other.esm" 5.f)))
-            do! post fixture.Runtime ServerRuntimeMessage.Tick
+            do! post fixture.Runtime (tick ())
             let! _, onTick = receive fixture.Output
             equal 5.f onTick.PlayersMoved.Players[0].Location.Position.X
 
@@ -199,7 +203,7 @@ let tests = testList "ServerRuntime" [
             do! post fixture.Runtime ServerRuntimeMessage.Stop
             let deadline = Environment.TickCount64 + 5000L
             while not fixture.Runtime.Completion.IsCompleted && Environment.TickCount64 < deadline do
-                fixture.Runtime.TryPost ServerRuntimeMessage.Tick |> ignore
+                fixture.Runtime.TryPost (tick ()) |> ignore
                 do! Task.Delay 1
             do! awaitUnit fixture.Runtime.Completion
         })

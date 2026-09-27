@@ -1,4 +1,4 @@
-﻿# Dreamsleeve.Agent
+# Dreamsleeve.Agent
 
 Последовательные агенты F# внутри одного процесса, построенные на `System.Threading.Channels` и `Task`. Целевая платформа — **.NET 10+**; используются только стандартные зависимости F#/.NET.
 
@@ -265,3 +265,10 @@ AgentOutbox. Его владелец отдельно ограничивает �
 оставляет место для Stop/Detach в своём ordered outbox и закрывает обычный допуск
 перед завершением. Порядок между независимыми конкурирующими отправителями
 определяется фактическим приёмом, а не временем начала PostAsync.
+
+
+`AgentTicker.start interval context toMessage` создаёт один owned PeriodicTimer.
+После обработки tick владелец вызывает `Acknowledge()`: до этого новые периоды
+объединяются. Callback строит только сообщение, не читает mutable state агента.
+Complete/Abort останавливают worker. `startWithTimeProvider` позволяет проверять
+расписание без wall-clock sleeps. Timestamp поля AgentTick относятся к TimeProvider.

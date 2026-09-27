@@ -103,7 +103,7 @@ type PresenceSubscription = {
 type PresenceCommand =
     | Join of PresenceSubscription
     | Update of connectionId: Guid * PlayerSnapshot
-    | Flush
+    | Flush of AgentTick
     | Detach of SessionDetach
 
 type ChatRoomOptions = {

@@ -11,3 +11,7 @@ module internal RuntimeMetrics =
     let presenceInterval = meter.CreateHistogram<double>("presence.flush.interval", "ms")
     let presenceLateness = meter.CreateHistogram<double>("presence.flush.lateness", "ms")
     let runtimeInterval = meter.CreateHistogram<double>("runtime.tick.interval", "ms")
+    let presenceTimerLateness = meter.CreateHistogram<double>("presence.timer.lateness", "ms")
+    let presenceQueueDelay = meter.CreateHistogram<double>("presence.tick.queue", "ms")
+    let runtimeTimerLateness = meter.CreateHistogram<double>("runtime.timer.lateness", "ms")
+    let runtimeQueueDelay = meter.CreateHistogram<double>("runtime.tick.queue", "ms")

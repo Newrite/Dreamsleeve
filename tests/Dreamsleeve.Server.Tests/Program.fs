@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Tests.Program
+module Dreamsleeve.Server.Tests.Program
 
 open Expecto
 
@@ -14,6 +14,7 @@ let main argv =
         AsyncDispatcherTests.tests
         AdmissionTests.tests
         LifetimeTests.tests
+        TickerTests.tests
         ProfileStoreTests.tests
         SqliteAccountStoreTests.tests
         AuthServiceTests.tests

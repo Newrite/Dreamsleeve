@@ -10,6 +10,10 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
+let private tick () =
+    let now = System.Diagnostics.Stopwatch.GetTimestamp()
+    PresenceCommand.Flush { DueTimestamp = now; QueuedTimestamp = now }
+
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private config = { MailboxCapacity = 4; ControlReserve = 2; MaxControlDeliveries = 4; ReplicationIntervalMs = 60000; VisibilityDistance = 8192.0f }
 let private profile number =
@@ -102,7 +106,7 @@ let private changed fixture value =
     post fixture.Presence (PresenceCommand.Update(fixture.Alice.ConnectionId, value))
 
 let private flushViews fixture expectedAuthor expectedObserver = task {
-    do! post fixture.Presence PresenceCommand.Flush
+    do! post fixture.Presence (tick ())
     let! author = receive fixture.AliceEvents
     let! observer = receive fixture.BobEvents
     equal expectedAuthor author
@@ -145,7 +149,7 @@ let private view fixture subscription events = task {
 }
 
 let private flushViewsNow fixture = task {
-    do! post fixture.Presence PresenceCommand.Flush
+    do! post fixture.Presence (tick ())
     let! alice = view fixture fixture.Alice fixture.AliceEvents
     let! bob = view fixture fixture.Bob fixture.BobEvents
     return alice, bob
@@ -290,13 +294,13 @@ let tests = testList "PresenceAgent" [
 
             let moved = { latest with Location = ValueSome (location 20.0f) }
             do! changed fixture moved
-            do! post fixture.Presence PresenceCommand.Flush
+            do! post fixture.Presence (tick ())
             let! movement = receive fixture.AliceEvents
             equal (PresenceEvent.Moved [moved.Data.PlayerId, moved.Location]) movement
             let! observer = readSnapshot fixture fixture.Bob fixture.BobEvents
             equal [hidden moved; fixture.Bob.Snapshot] observer
             do! changed fixture { moved with Location = ValueNone }
-            do! post fixture.Presence PresenceCommand.Flush
+            do! post fixture.Presence (tick ())
             let! cleared = receive fixture.AliceEvents
             equal (PresenceEvent.Moved [moved.Data.PlayerId, ValueNone]) cleared
             let! observer = readSnapshot fixture fixture.Bob fixture.BobEvents
@@ -304,7 +308,7 @@ let tests = testList "PresenceAgent" [
 
             // Rejoining the same member is an ordered read barrier, never a reset.
             do! changed fixture { moved with Location = ValueNone }
-            do! post fixture.Presence PresenceCommand.Flush
+            do! post fixture.Presence (tick ())
             do! post fixture.Presence (PresenceCommand.Join fixture.Alice)
             let! unchanged = receive fixture.AliceEvents
             equal [{ moved with Location = ValueNone }; fixture.Bob.Snapshot] (snapshot unchanged)
@@ -346,7 +350,7 @@ let tests = testList "PresenceAgent" [
                 let! joined = receive events
                 equal (PresenceEvent.Updated expected) published
                 equal (PresenceEvent.Joined fixture.Late.Snapshot) joined
-            do! post fixture.Presence PresenceCommand.Flush
+            do! post fixture.Presence (tick ())
             do! post fixture.Presence (PresenceCommand.Join fixture.Late)
             let! stable = receive fixture.LateEvents
             equal [hidden latest; fixture.Bob.Snapshot; fixture.Late.Snapshot] (snapshot stable)
@@ -370,7 +374,7 @@ let tests = testList "PresenceAgent" [
             let! joined = receive fixture.BobEvents
             equal (PresenceEvent.Joined replacement.Snapshot) joined
             do! changed fixture latest
-            do! post fixture.Presence PresenceCommand.Flush
+            do! post fixture.Presence (tick ())
             do! post fixture.Presence (PresenceCommand.Join replacement)
             let! stable = receive fixture.AliceEvents
             equal [replacement.Snapshot; fixture.Bob.Snapshot] (snapshot stable)
@@ -382,7 +386,7 @@ let tests = testList "PresenceAgent" [
             do! changed fixture fixture.Bob.Snapshot
             let! refused = receive fixture.Host
             equal (SessionHostCommand.Close(fixture.Alice.ConnectionId, "presence_identity_conflict")) refused
-            do! post fixture.Presence PresenceCommand.Flush
+            do! post fixture.Presence (tick ())
             do! post fixture.Presence (PresenceCommand.Join fixture.Alice)
             let! stable = receive fixture.AliceEvents
             equal [fixture.Alice.Snapshot; fixture.Bob.Snapshot] (snapshot stable)
@@ -529,7 +533,7 @@ let tests = testList "PresenceAgent" [
             let! initial = receive fixture.LateEvents
             equal temporary (snapshot initial |> List.head)
             do! changed fixture a
-            do! post fixture.Presence PresenceCommand.Flush
+            do! post fixture.Presence (tick ())
             let! restored = receive fixture.LateEvents
             equal (PresenceEvent.Moved [a.Data.PlayerId, a.Location]) restored
         }))
@@ -584,7 +588,7 @@ let tests = testList "PresenceAgent" [
             let b = { fixture.Bob.Snapshot with Location = ValueSome (location 6.0f) }
             do! changed fixture a
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, b))
-            do! post fixture.Presence PresenceCommand.Flush
+            do! post fixture.Presence (tick ())
             for events in [fixture.AliceEvents; fixture.BobEvents] do
                 let! batch = receive events
                 equal (PresenceEvent.Moved [a.Data.PlayerId, a.Location; b.Data.PlayerId, b.Location]) batch

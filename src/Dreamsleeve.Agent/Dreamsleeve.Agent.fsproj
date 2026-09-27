@@ -7,5 +7,6 @@
     <Compile Include="Agent.fs" />
     <Compile Include="AgentOutbox.fs" />
     <Compile Include="AgentLifetimes.fs" />
+    <Compile Include="AgentTicker.fs" />
   </ItemGroup>
 </Project>

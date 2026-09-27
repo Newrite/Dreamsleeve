@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Tests.PlayerSessionTests
+module Dreamsleeve.Server.Tests.PlayerSessionTests
 
 open System
 open System.Threading.Channels
@@ -488,7 +488,7 @@ let tests = testList "PlayerSession" [
                 | PresenceCommand.Update _ ->
                     entered.TrySetResult() |> ignore
                     do! release.Task.WaitAsync context.CancellationToken
-                | PresenceCommand.Join _ | PresenceCommand.Detach _ | PresenceCommand.Flush -> ()
+                | PresenceCommand.Join _ | PresenceCommand.Detach _ | PresenceCommand.Flush _ -> ()
             }
             Agent.Start({ AgentOptions.create "blocked-presence" with Mailbox = AgentMailbox.boundedWait 1 }, handle)
         do! withPlayerUsingPresence { options with MaxPendingUpdates = 1 } createPresence (fun fixture -> task {

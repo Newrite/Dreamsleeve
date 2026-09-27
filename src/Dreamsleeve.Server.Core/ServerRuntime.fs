@@ -22,7 +22,7 @@ type ServerRuntimeSnapshot = {
 [<RequireQualifiedAccess>]
 type ServerRuntimeMessage =
     | Start
-    | Tick
+    | Tick of AgentTick
     | Host of SessionHostCommand
     | PlayerStopped of Guid * Result<unit, exn>
     | SourceStopped of SessionSource * Result<unit, exn>
@@ -55,6 +55,7 @@ module ServerRuntime =
         mutable Stopping: bool
         mutable StopDeadline: int64
         mutable SourcesStopping: bool
+        mutable Ticker: AgentTicker option
         mutable LastTick: int64
     }
 
@@ -256,9 +257,9 @@ module ServerRuntime =
                 close options state context entry
                 if SessionTable.clean entry then SessionTable.remove entry state.Table
 
-    let private schedule (options: ServerRuntimeOptions) (context: AgentContext<ServerRuntimeMessage>) =
-        // A timer is an observation, not an outbound operation to drain on Complete.
-        context.Watch(Task.Delay(options.PollIntervalMs, context.CancellationToken), fun _ -> ServerRuntimeMessage.Tick)
+    let private schedule (options: ServerRuntimeOptions) state context =
+        if state.Ticker.IsNone then
+            state.Ticker <- Some (AgentTicker.start (TimeSpan.FromMilliseconds(int64 options.PollIntervalMs)) context ServerRuntimeMessage.Tick)
 
     let private initialize (options: ServerRuntimeOptions) globalId authenticator state (context: AgentContext<ServerRuntimeMessage>) =
         match context.Ref.TryReliable() with
@@ -280,7 +281,7 @@ module ServerRuntime =
                         PresenceCleanup = AgentOutbox(options.MaxSessions, presence.Ref.TryReliable().Value)
                         ChatStopped = false; PresenceStopped = false
                     }
-                    schedule options context
+                    schedule options state context
 
     let private stopped (options: ServerRuntimeOptions) state context connectionId (outcome: Result<unit, exn>) =
         match SessionTable.find connectionId state.Table with
@@ -343,8 +344,6 @@ module ServerRuntime =
                 state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.PresenceStopped)
             if state.Stopping && time >= state.StopDeadline && (state.Table.Connections.Count > 0 || not sourcesStopped) then
                 fail state context "Server shutdown timed out."
-            else
-                schedule options context
 
     let private finish state (context: AgentContext<ServerRuntimeMessage>) =
         if state.Stopping && (state.Table.Connections.Values |> Seq.forall SessionTable.domainClean) then
@@ -375,12 +374,15 @@ module ServerRuntime =
         match message with
         | ServerRuntimeMessage.Start ->
             if state.Sources.IsNone && not state.Stopping then initialize options globalId authenticator state context
-        | ServerRuntimeMessage.Tick ->
+        | ServerRuntimeMessage.Tick notification ->
             let started = Stopwatch.GetTimestamp()
             if state.LastTick <> 0L then RuntimeMetrics.runtimeInterval.Record(Stopwatch.GetElapsedTime(state.LastTick, started).TotalMilliseconds)
             state.LastTick <- started
+            RuntimeMetrics.runtimeTimerLateness.Record(Stopwatch.GetElapsedTime(notification.DueTimestamp, notification.QueuedTimestamp).TotalMilliseconds)
+            RuntimeMetrics.runtimeQueueDelay.Record(Stopwatch.GetElapsedTime(notification.QueuedTimestamp).TotalMilliseconds)
             tick options globalId authenticator state context
             RuntimeMetrics.runtimeTick.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
+            state.Ticker |> Option.iter _.Acknowledge()
         | ServerRuntimeMessage.Host command -> host options state context command
         | ServerRuntimeMessage.PlayerStopped(connectionId, outcome) -> stopped options state context connectionId outcome
         | ServerRuntimeMessage.SourceStopped(source, outcome) -> sourceStopped state context source outcome
@@ -407,7 +409,7 @@ module ServerRuntime =
     let private isControl = function
         | ServerRuntimeMessage.Host(SessionHostCommand.Send _) | ServerRuntimeMessage.Read _
         | ServerRuntimeMessage.FindPlayer _ -> false
-        | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick | ServerRuntimeMessage.Host _
+        | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick _ | ServerRuntimeMessage.Host _
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
         | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.Stop -> true
 
@@ -445,7 +447,7 @@ module ServerRuntime =
             let state = {
                 Table = SessionTable.create(); Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
                 Transport = transport; Logger = logger
-                Sources = None; Stopping = false; SourcesStopping = false; LastTick = 0L; StopDeadline = 0L
+                Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
             }
             let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
             let agent = Agent.Start(agentOptions, handle options globalId authenticator state, isControl = isControl)
