@@ -25,18 +25,19 @@ let tests = testList "Player details" [
         let talking = PlayerActivity.create 256 64 ActivityKind.Talking (ValueSome label) LockDifficulty.Unknown ValueNone |> ok
         Expect.equal talking.TargetName (ValueSome label) "Game labels preserve spelling and whitespace."
 
-    testCase "details distinguish unknown from an invalid zero level" <| fun _ ->
-        let details = PlayerDetails.create ValueNone (ValueSome UInt32.MaxValue) PlayerActivity.unknown ValueNone ValueNone |> ok
+    testCase "details preserve the full uint32 level range and distinguish unknown" <| fun _ ->
+        let details = PlayerDetails.create ValueNone (ValueSome UInt32.MaxValue) PlayerActivity.unknown ValueNone ValueNone
         Expect.equal details.Level (ValueSome UInt32.MaxValue) "No arbitrary gameplay level cap."
         Expect.equal PlayerDetails.empty.Level ValueNone "An unreported level is unknown."
-        Expect.isError (PlayerDetails.create ValueNone (ValueSome 0u) PlayerActivity.unknown ValueNone ValueNone) "Zero is not a reported level."
+        let zero = PlayerDetails.create ValueNone (ValueSome 0u) PlayerActivity.unknown ValueNone ValueNone
+        Expect.equal zero.Level (ValueSome 0u) "A reported zero level is not unknown."
 
     testCase "place labels and race keys remain separate from coordinate identity" <| fun _ ->
         let form = FormKey.create (PluginName.create 260 "Skyrim.esm" |> ok) (LocalFormId.create 0x13746u |> ok)
         let race = NamedForm.create 256 form "Nord" |> ok
         let place = PlaceDescription.create 256 64 "Skyrim" "Whiterun Hold" "Western Watchtower" "IMPERIAL_TOWER" false |> ok
         let start = DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L
-        let details = PlayerDetails.create (ValueSome race) (ValueSome 2u) PlayerActivity.unknown (ValueSome place) (ValueSome start) |> ok
+        let details = PlayerDetails.create (ValueSome race) (ValueSome 2u) PlayerActivity.unknown (ValueSome place) (ValueSome start)
         Expect.equal race.Form form "Race is a plugin-relative form."
         Expect.equal place.MarkerKind "imperial_tower" "Marker kind is an extensible canonical key."
         Expect.equal details.GameStartedAt (ValueSome start) "Client-reported start time is kept, not replaced by connection time."

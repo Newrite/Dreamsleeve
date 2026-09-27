@@ -122,7 +122,4 @@ module PlayerDetails =
                   place = ValueNone; gameStartedAt = ValueNone }
 
     let create race level activity place gameStartedAt =
-        match level with
-        | ValueSome 0u -> Error (DomainError.InvalidPlayerDetails "level")
-        | ValueSome _ | ValueNone ->
-            Ok { race = race; level = level; activity = activity; place = place; gameStartedAt = gameStartedAt }
+        { race = race; level = level; activity = activity; place = place; gameStartedAt = gameStartedAt }

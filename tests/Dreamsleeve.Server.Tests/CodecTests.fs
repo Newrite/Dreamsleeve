@@ -404,13 +404,21 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
             Expect.equal encoded.PlayerUpdated.Player.Details.Activity.LockDifficulty difficulty "difficulty mapping"
 
+    testCase "zero and absent level survive client command and server replication" <| fun _ ->
+        for level in [ValueNone; ValueSome 0u; ValueSome UInt32.MaxValue] do
+            let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity())
+            level |> ValueOption.iter (fun value -> source.Level <- value)
+            let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
+            Expect.equal state.Details.Level level "Client-reported level is preserved."
+            let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+            let actual = encoded.PlayerUpdated.Player.Details
+            Expect.equal actual.HasLevel level.IsSome "Presence survives replication."
+            level |> ValueOption.iter (fun value -> Expect.equal actual.Level value "Level survives replication.")
+
     testCase "malformed details and undefined enums never enter the domain" <| fun _ ->
         let valid () = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity())
         let rejected source = Expect.isError (update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source))) "invalid details"
         rejected (Dreamsleeve.Protocol.Chat.PlayerDetails())
-        let zero = valid()
-        zero.Level <- 0u
-        rejected zero
         let race = valid()
         race.Race <- Dreamsleeve.Protocol.Chat.NamedForm()
         rejected race

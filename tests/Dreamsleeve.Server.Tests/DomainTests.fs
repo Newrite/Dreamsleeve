@@ -300,7 +300,7 @@ let private stateTests =
         testCase "character generation and metadata follow explicit lifecycle operations" <| fun _ ->
             let original = Player.create (profile 1UL "First")
             let name = characterName "Nerevar"
-            let details = PlayerDetails.create ValueNone (ValueSome 80u) PlayerActivity.unknown ValueNone ValueNone |> ok
+            let details = PlayerDetails.create ValueNone (ValueSome 80u) PlayerActivity.unknown ValueNone ValueNone
             let first = original |> Player.applyUpdate (PlayerUpdate.BeginCharacter name)
             let sampled = first |> Player.applyUpdate (PlayerUpdate.SetDetails details)
             let renamed = sampled |> Player.applyUpdate (PlayerUpdate.RenameCharacter (characterName "Renamed"))

@@ -219,8 +219,7 @@ module ChatCodec =
         match decodeNamedForm limits source.Race, decodeActivity limits source.Activity,
               decodePlace limits source.Place, decodeGameStartedAt source with
         | Ok race, Ok activity, Ok place, Ok startedAt ->
-            PlayerDetails.create race level activity place startedAt
-            |> Result.mapError ChatCodecFailure.InvalidDomain
+            Ok (PlayerDetails.create race level activity place startedAt)
         | Error error, _, _, _ | _, Error error, _, _
         | _, _, Error error, _ | _, _, _, Error error -> Error error
 

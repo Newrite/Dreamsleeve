@@ -462,8 +462,8 @@ let tests = testList "PlayerSession" [
         withPlayer options (fun fixture -> task {
             let! _, _, _ = ready fixture
             let activity = PlayerActivity.create 256 64 ActivityKind.Menu ValueNone LockDifficulty.Unknown (ValueSome "main_menu") |> ok
-            let menu = PlayerDetails.create ValueNone ValueNone activity ValueNone (ValueSome DateTimeOffset.UnixEpoch) |> ok
-            let leveled = PlayerDetails.create ValueNone (ValueSome 10u) activity ValueNone ValueNone |> ok
+            let menu = PlayerDetails.create ValueNone ValueNone activity ValueNone (ValueSome DateTimeOffset.UnixEpoch)
+            let leveled = PlayerDetails.create ValueNone (ValueSome 10u) activity ValueNone ValueNone
             let! initial = applyUpdate fixture 2UL (PlayerUpdate.SetDetails menu)
             equal ValueNone initial.CharacterName
             equal menu initial.Details

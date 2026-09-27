@@ -364,7 +364,7 @@ let tests = testList "PresenceAgent" [
                 do! changed fixture original
                 do! flushBoth fixture (PresenceEvent.Updated original)
                 let activity = PlayerActivity.create 256 64 ActivityKind.Menu ValueNone LockDifficulty.Unknown (ValueSome "inventory") |> ok
-                let details = PlayerDetails.create ValueNone ValueNone activity ValueNone ValueNone |> ok
+                let details = PlayerDetails.create ValueNone ValueNone activity ValueNone ValueNone
                 let temporary =
                     if metadata then { original with Details = details }
                     else { original with Location = ValueSome (location 5.0f) }
