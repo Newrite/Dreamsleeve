@@ -26,6 +26,9 @@ public:
             DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Session timeouts, chat and pending request capacities must be positive")
         };
 
+      if (!config.movement.Valid() || config.maxPendingMovementSamples == 0)
+        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Invalid movement history configuration")};
+
       if (!std::isfinite(config.visibilityDistance) || config.visibilityDistance < 0)
         return std::unexpected{
             DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Visibility distance must be finite and nonnegative")
@@ -145,7 +148,8 @@ private:
     ClientRuntime(Configuration settings, Wire::ProtocolCodec codec, ClientExchange& exchange)
         : config(std::move(settings)),
           codec(std::move(codec)),
-          exchange(exchange)
+          exchange(exchange),
+          model(config.maxPendingMovementSamples)
     {}
 
     void SetPhase(SessionPhase value)

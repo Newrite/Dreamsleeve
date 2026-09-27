@@ -238,6 +238,7 @@ def smoke(args, log, directory: Path):
             lambda state: state.get("characterName") == "Nerevar" and state.get("location") is not None
                 and len(state["actorValues"]) == 2 and state["details"].get("level") == 25,
             args.timeout, alice_start)
+        check(authoritative["location"]["sampledAtUs"] > 0, "Source measurement timestamp was lost")
         check(authoritative["characterGeneration"] == 1, "First character generation did not advance")
         check(authoritative["actorValues"]["skyrim:speed"]["state"]["value"] == 0, "Zero scalar was lost")
         check(authoritative["actorValues"]["skyrim:health"]["state"]["current"] == 150, "Resource value was clamped")
@@ -278,7 +279,16 @@ def smoke(args, log, directory: Path):
             check(moved["details"] == authoritative["details"] and moved["actorValues"] == authoritative["actorValues"],
                   "Movement changed character metadata or actor values")
             check(moved["location"]["rotation"]["Z"] == 2.5, "Rotation did not replicate")
+            check(moved["location"]["sampledAtUs"] > authoritative["location"]["sampledAtUs"],
+                  "Movement timestamp did not advance across the real transport")
         stage("periodic compact movement reaches author and peer without losing unchanged details")
+
+        pose_start = bob.mark()
+        bob.send(f"watch {alice_id} 400")
+        poses = bob.wait_for(lambda lines: any(line.startswith(f"pose {alice_id} 42 ") for line in lines),
+                             args.timeout, pose_start)
+        check(any(line.startswith(f"pose {alice_id} 42 ") for line in poses), "Live movement view did not settle")
+        stage("native movement consumer samples the live ENet stream and holds its final position")
 
         alice_start, bob_start = alice.mark(), bob.mark()
         observer_sample["location"]["position"]["X"] = 20000

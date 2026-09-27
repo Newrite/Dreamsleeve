@@ -2939,6 +2939,7 @@ class PlayerLocation final : public ::google::protobuf::Message
     kLocationFieldNumber = 1,
     kPositionFieldNumber = 2,
     kRotationFieldNumber = 3,
+    kSampledAtUsFieldNumber = 4,
   };
   // .Dreamsleeve.Protocol.Chat.Location location = 1;
   bool has_location() const;
@@ -2985,11 +2986,21 @@ class PlayerLocation final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL _internal_mutable_rotation();
 
   public:
+  // uint64 sampled_at_us = 4;
+  void clear_sampled_at_us() ;
+  ::uint64_t sampled_at_us() const;
+  void set_sampled_at_us(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sampled_at_us() const;
+  void _internal_set_sampled_at_us(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayerLocation)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
                                    3, 0,
                                    2>
       _table_;
@@ -3014,6 +3025,7 @@ class PlayerLocation final : public ::google::protobuf::Message
     ::Dreamsleeve::Protocol::Chat::Location* PROTOBUF_NULLABLE location_;
     ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE position_;
     ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE rotation_;
+    ::uint64_t sampled_at_us_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5726,6 +5738,31 @@ inline void PlayerLocation::set_allocated_rotation(::Dreamsleeve::Protocol::Chat
 
   _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(value);
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerLocation.rotation)
+}
+
+// uint64 sampled_at_us = 4;
+inline void PlayerLocation::clear_sampled_at_us() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sampled_at_us_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline ::uint64_t PlayerLocation::sampled_at_us() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerLocation.sampled_at_us)
+  return _internal_sampled_at_us();
+}
+inline void PlayerLocation::set_sampled_at_us(::uint64_t value) {
+  _internal_set_sampled_at_us(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerLocation.sampled_at_us)
+}
+inline ::uint64_t PlayerLocation::_internal_sampled_at_us() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sampled_at_us_;
+}
+inline void PlayerLocation::_internal_set_sampled_at_us(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sampled_at_us_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -367,7 +367,8 @@ inline constexpr PlayerLocation::Impl_::Impl_(
       : _cached_size_{0},
         location_{nullptr},
         position_{nullptr},
-        rotation_{nullptr} {}
+        rotation_{nullptr},
+        sampled_at_us_{::uint64_t{0u}} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR PlayerLocation::PlayerLocation(::_pbi::ConstantInitialized)
@@ -665,13 +666,15 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerLocation, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerLocation, _impl_.location_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerLocation, _impl_.position_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerLocation, _impl_.rotation_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerLocation, _impl_.sampled_at_us_),
         0,
         1,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ResourceActorValue, _impl_._has_bits_),
         5, // hasbit index offset
@@ -820,24 +823,24 @@ static const ::_pbi::MigrationSchema
         {7, sizeof(::Dreamsleeve::Protocol::Chat::Position)},
         {16, sizeof(::Dreamsleeve::Protocol::Chat::Rotation)},
         {25, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLocation)},
-        {34, sizeof(::Dreamsleeve::Protocol::Chat::ResourceActorValue)},
-        {41, sizeof(::Dreamsleeve::Protocol::Chat::ActorValueEntry)},
-        {54, sizeof(::Dreamsleeve::Protocol::Chat::PlayerInfo)},
-        {69, sizeof(::Dreamsleeve::Protocol::Chat::NamedForm)},
-        {76, sizeof(::Dreamsleeve::Protocol::Chat::PlayerActivity)},
-        {87, sizeof(::Dreamsleeve::Protocol::Chat::PlaceDescription)},
-        {100, sizeof(::Dreamsleeve::Protocol::Chat::PlayerDetails)},
-        {113, sizeof(::Dreamsleeve::Protocol::Chat::BeginCharacter)},
-        {118, sizeof(::Dreamsleeve::Protocol::Chat::RenameCharacter)},
-        {123, sizeof(::Dreamsleeve::Protocol::Chat::SampleMovement)},
-        {128, sizeof(::Dreamsleeve::Protocol::Chat::ActorValues)},
-        {133, sizeof(::Dreamsleeve::Protocol::Chat::LeaveGame)},
-        {134, sizeof(::Dreamsleeve::Protocol::Chat::UpdatePlayer)},
-        {143, sizeof(::Dreamsleeve::Protocol::Chat::PlayerJoined)},
-        {148, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdated)},
-        {153, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged)},
-        {162, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMoved)},
-        {169, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLeft)},
+        {36, sizeof(::Dreamsleeve::Protocol::Chat::ResourceActorValue)},
+        {43, sizeof(::Dreamsleeve::Protocol::Chat::ActorValueEntry)},
+        {56, sizeof(::Dreamsleeve::Protocol::Chat::PlayerInfo)},
+        {71, sizeof(::Dreamsleeve::Protocol::Chat::NamedForm)},
+        {78, sizeof(::Dreamsleeve::Protocol::Chat::PlayerActivity)},
+        {89, sizeof(::Dreamsleeve::Protocol::Chat::PlaceDescription)},
+        {102, sizeof(::Dreamsleeve::Protocol::Chat::PlayerDetails)},
+        {115, sizeof(::Dreamsleeve::Protocol::Chat::BeginCharacter)},
+        {120, sizeof(::Dreamsleeve::Protocol::Chat::RenameCharacter)},
+        {125, sizeof(::Dreamsleeve::Protocol::Chat::SampleMovement)},
+        {130, sizeof(::Dreamsleeve::Protocol::Chat::ActorValues)},
+        {135, sizeof(::Dreamsleeve::Protocol::Chat::LeaveGame)},
+        {136, sizeof(::Dreamsleeve::Protocol::Chat::UpdatePlayer)},
+        {145, sizeof(::Dreamsleeve::Protocol::Chat::PlayerJoined)},
+        {150, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdated)},
+        {155, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged)},
+        {164, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMoved)},
+        {171, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLeft)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_Location_default_instance_._instance,
@@ -870,92 +873,92 @@ const char descriptor_table_protodef_player_2eproto[] ABSL_ATTRIBUTE_SECTION_VAR
     "id\030\001 \001(\0132\".Dreamsleeve.Protocol.Chat.For"
     "mKey\022\025\n\rlocation_name\030\002 \001(\t\"+\n\010Position\022"
     "\t\n\001x\030\001 \001(\002\022\t\n\001y\030\002 \001(\002\022\t\n\001z\030\003 \001(\002\"+\n\010Rota"
-    "tion\022\t\n\001x\030\001 \001(\002\022\t\n\001y\030\002 \001(\002\022\t\n\001z\030\003 \001(\002\"\265\001"
+    "tion\022\t\n\001x\030\001 \001(\002\022\t\n\001y\030\002 \001(\002\022\t\n\001z\030\003 \001(\002\"\314\001"
     "\n\016PlayerLocation\0225\n\010location\030\001 \001(\0132#.Dre"
     "amsleeve.Protocol.Chat.Location\0225\n\010posit"
     "ion\030\002 \001(\0132#.Dreamsleeve.Protocol.Chat.Po"
     "sition\0225\n\010rotation\030\003 \001(\0132#.Dreamsleeve.P"
-    "rotocol.Chat.Rotation\"6\n\022ResourceActorVa"
-    "lue\022\017\n\007current\030\001 \001(\002\022\017\n\007maximum\030\002 \001(\002\"\222\001"
-    "\n\017ActorValueEntry\022\013\n\003key\030\001 \001(\t\022\024\n\014displa"
-    "y_name\030\002 \001(\t\022\020\n\006scalar\030\003 \001(\002H\000\022A\n\010resour"
-    "ce\030\004 \001(\0132-.Dreamsleeve.Protocol.Chat.Res"
-    "ourceActorValueH\000B\007\n\005value\"\317\002\n\nPlayerInf"
-    "o\0229\n\007profile\030\001 \001(\0132(.Dreamsleeve.Protoco"
-    "l.Chat.PlayerProfile\022\033\n\016character_name\030\002"
-    " \001(\tH\000\210\001\001\022;\n\010location\030\003 \001(\0132).Dreamsleev"
-    "e.Protocol.Chat.PlayerLocation\022@\n\014actor_"
-    "values\030\004 \003(\0132*.Dreamsleeve.Protocol.Chat"
-    ".ActorValueEntry\022\034\n\024character_generation"
-    "\030\005 \001(\004\0229\n\007details\030\006 \001(\0132(.Dreamsleeve.Pr"
-    "otocol.Chat.PlayerDetailsB\021\n\017_character_"
-    "name\"K\n\tNamedForm\0220\n\004form\030\001 \001(\0132\".Dreams"
-    "leeve.Protocol.Chat.FormKey\022\014\n\004name\030\002 \001("
-    "\t\"\331\001\n\016PlayerActivity\0225\n\004kind\030\001 \001(\0162\'.Dre"
-    "amsleeve.Protocol.Chat.ActivityKind\022\030\n\013t"
-    "arget_name\030\002 \001(\tH\000\210\001\001\022B\n\017lock_difficulty"
-    "\030\003 \001(\0162).Dreamsleeve.Protocol.Chat.LockD"
-    "ifficulty\022\025\n\010menu_key\030\004 \001(\tH\001\210\001\001B\016\n\014_tar"
-    "get_nameB\013\n\t_menu_key\"\210\001\n\020PlaceDescripti"
-    "on\022\027\n\017worldspace_name\030\001 \001(\t\022\025\n\rlocation_"
-    "name\030\002 \001(\t\022\032\n\022nearby_marker_name\030\003 \001(\t\022\023"
-    "\n\013marker_kind\030\004 \001(\t\022\023\n\013is_interior\030\005 \001(\010"
-    "\"\234\002\n\rPlayerDetails\0222\n\004race\030\001 \001(\0132$.Dream"
-    "sleeve.Protocol.Chat.NamedForm\022\022\n\005level\030"
-    "\002 \001(\rH\000\210\001\001\022;\n\010activity\030\003 \001(\0132).Dreamslee"
-    "ve.Protocol.Chat.PlayerActivity\022:\n\005place"
-    "\030\004 \001(\0132+.Dreamsleeve.Protocol.Chat.Place"
-    "Description\022$\n\027game_started_at_unix_ms\030\005"
-    " \001(\003H\001\210\001\001B\010\n\006_levelB\032\n\030_game_started_at_"
-    "unix_ms\"\036\n\016BeginCharacter\022\014\n\004name\030\001 \001(\t\""
-    "\037\n\017RenameCharacter\022\014\n\004name\030\001 \001(\t\"M\n\016Samp"
-    "leMovement\022;\n\010location\030\001 \001(\0132).Dreamslee"
-    "ve.Protocol.Chat.PlayerLocation\"I\n\013Actor"
-    "Values\022:\n\006values\030\001 \003(\0132*.Dreamsleeve.Pro"
-    "tocol.Chat.ActorValueEntry\"\013\n\tLeaveGame\""
-    "\310\003\n\014UpdatePlayer\022D\n\017begin_character\030\001 \001("
-    "\0132).Dreamsleeve.Protocol.Chat.BeginChara"
-    "cterH\000\022F\n\020rename_character\030\002 \001(\0132*.Dream"
-    "sleeve.Protocol.Chat.RenameCharacterH\000\022D"
-    "\n\017sample_movement\030\006 \001(\0132).Dreamsleeve.Pr"
-    "otocol.Chat.SampleMovementH\000\022B\n\020set_acto"
-    "r_values\030\007 \001(\0132&.Dreamsleeve.Protocol.Ch"
-    "at.ActorValuesH\000\022:\n\nleave_game\030\004 \001(\0132$.D"
-    "reamsleeve.Protocol.Chat.LeaveGameH\000\022\?\n\013"
-    "set_details\030\005 \001(\0132(.Dreamsleeve.Protocol"
-    ".Chat.PlayerDetailsH\000B\010\n\006actionJ\004\010\003\020\004R\023s"
-    "ample_player_state\"E\n\014PlayerJoined\0225\n\006pl"
-    "ayer\030\001 \001(\0132%.Dreamsleeve.Protocol.Chat.P"
-    "layerInfo\"F\n\rPlayerUpdated\0225\n\006player\030\001 \001"
-    "(\0132%.Dreamsleeve.Protocol.Chat.PlayerInf"
-    "o\"\243\001\n\025PlayerMetadataChanged\022\021\n\tplayer_id"
-    "\030\001 \001(\004\022<\n\014actor_values\030\002 \001(\0132&.Dreamslee"
-    "ve.Protocol.Chat.ActorValues\0229\n\007details\030"
-    "\003 \001(\0132(.Dreamsleeve.Protocol.Chat.Player"
-    "Details\"]\n\013PlayerMoved\022\021\n\tplayer_id\030\001 \001("
-    "\004\022;\n\010location\030\002 \001(\0132).Dreamsleeve.Protoc"
-    "ol.Chat.PlayerLocation\"\037\n\nPlayerLeft\022\021\n\t"
-    "player_id\030\001 \001(\004*\230\004\n\014ActivityKind\022\031\n\025ACTI"
-    "VITY_KIND_UNKNOWN\020\000\022\033\n\027ACTIVITY_KIND_EXP"
-    "LORING\020\001\022\030\n\024ACTIVITY_KIND_COMBAT\020\002\022\031\n\025AC"
-    "TIVITY_KIND_TALKING\020\003\022\033\n\027ACTIVITY_KIND_B"
-    "ARTERING\020\004\022\032\n\026ACTIVITY_KIND_TRAINING\020\005\022\031"
-    "\n\025ACTIVITY_KIND_READING\020\006\022\035\n\031ACTIVITY_KI"
-    "ND_LOCKPICKING\020\007\022\032\n\026ACTIVITY_KIND_CRAFTI"
-    "NG\020\010\022\036\n\032ACTIVITY_KIND_USING_OBJECT\020\t\022\030\n\024"
-    "ACTIVITY_KIND_RIDING\020\n\022\032\n\026ACTIVITY_KIND_"
-    "SNEAKING\020\013\022\032\n\026ACTIVITY_KIND_SWIMMING\020\014\022\030"
-    "\n\024ACTIVITY_KIND_FLYING\020\r\022\026\n\022ACTIVITY_KIN"
-    "D_DEAD\020\016\022\031\n\025ACTIVITY_KIND_RAGDOLL\020\017\022\026\n\022A"
-    "CTIVITY_KIND_MENU\020\020\022\032\n\026ACTIVITY_KIND_NEW"
-    "_GAME\020\021\022\031\n\025ACTIVITY_KIND_LOADING\020\022*\374\001\n\016L"
-    "ockDifficulty\022\033\n\027LOCK_DIFFICULTY_UNKNOWN"
-    "\020\000\022\034\n\030LOCK_DIFFICULTY_UNLOCKED\020\001\022\035\n\031LOCK"
-    "_DIFFICULTY_VERY_EASY\020\002\022\030\n\024LOCK_DIFFICUL"
-    "TY_EASY\020\003\022\033\n\027LOCK_DIFFICULTY_AVERAGE\020\004\022\030"
-    "\n\024LOCK_DIFFICULTY_HARD\020\005\022\035\n\031LOCK_DIFFICU"
-    "LTY_VERY_HARD\020\006\022 \n\034LOCK_DIFFICULTY_REQUI"
-    "RES_KEY\020\007b\006proto3"
+    "rotocol.Chat.Rotation\022\025\n\rsampled_at_us\030\004"
+    " \001(\004\"6\n\022ResourceActorValue\022\017\n\007current\030\001 "
+    "\001(\002\022\017\n\007maximum\030\002 \001(\002\"\222\001\n\017ActorValueEntry"
+    "\022\013\n\003key\030\001 \001(\t\022\024\n\014display_name\030\002 \001(\t\022\020\n\006s"
+    "calar\030\003 \001(\002H\000\022A\n\010resource\030\004 \001(\0132-.Dreams"
+    "leeve.Protocol.Chat.ResourceActorValueH\000"
+    "B\007\n\005value\"\317\002\n\nPlayerInfo\0229\n\007profile\030\001 \001("
+    "\0132(.Dreamsleeve.Protocol.Chat.PlayerProf"
+    "ile\022\033\n\016character_name\030\002 \001(\tH\000\210\001\001\022;\n\010loca"
+    "tion\030\003 \001(\0132).Dreamsleeve.Protocol.Chat.P"
+    "layerLocation\022@\n\014actor_values\030\004 \003(\0132*.Dr"
+    "eamsleeve.Protocol.Chat.ActorValueEntry\022"
+    "\034\n\024character_generation\030\005 \001(\004\0229\n\007details"
+    "\030\006 \001(\0132(.Dreamsleeve.Protocol.Chat.Playe"
+    "rDetailsB\021\n\017_character_name\"K\n\tNamedForm"
+    "\0220\n\004form\030\001 \001(\0132\".Dreamsleeve.Protocol.Ch"
+    "at.FormKey\022\014\n\004name\030\002 \001(\t\"\331\001\n\016PlayerActiv"
+    "ity\0225\n\004kind\030\001 \001(\0162\'.Dreamsleeve.Protocol"
+    ".Chat.ActivityKind\022\030\n\013target_name\030\002 \001(\tH"
+    "\000\210\001\001\022B\n\017lock_difficulty\030\003 \001(\0162).Dreamsle"
+    "eve.Protocol.Chat.LockDifficulty\022\025\n\010menu"
+    "_key\030\004 \001(\tH\001\210\001\001B\016\n\014_target_nameB\013\n\t_menu"
+    "_key\"\210\001\n\020PlaceDescription\022\027\n\017worldspace_"
+    "name\030\001 \001(\t\022\025\n\rlocation_name\030\002 \001(\t\022\032\n\022nea"
+    "rby_marker_name\030\003 \001(\t\022\023\n\013marker_kind\030\004 \001"
+    "(\t\022\023\n\013is_interior\030\005 \001(\010\"\234\002\n\rPlayerDetail"
+    "s\0222\n\004race\030\001 \001(\0132$.Dreamsleeve.Protocol.C"
+    "hat.NamedForm\022\022\n\005level\030\002 \001(\rH\000\210\001\001\022;\n\010act"
+    "ivity\030\003 \001(\0132).Dreamsleeve.Protocol.Chat."
+    "PlayerActivity\022:\n\005place\030\004 \001(\0132+.Dreamsle"
+    "eve.Protocol.Chat.PlaceDescription\022$\n\027ga"
+    "me_started_at_unix_ms\030\005 \001(\003H\001\210\001\001B\010\n\006_lev"
+    "elB\032\n\030_game_started_at_unix_ms\"\036\n\016BeginC"
+    "haracter\022\014\n\004name\030\001 \001(\t\"\037\n\017RenameCharacte"
+    "r\022\014\n\004name\030\001 \001(\t\"M\n\016SampleMovement\022;\n\010loc"
+    "ation\030\001 \001(\0132).Dreamsleeve.Protocol.Chat."
+    "PlayerLocation\"I\n\013ActorValues\022:\n\006values\030"
+    "\001 \003(\0132*.Dreamsleeve.Protocol.Chat.ActorV"
+    "alueEntry\"\013\n\tLeaveGame\"\310\003\n\014UpdatePlayer\022"
+    "D\n\017begin_character\030\001 \001(\0132).Dreamsleeve.P"
+    "rotocol.Chat.BeginCharacterH\000\022F\n\020rename_"
+    "character\030\002 \001(\0132*.Dreamsleeve.Protocol.C"
+    "hat.RenameCharacterH\000\022D\n\017sample_movement"
+    "\030\006 \001(\0132).Dreamsleeve.Protocol.Chat.Sampl"
+    "eMovementH\000\022B\n\020set_actor_values\030\007 \001(\0132&."
+    "Dreamsleeve.Protocol.Chat.ActorValuesH\000\022"
+    ":\n\nleave_game\030\004 \001(\0132$.Dreamsleeve.Protoc"
+    "ol.Chat.LeaveGameH\000\022\?\n\013set_details\030\005 \001(\013"
+    "2(.Dreamsleeve.Protocol.Chat.PlayerDetai"
+    "lsH\000B\010\n\006actionJ\004\010\003\020\004R\023sample_player_stat"
+    "e\"E\n\014PlayerJoined\0225\n\006player\030\001 \001(\0132%.Drea"
+    "msleeve.Protocol.Chat.PlayerInfo\"F\n\rPlay"
+    "erUpdated\0225\n\006player\030\001 \001(\0132%.Dreamsleeve."
+    "Protocol.Chat.PlayerInfo\"\243\001\n\025PlayerMetad"
+    "ataChanged\022\021\n\tplayer_id\030\001 \001(\004\022<\n\014actor_v"
+    "alues\030\002 \001(\0132&.Dreamsleeve.Protocol.Chat."
+    "ActorValues\0229\n\007details\030\003 \001(\0132(.Dreamslee"
+    "ve.Protocol.Chat.PlayerDetails\"]\n\013Player"
+    "Moved\022\021\n\tplayer_id\030\001 \001(\004\022;\n\010location\030\002 \001"
+    "(\0132).Dreamsleeve.Protocol.Chat.PlayerLoc"
+    "ation\"\037\n\nPlayerLeft\022\021\n\tplayer_id\030\001 \001(\004*\230"
+    "\004\n\014ActivityKind\022\031\n\025ACTIVITY_KIND_UNKNOWN"
+    "\020\000\022\033\n\027ACTIVITY_KIND_EXPLORING\020\001\022\030\n\024ACTIV"
+    "ITY_KIND_COMBAT\020\002\022\031\n\025ACTIVITY_KIND_TALKI"
+    "NG\020\003\022\033\n\027ACTIVITY_KIND_BARTERING\020\004\022\032\n\026ACT"
+    "IVITY_KIND_TRAINING\020\005\022\031\n\025ACTIVITY_KIND_R"
+    "EADING\020\006\022\035\n\031ACTIVITY_KIND_LOCKPICKING\020\007\022"
+    "\032\n\026ACTIVITY_KIND_CRAFTING\020\010\022\036\n\032ACTIVITY_"
+    "KIND_USING_OBJECT\020\t\022\030\n\024ACTIVITY_KIND_RID"
+    "ING\020\n\022\032\n\026ACTIVITY_KIND_SNEAKING\020\013\022\032\n\026ACT"
+    "IVITY_KIND_SWIMMING\020\014\022\030\n\024ACTIVITY_KIND_F"
+    "LYING\020\r\022\026\n\022ACTIVITY_KIND_DEAD\020\016\022\031\n\025ACTIV"
+    "ITY_KIND_RAGDOLL\020\017\022\026\n\022ACTIVITY_KIND_MENU"
+    "\020\020\022\032\n\026ACTIVITY_KIND_NEW_GAME\020\021\022\031\n\025ACTIVI"
+    "TY_KIND_LOADING\020\022*\374\001\n\016LockDifficulty\022\033\n\027"
+    "LOCK_DIFFICULTY_UNKNOWN\020\000\022\034\n\030LOCK_DIFFIC"
+    "ULTY_UNLOCKED\020\001\022\035\n\031LOCK_DIFFICULTY_VERY_"
+    "EASY\020\002\022\030\n\024LOCK_DIFFICULTY_EASY\020\003\022\033\n\027LOCK"
+    "_DIFFICULTY_AVERAGE\020\004\022\030\n\024LOCK_DIFFICULTY"
+    "_HARD\020\005\022\035\n\031LOCK_DIFFICULTY_VERY_HARD\020\006\022 "
+    "\n\034LOCK_DIFFICULTY_REQUIRES_KEY\020\007b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_player_2eproto_deps[1] = {
@@ -965,7 +968,7 @@ static ::absl::once_flag descriptor_table_player_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_player_2eproto = {
     false,
     false,
-    3617,
+    3640,
     descriptor_table_protodef_player_2eproto,
     "player.proto",
     &descriptor_table_player_2eproto_once,
@@ -2004,6 +2007,7 @@ PlayerLocation::PlayerLocation(
   _impl_.rotation_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.rotation_)
                 : nullptr;
+  _impl_.sampled_at_us_ = from._impl_.sampled_at_us_;
 
   // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.PlayerLocation)
 }
@@ -2017,9 +2021,9 @@ inline void PlayerLocation::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, location_),
            0,
-           offsetof(Impl_, rotation_) -
+           offsetof(Impl_, sampled_at_us_) -
                offsetof(Impl_, location_) +
-               sizeof(Impl_::rotation_));
+               sizeof(Impl_::sampled_at_us_));
 }
 PlayerLocation::~PlayerLocation() {
   // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.PlayerLocation)
@@ -2081,16 +2085,16 @@ PlayerLocation::GetClassData() const {
   return PlayerLocation_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 3, 3, 0, 2>
+const ::_pbi::TcParseTable<2, 4, 3, 0, 2>
 PlayerLocation::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(PlayerLocation, _impl_._has_bits_),
     0, // no _extensions_
-    3, 24,  // max_field_number, fast_idx_mask
+    4, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967288,  // skipmap
+    4294967280,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    3,  // num_field_entries
+    4,  // num_field_entries
     3,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     PlayerLocation_class_data_.base(),
@@ -2100,7 +2104,10 @@ PlayerLocation::_table_ = {
     ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerLocation>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 sampled_at_us = 4;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerLocation, _impl_.sampled_at_us_), 3>(),
+     {32, 3, 0,
+      PROTOBUF_FIELD_OFFSET(PlayerLocation, _impl_.sampled_at_us_)}},
     // .Dreamsleeve.Protocol.Chat.Location location = 1;
     {::_pbi::TcParser::FastMtS1,
      {10, 0, 0,
@@ -2122,6 +2129,8 @@ PlayerLocation::_table_ = {
     {PROTOBUF_FIELD_OFFSET(PlayerLocation, _impl_.position_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.Rotation rotation = 3;
     {PROTOBUF_FIELD_OFFSET(PlayerLocation, _impl_.rotation_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // uint64 sampled_at_us = 4;
+    {PROTOBUF_FIELD_OFFSET(PlayerLocation, _impl_.sampled_at_us_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::Location>()},
@@ -2153,6 +2162,7 @@ PROTOBUF_NOINLINE void PlayerLocation::Clear() {
       _impl_.rotation_->Clear();
     }
   }
+  _impl_.sampled_at_us_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2197,6 +2207,15 @@ PROTOBUF_NOINLINE void PlayerLocation::Clear() {
         stream);
   }
 
+  // uint64 sampled_at_us = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_sampled_at_us() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_sampled_at_us(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2222,7 +2241,7 @@ PROTOBUF_NOINLINE void PlayerLocation::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // .Dreamsleeve.Protocol.Chat.Location location = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -2237,6 +2256,13 @@ PROTOBUF_NOINLINE void PlayerLocation::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.rotation_);
+    }
+    // uint64 sampled_at_us = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_sampled_at_us() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_sampled_at_us());
+      }
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -2258,7 +2284,7 @@ void PlayerLocation::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.location_ != nullptr);
       if (_this->_impl_.location_ == nullptr) {
@@ -2283,6 +2309,11 @@ void PlayerLocation::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.rotation_->MergeFrom(*from._impl_.rotation_);
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_sampled_at_us() != 0) {
+        _this->_impl_.sampled_at_us_ = from._impl_.sampled_at_us_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -2302,8 +2333,8 @@ void PlayerLocation::InternalSwap(PlayerLocation* PROTOBUF_RESTRICT PROTOBUF_NON
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerLocation, _impl_.rotation_)
-      + sizeof(PlayerLocation::_impl_.rotation_)
+      PROTOBUF_FIELD_OFFSET(PlayerLocation, _impl_.sampled_at_us_)
+      + sizeof(PlayerLocation::_impl_.sampled_at_us_)
       - PROTOBUF_FIELD_OFFSET(PlayerLocation, _impl_.location_)>(
           reinterpret_cast<char*>(&_impl_.location_),
           reinterpret_cast<char*>(&other->_impl_.location_));

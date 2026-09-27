@@ -26,7 +26,11 @@ module internal PlayerCodec =
                   Rotation.create angles.X angles.Y angles.Z with
             | Ok plugin, Ok localId, Ok name, Ok position, Ok rotation ->
                 let location = Location.create (FormKey.create plugin localId) name
-                Ok(ValueSome(PlayerLocation.create location position rotation))
+                let sampled =
+                    PlayerLocation.create location position rotation
+                    |> PlayerLocation.withSampleTime source.SampledAtUs
+
+                Ok(ValueSome sampled)
             | Error error, _, _, _, _
             | _, Error error, _, _, _
             | _, _, Error error, _, _
@@ -188,6 +192,7 @@ module internal PlayerCodec =
         let key = place.LocationId
 
         Dreamsleeve.Protocol.Chat.PlayerLocation(
+            SampledAtUs = value.SampledAtUs,
             Location = Dreamsleeve.Protocol.Chat.Location(
                 LocationId = Dreamsleeve.Protocol.Chat.FormKey(
                     PluginName = PluginName.value key.PluginName, LocalFormId = LocalFormId.value key.LocalFormId),

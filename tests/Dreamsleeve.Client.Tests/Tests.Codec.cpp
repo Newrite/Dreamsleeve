@@ -314,7 +314,7 @@ TEST_CASE("Player update encoding retains full samples explicit zero resource va
 {
   const auto codec = MakeCodec();
   LocalMovement sample;
-  sample.location = Domain::PlayerLocation{{{"skyrim.esm", 0x123}, "Whiterun"}, {1, 2, 3}, {0, 0, 3.14f}};
+  sample.location = Domain::PlayerLocation{{{"skyrim.esm", 0x123}, "Whiterun"}, {1, 2, 3}, {0, 0, 3.14f}, 123456789};
   LocalActorValues values;
   values.actorValues.emplace("speed", Domain::ActorValueInfo{"Speed", Domain::ScalarActorValue{0}});
   values.actorValues.emplace("health", Domain::ActorValueInfo{"Health", Domain::ResourceActorValue{150, 100}});
@@ -323,6 +323,7 @@ TEST_CASE("Player update encoding retains full samples explicit zero resource va
   P::ClientPacket packet;
   REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
   const auto& movement = packet.update_player().sample_movement();
+  CHECK(movement.location().sampled_at_us() == 123456789);
   CHECK(movement.location().position().x() == 1);
   CHECK(movement.location().rotation().z() == doctest::Approx(3.14));
   encoded = codec.Encode(W::UpdatePlayer{52, values});
@@ -483,6 +484,30 @@ TEST_CASE("Metadata notifications distinguish omitted components from empty repl
   CHECK(details.details->level == 0);
   packet.set_request_id(1);
   CHECK_FALSE(codec.Decode(Bytes(packet)));
+}
+
+
+TEST_CASE("Movement timestamp survives server decoding including unstamped legacy sources")
+{
+  const auto codec = MakeCodec();
+  P::ServerPacket packet;
+  packet.set_protocol_version(W::Version);
+  auto* moved = packet.mutable_player_moved();
+  moved->set_player_id(7);
+  auto* location = moved->mutable_location();
+  location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
+  location->mutable_location()->mutable_location_id()->set_local_form_id(0x3c);
+  location->mutable_position();
+  location->mutable_rotation();
+  for (const auto stamp : {std::uint64_t{0}, std::uint64_t{123456789}, std::numeric_limits<std::uint64_t>::max()})
+  {
+    location->set_sampled_at_us(stamp);
+    auto decoded = codec.Decode(Bytes(packet));
+    REQUIRE(decoded);
+    const auto& value = std::get<PlayerLocationUpdated>(*decoded);
+    REQUIRE(value.location);
+    CHECK(value.location->sampledAtUs == stamp);
+  }
 }
 
 TEST_SUITE_END();

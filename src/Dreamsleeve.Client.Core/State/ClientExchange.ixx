@@ -139,6 +139,15 @@ public:
       std::lock_guard lock{mutex};
       if (inputClosed) return CommandPostResult::Closed;
 
+      // Capture before queueing/coalescing, never at encode time. An adapter may
+      // supply its earlier sampling time using the same monotonic convention.
+      if (auto* movement = std::get_if<LocalMovement>(&command.command);
+          movement && movement->location && movement->location->sampledAtUs == 0)
+      {
+        movement->location->sampledAtUs = static_cast<std::uint64_t>(
+          std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+      }
+
       if (std::holds_alternative<LocalMovement>(command.command) && !commands.empty())
       {
         auto& last = commands.back();

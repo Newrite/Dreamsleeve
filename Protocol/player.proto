@@ -18,6 +18,9 @@ message PlayerLocation {
   Location location = 1;
   Position position = 2;
   Rotation rotation = 3;
+  // Sender monotonic microseconds; only differences within one character are meaningful.
+  // Zero denotes an unstamped source (receive-time interpolation fallback).
+  uint64 sampled_at_us = 4;
 }
 
 message ResourceActorValue { float current = 1; float maximum = 2; }

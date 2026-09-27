@@ -1,6 +1,7 @@
 export module Dreamsleeve.Client.PlayerStore;
 
 export import Dreamsleeve.Client.Domain.Logic;
+import Dreamsleeve.Client.Changes;
 
 import std;
 
@@ -81,6 +82,15 @@ public:
       }
 
       return found->second;
+    }
+
+    MovementObservation ObserveMovement(PlayerId id, MovementClock::time_point receivedAt) const
+    {
+      const auto found = players.find(id);
+      if (found == players.end()) return {id, 0, receivedAt, std::nullopt};
+
+      const auto& player = found->second;
+      return {id, player.characterGeneration, receivedAt, player.location};
     }
 
     std::vector<Player> Snapshot() const

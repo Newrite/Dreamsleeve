@@ -7,6 +7,18 @@ export import Dreamsleeve.Client.Domain;
 export namespace Dreamsleeve::Client
 {
 
+  using MovementClock = std::chrono::steady_clock;
+
+  // Ordered observations, independent of coalesced player invalidations.
+  // An absent location is a visibility/lifecycle boundary and clears history.
+  struct MovementObservation final
+  {
+    Domain::PlayerId playerId{};
+    std::uint64_t characterGeneration{};
+    MovementClock::time_point receivedAt{};
+    std::optional<Domain::PlayerLocation> location;
+  };
+
   struct ChatMessagesAdded final
   {
     Domain::ChatChannelId            channelId{};
@@ -54,11 +66,12 @@ export namespace Dreamsleeve::Client
     // Exact visible cache transitions. Unlike invalidations, these are ordered:
     // applying them in sequence reproduces the native chat cache contents.
     std::vector<ChatContentChange> chatContent;
+    std::vector<MovementObservation> movement;
 
     bool Empty() const noexcept
     {
       return !requiresSnapshot && !selfPlayerChanged && !playersReplaced && players.empty() && chats.empty() && resetChats.empty() &&
-             chatContent.empty();
+             chatContent.empty() && movement.empty();
     }
 
     // Keep allocated top-level storage for the next owner iteration. Nested
@@ -74,6 +87,7 @@ export namespace Dreamsleeve::Client
       chats.clear();
       resetChats.clear();
       chatContent.clear();
+      movement.clear();
     }
   };
 

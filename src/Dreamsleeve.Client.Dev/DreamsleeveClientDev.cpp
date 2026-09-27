@@ -8,6 +8,7 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 
 int RunStateConsole(bool demo);
+int RunMovementDemo();
 int RunNetworkConsole(int argc, char* argv[]);
 
 void InitializeLogging()
@@ -48,6 +49,13 @@ int main(int argc, char* argv[])
 {
   InitializeLogging();
 
+  if (argc == 2 && std::string_view{argv[1]} == "--movement-demo")
+  {
+    const int result = RunMovementDemo();
+    ShutdownLogger();
+    return result;
+  }
+
   if (argc >= 2 && std::string_view{argv[1]} == "--connect")
   {
     const int result = RunNetworkConsole(argc, argv);
@@ -56,7 +64,7 @@ int main(int argc, char* argv[])
   }
   if (argc > 2 || (argc == 2 && std::string_view{argv[1]} != "--state-demo"))
   {
-    spdlog::error("Usage: Dreamsleeve.Client.Dev [--state-demo] | --connect <IPv4> <port> <username> [--auth-url <origin>] [--register <displayName>]");
+    spdlog::error("Usage: Dreamsleeve.Client.Dev [--state-demo | --movement-demo] | --connect <IPv4> <port> <username> [--auth-url <origin>] [--register <displayName>]");
     ShutdownLogger();
     return 2;
   }

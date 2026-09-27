@@ -29,6 +29,8 @@ export namespace Dreamsleeve::Client
     // Reconcile channel existence/resets before replaying ordered content.
     std::vector<ChatStateChange>   chats;
     std::vector<ChatContentChange> chatContent;
+    std::vector<MovementObservation> movement;
+    MovementClock::time_point observedAt{};
   };
 
   using ClientStateUpdate = std::variant<ClientSnapshot, ClientStateDelta>;
@@ -44,6 +46,7 @@ export namespace Dreamsleeve::Client
     if (scratch.requiresSnapshot) return ClientStateUpdate{model.Snapshot()};
 
     ClientStateDelta delta;
+    delta.observedAt        = MovementClock::now();
     delta.generation        = scratch.generation;
     delta.revision          = scratch.revision;
     delta.selfPlayerChanged = scratch.selfPlayerChanged;
@@ -73,6 +76,7 @@ export namespace Dreamsleeve::Client
     }
 
     delta.chatContent = std::move(scratch.chatContent);
+    delta.movement = std::move(scratch.movement);
 
     return ClientStateUpdate{std::move(delta)};
   }

@@ -8,6 +8,20 @@ export import DreamNet.Core;
 export namespace Dreamsleeve::Client
 {
 
+  struct MovementSettings
+  {
+    std::chrono::milliseconds delay{150};
+    std::chrono::milliseconds maxGap{1000};
+    std::size_t historyCapacity{32};
+    double teleportDistance{2048.0};
+
+    bool Valid() const noexcept
+    {
+      return delay.count() >= 0 && maxGap > delay && maxGap <= std::chrono::hours{1} && historyCapacity >= 2 &&
+             std::isfinite(teleportDistance) && teleportDistance > 0;
+    }
+  };
+
   // Load externally before creating the network owner; keep fixed for its lifetime.
   struct Configuration
   {
@@ -30,6 +44,8 @@ export namespace Dreamsleeve::Client
     // Future game-view preferences. They do not change server subscriptions.
     double          visibilityDistance{8192.0};
     bool            showFireflies{true};
+    MovementSettings movement{};
+    std::size_t maxPendingMovementSamples{4096};
 
     std::optional<std::string_view> InvalidProtocolSetting() const noexcept
     {

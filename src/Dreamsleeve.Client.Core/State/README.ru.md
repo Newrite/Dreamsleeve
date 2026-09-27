@@ -121,8 +121,9 @@ TakeAll очищает предыдущий output и меняет вектор�
 
 Владелец отвечает за свежесть снимков и порядок публикации: очередь не проверяет
 generation/revision. ClientExchange вычитывает модель один раз и передаёт
-результат в единственную очередь состояния. Ошибки команд (`ServerRejection`) и измерения
-движения не входят в эту заменяемую снимком очередь состояния.
+результат в единственную очередь состояния. Ошибки команд (`ServerRejection`)
+передаются отдельно и не заменяются снимком. Измерения движения входят в
+ClientStateDelta.movement; новый снимок сбрасывает их историю.
 
 ## Сессия, история и ошибки
 
@@ -222,8 +223,8 @@ TakeCommands возвращает false, когда закрытая входн�
 перед уничтожением exchange вызывающий код обязан выполнить join потока владельца.
 
 Параллельно вычитывать ту же модель через TakeChanges/TakeStateUpdate или второй
-exchange нельзя. Измерения движения со временем приёма пока не добавлены:
-для интерполяции потребуется их история и сбросы на границах сессии/персонажа/
+exchange нельзя. Измерения движения со временем приёма добавлены в ClientStateDelta.movement;
+MovementView хранит их историю со сбросами на границах сессии/персонажа/
 пространства. Схлопнутые изменения последнего состояния для этой истории не годятся.
 
 ## Проверка в Client.Dev
@@ -248,7 +249,8 @@ xmake run Dreamsleeve.Client.Dev --state-demo
 Демо показывает отсутствие локального добавления после send, подтверждение/отказ,
 переполнение, вытеснение истории из кэша на 3 сообщения, явный снимок, новую сессию
 и остановку с join. На остановке ожидающие синтетического ответа отправки получают
-отказ. Подключения к настоящему серверу, игрового хука и JS-адаптера пока нет.
+отказ. Это синтетический режим; реальный сервер доступен через --connect.
+Игрового хука и JS-адаптера пока нет.
 
 Проверки: [Tests.State.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.State.cpp),
 [Tests.Changes.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.Changes.cpp)
@@ -256,3 +258,15 @@ xmake run Dreamsleeve.Client.Dev --state-demo
 [Tests.StateUpdateQueue.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.StateUpdateQueue.cpp)
 и [Tests.Exchange.cpp](../../../tests/Dreamsleeve.Client.Tests/Tests.Exchange.cpp).
 Запуск: [tests/README](../../../tests/README.md).
+
+## История движения
+
+ChangeBatch.movement сохраняет порядок успешных обновлений позиции, полных PlayerInfo,
+удалений и границ персонажа. TakeStateUpdate переносит их в ClientStateDelta.movement.
+Изменения actor values/Details/профиля не добавляют измерений. Лимит накопления
+ClientModel(maxPendingMovementSamples) по умолчанию 4096; переполнение требует снимок.
+
+MovementView принадлежит игровому потоку. После exchange.Drain(output) вызывается
+movement.Apply(output.state), затем Sample(playerId, frameTime) каждый кадр.
+Полный снимок/playersReplaced переустанавливает базу истории. Старые generation/revision
+не возвращают исчезнувшие треки. [Подробности](../../../docs/MovementInterpolationRu.md).

@@ -96,6 +96,7 @@ export namespace Domain
     Location location{};
     Position position{};
     Rotation rotation{};
+    std::uint64_t sampledAtUs{}; // Sender monotonic clock, not UTC.
 
     bool operator==(const PlayerLocation&) const = default;
   };

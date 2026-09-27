@@ -191,3 +191,14 @@ UDP-порту, проверяет оба направления чата, ед�
 Публичный ProtocolCodec обрабатывает оболочку и вызывает внутренние преобразования
 ChatCodec/PlayerCodec/SessionCodec. Файлы находятся в каталоге Protocol соответствующего
 Core-проекта; отдельные экземпляры для частей протокола не создаются.
+
+## Поток движения и интерполяция
+
+Модуль Dreamsleeve.Client.MovementView вычисляет положение на игровом потоке:
+Apply принимает StateUpdateBatch из ClientExchange, Sample вычисляет XYZ/rotation
+на заданное время кадра. История ограничена, без экстраполяции, со сбросами при
+телепорте и смене пространства/персонажа/видимости. Настройки — Configuration.movement
+и maxPendingMovementSamples. [Полный контракт и ограничения](../../docs/MovementInterpolationRu.md).
+
+Client.Dev: --movement-demo выводит детерминированную трассу с джиттером; в --connect
+команды pose <id> и watch <id> <ms> показывают вычисленные координаты реального игрока.

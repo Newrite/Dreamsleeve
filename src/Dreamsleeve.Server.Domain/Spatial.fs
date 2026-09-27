@@ -103,15 +103,20 @@ type PlayerLocation = private {
     location: Location
     position: Position
     rotation: Rotation
+    sampledAtUs: uint64
 } with
     member this.Location = this.location
     member this.Position = this.position
     member this.Rotation = this.rotation
+    member this.SampledAtUs = this.sampledAtUs
 
 [<RequireQualifiedAccess>]
 module PlayerLocation =
     let create location position rotation : PlayerLocation =
-        { location = location; position = position; rotation = rotation }
+        { location = location; position = position; rotation = rotation; sampledAtUs = 0UL }
+
+    let withSampleTime sampledAtUs (value: PlayerLocation) =
+        { value with sampledAtUs = sampledAtUs }
 
     let isSameSpace (left: PlayerLocation) (right: PlayerLocation) =
         left.Location.LocationId = right.Location.LocationId

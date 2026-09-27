@@ -22,6 +22,7 @@ python Scripts/run_tests.py --suite managed
 | Набор | Наблюдаемое поведение |
 |---|---|
 | Client Domain/State/Changes/Exchange | Владение моделью, дельты вместо копирования истории, bounded FIFO команд, снимок/восстановление UI, отсутствие локального эха |
+| Client.Movement | История замеров, джиттер, rotation wrap, остановки, переходы, лимиты и восстановление снимком |
 | DreamNet/Client.Runtime | ENet ownership, лимиты host/peer, коррелированный вход и чат, таймаут/повторный вход, ошибочные и запоздалые ответы |
 | Server Domain/Codec | Правила value objects/хранилищ, bootstrap, доменные ошибки, общий enum отказов, обязательная корреляция, повреждённые пакеты и конфигурация |
 | Agent/Background/Outbox/Lifetimes | Последовательный handler, bounded доставка, отмена, наблюдение Completion, owned children и независимый Watch |
@@ -166,3 +167,7 @@ Protocol v4: отдельные Move/SetActorValues/SetDetails, объедине
 на тике, подавление возврата к опубликованному значению, независимая очистка компонентов
 и применение PlayerMetadataChanged без изменения location проверяются managed/native
 тестами. ENet smoke использует `move`, `values`, `details` и проверяет их независимость.
+
+Для воспроизводимой трассы движения без сервера: `xmake run Dreamsleeve.Client.Dev --movement-demo`.
+Реальный ENet smoke также проверяет source timestamp и потребителя MovementView через watch.
+[Настройки и сценарии](../docs/MovementInterpolationRu.md).

@@ -72,6 +72,19 @@ let private playerUpdate result =
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
 let tests = testList "Dreamsleeve.Server.Codec" [
+    testCase "source movement timestamp survives domain and both replication shapes" <| fun _ ->
+        for stamp in [0UL; 123456789UL; UInt64.MaxValue] do
+            let wire = wireLocation()
+            wire.SampledAtUs <- stamp
+            let state = movementPacket wire |> update |> playerUpdate |> apply
+            let location = state.Location |> ValueOption.get
+            Expect.equal location.SampledAtUs stamp "No clock conversion on the server."
+
+            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayerMoved(pid 7UL, state.Location)) |> ok |> parse
+            Expect.equal moved.PlayerMoved.Location.SampledAtUs stamp "Compact movement retains time."
+            let full = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+            Expect.equal full.PlayerUpdated.Player.Location.SampledAtUs stamp "Snapshots retain the same measurement."
+
     testCase "metadata replication encodes omitted and empty components independently" <| fun _ ->
         let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueSome Map.empty, ValueNone)) |> ok |> parse
         Expect.isNotNull packet.PlayerMetadataChanged.ActorValues "Present empty means clear."

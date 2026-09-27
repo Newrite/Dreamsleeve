@@ -11,6 +11,7 @@ namespace Dreamsleeve::Client::Wire::Detail
 {
   void WriteLocation(P::PlayerLocation& target, const Domain::PlayerLocation& value)
   {
+    target.set_sampled_at_us(value.sampledAtUs);
     auto* location = target.mutable_location();
     location->mutable_location_id()->set_plugin_name(value.location.locationId.pluginName);
     location->mutable_location_id()->set_local_form_id(value.location.locationId.localFormId);
@@ -116,7 +117,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     return Domain::PlayerLocation{
       {{key.plugin_name(), key.local_form_id()}, source.location().location_name()},
       {position.x(), position.y(), position.z()},
-      {rotation.x(), rotation.y(), rotation.z()}
+      {rotation.x(), rotation.y(), rotation.z()}, source.sampled_at_us()
     };
   }
 

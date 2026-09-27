@@ -112,6 +112,7 @@ TEST_CASE("Local samples replace only adjacent samples of the same generation")
   LocalMovement second;
   second.location = Domain::PlayerLocation{};
   second.location->position.X = 2;
+  second.location->sampledAtUs = 12345;
   CHECK(exchange->Post({1, first}) == CommandPostResult::Queued);
   CHECK(exchange->Post({1, second}) == CommandPostResult::Replaced);
   CHECK(exchange->Post({1, CharacterStarted{"New"}}) == CommandPostResult::Queued);

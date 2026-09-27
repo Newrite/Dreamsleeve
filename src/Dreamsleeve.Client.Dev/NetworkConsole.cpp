@@ -2,6 +2,7 @@
 #include <glaze/glaze.hpp>
 import std;
 import Dreamsleeve.Client.Runtime;
+import Dreamsleeve.Client.MovementView;
 import DreamNet.Runtime;
 
 namespace
@@ -62,7 +63,7 @@ namespace
 
   constexpr std::string_view Commands =
     "Commands: connect | disconnect | send <text> | begin <name> | rename <name> | "
-    "move <json> | values <json> | details <json> | clear-location | leave | read | quit\n";
+    "move <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
 
   bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
@@ -122,10 +123,12 @@ namespace
     return true;
   }
 
-  void Print(ClientExchange& exchange, std::uint64_t& generation, Domain::ChatChannelId& channel)
+  void Print(ClientExchange& exchange, std::uint64_t& generation, Domain::ChatChannelId& channel, MovementView& movement, bool verbose = true)
   {
     ClientOutput output;
     exchange.Drain(output);
+    movement.Apply(output.state);
+    if (!verbose && output.state.updates.empty() && output.rejections.empty() && output.commandFailures.empty()) return;
 
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.phase) << '\n';
@@ -170,6 +173,42 @@ namespace
 
     for (const auto& failure : output.commandFailures)
       console << "request " << failure.requestId << " not sent (local " << static_cast<int>(failure.code) << ")\n";
+  }
+
+  void PrintPose(const MovementView& movement, Domain::PlayerId id)
+  {
+    const auto pose = movement.Sample(id);
+    if (pose)
+      std::cout << "pose " << id << ' ' << pose->position.X << ' ' << pose->position.Y << ' ' << pose->position.Z
+                << " yaw=" << pose->rotation.Z << '\n';
+    else
+      std::cout << "pose " << id << " absent\n";
+  }
+
+  bool ReadMovement(const std::string& line, ClientExchange& exchange, std::uint64_t& generation,
+                    Domain::ChatChannelId& channel, MovementView& movement)
+  {
+    std::istringstream input{line};
+    std::string command;
+    Domain::PlayerId id{};
+    int durationMs{};
+    if (!(input >> command >> id)) return false;
+    if (command == "pose")
+    {
+      Print(exchange, generation, channel, movement, false);
+      PrintPose(movement, id);
+      return true;
+    }
+    if (command != "watch" || !(input >> durationMs) || durationMs < 1 || durationMs > 60000) return false;
+
+    const auto end = MovementClock::now() + std::chrono::milliseconds{durationMs};
+    while (MovementClock::now() < end)
+    {
+      Print(exchange, generation, channel, movement, false);
+      PrintPose(movement, id);
+      std::this_thread::sleep_for(std::chrono::milliseconds{16});
+    }
+    return true;
   }
 
   enum class Action
@@ -321,6 +360,13 @@ int RunNetworkConsole(int argc, char* argv[])
     return 1;
   }
 
+  auto movement = MovementView::TryCreate(config.movement);
+  if (!movement)
+  {
+    PrintError(movement.error());
+    return 1;
+  }
+
   NetworkControl control;
   std::jthread worker(RunNetwork, config, std::ref(**exchange), std::cref(authUrl), std::cref(credentials), std::ref(control));
   std::uint64_t generation{};
@@ -332,7 +378,11 @@ int RunNetworkConsole(int argc, char* argv[])
   while (std::getline(std::cin, line) && line != "quit")
   {
     if (line == "read")
-      Print(**exchange, generation, channel);
+      Print(**exchange, generation, channel, **movement);
+    else if (line.starts_with("pose ") || line.starts_with("watch "))
+    {
+      if (!ReadMovement(line, **exchange, generation, channel, **movement)) std::cout << Commands;
+    }
     else if (line == "connect" || line == "disconnect")
     {
       std::lock_guard lock(control.mutex);
@@ -343,7 +393,7 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     else if (line.starts_with("send ") || line.starts_with("chat "))
     {
-      Print(**exchange, generation, channel);
+      Print(**exchange, generation, channel, **movement);
       const auto requestId = (*exchange)->NextRequestId();
       if (!requestId)
         std::cout << "Request IDs exhausted\n";
@@ -358,14 +408,14 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     else
     {
-      Print(**exchange, generation, channel);
+      Print(**exchange, generation, channel, **movement);
       if (!PostPlayerCommand(line, **exchange, generation)) std::cout << Commands;
     }
   }
 
   worker.request_stop();
   worker.join();
-  Print(**exchange, generation, channel);
+  Print(**exchange, generation, channel, **movement);
 
   return control.failed ? 1 : 0;
 }
