@@ -455,3 +455,24 @@ preceding state. This mode performs synchronous JSON/file I/O and must not be
 used for performance comparisons; confirm drop behavior with ETW alone. No packet
 payloads, passwords or tickets are recorded. With the environment unset, peer
 tracing is inactive and creates no files.
+
+## Cold AOI versus warmed steady-state movement
+
+The multiprocess runner defaults to **cold positions**: the first measured frame
+sends reliable SetLocation commands and creates initial AOI baselines. Keep this
+mode for historical A/B and connection/visibility admission stress. It includes
+that reliable fanout burst in its load window, not just steady-state movement.
+
+Pass `--warm-positions` to `Scripts/benchmark_enet_workers.py` to establish the
+scenario's relative-time-zero positions before measurement. Workers prepare
+positions in turn while servicing traffic, then require all expected visible
+baselines and local control acknowledgements to settle. Expected coordinates and
+space identities are deterministic; source timestamps may differ between workers.
+A `positions-ready` barrier precedes the common measured start. The first measured
+frame reuses those contexts and sends fresh realtime samples without an initial
+SetLocation burst. Warmup is excluded from load metrics; subsequent AOI changes in
+`boundaries` remain part of the measured workload.
+
+Reports retain `warmPositions` and the runner arguments. Compare owner/inline only
+with the same warmup setting, and report cold admission stress separately from
+steady-state delivery. This option does not change production behavior.

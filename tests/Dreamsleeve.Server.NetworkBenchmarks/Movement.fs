@@ -24,6 +24,8 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
     let seen = Array2D.zeroCreate<uint64> count total
     let lastReceive = Array2D.create count total -1.
     let receiveGaps = Distribution()
+    let seenSpaces = Array2D.zeroCreate<FormKey> count total
+    let mutable warmPositions: PlayerLocation array = [||]
     let seenX = Array2D.zeroCreate<float32> count total
     let initialized = Array2D.zeroCreate<bool> count total
     let mutable initializedCount = 0
@@ -120,12 +122,36 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
                     lastReceive[observer, index] <- -1.
                     if measuring then cleared <- cleared + 1L
                 else
+                    seenSpaces[observer, index] <- location.Location.LocationId
                     observe observer index (MovementPose(Position = location.Position, Rotation = location.Rotation, SampledAtUs = location.SampledAtUs))
 
     member _.BeginCharacters(serviceBatch: unit -> unit) =
         for index in 0 .. count - 1 do
             submit index (UpdatePlayer(BeginCharacter = BeginCharacter(Name = "Benchmark"))) |> ignore
             if index % 16 = 15 then serviceBatch()
+
+    member _.PreparePositions(serviceBatch: unit -> unit) =
+        started <- now()
+        warmPositions <- Array.init total (fun index -> position index started)
+        for index in 0 .. count - 1 do
+            move index started
+            if index % 16 = 15 then serviceBatch()
+
+    member _.PositionsPrepared =
+        let mutable ready = warmPositions.Length = total && (pending |> Array.forall (fun requests -> requests.Count = 0))
+        if ready then
+            for observer in 0 .. count - 1 do
+                let origin = warmPositions[globalIndex observer]
+                for source in 0 .. total - 1 do
+                    let target = warmPositions[source]
+                    let dx = double origin.Position.X - double target.Position.X
+                    let expected = globalIndex observer = source ||
+                                   (origin.Location.LocationId = target.Location.LocationId && dx * dx <= 8192. * 8192.)
+                    if expected then
+                        if not visible[observer, source] || seenX[observer, source] <> target.Position.X
+                           || seenSpaces[observer, source] <> target.Location.LocationId then ready <- false
+                    elif visible[observer, source] then ready <- false
+        ready
 
     member _.Prepared = initializedCount = count * total && (pending |> Array.forall (fun requests -> requests.Count = 0))
 
@@ -226,6 +252,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
 
     member _.Report(loadMs) =
         {| scenario = scenario; clients = count; sourceHz = rate; replicationMs = replicationMs; visibilityDistance = 8192
+           warmPositions = warmPositions.Length > 0
            sentSamples = sent; receivedMovements = received; visibilityClears = cleared
            sentPayloadBytes = sentBytes; receivedPayloadBytes = receivedBytes
            sentPayloadBytesPerSecond = float sentBytes * 1000. / max 1. loadMs
@@ -293,4 +320,24 @@ let verifyOracle () =
     check (probe.Pending = 0) "Final repeats must not wait for acknowledgements"
     movement 3UL repeated.Sequence repeated.Pose
     check (probe.Converged()) "A later repeat must recover the lost final sample"
+    let warmControls = ResizeArray<ClientPacket>()
+    let warmSamples = ResizeArray<ClientMovementPacket>()
+    let warm = Probe("spaces", 20., 50, [|1UL|], 0, 1, 1, (fun () -> time),
+                     (fun _ packet -> warmControls.Add packet; true),
+                     (fun _ packet -> warmSamples.Add packet; true), fail)
+    check (not warm.PositionsPrepared) "Cold mode must not report warmup completion"
+    warm.PreparePositions(ignore)
+    check (warmControls.Count = 1 && not warm.PositionsPrepared) "Warmup waits for reliable ACK and visibility"
+    let context = warmControls[0].UpdatePlayer.SetLocation
+    warm.Receive(0, ServerPacket(RequestId = warmControls[0].RequestId, PlayerUpdateAccepted = PlayerUpdateAccepted()), 0)
+    let remoteBaseline = context.Location.Clone()
+    remoteBaseline.SampledAtUs <- remoteBaseline.SampledAtUs + 999UL
+    warm.Receive(0, ServerPacket(PlayerVisibilityChanged = PlayerVisibilityChanged(
+        PlayerId = 1UL, ViewRevision = 1UL, Sequence = 0UL, Location = remoteBaseline)), 0)
+    check warm.PositionsPrepared "Warmup compares expected coordinates/context, not another worker's timestamp"
+    time <- time + 1000.
+    warm.Start(time)
+    warm.SendDue()
+    check (warmControls.Count = 1) "Steady-state first frame must reuse the warmed location context"
+    check (warmSamples.Count = 2) "Measured movement still emits a fresh sample after warmup"
     printfn "Movement oracle checks passed."

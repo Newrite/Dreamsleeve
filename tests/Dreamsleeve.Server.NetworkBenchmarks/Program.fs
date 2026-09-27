@@ -442,6 +442,23 @@ let private movementLoad state =
     if not probe.Prepared then fail state "Character snapshots did not converge before load"
     serviceFor state 1000.
 
+    if Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_WARM_POSITIONS" = "1" && state.ErrorCount = 0 then
+        stage "movement-positions"
+        state.Group.Wait("positions", state.Group.Index, barrierPump state)
+        probe.PreparePositions(fun () -> serviceFor state 150.)
+        state.Group.Publish("positions", true)
+        state.Group.Wait("positions", state.Group.Workers, barrierPump state)
+        let positionDeadline = now state + 30000.
+        let mutable ready = false
+        let mutable nextCheck = now state
+        while not ready && state.ErrorCount = 0 && now state < positionDeadline do
+            pump state
+            if now state >= nextCheck then
+                ready <- probe.PositionsPrepared
+                nextCheck <- now state + 100.
+        if not ready then fail state "Initial position baselines did not converge before load"
+        else state.Group.All("positions-ready", true, barrierPump state) |> ignore
+
     stage "armed"
     let started = state.Group.Start(barrierPump state)
     while Coordination.now() < started do pump state

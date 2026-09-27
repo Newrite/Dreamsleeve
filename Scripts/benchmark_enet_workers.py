@@ -39,6 +39,7 @@ def run(args, workers, repetition, destination):
     phase_path.write_text("startup", encoding="utf-8")
     env = os.environ.copy()
     env["DREAMSLEEVE_BENCH_PHASE"] = str(phase_path)
+    env["DREAMSLEEVE_BENCH_WARM_POSITIONS"] = "1" if args.warm_positions else "0"
     env["DREAMSLEEVE_BENCH_CLIENT_BUFFER"] = str(args.client_buffer)
     env["DREAMSLEEVE_BENCH_GROUP"] = str(group)
     env["DREAMSLEEVE_BENCH_WORKERS"] = str(workers)
@@ -160,7 +161,7 @@ def run(args, workers, repetition, destination):
                 errors.append(f"Server exit code: {server.process.returncode}")
     deliveries = [read_json(case / f"client-{i}.json") for i in range(workers)]
     result = dict(name=name, clients=args.clients, hosts=args.hosts, workers=workers, rate=args.rate,
-        replicationMs=args.replication_ms, seconds=args.seconds, scenario=args.scenario, config=config,
+        replicationMs=args.replication_ms, seconds=args.seconds, scenario=args.scenario, warmPositions=args.warm_positions, config=config,
         success=not errors and all(d and d.get("success") for d in deliveries), errors=errors,
         delivery=deliveries, server=aggregate(samples, "server"), clientsProcess=aggregate(samples, "clients"),
         workerProcesses=[aggregate(samples, f"client{i}") for i in range(workers)],
@@ -182,6 +183,7 @@ def main():
     parser.add_argument("--seconds", type=int, default=30)
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--warm-positions", action="store_true", help="Establish initial reliable AOI baselines before measured load")
     parser.add_argument("--udp-trace", action="store_true", help="Separate diagnostic run: ETW drops and OS endpoints")
     parser.add_argument("--peer-trace", action="store_true", help="Also record bounded per-peer ENet command snapshots; adds synchronous I/O")
     parser.add_argument("--server-benchmark", type=Path, help="Isolated server diagnostic benchmark DLL")
