@@ -99,6 +99,7 @@ let private withRuntimeUsing options createAuthentication run = task {
             events.Add value
         Ok (List.ofSeq events)
     let transport = {
+        MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
         Poll = poll
         Send = fun (id, bytes) -> output.Writer.TryWrite(id, ServerPacket.Parser.ParseFrom bytes) |> ignore; Ok ()
         Close = fun id -> if not (ignoreClose.ContainsKey id) then input.Enqueue(ServerTransportEvent.Disconnected id)
@@ -370,6 +371,7 @@ let tests = testList "ServerRuntime" [
     testCase "transport blocking interval must fit runtime deadlines" (fun () ->
         use authenticator = createAuthentication ()
         let transport = {
+            MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
             Poll = fun () -> failwith "Invalid runtime must not poll."
             Send = fun _ -> failwith "Invalid runtime must not send."
             Close = ignore; Reset = ignore; Dispose = ignore

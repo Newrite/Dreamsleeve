@@ -80,7 +80,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved movements) |> ok
         for limit in [12; 127; 128; packet.Length - 1; packet.Length] do
             let small = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = limit } |> ok
-            let packets = ProtocolCodec.encodeMovementPackets small movements |> ok
+            let packets = ProtocolCodec.encodeMovementPackets small Int32.MaxValue movements |> ok
             let decoded = packets |> List.collect (fun bytes ->
                 Expect.isLessThanOrEqual bytes.Length limit "Application limit includes the whole envelope."
                 let value = parse bytes
@@ -88,8 +88,37 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 value.PlayersMoved.Players |> Seq.map _.PlayerId |> List.ofSeq)
             Expect.equal decoded [1UL .. 130UL] "Every entry exactly once and in order."
         let tiny = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = 1 } |> ok
-        Expect.isError (ProtocolCodec.encodeMovementPackets tiny movements) "An unsplittable entry fails before any send."
+        Expect.isError (ProtocolCodec.encodeMovementPackets tiny Int32.MaxValue movements) "An unsplittable entry fails before any send."
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch []))) "Empty batch is invalid."
+
+    testCase "movement target is clamped by negotiated transport and application budgets" <| fun _ ->
+        let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
+        for target, transport, application in [64, 128, 1024; 128, 64, 1024; 128, 1024, 64] do
+            let configured = configured { config with MovementPacketTargetBytes = target; MaxPacketBytes = application }
+            let packets = ProtocolCodec.encodeMovementPackets configured transport movements |> ok
+            let budget = min target (min transport application)
+            let ids = packets |> List.collect (fun bytes ->
+                Expect.isLessThanOrEqual bytes.Length budget "Whole protobuf envelope fits."
+                (parse bytes).PlayersMoved.Players |> Seq.map _.PlayerId |> Seq.toList)
+            Expect.isGreaterThan packets.Length 1 "Fixture requires splitting."
+            Expect.equal ids [1UL .. 130UL] "Splitting preserves every entry and order."
+        Expect.isError (ProtocolCodec.encodeMovementPackets codec 0 movements) "Unavailable peer cannot encode movement."
+
+    testCase "an indivisible movement can fragment alone but cannot bypass application limit" <| fun _ ->
+        let wire = wireLocation ()
+        wire.Location.LocationId.PluginName <- String.replicate 240 "a" + ".esm"
+        wire.Location.LocationName <- String.replicate 128 "界"
+        let location = wire |> movementPacket |> update |> playerUpdate |> apply |> _.Location
+        let single = movementBatch [pid 2UL, location]
+        let singleSize = (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved single) |> ok).Length
+        let movements = movementBatch [pid 1UL, ValueNone; pid 2UL, location; pid 3UL, ValueNone]
+        let configured = configured { config with MovementPacketTargetBytes = 1200 }
+        let packets = ProtocolCodec.encodeMovementPackets configured 548 movements |> ok
+        Expect.equal (packets |> List.map (fun bytes -> (parse bytes).PlayersMoved.Players.Count)) [1; 1; 1] "Fallback is isolated."
+        Expect.isGreaterThan singleSize 548 "Long labels exceed the negotiated payload budget."
+        Expect.equal packets[1].Length singleSize "Large entry is retained intact."
+        let strict = ProtocolCodec.create { config with MaxPacketBytes = singleSize - 1 } |> ok
+        Expect.isError (ProtocolCodec.encodeMovementPackets strict 548 movements) "No partial result when any entry exceeds the strict cap."
 
     testCase "source movement timestamp survives domain and both replication shapes" <| fun _ ->
         for stamp in [0UL; 123456789UL; UInt64.MaxValue] do

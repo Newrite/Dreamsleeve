@@ -36,9 +36,16 @@ public enum PacketSendResult
 }
 
 // C# expresses the managed function pointer required by yENet. Routing, polling,
-// lifecycle and configuration stay in the F# adapter; this owns only packet leases.
+// lifecycle and configuration stay in the F# adapter; this owns packet leases and payload limits.
 public static unsafe class OutgoingPackets
 {
+    // Match enet_peer_send: its fragmentation threshold reserves the fragment
+    // command even for an ordinary reliable send. Read negotiated peer MTU.
+    public static int GetUnfragmentedPayloadBytes(EnetPeer peer) =>
+        checked((int)peer.Mtu) - sizeof(enet.ENetProtocolHeader)
+        - sizeof(enet.ENetProtocolSendFragment)
+        - (peer.Host.ChecksumCallback == null ? 0 : sizeof(uint));
+
     private sealed class Lease(PacketBudget host, PacketBudget peer, int length)
     {
         public void Release()

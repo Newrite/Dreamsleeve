@@ -24,6 +24,15 @@ public sealed class TransportDiagnostics
     private static readonly Histogram<double> Loss = Meter.CreateHistogram<double>("transport.peer.loss.window");
     private static readonly Histogram<double> ReceiveBuffer = Meter.CreateHistogram<double>("transport.socket.receive.bytes", "By");
     private static readonly Histogram<double> SendBuffer = Meter.CreateHistogram<double>("transport.socket.send.bytes", "By");
+    // Accepted logical packets needing fragmentation, not measured UDP sends/retries.
+    private static readonly Histogram<double> FragmentedPacketSize = Meter.CreateHistogram<double>("transport.fragmentation.accepted.bytes", "By");
+
+    public static void RecordAcceptedPacket(EnetPeer peer, int bytes)
+    {
+        if (FragmentedPacketSize.Enabled && bytes > OutgoingPackets.GetUnfragmentedPayloadBytes(peer))
+            FragmentedPacketSize.Record(bytes);
+    }
+
     private long lastPoll;
     private long lastSample;
 

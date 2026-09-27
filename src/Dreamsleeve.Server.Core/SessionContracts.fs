@@ -27,6 +27,8 @@ type ServerTransportEvent =
 type ServerTransport = {
     Poll: unit -> Result<ServerTransportEvent list, string>
     Send: Guid * byte array -> Result<unit, string>
+    /// Current transport payload budget before fragmentation; zero for unavailable connections.
+    MaxUnfragmentedPayloadBytes: Guid -> int
     /// Stop new sends and drain accepted reliable packets; Poll eventually reports Disconnected.
     Close: Guid -> unit
     /// Force local removal on the runtime deadline; no Disconnected event is required.

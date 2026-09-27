@@ -48,11 +48,12 @@ let private until condition pump =
         Thread.Sleep 1
     Expect.isTrue (condition ()) "loopback operation completed before the guard deadline"
 
-let private withPeers run =
+let private withPeersAtMtu mtu run =
     Expect.equal (enet.ENET_API.enet_initialize()) 0 "initialize"
     try
         use server = EnetHost.Create(address 0us, 1un, 2un, 0u, 0u, EnetHostOption.Ipv4)
         use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 2un, 0u, 0u, EnetHostOption.Ipv4)
+        Expect.isTrue (client.SetMtu mtu) "Set proposed MTU before connect."
         let mutable clientPeer = Unchecked.defaultof<EnetPeer>
         Expect.isTrue (client.TryConnect(server.Address, 2un, 0u, &clientPeer)) "begin connect"
         let mutable serverPeer = None
@@ -68,6 +69,8 @@ let private withPeers run =
         run server serverPeer.Value pump
     finally
         enet.ENET_API.enet_deinitialize()
+
+let private withPeers run = withPeersAtMtu 1392u run
 
 let private withAdapter settings run =
     let config = { settings with Port = freePort (); ServiceTimeoutMs = 0u }
@@ -91,6 +94,28 @@ let private withAdapter settings run =
         transport.Dispose()
 
 let tests = testSequenced <| testList "ENet transport" [
+    testCase "payload budget follows negotiated MTU and ENet fragmentation overhead" <| fun _ ->
+        for mtu in [576u; 1392u] do
+            withPeersAtMtu mtu (fun _ peer pump ->
+                Expect.equal peer.Mtu mtu "Peer negotiated the proposed MTU."
+                let payload = OutgoingPackets.GetUnfragmentedPayloadBytes peer
+                Expect.equal payload (int mtu - 28) "Header plus fragment command, no checksum."
+                let budget = PacketBudget(2, 4096L)
+                let peerBudget = PacketBudget(2, 4096L)
+                for size in [payload; payload + 1] do
+                    Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(Array.zeroCreate size), budget, peerBudget))
+                        PacketSendResult.Sent "Boundary and fragmented packet are both accepted."
+                until (fun () -> budget.Packets = 0) pump)
+
+    testCase "adapter exposes a payload budget only for live connections" <| fun _ ->
+        withAdapter ServerConfig.defaults (fun _ transport _ peer connection _ _ _ ->
+            Expect.equal (transport.MaxUnfragmentedPayloadBytes connection) (OutgoingPackets.GetUnfragmentedPayloadBytes peer) "Negotiated budget."
+            Expect.equal (transport.MaxUnfragmentedPayloadBytes(Guid.NewGuid())) 0 "Unknown peer."
+            transport.Reset connection
+            Expect.equal (transport.MaxUnfragmentedPayloadBytes connection) 0 "Reset peer."
+            transport.Dispose()
+            Expect.equal (transport.MaxUnfragmentedPayloadBytes connection) 0 "Disposed host is not accessed.")
+
     testCase "socket buffer readback borrows the handle and leaves the host usable" <| fun _ ->
         withPeers (fun host peer pump ->
             Expect.isTrue (TransportDiagnostics.ConfigureBuffers(host, 1024 * 1024, 1024 * 1024)) "socket options applied"

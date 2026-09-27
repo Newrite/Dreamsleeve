@@ -144,9 +144,11 @@ module ProtocolCodec =
             else
                 Ok(packet.ToByteArray())
 
-    /// Split on protobuf entry boundaries; never rely on ENet fragmentation to
-    /// bypass the configured application packet limit. No partial send on failure.
-    let encodeMovementPackets (codec: ProtocolCodec) (movements: MovementChange array) =
+    /// Split at entry boundaries within the configured target and peer MTU budget.
+    /// An indivisible entry may fragment, but never exceed MaxPacketBytes.
+    /// No partial send on failure; array order is preserved.
+    let encodeMovementPackets (codec: ProtocolCodec) maxUnfragmentedPayloadBytes (movements: MovementChange array) =
+        let target = min codec.Config.MaxPacketBytes (min codec.Config.MovementPacketTargetBytes maxUnfragmentedPayloadBytes)
         let packets = ResizeArray<byte array>()
         let mutable batch = Dreamsleeve.Protocol.Chat.PlayersMoved()
         let mutable payloadSize = 0
@@ -170,11 +172,17 @@ module ProtocolCodec =
             if envelopeSize size > codec.Config.MaxPacketBytes then
                 tooLarge <- true
             else
-                if envelopeSize (payloadSize + size) > codec.Config.MaxPacketBytes then flush()
+                if envelopeSize (payloadSize + size) > target then flush()
                 batch.Players.Add item
                 payloadSize <- payloadSize + size
         flush()
 
-        if tooLarge then fail None ProtocolCodecFailure.PacketTooLarge
+        if maxUnfragmentedPayloadBytes < 1 then fail None (ProtocolCodecFailure.InvalidPayload "transport_payload_budget")
+        elif tooLarge then fail None ProtocolCodecFailure.PacketTooLarge
         elif packets.Count = 0 then fail None (ProtocolCodecFailure.InvalidPayload "players_moved")
-        else Ok (List.ofSeq packets)
+        else
+            for packet in packets do
+                if packet.Length > target then
+                    RuntimeMetrics.movementTargetExceeded.Record(float packet.Length)
+
+            Ok (List.ofSeq packets)

@@ -30,6 +30,7 @@ type ServerConfig =
         ServiceTimeoutMs: uint32
         EventBudget: int
         MaxPacketBytes: int
+        MovementPacketTargetBytes: int
         ReceiveBufferBytes: int
         SendBufferBytes: int
         MaxWaitingData: int
@@ -55,6 +56,7 @@ module ServerConfig =
             ServiceTimeoutMs = 10u
             EventBudget = 64
             MaxPacketBytes = 1024 * 1024
+            MovementPacketTargetBytes = 1200
             ReceiveBufferBytes = 256 * 1024
             SendBufferBytes = 256 * 1024
             MaxWaitingData = 32 * 1024 * 1024
@@ -75,6 +77,7 @@ module ServerConfig =
     // Used at codec creation and host startup; no per-packet config validation.
     let protocolErrors (config: ServerConfig) =
         [
+            if config.MovementPacketTargetBytes < 1 then "MovementPacketTargetBytes must be positive."
             if config.MaxPacketBytes < 1 then "MaxPacketBytes must be positive."
             if config.MaxWaitingData < config.MaxPacketBytes then
                 "MaxWaitingData must allow at least one maximum-size packet."

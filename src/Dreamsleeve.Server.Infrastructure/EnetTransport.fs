@@ -126,6 +126,14 @@ module EnetTransport =
             | Some failure -> Error failure
             | None -> Ok (List.ofSeq events)
 
+    let private maxUnfragmentedPayloadBytes state connectionId =
+        if state.Disposed then 0
+        else
+            match state.Connections.TryGetValue connectionId with
+            | true, connection when not connection.Closing ->
+                OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer
+            | true, _ | false, _ -> 0
+
     let private send state (connectionId, bytes: byte array) =
         if state.Disposed then
             Error "ENet transport is disposed."
@@ -140,7 +148,9 @@ module EnetTransport =
                 let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing)
                 TransportDiagnostics.EndSend(started, bytes.Length)
                 match result with
-                | PacketSendResult.Sent -> Ok ()
+                | PacketSendResult.Sent ->
+                    TransportDiagnostics.RecordAcceptedPacket(connection.Peer, bytes.Length)
+                    Ok ()
                 | PacketSendResult.BudgetExceeded -> Error "Outgoing ENet packet budget exceeded."
                 | PacketSendResult.PeerRejected -> Error "ENet peer rejected the outgoing packet."
                 | unknown when not (Enum.IsDefined unknown) -> Error "Unknown ENet packet admission result."
@@ -194,6 +204,7 @@ module EnetTransport =
                     Ok {
                         Poll = poll state
                         Send = send state
+                        MaxUnfragmentedPayloadBytes = maxUnfragmentedPayloadBytes state
                         Close = close state
                         Reset = reset state
                         Dispose = dispose state

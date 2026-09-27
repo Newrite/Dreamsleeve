@@ -433,3 +433,18 @@ ValueTask; ticker уже ожидает его напрямую, без AsTask �
   Добавлены movement.flush.{tick,boundary,settlement,chat,metadata,lifecycle}.entries:
   count показывает число непустых flush, sum — число entries. ACK/lifecycle FIFO
   не изменён. Индексы dirty/deadline routes отложены до отдельных измерений.
+
+- Шаг 6: MovementPacketTargetBytes (default 1200) ограничивает batch вместе с
+  MaxPacketBytes и текущим unfragmented payload от adapter. Порог adapter соответствует
+  enet_peer_send установленного xENet; Core не содержит ENet overhead constants.
+  Неделимое entry выше цели остаётся отдельным пакетом, application cap строгий.
+  Добавлены метрики encoded target-exceeded и accepted transport fragmentation;
+  они не обозначают число реально отправленных UDP-фрагментов/ретраев.
+  Саморевью: protobuf envelope входит в размер, нет partial send при ошибке,
+  записи сохраняют порядок, unknown/reset/disposed peers не читают native pointers.
+  Wire v5, reliable/channel и FIFO-барьеры остаются прежними.
+  Итоговая проверка: Release build без предупреждений, 277/277 managed tests,
+  19/19 функциональных ENet smoke-сценариев с двумя native Client.Dev, включая
+  движение, AOI, metadata, чат и восстановление SQLite после рестарта. Оба benchmark
+  проекта собраны для проверки совместимости, но не запускались. Шаги 1–6 завершены;
+  шаг 7 и повторный performance-профиль остаются отложенными.

@@ -126,6 +126,7 @@ let private start count (probe: Probe) = task {
         while events.Count < 64 && incoming.TryDequeue(&event) do events.Add event
         Ok (List.ofSeq events)
     let transport = {
+        MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
         Poll = poll
         Send = fun (id, bytes) -> probe.Receive(id, bytes); Ok ()
         Close = fun id -> incoming.Enqueue(ServerTransportEvent.Disconnected id)

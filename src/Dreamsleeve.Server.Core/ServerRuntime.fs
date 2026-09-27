@@ -123,7 +123,9 @@ module ServerRuntime =
                 movements[index] <- { PlayerId = playerId; Location = location }
                 index <- index + 1
             entry.Movement.Clear()
-            ProtocolCodec.encodeMovementPackets state.Codec movements |> transmit options state context entry
+            let payloadBudget = state.Transport.MaxUnfragmentedPayloadBytes entry.ConnectionId
+            ProtocolCodec.encodeMovementPackets state.Codec payloadBudget movements
+            |> transmit options state context entry
 
     let private queueMovement (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) (movements: MovementChange array) =
         for movement in movements do

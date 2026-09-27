@@ -43,4 +43,4 @@
 
 - [Диагностика движения: таймер, UDP, ENet и GC](benchmarks/movement-diagnostics-2026-09-27.md): частоты, буферные эксперименты и EventPipe-профили.
 
-- [План первой волны оптимизации движения](MovementOptimizationPlanRu.md): конкретные hot paths, Task/ValueTask, struct/DU, reuse и порядок проверок; пока не реализован.
+- [План первой волны оптимизации движения](MovementOptimizationPlanRu.md): конкретные hot paths, Task/ValueTask, struct/DU, reuse и порядок проверок; первая волна реализована, повторные бенчмарки отложены.
