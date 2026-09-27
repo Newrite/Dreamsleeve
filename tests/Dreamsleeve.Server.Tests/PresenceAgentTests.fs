@@ -122,7 +122,7 @@ let private character subscription =
 let private withPositions settings aliceLocation bobLocation run =
     let initialize (alice, bob) =
         let positioned subscription location =
-            { subscription with Snapshot = character subscription |> Player.replaceSample location Map.empty |> Player.snapshot }
+            { subscription with Snapshot = character subscription |> Player.applyUpdate (PlayerUpdate.Move location) |> Player.snapshot }
         positioned alice aliceLocation, positioned bob bobLocation
     withPresenceUsing settings initialize run
 
@@ -281,7 +281,7 @@ let tests = testList "PresenceAgent" [
         withPresence config (fun fixture -> task {
             let player = character fixture.Alice
             let first = Player.snapshot player
-            let latest = Player.snapshot (Player.replaceSample (ValueSome (location 10.0f)) Map.empty player)
+            let latest = Player.snapshot (Player.applyUpdate (PlayerUpdate.Move(ValueSome (location 10.0f))) player)
             do! changed fixture first
             do! changed fixture latest
             do! flushViews fixture (PresenceEvent.Updated latest) (PresenceEvent.Updated(hidden latest))
@@ -314,7 +314,7 @@ let tests = testList "PresenceAgent" [
             let name = CharacterName.create 128 "Nerevar" |> ok
             let key = ActorValueKey.create 128 "skyrim:health" |> ok
             let health = ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok) (ActorValueState.resource 20.0f 100.0f |> ok)
-            let player = character fixture.Alice |> Player.replaceSample (ValueSome (location 10.0f)) (Map.ofList [(key, health)])
+            let player = character fixture.Alice |> Player.applyUpdate (PlayerUpdate.Move(ValueSome (location 10.0f))) |> Player.replaceActorValues (Map.ofList [(key, health)])
             let first = Player.snapshot player
             do! changed fixture first
             do! flushViews fixture (PresenceEvent.Updated first) (PresenceEvent.Updated(hidden first))
@@ -334,7 +334,7 @@ let tests = testList "PresenceAgent" [
 
     case "late join sees latest full state before the next replication flush" (fun () ->
         withPresence config (fun fixture -> task {
-            let latest = character fixture.Alice |> Player.replaceSample (ValueSome (location 5.0f)) Map.empty |> Player.snapshot
+            let latest = character fixture.Alice |> Player.applyUpdate (PlayerUpdate.Move(ValueSome (location 5.0f))) |> Player.snapshot
             do! changed fixture latest
             do! post fixture.Presence (PresenceCommand.Join fixture.Late)
             let! initial = receive fixture.LateEvents
@@ -419,14 +419,14 @@ let tests = testList "PresenceAgent" [
             equal temporary (snapshot newcomer |> List.head)
             for events in [fixture.AliceEvents; fixture.BobEvents] do
                 let! published = receive events
-                equal (PresenceEvent.Updated temporary) published
+                equal (PresenceEvent.MetadataChanged(original.Data.PlayerId, ValueNone, ValueSome details)) published
                 let! joined = receive events
                 equal (PresenceEvent.Joined fixture.Late.Snapshot) joined
 
             do! changed fixture original
-            do! flushBoth fixture (PresenceEvent.Updated original)
+            do! flushBoth fixture (PresenceEvent.MetadataChanged(original.Data.PlayerId, ValueNone, ValueSome original.Details))
             let! restored = receive fixture.LateEvents
-            equal (PresenceEvent.Updated original) restored
+            equal (PresenceEvent.MetadataChanged(original.Data.PlayerId, ValueNone, ValueSome original.Details)) restored
         }))
 
     case "join flush removes a slow existing subscriber without resurrecting its stale snapshot" (fun () -> task {
@@ -545,5 +545,35 @@ let tests = testList "PresenceAgent" [
             equal [PresenceEvent.Moved(fixture.Alice.Snapshot.Data.PlayerId, ValueNone)] events
         })
     })
+
+
+    case "tick combines latest metadata separately from movement and suppresses reverted components" (fun () ->
+        withPositions config (ValueSome (location 0.0f)) (ValueSome (location 5.0f)) (fun fixture -> task {
+            let initial = fixture.Alice.Snapshot
+            let key = ActorValueKey.create 128 "skyrim:health" |> ok
+            let entry = ActorValueInfo.create (ActorValueName.create 128 "Health" |> ok) (ActorValueState.scalar 0.0f |> ok)
+            let details = PlayerDetails.create ValueNone (ValueSome 0u) PlayerActivity.unknown ValueNone ValueNone
+            let first = { initial with ActorValues = Map.ofList [key, entry]; Location = ValueSome (location 1.0f) }
+            let latest = { first with Details = details; Location = ValueSome (location 2.0f) }
+            do! changed fixture first
+            do! changed fixture latest
+            let! (author, _), (observer, _) = flushViewsNow fixture
+            let expected = [PresenceEvent.MetadataChanged(initial.Data.PlayerId, ValueSome latest.ActorValues, ValueSome details);
+                            PresenceEvent.Moved(initial.Data.PlayerId, latest.Location)]
+            equal expected author
+            equal expected observer
+
+            do! changed fixture { latest with Details = PlayerDetails.empty }
+            do! changed fixture latest
+            let! (author, _), (observer, _) = flushViewsNow fixture
+            equal [] author
+            equal [] observer
+
+            do! changed fixture { latest with ActorValues = Map.empty }
+            let! (author, _), (observer, _) = flushViewsNow fixture
+            let cleared = [PresenceEvent.MetadataChanged(initial.Data.PlayerId, ValueSome Map.empty, ValueNone)]
+            equal cleared author
+            equal cleared observer
+        }))
 
 ]

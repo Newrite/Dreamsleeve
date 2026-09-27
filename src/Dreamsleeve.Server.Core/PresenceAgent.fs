@@ -83,10 +83,9 @@ module PresenceAgent =
         |> Seq.sortBy _.Data.PlayerId
         |> List.ofSeq
 
-    let private metadataEqual (previous: PlayerSnapshot) (latest: PlayerSnapshot) =
+    let private identityEqual (previous: PlayerSnapshot) (latest: PlayerSnapshot) =
         previous.Data = latest.Data && previous.CharacterName = latest.CharacterName
-        && previous.ActorValues = latest.ActorValues && previous.CharacterGeneration = latest.CharacterGeneration
-        && previous.Details = latest.Details
+        && previous.CharacterGeneration = latest.CharacterGeneration
 
     let private deliverDelta state context subscriber event =
         match deliver state context subscriber event with
@@ -115,10 +114,19 @@ module PresenceAgent =
                         let previous = visibleLocation state observer.Published source.Published
                         let latest = visibleLocation state observer.Latest source.Latest
 
-                        if not (metadataEqual source.Published source.Latest) then
+                        if not (identityEqual source.Published source.Latest) then
                             deliverDelta state context observer (PresenceEvent.Updated { source.Latest with Location = latest })
-                        elif previous <> latest then
-                            deliverDelta state context observer (PresenceEvent.Moved(source.Latest.Data.PlayerId, latest))
+                        else
+                            let values =
+                                if source.Published.ActorValues = source.Latest.ActorValues then ValueNone
+                                else ValueSome source.Latest.ActorValues
+                            let details =
+                                if source.Published.Details = source.Latest.Details then ValueNone
+                                else ValueSome source.Latest.Details
+                            if values.IsSome || details.IsSome then
+                                deliverDelta state context observer (PresenceEvent.MetadataChanged(source.Latest.Data.PlayerId, values, details))
+                            if previous <> latest && state.Members.ContainsKey observer.ConnectionId && state.Members.ContainsKey source.ConnectionId then
+                                deliverDelta state context observer (PresenceEvent.Moved(source.Latest.Data.PlayerId, latest))
 
             for memberState in members do
                 memberState.Published <- memberState.Latest

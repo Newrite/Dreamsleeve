@@ -46,10 +46,13 @@ let private updatePacket action =
 
 let private update action = updatePacket action |> decode
 
-let private samplePacket (place: Dreamsleeve.Protocol.Chat.PlayerLocation) entries =
-    let sample = Dreamsleeve.Protocol.Chat.SamplePlayerState(Location = place)
-    sample.ActorValues.AddRange(entries: Dreamsleeve.Protocol.Chat.ActorValueEntry list)
-    Dreamsleeve.Protocol.Chat.UpdatePlayer(SamplePlayerState = sample)
+let private movementPacket place =
+    Dreamsleeve.Protocol.Chat.UpdatePlayer(SampleMovement = Dreamsleeve.Protocol.Chat.SampleMovement(Location = place))
+
+let private valuesPacket entries =
+    let values = Dreamsleeve.Protocol.Chat.ActorValues()
+    values.Values.AddRange(entries: Dreamsleeve.Protocol.Chat.ActorValueEntry list)
+    Dreamsleeve.Protocol.Chat.UpdatePlayer(SetActorValues = values)
 
 let private wireLocation () =
     Dreamsleeve.Protocol.Chat.PlayerLocation(
@@ -69,6 +72,16 @@ let private playerUpdate result =
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
 let tests = testList "Dreamsleeve.Server.Codec" [
+    testCase "metadata replication encodes omitted and empty components independently" <| fun _ ->
+        let packet = ChatCodec.encodeServer codec (ChatResponse.PlayerMetadataChanged(pid 7UL, ValueSome Map.empty, ValueNone)) |> ok |> parse
+        Expect.isNotNull packet.PlayerMetadataChanged.ActorValues "Present empty means clear."
+        Expect.isNull packet.PlayerMetadataChanged.Details "Absent details means preserve."
+        let packet = ChatCodec.encodeServer codec (ChatResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueSome PlayerDetails.empty)) |> ok |> parse
+        Expect.isNull packet.PlayerMetadataChanged.ActorValues "Absent values mean preserve."
+        Expect.isNotNull packet.PlayerMetadataChanged.Details "Details reset is explicit."
+        Expect.isError (ChatCodec.encodeServer codec (ChatResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueNone))) "Empty patch is not an update."
+
+
     testCase "open session carries only an opaque ticket without changing it" <| fun _ ->
         let ticket = String('a', 41) + "-_"
         let packet = Dreamsleeve.Protocol.Chat.ClientPacket(
@@ -246,7 +259,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let resource = Dreamsleeve.Protocol.Chat.ActorValueEntry(
             Key = "skyrim:health", DisplayName = "Health",
             Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = 120.0f, Maximum = 100.0f))
-        let decoded = samplePacket null [zero; resource] |> update |> playerUpdate |> apply
+        let decoded = valuesPacket [zero; resource] |> update |> playerUpdate |> apply
         Expect.equal decoded.Location ValueNone "absent location is unknown"
         let speed = decoded.ActorValues[ActorValueKey.create 128 "skyrim:speedmult" |> ok].State
         Expect.equal (ActorValueState.current speed |> ActorValue.value) 0.0f "zero survived its oneof presence"
@@ -255,16 +268,16 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (ActorValueState.current health |> ActorValue.value) 120.0f "above maximum preserved"
         Expect.equal (ActorValueState.tryMaximum health |> ValueOption.map ActorValue.value) (ValueSome 100.0f) "maximum preserved"
         zero.ClearValue()
-        Expect.equal (samplePacket null [zero] |> update |> error).Failure
+        Expect.equal (valuesPacket [zero] |> update |> error).Failure
             (ChatCodecFailure.InvalidPayload "actor_value.value") "unset is not scalar zero"
 
     testCase "present zero coordinates are distinct from an unknown location" <| fun _ ->
-        let decoded = samplePacket (wireLocation()) [] |> update |> playerUpdate |> apply
+        let decoded = movementPacket (wireLocation()) |> update |> playerUpdate |> apply
         let place = decoded.Location |> ValueOption.get
         Expect.equal place.Position Position.zero "all-zero coordinates are valid"
         Expect.equal place.Rotation Rotation.zero "all-zero radians are valid"
         Expect.equal (PluginName.value place.Location.LocationId.PluginName) "skyrim.esm" "canonical identity"
-        let noLocation = samplePacket null [] |> update |> playerUpdate |> apply
+        let noLocation = movementPacket null |> update |> playerUpdate |> apply
         Expect.equal noLocation.Location ValueNone "unknown is represented by presence"
         for field in [0; 1; 2; 3] do
             let broken = wireLocation()
@@ -273,7 +286,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             | 1 -> broken.Location.LocationId <- null
             | 2 -> broken.Position <- null
             | _ -> broken.Rotation <- null
-            Expect.equal (samplePacket broken [] |> update |> error).Failure
+            Expect.equal (movementPacket broken |> update |> error).Failure
                 (ChatCodecFailure.InvalidPayload "location") "partial location rejected"
 
     testCase "nonfinite telemetry rejects the complete sample and preserves request correlation" <| fun _ ->
@@ -287,7 +300,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 | 3 -> place.Rotation.X <- bad
                 | 4 -> place.Rotation.Y <- bad
                 | _ -> place.Rotation.Z <- bad
-                let failure = samplePacket place [] |> update |> error
+                let failure = movementPacket place |> update |> error
                 Expect.equal failure.RequestId (Some 91UL) "caller can reject without applying the sample"
                 match failure.Failure with
                 | ChatCodecFailure.InvalidDomain(DomainError.NonFiniteNumber _) -> ()
@@ -297,15 +310,15 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = "skyrim:health", Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = bad))
                 Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = "skyrim:health", Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Maximum = bad))
             ] do
-                Expect.isError (samplePacket null [entry] |> update) "every actor value component must be finite"
+                Expect.isError (valuesPacket [entry] |> update) "every actor value component must be finite"
 
     testCase "sample admission checks count before accepting unique canonical keys" <| fun _ ->
         let first = scalarEntry "Skyrim:Health" 1.0f
         let duplicate = scalarEntry "skyrim:health" 2.0f
-        Expect.equal (samplePacket null [first; duplicate] |> update |> error).Failure
+        Expect.equal (valuesPacket [first; duplicate] |> update |> error).Failure
             (ChatCodecFailure.InvalidPayload "actor_values.duplicate_key") "case does not create another stat"
         let one = configured {config with PlayerInput = {config.PlayerInput with MaxActorValues = 1}}
-        let request entries = samplePacket null entries |> updatePacket |> fun packet -> packet.ToByteArray()
+        let request entries = valuesPacket entries |> updatePacket |> fun packet -> packet.ToByteArray()
         Expect.isOk (ChatCodec.decodeClient one (request [first])) "exact configured count"
         Expect.equal (ChatCodec.decodeClient one (request [first; scalarEntry "avg:health" 1.0f]) |> error).Failure
             (ChatCodecFailure.InvalidPayload "actor_values.count") "cannot grow state past the configured count"
@@ -322,13 +335,13 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (decodeWith shortName (beginName "Жа")) "character limit"
 
         let place = wireLocation()
-        Expect.isError (decodeWith {limits with PluginName = 2} (samplePacket place [])) "plugin key limit"
-        Expect.isError (decodeWith {limits with LocationName = 2} (samplePacket place [])) "place label limit"
+        Expect.isError (decodeWith {limits with PluginName = 2} (movementPacket place)) "plugin key limit"
+        Expect.isError (decodeWith {limits with LocationName = 2} (movementPacket place)) "place label limit"
 
         let entry = scalarEntry "skyrim:health" 0.0f
         entry.DisplayName <- "Health"
-        Expect.isError (decodeWith {limits with ActorValueKey = 2} (samplePacket null [entry])) "actor key limit"
-        Expect.isError (decodeWith {limits with ActorValueName = 2} (samplePacket null [entry])) "actor label limit"
+        Expect.isError (decodeWith {limits with ActorValueKey = 2} (valuesPacket [entry])) "actor key limit"
+        Expect.isError (decodeWith {limits with ActorValueName = 2} (valuesPacket [entry])) "actor label limit"
 
         let description = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity(
             Kind = Dreamsleeve.Protocol.Chat.ActivityKind.Talking, TargetName = "Nerevar"))
@@ -338,7 +351,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
 
     testCase "full player replication includes generation and all telemetry while moved omits other state" <| fun _ ->
         let started = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Nerevar" |> ok)
-        let sampled = samplePacket (wireLocation()) [scalarEntry "skyrim:health" 0.0f] |> update |> playerUpdate
+        let sampled = valuesPacket [scalarEntry "skyrim:health" 0.0f] |> update |> playerUpdate
         let state = started |> Player.applyUpdate sampled |> Player.snapshot
         let joined = ChatCodec.encodeServer codec (ChatResponse.PlayerJoined state) |> ok |> parse
         let changed = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse

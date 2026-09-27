@@ -72,12 +72,12 @@ RequestSnapshot работает и после смены generation.
 
 ## Состояние персонажа и репликация
 
-`CharacterStarted`, `CharacterRenamed`, `LocalPlayerState`, `PlayerDetailsChanged`
-и `GameExited` отправляются через UpdatePlayer. ID выделяет сетевой владелец;
-producer передаёт только generation текущей сессии. `LocalPlayerState` — полный
-sample optional location и actorValues, лимит config.maxActorValues (по умолчанию 64). Отсутствующая location
-очищает позицию; пустой набор actorValues очищает значения. Scalar 0 отличается
-от отсутствующего значения; Resource хранит current/maximum без clamping.
+`CharacterStarted`, `CharacterRenamed`, `LocalMovement`, `LocalActorValues`,
+`PlayerDetailsChanged` и `GameExited` отправляются через UpdatePlayer. ID выделяет
+сетевой владелец; producer передаёт generation текущей сессии. LocalMovement меняет
+только optional location (WRLD/CELL + XYZ + rotation), отсутствие очищает позицию.
+LocalActorValues отдельно заменяет всю карту, включая очистку пустой картой;
+лимит config.maxActorValues по умолчанию 64. Scalar 0 — допустимое значение.
 
 PlayerDetails содержит расу/FormKey, уровень, вид занятия и его контекст,
 описание места/ближайшего маркера и время начала игры в Unix ms. Это отдельная полная
@@ -88,9 +88,10 @@ Rename сохраняет generation и остальное состояние. �
 серверную generation в PlayerInfo.
 
 UpdatePlayer не меняет модель. Коррелированный PlayerUpdateAccepted освобождает
-ожидание; периодические PlayerUpdated/PlayerMoved без RequestId приходят также
+ожидание; периодические PlayerUpdated/PlayerMoved/PlayerMetadataChanged без RequestId приходят также
 автору. PlayerUpdated заменяет полный PlayerInfo, PlayerMoved меняет только
-optional location. Bootstrap и PlayerJoined содержат PlayerInfo с координатами,
+optional location. PlayerMetadataChanged заменяет только присутствующие части
+actorValues/details, сохраняет остальные поля и отмечает PlayerId в Changes. Bootstrap и PlayerJoined содержат PlayerInfo с координатами,
 отфильтрованными для конкретного наблюдателя.
 
 Свой location возвращается всегда. Чужой location доступен только при наличии
@@ -109,7 +110,7 @@ optional location. Bootstrap и PlayerJoined содержат PlayerInfo с ко
 `maxPendingPlayerUpdates` (32) ограничивает ожидания ACK; они также занимают общий
 бюджет результатов Exchange. Отказ завершает один запрос и оставляет Ready.
 Disconnect очищает pending, IDs не используются повторно. ACK другого/старого ID
-считается ошибкой протокола. Для samples `playerSampleIntervalMs` (100 ms) ограничивает
+считается ошибкой протокола. Для движения `playerSampleIntervalMs` (100 ms) ограничивает
 исходящую частоту; Exchange оставляет очередной sample в bounded очереди, где новые
 соседние samples заменяют его. За один owner batch выдаётся не более одного sample.
 Переходы персонажа сохраняют FIFO: чат за sample может ждать до следующего окна
@@ -141,15 +142,16 @@ HTTP допускается только на loopback, удалённый endpo
 `disconnect`, `connect`, `quit`. `read` печатает фазу, онлайн, принятые сообщения
 и отказы. Перед send консоль вычитывает актуальные generation/канал, затем Post. Сеть обслуживается отдельным потоком
 даже пока консоль ждёт ввода. EOF/quit закрывает соединение и завершает поток.
-Игровые команды: `begin <name>`, `rename <name>`, `leave`, `sample <json>`,
-`details <json>`, `clear-location`. Sample и details — полные замены своих частей;
-clear-location сохраняет actor values последнего введённого sample. Консоль хранит
-только черновик ввода: принятый PlayerInfo печатается через read строкой `player <json>`.
+Игровые команды: `begin <name>`, `rename <name>`, `leave`, `move <json>`, `values <json>`,
+`details <json>`, `clear-location`. Move, values и details — полные замены своих частей;
+clear-location очищает только положение; actor values и details не затрагиваются.
+Принятый PlayerInfo печатается через read строкой `player <json>`.
 Позиция измеряется игровыми world units, вращение XYZ — радианами.
 
 ```text
 begin Nerevar
-sample {"location":{"location":{"locationId":{"pluginName":"Skyrim.esm","localFormId":291},"locationName":"Whiterun"},"position":{"X":1,"Y":2,"Z":3},"rotation":{"X":0,"Y":0,"Z":1.5}},"actorValues":{"skyrim:health":{"displayName":"Health","state":{"current":150,"maximum":100}},"skyrim:speed":{"displayName":"Speed","state":{"value":0}}}}
+move {"location": {"location": {"locationId": {"pluginName": "Skyrim.esm", "localFormId": 291}, "locationName": "Whiterun"}, "position": {"X": 1, "Y": 2, "Z": 3}, "rotation": {"X": 0, "Y": 0, "Z": 1.5}}}
+values {"skyrim:health": {"displayName": "Health", "state": {"current": 150, "maximum": 100}}, "skyrim:speed": {"displayName": "Speed", "state": {"value": 0}}}
 details {"race":{"form":{"pluginName":"Skyrim.esm","localFormId":79686},"name":"Nord"},"level":25,"activity":{"kind":2,"targetName":"Dragon"},"place":{"worldspaceName":"Tamriel","locationName":"Whiterun","nearbyMarkerName":"Dragonsreach","markerKind":"castle","isInterior":false},"gameStartedAtUnixMs":1700000000000}
 clear-location
 rename Nerevar Renamed
@@ -159,7 +161,7 @@ leave
 В JSON enum задаются номерами из chat.proto: например activity.kind=2 — Combat,
 16 — Menu (menuKey="main" для главного меню), 18 — Loading. Внутри API это enum.
 Для подключения нужен Protocol/chat.proto на IPv4, reliable ENet channel 0,
-протокол версии 3 без checksum/compression. Старый `--state-demo` и консоль без аргументов
+протокол версии 4 без checksum/compression. Старый `--state-demo` и консоль без аргументов
 остаются явно синтетическими проверками очередей и чата.
 
 ## Проверка с реальным сервером

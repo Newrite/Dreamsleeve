@@ -15,10 +15,14 @@ export namespace Dreamsleeve::Client
 
   // Complete sampled values, not a patch. Only adjacent pending samples from
   // the same session can replace one another; transitions remain ordered.
-  struct LocalPlayerState
+  struct LocalMovement
   {
     std::optional<Domain::PlayerLocation> location;
-    Domain::ActorValueStorage             actorValues;
+  };
+
+  struct LocalActorValues
+  {
+    Domain::ActorValueStorage actorValues;
   };
 
   struct CharacterStarted
@@ -42,7 +46,7 @@ export namespace Dreamsleeve::Client
   struct RequestSnapshot
   {};
 
-  using ClientCommand = std::variant<SendChat, LocalPlayerState, CharacterStarted, CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot>;
+  using ClientCommand = std::variant<SendChat, LocalMovement, LocalActorValues, CharacterStarted, CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot>;
 
   struct QueuedClientCommand
   {
@@ -135,10 +139,10 @@ public:
       std::lock_guard lock{mutex};
       if (inputClosed) return CommandPostResult::Closed;
 
-      if (std::holds_alternative<LocalPlayerState>(command.command) && !commands.empty())
+      if (std::holds_alternative<LocalMovement>(command.command) && !commands.empty())
       {
         auto& last = commands.back();
-        if (last.generation == command.generation && std::holds_alternative<LocalPlayerState>(last.command))
+        if (last.generation == command.generation && std::holds_alternative<LocalMovement>(last.command))
         {
           last = std::move(command);
           return CommandPostResult::Replaced;
@@ -165,7 +169,7 @@ public:
       auto count = std::min(commands.size(), available);
       for (std::size_t index = 0; index < count; ++index)
       {
-        if (!std::holds_alternative<LocalPlayerState>(commands[index].command)) continue;
+        if (!std::holds_alternative<LocalMovement>(commands[index].command)) continue;
         if (sampleBudget == 0)
         {
           count = index;

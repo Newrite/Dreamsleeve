@@ -97,6 +97,16 @@ public:
       return snapshot;
     }
 
+    Domain::OperationResult ReplaceMetadata(PlayerId id, const std::optional<ActorValueStorage>& values,
+                                             const std::optional<PlayerDetails>& details)
+    {
+      const auto found = players.find(id);
+      if (found == players.end()) return UnknownPlayer();
+      if (values) found->second.actorValues = *values;
+      if (details) found->second.details = *details;
+      return {};
+    }
+
     Domain::OperationResult UpdateProfile(PlayerId id, PlayerData profile)
     {
       const auto found = players.find(id);

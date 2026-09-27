@@ -75,13 +75,17 @@ namespace Dreamsleeve::Client::Wire
       void operator()(const CharacterRenamed& value) const { target.mutable_rename_character()->set_name(value.name); }
       void operator()(const PlayerDetailsChanged& value) const { WriteDetails(*target.mutable_set_details(), value.details); }
       void operator()(const GameExited&) const { target.mutable_leave_game(); }
-      void operator()(const LocalPlayerState& value) const
+      void operator()(const LocalMovement& value) const
       {
-        auto* sample = target.mutable_sample_player_state();
+        auto* sample = target.mutable_sample_movement();
         if (value.location) WriteLocation(*sample->mutable_location(), *value.location);
+      }
+      void operator()(const LocalActorValues& value) const
+      {
+        auto* sample = target.mutable_set_actor_values();
         for (const auto& [key, info] : value.actorValues)
         {
-          auto* entry = sample->add_actor_values();
+          auto* entry = sample->add_values();
           entry->set_key(key);
           entry->set_display_name(info.displayName);
           std::visit(ActorValueWriter{*entry}, info.state);
@@ -286,8 +290,8 @@ namespace Dreamsleeve::Client::Wire
     }
     if (packet.has_send_chat() && packet.send_chat().channel_id() == 0) return Invalid("channel_id");
 
-    if (packet.has_update_player() && packet.update_player().has_sample_player_state() &&
-        static_cast<std::size_t>(packet.update_player().sample_player_state().actor_values_size()) > config.maxActorValues)
+    if (packet.has_update_player() && packet.update_player().has_set_actor_values() &&
+        static_cast<std::size_t>(packet.update_player().set_actor_values().values_size()) > config.maxActorValues)
       return Invalid("actor_values");
 
     const auto size = packet.ByteSizeLong();
@@ -357,6 +361,25 @@ namespace Dreamsleeve::Client::Wire
         auto player = Player(config, packet.player_updated().player());
         if (!player) return std::unexpected{player.error()};
         return PlayerUpserted{std::move(*player)};
+      }
+      case P::ServerPacket::kPlayerMetadataChanged: {
+        const auto& source = packet.player_metadata_changed();
+        if (packet.has_request_id() || source.player_id() == 0 || (!source.has_actor_values() && !source.has_details()))
+          return Invalid("player_metadata_changed");
+        PlayerMetadataUpdated result{source.player_id()};
+        if (source.has_actor_values())
+        {
+          if (static_cast<std::size_t>(source.actor_values().values_size()) > config.maxActorValues) return Invalid("actor_values");
+          result.actorValues.emplace();
+          for (const auto& entry : source.actor_values().values())
+          {
+            auto value = ReadActorValue(entry);
+            if (!value) return std::unexpected{value.error()};
+            if (!result.actorValues->emplace(entry.key(), std::move(*value)).second) return Invalid("actor_value_key");
+          }
+        }
+        if (source.has_details()) result.details = ReadDetails(source.details());
+        return result;
       }
       case P::ServerPacket::kPlayerMoved: {
         if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");

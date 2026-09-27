@@ -246,6 +246,7 @@ module PlayerSession =
                 close request state context "Unexpected presence snapshot."
         | PresenceEvent.Joined player -> publish options request state context (ChatResponse.PlayerJoined player)
         | PresenceEvent.Updated player -> publish options request state context (ChatResponse.PlayerUpdated player)
+        | PresenceEvent.MetadataChanged(playerId, values, details) -> publish options request state context (ChatResponse.PlayerMetadataChanged(playerId, values, details))
         | PresenceEvent.Moved(playerId, location) -> publish options request state context (ChatResponse.PlayerMoved(playerId, location))
         | PresenceEvent.Left playerId -> publish options request state context (ChatResponse.PlayerLeft playerId)
 
@@ -280,7 +281,8 @@ module PlayerSession =
         | PlayerUpdate.RenameCharacter _ -> player.CharacterName.IsSome
         | PlayerUpdate.SetDetails details ->
             player.CharacterName.IsSome || (details.Race.IsNone && details.Level.IsNone)
-        | PlayerUpdate.Sample(_, values) ->
+        | PlayerUpdate.Move _ -> player.CharacterName.IsSome
+        | PlayerUpdate.SetActorValues values ->
             player.CharacterName.IsSome && values.Count <= maxActorValues
 
     let private update (options: PlayerSessionOptions) maxActorValues (request: SessionOpenRequest) state context requestId command =
@@ -341,7 +343,7 @@ module PlayerSession =
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Rejected _)
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Snapshot _) -> true
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Published _)
-        | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.Left _)
+        | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.MetadataChanged _ | PresenceEvent.Left _)
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.Update _ | PlayerSessionMessage.Read _ -> false
 
     let start (options: PlayerSessionOptions) maxActorValues globalId authentication chat presence host (request: SessionOpenRequest) =

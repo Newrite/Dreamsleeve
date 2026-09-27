@@ -637,31 +637,55 @@ struct ChatPublishedDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ChatPublishedDefaultTypeInternal _ChatPublished_default_instance_;
 
-inline constexpr SamplePlayerState::Impl_::Impl_(
+inline constexpr ActorValues::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        actor_values_{},
-        location_{nullptr} {}
+        values_{} {}
 
 template <typename>
-PROTOBUF_CONSTEXPR SamplePlayerState::SamplePlayerState(::_pbi::ConstantInitialized)
+PROTOBUF_CONSTEXPR ActorValues::ActorValues(::_pbi::ConstantInitialized)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(SamplePlayerState_class_data_.base()),
+    : ::google::protobuf::Message(ActorValues_class_data_.base()),
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(),
 #endif  // PROTOBUF_CUSTOM_VTABLE
       _impl_(::_pbi::ConstantInitialized()) {
 }
-struct SamplePlayerStateDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR SamplePlayerStateDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~SamplePlayerStateDefaultTypeInternal() {}
+struct ActorValuesDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ActorValuesDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ActorValuesDefaultTypeInternal() {}
   union {
-    SamplePlayerState _instance;
+    ActorValues _instance;
   };
 };
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SamplePlayerStateDefaultTypeInternal _SamplePlayerState_default_instance_;
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ActorValuesDefaultTypeInternal _ActorValues_default_instance_;
+
+inline constexpr SampleMovement::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        location_{nullptr} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR SampleMovement::SampleMovement(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(SampleMovement_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct SampleMovementDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SampleMovementDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SampleMovementDefaultTypeInternal() {}
+  union {
+    SampleMovement _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SampleMovementDefaultTypeInternal _SampleMovement_default_instance_;
 
 inline constexpr PlayerMoved::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -688,6 +712,33 @@ struct PlayerMovedDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PlayerMovedDefaultTypeInternal _PlayerMoved_default_instance_;
+
+inline constexpr PlayerMetadataChanged::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        actor_values_{nullptr},
+        details_{nullptr},
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR PlayerMetadataChanged::PlayerMetadataChanged(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(PlayerMetadataChanged_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct PlayerMetadataChangedDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR PlayerMetadataChangedDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~PlayerMetadataChangedDefaultTypeInternal() {}
+  union {
+    PlayerMetadataChanged _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PlayerMetadataChangedDefaultTypeInternal _PlayerMetadataChanged_default_instance_;
 
 inline constexpr PlayerInfo::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -908,7 +959,7 @@ const ::uint32_t
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._oneof_case_[0]),
-        15, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.protocol_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
@@ -920,8 +971,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         1,
         0,
+        ~0u,
         ~0u,
         ~0u,
         ~0u,
@@ -1082,15 +1135,19 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::RenameCharacter, _impl_.name_),
         0,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SamplePlayerState, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SamplePlayerState, _impl_.location_),
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SamplePlayerState, _impl_.actor_values_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SampleMovement, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SampleMovement, _impl_.location_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ActorValues, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ActorValues, _impl_.values_),
         0,
         0x000, // bitmap
         0x004, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::UpdatePlayer, _impl_._oneof_case_[0]),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::UpdatePlayer, _impl_.action_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::UpdatePlayer, _impl_.action_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::UpdatePlayer, _impl_.action_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::UpdatePlayer, _impl_.action_),
@@ -1137,6 +1194,15 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerUpdated, _impl_.player_),
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged, _impl_.actor_values_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged, _impl_.details_),
+        2,
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerMoved, _impl_._has_bits_),
         5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerMoved, _impl_.player_id_),
@@ -1164,35 +1230,37 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::ClientPacket)},
         {15, sizeof(::Dreamsleeve::Protocol::Chat::ServerPacket)},
-        {40, sizeof(::Dreamsleeve::Protocol::Chat::OpenSession)},
-        {45, sizeof(::Dreamsleeve::Protocol::Chat::SendChat)},
-        {52, sizeof(::Dreamsleeve::Protocol::Chat::PlayerProfile)},
-        {61, sizeof(::Dreamsleeve::Protocol::Chat::FormKey)},
-        {68, sizeof(::Dreamsleeve::Protocol::Chat::Location)},
-        {75, sizeof(::Dreamsleeve::Protocol::Chat::Position)},
-        {84, sizeof(::Dreamsleeve::Protocol::Chat::Rotation)},
-        {93, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLocation)},
-        {102, sizeof(::Dreamsleeve::Protocol::Chat::ResourceActorValue)},
-        {109, sizeof(::Dreamsleeve::Protocol::Chat::ActorValueEntry)},
-        {122, sizeof(::Dreamsleeve::Protocol::Chat::PlayerInfo)},
-        {137, sizeof(::Dreamsleeve::Protocol::Chat::NamedForm)},
-        {144, sizeof(::Dreamsleeve::Protocol::Chat::PlayerActivity)},
-        {155, sizeof(::Dreamsleeve::Protocol::Chat::PlaceDescription)},
-        {168, sizeof(::Dreamsleeve::Protocol::Chat::PlayerDetails)},
-        {181, sizeof(::Dreamsleeve::Protocol::Chat::BeginCharacter)},
-        {186, sizeof(::Dreamsleeve::Protocol::Chat::RenameCharacter)},
-        {191, sizeof(::Dreamsleeve::Protocol::Chat::SamplePlayerState)},
-        {198, sizeof(::Dreamsleeve::Protocol::Chat::LeaveGame)},
-        {199, sizeof(::Dreamsleeve::Protocol::Chat::UpdatePlayer)},
-        {207, sizeof(::Dreamsleeve::Protocol::Chat::ChatMessage)},
-        {220, sizeof(::Dreamsleeve::Protocol::Chat::SessionOpened)},
-        {231, sizeof(::Dreamsleeve::Protocol::Chat::ChatPublished)},
-        {236, sizeof(::Dreamsleeve::Protocol::Chat::PlayerJoined)},
-        {241, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdated)},
-        {246, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMoved)},
-        {253, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
-        {254, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLeft)},
-        {259, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
+        {42, sizeof(::Dreamsleeve::Protocol::Chat::OpenSession)},
+        {47, sizeof(::Dreamsleeve::Protocol::Chat::SendChat)},
+        {54, sizeof(::Dreamsleeve::Protocol::Chat::PlayerProfile)},
+        {63, sizeof(::Dreamsleeve::Protocol::Chat::FormKey)},
+        {70, sizeof(::Dreamsleeve::Protocol::Chat::Location)},
+        {77, sizeof(::Dreamsleeve::Protocol::Chat::Position)},
+        {86, sizeof(::Dreamsleeve::Protocol::Chat::Rotation)},
+        {95, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLocation)},
+        {104, sizeof(::Dreamsleeve::Protocol::Chat::ResourceActorValue)},
+        {111, sizeof(::Dreamsleeve::Protocol::Chat::ActorValueEntry)},
+        {124, sizeof(::Dreamsleeve::Protocol::Chat::PlayerInfo)},
+        {139, sizeof(::Dreamsleeve::Protocol::Chat::NamedForm)},
+        {146, sizeof(::Dreamsleeve::Protocol::Chat::PlayerActivity)},
+        {157, sizeof(::Dreamsleeve::Protocol::Chat::PlaceDescription)},
+        {170, sizeof(::Dreamsleeve::Protocol::Chat::PlayerDetails)},
+        {183, sizeof(::Dreamsleeve::Protocol::Chat::BeginCharacter)},
+        {188, sizeof(::Dreamsleeve::Protocol::Chat::RenameCharacter)},
+        {193, sizeof(::Dreamsleeve::Protocol::Chat::SampleMovement)},
+        {198, sizeof(::Dreamsleeve::Protocol::Chat::ActorValues)},
+        {203, sizeof(::Dreamsleeve::Protocol::Chat::LeaveGame)},
+        {204, sizeof(::Dreamsleeve::Protocol::Chat::UpdatePlayer)},
+        {213, sizeof(::Dreamsleeve::Protocol::Chat::ChatMessage)},
+        {226, sizeof(::Dreamsleeve::Protocol::Chat::SessionOpened)},
+        {237, sizeof(::Dreamsleeve::Protocol::Chat::ChatPublished)},
+        {242, sizeof(::Dreamsleeve::Protocol::Chat::PlayerJoined)},
+        {247, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdated)},
+        {252, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged)},
+        {261, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMoved)},
+        {268, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
+        {269, sizeof(::Dreamsleeve::Protocol::Chat::PlayerLeft)},
+        {274, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_ClientPacket_default_instance_._instance,
@@ -1214,7 +1282,8 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_PlayerDetails_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_BeginCharacter_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_RenameCharacter_default_instance_._instance,
-    &::Dreamsleeve::Protocol::Chat::_SamplePlayerState_default_instance_._instance,
+    &::Dreamsleeve::Protocol::Chat::_SampleMovement_default_instance_._instance,
+    &::Dreamsleeve::Protocol::Chat::_ActorValues_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_LeaveGame_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_UpdatePlayer_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_ChatMessage_default_instance_._instance,
@@ -1222,6 +1291,7 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_ChatPublished_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_PlayerJoined_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_PlayerUpdated_default_instance_._instance,
+    &::Dreamsleeve::Protocol::Chat::_PlayerMetadataChanged_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_PlayerMoved_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_PlayerUpdateAccepted_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_PlayerLeft_default_instance_._instance,
@@ -1236,7 +1306,7 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "sionH\000\0228\n\tsend_chat\030\013 \001(\0132#.Dreamsleeve."
     "Protocol.Chat.SendChatH\000\022@\n\rupdate_playe"
     "r\030\014 \001(\0132\'.Dreamsleeve.Protocol.Chat.Upda"
-    "tePlayerH\000B\t\n\007payload\"\202\005\n\014ServerPacket\022\030"
+    "tePlayerH\000B\t\n\007payload\"\327\005\n\014ServerPacket\022\030"
     "\n\020protocol_version\030\001 \001(\r\022\027\n\nrequest_id\030\002"
     " \001(\004H\001\210\001\001\022B\n\016session_opened\030\n \001(\0132(.Drea"
     "msleeve.Protocol.Chat.SessionOpenedH\000\022B\n"
@@ -1252,133 +1322,141 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "\020 \001(\0132/.Dreamsleeve.Protocol.Chat.Player"
     "UpdateAcceptedH\000\022>\n\014player_moved\030\021 \001(\0132&"
     ".Dreamsleeve.Protocol.Chat.PlayerMovedH\000"
-    "B\t\n\007payloadB\r\n\013_request_id\"I\n\013OpenSessio"
-    "n\022\026\n\016session_ticket\030\003 \001(\tJ\004\010\001\020\002J\004\010\002\020\003R\010u"
-    "sernameR\014display_name\",\n\010SendChat\022\022\n\ncha"
-    "nnel_id\030\001 \001(\004\022\014\n\004text\030\002 \001(\t\"J\n\rPlayerPro"
-    "file\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010username\030\002 \001("
-    "\t\022\024\n\014display_name\030\003 \001(\t\"5\n\007FormKey\022\023\n\013pl"
-    "ugin_name\030\001 \001(\t\022\025\n\rlocal_form_id\030\002 \001(\r\"Z"
-    "\n\010Location\0227\n\013location_id\030\001 \001(\0132\".Dreams"
-    "leeve.Protocol.Chat.FormKey\022\025\n\rlocation_"
-    "name\030\002 \001(\t\"+\n\010Position\022\t\n\001x\030\001 \001(\002\022\t\n\001y\030\002"
-    " \001(\002\022\t\n\001z\030\003 \001(\002\"+\n\010Rotation\022\t\n\001x\030\001 \001(\002\022\t"
-    "\n\001y\030\002 \001(\002\022\t\n\001z\030\003 \001(\002\"\265\001\n\016PlayerLocation\022"
-    "5\n\010location\030\001 \001(\0132#.Dreamsleeve.Protocol"
-    ".Chat.Location\0225\n\010position\030\002 \001(\0132#.Dream"
-    "sleeve.Protocol.Chat.Position\0225\n\010rotatio"
-    "n\030\003 \001(\0132#.Dreamsleeve.Protocol.Chat.Rota"
-    "tion\"6\n\022ResourceActorValue\022\017\n\007current\030\001 "
-    "\001(\002\022\017\n\007maximum\030\002 \001(\002\"\222\001\n\017ActorValueEntry"
-    "\022\013\n\003key\030\001 \001(\t\022\024\n\014display_name\030\002 \001(\t\022\020\n\006s"
-    "calar\030\003 \001(\002H\000\022A\n\010resource\030\004 \001(\0132-.Dreams"
-    "leeve.Protocol.Chat.ResourceActorValueH\000"
-    "B\007\n\005value\"\317\002\n\nPlayerInfo\0229\n\007profile\030\001 \001("
-    "\0132(.Dreamsleeve.Protocol.Chat.PlayerProf"
-    "ile\022\033\n\016character_name\030\002 \001(\tH\000\210\001\001\022;\n\010loca"
-    "tion\030\003 \001(\0132).Dreamsleeve.Protocol.Chat.P"
-    "layerLocation\022@\n\014actor_values\030\004 \003(\0132*.Dr"
-    "eamsleeve.Protocol.Chat.ActorValueEntry\022"
-    "\034\n\024character_generation\030\005 \001(\004\0229\n\007details"
-    "\030\006 \001(\0132(.Dreamsleeve.Protocol.Chat.Playe"
-    "rDetailsB\021\n\017_character_name\"K\n\tNamedForm"
-    "\0220\n\004form\030\001 \001(\0132\".Dreamsleeve.Protocol.Ch"
-    "at.FormKey\022\014\n\004name\030\002 \001(\t\"\331\001\n\016PlayerActiv"
-    "ity\0225\n\004kind\030\001 \001(\0162\'.Dreamsleeve.Protocol"
-    ".Chat.ActivityKind\022\030\n\013target_name\030\002 \001(\tH"
-    "\000\210\001\001\022B\n\017lock_difficulty\030\003 \001(\0162).Dreamsle"
-    "eve.Protocol.Chat.LockDifficulty\022\025\n\010menu"
-    "_key\030\004 \001(\tH\001\210\001\001B\016\n\014_target_nameB\013\n\t_menu"
-    "_key\"\210\001\n\020PlaceDescription\022\027\n\017worldspace_"
-    "name\030\001 \001(\t\022\025\n\rlocation_name\030\002 \001(\t\022\032\n\022nea"
-    "rby_marker_name\030\003 \001(\t\022\023\n\013marker_kind\030\004 \001"
-    "(\t\022\023\n\013is_interior\030\005 \001(\010\"\234\002\n\rPlayerDetail"
-    "s\0222\n\004race\030\001 \001(\0132$.Dreamsleeve.Protocol.C"
-    "hat.NamedForm\022\022\n\005level\030\002 \001(\rH\000\210\001\001\022;\n\010act"
-    "ivity\030\003 \001(\0132).Dreamsleeve.Protocol.Chat."
-    "PlayerActivity\022:\n\005place\030\004 \001(\0132+.Dreamsle"
-    "eve.Protocol.Chat.PlaceDescription\022$\n\027ga"
-    "me_started_at_unix_ms\030\005 \001(\003H\001\210\001\001B\010\n\006_lev"
-    "elB\032\n\030_game_started_at_unix_ms\"\036\n\016BeginC"
-    "haracter\022\014\n\004name\030\001 \001(\t\"\037\n\017RenameCharacte"
-    "r\022\014\n\004name\030\001 \001(\t\"\222\001\n\021SamplePlayerState\022;\n"
-    "\010location\030\001 \001(\0132).Dreamsleeve.Protocol.C"
-    "hat.PlayerLocation\022@\n\014actor_values\030\002 \003(\013"
+    "\022S\n\027player_metadata_changed\030\022 \001(\01320.Drea"
+    "msleeve.Protocol.Chat.PlayerMetadataChan"
+    "gedH\000B\t\n\007payloadB\r\n\013_request_id\"I\n\013OpenS"
+    "ession\022\026\n\016session_ticket\030\003 \001(\tJ\004\010\001\020\002J\004\010\002"
+    "\020\003R\010usernameR\014display_name\",\n\010SendChat\022\022"
+    "\n\nchannel_id\030\001 \001(\004\022\014\n\004text\030\002 \001(\t\"J\n\rPlay"
+    "erProfile\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010username"
+    "\030\002 \001(\t\022\024\n\014display_name\030\003 \001(\t\"5\n\007FormKey\022"
+    "\023\n\013plugin_name\030\001 \001(\t\022\025\n\rlocal_form_id\030\002 "
+    "\001(\r\"Z\n\010Location\0227\n\013location_id\030\001 \001(\0132\".D"
+    "reamsleeve.Protocol.Chat.FormKey\022\025\n\rloca"
+    "tion_name\030\002 \001(\t\"+\n\010Position\022\t\n\001x\030\001 \001(\002\022\t"
+    "\n\001y\030\002 \001(\002\022\t\n\001z\030\003 \001(\002\"+\n\010Rotation\022\t\n\001x\030\001 "
+    "\001(\002\022\t\n\001y\030\002 \001(\002\022\t\n\001z\030\003 \001(\002\"\265\001\n\016PlayerLoca"
+    "tion\0225\n\010location\030\001 \001(\0132#.Dreamsleeve.Pro"
+    "tocol.Chat.Location\0225\n\010position\030\002 \001(\0132#."
+    "Dreamsleeve.Protocol.Chat.Position\0225\n\010ro"
+    "tation\030\003 \001(\0132#.Dreamsleeve.Protocol.Chat"
+    ".Rotation\"6\n\022ResourceActorValue\022\017\n\007curre"
+    "nt\030\001 \001(\002\022\017\n\007maximum\030\002 \001(\002\"\222\001\n\017ActorValue"
+    "Entry\022\013\n\003key\030\001 \001(\t\022\024\n\014display_name\030\002 \001(\t"
+    "\022\020\n\006scalar\030\003 \001(\002H\000\022A\n\010resource\030\004 \001(\0132-.D"
+    "reamsleeve.Protocol.Chat.ResourceActorVa"
+    "lueH\000B\007\n\005value\"\317\002\n\nPlayerInfo\0229\n\007profile"
+    "\030\001 \001(\0132(.Dreamsleeve.Protocol.Chat.Playe"
+    "rProfile\022\033\n\016character_name\030\002 \001(\tH\000\210\001\001\022;\n"
+    "\010location\030\003 \001(\0132).Dreamsleeve.Protocol.C"
+    "hat.PlayerLocation\022@\n\014actor_values\030\004 \003(\013"
     "2*.Dreamsleeve.Protocol.Chat.ActorValueE"
-    "ntry\"\013\n\tLeaveGame\"\360\002\n\014UpdatePlayer\022D\n\017be"
-    "gin_character\030\001 \001(\0132).Dreamsleeve.Protoc"
-    "ol.Chat.BeginCharacterH\000\022F\n\020rename_chara"
-    "cter\030\002 \001(\0132*.Dreamsleeve.Protocol.Chat.R"
-    "enameCharacterH\000\022K\n\023sample_player_state\030"
-    "\003 \001(\0132,.Dreamsleeve.Protocol.Chat.Sample"
-    "PlayerStateH\000\022:\n\nleave_game\030\004 \001(\0132$.Drea"
-    "msleeve.Protocol.Chat.LeaveGameH\000\022\?\n\013set"
-    "_details\030\005 \001(\0132(.Dreamsleeve.Protocol.Ch"
-    "at.PlayerDetailsH\000B\010\n\006action\"\226\001\n\013ChatMes"
-    "sage\022\022\n\nmessage_id\030\001 \001(\004\022\022\n\nchannel_id\030\002"
-    " \001(\004\0228\n\006author\030\003 \001(\0132(.Dreamsleeve.Proto"
-    "col.Chat.PlayerProfile\022\014\n\004text\030\004 \001(\t\022\027\n\017"
-    "sent_at_unix_ms\030\005 \001(\003\"\301\001\n\rSessionOpened\022"
-    "\026\n\016self_player_id\030\001 \001(\004\022\031\n\021global_channe"
-    "l_id\030\002 \001(\004\0226\n\007players\030\005 \003(\0132%.Dreamsleev"
-    "e.Protocol.Chat.PlayerInfo\022\?\n\017recent_mes"
-    "sages\030\004 \003(\0132&.Dreamsleeve.Protocol.Chat."
-    "ChatMessageJ\004\010\003\020\004\"H\n\rChatPublished\0227\n\007me"
-    "ssage\030\001 \001(\0132&.Dreamsleeve.Protocol.Chat."
-    "ChatMessage\"E\n\014PlayerJoined\0225\n\006player\030\001 "
-    "\001(\0132%.Dreamsleeve.Protocol.Chat.PlayerIn"
-    "fo\"F\n\rPlayerUpdated\0225\n\006player\030\001 \001(\0132%.Dr"
-    "eamsleeve.Protocol.Chat.PlayerInfo\"]\n\013Pl"
-    "ayerMoved\022\021\n\tplayer_id\030\001 \001(\004\022;\n\010location"
-    "\030\002 \001(\0132).Dreamsleeve.Protocol.Chat.Playe"
-    "rLocation\"\026\n\024PlayerUpdateAccepted\"\037\n\nPla"
-    "yerLeft\022\021\n\tplayer_id\030\001 \001(\004\"p\n\017RequestRej"
-    "ected\022=\n\004code\030\001 \001(\0162/.Dreamsleeve.Protoc"
-    "ol.Chat.RequestRejectionCode\022\017\n\007message\030"
-    "\002 \001(\t\022\r\n\005field\030\003 \001(\t*\230\004\n\014ActivityKind\022\031\n"
-    "\025ACTIVITY_KIND_UNKNOWN\020\000\022\033\n\027ACTIVITY_KIN"
-    "D_EXPLORING\020\001\022\030\n\024ACTIVITY_KIND_COMBAT\020\002\022"
-    "\031\n\025ACTIVITY_KIND_TALKING\020\003\022\033\n\027ACTIVITY_K"
-    "IND_BARTERING\020\004\022\032\n\026ACTIVITY_KIND_TRAININ"
-    "G\020\005\022\031\n\025ACTIVITY_KIND_READING\020\006\022\035\n\031ACTIVI"
-    "TY_KIND_LOCKPICKING\020\007\022\032\n\026ACTIVITY_KIND_C"
-    "RAFTING\020\010\022\036\n\032ACTIVITY_KIND_USING_OBJECT\020"
-    "\t\022\030\n\024ACTIVITY_KIND_RIDING\020\n\022\032\n\026ACTIVITY_"
-    "KIND_SNEAKING\020\013\022\032\n\026ACTIVITY_KIND_SWIMMIN"
-    "G\020\014\022\030\n\024ACTIVITY_KIND_FLYING\020\r\022\026\n\022ACTIVIT"
-    "Y_KIND_DEAD\020\016\022\031\n\025ACTIVITY_KIND_RAGDOLL\020\017"
-    "\022\026\n\022ACTIVITY_KIND_MENU\020\020\022\032\n\026ACTIVITY_KIN"
-    "D_NEW_GAME\020\021\022\031\n\025ACTIVITY_KIND_LOADING\020\022*"
-    "\374\001\n\016LockDifficulty\022\033\n\027LOCK_DIFFICULTY_UN"
-    "KNOWN\020\000\022\034\n\030LOCK_DIFFICULTY_UNLOCKED\020\001\022\035\n"
-    "\031LOCK_DIFFICULTY_VERY_EASY\020\002\022\030\n\024LOCK_DIF"
-    "FICULTY_EASY\020\003\022\033\n\027LOCK_DIFFICULTY_AVERAG"
-    "E\020\004\022\030\n\024LOCK_DIFFICULTY_HARD\020\005\022\035\n\031LOCK_DI"
-    "FFICULTY_VERY_HARD\020\006\022 \n\034LOCK_DIFFICULTY_"
-    "REQUIRES_KEY\020\007*\252\003\n\024RequestRejectionCode\022"
-    "&\n\"REQUEST_REJECTION_CODE_UNSPECIFIED\020\000\022"
-    "*\n&REQUEST_REJECTION_CODE_INVALID_REQUES"
-    "T\020\001\022,\n(REQUEST_REJECTION_CODE_SESSION_NO"
-    "T_READY\020\002\022/\n+REQUEST_REJECTION_CODE_SESS"
-    "ION_ALREADY_OPEN\020\003\022)\n%REQUEST_REJECTION_"
-    "CODE_USERNAME_TAKEN\020\004\022,\n(REQUEST_REJECTI"
-    "ON_CODE_CHANNEL_NOT_FOUND\020\005\022-\n)REQUEST_R"
-    "EJECTION_CODE_NOT_CHANNEL_MEMBER\020\006\022%\n!RE"
-    "QUEST_REJECTION_CODE_OVERLOADED\020\007\0220\n,REQ"
-    "UEST_REJECTION_CODE_AUTHENTICATION_FAILE"
-    "D\020\010b\006proto3"
+    "ntry\022\034\n\024character_generation\030\005 \001(\004\0229\n\007de"
+    "tails\030\006 \001(\0132(.Dreamsleeve.Protocol.Chat."
+    "PlayerDetailsB\021\n\017_character_name\"K\n\tName"
+    "dForm\0220\n\004form\030\001 \001(\0132\".Dreamsleeve.Protoc"
+    "ol.Chat.FormKey\022\014\n\004name\030\002 \001(\t\"\331\001\n\016Player"
+    "Activity\0225\n\004kind\030\001 \001(\0162\'.Dreamsleeve.Pro"
+    "tocol.Chat.ActivityKind\022\030\n\013target_name\030\002"
+    " \001(\tH\000\210\001\001\022B\n\017lock_difficulty\030\003 \001(\0162).Dre"
+    "amsleeve.Protocol.Chat.LockDifficulty\022\025\n"
+    "\010menu_key\030\004 \001(\tH\001\210\001\001B\016\n\014_target_nameB\013\n\t"
+    "_menu_key\"\210\001\n\020PlaceDescription\022\027\n\017worlds"
+    "pace_name\030\001 \001(\t\022\025\n\rlocation_name\030\002 \001(\t\022\032"
+    "\n\022nearby_marker_name\030\003 \001(\t\022\023\n\013marker_kin"
+    "d\030\004 \001(\t\022\023\n\013is_interior\030\005 \001(\010\"\234\002\n\rPlayerD"
+    "etails\0222\n\004race\030\001 \001(\0132$.Dreamsleeve.Proto"
+    "col.Chat.NamedForm\022\022\n\005level\030\002 \001(\rH\000\210\001\001\022;"
+    "\n\010activity\030\003 \001(\0132).Dreamsleeve.Protocol."
+    "Chat.PlayerActivity\022:\n\005place\030\004 \001(\0132+.Dre"
+    "amsleeve.Protocol.Chat.PlaceDescription\022"
+    "$\n\027game_started_at_unix_ms\030\005 \001(\003H\001\210\001\001B\010\n"
+    "\006_levelB\032\n\030_game_started_at_unix_ms\"\036\n\016B"
+    "eginCharacter\022\014\n\004name\030\001 \001(\t\"\037\n\017RenameCha"
+    "racter\022\014\n\004name\030\001 \001(\t\"M\n\016SampleMovement\022;"
+    "\n\010location\030\001 \001(\0132).Dreamsleeve.Protocol."
+    "Chat.PlayerLocation\"I\n\013ActorValues\022:\n\006va"
+    "lues\030\001 \003(\0132*.Dreamsleeve.Protocol.Chat.A"
+    "ctorValueEntry\"\013\n\tLeaveGame\"\310\003\n\014UpdatePl"
+    "ayer\022D\n\017begin_character\030\001 \001(\0132).Dreamsle"
+    "eve.Protocol.Chat.BeginCharacterH\000\022F\n\020re"
+    "name_character\030\002 \001(\0132*.Dreamsleeve.Proto"
+    "col.Chat.RenameCharacterH\000\022D\n\017sample_mov"
+    "ement\030\006 \001(\0132).Dreamsleeve.Protocol.Chat."
+    "SampleMovementH\000\022B\n\020set_actor_values\030\007 \001"
+    "(\0132&.Dreamsleeve.Protocol.Chat.ActorValu"
+    "esH\000\022:\n\nleave_game\030\004 \001(\0132$.Dreamsleeve.P"
+    "rotocol.Chat.LeaveGameH\000\022\?\n\013set_details\030"
+    "\005 \001(\0132(.Dreamsleeve.Protocol.Chat.Player"
+    "DetailsH\000B\010\n\006actionJ\004\010\003\020\004R\023sample_player"
+    "_state\"\226\001\n\013ChatMessage\022\022\n\nmessage_id\030\001 \001"
+    "(\004\022\022\n\nchannel_id\030\002 \001(\004\0228\n\006author\030\003 \001(\0132("
+    ".Dreamsleeve.Protocol.Chat.PlayerProfile"
+    "\022\014\n\004text\030\004 \001(\t\022\027\n\017sent_at_unix_ms\030\005 \001(\003\""
+    "\301\001\n\rSessionOpened\022\026\n\016self_player_id\030\001 \001("
+    "\004\022\031\n\021global_channel_id\030\002 \001(\004\0226\n\007players\030"
+    "\005 \003(\0132%.Dreamsleeve.Protocol.Chat.Player"
+    "Info\022\?\n\017recent_messages\030\004 \003(\0132&.Dreamsle"
+    "eve.Protocol.Chat.ChatMessageJ\004\010\003\020\004\"H\n\rC"
+    "hatPublished\0227\n\007message\030\001 \001(\0132&.Dreamsle"
+    "eve.Protocol.Chat.ChatMessage\"E\n\014PlayerJ"
+    "oined\0225\n\006player\030\001 \001(\0132%.Dreamsleeve.Prot"
+    "ocol.Chat.PlayerInfo\"F\n\rPlayerUpdated\0225\n"
+    "\006player\030\001 \001(\0132%.Dreamsleeve.Protocol.Cha"
+    "t.PlayerInfo\"\243\001\n\025PlayerMetadataChanged\022\021"
+    "\n\tplayer_id\030\001 \001(\004\022<\n\014actor_values\030\002 \001(\0132"
+    "&.Dreamsleeve.Protocol.Chat.ActorValues\022"
+    "9\n\007details\030\003 \001(\0132(.Dreamsleeve.Protocol."
+    "Chat.PlayerDetails\"]\n\013PlayerMoved\022\021\n\tpla"
+    "yer_id\030\001 \001(\004\022;\n\010location\030\002 \001(\0132).Dreamsl"
+    "eeve.Protocol.Chat.PlayerLocation\"\026\n\024Pla"
+    "yerUpdateAccepted\"\037\n\nPlayerLeft\022\021\n\tplaye"
+    "r_id\030\001 \001(\004\"p\n\017RequestRejected\022=\n\004code\030\001 "
+    "\001(\0162/.Dreamsleeve.Protocol.Chat.RequestR"
+    "ejectionCode\022\017\n\007message\030\002 \001(\t\022\r\n\005field\030\003"
+    " \001(\t*\230\004\n\014ActivityKind\022\031\n\025ACTIVITY_KIND_U"
+    "NKNOWN\020\000\022\033\n\027ACTIVITY_KIND_EXPLORING\020\001\022\030\n"
+    "\024ACTIVITY_KIND_COMBAT\020\002\022\031\n\025ACTIVITY_KIND"
+    "_TALKING\020\003\022\033\n\027ACTIVITY_KIND_BARTERING\020\004\022"
+    "\032\n\026ACTIVITY_KIND_TRAINING\020\005\022\031\n\025ACTIVITY_"
+    "KIND_READING\020\006\022\035\n\031ACTIVITY_KIND_LOCKPICK"
+    "ING\020\007\022\032\n\026ACTIVITY_KIND_CRAFTING\020\010\022\036\n\032ACT"
+    "IVITY_KIND_USING_OBJECT\020\t\022\030\n\024ACTIVITY_KI"
+    "ND_RIDING\020\n\022\032\n\026ACTIVITY_KIND_SNEAKING\020\013\022"
+    "\032\n\026ACTIVITY_KIND_SWIMMING\020\014\022\030\n\024ACTIVITY_"
+    "KIND_FLYING\020\r\022\026\n\022ACTIVITY_KIND_DEAD\020\016\022\031\n"
+    "\025ACTIVITY_KIND_RAGDOLL\020\017\022\026\n\022ACTIVITY_KIN"
+    "D_MENU\020\020\022\032\n\026ACTIVITY_KIND_NEW_GAME\020\021\022\031\n\025"
+    "ACTIVITY_KIND_LOADING\020\022*\374\001\n\016LockDifficul"
+    "ty\022\033\n\027LOCK_DIFFICULTY_UNKNOWN\020\000\022\034\n\030LOCK_"
+    "DIFFICULTY_UNLOCKED\020\001\022\035\n\031LOCK_DIFFICULTY"
+    "_VERY_EASY\020\002\022\030\n\024LOCK_DIFFICULTY_EASY\020\003\022\033"
+    "\n\027LOCK_DIFFICULTY_AVERAGE\020\004\022\030\n\024LOCK_DIFF"
+    "ICULTY_HARD\020\005\022\035\n\031LOCK_DIFFICULTY_VERY_HA"
+    "RD\020\006\022 \n\034LOCK_DIFFICULTY_REQUIRES_KEY\020\007*\252"
+    "\003\n\024RequestRejectionCode\022&\n\"REQUEST_REJEC"
+    "TION_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_REJEC"
+    "TION_CODE_INVALID_REQUEST\020\001\022,\n(REQUEST_R"
+    "EJECTION_CODE_SESSION_NOT_READY\020\002\022/\n+REQ"
+    "UEST_REJECTION_CODE_SESSION_ALREADY_OPEN"
+    "\020\003\022)\n%REQUEST_REJECTION_CODE_USERNAME_TA"
+    "KEN\020\004\022,\n(REQUEST_REJECTION_CODE_CHANNEL_"
+    "NOT_FOUND\020\005\022-\n)REQUEST_REJECTION_CODE_NO"
+    "T_CHANNEL_MEMBER\020\006\022%\n!REQUEST_REJECTION_"
+    "CODE_OVERLOADED\020\007\0220\n,REQUEST_REJECTION_C"
+    "ODE_AUTHENTICATION_FAILED\020\010b\006proto3"
 };
 static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    5491,
+    5835,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
     nullptr,
     0,
-    31,
+    33,
     schemas,
     file_default_instances,
     TableStruct_chat_2eproto::offsets,
@@ -2030,6 +2108,19 @@ void ServerPacket::set_allocated_player_moved(::Dreamsleeve::Protocol::Chat::Pla
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.player_moved)
 }
+void ServerPacket::set_allocated_player_metadata_changed(::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged* PROTOBUF_NULLABLE player_metadata_changed) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_payload();
+  if (player_metadata_changed) {
+    ::google::protobuf::Arena* submessage_arena = player_metadata_changed->GetArena();
+    if (message_arena != submessage_arena) {
+      player_metadata_changed = ::google::protobuf::internal::GetOwnedMessage(message_arena, player_metadata_changed, submessage_arena);
+    }
+    set_has_player_metadata_changed();
+    _impl_.payload_.player_metadata_changed_ = player_metadata_changed;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.player_metadata_changed)
+}
 ServerPacket::ServerPacket(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ServerPacket_class_data_.base()) {
@@ -2094,6 +2185,9 @@ ServerPacket::ServerPacket(
         break;
       case kPlayerMoved:
         _impl_.payload_.player_moved_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.player_moved_);
+        break;
+      case kPlayerMetadataChanged:
+        _impl_.payload_.player_metadata_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.player_metadata_changed_);
         break;
   }
 
@@ -2200,6 +2294,14 @@ void ServerPacket::clear_payload() {
       }
       break;
     }
+    case kPlayerMetadataChanged: {
+      if (GetArena() == nullptr) {
+        delete _impl_.payload_.player_metadata_changed_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.player_metadata_changed_);
+      }
+      break;
+    }
     case PAYLOAD_NOT_SET: {
       break;
     }
@@ -2251,17 +2353,17 @@ ServerPacket::GetClassData() const {
   return ServerPacket_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 10, 8, 0, 2>
+const ::_pbi::TcParseTable<1, 11, 9, 0, 2>
 ServerPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_._has_bits_),
     0, // no _extensions_
-    17, 8,  // max_field_number, fast_idx_mask
+    18, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294836732,  // skipmap
+    4294705660,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    10,  // num_field_entries
-    8,  // num_aux_entries
+    11,  // num_field_entries
+    9,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ServerPacket_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -2301,6 +2403,8 @@ ServerPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.player_update_accepted_), _Internal::kOneofCaseOffset + 0, 6, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.PlayerMoved player_moved = 17;
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.player_moved_), _Internal::kOneofCaseOffset + 0, 7, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.PlayerMetadataChanged player_metadata_changed = 18;
+    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.player_metadata_changed_), _Internal::kOneofCaseOffset + 0, 8, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SessionOpened>()},
@@ -2311,6 +2415,7 @@ ServerPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerUpdated>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerMoved>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged>()},
   }},
   {{
   }},
@@ -2417,6 +2522,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
           stream);
       break;
     }
+    case kPlayerMetadataChanged: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          18, *this_._impl_.payload_.player_metadata_changed_, this_._impl_.payload_.player_metadata_changed_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -2506,6 +2617,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
     case kPlayerMoved: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.player_moved_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Chat.PlayerMetadataChanged player_metadata_changed = 18;
+    case kPlayerMetadataChanged: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.player_metadata_changed_);
       break;
     }
     case PAYLOAD_NOT_SET: {
@@ -2615,6 +2732,14 @@ void ServerPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.payload_.player_moved_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.player_moved_);
         } else {
           _this->_impl_.payload_.player_moved_->MergeFrom(*from._impl_.payload_.player_moved_);
+        }
+        break;
+      }
+      case kPlayerMetadataChanged: {
+        if (oneof_needs_init) {
+          _this->_impl_.payload_.player_metadata_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.player_metadata_changed_);
+        } else {
+          _this->_impl_.payload_.player_metadata_changed_->MergeFrom(*from._impl_.payload_.player_metadata_changed_);
         }
         break;
       }
@@ -8513,67 +8638,65 @@ void RenameCharacter::InternalSwap(RenameCharacter* PROTOBUF_RESTRICT PROTOBUF_N
 }
 // ===================================================================
 
-class SamplePlayerState::_Internal {
+class SampleMovement::_Internal {
  public:
   using HasBits =
-      decltype(::std::declval<SamplePlayerState>()._impl_._has_bits_);
+      decltype(::std::declval<SampleMovement>()._impl_._has_bits_);
   static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(SamplePlayerState, _impl_._has_bits_);
+      8 * PROTOBUF_FIELD_OFFSET(SampleMovement, _impl_._has_bits_);
 };
 
-SamplePlayerState::SamplePlayerState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+SampleMovement::SampleMovement(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, SamplePlayerState_class_data_.base()) {
+    : ::google::protobuf::Message(arena, SampleMovement_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
   SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Chat.SampleMovement)
 }
-PROTOBUF_NDEBUG_INLINE SamplePlayerState::Impl_::Impl_(
+PROTOBUF_NDEBUG_INLINE SampleMovement::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    [[maybe_unused]] const ::Dreamsleeve::Protocol::Chat::SamplePlayerState& from_msg)
+    [[maybe_unused]] const ::Dreamsleeve::Protocol::Chat::SampleMovement& from_msg)
       : _has_bits_{from._has_bits_},
-        _cached_size_{0},
-        actor_values_{visibility, arena, from.actor_values_} {}
+        _cached_size_{0} {}
 
-SamplePlayerState::SamplePlayerState(
+SampleMovement::SampleMovement(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const SamplePlayerState& from)
+    const SampleMovement& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, SamplePlayerState_class_data_.base()) {
+    : ::google::protobuf::Message(arena, SampleMovement_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  SamplePlayerState* const _this = this;
+  SampleMovement* const _this = this;
   (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.location_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+  _impl_.location_ = (CheckHasBit(cached_has_bits, 0x00000001U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.location_)
                 : nullptr;
 
-  // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+  // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.SampleMovement)
 }
-PROTOBUF_NDEBUG_INLINE SamplePlayerState::Impl_::Impl_(
+PROTOBUF_NDEBUG_INLINE SampleMovement::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0},
-        actor_values_{visibility, arena} {}
+      : _cached_size_{0} {}
 
-inline void SamplePlayerState::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+inline void SampleMovement::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   _impl_.location_ = {};
 }
-SamplePlayerState::~SamplePlayerState() {
-  // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+SampleMovement::~SampleMovement() {
+  // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.SampleMovement)
   SharedDtor(*this);
 }
-inline void SamplePlayerState::SharedDtor(MessageLite& self) {
-  SamplePlayerState& this_ = static_cast<SamplePlayerState&>(self);
+inline void SampleMovement::SharedDtor(MessageLite& self) {
+  SampleMovement& this_ = static_cast<SampleMovement&>(self);
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     this_.CheckHasBitConsistency();
   }
@@ -8583,159 +8706,406 @@ inline void SamplePlayerState::SharedDtor(MessageLite& self) {
   this_._impl_.~Impl_();
 }
 
-inline void* PROTOBUF_NONNULL SamplePlayerState::PlacementNew_(
+inline void* PROTOBUF_NONNULL SampleMovement::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) SamplePlayerState(arena);
+  return ::new (mem) SampleMovement(arena);
 }
-constexpr auto SamplePlayerState::InternalNewImpl_() {
-  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
-      PROTOBUF_FIELD_OFFSET(SamplePlayerState, _impl_.actor_values_) +
-          decltype(SamplePlayerState::_impl_.actor_values_)::
-              InternalGetArenaOffset(
-                  ::google::protobuf::Message::internal_visibility()),
-  });
-  if (arena_bits.has_value()) {
-    return ::google::protobuf::internal::MessageCreator::ZeroInit(
-        sizeof(SamplePlayerState), alignof(SamplePlayerState), *arena_bits);
-  } else {
-    return ::google::protobuf::internal::MessageCreator(&SamplePlayerState::PlacementNew_,
-                                 sizeof(SamplePlayerState),
-                                 alignof(SamplePlayerState));
-  }
+constexpr auto SampleMovement::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SampleMovement),
+                                            alignof(SampleMovement));
 }
-constexpr auto SamplePlayerState::InternalGenerateClassData_() {
+constexpr auto SampleMovement::InternalGenerateClassData_() {
   return ::google::protobuf::internal::ClassDataFull{
       ::google::protobuf::internal::ClassData{
-          &_SamplePlayerState_default_instance_._instance,
+          &_SampleMovement_default_instance_._instance,
           &_table_.header,
           nullptr,  // OnDemandRegisterArenaDtor
           nullptr,  // IsInitialized
-          &SamplePlayerState::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<SamplePlayerState>(),
+          &SampleMovement::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SampleMovement>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-          &SamplePlayerState::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<SamplePlayerState>(), &SamplePlayerState::ByteSizeLong,
-              &SamplePlayerState::_InternalSerialize,
+          &SampleMovement::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SampleMovement>(), &SampleMovement::ByteSizeLong,
+              &SampleMovement::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(SamplePlayerState, _impl_._cached_size_),
+          PROTOBUF_FIELD_OFFSET(SampleMovement, _impl_._cached_size_),
           false,
       },
-      &SamplePlayerState::kDescriptorMethods,
+      &SampleMovement::kDescriptorMethods,
       &descriptor_table_chat_2eproto,
       nullptr,  // tracker
   };
 }
 
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull SamplePlayerState_class_data_ =
-        SamplePlayerState::InternalGenerateClassData_();
+    ::google::protobuf::internal::ClassDataFull SampleMovement_class_data_ =
+        SampleMovement::InternalGenerateClassData_();
 
 PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-SamplePlayerState::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&SamplePlayerState_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(SamplePlayerState_class_data_.tc_table);
-  return SamplePlayerState_class_data_.base();
+SampleMovement::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SampleMovement_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SampleMovement_class_data_.tc_table);
+  return SampleMovement_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 2, 0, 2>
-SamplePlayerState::_table_ = {
+const ::_pbi::TcParseTable<0, 1, 1, 0, 2>
+SampleMovement::_table_ = {
   {
-    PROTOBUF_FIELD_OFFSET(SamplePlayerState, _impl_._has_bits_),
+    PROTOBUF_FIELD_OFFSET(SampleMovement, _impl_._has_bits_),
     0, // no _extensions_
-    2, 8,  // max_field_number, fast_idx_mask
+    1, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967292,  // skipmap
+    4294967294,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
-    2,  // num_aux_entries
+    1,  // num_field_entries
+    1,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
-    SamplePlayerState_class_data_.base(),
+    SampleMovement_class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
     #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SamplePlayerState>(),  // to_prefetch
+    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SampleMovement>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry actor_values = 2;
-    {::_pbi::TcParser::FastMtR1,
-     {18, 0, 1,
-      PROTOBUF_FIELD_OFFSET(SamplePlayerState, _impl_.actor_values_)}},
     // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 1;
     {::_pbi::TcParser::FastMtS1,
-     {10, 1, 0,
-      PROTOBUF_FIELD_OFFSET(SamplePlayerState, _impl_.location_)}},
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(SampleMovement, _impl_.location_)}},
   }}, {{
     65535, 65535
   }}, {{
     // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 1;
-    {PROTOBUF_FIELD_OFFSET(SamplePlayerState, _impl_.location_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry actor_values = 2;
-    {PROTOBUF_FIELD_OFFSET(SamplePlayerState, _impl_.actor_values_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    {PROTOBUF_FIELD_OFFSET(SampleMovement, _impl_.location_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerLocation>()},
-      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ActorValueEntry>()},
   }},
   {{
   }},
 };
-PROTOBUF_NOINLINE void SamplePlayerState::Clear() {
-// @@protoc_insertion_point(message_clear_start:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+PROTOBUF_NOINLINE void SampleMovement::Clear() {
+// @@protoc_insertion_point(message_clear_start:Dreamsleeve.Protocol.Chat.SampleMovement)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   ::uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
-      _impl_.actor_values_.Clear();
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      ABSL_DCHECK(_impl_.location_ != nullptr);
-      _impl_.location_->Clear();
-    }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.location_ != nullptr);
+    _impl_.location_->Clear();
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL SamplePlayerState::_InternalSerialize(
+::uint8_t* PROTOBUF_NONNULL SampleMovement::_InternalSerialize(
     const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
     ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const SamplePlayerState& this_ = static_cast<const SamplePlayerState&>(base);
+  const SampleMovement& this_ = static_cast<const SampleMovement&>(base);
 #else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL SamplePlayerState::_InternalSerialize(
+::uint8_t* PROTOBUF_NONNULL SampleMovement::_InternalSerialize(
     ::uint8_t* PROTOBUF_NONNULL target,
     ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const SamplePlayerState& this_ = *this;
+  const SampleMovement& this_ = *this;
 #endif  // PROTOBUF_CUSTOM_VTABLE
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     this_.CheckHasBitConsistency();
   }
-  // @@protoc_insertion_point(serialize_to_array_start:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+  // @@protoc_insertion_point(serialize_to_array_start:Dreamsleeve.Protocol.Chat.SampleMovement)
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *this_._impl_.location_, this_._impl_.location_->GetCachedSize(), target,
         stream);
   }
 
-  // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry actor_values = 2;
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:Dreamsleeve.Protocol.Chat.SampleMovement)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SampleMovement::ByteSizeLong(const MessageLite& base) {
+  const SampleMovement& this_ = static_cast<const SampleMovement&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SampleMovement::ByteSizeLong() const {
+  const SampleMovement& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:Dreamsleeve.Protocol.Chat.SampleMovement)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.location_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SampleMovement::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<SampleMovement*>(&to_msg);
+  auto& from = static_cast<const SampleMovement&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:Dreamsleeve.Protocol.Chat.SampleMovement)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(from._impl_.location_ != nullptr);
+    if (_this->_impl_.location_ == nullptr) {
+      _this->_impl_.location_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.location_);
+    } else {
+      _this->_impl_.location_->MergeFrom(*from._impl_.location_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SampleMovement::CopyFrom(const SampleMovement& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:Dreamsleeve.Protocol.Chat.SampleMovement)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SampleMovement::InternalSwap(SampleMovement* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.location_, other->_impl_.location_);
+}
+
+::google::protobuf::Metadata SampleMovement::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class ActorValues::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<ActorValues>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ActorValues, _impl_._has_bits_);
+};
+
+ActorValues::ActorValues(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ActorValues_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Chat.ActorValues)
+}
+PROTOBUF_NDEBUG_INLINE ActorValues::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::Dreamsleeve::Protocol::Chat::ActorValues& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        values_{visibility, arena, from.values_} {}
+
+ActorValues::ActorValues(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ActorValues& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ActorValues_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ActorValues* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.ActorValues)
+}
+PROTOBUF_NDEBUG_INLINE ActorValues::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        values_{visibility, arena} {}
+
+inline void ActorValues::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+ActorValues::~ActorValues() {
+  // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.ActorValues)
+  SharedDtor(*this);
+}
+inline void ActorValues::SharedDtor(MessageLite& self) {
+  ActorValues& this_ = static_cast<ActorValues&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL ActorValues::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ActorValues(arena);
+}
+constexpr auto ActorValues::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(ActorValues, _impl_.values_) +
+          decltype(ActorValues::_impl_.values_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::ZeroInit(
+        sizeof(ActorValues), alignof(ActorValues), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&ActorValues::PlacementNew_,
+                                 sizeof(ActorValues),
+                                 alignof(ActorValues));
+  }
+}
+constexpr auto ActorValues::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_ActorValues_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &ActorValues::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ActorValues>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ActorValues::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ActorValues>(), &ActorValues::ByteSizeLong,
+              &ActorValues::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ActorValues, _impl_._cached_size_),
+          false,
+      },
+      &ActorValues::kDescriptorMethods,
+      &descriptor_table_chat_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ActorValues_class_data_ =
+        ActorValues::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ActorValues::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ActorValues_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ActorValues_class_data_.tc_table);
+  return ActorValues_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 1, 1, 0, 2>
+ActorValues::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(ActorValues, _impl_._has_bits_),
+    0, // no _extensions_
+    1, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967294,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    1,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    ActorValues_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ActorValues>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry values = 1;
+    {::_pbi::TcParser::FastMtR1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(ActorValues, _impl_.values_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry values = 1;
+    {PROTOBUF_FIELD_OFFSET(ActorValues, _impl_.values_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ActorValueEntry>()},
+  }},
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void ActorValues::Clear() {
+// @@protoc_insertion_point(message_clear_start:Dreamsleeve.Protocol.Chat.ActorValues)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
+    _impl_.values_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ActorValues::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ActorValues& this_ = static_cast<const ActorValues&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ActorValues::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ActorValues& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:Dreamsleeve.Protocol.Chat.ActorValues)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry values = 1;
   if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
-                             this_._internal_actor_values_size());
+                             this_._internal_values_size());
          i < n; i++) {
-      const auto& repfield = this_._internal_actor_values().Get(i);
+      const auto& repfield = this_._internal_values().Get(i);
       target =
           ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-              2, repfield, repfield.GetCachedSize(),
+              1, repfield, repfield.GetCachedSize(),
               target, stream);
     }
   }
@@ -8745,18 +9115,18 @@ PROTOBUF_NOINLINE void SamplePlayerState::Clear() {
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
             this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
   }
-  // @@protoc_insertion_point(serialize_to_array_end:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+  // @@protoc_insertion_point(serialize_to_array_end:Dreamsleeve.Protocol.Chat.ActorValues)
   return target;
 }
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t SamplePlayerState::ByteSizeLong(const MessageLite& base) {
-  const SamplePlayerState& this_ = static_cast<const SamplePlayerState&>(base);
+::size_t ActorValues::ByteSizeLong(const MessageLite& base) {
+  const ActorValues& this_ = static_cast<const ActorValues&>(base);
 #else   // PROTOBUF_CUSTOM_VTABLE
-::size_t SamplePlayerState::ByteSizeLong() const {
-  const SamplePlayerState& this_ = *this;
+::size_t ActorValues::ByteSizeLong() const {
+  const ActorValues& this_ = *this;
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+  // @@protoc_insertion_point(message_byte_size_start:Dreamsleeve.Protocol.Chat.ActorValues)
   ::size_t total_size = 0;
 
   ::uint32_t cached_has_bits = 0;
@@ -8764,77 +9134,61 @@ PROTOBUF_NOINLINE void SamplePlayerState::Clear() {
   (void)cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry actor_values = 2;
+   {
+    // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry values = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
-      total_size += 1UL * this_._internal_actor_values_size();
-      for (const auto& msg : this_._internal_actor_values()) {
+      total_size += 1UL * this_._internal_values_size();
+      for (const auto& msg : this_._internal_values()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
-    }
-    // .Dreamsleeve.Protocol.Chat.PlayerLocation location = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      total_size += 1 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.location_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
 
-void SamplePlayerState::MergeImpl(::google::protobuf::MessageLite& to_msg,
+void ActorValues::MergeImpl(::google::protobuf::MessageLite& to_msg,
                             const ::google::protobuf::MessageLite& from_msg) {
    auto* const _this =
-      static_cast<SamplePlayerState*>(&to_msg);
-  auto& from = static_cast<const SamplePlayerState&>(from_msg);
+      static_cast<ActorValues*>(&to_msg);
+  auto& from = static_cast<const ActorValues&>(from_msg);
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     from.CheckHasBitConsistency();
   }
   ::google::protobuf::Arena* arena = _this->GetArena();
-  // @@protoc_insertion_point(class_specific_merge_from_start:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+  // @@protoc_insertion_point(class_specific_merge_from_start:Dreamsleeve.Protocol.Chat.ActorValues)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
-      _this->_internal_mutable_actor_values()->InternalMergeFromWithArena(
-          ::google::protobuf::MessageLite::internal_visibility(), arena,
-          from._internal_actor_values());
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      ABSL_DCHECK(from._impl_.location_ != nullptr);
-      if (_this->_impl_.location_ == nullptr) {
-        _this->_impl_.location_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.location_);
-      } else {
-        _this->_impl_.location_->MergeFrom(*from._impl_.location_);
-      }
-    }
+  if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_values()->InternalMergeFromWithArena(
+        ::google::protobuf::MessageLite::internal_visibility(), arena,
+        from._internal_values());
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
 }
 
-void SamplePlayerState::CopyFrom(const SamplePlayerState& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:Dreamsleeve.Protocol.Chat.SamplePlayerState)
+void ActorValues::CopyFrom(const ActorValues& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:Dreamsleeve.Protocol.Chat.ActorValues)
   if (&from == this) return;
   Clear();
   MergeFrom(from);
 }
 
 
-void SamplePlayerState::InternalSwap(SamplePlayerState* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+void ActorValues::InternalSwap(ActorValues* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  _impl_.actor_values_.InternalSwap(&other->_impl_.actor_values_);
-  swap(_impl_.location_, other->_impl_.location_);
+  _impl_.values_.InternalSwap(&other->_impl_.values_);
 }
 
-::google::protobuf::Metadata SamplePlayerState::GetMetadata() const {
+::google::protobuf::Metadata ActorValues::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
@@ -8980,18 +9334,31 @@ void UpdatePlayer::set_allocated_rename_character(::Dreamsleeve::Protocol::Chat:
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.UpdatePlayer.rename_character)
 }
-void UpdatePlayer::set_allocated_sample_player_state(::Dreamsleeve::Protocol::Chat::SamplePlayerState* PROTOBUF_NULLABLE sample_player_state) {
+void UpdatePlayer::set_allocated_sample_movement(::Dreamsleeve::Protocol::Chat::SampleMovement* PROTOBUF_NULLABLE sample_movement) {
   ::google::protobuf::Arena* message_arena = GetArena();
   clear_action();
-  if (sample_player_state) {
-    ::google::protobuf::Arena* submessage_arena = sample_player_state->GetArena();
+  if (sample_movement) {
+    ::google::protobuf::Arena* submessage_arena = sample_movement->GetArena();
     if (message_arena != submessage_arena) {
-      sample_player_state = ::google::protobuf::internal::GetOwnedMessage(message_arena, sample_player_state, submessage_arena);
+      sample_movement = ::google::protobuf::internal::GetOwnedMessage(message_arena, sample_movement, submessage_arena);
     }
-    set_has_sample_player_state();
-    _impl_.action_.sample_player_state_ = sample_player_state;
+    set_has_sample_movement();
+    _impl_.action_.sample_movement_ = sample_movement;
   }
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.UpdatePlayer.sample_player_state)
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.UpdatePlayer.sample_movement)
+}
+void UpdatePlayer::set_allocated_set_actor_values(::Dreamsleeve::Protocol::Chat::ActorValues* PROTOBUF_NULLABLE set_actor_values) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_action();
+  if (set_actor_values) {
+    ::google::protobuf::Arena* submessage_arena = set_actor_values->GetArena();
+    if (message_arena != submessage_arena) {
+      set_actor_values = ::google::protobuf::internal::GetOwnedMessage(message_arena, set_actor_values, submessage_arena);
+    }
+    set_has_set_actor_values();
+    _impl_.action_.set_actor_values_ = set_actor_values;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.UpdatePlayer.set_actor_values)
 }
 void UpdatePlayer::set_allocated_leave_game(::Dreamsleeve::Protocol::Chat::LeaveGame* PROTOBUF_NULLABLE leave_game) {
   ::google::protobuf::Arena* message_arena = GetArena();
@@ -9058,8 +9425,11 @@ UpdatePlayer::UpdatePlayer(
       case kRenameCharacter:
         _impl_.action_.rename_character_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.rename_character_);
         break;
-      case kSamplePlayerState:
-        _impl_.action_.sample_player_state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.sample_player_state_);
+      case kSampleMovement:
+        _impl_.action_.sample_movement_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.sample_movement_);
+        break;
+      case kSetActorValues:
+        _impl_.action_.set_actor_values_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.set_actor_values_);
         break;
       case kLeaveGame:
         _impl_.action_.leave_game_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.leave_game_);
@@ -9118,11 +9488,19 @@ void UpdatePlayer::clear_action() {
       }
       break;
     }
-    case kSamplePlayerState: {
+    case kSampleMovement: {
       if (GetArena() == nullptr) {
-        delete _impl_.action_.sample_player_state_;
+        delete _impl_.action_.sample_movement_;
       } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.sample_player_state_);
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.sample_movement_);
+      }
+      break;
+    }
+    case kSetActorValues: {
+      if (GetArena() == nullptr) {
+        delete _impl_.action_.set_actor_values_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.set_actor_values_);
       }
       break;
     }
@@ -9193,17 +9571,17 @@ UpdatePlayer::GetClassData() const {
   return UpdatePlayer_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 5, 5, 0, 2>
+const ::_pbi::TcParseTable<0, 6, 6, 0, 2>
 UpdatePlayer::_table_ = {
   {
     0,  // no _has_bits_
     0, // no _extensions_
-    5, 0,  // max_field_number, fast_idx_mask
+    7, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967264,  // skipmap
+    4294967172,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    5,  // num_field_entries
-    5,  // num_aux_entries
+    6,  // num_field_entries
+    6,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     UpdatePlayer_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -9220,19 +9598,22 @@ UpdatePlayer::_table_ = {
     {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.begin_character_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.RenameCharacter rename_character = 2;
     {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.rename_character_), _Internal::kOneofCaseOffset + 0, 1, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .Dreamsleeve.Protocol.Chat.SamplePlayerState sample_player_state = 3;
-    {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.sample_player_state_), _Internal::kOneofCaseOffset + 0, 2, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.LeaveGame leave_game = 4;
-    {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.leave_game_), _Internal::kOneofCaseOffset + 0, 3, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.leave_game_), _Internal::kOneofCaseOffset + 0, 2, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.PlayerDetails set_details = 5;
-    {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.set_details_), _Internal::kOneofCaseOffset + 0, 4, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.set_details_), _Internal::kOneofCaseOffset + 0, 3, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.SampleMovement sample_movement = 6;
+    {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.sample_movement_), _Internal::kOneofCaseOffset + 0, 4, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.ActorValues set_actor_values = 7;
+    {PROTOBUF_FIELD_OFFSET(UpdatePlayer, _impl_.action_.set_actor_values_), _Internal::kOneofCaseOffset + 0, 5, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::BeginCharacter>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::RenameCharacter>()},
-      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SamplePlayerState>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::LeaveGame>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerDetails>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SampleMovement>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ActorValues>()},
   }},
   {{
   }},
@@ -9279,12 +9660,6 @@ PROTOBUF_NOINLINE void UpdatePlayer::Clear() {
           stream);
       break;
     }
-    case kSamplePlayerState: {
-      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-          3, *this_._impl_.action_.sample_player_state_, this_._impl_.action_.sample_player_state_->GetCachedSize(), target,
-          stream);
-      break;
-    }
     case kLeaveGame: {
       target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
           4, *this_._impl_.action_.leave_game_, this_._impl_.action_.leave_game_->GetCachedSize(), target,
@@ -9294,6 +9669,18 @@ PROTOBUF_NOINLINE void UpdatePlayer::Clear() {
     case kSetDetails: {
       target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
           5, *this_._impl_.action_.set_details_, this_._impl_.action_.set_details_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kSampleMovement: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          6, *this_._impl_.action_.sample_movement_, this_._impl_.action_.sample_movement_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kSetActorValues: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          7, *this_._impl_.action_.set_actor_values_, this_._impl_.action_.set_actor_values_->GetCachedSize(), target,
           stream);
       break;
     }
@@ -9336,10 +9723,16 @@ PROTOBUF_NOINLINE void UpdatePlayer::Clear() {
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.action_.rename_character_);
       break;
     }
-    // .Dreamsleeve.Protocol.Chat.SamplePlayerState sample_player_state = 3;
-    case kSamplePlayerState: {
+    // .Dreamsleeve.Protocol.Chat.SampleMovement sample_movement = 6;
+    case kSampleMovement: {
       total_size += 1 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.action_.sample_player_state_);
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.action_.sample_movement_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Chat.ActorValues set_actor_values = 7;
+    case kSetActorValues: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.action_.set_actor_values_);
       break;
     }
     // .Dreamsleeve.Protocol.Chat.LeaveGame leave_game = 4;
@@ -9404,11 +9797,19 @@ void UpdatePlayer::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
         break;
       }
-      case kSamplePlayerState: {
+      case kSampleMovement: {
         if (oneof_needs_init) {
-          _this->_impl_.action_.sample_player_state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.sample_player_state_);
+          _this->_impl_.action_.sample_movement_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.sample_movement_);
         } else {
-          _this->_impl_.action_.sample_player_state_->MergeFrom(*from._impl_.action_.sample_player_state_);
+          _this->_impl_.action_.sample_movement_->MergeFrom(*from._impl_.action_.sample_movement_);
+        }
+        break;
+      }
+      case kSetActorValues: {
+        if (oneof_needs_init) {
+          _this->_impl_.action_.set_actor_values_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.set_actor_values_);
+        } else {
+          _this->_impl_.action_.set_actor_values_->MergeFrom(*from._impl_.action_.set_actor_values_);
         }
         break;
       }
@@ -11103,6 +11504,357 @@ void PlayerUpdated::InternalSwap(PlayerUpdated* PROTOBUF_RESTRICT PROTOBUF_NONNU
 }
 
 ::google::protobuf::Metadata PlayerUpdated::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class PlayerMetadataChanged::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<PlayerMetadataChanged>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_._has_bits_);
+};
+
+PlayerMetadataChanged::PlayerMetadataChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerMetadataChanged_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+}
+PROTOBUF_NDEBUG_INLINE PlayerMetadataChanged::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+PlayerMetadataChanged::PlayerMetadataChanged(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayerMetadataChanged& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerMetadataChanged_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PlayerMetadataChanged* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.actor_values_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.actor_values_)
+                : nullptr;
+  _impl_.details_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.details_)
+                : nullptr;
+  _impl_.player_id_ = from._impl_.player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+}
+PROTOBUF_NDEBUG_INLINE PlayerMetadataChanged::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void PlayerMetadataChanged::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, actor_values_),
+           0,
+           offsetof(Impl_, player_id_) -
+               offsetof(Impl_, actor_values_) +
+               sizeof(Impl_::player_id_));
+}
+PlayerMetadataChanged::~PlayerMetadataChanged() {
+  // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+  SharedDtor(*this);
+}
+inline void PlayerMetadataChanged::SharedDtor(MessageLite& self) {
+  PlayerMetadataChanged& this_ = static_cast<PlayerMetadataChanged&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.actor_values_;
+  delete this_._impl_.details_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL PlayerMetadataChanged::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PlayerMetadataChanged(arena);
+}
+constexpr auto PlayerMetadataChanged::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PlayerMetadataChanged),
+                                            alignof(PlayerMetadataChanged));
+}
+constexpr auto PlayerMetadataChanged::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_PlayerMetadataChanged_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &PlayerMetadataChanged::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PlayerMetadataChanged>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PlayerMetadataChanged::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PlayerMetadataChanged>(), &PlayerMetadataChanged::ByteSizeLong,
+              &PlayerMetadataChanged::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_._cached_size_),
+          false,
+      },
+      &PlayerMetadataChanged::kDescriptorMethods,
+      &descriptor_table_chat_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PlayerMetadataChanged_class_data_ =
+        PlayerMetadataChanged::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerMetadataChanged::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerMetadataChanged_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PlayerMetadataChanged_class_data_.tc_table);
+  return PlayerMetadataChanged_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 3, 2, 0, 2>
+PlayerMetadataChanged::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_._has_bits_),
+    0, // no _extensions_
+    3, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967288,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    3,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    PlayerMetadataChanged_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerMetadataChanged>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 player_id = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerMetadataChanged, _impl_.player_id_), 2>(),
+     {8, 2, 0,
+      PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_.player_id_)}},
+    // .Dreamsleeve.Protocol.Chat.ActorValues actor_values = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 0,
+      PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_.actor_values_)}},
+    // .Dreamsleeve.Protocol.Chat.PlayerDetails details = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 1, 1,
+      PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_.details_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint64 player_id = 1;
+    {PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    // .Dreamsleeve.Protocol.Chat.ActorValues actor_values = 2;
+    {PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_.actor_values_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.PlayerDetails details = 3;
+    {PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_.details_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ActorValues>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerDetails>()},
+  }},
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void PlayerMetadataChanged::Clear() {
+// @@protoc_insertion_point(message_clear_start:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.actor_values_ != nullptr);
+      _impl_.actor_values_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.details_ != nullptr);
+      _impl_.details_->Clear();
+    }
+  }
+  _impl_.player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PlayerMetadataChanged::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PlayerMetadataChanged& this_ = static_cast<const PlayerMetadataChanged&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PlayerMetadataChanged::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PlayerMetadataChanged& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // .Dreamsleeve.Protocol.Chat.ActorValues actor_values = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.actor_values_, this_._impl_.actor_values_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .Dreamsleeve.Protocol.Chat.PlayerDetails details = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.details_, this_._impl_.details_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PlayerMetadataChanged::ByteSizeLong(const MessageLite& base) {
+  const PlayerMetadataChanged& this_ = static_cast<const PlayerMetadataChanged&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PlayerMetadataChanged::ByteSizeLong() const {
+  const PlayerMetadataChanged& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // .Dreamsleeve.Protocol.Chat.ActorValues actor_values = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.actor_values_);
+    }
+    // .Dreamsleeve.Protocol.Chat.PlayerDetails details = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.details_);
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PlayerMetadataChanged::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<PlayerMetadataChanged*>(&to_msg);
+  auto& from = static_cast<const PlayerMetadataChanged&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.actor_values_ != nullptr);
+      if (_this->_impl_.actor_values_ == nullptr) {
+        _this->_impl_.actor_values_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.actor_values_);
+      } else {
+        _this->_impl_.actor_values_->MergeFrom(*from._impl_.actor_values_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.details_ != nullptr);
+      if (_this->_impl_.details_ == nullptr) {
+        _this->_impl_.details_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.details_);
+      } else {
+        _this->_impl_.details_->MergeFrom(*from._impl_.details_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PlayerMetadataChanged::CopyFrom(const PlayerMetadataChanged& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:Dreamsleeve.Protocol.Chat.PlayerMetadataChanged)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PlayerMetadataChanged::InternalSwap(PlayerMetadataChanged* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_.player_id_)
+      + sizeof(PlayerMetadataChanged::_impl_.player_id_)
+      - PROTOBUF_FIELD_OFFSET(PlayerMetadataChanged, _impl_.actor_values_)>(
+          reinterpret_cast<char*>(&_impl_.actor_values_),
+          reinterpret_cast<char*>(&other->_impl_.actor_values_));
+}
+
+::google::protobuf::Metadata PlayerMetadataChanged::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

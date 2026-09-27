@@ -278,7 +278,7 @@ private:
             outgoing = SendChat{*requestId, 1, std::move(text)};
           }
           else if (action == "sample")
-            outgoing = LocalPlayerState{};
+            outgoing = LocalMovement{};
 
           const auto posted = exchange->Post({generation, std::move(outgoing)});
           if (posted == CommandPostResult::Queued || posted == CommandPostResult::Replaced)

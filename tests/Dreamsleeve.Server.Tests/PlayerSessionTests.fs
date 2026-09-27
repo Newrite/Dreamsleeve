@@ -313,14 +313,15 @@ let tests = testList "PlayerSession" [
             }
 
             do! update (PlayerUpdate.BeginCharacter name)
-            do! update (PlayerUpdate.Sample(ValueSome location, Map.ofList [(key, health 80.0f)]))
+            do! update (PlayerUpdate.Move(ValueSome location))
+            do! update (PlayerUpdate.SetActorValues(Map.ofList [(key, health 80.0f)]))
             let! first = read fixture.Player
             let first = ok first
             equal profile first.Data
             equal (ValueSome name) first.CharacterName
             equal (ValueSome location) first.Location
 
-            do! update (PlayerUpdate.Sample(ValueSome location, Map.ofList [(key, health 20.0f)]))
+            do! update (PlayerUpdate.SetActorValues(Map.ofList [(key, health 20.0f)]))
             let! second = read fixture.Player
             equal (health 20.0f) (ok second).ActorValues[key]
             equal (health 80.0f) first.ActorValues[key]
@@ -424,17 +425,17 @@ let tests = testList "PlayerSession" [
             let name = CharacterName.create 128 "Nerevar" |> ok
             let key = ActorValueKey.create 128 "skyrim:health" |> ok
             let health = ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok) (ActorValueState.resource 20.0f 100.0f |> ok)
-            do! rejectUpdate fixture 2UL (PlayerUpdate.Sample(ValueNone, Map.ofList [(key, health)]))
+            do! rejectUpdate fixture 2UL (PlayerUpdate.SetActorValues( Map.ofList [(key, health)]))
             do! rejectUpdate fixture 3UL (PlayerUpdate.RenameCharacter name)
             let! beginning = applyUpdate fixture 4UL (PlayerUpdate.BeginCharacter name)
             let oversized = [for index in 0 .. 64 -> (ActorValueKey.create 128 $"test:value{index}" |> ok), health] |> Map.ofList
-            do! rejectUpdate fixture 6UL (PlayerUpdate.Sample(ValueNone, oversized))
+            do! rejectUpdate fixture 6UL (PlayerUpdate.SetActorValues( oversized))
             let! afterRejected = read fixture.Player
             equal beginning (ok afterRejected)
 
-            let! populated = applyUpdate fixture 7UL (PlayerUpdate.Sample(ValueNone, Map.ofList [(key, health)]))
+            let! populated = applyUpdate fixture 7UL (PlayerUpdate.SetActorValues( Map.ofList [(key, health)]))
             equal 1 populated.ActorValues.Count
-            let! cleared = applyUpdate fixture 8UL (PlayerUpdate.Sample(ValueNone, Map.empty))
+            let! cleared = applyUpdate fixture 8UL (PlayerUpdate.SetActorValues( Map.empty))
             equal Map.empty cleared.ActorValues
             equal profile cleared.Data
             equal 0 fixture.Host.Reader.Count

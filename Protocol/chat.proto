@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package Dreamsleeve.Protocol.Chat;
 
-// One serialized envelope per reliable ENet packet. Version 3 replicates full player state and opens sessions
+// One serialized envelope per reliable ENet packet. Version 4 replicates full player state and opens sessions
 // with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
 // requires reconnecting. Transport Connected alone is not application readiness.
 message ClientPacket {
@@ -30,6 +30,7 @@ message ServerPacket {
     PlayerUpdated player_updated = 15;
     PlayerUpdateAccepted player_update_accepted = 16;
     PlayerMoved player_moved = 17;
+    PlayerMetadataChanged player_metadata_changed = 18;
   }
 }
 
@@ -148,16 +149,19 @@ message PlayerDetails {
 
 message BeginCharacter { string name = 1; }
 message RenameCharacter { string name = 1; }
-message SamplePlayerState {
-  PlayerLocation location = 1; // Absence clears the current location.
-  repeated ActorValueEntry actor_values = 2; // Complete replacement, bounded by the configured actor-value limit.
+message SampleMovement {
+  PlayerLocation location = 1; // Absence clears current position; WRLD/CELL travels with coordinates.
 }
+message ActorValues { repeated ActorValueEntry values = 1; } // Full replacement, including empty.
 message LeaveGame {}
 message UpdatePlayer {
+  reserved 3;
+  reserved "sample_player_state";
   oneof action {
     BeginCharacter begin_character = 1;
     RenameCharacter rename_character = 2;
-    SamplePlayerState sample_player_state = 3;
+    SampleMovement sample_movement = 6;
+    ActorValues set_actor_values = 7;
     LeaveGame leave_game = 4;
     PlayerDetails set_details = 5;
   }
@@ -182,6 +186,12 @@ message SessionOpened {
 message ChatPublished { ChatMessage message = 1; }
 message PlayerJoined { PlayerInfo player = 1; }
 message PlayerUpdated { PlayerInfo player = 1; }
+// At least one component is present. Absent means unchanged; present replaces that component.
+message PlayerMetadataChanged {
+  uint64 player_id = 1;
+  ActorValues actor_values = 2;
+  PlayerDetails details = 3;
+}
 // Location-only replication avoids resending unchanged actor values.
 message PlayerMoved { uint64 player_id = 1; PlayerLocation location = 2; }
 // Settles the command; authoritative state arrives through periodic replication.

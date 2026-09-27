@@ -140,7 +140,7 @@ module ServerRuntime =
                 match response with
                 | ChatResponse.RequestRejected _ -> send options state context entry response
                 | ChatResponse.SessionOpened _ | ChatResponse.ChatAccepted _ | ChatResponse.ChatPublished _
-                | ChatResponse.PlayerJoined _ | ChatResponse.PlayerUpdated _ | ChatResponse.PlayerMoved _
+                | ChatResponse.PlayerJoined _ | ChatResponse.PlayerUpdated _ | ChatResponse.PlayerMoved _ | ChatResponse.PlayerMetadataChanged _
                 | ChatResponse.PlayerUpdateAccepted _ | ChatResponse.PlayerLeft _ -> ()
             | Some _ | None -> ()
 

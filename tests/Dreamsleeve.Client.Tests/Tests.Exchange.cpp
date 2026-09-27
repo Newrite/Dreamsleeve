@@ -107,10 +107,11 @@ TEST_CASE("Posting chat does not mutate history and accepted messages are delive
 TEST_CASE("Local samples replace only adjacent samples of the same generation")
 {
   auto             exchange = Exchange(4);
-  LocalPlayerState first;
-  first.actorValues.emplace("level", Domain::ActorValueInfo{"Level", Domain::ScalarActorValue{1}});
-  LocalPlayerState second;
-  second.actorValues.emplace("level", Domain::ActorValueInfo{"Level", Domain::ScalarActorValue{2}});
+  LocalMovement first;
+  first.location = Domain::PlayerLocation{};
+  LocalMovement second;
+  second.location = Domain::PlayerLocation{};
+  second.location->position.X = 2;
   CHECK(exchange->Post({1, first}) == CommandPostResult::Queued);
   CHECK(exchange->Post({1, second}) == CommandPostResult::Replaced);
   CHECK(exchange->Post({1, CharacterStarted{"New"}}) == CommandPostResult::Queued);
@@ -121,7 +122,7 @@ TEST_CASE("Local samples replace only adjacent samples of the same generation")
   std::vector<QueuedClientCommand> commands;
   exchange->TakeCommands(commands);
   REQUIRE(commands.size() == 4);
-  CHECK(std::get<LocalPlayerState>(commands[0].command).actorValues == second.actorValues);
+  CHECK(std::get<LocalMovement>(commands[0].command).location == second.location);
   CHECK(std::holds_alternative<CharacterStarted>(commands[1].command));
   CHECK(commands[2].generation == 1);
   CHECK(commands[3].generation == 2);
@@ -343,9 +344,9 @@ TEST_CASE("Sample admission budget leaves the latest sample coalescible without 
   REQUIRE(created);
   auto exchange = std::move(*created);
   REQUIRE(exchange->Post({1, CharacterStarted{"Name"}}) == CommandPostResult::Queued);
-  REQUIRE(exchange->Post({1, LocalPlayerState{}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, LocalMovement{}}) == CommandPostResult::Queued);
   REQUIRE(exchange->Post({1, CharacterRenamed{"Rename"}}) == CommandPostResult::Queued);
-  REQUIRE(exchange->Post({1, LocalPlayerState{}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, LocalMovement{}}) == CommandPostResult::Queued);
   REQUIRE(exchange->Post({1, GameExited{}}) == CommandPostResult::Queued);
   std::vector<QueuedClientCommand> commands;
   CHECK(exchange->TakeCommands(commands, 0, 0));
@@ -353,13 +354,13 @@ TEST_CASE("Sample admission budget leaves the latest sample coalescible without 
   CHECK(std::holds_alternative<CharacterStarted>(commands[0].command));
   CHECK(exchange->TakeCommands(commands, 0, 1));
   REQUIRE(commands.size() == 2);
-  CHECK(std::holds_alternative<LocalPlayerState>(commands[0].command));
+  CHECK(std::holds_alternative<LocalMovement>(commands[0].command));
   CHECK(std::holds_alternative<CharacterRenamed>(commands[1].command));
   CHECK(exchange->TakeCommands(commands, 0, 0));
   CHECK(commands.empty());
   CHECK(exchange->TakeCommands(commands, 0, 1));
   REQUIRE(commands.size() == 2);
-  CHECK(std::holds_alternative<LocalPlayerState>(commands[0].command));
+  CHECK(std::holds_alternative<LocalMovement>(commands[0].command));
   CHECK(std::holds_alternative<GameExited>(commands[1].command));
 }
 

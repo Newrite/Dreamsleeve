@@ -289,6 +289,8 @@ private:
       return {};
     }
 
+    Result<void> Receive(PlayerMetadataUpdated& value) { return Apply(value); }
+
     Result<void> Receive(PlayerLocationUpdated& value)
     {
       return Apply(value);
@@ -372,12 +374,13 @@ private:
       return {};
     }
 
-    Result<void> Process(std::uint64_t generation, LocalPlayerState& command)
+    Result<void> Process(std::uint64_t generation, LocalMovement& command)
     {
       if (phase == SessionPhase::Ready && generation == model.Generation())
         nextPlayerSample = Clock::now() + std::chrono::milliseconds(config.playerSampleIntervalMs);
       return SendPlayerUpdate(generation, command);
     }
+    Result<void> Process(std::uint64_t generation, LocalActorValues& command) { return SendPlayerUpdate(generation, command); }
     Result<void> Process(std::uint64_t generation, CharacterStarted& command) { return SendPlayerUpdate(generation, command); }
     Result<void> Process(std::uint64_t generation, CharacterRenamed& command) { return SendPlayerUpdate(generation, command); }
     Result<void> Process(std::uint64_t generation, PlayerDetailsChanged& command) { return SendPlayerUpdate(generation, command); }

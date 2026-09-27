@@ -286,10 +286,14 @@ let private stateTests =
             let extraKey = actorKey "avg:extra"
             let original = Player.create (profile 1UL "First") |> Player.applyUpdate (PlayerUpdate.BeginCharacter name)
             let place = location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero
-            let first = original |> Player.applyUpdate (PlayerUpdate.Sample(ValueSome place, Map.ofList [healthKey, health 120.0f; extraKey, health 5.0f]))
+            let first = original |> Player.applyUpdate (PlayerUpdate.Move(ValueSome place)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health 120.0f; extraKey, health 5.0f]))
 
             let before = Player.snapshot first
-            let second = first |> Player.applyUpdate (PlayerUpdate.Sample(ValueNone, Map.ofList [healthKey, health -5.0f]))
+            let valuesOnly = first |> Player.applyUpdate (PlayerUpdate.SetActorValues Map.empty)
+            Expect.equal valuesOnly.Location first.Location "Values do not touch movement."
+            let movedOnly = first |> Player.applyUpdate (PlayerUpdate.Move ValueNone)
+            Expect.equal (Player.actorValuesSnapshot movedOnly) before.ActorValues "Movement does not touch values."
+            let second = first |> Player.applyUpdate (PlayerUpdate.Move ValueNone) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health -5.0f]))
 
             Expect.equal second.Location ValueNone "unknown position replaces a previous known location"
             Expect.equal (Player.actorValueCount second) 1 "a missing key is removed, not retained forever"

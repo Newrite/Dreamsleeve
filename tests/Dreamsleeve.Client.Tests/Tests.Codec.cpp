@@ -188,7 +188,7 @@ TEST_CASE("Malformed unsupported and structurally incomplete server packets retu
   auto bytes = Bytes(packet);
   bytes.insert(bytes.end(), {std::byte{0x98}, std::byte{0x06}, std::byte{0x01}});
   CHECK(codec.Decode(bytes));  // An unknown additive field is allowed within this version.
-  const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{0x03}, std::byte{0x92}, std::byte{0x01}, std::byte{0x00}};
+  const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{W::Version}, std::byte{0xFA}, std::byte{0x01}, std::byte{0x00}};
   auto                         unknown = codec.Decode(futurePayload);
   REQUIRE_FALSE(unknown);
   CHECK(unknown.error().code == W::ErrorCode::InvalidPayload);
@@ -313,19 +313,24 @@ TEST_CASE("Rejection codes share protobuf names and retain future signed enum va
 TEST_CASE("Player update encoding retains full samples explicit zero resource values and structured details")
 {
   const auto codec = MakeCodec();
-  LocalPlayerState sample;
+  LocalMovement sample;
   sample.location = Domain::PlayerLocation{{{"skyrim.esm", 0x123}, "Whiterun"}, {1, 2, 3}, {0, 0, 3.14f}};
-  sample.actorValues.emplace("speed", Domain::ActorValueInfo{"Speed", Domain::ScalarActorValue{0}});
-  sample.actorValues.emplace("health", Domain::ActorValueInfo{"Health", Domain::ResourceActorValue{150, 100}});
+  LocalActorValues values;
+  values.actorValues.emplace("speed", Domain::ActorValueInfo{"Speed", Domain::ScalarActorValue{0}});
+  values.actorValues.emplace("health", Domain::ActorValueInfo{"Health", Domain::ResourceActorValue{150, 100}});
   auto encoded = codec.Encode(W::UpdatePlayer{51, sample});
   REQUIRE(encoded);
   P::ClientPacket packet;
   REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
-  const auto& wire = packet.update_player().sample_player_state();
-  CHECK(wire.location().position().x() == 1);
-  CHECK(wire.location().rotation().z() == doctest::Approx(3.14));
-  CHECK(wire.actor_values_size() == 2);
-  for (const auto& entry : wire.actor_values())
+  const auto& movement = packet.update_player().sample_movement();
+  CHECK(movement.location().position().x() == 1);
+  CHECK(movement.location().rotation().z() == doctest::Approx(3.14));
+  encoded = codec.Encode(W::UpdatePlayer{52, values});
+  REQUIRE(encoded);
+  REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  const auto& wire = packet.update_player().set_actor_values();
+  CHECK(wire.values_size() == 2);
+  for (const auto& entry : wire.values())
   {
     if (entry.key() == "speed")
     {
@@ -410,7 +415,7 @@ TEST_CASE("Actor value limits are configured for both outgoing samples and incom
   Configuration settings;
   settings.maxActorValues = 1;
   const auto codec = MakeCodec(settings);
-  LocalPlayerState sample;
+  LocalActorValues sample;
   sample.actorValues.emplace("skyrim:health", Domain::ActorValueInfo{"Health", Domain::ScalarActorValue{0}});
   sample.actorValues.emplace("skyrim:stamina", Domain::ActorValueInfo{"Stamina", Domain::ScalarActorValue{1}});
   CHECK_FALSE(codec.Encode(W::UpdatePlayer{1, sample}));
@@ -449,6 +454,33 @@ TEST_CASE("Player update correlation is distinct from uncorrelated full and comp
   CHECK_FALSE(std::get<PlayerLocationUpdated>(*moved).location);
   packet.mutable_player_updated()->mutable_player()->mutable_profile()->set_player_id(7);
   REQUIRE(codec.Decode(Bytes(packet)));
+  packet.set_request_id(1);
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
+}
+
+TEST_CASE("Metadata notifications distinguish omitted components from empty replacements")
+{
+  const auto codec = MakeCodec();
+  P::ServerPacket packet;
+  packet.set_protocol_version(W::Version);
+  auto* patch = packet.mutable_player_metadata_changed();
+  patch->set_player_id(7);
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  patch->mutable_actor_values();
+  auto result = codec.Decode(Bytes(packet));
+  REQUIRE(result);
+  const auto& empty = std::get<PlayerMetadataUpdated>(*result);
+  REQUIRE(empty.actorValues);
+  CHECK(empty.actorValues->empty());
+  CHECK_FALSE(empty.details);
+  patch->clear_actor_values();
+  patch->mutable_details()->set_level(0);
+  result = codec.Decode(Bytes(packet));
+  REQUIRE(result);
+  const auto& details = std::get<PlayerMetadataUpdated>(*result);
+  CHECK_FALSE(details.actorValues);
+  REQUIRE(details.details);
+  CHECK(details.details->level == 0);
   packet.set_request_id(1);
   CHECK_FALSE(codec.Decode(Bytes(packet)));
 }

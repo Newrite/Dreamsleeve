@@ -90,6 +90,7 @@ type PresenceEvent =
     | Joined of PlayerSnapshot
     | Updated of PlayerSnapshot
     | Moved of PlayerId * PlayerLocation voption
+    | MetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | Left of PlayerId
 
 type PresenceSubscription = {

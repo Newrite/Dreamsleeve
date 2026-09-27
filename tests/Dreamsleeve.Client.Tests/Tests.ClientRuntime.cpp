@@ -767,7 +767,7 @@ TEST_CASE("Sample cadence retains the latest sample and preserves transitions wh
 {
   Fixture fixture;
   const auto generation = Ready(fixture);
-  REQUIRE(fixture.exchange->Post({generation, LocalPlayerState{}}) == CommandPostResult::Queued);
+  REQUIRE(fixture.exchange->Post({generation, LocalMovement{}}) == CommandPostResult::Queued);
   fixture.Until([&] { return fixture.requests.size() == 2; });
   P::ServerPacket ack;
   ack.set_protocol_version(Wire::Version);
@@ -775,17 +775,17 @@ TEST_CASE("Sample cadence retains the latest sample and preserves transitions wh
   ack.mutable_player_update_accepted();
   fixture.Send(ack);
 
-  LocalPlayerState stale;
-  stale.actorValues.emplace("level", Domain::ActorValueInfo{"Level", Domain::ScalarActorValue{1}});
+  LocalMovement stale;
+  stale.location = Domain::PlayerLocation{};
   REQUIRE(fixture.exchange->Post({generation, stale}) == CommandPostResult::Queued);
   auto latest = stale;
-  latest.actorValues.at("level").state = Domain::ScalarActorValue{2};
+  latest.location->position.X = 2;
   REQUIRE(fixture.exchange->Post({generation, latest}) == CommandPostResult::Replaced);
   REQUIRE(fixture.exchange->Post({generation, GameExited{}}) == CommandPostResult::Queued);
   fixture.Until([&] { return fixture.requests.size() == 4; });
-  const auto& sample = fixture.requests[2].update_player().sample_player_state();
-  REQUIRE(sample.actor_values_size() == 1);
-  CHECK(sample.actor_values(0).scalar() == 2);
+  const auto& sample = fixture.requests[2].update_player().sample_movement();
+  REQUIRE(sample.has_location());
+  CHECK(sample.location().position().x() == 2);
   CHECK(fixture.requests[3].update_player().has_leave_game());
   CHECK(fixture.errors.empty());
 }
@@ -796,7 +796,7 @@ TEST_CASE("Undrained player rejections share the outcome bound and stale samples
   const auto generation = Ready(fixture);
   REQUIRE(fixture.exchange->Post({generation, CharacterStarted{"First"}}) == CommandPostResult::Queued);
   fixture.Until([&] { return fixture.requests.size() == 2; });
-  REQUIRE(fixture.exchange->Post({generation, LocalPlayerState{}}) == CommandPostResult::Queued);
+  REQUIRE(fixture.exchange->Post({generation, LocalMovement{}}) == CommandPostResult::Queued);
   fixture.Send(Rejection(fixture.requests.back().request_id()));
   fixture.peer->Disconnect(DisconnectType::Later, DisconnectReason::ServerShutdown);
   fixture.server.FlushPackets();

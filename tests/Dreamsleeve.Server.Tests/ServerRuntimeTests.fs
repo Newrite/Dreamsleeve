@@ -58,9 +58,8 @@ let private playerLocation x =
 
 let private telemetry requestId x =
     packet requestId (fun packet ->
-        let sample = SamplePlayerState(Location = playerLocation x)
-        sample.ActorValues.Add(ActorValueEntry(Key = "skyrim:health", DisplayName = "Health", Resource = ResourceActorValue(Current = 75.0f, Maximum = 100.0f)))
-        packet.UpdatePlayer <- UpdatePlayer(SamplePlayerState = sample))
+        packet.UpdatePlayer <- UpdatePlayer(SampleMovement = SampleMovement(Location = playerLocation x)))
+
 
 type private Fixture = {
     Runtime: Agent<ServerRuntimeMessage>
@@ -367,24 +366,30 @@ let tests = testList "ServerRuntime" [
                 observerReady <- id = bob && response.RequestId = 3UL
             fixture.Input.Enqueue(ServerTransportEvent.Received(alice, beginCharacter 2UL "Nerevar"))
             fixture.Input.Enqueue(ServerTransportEvent.Received(alice, telemetry 3UL 10.0f))
-            let replicated = ResizeArray<Guid * PlayerInfo>()
+            let replicated = System.Collections.Generic.Dictionary<Guid, PlayerInfo>()
+            let located = System.Collections.Generic.HashSet<Guid>()
             let mutable accepted = false
-            while replicated.Count < 2 || not accepted do
+            while located.Count < 2 || not accepted do
                 let! id, response = receive fixture.Output
                 if id = alice && response.RequestId = 3UL then
                     equal ServerPacket.PayloadOneofCase.PlayerUpdateAccepted response.PayloadCase
                     accepted <- true
                 elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
-                     && response.PlayerUpdated.Player.ActorValues.Count = 1
                      && response.PlayerUpdated.Player.Profile.PlayerId = a.SelfPlayerId then
-                    replicated.Add(id, response.PlayerUpdated.Player)
-            equal (set [alice; bob]) (replicated |> Seq.map fst |> Set.ofSeq)
-            for _, current in replicated do
+                    let current = response.PlayerUpdated.Player
+                    replicated[id] <- current
+                    if not (isNull current.Location) && current.Location.Position.X = 10.0f then located.Add id |> ignore
+                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayerMoved
+                     && response.PlayerMoved.PlayerId = a.SelfPlayerId then
+                    replicated[id].Location <- response.PlayerMoved.Location
+                    if response.PlayerMoved.Location.Position.X = 10.0f then located.Add id |> ignore
+            equal (set [alice; bob]) (replicated.Keys |> Set.ofSeq)
+            for KeyValue(_, current) in replicated do
                 equal a.SelfPlayerId current.Profile.PlayerId
                 equal "Nerevar" current.CharacterName
                 equal 1UL current.CharacterGeneration
                 equal 10.0f current.Location.Position.X
-                equal 75.0f current.ActorValues[0].Resource.Current
+                equal 0 current.ActorValues.Count
 
             fixture.Input.Enqueue(ServerTransportEvent.Received(alice, telemetry 4UL 20.0f))
             let moved = ResizeArray<Guid>()
@@ -404,7 +409,7 @@ let tests = testList "ServerRuntime" [
             let! initial = welcome fixture late
             let current = initial.Players |> Seq.find (fun value -> value.Profile.PlayerId = a.SelfPlayerId)
             check (isNull current.Location) "Unlocated late join must not receive remote coordinates."
-            equal 1 current.ActorValues.Count
+            equal 0 current.ActorValues.Count
             equal "Nerevar" current.CharacterName
         })
     }

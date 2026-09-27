@@ -183,13 +183,13 @@ Post возвращает Queued, Replaced, Full или Closed. Queued не оз
 Игровые объекты и указатели на них не передаются: адаптер снимает значения и
 преобразует их в доменные типы, кодирование/отправка выполняются сетевым владельцем.
 
-Команды: SendChat, LocalPlayerState, CharacterStarted, GameExited, RequestSnapshot.
+Команды: SendChat, LocalMovement, LocalActorValues, CharacterStarted, CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot.
 NextRequestId() — общий allocator OpenSession/UI SendChat, сохраняющий счётчик
 между сессиями. Producer ставит SendChat в порядке выделенных ID. ClientRuntime
 обслуживает SendChat/RequestSnapshot; игровые команды пока возвращают InvalidOperation.
 QueuedClientCommand несёт generation, которую владелец сверяет перед выполнением.
 RequestSnapshot обслуживает текущую модель, в том числе после смены поколения.
-LocalPlayerState — полный срез позиции/ActorValues, не патч. Заменяются только
+LocalMovement — положение вместе с пространством; LocalActorValues отдельно заменяет карту показаний. Заменяются только
 соседние ещё не вычитанные срезы одного поколения; через другие команды или смену
 generation объединения нет. Политики частоты отправки и wire contract игровых показаний ещё не заданы;
 протокол чата описан в [Protocol/README](../../../Protocol/README.ru.md).
@@ -242,7 +242,7 @@ xmake run Dreamsleeve.Client.Dev --state-demo
 Команды: `send <text>`, `accept`, `reject`, `receive <text>`, `sample`, `read`,
 `snapshot`, `reset`, `quit`. send передаёт команду, accept имитирует серверное
 подтверждение самой ранней отправки, reject — отказ. receive имитирует входящее
-сообщение. sample передаёт пустой полный срез игровых показаний как проверку пути
+сообщение. sample передаёт отсутствие положения как проверку пути
 отправки. read вычитывает единственную очередь и печатает дельты/снимки и отказы.
 
 Демо показывает отсутствие локального добавления после send, подтверждение/отказ,

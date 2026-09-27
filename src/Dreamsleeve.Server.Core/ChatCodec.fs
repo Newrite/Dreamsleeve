@@ -59,6 +59,7 @@ type ChatResponse =
     | PlayerLeft of PlayerId
     | PlayerUpdated of PlayerSnapshot
     | PlayerMoved of PlayerId * PlayerLocation voption
+    | PlayerMetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | PlayerUpdateAccepted of requestId: uint64
 
 /// Validated settings, held unchanged for the network owner's lifetime.
@@ -67,7 +68,7 @@ type ChatCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ChatCodec =
     [<Literal>]
-    let Version = 3u
+    let Version = 4u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -233,12 +234,10 @@ module ChatCodec =
             CharacterName.create limits.CharacterName source.RenameCharacter.Name
             |> Result.map PlayerUpdate.RenameCharacter
             |> Result.mapError ChatCodecFailure.InvalidDomain
-        | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.SamplePlayerState ->
-            let sample = source.SamplePlayerState
-
-            match decodeLocation limits sample.Location, decodeActorValues limits sample.ActorValues with
-            | Ok location, Ok values -> Ok(PlayerUpdate.Sample(location, values))
-            | Error error, _ | _, Error error -> Error error
+        | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.SampleMovement ->
+            decodeLocation limits source.SampleMovement.Location |> Result.map PlayerUpdate.Move
+        | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.SetActorValues ->
+            decodeActorValues limits source.SetActorValues.Values |> Result.map PlayerUpdate.SetActorValues
         | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.LeaveGame -> Ok PlayerUpdate.LeaveGame
         | Dreamsleeve.Protocol.Chat.UpdatePlayer.ActionOneofCase.SetDetails ->
             decodeDetails limits source.SetDetails |> Result.map PlayerUpdate.SetDetails
@@ -434,6 +433,7 @@ module ChatCodec =
         | ChatResponse.ChatPublished _
         | ChatResponse.PlayerJoined _
         | ChatResponse.PlayerUpdated _
+        | ChatResponse.PlayerMetadataChanged _
         | ChatResponse.PlayerMoved _
         | ChatResponse.PlayerLeft _ -> None
 
@@ -451,6 +451,10 @@ module ChatCodec =
                     Some(ChatCodecFailure.InvalidPayload "code")
                 elif isNull value.Message || isNull value.Field then
                     Some(ChatCodecFailure.InvalidPayload "rejection")
+                else None
+
+            | ChatResponse.PlayerMetadataChanged(_, values, details) ->
+                if values.IsNone && details.IsNone then Some(ChatCodecFailure.InvalidPayload "player_metadata_changed")
                 else None
 
             | ChatResponse.ChatAccepted _
@@ -491,6 +495,14 @@ module ChatCodec =
                 packet.PlayerJoined <- Dreamsleeve.Protocol.Chat.PlayerJoined(Player = player value)
             | ChatResponse.PlayerUpdated value ->
                 packet.PlayerUpdated <- Dreamsleeve.Protocol.Chat.PlayerUpdated(Player = player value)
+            | ChatResponse.PlayerMetadataChanged(playerId, values, metadata) ->
+                let changed = Dreamsleeve.Protocol.Chat.PlayerMetadataChanged(PlayerId = PlayerId.value playerId)
+                values |> ValueOption.iter (fun entries ->
+                    let replacement = Dreamsleeve.Protocol.Chat.ActorValues()
+                    entries |> Map.toSeq |> Seq.map actorValue |> replacement.Values.AddRange
+                    changed.ActorValues <- replacement)
+                metadata |> ValueOption.iter (fun value -> changed.Details <- details value)
+                packet.PlayerMetadataChanged <- changed
             | ChatResponse.PlayerMoved(playerId, place) ->
                 let moved = Dreamsleeve.Protocol.Chat.PlayerMoved(PlayerId = PlayerId.value playerId)
                 place |> ValueOption.iter (fun value -> moved.Location <- location value)

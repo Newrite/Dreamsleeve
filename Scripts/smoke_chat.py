@@ -231,7 +231,8 @@ def smoke(args, log, directory: Path):
                    "place": {"worldspaceName": "Tamriel", "locationName": "Whiterun",
                              "nearbyMarkerName": "Dragonsreach", "markerKind": "castle", "isInterior": False},
                    "gameStartedAtUnixMs": 1700000000000}
-        alice.send("sample " + json.dumps(sample))
+        alice.send("move " + json.dumps({"location": sample["location"]}))
+        alice.send("values " + json.dumps(sample["actorValues"]))
         alice.send("details " + json.dumps(details))
         authoritative = wait_player(alice, alice_id,
             lambda state: state.get("characterName") == "Nerevar" and state.get("location") is not None
@@ -260,7 +261,7 @@ def smoke(args, log, directory: Path):
         bob.send("begin Observer")
         observer_sample = {"location": copy.deepcopy(sample["location"]), "actorValues": {}}
         observer_sample["location"]["position"]["X"] = 0
-        bob.send("sample " + json.dumps(observer_sample))
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
         visible = wait_player(bob, alice_id, lambda state: state.get("location") is not None, args.timeout, bob_start)
         check(visible == authoritative, "Entering range missed the stationary player's full game state")
         wait_player(alice, bob_id, lambda state: state.get("location") is not None, args.timeout, alice_start)
@@ -269,7 +270,7 @@ def smoke(args, log, directory: Path):
         alice_start, bob_start = alice.mark(), bob.mark()
         sample["location"]["position"]["X"] = 42
         sample["location"]["rotation"]["Z"] = 2.5
-        alice.send("sample " + json.dumps(sample))
+        alice.send("move " + json.dumps({"location": sample["location"]}))
         for child, start_at in ((alice, alice_start), (bob, bob_start)):
             moved = wait_player(child, alice_id,
                 lambda state: state.get("location") is not None and state["location"]["position"]["X"] == 42,
@@ -281,7 +282,7 @@ def smoke(args, log, directory: Path):
 
         alice_start, bob_start = alice.mark(), bob.mark()
         observer_sample["location"]["position"]["X"] = 20000
-        bob.send("sample " + json.dumps(observer_sample))
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
         hidden = wait_player(bob, alice_id, lambda state: not state.get("location"), args.timeout, bob_start)
         check(hidden["details"] == authoritative["details"] and hidden["actorValues"] == authoritative["actorValues"],
               "Leaving range removed global player metadata")
@@ -299,7 +300,7 @@ def smoke(args, log, directory: Path):
 
         bob_start = bob.mark()
         observer_sample["location"]["position"]["X"] = 0
-        bob.send("sample " + json.dumps(observer_sample))
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
         stationary = wait_player(bob, alice_id,
             lambda state: state.get("location") is not None and state["location"]["position"]["X"] == 42,
             args.timeout, bob_start)
@@ -308,22 +309,38 @@ def smoke(args, log, directory: Path):
 
         bob_start = bob.mark()
         observer_sample["location"]["location"]["locationId"]["localFormId"] = 292
-        bob.send("sample " + json.dumps(observer_sample))
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
         wait_player(bob, alice_id, lambda state: not state.get("location"), args.timeout, bob_start)
         bob_start = bob.mark()
         observer_sample["location"]["location"]["locationId"]["localFormId"] = 291
-        bob.send("sample " + json.dumps(observer_sample))
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
         wait_player(bob, alice_id,
             lambda state: state.get("location") is not None and state["location"]["position"]["X"] == 42,
             args.timeout, bob_start)
         stage("different WRLD/CELL clears location and returning restores the stationary source")
 
         alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("values {}")
+        for child, start_at in ((alice, alice_start), (bob, bob_start)):
+            cleared = wait_player(child, alice_id, lambda state: not state["actorValues"], args.timeout, start_at)
+            check(cleared["location"]["position"]["X"] == 42 and cleared["details"] == authoritative["details"],
+                  "Actor values replacement changed movement or details")
+        alice_start, bob_start = alice.mark(), bob.mark()
+        details["level"] = 0
+        alice.send("details " + json.dumps(details))
+        for child, start_at in ((alice, alice_start), (bob, bob_start)):
+            updated = wait_player(child, alice_id, lambda state: state["details"].get("level") == 0, args.timeout, start_at)
+            check(not updated["actorValues"] and updated["location"]["position"]["X"] == 42,
+                  "Details replacement changed movement or actor values")
+        stage("independent metadata patches clear actor values and update details without touching movement")
+
+
+        alice_start, bob_start = alice.mark(), bob.mark()
         alice.send("rename Nerevar Renamed")
         for child, start_at in ((alice, alice_start), (bob, bob_start)):
             renamed = wait_player(child, alice_id, lambda state: state.get("characterName") == "Nerevar Renamed",
                                   args.timeout, start_at)
-            check(renamed["characterGeneration"] == 1 and renamed["actorValues"] == authoritative["actorValues"],
+            check(renamed["characterGeneration"] == 1 and not renamed["actorValues"] and renamed["details"]["level"] == 0,
                   "Rename unexpectedly reset the character")
         alice_start, bob_start = alice.mark(), bob.mark()
         alice.send("begin Nerevar Renamed")

@@ -35,13 +35,14 @@ type PlayerSnapshot = {
     ActorValues: Map<ActorValueKey, ActorValueInfo>
 }
 
-/// Validated observations from the current game instance. A sample replaces the
-/// location and readings; membership, identity and admission limits belong to the session owner.
+/// Independent observations from the current game instance. Membership, identity
+/// and admission limits belong to the session owner.
 [<RequireQualifiedAccess>]
 type PlayerUpdate =
     | BeginCharacter of CharacterName
     | RenameCharacter of CharacterName
-    | Sample of PlayerLocation voption * Map<ActorValueKey, ActorValueInfo>
+    | Move of PlayerLocation voption
+    | SetActorValues of Map<ActorValueKey, ActorValueInfo>
     | SetDetails of PlayerDetails
     | LeaveGame
 
@@ -109,20 +110,21 @@ module Player =
         clearGameState player |> withCharacterName characterName
 
     /// Build a replacement storage before publishing the replacement player. No
-    /// observer can see a new location paired with readings from the previous sample.
-    let replaceSample location (entries: Map<ActorValueKey, ActorValueInfo>) (player: Player) =
+    /// observer can see a partially replaced set of readings.
+    let replaceActorValues (entries: Map<ActorValueKey, ActorValueInfo>) (player: Player) =
         let values = ActorValueStorage.create ()
 
         for KeyValue(key, info) in entries do
             ActorValueStorage.set key info values
 
-        { player with location = location; actorValues = values }
+        { player with actorValues = values }
 
     let applyUpdate update player =
         match update with
         | PlayerUpdate.BeginCharacter name -> beginCharacter name player
         | PlayerUpdate.RenameCharacter name -> withCharacterName name player
-        | PlayerUpdate.Sample(location, values) -> replaceSample location values player
+        | PlayerUpdate.Move location -> { player with location = location }
+        | PlayerUpdate.SetActorValues values -> replaceActorValues values player
         | PlayerUpdate.SetDetails details -> { player with details = details }
         | PlayerUpdate.LeaveGame -> clearGameState player
 

@@ -62,9 +62,9 @@ namespace
 
   constexpr std::string_view Commands =
     "Commands: connect | disconnect | send <text> | begin <name> | rename <name> | "
-    "sample <json> | details <json> | clear-location | leave | read | quit\n";
+    "move <json> | values <json> | details <json> | clear-location | leave | read | quit\n";
 
-  bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation, LocalPlayerState& draft)
+  bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
     ClientCommand command;
     if (line.starts_with("begin "))
@@ -77,19 +77,27 @@ namespace
       command = GameExited{};
     else if (line == "clear-location")
     {
-      auto sample = draft;
-      sample.location.reset();
-      command = std::move(sample);
+      command = LocalMovement{};
     }
-    else if (line.starts_with("sample "))
+    else if (line.starts_with("move "))
     {
-      LocalPlayerState sample;
-      if (glz::read_json(sample, std::string_view(line).substr(7)))
+      LocalMovement sample;
+      if (glz::read_json(sample, std::string_view(line).substr(5)))
       {
-        std::cout << "Invalid sample JSON\n";
+        std::cout << "Invalid movement JSON\n";
         return true;
       }
       command = std::move(sample);
+    }
+    else if (line.starts_with("values "))
+    {
+      LocalActorValues values;
+      if (glz::read_json(values.actorValues, std::string_view(line).substr(7)))
+      {
+        std::cout << "Invalid actor values JSON\n";
+        return true;
+      }
+      command = std::move(values);
     }
     else if (line.starts_with("details "))
     {
@@ -107,9 +115,6 @@ namespace
     const auto posted = exchange.Post({generation, command});
     if (posted == CommandPostResult::Queued || posted == CommandPostResult::Replaced)
     {
-      // Only the input draft changes here. Replicated Player state comes from read.
-      if (const auto* sample = std::get_if<LocalPlayerState>(&command)) draft = *sample;
-      if (std::holds_alternative<CharacterStarted>(command) || std::holds_alternative<GameExited>(command)) draft = {};
       std::cout << "player command queued\n";
     }
     else
@@ -321,7 +326,6 @@ int RunNetworkConsole(int argc, char* argv[])
   std::uint64_t generation{};
   Domain::ChatChannelId channel{};
 
-  LocalPlayerState draft;
   std::cout << "Real ENet connection. " << Commands;
 
   std::string line;
@@ -355,7 +359,7 @@ int RunNetworkConsole(int argc, char* argv[])
     else
     {
       Print(**exchange, generation, channel);
-      if (!PostPlayerCommand(line, **exchange, generation, draft)) std::cout << Commands;
+      if (!PostPlayerCommand(line, **exchange, generation)) std::cout << Commands;
     }
   }
 

@@ -441,4 +441,30 @@ TEST_CASE("ClientModel.TakeChanges replaces the output and recycles its capaciti
   CHECK(output.chats.capacity() >= 32);
 }
 
+TEST_CASE("Metadata replacement preserves movement and publishes the changed player")
+{
+  ClientModel model;
+  const auto generation = model.Generation();
+  const auto original = ChangeTestPlayer();
+  REQUIRE(model.Apply(generation, PlayerUpserted{original}));
+  ChangeBatch changes;
+  model.TakeChanges(changes);
+  Domain::PlayerDetails details;
+  details.level = 0;
+  REQUIRE(model.Apply(generation, PlayerMetadataUpdated{7, std::nullopt, details}));
+  auto player = model.FindPlayer(7);
+  REQUIRE(player);
+  CHECK(player->location == original.location);
+  CHECK(player->actorValues == original.actorValues);
+  CHECK(player->details.level == 0);
+  REQUIRE(model.Apply(generation, PlayerMetadataUpdated{7, Domain::ActorValueStorage{}, std::nullopt}));
+  player = model.FindPlayer(7);
+  CHECK(player->actorValues.empty());
+  CHECK(player->details.level == 0);
+  CHECK(player->location == original.location);
+  model.TakeChanges(changes);
+  CheckSinglePlayerChange(changes, 7);
+  CHECK_FALSE(model.Apply(generation, PlayerMetadataUpdated{99, Domain::ActorValueStorage{}, std::nullopt}));
+}
+
 TEST_SUITE_END();

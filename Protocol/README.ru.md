@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 3
+# Прикладной протокол сессии, версия 4
 
 Источник схемы — [chat.proto](chat.proto); [network.proto](network.proto) сохраняет
 причины отключения ENet. Это первый срез для Client.Dev и сервера: профили, онлайн
@@ -19,7 +19,7 @@ protocol_version = 3 и oneof payload. Неизвестные дополните
 
 OpenSession передаёт только session_ticket: одноразовый билет из HTTP login,
 32 случайных байта в base64url без padding (43 символа). Старые номера полей 1/2
-и имена username/display_name зарезервированы; версии 1/2 несовместимы с версией 3.
+и имена username/display_name зарезервированы; версии 1/2/3 несовместимы с версией 4.
 Имя, отображаемое имя и PlayerId берутся из профиля, связанного с билетом.
 Отсутствующий, просроченный, неизвестный или использованный билет не открывает сессию.
 SessionTable резервирует PlayerId до завершения агента и очистки членства;
@@ -45,9 +45,9 @@ plain HTTP допустим только для явно разрешённой 
 | Сервер → клиент | SessionOpened | SelfPlayerId, GlobalChannelId, весь онлайн и хвост истории |
 | Сервер → клиент | ChatPublished | Одно принятое сообщение |
 | Сервер → клиент | RequestRejected | Общий RequestRejectionCode, объяснение, поле |
-| Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SamplePlayerState / LeaveGame / SetDetails |
+| Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SampleMovement / SetActorValues / LeaveGame / SetDetails |
 | Сервер → клиент | PlayerJoined / PlayerLeft | Полный PlayerInfo нового игрока / ID ушедшего |
-| Сервер → клиент | PlayerUpdated / PlayerMoved | Полный PlayerInfo / только optional location |
+| Сервер → клиент | PlayerUpdated / PlayerMoved / PlayerMetadataChanged | Полный PlayerInfo / только optional location / изменённые actor values и Details |
 | Сервер → клиент | PlayerUpdateAccepted | ACK команды UpdatePlayer |
 
 RequestId — ненулевой uint64, назначаемый клиентским API до отправки. Клиент должен
@@ -62,7 +62,7 @@ ChatMessageId, не серверная последовательность и �
 - SessionOpened, PlayerUpdateAccepted и RequestRejected обязательно возвращают ID исходного запроса.
 - ChatPublished содержит RequestId только в копии инициатору. Остальные получают
   то же принятое сообщение без RequestId. ID других клиентов не завершает свои запросы.
-- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerMoved не содержат RequestId. Явный ноль всегда ошибочен.
+- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerMoved/PlayerMetadataChanged не содержат RequestId. Явный ноль всегда ошибочен.
 
 Optional RequestId существует только в общей protobuf-оболочке и диагностике codec.
 В прикладных ответах наличие ID закреплено вариантом типа:
@@ -97,15 +97,15 @@ optional PlayerLocation, actor_values, character_generation и PlayerDetails. Se
 PlayerLocation содержит Location(FormKey(plugin_name/local_form_id), location_name),
 Position XYZ в world units и Rotation XYZ в радианах. ActorValueEntry имеет key,
 display_name и oneof scalar/resource(current/maximum). Scalar 0 присутствует явно;
-отсутствующий oneof — ошибка. SamplePlayerState полностью заменяет location/actor_values:
-absence очищает location, пустой список очищает actor values. По умолчанию лимит 64 entries (настраивается одинаково на обеих сторонах),
-ключи уникальны после нормализации сервером. Значения конечны; current может превышать maximum.
+отсутствующий oneof — ошибка. SampleMovement заменяет только location: отсутствие
+положения очищает его. SetActorValues независимо заменяет карту показаний; пустая
+карта очищает её. Зарезервирован старый номер 3 объединённого sample_player_state.
 
 PlayerDetails отдельно заменяет расу (NamedForm), optional level, PlayerActivity,
 PlaceDescription и optional game_started_at_unix_ms. Занятие — общий ActivityKind с
 optional target_name/menu_key и LockDifficulty; место хранит worldspace/location,
 ближайший маркер, его вид и is_interior. Это данные для разных UI, а не готовая
-Discord-строка. Sample не стирает details. BeginCharacter/LeaveGame очищают игровой
+Discord-строка. Движение и actor values не стирают details. BeginCharacter/LeaveGame очищают игровой
 контекст и увеличивают character_generation, даже при повторе имени; Rename сохраняет
 остальные поля. Поля профиля клиент изменить этой командой не может.
 
@@ -332,7 +332,7 @@ MessageId упорядочен внутри канала, идентичност
 
 ### Видимость позиций
 
-Форма v3 не меняется: PlayerInfo остаётся записью онлайна, optional location в ней
+В v4 правило видимости сохраняется: PlayerInfo остаётся записью онлайна, optional location в ней
 означает положение, доступное конкретному получателю. Сервер передаёт чужие позиции
 только при известной позиции получателя, совпадении WRLD/CELL FormKey и расстоянии
 XYZ <= Runtime.Presence.VisibilityDistance. Себе игрок получает положение всегда.
@@ -345,3 +345,22 @@ XYZ <= Runtime.Presence.VisibilityDistance. Себе игрок получает
 Радиус сервера по умолчанию 8192 Skyrim units, граница включена; 0 допустим.
 Клиентские настройки отображения не отправляются серверу: выключение светлячков
 не является отпиской от пакетов, а больший клиентский радиус не расширяет доставку.
+
+### Репликация компонентов v4
+
+На интервале рассылки сервер сравнивает Latest с Published. PlayerMoved содержит
+только актуальное положение для конкретного наблюдателя. PlayerMetadataChanged
+содержит только изменившиеся компоненты actor_values/details: отсутствующий блок
+не меняет модель, присутствующий заменяет компонент целиком (пустые values очищают).
+Пакет без обоих блоков недопустим. Частичное обновление никогда не меняет координаты.
+Если изменились и движение, и метаданные, отправляются два отдельных уведомления.
+Полный PlayerUpdated используется при изменении профиля, имени или поколения
+персонажа; он включает актуальные компоненты и отфильтрованную location, отдельные
+дельты для него не дублируются. Bootstrap и Joined по-прежнему полные.
+
+Клиентский playerSampleIntervalMs регулирует только движение; серверный
+ReplicationIntervalMs регулирует объединение и рассылку всех изменений. Значение
+по умолчанию у обоих 100 мс. Тики не синхронизируются; автоматического согласования
+настроек нет. Между рассылками сохраняется последнее состояние, неизменившиеся
+компоненты и возврат к опубликованному значению подавляются. Это не heartbeat
+и не доставка каждого промежуточного измерения. Команды чата не объединяются.

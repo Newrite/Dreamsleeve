@@ -40,6 +40,13 @@ export namespace Dreamsleeve::Client
     PlayerData profile;
   };
 
+  struct PlayerMetadataUpdated
+  {
+    Domain::PlayerId playerId;
+    std::optional<Domain::ActorValueStorage> actorValues;
+    std::optional<Domain::PlayerDetails> details;
+  };
+
   struct PlayerLocationUpdated
   {
     PlayerId                      playerId;
@@ -104,6 +111,7 @@ export namespace Dreamsleeve::Client
     PlayerRemoved,
     PlayerProfileUpdated,
     PlayerLocationUpdated,
+    PlayerMetadataUpdated,
     PlayerCharacterRenamed,
     PlayerCharacterStarted,
     PlayerGameStateCleared,
@@ -465,6 +473,11 @@ private:
     Domain::OperationResult ApplyOne(const PlayerProfileUpdated& update)
     {
       return players.UpdateProfile(update.playerId, update.profile);
+    }
+
+    Domain::OperationResult ApplyOne(const PlayerMetadataUpdated& update)
+    {
+      return players.ReplaceMetadata(update.playerId, update.actorValues, update.details);
     }
 
     Domain::OperationResult ApplyOne(const PlayerLocationUpdated& update)
