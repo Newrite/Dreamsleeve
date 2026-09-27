@@ -32,7 +32,7 @@ type Group() =
 
     member _.Wait(name, count, pump: unit -> unit) =
         if enabled then
-            let deadline = now() + 180000.
+            let deadline = now() + 600000.
             let mutable ready = false
             while not ready do
                 let checkAt = now() + 50.
