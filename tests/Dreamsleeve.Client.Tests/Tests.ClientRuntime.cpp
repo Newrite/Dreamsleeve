@@ -396,6 +396,27 @@ TEST_CASE("Invalid runtime settings fail before any connection")
   CHECK_FALSE(ClientRuntime::TryCreate(config, *exchange));
 }
 
+TEST_CASE("Local visibility settings accept exact co-location and reject nonfinite or negative distances")
+{
+  auto exchange = Value(ClientExchange::TryCreate(1, 1));
+  Configuration config;
+  CHECK(config.visibilityDistance == 8192.0);
+  CHECK(config.showFireflies);
+  CHECK(ClientRuntime::TryCreate(config, *exchange));
+  config.visibilityDistance = 0;
+  config.showFireflies = false;
+  CHECK(ClientRuntime::TryCreate(config, *exchange));
+
+  for (const auto distance : {-1.0, std::numeric_limits<double>::infinity(),
+                              -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()})
+  {
+    config.visibilityDistance = distance;
+    auto result = ClientRuntime::TryCreate(config, *exchange);
+    REQUIRE_FALSE(result);
+    CHECK(std::get<DreamNetError>(result.error()).code == DreamNetErrorCode::InvalidConfig);
+  }
+}
+
 TEST_CASE("Transport connection can be cancelled or time out without opening a session")
 {
   Fixture fixture;

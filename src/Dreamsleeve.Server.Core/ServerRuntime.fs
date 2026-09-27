@@ -372,6 +372,8 @@ module ServerRuntime =
                        options.Chat.HistoryCapacity; options.Chat.MaxControlDeliveries; options.Presence.MailboxCapacity
                        options.Presence.ControlReserve; options.Presence.MaxControlDeliveries; options.Presence.ReplicationIntervalMs ]
         let errors = [
+            if not (System.Single.IsFinite options.Presence.VisibilityDistance) || options.Presence.VisibilityDistance < 0.0f then
+                "Presence.VisibilityDistance must be finite and non-negative."
             if limits |> List.exists (fun value -> value < 1) then "Runtime capacities and deadlines must be positive."
             if int64 options.ControlReserve < 3L * int64 options.MaxSessions + 4L then
                 "Runtime ControlReserve must allow 3 * MaxSessions + 4 lifecycle messages."

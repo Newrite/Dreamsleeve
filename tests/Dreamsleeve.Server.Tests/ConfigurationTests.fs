@@ -77,4 +77,11 @@ let tests = testList "Server configuration" [
         ] do
             withFile source (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) "invalid telemetry input configuration rejected")
+    testCase "visibility distance loads from JSON and rejects negative radius" <| fun _ ->
+        withFile """{"Runtime":{"Presence":{"VisibilityDistance":0}}}""" (fun path ->
+            match Configuration.parse [|"--config"; path|] with
+            | Ok (LaunchCommand.Run config) -> Expect.equal config.Runtime.Presence.VisibilityDistance 0.0f "Zero is valid."
+            | other -> failwithf "%A" other)
+        withFile """{"Runtime":{"Presence":{"VisibilityDistance":-1}}}""" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "Invalid distance rejected before startup.")
 ]

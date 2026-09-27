@@ -359,6 +359,12 @@ let tests = testList "ServerRuntime" [
             let! a = welcome fixture alice
             let bob = connect fixture "bob"
             let! _ = welcome fixture bob
+            fixture.Input.Enqueue(ServerTransportEvent.Received(bob, beginCharacter 2UL "Observer"))
+            fixture.Input.Enqueue(ServerTransportEvent.Received(bob, telemetry 3UL 0.0f))
+            let mutable observerReady = false
+            while not observerReady do
+                let! id, response = receive fixture.Output
+                observerReady <- id = bob && response.RequestId = 3UL
             fixture.Input.Enqueue(ServerTransportEvent.Received(alice, beginCharacter 2UL "Nerevar"))
             fixture.Input.Enqueue(ServerTransportEvent.Received(alice, telemetry 3UL 10.0f))
             let replicated = ResizeArray<Guid * PlayerInfo>()
@@ -369,7 +375,8 @@ let tests = testList "ServerRuntime" [
                     equal ServerPacket.PayloadOneofCase.PlayerUpdateAccepted response.PayloadCase
                     accepted <- true
                 elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
-                     && response.PlayerUpdated.Player.ActorValues.Count = 1 then
+                     && response.PlayerUpdated.Player.ActorValues.Count = 1
+                     && response.PlayerUpdated.Player.Profile.PlayerId = a.SelfPlayerId then
                     replicated.Add(id, response.PlayerUpdated.Player)
             equal (set [alice; bob]) (replicated |> Seq.map fst |> Set.ofSeq)
             for _, current in replicated do
@@ -396,7 +403,7 @@ let tests = testList "ServerRuntime" [
             let late = connect fixture "healthy"
             let! initial = welcome fixture late
             let current = initial.Players |> Seq.find (fun value -> value.Profile.PlayerId = a.SelfPlayerId)
-            equal 20.0f current.Location.Position.X
+            check (isNull current.Location) "Unlocated late join must not receive remote coordinates."
             equal 1 current.ActorValues.Count
             equal "Nerevar" current.CharacterName
         })

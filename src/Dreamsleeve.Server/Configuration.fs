@@ -109,6 +109,8 @@ module Configuration =
            || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
            || isNull (box config.Authentication.Service) then
             Error "Configuration sections cannot be null."
+        elif not (Single.IsFinite config.Runtime.Presence.VisibilityDistance) || config.Runtime.Presence.VisibilityDistance < 0.0f then
+            Error "Presence.VisibilityDistance must be finite and non-negative."
         elif config.Runtime.MaxSessions > config.Server.PeerLimit then
             Error "Runtime.MaxSessions cannot exceed Server.PeerLimit."
         elif config.Runtime.MaxSessions > config.Server.MaxInitialPlayers then

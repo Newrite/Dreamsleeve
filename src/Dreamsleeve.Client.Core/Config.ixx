@@ -27,6 +27,9 @@ export namespace Dreamsleeve::Client
     std::size_t     maxPendingPlayerUpdates{32};
     std::size_t     maxActorValues{64};
     TimeOutMs       playerSampleIntervalMs{100};
+    // Future game-view preferences. They do not change server subscriptions.
+    double          visibilityDistance{8192.0};
+    bool            showFireflies{true};
 
     std::optional<std::string_view> InvalidProtocolSetting() const noexcept
     {

@@ -7,6 +7,7 @@ Every child is started without a visible console and is stopped on every exit pa
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import tempfile
@@ -249,8 +250,21 @@ def smoke(args, log, directory: Path):
         check(f"{alice_id}: Smoke Alice" in bob.output(), "Second client bootstrap missed the first player")
         alice.wait_for(lambda lines: f"online {bob_id}: Smoke Bob" in lines, args.timeout, read=True)
         late_join = wait_player(bob, alice_id, lambda state: state.get("characterName") == "Nerevar", args.timeout)
-        check(late_join == authoritative, "Late-join PlayerInfo missed the current game state")
-        stage("both clients see the same online players and late join receives complete PlayerInfo")
+        filtered = {key: value for key, value in authoritative.items() if key != "location"}
+        check(late_join == filtered, "Late-join metadata changed or location leaked to an observer without position")
+        check(all(not state.get("location") for state in player_states(bob.output(), alice_id)),
+              "Bootstrap exposed location before the observer had a position")
+        stage("late join receives global PlayerInfo metadata without leaking positions to an unlocated observer")
+
+        bob_start, alice_start = bob.mark(), alice.mark()
+        bob.send("begin Observer")
+        observer_sample = {"location": copy.deepcopy(sample["location"]), "actorValues": {}}
+        observer_sample["location"]["position"]["X"] = 0
+        bob.send("sample " + json.dumps(observer_sample))
+        visible = wait_player(bob, alice_id, lambda state: state.get("location") is not None, args.timeout, bob_start)
+        check(visible == authoritative, "Entering range missed the stationary player's full game state")
+        wait_player(alice, bob_id, lambda state: state.get("location") is not None, args.timeout, alice_start)
+        stage("an observer entering the same space receives the stationary player's location")
 
         alice_start, bob_start = alice.mark(), bob.mark()
         sample["location"]["position"]["X"] = 42
@@ -264,6 +278,45 @@ def smoke(args, log, directory: Path):
                   "Movement changed character metadata or actor values")
             check(moved["location"]["rotation"]["Z"] == 2.5, "Rotation did not replicate")
         stage("periodic compact movement reaches author and peer without losing unchanged details")
+
+        alice_start, bob_start = alice.mark(), bob.mark()
+        observer_sample["location"]["position"]["X"] = 20000
+        bob.send("sample " + json.dumps(observer_sample))
+        hidden = wait_player(bob, alice_id, lambda state: not state.get("location"), args.timeout, bob_start)
+        check(hidden["details"] == authoritative["details"] and hidden["actorValues"] == authoritative["actorValues"],
+              "Leaving range removed global player metadata")
+        wait_player(alice, bob_id, lambda state: not state.get("location"), args.timeout, alice_start)
+        wait_player(bob, bob_id,
+                    lambda state: state.get("location") is not None and state["location"]["position"]["X"] == 20000,
+                    args.timeout, bob_start)
+
+        bob_start = bob.mark()
+        alice.send("rename Nerevar Outside")
+        hidden = wait_player(bob, alice_id, lambda state: state.get("characterName") == "Nerevar Outside",
+                             args.timeout, bob_start)
+        check(not hidden.get("location"), "Full PlayerInfo leaked an out-of-range location")
+        stage("leaving radius clears both remote positions while self and global metadata remain available")
+
+        bob_start = bob.mark()
+        observer_sample["location"]["position"]["X"] = 0
+        bob.send("sample " + json.dumps(observer_sample))
+        stationary = wait_player(bob, alice_id,
+            lambda state: state.get("location") is not None and state["location"]["position"]["X"] == 42,
+            args.timeout, bob_start)
+        check(stationary["characterName"] == "Nerevar Outside", "Reentry lost global metadata")
+        stage("returning inside the radius restores a stationary source without a new source sample")
+
+        bob_start = bob.mark()
+        observer_sample["location"]["location"]["locationId"]["localFormId"] = 292
+        bob.send("sample " + json.dumps(observer_sample))
+        wait_player(bob, alice_id, lambda state: not state.get("location"), args.timeout, bob_start)
+        bob_start = bob.mark()
+        observer_sample["location"]["location"]["locationId"]["localFormId"] = 291
+        bob.send("sample " + json.dumps(observer_sample))
+        wait_player(bob, alice_id,
+            lambda state: state.get("location") is not None and state["location"]["position"]["X"] == 42,
+            args.timeout, bob_start)
+        stage("different WRLD/CELL clears location and returning restores the stationary source")
 
         alice_start, bob_start = alice.mark(), bob.mark()
         alice.send("rename Nerevar Renamed")

@@ -26,6 +26,11 @@ public:
             DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Session timeouts, chat and pending request capacities must be positive")
         };
 
+      if (!std::isfinite(config.visibilityDistance) || config.visibilityDistance < 0)
+        return std::unexpected{
+            DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Visibility distance must be finite and nonnegative")
+        };
+
       auto codec = Wire::Codec::TryCreate(config);
       if (!codec) return std::unexpected{codec.error()};
 

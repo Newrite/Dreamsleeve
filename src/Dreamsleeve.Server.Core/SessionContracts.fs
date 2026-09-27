@@ -117,6 +117,7 @@ type PresenceOptions = {
     ControlReserve: int
     MaxControlDeliveries: int
     ReplicationIntervalMs: int
+    VisibilityDistance: float32
 }
 
 type PlayerSessionOptions = {
@@ -152,5 +153,5 @@ module ServerRuntimeOptions =
         Player = { MailboxCapacity = 128; ControlReserve = 32; MaxPendingChat = 16; MaxPendingUpdates = 16;
                    MaxBootstrapEvents = 128; MaxPendingOutput = 128 }
         Chat = { MailboxCapacity = 256; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128 }
-        Presence = { MailboxCapacity = 128; ControlReserve = 64; MaxControlDeliveries = 128; ReplicationIntervalMs = 100 }
+        Presence = { MailboxCapacity = 128; ControlReserve = 64; MaxControlDeliveries = 128; ReplicationIntervalMs = 100; VisibilityDistance = 8192.0f }
     }

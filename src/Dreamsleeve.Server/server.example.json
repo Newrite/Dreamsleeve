@@ -55,7 +55,8 @@
       "MailboxCapacity": 128,
       "ControlReserve": 64,
       "MaxControlDeliveries": 128,
-      "ReplicationIntervalMs": 100
+      "ReplicationIntervalMs": 100,
+      "VisibilityDistance": 8192
     }
   },
   "Database": {
