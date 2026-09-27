@@ -1,0 +1,4042 @@
+{
+  "measuredAtUtc": "2026-09-27T09:15:19.299965+00:00",
+  "head": "bdb3c389f86cc5d58bfc8b7597ef1afca23c6b16",
+  "worktree": [],
+  "dotnet": "10.0.401",
+  "serverRuntimeConfig": {
+    "runtimeOptions": {
+      "tfm": "net10.0",
+      "frameworks": [
+        {
+          "name": "Microsoft.NETCore.App",
+          "version": "10.0.0"
+        },
+        {
+          "name": "Microsoft.AspNetCore.App",
+          "version": "10.0.0"
+        }
+      ],
+      "configProperties": {
+        "System.GC.Server": true,
+        "System.Reflection.Metadata.MetadataUpdater.IsSupported": false,
+        "System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization": false
+      }
+    }
+  },
+  "logicalProcessors": 16,
+  "os": "Windows-10-10.0.19045-SP0",
+  "tieredCompilationOverride": null,
+  "sourceSha256": {
+    "Scripts\\benchmark_enet.py": "1e218554a3dcb42316ec3f497c9d77a1465326892a69a41833ebec53ba4cda46",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Measurements.fs": "0327ac1986605993aa7ef15e25428b24dc701314599f1e7e25687713d52cf056",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Movement.fs": "1bf640a0ffba0e459dc90185e593ae3c15866aa61c398e69a75d18d909a30bbe",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\Program.fs": "e9f431d7223bb75be6cb0c105e3276a2ccf9b126eae6eda3f2eadd5d2c596f0a",
+    "src\\Dreamsleeve.Server.Core\\PresenceAgent.fs": "74d2d073f694556ac5ccec359e74ae8a33209ae39197157467a279e3cd7e8c20",
+    "src\\Dreamsleeve.Server.Core\\RuntimeMetrics.fs": "5a613a10c9e7e6f669c64bf43cad4352c8605af13d6c4f0a395e67ab3e0393c4"
+  },
+  "binarySha256": {
+    "src\\Dreamsleeve.Server\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "c80f5e6c36a1e083057b4507e123c83d5f9cb2223a490bbc5c659da8376e932b",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "91a847afb03279661fb1c701b1fba9bacc6f967a923e36ac9f7aa49e3a7576a6",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "062c7da848e9d2558b3493d4be08ea2abf545b22d448a421c95c211370fcdee8",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "64a914d1b7987a0f750167efd261e405199596c4148747ebcda01c986ca8cba0",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "730a65e0de239e2b270616c62d42bd174369e4aeb6e2e128446558f5b49e46d2",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "c80f5e6c36a1e083057b4507e123c83d5f9cb2223a490bbc5c659da8376e932b",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "ec52839bcd670c4e82b5f312d4d7884e244bcc8626de24a36357c4f734a60545",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "f8394e2885e14f324334df2886394bd57d1a7f6e29229faa807651f029118ed8",
+    "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "aa081957e15d7f839404005002679423a7baefba35a826a439e62ad4cd8d0df4"
+  },
+  "sampleIntervalMs": 100,
+  "durationSeconds": 10,
+  "baseline": "movement-2026-09-27.json",
+  "runs": [
+    {
+      "scenario": "dense",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 19611,
+          "max": 18.7957,
+          "p50": 0.020100000000000007,
+          "p95": 0.10462212541120453,
+          "p99": 1.573537550058798
+        },
+        "presence.flush.duration": {
+          "count": 103,
+          "max": 6.4915,
+          "p50": 1.9289257926646686,
+          "p95": 4.537022529567736,
+          "p99": 6.171863397539412
+        }
+      },
+      "name": "dense-n100-r10-run1",
+      "clients": 100,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 56033,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 328,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 128,
+            "MaxPendingOutput": 328
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\dense-n100-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59465",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\dense-n100-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0,
+          "cpuCoreEquivalent": 0.109375,
+          "privateMedianMiB": 26.859375,
+          "privatePeakMiB": 27.0,
+          "workingSetPeakMiB": 63.25
+        },
+        "auth-register": {
+          "sampleCount": 38,
+          "sampleSpanSeconds": 3.7030000000013388,
+          "cpuCoreEquivalent": 3.7258641641898493,
+          "privateMedianMiB": 45.92578125,
+          "privatePeakMiB": 47.01953125,
+          "workingSetPeakMiB": 94.890625
+        },
+        "connecting": {
+          "sampleCount": 39,
+          "sampleSpanSeconds": 3.8290000000015425,
+          "cpuCoreEquivalent": 3.9256333246262587,
+          "privateMedianMiB": 49.91015625,
+          "privatePeakMiB": 52.6328125,
+          "workingSetPeakMiB": 107.63671875
+        },
+        "movement-setup": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9069999999992433,
+          "cpuCoreEquivalent": 0.18845044572634642,
+          "privateMedianMiB": 59.69921875,
+          "privatePeakMiB": 59.69921875,
+          "workingSetPeakMiB": 115.30859375
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.93699999999808,
+          "cpuCoreEquivalent": 0.13365452349806348,
+          "privateMedianMiB": 54.16015625,
+          "privatePeakMiB": 66.9140625,
+          "workingSetPeakMiB": 122.93359375
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 46.0078125,
+          "privatePeakMiB": 46.0078125,
+          "workingSetPeakMiB": 100.86328125
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.032791185729292495,
+          "privateMedianMiB": 46.69140625,
+          "privatePeakMiB": 46.69140625,
+          "workingSetPeakMiB": 101.90625
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.32421875,
+          "privatePeakMiB": 0.32421875,
+          "workingSetPeakMiB": 1.69140625
+        },
+        "auth-register": {
+          "sampleCount": 38,
+          "sampleSpanSeconds": 3.7030000000013388,
+          "cpuCoreEquivalent": 0.2616122063191061,
+          "privateMedianMiB": 20.875,
+          "privatePeakMiB": 21.1953125,
+          "workingSetPeakMiB": 50.56640625
+        },
+        "connecting": {
+          "sampleCount": 39,
+          "sampleSpanSeconds": 3.8290000000015425,
+          "cpuCoreEquivalent": 0.10609819796287186,
+          "privateMedianMiB": 23.3046875,
+          "privatePeakMiB": 28.359375,
+          "workingSetPeakMiB": 59.7890625
+        },
+        "movement-setup": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9069999999992433,
+          "cpuCoreEquivalent": 0.04096748820137965,
+          "privateMedianMiB": 36.515625,
+          "privatePeakMiB": 36.671875,
+          "workingSetPeakMiB": 68.48046875
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.93699999999808,
+          "cpuCoreEquivalent": 0.08962715105164257,
+          "privateMedianMiB": 65.4296875,
+          "privatePeakMiB": 68.08203125,
+          "workingSetPeakMiB": 99.64453125
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 65.38671875,
+          "privatePeakMiB": 65.38671875,
+          "workingSetPeakMiB": 96.01953125
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 100,
+          "max": 78.09929999999997,
+          "p50": 4.171499999999924,
+          "p95": 7.0315999999997985,
+          "p99": 73.9239
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 100,
+        "connectWindow": 4,
+        "drainMs": 108.28060000000005,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.680400000001,
+        "loginMs": 13889.0119,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 9948,
+            "max": 17.321199999999408,
+            "p50": 2.171606934873976,
+            "p95": 4.3209698178731175,
+            "p99": 8.382295369303986
+          },
+          "actualSamplesPerClientSecond": 9.94732318413055,
+          "clients": 100,
+          "deliveryAgeMs": {
+            "count": 950000,
+            "max": 130.04110000000037,
+            "p50": 59.91543813588385,
+            "p95": 105.34677003891747,
+            "p99": 110.77152410657581
+          },
+          "expectedInitializedPairs": 10000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 10000,
+          "maxPendingPerClient": 1,
+          "pending": 0,
+          "pendingThrottledSamples": 0,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 950000,
+          "receivedPayloadBytes": 51426545,
+          "receivedPayloadBytesPerSecond": 5142304.617593818,
+          "replicationMs": 100,
+          "scenario": "dense",
+          "sentPayloadBytes": 576984,
+          "sentPayloadBytesPerSecond": 57694.474467957196,
+          "sentSamples": 9948,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 3933.4708,
+        "ready": 100,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 3761.3021,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 16065.372,
+        "transportConnectMs": {
+          "count": 100,
+          "max": 20.65829999999997,
+          "p50": 1.0813999999998032,
+          "p95": 3.611499999999978,
+          "p99": 20.641500000000008
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 23.65599999999904,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "spaces",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 19794,
+          "max": 16.9958,
+          "p50": 0.020100000000000007,
+          "p95": 0.09368527268436111,
+          "p99": 0.3613274044862351
+        },
+        "presence.flush.duration": {
+          "count": 106,
+          "max": 5.0981,
+          "p50": 0.549317571515475,
+          "p95": 1.8146401171994988,
+          "p99": 4.21612569147448
+        }
+      },
+      "name": "spaces-n100-r10-run1",
+      "clients": 100,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 57006,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 328,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 128,
+            "MaxPendingOutput": 328
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\spaces-n100-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59479",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\spaces-n100-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0,
+          "cpuCoreEquivalent": 0.171875,
+          "privateMedianMiB": 26.6171875,
+          "privatePeakMiB": 26.6484375,
+          "workingSetPeakMiB": 63.27734375
+        },
+        "auth-register": {
+          "sampleCount": 38,
+          "sampleSpanSeconds": 3.7190000000009604,
+          "cpuCoreEquivalent": 3.5501815004024175,
+          "privateMedianMiB": 45.95703125,
+          "privatePeakMiB": 47.02734375,
+          "workingSetPeakMiB": 95.0234375
+        },
+        "connecting": {
+          "sampleCount": 39,
+          "sampleSpanSeconds": 3.827999999997701,
+          "cpuCoreEquivalent": 4.00013061651233,
+          "privateMedianMiB": 49.94921875,
+          "privatePeakMiB": 55.5078125,
+          "workingSetPeakMiB": 110.94140625
+        },
+        "movement-setup": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.06558237145858499,
+          "privateMedianMiB": 64.12890625,
+          "privatePeakMiB": 64.12890625,
+          "workingSetPeakMiB": 120.0859375
+        },
+        "load": {
+          "sampleCount": 99,
+          "sampleSpanSeconds": 9.828000000001339,
+          "cpuCoreEquivalent": 0.055644586894579316,
+          "privateMedianMiB": 49.18359375,
+          "privatePeakMiB": 64.875,
+          "workingSetPeakMiB": 121.2421875
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 44.64453125,
+          "privatePeakMiB": 44.64453125,
+          "workingSetPeakMiB": 98.71484375
+        },
+        "disconnect": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 45.046875,
+          "privatePeakMiB": 45.046875,
+          "workingSetPeakMiB": 99.05078125
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9060000000026776,
+          "cpuCoreEquivalent": 0.024593389296922428,
+          "privateMedianMiB": 45.171875,
+          "privatePeakMiB": 45.171875,
+          "workingSetPeakMiB": 99.44140625
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.3359375,
+          "privatePeakMiB": 0.3359375,
+          "workingSetPeakMiB": 1.69921875
+        },
+        "auth-register": {
+          "sampleCount": 38,
+          "sampleSpanSeconds": 3.7190000000009604,
+          "cpuCoreEquivalent": 0.2646880881956832,
+          "privateMedianMiB": 20.955078125,
+          "privatePeakMiB": 21.40625,
+          "workingSetPeakMiB": 50.66015625
+        },
+        "connecting": {
+          "sampleCount": 39,
+          "sampleSpanSeconds": 3.827999999997701,
+          "cpuCoreEquivalent": 0.08571708463954991,
+          "privateMedianMiB": 23.57421875,
+          "privatePeakMiB": 28.86328125,
+          "workingSetPeakMiB": 60.58984375
+        },
+        "movement-setup": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.05738457502626187,
+          "privateMedianMiB": 36.6640625,
+          "privatePeakMiB": 36.8203125,
+          "workingSetPeakMiB": 68.7265625
+        },
+        "load": {
+          "sampleCount": 99,
+          "sampleSpanSeconds": 9.828000000001339,
+          "cpuCoreEquivalent": 0.03338675213674759,
+          "privateMedianMiB": 61.2421875,
+          "privatePeakMiB": 66.1015625,
+          "workingSetPeakMiB": 98.0703125
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 66.1015625,
+          "privatePeakMiB": 66.1015625,
+          "workingSetPeakMiB": 98.08984375
+        },
+        "disconnect": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 66.5,
+          "privatePeakMiB": 66.5,
+          "workingSetPeakMiB": 99.109375
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 100,
+          "max": 72.78069999999997,
+          "p50": 3.2390000000000327,
+          "p95": 4.9953999999997905,
+          "p99": 68.39349999999999
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 100,
+        "connectWindow": 4,
+        "drainMs": 108.181700000001,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.541799999999,
+        "loginMs": 13698.678600000003,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 9936,
+            "max": 9.418499999999767,
+            "p50": 2.0783304440876753,
+            "p95": 3.108043910989937,
+            "p99": 4.113347408562376
+          },
+          "actualSamplesPerClientSecond": 9.935461696685275,
+          "clients": 100,
+          "deliveryAgeMs": {
+            "count": 97870,
+            "max": 114.10869999999977,
+            "p50": 56.95894923182511,
+            "p95": 101.19715570663375,
+            "p99": 105.34677003891747
+          },
+          "expectedInitializedPairs": 10000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 10000,
+          "maxPendingPerClient": 1,
+          "pending": 0,
+          "pendingThrottledSamples": 0,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 97870,
+          "receivedPayloadBytes": 5413332,
+          "receivedPayloadBytesPerSecond": 541303.8721562066,
+          "replicationMs": 100,
+          "scenario": "spaces",
+          "sentPayloadBytes": 576288,
+          "sentPayloadBytesPerSecond": 57625.677840774595,
+          "sentSamples": 9936,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 3829.7194,
+        "ready": 100,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 3817.4132,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 15963.8571,
+        "transportConnectMs": {
+          "count": 100,
+          "max": 18.167599999999993,
+          "p50": 0.9794999999999163,
+          "p95": 5.197200000000066,
+          "p99": 18.158199999999994
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 23.64100000000326,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "sparse",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 19364,
+          "max": 16.572,
+          "p50": 0.020100000000000007,
+          "p95": 0.10462212541120453,
+          "p99": 0.5804588547029359
+        },
+        "presence.flush.duration": {
+          "count": 105,
+          "max": 5.3322,
+          "p50": 0.7458098192069154,
+          "p95": 2.8316467253100264,
+          "p99": 4.374179516051849
+        }
+      },
+      "name": "sparse-n100-r10-run1",
+      "clients": 100,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 53870,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 328,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 128,
+            "MaxPendingOutput": 328
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\sparse-n100-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59503",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\sparse-n100-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0159999999996217,
+          "cpuCoreEquivalent": 0.15378937007879742,
+          "privateMedianMiB": 26.6015625,
+          "privatePeakMiB": 26.703125,
+          "workingSetPeakMiB": 63.25390625
+        },
+        "auth-register": {
+          "sampleCount": 37,
+          "sampleSpanSeconds": 3.625,
+          "cpuCoreEquivalent": 3.6120689655172415,
+          "privateMedianMiB": 45.765625,
+          "privatePeakMiB": 53.23828125,
+          "workingSetPeakMiB": 101.13671875
+        },
+        "connecting": {
+          "sampleCount": 37,
+          "sampleSpanSeconds": 3.625,
+          "cpuCoreEquivalent": 3.8836206896551726,
+          "privateMedianMiB": 56.1640625,
+          "privatePeakMiB": 58.4765625,
+          "workingSetPeakMiB": 111.66015625
+        },
+        "movement-setup": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.3525052465898943,
+          "privateMedianMiB": 61.826171875,
+          "privatePeakMiB": 61.828125,
+          "workingSetPeakMiB": 116.62890625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.937000000001717,
+          "cpuCoreEquivalent": 0.06446865251080701,
+          "privateMedianMiB": 48.224609375,
+          "privatePeakMiB": 62.17578125,
+          "workingSetPeakMiB": 117.4296875
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 46.1953125,
+          "privatePeakMiB": 46.1953125,
+          "workingSetPeakMiB": 99.39453125
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.04098898216161562,
+          "privateMedianMiB": 42.6640625,
+          "privatePeakMiB": 42.6640625,
+          "workingSetPeakMiB": 98.9765625
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.33984375,
+          "privatePeakMiB": 0.33984375,
+          "workingSetPeakMiB": 1.72265625
+        },
+        "auth-register": {
+          "sampleCount": 37,
+          "sampleSpanSeconds": 3.625,
+          "cpuCoreEquivalent": 0.3017241379310345,
+          "privateMedianMiB": 20.85546875,
+          "privatePeakMiB": 21.125,
+          "workingSetPeakMiB": 50.5078125
+        },
+        "connecting": {
+          "sampleCount": 37,
+          "sampleSpanSeconds": 3.625,
+          "cpuCoreEquivalent": 0.08620689655172414,
+          "privateMedianMiB": 23.16015625,
+          "privatePeakMiB": 28.19140625,
+          "workingSetPeakMiB": 59.796875
+        },
+        "movement-setup": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.032791185729292495,
+          "privateMedianMiB": 36.42578125,
+          "privatePeakMiB": 36.58203125,
+          "workingSetPeakMiB": 68.546875
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.937000000001717,
+          "cpuCoreEquivalent": 0.03616534165240393,
+          "privateMedianMiB": 64.85546875,
+          "privatePeakMiB": 67.953125,
+          "workingSetPeakMiB": 100.0859375
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 65.63671875,
+          "privatePeakMiB": 65.63671875,
+          "workingSetPeakMiB": 95.546875
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 100,
+          "max": 72.489,
+          "p50": 3.262899999999945,
+          "p95": 8.140499999999975,
+          "p99": 68.35420000000002
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 100,
+        "connectWindow": 4,
+        "drainMs": 110.01280000000042,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10001.0092,
+        "loginMs": 13153.902400000003,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 9944,
+            "max": 11.69340000000011,
+            "p50": 2.1402048860138376,
+            "p95": 3.1906155936008354,
+            "p99": 5.055759995109739
+          },
+          "actualSamplesPerClientSecond": 9.942996552787893,
+          "clients": 100,
+          "deliveryAgeMs": {
+            "count": 242300,
+            "max": 115.47759999999926,
+            "p50": 58.12392411138477,
+            "p95": 102.21912726370007,
+            "p99": 107.48434011669967
+          },
+          "expectedInitializedPairs": 10000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 10000,
+          "maxPendingPerClient": 1,
+          "pending": 0,
+          "pendingThrottledSamples": 0,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 242300,
+          "receivedPayloadBytes": 13212008,
+          "receivedPayloadBytesPerSecond": 1321067.4778701332,
+          "replicationMs": 100,
+          "scenario": "sparse",
+          "sentPayloadBytes": 576752,
+          "sentPayloadBytesPerSecond": 57669.38000616978,
+          "sentSamples": 9944,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 3698.7962,
+        "ready": 100,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 3703.6296,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 15833.4055,
+        "transportConnectMs": {
+          "count": 100,
+          "max": 16.921700000000016,
+          "p50": 0.8104000000000724,
+          "p95": 3.7667999999999893,
+          "p99": 16.910899999999998
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 23.35900000000038,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "boundaries",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 19348,
+          "max": 16.4222,
+          "p50": 0.020100000000000007,
+          "p95": 0.10462212541120453,
+          "p99": 0.7809005965729743
+        },
+        "presence.flush.duration": {
+          "count": 105,
+          "max": 5.7309,
+          "p50": 1.0067633683953852,
+          "p95": 3.2325217495368426,
+          "p99": 5.177480771011445
+        }
+      },
+      "name": "boundaries-n100-r10-run1",
+      "clients": 100,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 54618,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 328,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 128,
+            "MaxPendingOutput": 328
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\boundaries-n100-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59520",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\boundaries-n100-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0,
+          "cpuCoreEquivalent": 0.09375,
+          "privateMedianMiB": 26.65234375,
+          "privatePeakMiB": 26.9765625,
+          "workingSetPeakMiB": 63.1953125
+        },
+        "auth-register": {
+          "sampleCount": 36,
+          "sampleSpanSeconds": 3.5,
+          "cpuCoreEquivalent": 3.825892857142857,
+          "privateMedianMiB": 46.1796875,
+          "privatePeakMiB": 47.3125,
+          "workingSetPeakMiB": 94.296875
+        },
+        "connecting": {
+          "sampleCount": 38,
+          "sampleSpanSeconds": 3.7180000000007567,
+          "cpuCoreEquivalent": 3.769667832167065,
+          "privateMedianMiB": 49.587890625,
+          "privatePeakMiB": 55.42578125,
+          "workingSetPeakMiB": 109.296875
+        },
+        "movement-setup": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.5656479538302955,
+          "privateMedianMiB": 59.12890625,
+          "privatePeakMiB": 59.6328125,
+          "workingSetPeakMiB": 114.91015625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.93699999999808,
+          "cpuCoreEquivalent": 0.06761346482843211,
+          "privateMedianMiB": 52.826171875,
+          "privatePeakMiB": 60.23828125,
+          "workingSetPeakMiB": 115.9140625
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 47.02734375,
+          "privatePeakMiB": 47.02734375,
+          "workingSetPeakMiB": 100.53125
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9069999999992433,
+          "cpuCoreEquivalent": 0.04096748820137965,
+          "privateMedianMiB": 47.28125,
+          "privatePeakMiB": 47.28125,
+          "workingSetPeakMiB": 101.0703125
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.32421875,
+          "privatePeakMiB": 0.32421875,
+          "workingSetPeakMiB": 1.6875
+        },
+        "auth-register": {
+          "sampleCount": 36,
+          "sampleSpanSeconds": 3.5,
+          "cpuCoreEquivalent": 0.2857142857142857,
+          "privateMedianMiB": 20.978515625,
+          "privatePeakMiB": 21.28125,
+          "workingSetPeakMiB": 50.60546875
+        },
+        "connecting": {
+          "sampleCount": 38,
+          "sampleSpanSeconds": 3.7180000000007567,
+          "cpuCoreEquivalent": 0.08405056481977849,
+          "privateMedianMiB": 23.48828125,
+          "privatePeakMiB": 28.3828125,
+          "workingSetPeakMiB": 59.9609375
+        },
+        "movement-setup": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.04918677859393874,
+          "privateMedianMiB": 36.421875,
+          "privatePeakMiB": 36.546875,
+          "workingSetPeakMiB": 68.53125
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.93699999999808,
+          "cpuCoreEquivalent": 0.03931015397001867,
+          "privateMedianMiB": 63.859375,
+          "privatePeakMiB": 67.546875,
+          "workingSetPeakMiB": 99.671875
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 63.859375,
+          "privatePeakMiB": 63.859375,
+          "workingSetPeakMiB": 95.625
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 100,
+          "max": 73.09920000000002,
+          "p50": 3.5830000000000837,
+          "p95": 6.692700000000059,
+          "p99": 68.90619999999998
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 100,
+        "connectWindow": 4,
+        "drainMs": 108.07690000000002,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.7981,
+        "loginMs": 13315.087499999996,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 9944,
+            "max": 8.370299999999588,
+            "p50": 2.171606934873976,
+            "p95": 3.1906155936008354,
+            "p99": 5.116317595060837
+          },
+          "actualSamplesPerClientSecond": 9.943206432694605,
+          "clients": 100,
+          "deliveryAgeMs": {
+            "count": 340094,
+            "max": 115.08790000000045,
+            "p50": 56.95894923182511,
+            "p95": 104.2938317217004,
+            "p99": 107.48434011669967
+          },
+          "expectedInitializedPairs": 10000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 10000,
+          "maxPendingPerClient": 1,
+          "pending": 0,
+          "pendingThrottledSamples": 0,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 340094,
+          "receivedPayloadBytes": 18528692,
+          "receivedPayloadBytesPerSecond": 1852721.3343103088,
+          "replicationMs": 100,
+          "scenario": "boundaries",
+          "sentPayloadBytes": 576752,
+          "sentPayloadBytesPerSecond": 57670.59730962872,
+          "sentSamples": 9944,
+          "sourceHz": 10,
+          "visibilityClears": 8952,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 3799.4737,
+        "ready": 100,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 3615.5336,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 15933.9402,
+        "transportConnectMs": {
+          "count": 100,
+          "max": 17.86840000000001,
+          "p50": 0.9789000000000669,
+          "p95": 5.400300000000016,
+          "p99": 17.8536
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 23.4529999999977,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "dense",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 43614,
+          "max": 195.2943,
+          "p50": 0.020100000000000007,
+          "p95": 0.2323919403474468,
+          "p99": 2.908662824488758
+        },
+        "presence.flush.duration": {
+          "count": 96,
+          "max": 80.4903,
+          "p50": 43.30404823062054,
+          "p95": 54.69741099866135,
+          "p99": 80.4903
+        }
+      },
+      "name": "dense-n500-r10-run1",
+      "clients": 500,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 58605,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 1128,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 500,
+            "MaxPendingOutput": 1128
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\dense-n500-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59538",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\dense-n500-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.014999999999418,
+          "cpuCoreEquivalent": 0.23091133004939352,
+          "privateMedianMiB": 27.08203125,
+          "privatePeakMiB": 27.15234375,
+          "workingSetPeakMiB": 63.6015625
+        },
+        "auth-register": {
+          "sampleCount": 174,
+          "sampleSpanSeconds": 17.39099999999962,
+          "cpuCoreEquivalent": 3.7195963429360823,
+          "privateMedianMiB": 35.68359375,
+          "privatePeakMiB": 47.73828125,
+          "workingSetPeakMiB": 96.4453125
+        },
+        "connecting": {
+          "sampleCount": 182,
+          "sampleSpanSeconds": 18.2029999999977,
+          "cpuCoreEquivalent": 3.5313547217496084,
+          "privateMedianMiB": 55.55859375,
+          "privatePeakMiB": 66.4765625,
+          "workingSetPeakMiB": 122.26171875
+        },
+        "movement-setup": {
+          "sampleCount": 57,
+          "sampleSpanSeconds": 5.625,
+          "cpuCoreEquivalent": 0.2722222222222222,
+          "privateMedianMiB": 81.72265625,
+          "privatePeakMiB": 84.15234375,
+          "workingSetPeakMiB": 139.72265625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.953000000001339,
+          "cpuCoreEquivalent": 1.252762986034193,
+          "privateMedianMiB": 233.748046875,
+          "privatePeakMiB": 271.85546875,
+          "workingSetPeakMiB": 303.5546875
+        },
+        "drain": {
+          "sampleCount": 62,
+          "sampleSpanSeconds": 6.1560000000026776,
+          "cpuCoreEquivalent": 0.0989887914229589,
+          "privateMedianMiB": 161.8984375,
+          "privatePeakMiB": 244.9921875,
+          "workingSetPeakMiB": 276.78125
+        },
+        "done": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 184.1640625,
+          "privatePeakMiB": 184.1640625,
+          "workingSetPeakMiB": 215.7890625
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.05738457502626187,
+          "privateMedianMiB": 185.22265625,
+          "privatePeakMiB": 185.3125,
+          "workingSetPeakMiB": 216.3984375
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.390625,
+          "privatePeakMiB": 0.390625,
+          "workingSetPeakMiB": 1.7734375
+        },
+        "auth-register": {
+          "sampleCount": 174,
+          "sampleSpanSeconds": 17.39099999999962,
+          "cpuCoreEquivalent": 0.0601963659364052,
+          "privateMedianMiB": 16.69140625,
+          "privatePeakMiB": 21.96484375,
+          "workingSetPeakMiB": 51.10546875
+        },
+        "connecting": {
+          "sampleCount": 182,
+          "sampleSpanSeconds": 18.2029999999977,
+          "cpuCoreEquivalent": 0.04549387463605475,
+          "privateMedianMiB": 60.130859375,
+          "privatePeakMiB": 72.66015625,
+          "workingSetPeakMiB": 103.6328125
+        },
+        "movement-setup": {
+          "sampleCount": 57,
+          "sampleSpanSeconds": 5.625,
+          "cpuCoreEquivalent": 0.08611111111111111,
+          "privateMedianMiB": 84.73828125,
+          "privatePeakMiB": 85.73046875,
+          "workingSetPeakMiB": 117.00390625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.953000000001339,
+          "cpuCoreEquivalent": 0.5337586657288541,
+          "privateMedianMiB": 166.51953125,
+          "privatePeakMiB": 186.78125,
+          "workingSetPeakMiB": 217.390625
+        },
+        "drain": {
+          "sampleCount": 62,
+          "sampleSpanSeconds": 6.1560000000026776,
+          "cpuCoreEquivalent": 0.1269087069525114,
+          "privateMedianMiB": 95.765625,
+          "privatePeakMiB": 173.796875,
+          "workingSetPeakMiB": 200.359375
+        },
+        "done": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 79.55859375,
+          "privatePeakMiB": 79.55859375,
+          "workingSetPeakMiB": 112.42578125
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 500,
+          "max": 85.02940000000001,
+          "p50": 5.7097000000012486,
+          "p95": 12.015200000001641,
+          "p99": 16.21730000000025
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 500,
+        "connectWindow": 4,
+        "drainMs": 6260.0057000000015,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.824100000002,
+        "loginMs": 63889.660700000066,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 30670,
+            "max": 13708.4332,
+            "p50": 379.0669872195815,
+            "p95": 3227.1634164155075,
+            "p99": 5203.529242965602
+          },
+          "actualSamplesPerClientSecond": 6.1334945387150634,
+          "clients": 500,
+          "deliveryAgeMs": {
+            "count": 8388909,
+            "max": 8313.132899999997,
+            "p50": 761.7045074886532,
+            "p95": 3636.5753389733304,
+            "p99": 5255.574535395262
+          },
+          "expectedInitializedPairs": 250000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 250000,
+          "maxPendingPerClient": 8,
+          "pending": 0,
+          "pendingThrottledSamples": 18021,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 8388909,
+          "receivedPayloadBytes": 459705101,
+          "receivedPayloadBytesPerSecond": 45966721.98244142,
+          "replicationMs": 100,
+          "scenario": "dense",
+          "sentPayloadBytes": 1778860,
+          "sentPayloadBytesPerSecond": 177871.34162273683,
+          "sentSamples": 30670,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 18230.0277,
+        "ready": 500,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 17461.2543,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 40301.6013,
+        "transportConnectMs": {
+          "count": 500,
+          "max": 18.309300000000007,
+          "p50": 1.061200000000099,
+          "p95": 5.375099999999293,
+          "p99": 6.405699999999342
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 61.68800000000192,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "spaces",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 43422,
+          "max": 24.5823,
+          "p50": 0.020100000000000007,
+          "p95": 0.16096895536999867,
+          "p99": 1.7867723932668307
+        },
+        "presence.flush.duration": {
+          "count": 119,
+          "max": 19.5281,
+          "p50": 7.162249540925066,
+          "p95": 12.159391562431118,
+          "p99": 16.044785022367712
+        }
+      },
+      "name": "spaces-n500-r10-run1",
+      "clients": 500,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 57517,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 1128,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 500,
+            "MaxPendingOutput": 1128
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\spaces-n500-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59584",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\spaces-n500-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0,
+          "cpuCoreEquivalent": 0.203125,
+          "privateMedianMiB": 26.70703125,
+          "privatePeakMiB": 26.73828125,
+          "workingSetPeakMiB": 63.234375
+        },
+        "auth-register": {
+          "sampleCount": 167,
+          "sampleSpanSeconds": 16.687999999998283,
+          "cpuCoreEquivalent": 3.8968869846600365,
+          "privateMedianMiB": 41.33203125,
+          "privatePeakMiB": 50.0703125,
+          "workingSetPeakMiB": 99.5078125
+        },
+        "connecting": {
+          "sampleCount": 184,
+          "sampleSpanSeconds": 18.39099999999962,
+          "cpuCoreEquivalent": 3.5802158664564927,
+          "privateMedianMiB": 57.78125,
+          "privatePeakMiB": 66.6953125,
+          "workingSetPeakMiB": 120.8203125
+        },
+        "movement-setup": {
+          "sampleCount": 57,
+          "sampleSpanSeconds": 5.625,
+          "cpuCoreEquivalent": 0.25555555555555554,
+          "privateMedianMiB": 85.83203125,
+          "privatePeakMiB": 88.56640625,
+          "workingSetPeakMiB": 144.4453125
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.937999999998283,
+          "cpuCoreEquivalent": 0.5141250754679898,
+          "privateMedianMiB": 78.30078125,
+          "privatePeakMiB": 101.61328125,
+          "workingSetPeakMiB": 158.015625
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 71.94140625,
+          "privatePeakMiB": 71.94140625,
+          "workingSetPeakMiB": 128.51171875
+        },
+        "disconnect": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 72.109375,
+          "privatePeakMiB": 72.109375,
+          "workingSetPeakMiB": 128.58203125
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9220000000022992,
+          "cpuCoreEquivalent": 0.016259105098835908,
+          "privateMedianMiB": 78.18359375,
+          "privatePeakMiB": 79.71875,
+          "workingSetPeakMiB": 136.203125
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.4140625,
+          "privatePeakMiB": 0.4140625,
+          "workingSetPeakMiB": 1.67578125
+        },
+        "auth-register": {
+          "sampleCount": 167,
+          "sampleSpanSeconds": 16.687999999998283,
+          "cpuCoreEquivalent": 0.06085959971237443,
+          "privateMedianMiB": 16.0859375,
+          "privatePeakMiB": 21.80859375,
+          "workingSetPeakMiB": 51.1484375
+        },
+        "connecting": {
+          "sampleCount": 184,
+          "sampleSpanSeconds": 18.39099999999962,
+          "cpuCoreEquivalent": 0.04163041705181968,
+          "privateMedianMiB": 58.6015625,
+          "privatePeakMiB": 72.0859375,
+          "workingSetPeakMiB": 104.14453125
+        },
+        "movement-setup": {
+          "sampleCount": 57,
+          "sampleSpanSeconds": 5.625,
+          "cpuCoreEquivalent": 0.075,
+          "privateMedianMiB": 81.33203125,
+          "privatePeakMiB": 81.87890625,
+          "workingSetPeakMiB": 113.41796875
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.937999999998283,
+          "cpuCoreEquivalent": 0.22325920708395888,
+          "privateMedianMiB": 82.546875,
+          "privatePeakMiB": 83.7578125,
+          "workingSetPeakMiB": 116.89453125
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 82.27734375,
+          "privatePeakMiB": 82.27734375,
+          "workingSetPeakMiB": 114.59375
+        },
+        "disconnect": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 82.328125,
+          "privatePeakMiB": 82.328125,
+          "workingSetPeakMiB": 114.953125
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 500,
+          "max": 73.76020000000003,
+          "p50": 5.769899999999325,
+          "p95": 12.253699999999299,
+          "p99": 15.430700000000797
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 500,
+        "connectWindow": 4,
+        "drainMs": 146.61990000000515,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.485799999999,
+        "loginMs": 64894.916699999965,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 49501,
+            "max": 50.97819999999774,
+            "p50": 3.1906155936008354,
+            "p95": 18.016327125170736,
+            "p99": 29.054522588903726
+          },
+          "actualSamplesPerClientSecond": 9.8997190716475,
+          "clients": 500,
+          "deliveryAgeMs": {
+            "count": 2125000,
+            "max": 168.820499999998,
+            "p50": 73.32841089247205,
+            "p95": 122.46529851905542,
+            "p99": 136.74632546929436
+          },
+          "expectedInitializedPairs": 250000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 250000,
+          "maxPendingPerClient": 1,
+          "pending": 0,
+          "pendingThrottledSamples": 0,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 2125000,
+          "receivedPayloadBytes": 116936757,
+          "receivedPayloadBytesPerSecond": 11693107.648830421,
+          "replicationMs": 100,
+          "scenario": "spaces",
+          "sentPayloadBytes": 2871058,
+          "sentPayloadBytesPerSecond": 287091.85307777754,
+          "sentSamples": 49501,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 18463.6263,
+        "ready": 500,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 16728.1813,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 34421.5167,
+        "transportConnectMs": {
+          "count": 500,
+          "max": 17.78540000000001,
+          "p50": 1.0291999999999462,
+          "p95": 4.931800000000294,
+          "p99": 9.982899999999063
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 55.01599999999962,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "sparse",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 44417,
+          "max": 16.9693,
+          "p50": 0.020100000000000007,
+          "p95": 0.18430443137293562,
+          "p99": 1.4486326746484814
+        },
+        "presence.flush.duration": {
+          "count": 123,
+          "max": 13.7325,
+          "p50": 3.4043791049802543,
+          "p95": 7.838546648400428,
+          "p99": 11.39674212023265
+        }
+      },
+      "name": "sparse-n500-r10-run1",
+      "clients": 500,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 61178,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 1128,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 500,
+            "MaxPendingOutput": 1128
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\sparse-n500-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59614",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\sparse-n500-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0,
+          "cpuCoreEquivalent": 0.203125,
+          "privateMedianMiB": 27.45703125,
+          "privatePeakMiB": 27.4609375,
+          "workingSetPeakMiB": 63.7265625
+        },
+        "auth-register": {
+          "sampleCount": 170,
+          "sampleSpanSeconds": 16.985000000000582,
+          "cpuCoreEquivalent": 3.8508242566969537,
+          "privateMedianMiB": 38.765625,
+          "privatePeakMiB": 46.96484375,
+          "workingSetPeakMiB": 95.9765625
+        },
+        "connecting": {
+          "sampleCount": 189,
+          "sampleSpanSeconds": 18.89099999999962,
+          "cpuCoreEquivalent": 3.5367370705627725,
+          "privateMedianMiB": 54.97265625,
+          "privatePeakMiB": 66.33203125,
+          "workingSetPeakMiB": 121.49609375
+        },
+        "movement-setup": {
+          "sampleCount": 58,
+          "sampleSpanSeconds": 5.71900000000096,
+          "cpuCoreEquivalent": 0.15846301801011503,
+          "privateMedianMiB": 84.603515625,
+          "privatePeakMiB": 91.859375,
+          "workingSetPeakMiB": 147.06640625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.937000000001717,
+          "cpuCoreEquivalent": 0.36322582268283954,
+          "privateMedianMiB": 71.625,
+          "privatePeakMiB": 87.31640625,
+          "workingSetPeakMiB": 143.2734375
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 65.99609375,
+          "privatePeakMiB": 65.99609375,
+          "workingSetPeakMiB": 122.34375
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.032791185729292495,
+          "privateMedianMiB": 66.890625,
+          "privatePeakMiB": 76.67578125,
+          "workingSetPeakMiB": 132.8515625
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.3359375,
+          "privatePeakMiB": 0.3359375,
+          "workingSetPeakMiB": 1.703125
+        },
+        "auth-register": {
+          "sampleCount": 170,
+          "sampleSpanSeconds": 16.985000000000582,
+          "cpuCoreEquivalent": 0.06531498380924121,
+          "privateMedianMiB": 16.8203125,
+          "privatePeakMiB": 21.97265625,
+          "workingSetPeakMiB": 51.265625
+        },
+        "connecting": {
+          "sampleCount": 189,
+          "sampleSpanSeconds": 18.89099999999962,
+          "cpuCoreEquivalent": 0.043009898893653926,
+          "privateMedianMiB": 59.94921875,
+          "privatePeakMiB": 68.82421875,
+          "workingSetPeakMiB": 99.6796875
+        },
+        "movement-setup": {
+          "sampleCount": 58,
+          "sampleSpanSeconds": 5.71900000000096,
+          "cpuCoreEquivalent": 0.0846957510054063,
+          "privateMedianMiB": 80.8984375,
+          "privatePeakMiB": 81.73046875,
+          "workingSetPeakMiB": 113.140625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.937000000001717,
+          "cpuCoreEquivalent": 0.1462337727684159,
+          "privateMedianMiB": 83.31640625,
+          "privatePeakMiB": 83.31640625,
+          "workingSetPeakMiB": 116.296875
+        },
+        "drain": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 77.9765625,
+          "privatePeakMiB": 77.9765625,
+          "workingSetPeakMiB": 110.3359375
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 500,
+          "max": 74.75789999999998,
+          "p50": 5.911200000000463,
+          "p95": 12.12750000000051,
+          "p99": 14.620499999997264
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 500,
+        "connectWindow": 4,
+        "drainMs": 131.34260000000359,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.869100000004,
+        "loginMs": 66526.49009999998,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 49629,
+            "max": 29.758200000000215,
+            "p50": 2.9477494527336456,
+            "p95": 9.363891052076273,
+            "p99": 15.708935420417323
+          },
+          "actualSamplesPerClientSecond": 9.924937423688505,
+          "clients": 500,
+          "deliveryAgeMs": {
+            "count": 1125000,
+            "max": 132.16110000000117,
+            "p50": 66.96142615145494,
+            "p95": 113.01813174111794,
+            "p99": 118.83420235354075
+          },
+          "expectedInitializedPairs": 250000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 250000,
+          "maxPendingPerClient": 1,
+          "pending": 0,
+          "pendingThrottledSamples": 0,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 1125000,
+          "receivedPayloadBytes": 62206653,
+          "receivedPayloadBytesPerSecond": 6220124.708961542,
+          "replicationMs": 100,
+          "scenario": "sparse",
+          "sentPayloadBytes": 2878482,
+          "sentPayloadBytesPerSecond": 287823.1852869666,
+          "sentSamples": 49629,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 18997.8724,
+        "ready": 500,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 17064.7603,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 34940.0648,
+        "transportConnectMs": {
+          "count": 500,
+          "max": 18.1336,
+          "p50": 1.168100000000777,
+          "p95": 5.466700000000856,
+          "p99": 10.297599999998056
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 55.81200000000172,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "boundaries",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 42361,
+          "max": 61.2515,
+          "p50": 0.020100000000000007,
+          "p95": 0.20810895044353162,
+          "p99": 2.8699631925631266
+        },
+        "presence.flush.duration": {
+          "count": 110,
+          "max": 54.3312,
+          "p50": 22.435568284070953,
+          "p95": 32.53087952657763,
+          "p99": 42.431083453210995
+        }
+      },
+      "name": "boundaries-n500-r10-run1",
+      "clients": 500,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 52318,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 1128,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 500,
+            "MaxPendingOutput": 1128
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\boundaries-n500-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59659",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\boundaries-n500-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0159999999996217,
+          "cpuCoreEquivalent": 0.21530511811031638,
+          "privateMedianMiB": 26.83984375,
+          "privatePeakMiB": 26.99609375,
+          "workingSetPeakMiB": 63.5234375
+        },
+        "auth-register": {
+          "sampleCount": 173,
+          "sampleSpanSeconds": 17.28200000000288,
+          "cpuCoreEquivalent": 3.856975465801926,
+          "privateMedianMiB": 39.5,
+          "privatePeakMiB": 47.50390625,
+          "workingSetPeakMiB": 96.484375
+        },
+        "connecting": {
+          "sampleCount": 188,
+          "sampleSpanSeconds": 18.78099999999904,
+          "cpuCoreEquivalent": 3.6098650231618907,
+          "privateMedianMiB": 56.318359375,
+          "privatePeakMiB": 64.0390625,
+          "workingSetPeakMiB": 119.25390625
+        },
+        "movement-setup": {
+          "sampleCount": 58,
+          "sampleSpanSeconds": 5.73399999999674,
+          "cpuCoreEquivalent": 0.20164806417869852,
+          "privateMedianMiB": 84.685546875,
+          "privatePeakMiB": 86.00390625,
+          "workingSetPeakMiB": 141.8046875
+        },
+        "load": {
+          "sampleCount": 99,
+          "sampleSpanSeconds": 9.84400000000096,
+          "cpuCoreEquivalent": 0.8983898821616352,
+          "privateMedianMiB": 115.7109375,
+          "privatePeakMiB": 159.91796875,
+          "workingSetPeakMiB": 214.5625
+        },
+        "drain": {
+          "sampleCount": 3,
+          "sampleSpanSeconds": 0.2029999999977008,
+          "cpuCoreEquivalent": 0.6927339901556292,
+          "privateMedianMiB": 98.078125,
+          "privatePeakMiB": 100.76953125,
+          "workingSetPeakMiB": 156.2109375
+        },
+        "done": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 102.36328125,
+          "privatePeakMiB": 102.36328125,
+          "workingSetPeakMiB": 157.83984375
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.04098898216161562,
+          "privateMedianMiB": 102.46484375,
+          "privatePeakMiB": 102.52734375,
+          "workingSetPeakMiB": 158.02734375
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.31640625,
+          "privatePeakMiB": 0.31640625,
+          "workingSetPeakMiB": 1.6875
+        },
+        "auth-register": {
+          "sampleCount": 173,
+          "sampleSpanSeconds": 17.28200000000288,
+          "cpuCoreEquivalent": 0.06419251244067903,
+          "privateMedianMiB": 16.578125,
+          "privatePeakMiB": 21.953125,
+          "workingSetPeakMiB": 51.265625
+        },
+        "connecting": {
+          "sampleCount": 188,
+          "sampleSpanSeconds": 18.78099999999904,
+          "cpuCoreEquivalent": 0.04326180714552162,
+          "privateMedianMiB": 59.021484375,
+          "privatePeakMiB": 71.35546875,
+          "workingSetPeakMiB": 103.5078125
+        },
+        "movement-setup": {
+          "sampleCount": 58,
+          "sampleSpanSeconds": 5.73399999999674,
+          "cpuCoreEquivalent": 0.0626743983258117,
+          "privateMedianMiB": 80.68359375,
+          "privatePeakMiB": 81.5703125,
+          "workingSetPeakMiB": 113.2578125
+        },
+        "load": {
+          "sampleCount": 99,
+          "sampleSpanSeconds": 9.84400000000096,
+          "cpuCoreEquivalent": 0.3682446160097162,
+          "privateMedianMiB": 88.15625,
+          "privatePeakMiB": 90.671875,
+          "workingSetPeakMiB": 123.9765625
+        },
+        "drain": {
+          "sampleCount": 3,
+          "sampleSpanSeconds": 0.2029999999977008,
+          "cpuCoreEquivalent": 0.38485221675312736,
+          "privateMedianMiB": 84.671875,
+          "privatePeakMiB": 84.86328125,
+          "workingSetPeakMiB": 116.96875
+        },
+        "done": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 2.33203125,
+          "privatePeakMiB": 2.33203125,
+          "workingSetPeakMiB": 21.05859375
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 500,
+          "max": 75.27029999999999,
+          "p50": 5.882900000000518,
+          "p95": 12.03440000000046,
+          "p99": 18.172699999999168
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 500,
+        "connectWindow": 4,
+        "drainMs": 266.21860000000015,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.9199,
+        "loginMs": 66425.715,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 49413,
+            "max": 435.393799999998,
+            "p50": 7.081435189034719,
+            "p95": 63.662965063929306,
+            "p99": 182.82300532166522
+          },
+          "actualSamplesPerClientSecond": 9.88169098324645,
+          "clients": 500,
+          "deliveryAgeMs": {
+            "count": 5312225,
+            "max": 595.7335999999996,
+            "p50": 105.34677003891747,
+            "p95": 186.5178477286306,
+            "p99": 329.6442048396025
+          },
+          "expectedInitializedPairs": 250000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 250000,
+          "maxPendingPerClient": 5,
+          "pending": 0,
+          "pendingThrottledSamples": 0,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 5312225,
+          "receivedPayloadBytes": 292676253,
+          "receivedPayloadBytesPerSecond": 29264933.218793202,
+          "replicationMs": 100,
+          "scenario": "boundaries",
+          "sentPayloadBytes": 2865954,
+          "sentPayloadBytesPerSecond": 286569.03851414705,
+          "sentSamples": 49413,
+          "sourceHz": 10,
+          "visibilityClears": 266928,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 18901.9191,
+        "ready": 500,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 17322.7612,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 34982.681,
+        "transportConnectMs": {
+          "count": 500,
+          "max": 18.7962,
+          "p50": 0.987699999999677,
+          "p95": 5.652600000001257,
+          "p99": 11.36909999999989
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 56.2029999999977,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "dense",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 85319,
+          "max": 1010.985,
+          "p50": 0.020100000000000007,
+          "p95": 0.12682503013196977,
+          "p99": 2.6095845407556943
+        },
+        "presence.flush.duration": {
+          "count": 107,
+          "max": 277.5875,
+          "p50": 9.059090549340697,
+          "p95": 152.6792151955503,
+          "p99": 262.0082177202277
+        }
+      },
+      "name": "dense-n1000-r10-run1",
+      "clients": 1000,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": false,
+      "errors": [
+        "Client exit code: 1"
+      ],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 58989,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 2128,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 1000,
+            "MaxPendingOutput": 2128
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\dense-n1000-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59687",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\dense-n1000-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0159999999996217,
+          "cpuCoreEquivalent": 0.19992618110243665,
+          "privateMedianMiB": 26.91015625,
+          "privatePeakMiB": 27.0703125,
+          "workingSetPeakMiB": 63.58984375
+        },
+        "auth-register": {
+          "sampleCount": 335,
+          "sampleSpanSeconds": 33.56200000000172,
+          "cpuCoreEquivalent": 3.7947492700075527,
+          "privateMedianMiB": 34.33203125,
+          "privatePeakMiB": 47.3515625,
+          "workingSetPeakMiB": 96.046875
+        },
+        "connecting": {
+          "sampleCount": 393,
+          "sampleSpanSeconds": 39.45300000000134,
+          "cpuCoreEquivalent": 3.51248637619434,
+          "privateMedianMiB": 65.71875,
+          "privatePeakMiB": 87.6171875,
+          "workingSetPeakMiB": 142.76953125
+        },
+        "movement-setup": {
+          "sampleCount": 105,
+          "sampleSpanSeconds": 10.4529999999977,
+          "cpuCoreEquivalent": 0.6487372046303924,
+          "privateMedianMiB": 120.73828125,
+          "privatePeakMiB": 128.296875,
+          "workingSetPeakMiB": 179.890625
+        },
+        "load": {
+          "sampleCount": 99,
+          "sampleSpanSeconds": 9.859000000000378,
+          "cpuCoreEquivalent": 1.8241581296276812,
+          "privateMedianMiB": 744.65625,
+          "privatePeakMiB": 803.18359375,
+          "workingSetPeakMiB": 700.984375
+        },
+        "drain": {
+          "sampleCount": 6,
+          "sampleSpanSeconds": 0.5,
+          "cpuCoreEquivalent": 0.8125,
+          "privateMedianMiB": 699.451171875,
+          "privatePeakMiB": 702.421875,
+          "workingSetPeakMiB": 588.83203125
+        },
+        "disconnect": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.937999999998283,
+          "cpuCoreEquivalent": 0.47481887703771536,
+          "privateMedianMiB": 580.890625,
+          "privatePeakMiB": 727.82421875,
+          "workingSetPeakMiB": 606.9140625
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.34375,
+          "privatePeakMiB": 0.34375,
+          "workingSetPeakMiB": 1.69921875
+        },
+        "auth-register": {
+          "sampleCount": 335,
+          "sampleSpanSeconds": 33.56200000000172,
+          "cpuCoreEquivalent": 0.031657827304688205,
+          "privateMedianMiB": 17.44921875,
+          "privatePeakMiB": 21.921875,
+          "workingSetPeakMiB": 51.35546875
+        },
+        "connecting": {
+          "sampleCount": 393,
+          "sampleSpanSeconds": 39.45300000000134,
+          "cpuCoreEquivalent": 0.07366359972625405,
+          "privateMedianMiB": 68.33203125,
+          "privatePeakMiB": 117.015625,
+          "workingSetPeakMiB": 148.078125
+        },
+        "movement-setup": {
+          "sampleCount": 105,
+          "sampleSpanSeconds": 10.4529999999977,
+          "cpuCoreEquivalent": 0.12705682579166672,
+          "privateMedianMiB": 126.05859375,
+          "privatePeakMiB": 126.9453125,
+          "workingSetPeakMiB": 154.4296875
+        },
+        "load": {
+          "sampleCount": 99,
+          "sampleSpanSeconds": 9.859000000000378,
+          "cpuCoreEquivalent": 0.5150750583223253,
+          "privateMedianMiB": 253.9453125,
+          "privatePeakMiB": 441.796875,
+          "workingSetPeakMiB": 461.57421875
+        },
+        "drain": {
+          "sampleCount": 6,
+          "sampleSpanSeconds": 0.5,
+          "cpuCoreEquivalent": 0.40625,
+          "privateMedianMiB": 441.796875,
+          "privatePeakMiB": 441.796875,
+          "workingSetPeakMiB": 463.625
+        },
+        "disconnect": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.937999999998283,
+          "cpuCoreEquivalent": 0.03458945461864152,
+          "privateMedianMiB": 188.57421875,
+          "privatePeakMiB": 346.375,
+          "workingSetPeakMiB": 354.82421875
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 1000,
+          "max": 72.80860000000001,
+          "p50": 8.623899999998685,
+          "p95": 23.559400000005553,
+          "p99": 29.865700000002107
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 1000,
+        "connectWindow": 4,
+        "drainMs": 558.1447000000044,
+        "errorCount": 2,
+        "errors": [
+          "Client 320 unexpectedly disconnected",
+          "Graceful client disconnect timed out"
+        ],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10006.645900000003,
+        "loginMs": 133179.30070000008,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 15896,
+            "max": 10174.140899999999,
+            "p50": 1330.5370183270645,
+            "p95": 8730.581052353311,
+            "p99": 9837.964082417768
+          },
+          "actualSamplesPerClientSecond": 2.1057005724565507,
+          "clients": 1000,
+          "deliveryAgeMs": {
+            "count": 5175323,
+            "max": 9843.0919,
+            "p50": 3391.8321940178494,
+            "p95": 8473.786545245832,
+            "p99": 9454.051093275873
+          },
+          "expectedInitializedPairs": 1000000,
+          "finalStateConverged": false,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 1000000,
+          "maxPendingPerClient": 8,
+          "pending": 5175,
+          "pendingThrottledSamples": 76281,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 5175323,
+          "receivedPayloadBytes": 284163993,
+          "receivedPayloadBytesPerSecond": 28397526.587805003,
+          "replicationMs": 100,
+          "scenario": "dense",
+          "sentPayloadBytes": 1222118,
+          "sentPayloadBytesPerSecond": 122130.63320247992,
+          "sentSamples": 21071,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 39463.7199,
+        "ready": 1000,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 33666.5196,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": false,
+        "totalMs": 70597.7599,
+        "transportConnectMs": {
+          "count": 1000,
+          "max": 18.745300000002317,
+          "p50": 1.0560999999943306,
+          "p95": 10.413400000001275,
+          "p99": 15.080399999998917
+        },
+        "unexpectedDisconnects": 1
+      },
+      "elapsedSeconds": 116.21899999999732,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "spaces",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 71487,
+          "max": 79.4412,
+          "p50": 0.020100000000000007,
+          "p95": 0.2824319950172338,
+          "p99": 2.434395837044807
+        },
+        "presence.flush.duration": {
+          "count": 134,
+          "max": 38.7685,
+          "p50": 25.938581415109027,
+          "p95": 35.309137740961894,
+          "p99": 37.9283101766081
+        }
+      },
+      "name": "spaces-n1000-r10-run1",
+      "clients": 1000,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 63105,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 2128,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 1000,
+            "MaxPendingOutput": 2128
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\spaces-n1000-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59773",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\spaces-n1000-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0,
+          "cpuCoreEquivalent": 0.1875,
+          "privateMedianMiB": 26.59765625,
+          "privatePeakMiB": 26.6640625,
+          "workingSetPeakMiB": 63.2421875
+        },
+        "auth-register": {
+          "sampleCount": 338,
+          "sampleSpanSeconds": 33.86000000000058,
+          "cpuCoreEquivalent": 3.8065748670997572,
+          "privateMedianMiB": 35.30078125,
+          "privatePeakMiB": 55.87109375,
+          "workingSetPeakMiB": 107.03515625
+        },
+        "connecting": {
+          "sampleCount": 376,
+          "sampleSpanSeconds": 37.70300000000134,
+          "cpuCoreEquivalent": 3.525498634060825,
+          "privateMedianMiB": 64.767578125,
+          "privatePeakMiB": 89.9140625,
+          "workingSetPeakMiB": 143.70703125
+        },
+        "movement-setup": {
+          "sampleCount": 105,
+          "sampleSpanSeconds": 10.437999999998283,
+          "cpuCoreEquivalent": 0.5703319601457156,
+          "privateMedianMiB": 118.40234375,
+          "privatePeakMiB": 138.9921875,
+          "workingSetPeakMiB": 190.1640625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.93699999999808,
+          "cpuCoreEquivalent": 1.1352772466541392,
+          "privateMedianMiB": 159.4765625,
+          "privatePeakMiB": 198.828125,
+          "workingSetPeakMiB": 241.625
+        },
+        "drain": {
+          "sampleCount": 4,
+          "sampleSpanSeconds": 0.31300000000192085,
+          "cpuCoreEquivalent": 0.14976038338566242,
+          "privateMedianMiB": 141.39453125,
+          "privatePeakMiB": 141.859375,
+          "workingSetPeakMiB": 188.875
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9070000000028813,
+          "cpuCoreEquivalent": 1.0159937073922771,
+          "privateMedianMiB": 115.06640625,
+          "privatePeakMiB": 151.7890625,
+          "workingSetPeakMiB": 198.31640625
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.38671875,
+          "privatePeakMiB": 0.38671875,
+          "workingSetPeakMiB": 1.7734375
+        },
+        "auth-register": {
+          "sampleCount": 338,
+          "sampleSpanSeconds": 33.86000000000058,
+          "cpuCoreEquivalent": 0.031840667454222725,
+          "privateMedianMiB": 16.859375,
+          "privatePeakMiB": 22.19140625,
+          "workingSetPeakMiB": 51.46484375
+        },
+        "connecting": {
+          "sampleCount": 376,
+          "sampleSpanSeconds": 37.70300000000134,
+          "cpuCoreEquivalent": 0.05511829297403194,
+          "privateMedianMiB": 72.421875,
+          "privatePeakMiB": 118.578125,
+          "workingSetPeakMiB": 149.62890625
+        },
+        "movement-setup": {
+          "sampleCount": 105,
+          "sampleSpanSeconds": 10.437999999998283,
+          "cpuCoreEquivalent": 0.125742479402205,
+          "privateMedianMiB": 127.7109375,
+          "privatePeakMiB": 128.49609375,
+          "workingSetPeakMiB": 156.12890625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.93699999999808,
+          "cpuCoreEquivalent": 0.4874459092282315,
+          "privateMedianMiB": 133.361328125,
+          "privatePeakMiB": 144.67578125,
+          "workingSetPeakMiB": 176.69140625
+        },
+        "drain": {
+          "sampleCount": 4,
+          "sampleSpanSeconds": 0.31300000000192085,
+          "cpuCoreEquivalent": 0.24960063897610402,
+          "privateMedianMiB": 128.33203125,
+          "privatePeakMiB": 129.6953125,
+          "workingSetPeakMiB": 161.546875
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 1000,
+          "max": 73.37510000000003,
+          "p50": 8.043499999999767,
+          "p95": 19.796699999998964,
+          "p99": 30.338400000000547
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 1000,
+        "connectWindow": 4,
+        "drainMs": 410.42000000000553,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10003.715000000004,
+        "loginMs": 128765.4732999999,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 97392,
+            "max": 2281.540500000003,
+            "p50": 21.746331687604833,
+            "p95": 295.3642428575513,
+            "p99": 682.6301395198161
+          },
+          "actualSamplesPerClientSecond": 9.735583230829743,
+          "clients": 1000,
+          "deliveryAgeMs": {
+            "count": 6828200,
+            "max": 2469.914700000001,
+            "p50": 143.77277243257396,
+            "p95": 418.83040322112714,
+            "p99": 800.6101026271451
+          },
+          "expectedInitializedPairs": 1000000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 1000000,
+          "maxPendingPerClient": 8,
+          "pending": 0,
+          "pendingThrottledSamples": 702,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 6828200,
+          "receivedPayloadBytes": 375780136,
+          "receivedPayloadBytesPerSecond": 37564058.55224782,
+          "replicationMs": 100,
+          "scenario": "spaces",
+          "sentPayloadBytes": 5648736,
+          "sentPayloadBytesPerSecond": 564663.8273881251,
+          "sentSamples": 97392,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 37791.2553,
+        "ready": 1000,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 33930.7977,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 58759.0683,
+        "transportConnectMs": {
+          "count": 1000,
+          "max": 18.152300000000025,
+          "p50": 1.0597999999999956,
+          "p95": 9.590700000000652,
+          "p99": 14.169600000001083
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 96.51499999999942,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "sparse",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 76831,
+          "max": 27.0751,
+          "p50": 0.020100000000000007,
+          "p95": 0.18430443137293562,
+          "p99": 1.9877972010972287
+        },
+        "presence.flush.duration": {
+          "count": 149,
+          "max": 30.9822,
+          "p50": 7.162249540925066,
+          "p95": 12.96895931316941,
+          "p99": 23.145689438646585
+        }
+      },
+      "name": "sparse-n1000-r10-run1",
+      "clients": 1000,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 56144,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 2128,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 1000,
+            "MaxPendingOutput": 2128
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\sparse-n1000-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59837",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\sparse-n1000-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0,
+          "cpuCoreEquivalent": 0.234375,
+          "privateMedianMiB": 27.0703125,
+          "privatePeakMiB": 27.0703125,
+          "workingSetPeakMiB": 63.5078125
+        },
+        "auth-register": {
+          "sampleCount": 351,
+          "sampleSpanSeconds": 35.17199999999866,
+          "cpuCoreEquivalent": 3.740546457409445,
+          "privateMedianMiB": 35.33203125,
+          "privatePeakMiB": 56.10546875,
+          "workingSetPeakMiB": 107.24609375
+        },
+        "connecting": {
+          "sampleCount": 383,
+          "sampleSpanSeconds": 38.39099999999962,
+          "cpuCoreEquivalent": 3.4940643640436906,
+          "privateMedianMiB": 65.12890625,
+          "privatePeakMiB": 89.09375,
+          "workingSetPeakMiB": 144.23046875
+        },
+        "movement-setup": {
+          "sampleCount": 104,
+          "sampleSpanSeconds": 10.328000000001339,
+          "cpuCoreEquivalent": 0.6853335592563016,
+          "privateMedianMiB": 121.560546875,
+          "privatePeakMiB": 132.8515625,
+          "workingSetPeakMiB": 183.72265625
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.93699999999808,
+          "cpuCoreEquivalent": 0.6965759283487308,
+          "privateMedianMiB": 125.107421875,
+          "privatePeakMiB": 136.2109375,
+          "workingSetPeakMiB": 188.1484375
+        },
+        "drain": {
+          "sampleCount": 2,
+          "sampleSpanSeconds": 0.0930000000007567,
+          "cpuCoreEquivalent": 0.840053763434025,
+          "privateMedianMiB": 102.951171875,
+          "privatePeakMiB": 105.21875,
+          "workingSetPeakMiB": 158.26953125
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 1.0493179433373598,
+          "privateMedianMiB": 94.7578125,
+          "privatePeakMiB": 104.19140625,
+          "workingSetPeakMiB": 157.53125
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.33984375,
+          "privatePeakMiB": 0.33984375,
+          "workingSetPeakMiB": 1.69921875
+        },
+        "auth-register": {
+          "sampleCount": 351,
+          "sampleSpanSeconds": 35.17199999999866,
+          "cpuCoreEquivalent": 0.031097179574662848,
+          "privateMedianMiB": 17.28515625,
+          "privatePeakMiB": 21.9140625,
+          "workingSetPeakMiB": 51.234375
+        },
+        "connecting": {
+          "sampleCount": 383,
+          "sampleSpanSeconds": 38.39099999999962,
+          "cpuCoreEquivalent": 0.06064246828683866,
+          "privateMedianMiB": 68.46484375,
+          "privatePeakMiB": 117.00390625,
+          "workingSetPeakMiB": 148.3359375
+        },
+        "movement-setup": {
+          "sampleCount": 104,
+          "sampleSpanSeconds": 10.328000000001339,
+          "cpuCoreEquivalent": 0.11497869868317642,
+          "privateMedianMiB": 129.310546875,
+          "privatePeakMiB": 130.26171875,
+          "workingSetPeakMiB": 158.37109375
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.93699999999808,
+          "cpuCoreEquivalent": 0.242150548455315,
+          "privateMedianMiB": 131.5390625,
+          "privatePeakMiB": 131.6484375,
+          "workingSetPeakMiB": 164.2890625
+        },
+        "drain": {
+          "sampleCount": 2,
+          "sampleSpanSeconds": 0.0930000000007567,
+          "cpuCoreEquivalent": 0.16801075268680501,
+          "privateMedianMiB": 128.98828125,
+          "privatePeakMiB": 129.140625,
+          "workingSetPeakMiB": 160.75390625
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 1000,
+          "max": 84.7337,
+          "p50": 7.390400000000227,
+          "p95": 21.032599999998638,
+          "p99": 26.64089999999851
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 1000,
+        "connectWindow": 4,
+        "drainMs": 181.5723999999973,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.479899999998,
+        "loginMs": 130971.30939999995,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 98586,
+            "max": 57.03110000000015,
+            "p50": 5.301648134508775,
+            "p95": 10.448183361474658,
+            "p99": 21.973795004480888
+          },
+          "actualSamplesPerClientSecond": 9.858126908489663,
+          "clients": 1000,
+          "deliveryAgeMs": {
+            "count": 2107275,
+            "max": 157.72189999999682,
+            "p50": 76.34644243163409,
+            "p95": 130.06090227794522,
+            "p99": 149.65112753215394
+          },
+          "expectedInitializedPairs": 1000000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 1000000,
+          "maxPendingPerClient": 1,
+          "pending": 0,
+          "pendingThrottledSamples": 0,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 2107275,
+          "receivedPayloadBytes": 116827711,
+          "receivedPayloadBytesPerSecond": 11682210.470719513,
+          "replicationMs": 100,
+          "scenario": "sparse",
+          "sentPayloadBytes": 5717988,
+          "sentPayloadBytesPerSecond": 571771.3606924005,
+          "sentSamples": 98586,
+          "sourceHz": 10,
+          "visibilityClears": 0,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 38454.9603,
+        "ready": 1000,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 35211.6189,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 59210.1623,
+        "transportConnectMs": {
+          "count": 1000,
+          "max": 26.24369999999908,
+          "p50": 1.026600000000144,
+          "p95": 9.886999999998807,
+          "p99": 16.46150000000489
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 98.23500000000058,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    },
+    {
+      "scenario": "boundaries",
+      "serverInstrumentsWholeRun": {
+        "runtime.tick.duration": {
+          "count": 79128,
+          "max": 191.8281,
+          "p50": 0.020100000000000007,
+          "p95": 0.19614747568666502,
+          "p99": 3.2325217495368426
+        },
+        "presence.flush.duration": {
+          "count": 118,
+          "max": 155.1666,
+          "p50": 13.828331793854836,
+          "p95": 120.03254437707623,
+          "p99": 154.21600734750578
+        }
+      },
+      "name": "boundaries-n1000-r10-run1",
+      "clients": 1000,
+      "rate": 10.0,
+      "repetition": 1,
+      "profile": "movement",
+      "success": true,
+      "errors": [],
+      "config": {
+        "Server": {
+          "BindAddress": "127.0.0.1",
+          "Port": 55288,
+          "PeerLimit": 1000,
+          "ChannelLimit": 2,
+          "ServiceTimeoutMs": 0,
+          "EventBudget": 512,
+          "MaxPacketBytes": 1048576,
+          "MaxWaitingData": 33554432,
+          "MaxOutgoingPacketsPerPeer": 4096,
+          "MaxOutgoingBytesPerPeer": 16777216,
+          "MaxOutgoingPackets": 262144,
+          "MaxOutgoingBytes": 268435456,
+          "MaxInitialPlayers": 4096,
+          "MaxRecentMessages": 512,
+          "ChatInput": {
+            "Username": 32,
+            "DisplayName": 64,
+            "MessageText": 2000
+          },
+          "PlayerInput": {
+            "CharacterName": 128,
+            "PluginName": 260,
+            "LocationName": 256,
+            "ActorValueKey": 128,
+            "ActorValueName": 128,
+            "MaxActorValues": 64,
+            "DetailsText": 256,
+            "ActivityKey": 64
+          }
+        },
+        "Runtime": {
+          "MaxSessions": 1000,
+          "MailboxCapacity": 65536,
+          "ControlReserve": 3004,
+          "OpenTimeoutMs": 30000,
+          "ShutdownTimeoutMs": 10000,
+          "PollIntervalMs": 1,
+          "Player": {
+            "MailboxCapacity": 2128,
+            "ControlReserve": 32,
+            "MaxPendingChat": 16,
+            "MaxPendingUpdates": 16,
+            "MaxBootstrapEvents": 1000,
+            "MaxPendingOutput": 2128
+          },
+          "Chat": {
+            "MailboxCapacity": 256,
+            "ControlReserve": 64,
+            "HistoryCapacity": 512,
+            "MaxControlDeliveries": 128
+          },
+          "Presence": {
+            "MailboxCapacity": 8192,
+            "ControlReserve": 128,
+            "MaxControlDeliveries": 1024,
+            "ReplicationIntervalMs": 100,
+            "VisibilityDistance": 8192
+          }
+        },
+        "Database": {
+          "DatabasePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\boundaries-n1000-r10-run1\\accounts.sqlite",
+          "BusyTimeoutSeconds": 5
+        },
+        "Authentication": {
+          "ListenUrl": "http://127.0.0.1:59886",
+          "AllowInsecureLoopback": true,
+          "AllowRegistration": true,
+          "CertificatePath": "",
+          "RequestsPerMinute": 6000,
+          "RequestTimeoutSeconds": 15,
+          "Service": {
+            "MailboxCapacity": 64,
+            "MaxConcurrentOperations": 4,
+            "MaxTickets": 4096,
+            "TicketLifetimeSeconds": 60,
+            "PasswordIterations": 210000
+          }
+        },
+        "Logging": {
+          "MinimumLevel": "Information",
+          "Console": true,
+          "FilePath": "S:\\Programming\\Dreamsleeve\\build\\benchmarks\\movement-v5\\boundaries-n1000-r10-run1\\server-.json",
+          "FileSizeLimitBytes": 10485760,
+          "RetainedFileCount": 14
+        }
+      },
+      "server": {
+        "startup": {
+          "sampleCount": 11,
+          "sampleSpanSeconds": 1.0,
+          "cpuCoreEquivalent": 0.234375,
+          "privateMedianMiB": 26.890625,
+          "privatePeakMiB": 26.9140625,
+          "workingSetPeakMiB": 63.42578125
+        },
+        "auth-register": {
+          "sampleCount": 343,
+          "sampleSpanSeconds": 34.36000000000058,
+          "cpuCoreEquivalent": 3.7652793946448724,
+          "privateMedianMiB": 34.359375,
+          "privatePeakMiB": 47.53515625,
+          "workingSetPeakMiB": 96.89453125
+        },
+        "connecting": {
+          "sampleCount": 391,
+          "sampleSpanSeconds": 39.18799999999828,
+          "cpuCoreEquivalent": 3.479221955700877,
+          "privateMedianMiB": 64.59375,
+          "privatePeakMiB": 89.24609375,
+          "workingSetPeakMiB": 144.46484375
+        },
+        "movement-setup": {
+          "sampleCount": 104,
+          "sampleSpanSeconds": 10.359000000000378,
+          "cpuCoreEquivalent": 0.550547832802374,
+          "privateMedianMiB": 113.66796875,
+          "privatePeakMiB": 124.27734375,
+          "workingSetPeakMiB": 176.0078125
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.967999999997119,
+          "cpuCoreEquivalent": 1.7712931380422456,
+          "privateMedianMiB": 337.140625,
+          "privatePeakMiB": 410.484375,
+          "workingSetPeakMiB": 417.23046875
+        },
+        "drain": {
+          "sampleCount": 95,
+          "sampleSpanSeconds": 9.453000000001339,
+          "cpuCoreEquivalent": 0.09917486512216939,
+          "privateMedianMiB": 232.9453125,
+          "privatePeakMiB": 348.3984375,
+          "workingSetPeakMiB": 349.09375
+        },
+        "afterDisconnect": {
+          "sampleCount": 20,
+          "sampleSpanSeconds": 1.9059999999990396,
+          "cpuCoreEquivalent": 0.9427465897171592,
+          "privateMedianMiB": 193.30078125,
+          "privatePeakMiB": 226.49609375,
+          "workingSetPeakMiB": 231.66015625
+        }
+      },
+      "clientProcess": {
+        "startup": {
+          "sampleCount": 1,
+          "sampleSpanSeconds": 0.0,
+          "cpuCoreEquivalent": null,
+          "privateMedianMiB": 0.33984375,
+          "privatePeakMiB": 0.33984375,
+          "workingSetPeakMiB": 1.69921875
+        },
+        "auth-register": {
+          "sampleCount": 343,
+          "sampleSpanSeconds": 34.36000000000058,
+          "cpuCoreEquivalent": 0.03456053550640221,
+          "privateMedianMiB": 16.69921875,
+          "privatePeakMiB": 21.91015625,
+          "workingSetPeakMiB": 51.2109375
+        },
+        "connecting": {
+          "sampleCount": 391,
+          "sampleSpanSeconds": 39.18799999999828,
+          "cpuCoreEquivalent": 0.07376301418801998,
+          "privateMedianMiB": 68.30859375,
+          "privatePeakMiB": 117.29296875,
+          "workingSetPeakMiB": 148.37109375
+        },
+        "movement-setup": {
+          "sampleCount": 104,
+          "sampleSpanSeconds": 10.359000000000378,
+          "cpuCoreEquivalent": 0.11312626701418643,
+          "privateMedianMiB": 131.068359375,
+          "privatePeakMiB": 131.203125,
+          "workingSetPeakMiB": 159.38671875
+        },
+        "load": {
+          "sampleCount": 100,
+          "sampleSpanSeconds": 9.967999999997119,
+          "cpuCoreEquivalent": 0.5878185192618072,
+          "privateMedianMiB": 214.119140625,
+          "privatePeakMiB": 261.53125,
+          "workingSetPeakMiB": 290.4375
+        },
+        "drain": {
+          "sampleCount": 95,
+          "sampleSpanSeconds": 9.453000000001339,
+          "cpuCoreEquivalent": 0.10082777954087221,
+          "privateMedianMiB": 136.83203125,
+          "privatePeakMiB": 262.953125,
+          "workingSetPeakMiB": 291.96484375
+        }
+      },
+      "delivery": {
+        "actualSendRate": 0,
+        "allRecipientsMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "applicationOpenMs": {
+          "count": 1000,
+          "max": 73.4119,
+          "p50": 8.669599999999264,
+          "p95": 23.15769999999611,
+          "p99": 26.33350000000064
+        },
+        "authenticationConcurrency": 4,
+        "authorAckMs": {
+          "count": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "backpressuredMs": 0,
+        "clients": 1000,
+        "connectWindow": 4,
+        "drainMs": 9531.666599999997,
+        "errorCount": 0,
+        "errors": [],
+        "expected": 0,
+        "hostCount": 1,
+        "inflightLimit": 128,
+        "loadMs": 10000.9695,
+        "loginMs": 131580.55070000008,
+        "maxInflight": 0,
+        "movement": {
+          "ackMs": {
+            "count": 61316,
+            "max": 14122.379199999996,
+            "p50": 458.16232902808355,
+            "p95": 2892.479434156528,
+            "p99": 6101.719847182369
+          },
+          "actualSamplesPerClientSecond": 6.131005599007176,
+          "clients": 1000,
+          "deliveryAgeMs": {
+            "count": 7830637,
+            "max": 9122.9113,
+            "p50": 808.6262036534164,
+            "p95": 3746.7975093195623,
+            "p99": 5691.116984286569
+          },
+          "expectedInitializedPairs": 1000000,
+          "finalStateConverged": true,
+          "generatorMissedIntervals": 0,
+          "initializedPairs": 1000000,
+          "maxPendingPerClient": 8,
+          "pending": 0,
+          "pendingThrottledSamples": 35964,
+          "percentileMethod": "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms",
+          "receivedMovements": 7830637,
+          "receivedPayloadBytes": 435890395,
+          "receivedPayloadBytesPerSecond": 43584813.95228733,
+          "replicationMs": 100,
+          "scenario": "boundaries",
+          "sentPayloadBytes": 3556328,
+          "sentPayloadBytesPerSecond": 355598.32474241627,
+          "sentSamples": 61316,
+          "sourceHz": 10,
+          "visibilityClears": 1153914,
+          "visibilityDistance": 8192
+        },
+        "presenceConverged": true,
+        "rampIncludesLogin": true,
+        "rampMs": 39285.5848,
+        "ready": 1000,
+        "received": 0,
+        "receivedChatPayloadBytes": 0,
+        "receivedChatPayloadBytesPerSecond": 0,
+        "registrationMs": 34377.428,
+        "rejections": 0,
+        "requestedRate": 10,
+        "seconds": 10,
+        "sent": 0,
+        "sentChatPayloadBytes": 0,
+        "sentChatPayloadBytesPerSecond": 0,
+        "serviceLoopCount": 1,
+        "socketCount": 1,
+        "success": true,
+        "totalMs": 69357.6996,
+        "transportConnectMs": {
+          "count": 1000,
+          "max": 17.561200000000014,
+          "p50": 1.0881999999999152,
+          "p95": 9.66689999999653,
+          "p99": 14.259099999999307
+        },
+        "unexpectedDisconnects": 0
+      },
+      "elapsedSeconds": 107.57900000000154,
+      "serverDiagnosticsRelevant": [
+        "BENCHMARK_HOST server_gc=true"
+      ]
+    }
+  ]
+}
