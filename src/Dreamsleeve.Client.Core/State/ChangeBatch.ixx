@@ -17,6 +17,7 @@ export namespace Dreamsleeve::Client
     std::uint64_t characterGeneration{};
     MovementClock::time_point receivedAt{};
     std::optional<Domain::PlayerLocation> location;
+    std::uint64_t viewRevision{};
   };
 
   struct ChatMessagesAdded final

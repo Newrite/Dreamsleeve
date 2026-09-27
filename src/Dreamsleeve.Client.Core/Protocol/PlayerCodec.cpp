@@ -71,10 +71,11 @@ namespace Dreamsleeve::Client::Wire::Detail
     void operator()(const CharacterRenamed& value) const { target.mutable_rename_character()->set_name(value.name); }
     void operator()(const PlayerDetailsChanged& value) const { WriteDetails(*target.mutable_set_details(), value.details); }
     void operator()(const GameExited&) const { target.mutable_leave_game(); }
-    void operator()(const LocalMovement& value) const
+    void operator()(const SetLocation& value) const
     {
-      auto* sample = target.mutable_sample_movement();
-      if (value.location) WriteLocation(*sample->mutable_location(), *value.location);
+      auto* transition = target.mutable_set_location();
+      transition->set_context_revision(value.contextRevision);
+      if (value.location) WriteLocation(*transition->mutable_location(), *value.location);
     }
     void operator()(const LocalActorValues& value) const
     {
@@ -166,6 +167,8 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (static_cast<std::size_t>(source.actor_values_size()) > config.maxActorValues) return Invalid("actor_values");
 
     Domain::Player result{.data = std::move(*profile), .characterGeneration = source.character_generation()};
+    result.viewRevision = source.view_revision();
+    result.movementSequence = source.movement_sequence();
     result.details = ReadDetails(source.details());
     if (source.has_character_name()) result.characterName = source.character_name();
     if (source.has_location())
@@ -202,9 +205,33 @@ namespace Dreamsleeve::Client::Wire::Detail
     return result;
   }
 
-  Result<PlayerLocationUpdated> ReadMovement(const P::PlayerMoved& source)
+  void WritePose(P::MovementPose& target, const Domain::MovementPose& value)
   {
-    if (source.player_id() == 0) return Invalid("player_id");
+    target.mutable_position()->set_x(value.position.X);
+    target.mutable_position()->set_y(value.position.Y);
+    target.mutable_position()->set_z(value.position.Z);
+    target.mutable_rotation()->set_x(value.rotation.X);
+    target.mutable_rotation()->set_y(value.rotation.Y);
+    target.mutable_rotation()->set_z(value.rotation.Z);
+    target.set_sampled_at_us(value.sampledAtUs);
+  }
+
+  Result<PlayerMovementReceived> ReadMovement(const P::PlayerMoved& source)
+  {
+    if (source.player_id() == 0 || source.view_revision() == 0 || !source.has_pose())
+      return Invalid("movement");
+    const auto& pose = source.pose();
+    const auto& p = pose.position();
+    const auto& r = pose.rotation();
+    if (!std::isfinite(p.x()) || !std::isfinite(p.y()) || !std::isfinite(p.z()) ||
+        !std::isfinite(r.x()) || !std::isfinite(r.y()) || !std::isfinite(r.z())) return Invalid("pose");
+    return PlayerMovementReceived{source.player_id(), source.view_revision(), source.sequence(),
+      {{p.x(), p.y(), p.z()}, {r.x(), r.y(), r.z()}, pose.sampled_at_us()}};
+  }
+
+  Result<PlayerLocationUpdated> ReadVisibility(const P::PlayerVisibilityChanged& source)
+  {
+    if (source.player_id() == 0 || source.view_revision() == 0) return Invalid("visibility");
     std::optional<Domain::PlayerLocation> location;
     if (source.has_location())
     {
@@ -212,6 +239,6 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (!decoded) return std::unexpected{decoded.error()};
       location = std::move(*decoded);
     }
-    return PlayerLocationUpdated{source.player_id(), std::move(location)};
+    return PlayerLocationUpdated{source.player_id(), std::move(location), source.view_revision(), source.sequence()};
   }
 }

@@ -63,7 +63,7 @@ namespace
 
   constexpr std::string_view Commands =
     "Commands: connect | disconnect | send <text> | begin <name> | rename <name> | "
-    "move <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
+    "move <json> | location <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
 
   bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
@@ -78,7 +78,7 @@ namespace
       command = GameExited{};
     else if (line == "clear-location")
     {
-      command = LocalMovement{};
+      command = LocalLocation{};
     }
     else if (line.starts_with("move "))
     {
@@ -89,6 +89,16 @@ namespace
         return true;
       }
       command = std::move(sample);
+    }
+    else if (line.starts_with("location "))
+    {
+      LocalLocation transition;
+      if (glz::read_json(transition, std::string_view(line).substr(9)))
+      {
+        std::cout << "Invalid location JSON\n";
+        return true;
+      }
+      command = std::move(transition);
     }
     else if (line.starts_with("values "))
     {

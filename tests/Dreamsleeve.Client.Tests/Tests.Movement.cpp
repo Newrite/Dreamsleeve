@@ -317,4 +317,79 @@ TEST_CASE("An old visibility seed cannot stretch the next sample into the future
   CHECK(fixture.view->Sample(7, At(1100))->position.X == 10);
 }
 
+TEST_CASE("Realtime cannot create visibility or resurrect an old context and repeat restores a lost final pose")
+{
+  MovementFixture fixture;
+  auto& model = fixture.model;
+  const auto generation = model.Generation();
+  auto apply = [&](std::uint64_t token, std::uint64_t sequence, float x) {
+    REQUIRE(model.Apply(generation, PlayerMovementReceived{7, token, sequence, {{x, 0, 0}, {}, sequence * 100000}}, At(100)));
+  };
+  apply(1, 1, 20); // Overtakes reliable baseline: drop.
+  CHECK_FALSE(model.FindPlayer(7)->location);
+  REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(0), 1, 0}, At(100)));
+  apply(1, 2, 20); // Sample 1 was lost; independent sample 2 is enough.
+  apply(1, 1, 10); // Late sample cannot roll back.
+  CHECK(model.FindPlayer(7)->location->position.X == 20);
+  apply(1, 3, 30); // A subsequent repeat repairs the lost final position.
+  const auto sequence = model.FindPlayer(7)->movementSequence;
+  apply(1, 3, 999); // Server repeating the same source sample cannot add motion.
+  CHECK(model.FindPlayer(7)->location->position.X == 30);
+  CHECK(model.FindPlayer(7)->movementSequence == sequence);
+  REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, std::nullopt, 2, 0}));
+  apply(1, 100, 100);
+  CHECK_FALSE(model.FindPlayer(7)->location);
+  REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(50), 3, 0}));
+  apply(1, 101, 101);
+  CHECK(model.FindPlayer(7)->location->position.X == 50);
+  apply(3, 1, 60);
+  CHECK(model.FindPlayer(7)->location->position.X == 60);
+  REQUIRE(model.Apply(generation, PlayerRemoved{7}));
+  apply(3, 2, 70);
+  CHECK_FALSE(model.FindPlayer(7));
+}
+
+TEST_CASE("Metadata cannot roll back realtime and same-space new view token resets interpolation")
+{
+  MovementFixture fixture;
+  auto& model = fixture.model;
+  const auto generation = model.Generation();
+  REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(0), 1, 0}, At(100)));
+  REQUIRE(model.Apply(generation, PlayerMovementReceived{7, 1, 1, {{10, 0, 0}, {}, 1100000}}, At(200)));
+  auto metadata = *model.FindPlayer(7);
+  metadata.viewRevision = 0;
+  metadata.location.reset();
+  metadata.movementSequence = 0;
+  metadata.characterName = "Renamed";
+  REQUIRE(model.Apply(generation, PlayerUpserted{metadata}));
+  CHECK(model.FindPlayer(7)->location->position.X == 10);
+  CHECK(model.FindPlayer(7)->viewRevision == 1);
+  REQUIRE(fixture.exchange->Publish(model));
+  fixture.Drain(200);
+  REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(11, 1200000), 2, 0}, At(300)));
+  REQUIRE(fixture.exchange->Publish(model));
+  fixture.Drain(300);
+  CHECK(fixture.view->HistorySize(7) == 1);
+  CHECK(fixture.view->Sample(7, At(300))->position.X == 11);
+}
+
+TEST_CASE("A character change invalidates old realtime before its visibility baseline arrives")
+{
+  MovementFixture fixture;
+  auto& model = fixture.model;
+  const auto generation = model.Generation();
+  REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(10), 4, 0}));
+  auto next = *model.FindPlayer(7);
+  ++next.characterGeneration;
+  next.viewRevision = 0;
+  next.movementSequence = 0;
+  next.location.reset();
+  REQUIRE(model.Apply(generation, PlayerUpserted{next}));
+  REQUIRE(model.Apply(generation, PlayerMovementReceived{7, 4, 100, {{50, 0, 0}, {}, 1000}}));
+  CHECK_FALSE(model.FindPlayer(7)->location);
+  REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(20), 5, 0}));
+  REQUIRE(model.Apply(generation, PlayerMovementReceived{7, 4, 101, {{60, 0, 0}, {}, 2000}}));
+  CHECK(model.FindPlayer(7)->location->position.X == 20);
+}
+
 TEST_SUITE_END();

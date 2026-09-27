@@ -184,16 +184,19 @@ Post возвращает Queued, Replaced, Full или Closed. Queued не оз
 Игровые объекты и указатели на них не передаются: адаптер снимает значения и
 преобразует их в доменные типы, кодирование/отправка выполняются сетевым владельцем.
 
-Команды: SendChat, LocalMovement, LocalActorValues, CharacterStarted, CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot.
-NextRequestId() — общий allocator OpenSession/UI SendChat, сохраняющий счётчик
-между сессиями. Producer ставит SendChat в порядке выделенных ID. ClientRuntime
-обслуживает SendChat/RequestSnapshot; игровые команды пока возвращают InvalidOperation.
-QueuedClientCommand несёт generation, которую владелец сверяет перед выполнением.
-RequestSnapshot обслуживает текущую модель, в том числе после смены поколения.
-LocalMovement — положение вместе с пространством; LocalActorValues отдельно заменяет карту показаний. Заменяются только
-соседние ещё не вычитанные срезы одного поколения; через другие команды или смену
-generation объединения нет. Политики частоты отправки и wire contract игровых показаний ещё не заданы;
-протокол чата описан в [Protocol/README](../../../Protocol/README.ru.md).
+Команды: SendChat, LocalMovement, LocalLocation, LocalActorValues, CharacterStarted,
+CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot.
+NextRequestId общий для reliable-команд; движение не требует ID или результата.
+QueuedClientCommand несёт generation текущей сессии. LocalMovement хранит последнюю
+позу, LocalLocation — явный reliable-переход/clear. Объединяются только соседние
+samples одного пространства и generation; переходы и остальные команды сохраняются.
+ClientRuntime повторяет последнюю позу по playerSampleIntervalMs независимо от
+поступления новых samples; новый контекст отправляет после принятия перехода.
+
+ClientModel принимает realtime только для уже видимого игрока с совпадающим
+viewRevision и большим movementSequence. Потери и перестановки не создают session
+fault. Reliable baseline/clear меняет токен и историю; metadata сохраняет актуальную
+позу. Повтор той же серверной sequence не создаёт новое наблюдение интерполяции.
 
 Publish первый раз выдаёт снимок, затем вычитывает ChangeBatch и перемещает дельту
 в очередь. **Обычное сообщение не копирует всю историю чата**: в пакет входят только

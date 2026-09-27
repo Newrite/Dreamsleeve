@@ -28,6 +28,15 @@ public:
     bool Upsert(Player player)
     {
       const auto id = player.data.playerId;
+      const auto previous = players.find(id);
+      if (previous != players.end() && previous->second.characterGeneration == player.characterGeneration &&
+          previous->second.viewRevision != 0 && (player.viewRevision == 0 ||
+          (player.viewRevision == previous->second.viewRevision && player.movementSequence < previous->second.movementSequence)))
+      {
+        player.viewRevision = previous->second.viewRevision;
+        player.location = previous->second.location;
+        player.movementSequence = previous->second.movementSequence;
+      }
       return players.insert_or_assign(id, std::move(player)).second;
     }
 
@@ -90,7 +99,7 @@ public:
       if (found == players.end()) return {id, 0, receivedAt, std::nullopt};
 
       const auto& player = found->second;
-      return {id, player.characterGeneration, receivedAt, player.location};
+      return {id, player.characterGeneration, receivedAt, player.location, player.viewRevision};
     }
 
     std::vector<Player> Snapshot() const
@@ -136,7 +145,7 @@ public:
       return {};
     }
 
-    Domain::OperationResult UpdateLocation(PlayerId id, std::optional<PlayerLocation> location)
+    Domain::OperationResult UpdateLocation(PlayerId id, std::optional<PlayerLocation> location, std::uint64_t viewRevision = 0, std::uint64_t sequence = 0)
     {
       const auto found = players.find(id);
       if (found == players.end())
@@ -146,7 +155,25 @@ public:
 
       // Position updates are frequent; replace only their payload.
       found->second.location = std::move(location);
+      found->second.viewRevision = viewRevision;
+      found->second.movementSequence = sequence;
       return {};
+    }
+
+    bool CanApplyMovement(PlayerId id, std::uint64_t viewRevision, std::uint64_t sequence) const
+    {
+      const auto found = players.find(id);
+      return found != players.end() && found->second.location && viewRevision != 0 &&
+             found->second.viewRevision == viewRevision && sequence > found->second.movementSequence;
+    }
+
+    void ApplyMovement(PlayerId id, std::uint64_t sequence, const MovementPose& pose)
+    {
+      auto& player = players.at(id);
+      player.location->position = pose.position;
+      player.location->rotation = pose.rotation;
+      player.location->sampledAtUs = pose.sampledAtUs;
+      player.movementSequence = sequence;
     }
 
     Domain::OperationResult RenameCharacter(PlayerId id, std::optional<CharacterName> characterName)

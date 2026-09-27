@@ -339,30 +339,25 @@ TEST_CASE("Rejection overflow is explicit and retry preserves correlation and te
 }
 
 
-TEST_CASE("Sample admission budget leaves the latest sample coalescible without reordering transitions")
+TEST_CASE("Movement coalescing preserves space changes and explicit reliable boundaries")
 {
-  auto created = ClientExchange::TryCreate(8, 8);
-  REQUIRE(created);
-  auto exchange = std::move(*created);
-  REQUIRE(exchange->Post({1, CharacterStarted{"Name"}}) == CommandPostResult::Queued);
-  REQUIRE(exchange->Post({1, LocalMovement{}}) == CommandPostResult::Queued);
-  REQUIRE(exchange->Post({1, CharacterRenamed{"Rename"}}) == CommandPostResult::Queued);
-  REQUIRE(exchange->Post({1, LocalMovement{}}) == CommandPostResult::Queued);
+  auto exchange = Exchange(8);
+  Domain::PlayerLocation first{{{"skyrim.esm", 1}, "A"}};
+  auto next = first;
+  next.position.X = 10;
+  REQUIRE(exchange->Post({1, LocalMovement{first}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, LocalMovement{next}}) == CommandPostResult::Replaced);
+  next.location.locationId.localFormId = 2;
+  REQUIRE(exchange->Post({1, LocalMovement{next}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, LocalLocation{next}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, LocalMovement{next}}) == CommandPostResult::Queued);
   REQUIRE(exchange->Post({1, GameExited{}}) == CommandPostResult::Queued);
   std::vector<QueuedClientCommand> commands;
-  CHECK(exchange->TakeCommands(commands, 0, 0));
-  REQUIRE(commands.size() == 1);
-  CHECK(std::holds_alternative<CharacterStarted>(commands[0].command));
-  CHECK(exchange->TakeCommands(commands, 0, 1));
-  REQUIRE(commands.size() == 2);
-  CHECK(std::holds_alternative<LocalMovement>(commands[0].command));
-  CHECK(std::holds_alternative<CharacterRenamed>(commands[1].command));
-  CHECK(exchange->TakeCommands(commands, 0, 0));
-  CHECK(commands.empty());
-  CHECK(exchange->TakeCommands(commands, 0, 1));
-  REQUIRE(commands.size() == 2);
-  CHECK(std::holds_alternative<LocalMovement>(commands[0].command));
-  CHECK(std::holds_alternative<GameExited>(commands[1].command));
+  CHECK(exchange->TakeCommands(commands));
+  REQUIRE(commands.size() == 5);
+  CHECK(std::get<LocalMovement>(commands[0].command).location->position.X == 10);
+  CHECK(std::holds_alternative<LocalLocation>(commands[2].command));
+  CHECK(std::holds_alternative<GameExited>(commands[4].command));
 }
 
 TEST_SUITE_END();

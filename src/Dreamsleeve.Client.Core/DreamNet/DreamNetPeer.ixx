@@ -1,4 +1,4 @@
-﻿module;
+module;
 
 #include <enet/enet.h>
 
@@ -422,6 +422,14 @@ export class DreamNetPeer
   {
     if (!IsValid()) return;
     enet_peer_ping(Native());
+  }
+
+  // Conservative unfragmented payload, including ENet's optional checksum.
+  std::size_t MaxUnfragmentedPayloadBytes() const noexcept
+  {
+    if (!IsValid()) return 0;
+    const auto overhead = sizeof(ENetProtocolHeader) + sizeof(ENetProtocolSendFragment) + sizeof(enet_uint32);
+    return peer->mtu > overhead ? peer->mtu - overhead : 0;
   }
 
   std::optional<PeerTelemetry> GetPeerTelemetry() const noexcept

@@ -24,7 +24,7 @@ namespace
   {
     auto config         = ServerConfig::Default();
     config.address      = DreamNetAddress::Loopback(0);
-    config.channelLimit = 1;
+    config.channelLimit = 3;
     return Value(DreamNetHost::TryCreateServer(config));
   }
 
@@ -37,6 +37,7 @@ namespace
     ClientRuntime::Ptr                client;
     std::optional<DreamNetPeer>       peer;
     std::vector<P::ClientPacket>      requests;
+    std::vector<P::ClientMovementPacket> samples;
     std::vector<ClientRuntime::Error> errors;
     bool                              closed{};
 
@@ -74,9 +75,20 @@ namespace
         else if (event->IsReceive())
         {
           const auto      bytes = event->ViewPacket()->DataBytesView();
-          P::ClientPacket packet;
-          REQUIRE(packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
-          requests.push_back(std::move(packet));
+          if (event->TryChannelId() == 2)
+          {
+            CHECK_FALSE(PacketFlags::HasFlag(event->ViewPacket()->Flags(), PacketFlag::Reliable));
+            P::ClientMovementPacket packet;
+            REQUIRE(packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
+            samples.push_back(std::move(packet));
+          }
+          else
+          {
+            P::ClientPacket packet;
+            REQUIRE(packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
+            CHECK(event->TryChannelId() == (packet.has_send_chat() ? 1 : 0));
+            requests.push_back(std::move(packet));
+          }
         }
       }
       server.FlushPackets();
@@ -110,7 +122,22 @@ namespace
       auto packet = Value(DreamNetPacket::TryAllocateWith(message.ByteSizeLong(), [&](std::span<std::byte> bytes) {
         return message.SerializeToArray(bytes.data(), static_cast<int>(bytes.size()));
       }));
-      REQUIRE(peer->PushPacket(std::move(packet), 0));
+      auto channel = message.has_chat_published() ? 1 : 0;
+      if (message.has_request_rejected())
+      {
+        const auto request = std::ranges::find(requests, message.request_id(), &P::ClientPacket::request_id);
+        if (request != requests.end() && request->has_send_chat()) channel = 1;
+      }
+      REQUIRE(peer->PushPacket(std::move(packet), static_cast<ChannelId>(channel)));
+      server.FlushPackets();
+    }
+
+    void Send(const P::ServerMovementPacket& message)
+    {
+      auto packet = Value(DreamNetPacket::TryAllocateWith(message.ByteSizeLong(), [&](std::span<std::byte> bytes) {
+        return message.SerializeToArray(bytes.data(), static_cast<int>(bytes.size()));
+      }, PacketFlag::None));
+      REQUIRE(peer->PushPacket(std::move(packet), 2));
       server.FlushPackets();
     }
 
@@ -774,6 +801,7 @@ TEST_CASE("Sample cadence retains the latest sample and preserves transitions wh
   ack.set_request_id(fixture.requests.back().request_id());
   ack.mutable_player_update_accepted();
   fixture.Send(ack);
+  for (int i = 0; i < 10; ++i) fixture.Step();
 
   LocalMovement stale;
   stale.location = Domain::PlayerLocation{};
@@ -783,7 +811,7 @@ TEST_CASE("Sample cadence retains the latest sample and preserves transitions wh
   REQUIRE(fixture.exchange->Post({generation, latest}) == CommandPostResult::Replaced);
   REQUIRE(fixture.exchange->Post({generation, GameExited{}}) == CommandPostResult::Queued);
   fixture.Until([&] { return fixture.requests.size() == 4; });
-  const auto& sample = fixture.requests[2].update_player().sample_movement();
+  const auto& sample = fixture.requests[2].update_player().set_location();
   REQUIRE(sample.has_location());
   CHECK(sample.location().position().x() == 2);
   CHECK(fixture.requests[3].update_player().has_leave_game());
@@ -806,8 +834,7 @@ TEST_CASE("Undrained player rejections share the outcome bound and stale samples
   REQUIRE(rejected.rejections.size() == 1);
   REQUIRE(fixture.client->Poll());
   const auto stale = fixture.Drain();
-  REQUIRE(stale.commandFailures.size() == 1);
-  CHECK(stale.commandFailures[0].code == CommandFailureCode::StaleGeneration);
+  CHECK(stale.commandFailures.empty()); // Stale measurements have no request outcome.
   CHECK(fixture.errors.empty());
 }
 
@@ -829,8 +856,9 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
 
   P::ServerPacket moved;
   moved.set_protocol_version(Wire::Version);
-  moved.mutable_players_moved()->add_players()->set_player_id(7);
-  auto* location = moved.mutable_players_moved()->mutable_players(0)->mutable_location();
+  moved.mutable_player_visibility_changed()->set_player_id(7);
+  moved.mutable_player_visibility_changed()->set_view_revision(1);
+  auto* location = moved.mutable_player_visibility_changed()->mutable_location();
   location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
   location->mutable_location()->mutable_location_id()->set_local_form_id(0x123);
   location->mutable_position()->set_x(42);
@@ -843,7 +871,8 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
   CHECK(changed.details.level == 12);
   CHECK(changed.characterGeneration == 1);
 
-  moved.mutable_players_moved()->mutable_players(0)->clear_location();
+  moved.mutable_player_visibility_changed()->clear_location();
+  moved.mutable_player_visibility_changed()->set_view_revision(2);
   fixture.Send(moved);
   output = fixture.ReceiveOutput();
   CHECK_FALSE(std::get<ClientStateDelta>(output.state.updates.back()).players.front().location);
@@ -862,33 +891,36 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
   CHECK(fixture.errors.empty());
 }
 
-TEST_CASE("Movement batch publishes once and retains multiple source observations")
+TEST_CASE("Periodic movement repeats after local sampling stops without request acknowledgements")
 {
   Fixture fixture;
-  auto welcome = Welcome(fixture.Open());
-  auto* second = welcome.mutable_session_opened()->add_players();
-  second->mutable_profile()->set_player_id(8);
-  fixture.Send(welcome);
-  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
-  fixture.Drain();
+  const auto generation = Ready(fixture);
+  Domain::PlayerLocation location{{{"skyrim.esm", 0x3c}, "Tamriel"}, {42, 0, 0}, {}, 100};
+  REQUIRE(fixture.exchange->Post({generation, LocalMovement{location}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  CHECK(fixture.requests.back().update_player().has_set_location());
+  CHECK(fixture.samples.empty());
+  P::ServerPacket ack;
+  ack.set_protocol_version(Wire::Version);
+  ack.set_request_id(fixture.requests.back().request_id());
+  ack.mutable_player_update_accepted();
+  fixture.Send(ack);
+  fixture.Until([&] { return fixture.samples.size() >= 3; });
+  CHECK(fixture.requests.size() == 2);
+  CHECK(fixture.samples[0].sample().sequence() < fixture.samples[2].sample().sequence());
+  CHECK(fixture.samples[2].sample().pose().position().x() == 42);
+  CHECK(fixture.errors.empty());
+}
 
-  P::ServerPacket packet;
-  packet.set_protocol_version(Wire::Version);
-  for (auto id : {7, 8})
-  {
-    auto* moved = packet.mutable_players_moved()->add_players();
-    moved->set_player_id(id);
-    auto* location = moved->mutable_location();
-    location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
-    location->mutable_location()->mutable_location_id()->set_local_form_id(0x3c);
-    location->mutable_position()->set_x(static_cast<float>(id));
-    location->set_sampled_at_us(1000);
-  }
-  fixture.Send(packet);
-  auto output = fixture.ReceiveOutput();
-  REQUIRE(output.state.updates.size() == 1);
-  const auto& delta = std::get<ClientStateDelta>(output.state.updates.front());
-  CHECK(delta.players.size() == 2);
+TEST_CASE("Chat can arrive before bootstrap on its independent reliable channel")
+{
+  Fixture fixture;
+  const auto request = fixture.Open();
+  fixture.Send(Publication(0, 30, 8));
+  for (int i = 0; i < 10; ++i) fixture.Step();
+  CHECK(fixture.client->Phase() == SessionPhase::Opening);
+  fixture.Send(Welcome(request));
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
   CHECK(fixture.errors.empty());
 }
 

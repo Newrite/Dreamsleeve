@@ -16,11 +16,13 @@ namespace Dreamsleeve::Client::Wire::Detail
     return Failure(ErrorCode::InvalidPayload, std::move(field));
   }
 
+  void WritePose(P::MovementPose&, const Domain::MovementPose&);
+  Result<PlayerLocationUpdated> ReadVisibility(const P::PlayerVisibilityChanged&);
   void WritePlayerUpdate(P::UpdatePlayer&, const PlayerUpdate&);
   Result<Domain::PlayerData> Profile(const P::PlayerProfile&);
   Result<Domain::Player> Player(const Configuration&, const P::PlayerInfo&);
   Result<PlayerMetadataUpdated> ReadMetadata(const Configuration&, const P::PlayerMetadataChanged&);
-  Result<PlayerLocationUpdated> ReadMovement(const P::PlayerMoved&);
+  Result<PlayerMovementReceived> ReadMovement(const P::PlayerMoved&);
 
   void WriteChat(P::SendChat&, const SendChat&);
   Result<Domain::ChatMessage> Message(const P::ChatMessage&);

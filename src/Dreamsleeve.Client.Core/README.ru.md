@@ -72,10 +72,13 @@ RequestSnapshot работает и после смены generation.
 
 ## Состояние персонажа и репликация
 
-`CharacterStarted`, `CharacterRenamed`, `LocalMovement`, `LocalActorValues`,
-`PlayerDetailsChanged` и `GameExited` отправляются через UpdatePlayer. ID выделяет
-сетевой владелец; producer передаёт generation текущей сессии. LocalMovement меняет
-только optional location (WRLD/CELL + XYZ + rotation), отсутствие очищает позицию.
+`CharacterStarted`, `CharacterRenamed`, `LocalLocation`, `LocalActorValues`,
+`PlayerDetailsChanged` и `GameExited` — reliable-команды с RequestId.
+`LocalMovement` обновляет последнюю позу сетевого владельца без запроса/ACK.
+Первое положение или новое пространство автоматически создаёт reliable SetLocation;
+`LocalLocation` явно задаёт границу, в том числе телепорт внутри того же пространства.
+Отсутствие location очищает позицию. Пока переход не подтверждён, samples не идут;
+отказ очищает локальный поток, следующая локальная позиция может создать новый переход.
 LocalActorValues отдельно заменяет всю карту, включая очистку пустой картой;
 лимит config.maxActorValues по умолчанию 64. Scalar 0 — допустимое значение.
 
@@ -87,19 +90,17 @@ PlayerDetails содержит расу/FormKey, уровень, вид заня
 Rename сохраняет generation и остальное состояние. Клиент только принимает
 серверную generation в PlayerInfo.
 
-UpdatePlayer не меняет модель. Коррелированный PlayerUpdateAccepted освобождает
-ожидание; периодические PlayerUpdated/PlayersMoved/PlayerMetadataChanged без RequestId приходят также
-автору. PlayerUpdated заменяет полный PlayerInfo, PlayersMoved содержит список изменений optional location; вся пачка декодируется
-до применения и публикуется в exchange один раз. PlayerMetadataChanged заменяет только присутствующие части
-actorValues/details, сохраняет остальные поля и отмечает PlayerId в Changes. Bootstrap и PlayerJoined содержат PlayerInfo с координатами,
-отфильтрованными для конкретного наблюдателя.
+UpdatePlayer не меняет модель. PlayerUpdateAccepted завершает команду. Репликация
+приходит также автору: metadata не откатывает позицию, а reliable PlayerVisibilityChanged
+устанавливает/очищает её контекст. Bootstrap/PlayerJoined включают исходную позу,
+viewRevision и movementSequence. Realtime PlayersMoved содержит только pose с токеном
+видимости и sequence; неизвестные контексты и старые номера молча отбрасываются.
 
-Свой location возвращается всегда. Чужой location доступен только при наличии
-позиции наблюдателя, в том же пространстве WRLD/CELL (FormKey) и внутри серверного
-радиуса видимости. Выход из радиуса или смена пространства присылает запись
-в PlayersMoved с отсутствующим location; повторный вход восстанавливает позицию даже неподвижной
-цели. Профиль, имя персонажа, actor values и details остаются глобальными, а
-неизвестная позиция не означает выход игрока из онлайна.
+Чужая позиция видима только в соответствующем WRLD/CELL и серверном радиусе AOI.
+Периодический повтор всех текущих видимых позиций восстанавливает потерю пакета;
+отсутствие записи в пачке ничего не удаляет. Очистка и повторный вход используют
+reliable-границу с новым токеном, который сбрасывает историю интерполяции.
+Профиль, имя, actor values и details остаются глобальными.
 
 Клиентская Configuration содержит `visibilityDistance` (8192 Skyrim units) и
 `showFireflies` (true) для будущего игрового адаптера. Расстояние должно быть конечным
@@ -110,12 +111,15 @@ actorValues/details, сохраняет остальные поля и отме�
 `maxPendingPlayerUpdates` (32) ограничивает ожидания ACK; они также занимают общий
 бюджет результатов Exchange. Отказ завершает один запрос и оставляет Ready.
 Disconnect очищает pending, IDs не используются повторно. ACK другого/старого ID
-считается ошибкой протокола. Для движения `playerSampleIntervalMs` (100 ms) ограничивает
-исходящую частоту; Exchange оставляет очередной sample в bounded очереди, где новые
-соседние samples заменяют его. За один owner batch выдаётся не более одного sample.
-Переходы персонажа сохраняют FIFO: чат за sample может ждать до следующего окна
-отправки (по умолчанию до 100 ms). Poll всё это время обслуживает ENet и ACK.
-В неактивной сессии stale-команды завершаются без ожидания sample-интервала.
+считается ошибкой протокола. Для движения `playerSampleIntervalMs` (100 ms) задаёт период
+повторения последней позы, включая остановившегося игрока. Повтор получает новый
+sequence и время измерения. Clear/Leave/Begin прекращают старый поток.
+Exchange объединяет лишь соседние samples того же пространства и поколения;
+reliable-переходы не объединяются. Чат не ждёт окна отправки movement.
+
+Каналы: Control=0 reliable, Chat=1 reliable, Realtime=2 unreliable sequenced.
+Пакет движения не превышает согласованный MTU; запроса и pending-записи у него нет.
+ChatPublished, обогнавший SessionOpened, сохраняется в bounded bootstrap-буфере.
 
 Тесты Client.Runtime используют настоящий ENet host и protobuf-пакеты на серверной
 стороне: отсутствие локального эха, корреляция, перегрузка, отказы без отключения,
@@ -160,8 +164,8 @@ leave
 
 В JSON enum задаются номерами из player.proto: например activity.kind=2 — Combat,
 16 — Menu (menuKey="main" для главного меню), 18 — Loading. Внутри API это enum.
-Для подключения нужен Protocol/protocol.proto на IPv4, reliable ENet channel 0,
-протокол версии 4 без checksum/compression. Старый `--state-demo` и консоль без аргументов
+Для подключения нужен Protocol/protocol.proto на IPv4, три ENet-канала,
+протокол версии 6 без checksum/compression. Старый `--state-demo` и консоль без аргументов
 остаются явно синтетическими проверками очередей и чата.
 
 ## Проверка с реальным сервером

@@ -1,4 +1,4 @@
-﻿module;
+module;
 
 #include <enet/enet.h>
 #include <cassert>
@@ -180,6 +180,17 @@ export class DreamNetClient final
     }
 
     return serverPeer->PushPacket(std::move(packet), channelId);
+  }
+
+  std::size_t MaxUnfragmentedPayloadBytes() const noexcept
+  {
+    return serverPeer ? serverPeer->MaxUnfragmentedPayloadBytes() : 0;
+  }
+
+  std::size_t NegotiatedChannelCount() const noexcept
+  {
+    const auto info = serverPeer ? serverPeer->GetPeerInfo() : std::nullopt;
+    return info ? info->channelCount : 0;
   }
 
   // All client operations, including Poll and Send, require one serial owner.

@@ -51,6 +51,16 @@ export namespace Dreamsleeve::Client
   {
     PlayerId                      playerId;
     std::optional<PlayerLocation> location;
+    std::uint64_t viewRevision{};
+    std::uint64_t sequence{};
+  };
+
+  struct PlayerMovementReceived
+  {
+    PlayerId playerId;
+    std::uint64_t viewRevision;
+    std::uint64_t sequence;
+    MovementPose pose;
   };
 
   struct PlayerCharacterRenamed
@@ -111,6 +121,7 @@ export namespace Dreamsleeve::Client
     PlayerRemoved,
     PlayerProfileUpdated,
     PlayerLocationUpdated,
+    PlayerMovementReceived,
     PlayerMetadataUpdated,
     PlayerCharacterRenamed,
     PlayerCharacterStarted,
@@ -213,6 +224,9 @@ public:
       {
         return std::unexpected(Domain::Error{Domain::ErrorCode::StaleGeneration, "generation"});
       }
+
+      if (const auto* sample = std::get_if<PlayerMovementReceived>(&update);
+          sample && !players.CanApplyMovement(sample->playerId, sample->viewRevision, sample->sequence)) return {};
 
       auto result = std::visit([this](const auto& value) { return ApplyOne(value); }, update);
       if (result)
@@ -348,7 +362,7 @@ private:
 
       if constexpr (std::is_same_v<Update, PlayerUpserted>)
         AppendMovement(update.player.data.playerId, receivedAt);
-      else if constexpr (std::is_same_v<Update, PlayerLocationUpdated> || std::is_same_v<Update, PlayerRemoved> ||
+      else if constexpr (std::is_same_v<Update, PlayerLocationUpdated> || std::is_same_v<Update, PlayerMovementReceived> || std::is_same_v<Update, PlayerRemoved> ||
                          std::is_same_v<Update, PlayerCharacterStarted> || std::is_same_v<Update, PlayerGameStateCleared>)
         AppendMovement(update.playerId, receivedAt);
       else if constexpr (std::is_same_v<Update, SelfPlayerAssigned> || std::is_same_v<Update, OnlinePlayersReplaced> ||
@@ -521,7 +535,13 @@ private:
 
     Domain::OperationResult ApplyOne(const PlayerLocationUpdated& update)
     {
-      return players.UpdateLocation(update.playerId, update.location);
+      return players.UpdateLocation(update.playerId, update.location, update.viewRevision, update.sequence);
+    }
+
+    Domain::OperationResult ApplyOne(const PlayerMovementReceived& update)
+    {
+      players.ApplyMovement(update.playerId, update.sequence, update.pose);
+      return {};
     }
 
     Domain::OperationResult ApplyOne(const PlayerCharacterRenamed& update)

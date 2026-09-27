@@ -18,7 +18,8 @@ namespace
     return std::move(*result);
   }
 
-  std::vector<std::byte> Bytes(const P::ServerPacket& packet)
+  template<class T>
+  std::vector<std::byte> Bytes(const T& packet)
   {
     std::vector<std::byte> bytes(packet.ByteSizeLong());
     REQUIRE(packet.SerializeToArray(bytes.data(), static_cast<int>(bytes.size())));
@@ -85,11 +86,11 @@ TEST_CASE("Own and broadcast chat decode into the same owned normal chat event")
 {
   const auto codec     = MakeCodec();
   auto       packet    = Published();
-  auto       broadcast = codec.Decode(Bytes(packet));
+  auto       broadcast = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(broadcast);
   CHECK(std::holds_alternative<ChatMessagesReceived>(*broadcast));
   packet.set_request_id(42);
-  auto own = codec.Decode(Bytes(packet));
+  auto own = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(own);
   CHECK(std::get<W::ChatAccepted>(*own).requestId == 42);
   const auto& first  = std::get<ChatMessagesReceived>(*broadcast);
@@ -107,7 +108,7 @@ TEST_CASE("Welcome decoding returns ordinary player and chat data without applyi
   const auto codec  = MakeCodec();
   auto       packet = Welcome();
   packet.mutable_session_opened()->mutable_recent_messages(0)->mutable_author()->set_player_id(99);
-  auto decoded = codec.Decode(Bytes(packet));
+  auto decoded = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(decoded);
   const auto& opened = std::get<W::SessionOpened>(*decoded);
   CHECK(opened.requestId == 1);
@@ -123,9 +124,9 @@ TEST_CASE("Welcome decoding returns ordinary player and chat data without applyi
   *welcome->add_players() = duplicate;
   welcome->set_self_player_id(8);
   welcome->mutable_recent_messages(0)->set_channel_id(2);
-  CHECK(codec.Decode(Bytes(packet)));  // Store/state policy is not repeated in the codec.
+  CHECK(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));  // Store/state policy is not repeated in the codec.
   packet.clear_request_id();
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
 }
 
 TEST_CASE("Rejections retain unknown codes and correlation while presence events forbid correlation")
@@ -138,20 +139,20 @@ TEST_CASE("Rejections retain unknown codes and correlation while presence events
   rejected->set_code(static_cast<P::RequestRejectionCode>(0x7FFF0001));
   rejected->set_message("Отказ");
   rejected->set_field("text");
-  auto result = codec.Decode(Bytes(packet));
+  auto result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
   const auto& rejection = std::get<ServerRejection>(*result);
   CHECK(rejection.requestId == 9);
   CHECK(static_cast<std::int32_t>(rejection.code) == 0x7FFF0001);
   CHECK(rejection.message == "Отказ");
   packet.mutable_player_left()->set_player_id(7);
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.clear_request_id();
-  result = codec.Decode(Bytes(packet));
+  result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
   CHECK(std::get<PlayerRemoved>(*result).playerId == 7);
   *packet.mutable_player_joined()->mutable_player()->mutable_profile() = Published().chat_published().message().author();
-  result                                            = codec.Decode(Bytes(packet));
+  result                                            = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
   CHECK(std::get<PlayerUpserted>(*result).player.data.playerId == 7);
 }
@@ -165,29 +166,29 @@ TEST_CASE("Malformed unsupported and structurally incomplete server packets retu
   CHECK_FALSE(codec.Decode(std::vector<std::byte>(config.network.maxPacketBytes + 1)));
   auto packet = Published();
   packet.set_protocol_version(1);
-  auto result = codec.Decode(Bytes(packet));
+  auto result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE_FALSE(result);
   CHECK(result.error().code == W::ErrorCode::UnsupportedVersion);
   packet.set_protocol_version(W::Version);
   packet.mutable_chat_published()->clear_message();
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.mutable_chat_published()->mutable_message();
-  CHECK_FALSE(codec.Decode(Bytes(packet)));  // Present but empty is equally invalid.
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));  // Present but empty is equally invalid.
   packet = Published();
   packet.mutable_chat_published()->mutable_message()->clear_author();
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.mutable_player_joined();  // Absent profile exposes the default zero ID.
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet = Published();
   packet.mutable_chat_published()->mutable_message()->set_sent_at_unix_ms(std::numeric_limits<std::int64_t>::max());
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet = Published();
   packet.set_request_id(0);
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.clear_request_id();
   auto bytes = Bytes(packet);
   bytes.insert(bytes.end(), {std::byte{0x98}, std::byte{0x06}, std::byte{0x01}});
-  CHECK(codec.Decode(bytes));  // An unknown additive field is allowed within this version.
+  CHECK(codec.Decode(bytes, W::Channel::Chat));  // An unknown additive field is allowed within this version.
   const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{W::Version}, std::byte{0xFA}, std::byte{0x01}, std::byte{0x00}};
   auto                         unknown = codec.Decode(futurePayload);
   REQUIRE_FALSE(unknown);
@@ -213,9 +214,9 @@ TEST_CASE("Configured packet size applies to both codec directions at the exact 
 
   auto bytes                      = Bytes(Published());
   settings.network.maxPacketBytes = bytes.size();
-  CHECK(MakeCodec(settings).Decode(bytes));
+  CHECK(MakeCodec(settings).Decode(bytes, W::Channel::Chat));
   --settings.network.maxPacketBytes;
-  auto rejected = MakeCodec(settings).Decode(bytes);
+  auto rejected = MakeCodec(settings).Decode(bytes, W::Channel::Chat);
   REQUIRE_FALSE(rejected);
   CHECK(rejected.error().code == W::ErrorCode::PacketTooLarge);
 }
@@ -279,24 +280,24 @@ TEST_CASE("Rejection codes share protobuf names and retain future signed enum va
   rejected->set_code(P::REQUEST_REJECTION_CODE_USERNAME_TAKEN);
   rejected->set_message("Имя занято");
   rejected->set_field("username");
-  auto decoded = codec.Decode(Bytes(packet));
+  auto decoded = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(decoded);
   CHECK(std::get<ServerRejection>(*decoded).code == RequestRejectionCode::UsernameTaken);
 
   rejected->set_code(P::REQUEST_REJECTION_CODE_OVERLOADED);
-  auto overloaded = codec.Decode(Bytes(packet));
+  auto overloaded = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(overloaded);
   CHECK(std::get<ServerRejection>(*overloaded).code == RequestRejectionCode::Overloaded);
 
   rejected->set_code(P::REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED);
-  auto unauthenticated = codec.Decode(Bytes(packet));
+  auto unauthenticated = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(unauthenticated);
   CHECK(std::get<ServerRejection>(*unauthenticated).code == RequestRejectionCode::AuthenticationFailed);
 
   for (const auto code : {0x7FFF0001, -1})
   {
     rejected->set_code(static_cast<P::RequestRejectionCode>(code));
-    auto future = codec.Decode(Bytes(packet));
+    auto future = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
     REQUIRE(future);
     const auto& value = std::get<ServerRejection>(*future);
     CHECK(static_cast<std::int32_t>(value.code) == code);
@@ -304,7 +305,7 @@ TEST_CASE("Rejection codes share protobuf names and retain future signed enum va
     CHECK(value.field == "username");
   }
   rejected->clear_code();
-  auto missing = codec.Decode(Bytes(packet));
+  auto missing = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE_FALSE(missing);
   CHECK(missing.error().field == "code");
 }
@@ -318,11 +319,11 @@ TEST_CASE("Player update encoding retains full samples explicit zero resource va
   LocalActorValues values;
   values.actorValues.emplace("speed", Domain::ActorValueInfo{"Speed", Domain::ScalarActorValue{0}});
   values.actorValues.emplace("health", Domain::ActorValueInfo{"Health", Domain::ResourceActorValue{150, 100}});
-  auto encoded = codec.Encode(W::UpdatePlayer{51, sample});
+  auto encoded = codec.Encode(W::UpdatePlayer{51, W::SetLocation{1, sample.location}});
   REQUIRE(encoded);
   P::ClientPacket packet;
   REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
-  const auto& movement = packet.update_player().sample_movement();
+  const auto& movement = packet.update_player().set_location();
   CHECK(movement.location().sampled_at_us() == 123456789);
   CHECK(movement.location().position().x() == 1);
   CHECK(movement.location().rotation().z() == doctest::Approx(3.14));
@@ -384,7 +385,7 @@ TEST_CASE("Full PlayerInfo preserves optional data zero scalars and generation f
   auto* scalar = source->add_actor_values();
   scalar->set_key("zero");
   scalar->set_scalar(0);
-  auto result = codec.Decode(Bytes(packet));
+  auto result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
   const auto& player = std::get<W::SessionOpened>(*result).players.front();
   CHECK(player.characterName == "Nerevar");
@@ -408,7 +409,7 @@ TEST_CASE("Full PlayerInfo preserves optional data zero scalars and generation f
       value->set_scalar(0);
     }
   }
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
 }
 
 TEST_CASE("Actor value limits are configured for both outgoing samples and incoming player state")
@@ -428,7 +429,7 @@ TEST_CASE("Actor value limits are configured for both outgoing samples and incom
     value->set_key(key);
     value->set_scalar(0);
   }
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   settings.maxActorValues = 65;
   CHECK(MakeCodec(settings).Decode(Bytes(packet)));
   settings.maxActorValues = 0;
@@ -441,22 +442,24 @@ TEST_CASE("Player update correlation is distinct from uncorrelated full and comp
   P::ServerPacket packet;
   packet.set_protocol_version(W::Version);
   packet.mutable_player_update_accepted();
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.set_request_id(1);
-  auto accepted = codec.Decode(Bytes(packet));
+  auto accepted = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(accepted);
   CHECK(std::get<W::PlayerUpdateAccepted>(*accepted).requestId == 1);
-  packet.mutable_players_moved()->add_players()->set_player_id(7);
+  auto* boundary = packet.mutable_player_visibility_changed();
+  boundary->set_player_id(7);
+  boundary->set_view_revision(1);
   CHECK_FALSE(codec.Decode(Bytes(packet)));
   packet.clear_request_id();
   auto moved = codec.Decode(Bytes(packet));
   REQUIRE(moved);
-  CHECK(std::get<W::PlayersMoved>(*moved).players[0].playerId == 7);
-  CHECK_FALSE(std::get<W::PlayersMoved>(*moved).players[0].location);
+  CHECK(std::get<PlayerLocationUpdated>(*moved).playerId == 7);
+  CHECK_FALSE(std::get<PlayerLocationUpdated>(*moved).location);
   packet.mutable_player_updated()->mutable_player()->mutable_profile()->set_player_id(7);
-  REQUIRE(codec.Decode(Bytes(packet)));
+  REQUIRE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.set_request_id(1);
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
 }
 
 TEST_CASE("Metadata notifications distinguish omitted components from empty replacements")
@@ -466,9 +469,9 @@ TEST_CASE("Metadata notifications distinguish omitted components from empty repl
   packet.set_protocol_version(W::Version);
   auto* patch = packet.mutable_player_metadata_changed();
   patch->set_player_id(7);
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   patch->mutable_actor_values();
-  auto result = codec.Decode(Bytes(packet));
+  auto result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
   const auto& empty = std::get<PlayerMetadataUpdated>(*result);
   REQUIRE(empty.actorValues);
@@ -476,59 +479,60 @@ TEST_CASE("Metadata notifications distinguish omitted components from empty repl
   CHECK_FALSE(empty.details);
   patch->clear_actor_values();
   patch->mutable_details()->set_level(0);
-  result = codec.Decode(Bytes(packet));
+  result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
   const auto& details = std::get<PlayerMetadataUpdated>(*result);
   CHECK_FALSE(details.actorValues);
   REQUIRE(details.details);
   CHECK(details.details->level == 0);
   packet.set_request_id(1);
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
 }
 
 
-TEST_CASE("Movement timestamp survives server decoding including unstamped legacy sources")
+TEST_CASE("Movement uses a separate unreliable envelope bounded by negotiated payload")
 {
   const auto codec = MakeCodec();
-  P::ServerPacket packet;
+  W::MovementSample source{11, 42, {{0, 2, 3}, {0, 0, 1}, 12345}};
+  auto encoded = codec.Encode(source, 1200);
+  REQUIRE(encoded);
+  CHECK(encoded->Flags() == PacketFlag::None);
+  P::ClientMovementPacket packet;
+  REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  CHECK(packet.sample().context_revision() == 11);
+  CHECK(packet.sample().sequence() == 42);
+  CHECK(packet.sample().pose().sampled_at_us() == 12345);
+  CHECK(codec.Encode(source, encoded->Size()));
+  CHECK_FALSE(codec.Encode(source, encoded->Size() - 1));
+  CHECK_FALSE(codec.Encode(W::MovementSample{0, 1, {}}, 1200));
+}
+
+TEST_CASE("Movement batch validates sequence context finite pose and selected channel")
+{
+  const auto codec = MakeCodec();
+  P::ServerMovementPacket packet;
   packet.set_protocol_version(W::Version);
-  auto* moved = packet.mutable_players_moved()->add_players();
-  moved->set_player_id(7);
-  auto* location = moved->mutable_location();
-  location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
-  location->mutable_location()->mutable_location_id()->set_local_form_id(0x3c);
-  location->mutable_position();
-  location->mutable_rotation();
-  for (const auto stamp : {std::uint64_t{0}, std::uint64_t{123456789}, std::numeric_limits<std::uint64_t>::max()})
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Realtime));
+  for (auto id : {7, 8})
   {
-    location->set_sampled_at_us(stamp);
-    auto decoded = codec.Decode(Bytes(packet));
-    REQUIRE(decoded);
-    const auto& value = std::get<W::PlayersMoved>(*decoded).players[0];
-    REQUIRE(value.location);
-    CHECK(value.location->sampledAtUs == stamp);
+    auto* sample = packet.mutable_movements()->add_players();
+    sample->set_player_id(id);
+    sample->set_view_revision(9);
+    sample->set_sequence(12);
+    sample->mutable_pose()->set_sampled_at_us(0);
   }
-}
-
-TEST_CASE("Movement batch validates every item before returning and preserves order")
-{
-  const auto codec = MakeCodec();
-  P::ServerPacket packet;
-  packet.set_protocol_version(W::Version);
-  auto* batch = packet.mutable_players_moved();
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
-  batch->add_players()->set_player_id(7);
-  batch->add_players()->set_player_id(8);
-  auto decoded = codec.Decode(Bytes(packet));
+  auto decoded = codec.Decode(Bytes(packet), W::Channel::Realtime);
   REQUIRE(decoded);
-  const auto& values = std::get<W::PlayersMoved>(*decoded).players;
-  REQUIRE(values.size() == 2);
-  CHECK(values[0].playerId == 7);
-  CHECK(values[1].playerId == 8);
-  batch->mutable_players(1)->set_player_id(0);
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
-  packet.set_protocol_version(4);
-  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  CHECK(std::get<W::PlayersMoved>(*decoded).players[0].pose.sampledAtUs == 0);
+  CHECK(std::get<W::PlayersMoved>(*decoded).players[1].playerId == 8);
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Control));
+  packet.mutable_movements()->mutable_players(0)->set_sequence(0);
+  CHECK(codec.Decode(Bytes(packet), W::Channel::Realtime)); // A repeated reliable baseline.
+  SUBCASE("unknown player") { packet.mutable_movements()->mutable_players(1)->set_player_id(0); }
+  SUBCASE("empty context") { packet.mutable_movements()->mutable_players(1)->set_view_revision(0); }
+  SUBCASE("nonfinite pose") { packet.mutable_movements()->mutable_players(1)->mutable_pose()->mutable_position()->set_x(std::numeric_limits<float>::infinity()); }
+  SUBCASE("wrong version") { packet.set_protocol_version(5); }
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Realtime));
 }
 
 TEST_SUITE_END();

@@ -91,6 +91,13 @@ export namespace Domain
     bool operator==(const Rotation&) const = default;
   };
 
+  struct MovementPose
+  {
+    Position position{};
+    Rotation rotation{};
+    std::uint64_t sampledAtUs{};
+  };
+
   struct PlayerLocation
   {
     Location location{};
@@ -157,6 +164,8 @@ export namespace Domain
     ActorValueStorage             actorValues{};
     std::uint64_t                 characterGeneration{};
     PlayerDetails                 details{};
+    std::uint64_t viewRevision{};
+    std::uint64_t movementSequence{};
 
     bool operator==(const Player&) const = default;
   };

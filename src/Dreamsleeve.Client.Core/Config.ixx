@@ -28,6 +28,7 @@ export namespace Dreamsleeve::Client
     NetConfig       network{[] {
       auto value     = NetConfig::Default();
       value.maxPeers = 1;
+      value.channelLimit = 3;
       return value;
     }()};
     std::size_t     maxInitialPlayers{4096};
@@ -49,6 +50,7 @@ export namespace Dreamsleeve::Client
 
     std::optional<std::string_view> InvalidProtocolSetting() const noexcept
     {
+      if (network.channelLimit < 3) return "channelLimit";
       if (network.maxPacketBytes == 0 || network.maxPacketBytes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
         return "maxPacketBytes";
       if (network.maxWaitingData < network.maxPacketBytes) return "maxWaitingData";

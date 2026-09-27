@@ -68,6 +68,7 @@ export namespace Dreamsleeve::Client
 
     struct Track
     {
+      std::uint64_t viewRevision{};
       std::uint64_t characterGeneration{};
       Clock::time_point receivedAt{};
       std::deque<SamplePoint> samples;
@@ -103,7 +104,7 @@ export namespace Dreamsleeve::Client
     {
       const auto& previous = track.samples.back().location;
       const auto& next = *observation.location;
-      if (track.characterGeneration != observation.characterGeneration ||
+      if (track.viewRevision != observation.viewRevision || track.characterGeneration != observation.characterGeneration ||
           previous.location.locationId != next.location.locationId) return true;
 
       if (observation.receivedAt - track.receivedAt > settings.maxGap) return true;
@@ -122,7 +123,7 @@ export namespace Dreamsleeve::Client
       auto time = observation.receivedAt;
       if (stamp != 0 && oldStamp != 0)
       {
-        // Reliable ordered transport plus the state cursor define ordering.
+        // The model has already checked context and sample sequence.
         // A source clock restart is a discontinuity, never unsigned wraparound.
         if (stamp < oldStamp) return std::nullopt;
 
@@ -153,7 +154,7 @@ export namespace Dreamsleeve::Client
       }
 
       auto& track = tracks[observation.playerId];
-      if (!track.samples.empty() && track.characterGeneration == observation.characterGeneration &&
+      if (!track.samples.empty() && track.characterGeneration == observation.characterGeneration && track.viewRevision == observation.viewRevision &&
           track.samples.back().location == *observation.location) return;
 
       const auto mapped = track.samples.empty() || Discontinuous(track, observation)
@@ -168,6 +169,7 @@ export namespace Dreamsleeve::Client
         return;
       }
 
+      track.viewRevision = observation.viewRevision;
       track.characterGeneration = observation.characterGeneration;
       track.receivedAt = observation.receivedAt;
       track.samples.push_back({time, *observation.location});
@@ -178,7 +180,7 @@ export namespace Dreamsleeve::Client
     {
       tracks.clear();
       for (const auto& player : players)
-        Observe({player.data.playerId, player.characterGeneration, now, player.location});
+        Observe({player.data.playerId, player.characterGeneration, now, player.location, player.viewRevision});
     }
 
     bool Older(std::uint64_t nextGeneration, std::uint64_t nextRevision) const noexcept

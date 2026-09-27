@@ -20,6 +20,12 @@ export namespace Dreamsleeve::Client
     std::optional<Domain::PlayerLocation> location;
   };
 
+  // Explicit reliable boundary, including same-space teleports and clearing.
+  struct LocalLocation
+  {
+    std::optional<Domain::PlayerLocation> location;
+  };
+
   struct LocalActorValues
   {
     Domain::ActorValueStorage actorValues;
@@ -46,7 +52,7 @@ export namespace Dreamsleeve::Client
   struct RequestSnapshot
   {};
 
-  using ClientCommand = std::variant<SendChat, LocalMovement, LocalActorValues, CharacterStarted, CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot>;
+  using ClientCommand = std::variant<SendChat, LocalMovement, LocalLocation, LocalActorValues, CharacterStarted, CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot>;
 
   struct QueuedClientCommand
   {
@@ -151,7 +157,11 @@ public:
       if (std::holds_alternative<LocalMovement>(command.command) && !commands.empty())
       {
         auto& last = commands.back();
-        if (last.generation == command.generation && std::holds_alternative<LocalMovement>(last.command))
+        const auto* previous = std::get_if<LocalMovement>(&last.command);
+        const auto& next = std::get<LocalMovement>(command.command);
+        const bool sameContext = previous && ((!previous->location && !next.location) ||
+          (previous->location && next.location && previous->location->location.locationId == next.location->location.locationId));
+        if (last.generation == command.generation && sameContext)
         {
           last = std::move(command);
           return CommandPostResult::Replaced;
@@ -166,7 +176,7 @@ public:
 
     // Owner side, nonblocking so the network pump can continue polling ENet.
     // False means input is closed and all admitted commands have been taken.
-    bool TakeCommands(std::vector<QueuedClientCommand>& output, std::size_t pendingReplies = 0, std::size_t sampleBudget = std::numeric_limits<std::size_t>::max())
+    bool TakeCommands(std::vector<QueuedClientCommand>& output, std::size_t pendingReplies = 0)
     {
       output.clear();
 
@@ -176,16 +186,6 @@ public:
       const auto free = maxCommands - pendingFailures.size() - pendingRejections.size();
       const auto available = pendingReplies >= free ? 0 : free - pendingReplies;
       auto count = std::min(commands.size(), available);
-      for (std::size_t index = 0; index < count; ++index)
-      {
-        if (!std::holds_alternative<LocalMovement>(commands[index].command)) continue;
-        if (sampleBudget == 0)
-        {
-          count = index;
-          break;
-        }
-        --sampleBudget;
-      }
       if (count == commands.size())
         commands.swap(output);
       else

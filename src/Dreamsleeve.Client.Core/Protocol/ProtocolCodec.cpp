@@ -1,5 +1,6 @@
 module;
 #include "protocol.pb.h"
+#include "network.pb.h"
 
 module Dreamsleeve.Client.ProtocolCodec;
 #include "CodecParts.h"
@@ -10,6 +11,9 @@ module Dreamsleeve.Client.ProtocolCodec;
 namespace Dreamsleeve::Client::Wire
 {
   using namespace Detail;
+  static_assert(static_cast<int>(Channel::Control) == ::Dreamsleeve::Protocol::Network::Control);
+  static_assert(static_cast<int>(Channel::Chat) == ::Dreamsleeve::Protocol::Network::Chat);
+  static_assert(static_cast<int>(Channel::Realtime) == ::Dreamsleeve::Protocol::Network::Realtime);
   namespace
   {
     // No catch-all overload: adding a ClientRequest alternative must fail to compile.
@@ -74,15 +78,57 @@ namespace Dreamsleeve::Client::Wire
     return std::move(*result);
   }
 
-  Result<ServerResponse> ProtocolCodec::Decode(std::span<const std::byte> bytes) const
+  Result<DreamNetPacket> ProtocolCodec::Encode(const MovementSample& sample, std::size_t maxPayloadBytes) const
+  {
+    if (sample.contextRevision == 0 || sample.sequence == 0) return Invalid("movement");
+    const auto& p = sample.pose.position;
+    const auto& r = sample.pose.rotation;
+    if (!std::isfinite(p.X) || !std::isfinite(p.Y) || !std::isfinite(p.Z) ||
+        !std::isfinite(r.X) || !std::isfinite(r.Y) || !std::isfinite(r.Z)) return Invalid("pose");
+    P::ClientMovementPacket packet;
+    packet.set_protocol_version(Version);
+    packet.mutable_sample()->set_context_revision(sample.contextRevision);
+    packet.mutable_sample()->set_sequence(sample.sequence);
+    WritePose(*packet.mutable_sample()->mutable_pose(), sample.pose);
+    const auto size = packet.ByteSizeLong();
+    if (size > std::min(maxPayloadBytes, config.network.maxPacketBytes)) return Failure(ErrorCode::PacketTooLarge, "movement");
+    auto result = DreamNetPacket::TryAllocateWith(size, [&](std::span<std::byte> buffer) {
+      return packet.SerializeToArray(buffer.data(), static_cast<int>(buffer.size()));
+    }, PacketFlag::None);
+    if (!result) return Failure(ErrorCode::PacketCreationFailed, "movement");
+    return std::move(*result);
+  }
+
+  Result<ServerResponse> ProtocolCodec::Decode(std::span<const std::byte> bytes, Channel channel) const
   {
     if (bytes.empty()) return Failure(ErrorCode::EmptyPacket, "packet");
     if (bytes.size() > config.network.maxPacketBytes) return Failure(ErrorCode::PacketTooLarge, "packet");
+
+    if (channel == Channel::Realtime)
+    {
+      P::ServerMovementPacket packet;
+      if (!packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size()))) return Failure(ErrorCode::MalformedPacket, "movement");
+      if (packet.protocol_version() != Version) return Failure(ErrorCode::UnsupportedVersion, "protocol_version");
+      if (packet.movements().players().empty()) return Invalid("movements");
+      PlayersMoved batch;
+      batch.players.reserve(packet.movements().players_size());
+      for (const auto& value : packet.movements().players())
+      {
+        auto sample = ReadMovement(value);
+        if (!sample) return std::unexpected{sample.error()};
+        batch.players.push_back(std::move(*sample));
+      }
+      return batch;
+    }
+    if (channel != Channel::Control && channel != Channel::Chat) return Failure(ErrorCode::InvalidEnvelope, "channel");
 
     P::ServerPacket packet;
     if (!packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size()))) return Failure(ErrorCode::MalformedPacket, "packet");
     if (packet.protocol_version() != Version) return Failure(ErrorCode::UnsupportedVersion, "protocol_version");
     if (packet.has_request_id() && packet.request_id() == 0) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+
+    const auto expected = packet.has_chat_published() ? Channel::Chat : Channel::Control;
+    if (!packet.has_request_rejected() && channel != expected) return Failure(ErrorCode::InvalidEnvelope, "channel");
 
     switch (packet.payload_case())
     {
@@ -98,8 +144,8 @@ namespace Dreamsleeve::Client::Wire
         auto message = Message(packet.chat_published().message());
         if (!message) return std::unexpected{message.error()};
 
-        const auto           channel = message->channelId;
-        ChatMessagesReceived changes{channel, {std::move(*message)}};
+        const auto           chatChannel = message->channelId;
+        ChatMessagesReceived changes{chatChannel, {std::move(*message)}};
         if (packet.has_request_id()) return ChatAccepted{packet.request_id(), std::move(changes)};
 
         return changes;
@@ -137,19 +183,11 @@ namespace Dreamsleeve::Client::Wire
         if (!result) return std::unexpected{result.error()};
         return std::move(*result);
       }
-      case P::ServerPacket::kPlayersMoved: {
+      case P::ServerPacket::kPlayerVisibilityChanged: {
         if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-        if (packet.players_moved().players().empty()) return Invalid("players_moved");
-
-        PlayersMoved batch;
-        batch.players.reserve(packet.players_moved().players_size());
-        for (const auto& item : packet.players_moved().players())
-        {
-          auto result = ReadMovement(item);
-          if (!result) return std::unexpected{result.error()};
-          batch.players.push_back(std::move(*result));
-        }
-        return batch;
+        auto result = ReadVisibility(packet.player_visibility_changed());
+        if (!result) return std::unexpected{result.error()};
+        return std::move(*result);
       }
       case P::ServerPacket::kPlayerUpdateAccepted:
         if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");

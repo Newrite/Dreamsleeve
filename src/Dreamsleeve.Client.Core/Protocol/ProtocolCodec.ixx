@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 5;
+  inline constexpr std::uint32_t Version = 6;
 
   enum class ErrorCode
   {
@@ -36,7 +36,22 @@ export namespace Dreamsleeve::Client::Wire
     std::string   sessionTicket;
   };
 
-  using PlayerUpdate = std::variant<CharacterStarted, CharacterRenamed, LocalMovement, LocalActorValues, GameExited, PlayerDetailsChanged>;
+  enum class Channel : std::uint8_t { Control = 0, Chat = 1, Realtime = 2 };
+
+  struct SetLocation
+  {
+    std::uint64_t contextRevision;
+    std::optional<Domain::PlayerLocation> location;
+  };
+
+  struct MovementSample
+  {
+    std::uint64_t contextRevision;
+    std::uint64_t sequence;
+    Domain::MovementPose pose;
+  };
+
+  using PlayerUpdate = std::variant<CharacterStarted, CharacterRenamed, SetLocation, LocalActorValues, GameExited, PlayerDetailsChanged>;
 
   struct UpdatePlayer
   {
@@ -68,12 +83,12 @@ export namespace Dreamsleeve::Client::Wire
 
   struct PlayersMoved
   {
-    std::vector<PlayerLocationUpdated> players;
+    std::vector<PlayerMovementReceived> players;
   };
 
   // Replies carry required correlation; notifications have no request ID.
   // Own and broadcast chat both apply the same ChatMessagesReceived update.
-  using ServerResponse = std::variant<SessionOpened, ChatAccepted, ChatMessagesReceived, ServerRejection, PlayerUpserted, PlayerRemoved, PlayersMoved, PlayerMetadataUpdated, PlayerUpdateAccepted>;
+  using ServerResponse = std::variant<SessionOpened, ChatAccepted, ChatMessagesReceived, ServerRejection, PlayerUpserted, PlayerRemoved, PlayersMoved, PlayerMetadataUpdated, PlayerLocationUpdated, PlayerUpdateAccepted>;
 
   // One immutable configuration per network owner. Validate once at startup.
   class ProtocolCodec
@@ -84,7 +99,12 @@ public:
 
     // Serializes directly into the owning ENet packet; send with PushPacket/Send.
     Result<DreamNetPacket> Encode(const ClientRequest& request) const;
-    Result<ServerResponse> Decode(std::span<const std::byte> packet) const;
+    Result<DreamNetPacket> Encode(const MovementSample& sample, std::size_t maxPayloadBytes) const;
+    Result<ServerResponse> Decode(std::span<const std::byte> packet, Channel channel = Channel::Control) const;
+    static Channel RequestChannel(const ClientRequest& request)
+    {
+      return std::holds_alternative<SendChat>(request) ? Channel::Chat : Channel::Control;
+    }
 
 private:
 
