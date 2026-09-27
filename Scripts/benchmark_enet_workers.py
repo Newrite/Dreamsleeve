@@ -28,6 +28,10 @@ def run(args, workers, repetition, destination):
     group.mkdir()
     config = configuration(args.clients, free_port(), "movement", case)
     config["Server"].update(ReceiveBufferBytes=args.server_buffer, SendBufferBytes=args.server_buffer, MovementPacketTargetBytes=0)
+    config["Server"]["Worker"] = dict(
+        QueueCapacity=65536, QueueBytes=16 * 1024 * 1024,
+        SendCommandsPerPass=args.worker_send_budget, SendBytesPerPass=4 * 1024 * 1024,
+        WorkBudgetMs=2, IdleWaitMs=1)
     config["Runtime"]["Presence"]["ReplicationIntervalMs"] = args.replication_ms
     config_path = case / "server.json"
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
@@ -52,8 +56,10 @@ def run(args, workers, repetition, destination):
     print("START", name, flush=True)
     try:
         server = Child(["dotnet", "exec", "--runtimeconfig", str(SERVER.with_suffix(".runtimeconfig.json")),
-                        str(CLIENT), "--server-config", str(config_path),
-                        "--metrics-output", str(case / "metrics.json")], case / "server.log", env)
+                        str(args.server_benchmark or CLIENT), "--server-config", str(config_path),
+                        "--metrics-output", str(case / "metrics.json")], case / "server.log",
+                       dict(env, DOTNET_STARTUP_HOOKS=str(args.enet_probe.resolve()),
+                            DREAMSLEEVE_ENET_PROBE_OUTPUT=str(case / "enet-probe.json")) if args.enet_probe else env)
         ready = False
         while not ready:
             lines = list(server.output())
@@ -178,24 +184,35 @@ def main():
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--udp-trace", action="store_true", help="Separate diagnostic run: ETW drops and OS endpoints")
     parser.add_argument("--peer-trace", action="store_true", help="Also record bounded per-peer ENet command snapshots; adds synchronous I/O")
+    parser.add_argument("--server-benchmark", type=Path, help="Isolated server diagnostic benchmark DLL")
+    parser.add_argument("--enet-probe", type=Path, help="Startup hook for instrumented server")
+    parser.add_argument("--worker-send-budget", type=int, default=2048, help="Production Server.Worker.SendCommandsPerPass (inline baseline ignores it)")
     parser.add_argument("--server-buffer", type=int, default=262144)
     parser.add_argument("--client-buffer", type=int, default=262144)
     parser.add_argument("--scenario", choices=["sparse", "spaces", "dense", "boundaries"], default="sparse")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.enet_probe and not args.server_benchmark:
+        parser.error("--enet-probe requires an isolated --server-benchmark")
     if not 1 <= args.clients <= 1000 or not 1 <= args.hosts <= args.clients:
         parser.error("Require 1 <= hosts <= clients <= 1000")
     if any(p < 1 or args.clients % p or args.hosts % p for p in args.workers):
         parser.error("Client and host counts must be divisible by each worker count")
-    if not 0 < args.rate <= 1000 or not 1 <= args.seconds <= 300 or args.replication_ms < 1 or args.client_buffer < 1 or args.server_buffer < 1 or args.repetitions < 1:
+    if not 0 < args.rate <= 1000 or not 1 <= args.seconds <= 300 or args.replication_ms < 1 or args.client_buffer < 1 or args.server_buffer < 1 or args.repetitions < 1 or args.worker_send_budget < 1:
         parser.error("Invalid rate, duration, replication interval, buffer or repetition count")
     destination = args.output.resolve()
     destination.mkdir(parents=True, exist_ok=False)
     sources = [Path(__file__), ROOT / "Scripts/benchmark_enet.py",
+               ROOT / "Scripts/build_enet_worker_experiment.py",
+               ROOT / "src/Dreamsleeve.Server.Infrastructure/TransportOwner.fs",
                *sorted((ROOT / "tests/Dreamsleeve.Server.NetworkBenchmarks").glob("*.fs"))]
     result = dict(measuredAtUtc=datetime.now(timezone.utc).isoformat(), args={k: str(v) if isinstance(v, Path) else v for k,v in vars(args).items()},
         head=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         worktree=subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).splitlines(),
+        diagnosticBinarySha256={str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in ([args.server_benchmark.resolve(), args.server_benchmark.resolve().parent / "xENet.dll",
+                       args.server_benchmark.resolve().parent / "Dreamsleeve.Server.Infrastructure.dll"] if args.server_benchmark else [])
+            + ([args.enet_probe.resolve()] if args.enet_probe else [])},
         logicalProcessors=os.cpu_count(), clock="same-machine Stopwatch monotonic; not a distributed-host runner",
         sourceSha256={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources},
         binarySha256={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(CLIENT.parent.glob("Dreamsleeve.*.dll"))}, runs=[])

@@ -123,13 +123,19 @@ let private fail state message =
     state.ErrorCount <- state.ErrorCount + 1
     if state.Errors.Count < 64 then state.Errors.Add message
 
-let private send state client (message: ClientPacket) =
-    let bytes = message.ToByteArray()
-    match OutgoingPackets.TrySend(client.Peer, ReadOnlySpan<byte>(bytes), state.Budget, client.Budget) with
+let private sendBytes state client channel reliable (bytes: byte array) =
+    match OutgoingPackets.TrySend(client.Peer, ReadOnlySpan<byte>(bytes), state.Budget, client.Budget, channel, reliable) with
     | PacketSendResult.Sent -> true
     | failure ->
         fail state (sprintf "Client %d packet admission failed: %A" client.Index failure)
         false
+
+let private send state client (message: ClientPacket) =
+    let channel = if message.PayloadCase = ClientPacket.PayloadOneofCase.SendChat then 1uy else 0uy
+    sendBytes state client channel true (message.ToByteArray())
+
+let private sendMovement state client (message: ClientMovementPacket) =
+    sendBytes state client 2uy false (message.ToByteArray())
 
 let private connected state client =
     client.ConnectedMs <- now state
@@ -195,11 +201,24 @@ let private published state client (packet: ServerPacket) =
 
 let private received state client (event: EnetEvent) =
     use packet = event.Packet
-    if event.ChannelId <> 0uy || (packet.Flags &&& EnetPacketFlag.Reliable) <> EnetPacketFlag.Reliable then
+    if event.ChannelId = 2uy && packet.Flags = Unchecked.defaultof<EnetPacketFlag> then
+        let response = ServerMovementPacket.Parser.ParseFrom(packet.AsSpan().ToArray())
+        if response.ProtocolVersion <> protocolVersion then fail state "Unexpected movement protocol version"
+        else
+            match state.Movement with
+            | Some probe -> probe.ReceiveMovement(client.Index, response, int packet.DataLength)
+            | None -> fail state "Unexpected realtime packet during chat benchmark"
+    elif event.ChannelId > 1uy || (packet.Flags &&& EnetPacketFlag.Reliable) <> EnetPacketFlag.Reliable then
         fail state (sprintf "Client %d received wrong transport channel/flags" client.Index)
     else
         let response = ServerPacket.Parser.ParseFrom(packet.AsSpan().ToArray())
+        let validChannel =
+            match response.PayloadCase with
+            | ServerPacket.PayloadOneofCase.ChatPublished -> event.ChannelId = 1uy
+            | ServerPacket.PayloadOneofCase.RequestRejected -> true
+            | _ -> event.ChannelId = 0uy
         if response.ProtocolVersion <> protocolVersion then fail state "Unexpected protocol version"
+        elif not validChannel then fail state "Response arrived on the wrong delivery channel"
         else
             match response.PayloadCase with
             | ServerPacket.PayloadOneofCase.SessionOpened -> opened state client response
@@ -220,7 +239,7 @@ let private received state client (event: EnetEvent) =
                 if not state.Disconnecting then fail state "A player left before benchmark cleanup"
             | ServerPacket.PayloadOneofCase.PlayerUpdateAccepted
             | ServerPacket.PayloadOneofCase.PlayerUpdated
-            | ServerPacket.PayloadOneofCase.PlayersMoved
+            | ServerPacket.PayloadOneofCase.PlayerVisibilityChanged
             | ServerPacket.PayloadOneofCase.PlayerMetadataChanged ->
                 match state.Movement with
                 | Some probe -> probe.Receive(client.Index, response, int packet.DataLength)
@@ -315,7 +334,7 @@ let private ramp state =
                 state.LoginMs <- state.LoginMs + elapsed
 
                 let mutable peer = Unchecked.defaultof<EnetPeer>
-                if state.Hosts[client.HostIndex].TryConnect(remote, 1un, 0u, &peer) then
+                if state.Hosts[client.HostIndex].TryConnect(remote, 3un, 0u, &peer) then
                     client.Peer <- peer
                     client.StartedMs <- now state
                     state.Slots.Add(struct (client.HostIndex, peer.IncomingPeerId), client)
@@ -409,7 +428,8 @@ let private drain state =
 
 let private movementLoad state =
     let probe = Movement.Probe(state.Options.Scenario, state.Options.Rate, state.Options.ReplicationMs, state.AllPlayerIds, state.Group.Index, state.Group.Workers, state.Clients.Length,
-                               Coordination.now, (fun index packet -> send state state.Clients[index] packet), fail state)
+                               Coordination.now, (fun index packet -> send state state.Clients[index] packet),
+                               (fun index packet -> sendMovement state state.Clients[index] packet), fail state)
     state.Movement <- Some probe
     stage "movement-setup"
     state.Group.All("probes", true, barrierPump state) |> ignore
@@ -446,12 +466,13 @@ let private movementLoad state =
         let mutable converged = false
         let mutable nextCheck = now state
         while not converged && state.ErrorCount = 0 && now state < deadline do
+            probe.RepeatFinalSamples()
             pump state
             if now state >= nextCheck then
                 converged <- probe.Converged()
                 nextCheck <- now state + 100.
         if not converged then fail state "Final movement/AOI state did not converge"
-    elif state.ErrorCount = 0 then fail state "Movement acknowledgements did not drain"
+    elif state.ErrorCount = 0 then fail state "Control acknowledgements did not drain"
     state.DrainMs <- now state - draining
     if state.ErrorCount = 0 then
         state.Disconnecting <- true
@@ -535,7 +556,7 @@ let private run (options: Options) =
         let capacity = (options.Clients + options.Hosts - 1) / options.Hosts
         let buffer = Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_CLIENT_BUFFER"
         for _ in 1 .. options.Hosts do
-            let host = EnetHost.Create(address 0us, unativeint capacity, 1un, 0u, 0u, EnetHostOption.Ipv4)
+            let host = EnetHost.Create(address 0us, unativeint capacity, 3un, 0u, 0u, EnetHostOption.Ipv4)
             hosts.Add host
             if not (String.IsNullOrEmpty buffer) then
                 let bytes = Int32.Parse buffer
@@ -544,8 +565,7 @@ let private run (options: Options) =
             host.SetMaximumPacketSize(1024un * 1024un)
             host.SetMaximumWaitingData(32un * 1024un * 1024un)
 
-        // Movement permits eight pending requests per peer. The aggregate
-        // transport budget must accommodate the same finite per-peer window.
+        // Bound native packet ownership independently of control request correlation.
         let outgoingPackets = if options.Scenario = "chat" then 4096 else max (4096 / group.Workers) (16 * options.Clients)
         let totalHosts =
             match Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_TOTAL_HOSTS" with
@@ -614,6 +634,7 @@ let private parse (args: string array) =
 let main args =
     try
         match args with
+        | [|"--verify-movement-oracle"|] -> Movement.verifyOracle(); 0
         | [|"--server-config"; config; "--metrics-output"; output|] -> Measurements.runServer config output
         | _ -> parse args |> run
     with error -> eprintfn "%s" error.Message; 2

@@ -1,9 +1,45 @@
+## Movement transport contract (protocol v6)
+
+The managed load generator uses three ENet channels: Control 0 (reliable), Chat 1
+(reliable), and Realtime 2 (unreliable sequenced). Character initialization and
+location/context changes remain acknowledged commands. Movement samples carry a
+context revision and increasing sequence, with no request ID, acknowledgement,
+or eight-request throttle. The native outgoing packet budget remains bounded.
+
+Recipients apply realtime samples only after a reliable visibility baseline with
+matching view revision, and discard old sequences. Final convergence checks freeze
+the last source pose and repeat it during drain with increasing sequences; they
+compare the shared final source timestamp and position for every expected visible
+pair, including self, and require hidden pairs to have cleared their baseline.
+This verifies recovery of a lost final sample without relying on movement ACKs.
+
+`controlAckMs` reports only command acknowledgements. Historical reports below
+used reliable movement and are not directly comparable with protocol-v6 runs.
+No new performance results are implied by this protocol migration.
+
+Before new 20 Hz comparisons, exploratory acceptance bounds are: achieved source
+rate at least 18 Hz per client, delivery-age p95 at most 200 ms, receive-gap p95 at
+most 100 ms, final convergence, and no unexpected disconnects. These are diagnostic
+bounds for the selected workload, not production capacity guarantees.
+
+`receiveGapMs` measures intervals between newly accepted source measurements for
+each observer/source pair during load. Repeated timestamps do not inflate delivery
+counts; the first observation has no gap, and visibility clears reset its baseline.
+The histogram pools measured pair intervals and does not represent time before a
+pair's first measurement or after its last one; final convergence alone does not
+prove continuous cadence. Inspect counts and source rate alongside the histogram.
+
+
+Run `dotnet run --project tests/Dreamsleeve.Server.NetworkBenchmarks -c Release -- --verify-movement-oracle`
+to check the measurement oracle without sockets: baseline ordering, visibility
+revision changes, stale sequences, and recovery by repeating a lost final pose.
+
 # Real ENet network load generator
 
 This executable is a separate process from `Dreamsleeve.Server`. It uses yENet and
 protobuf from the existing projects. The movement host also subscribes to standard
 server duration instruments; no benchmark branch is added to the server handlers.
-It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v5 keeps ticket authentication and uses full player snapshots; no username enters OpenSession.
+It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v6 keeps ticket authentication and uses reliable player baselines plus repeated realtime poses; no username enters OpenSession.
 
 ```powershell
 dotnet build tests/Dreamsleeve.Server.NetworkBenchmarks -c Release
@@ -314,7 +350,10 @@ python Scripts/benchmark_enet.py --clients 500 --rates 10 --scenarios dense --se
 ```
 
 `--movement-packet-target` explicitly overrides the saved server configuration;
-0 keeps application-size batches, a positive value enables MTU-aware splitting.
+In protocol v6, 0 uses the negotiated unfragmented ENet payload budget. A positive
+value can lower that budget; neither setting allows realtime fragmentation.
+Historical pre-v6 runs used 0 to keep application-size reliable batches, so their
+results describe a different delivery contract.
 Omission preserves the example configuration. Compare these cases with identical
 socket counts, buffers and source/replication rates. Server host count remains one.
 

@@ -71,29 +71,34 @@ type Recorder(output: string) =
                 threadPoolPending = ThreadPool.PendingWorkItemCount
             |}))
 
+    let record (instrument: Instrument) (value: double) =
+        lock gate (fun () ->
+            let values =
+                match measurements.TryGetValue phase with
+                | true, existing -> existing
+                | false, _ ->
+                    let created = Dictionary()
+                    measurements.Add(phase, created)
+                    created
+            let distribution =
+                match values.TryGetValue instrument.Name with
+                | true, existing -> existing
+                | false, _ ->
+                    let created = Distribution()
+                    values.Add(instrument.Name, created)
+                    created
+            distribution.Add value
+            if slowEvents.Count < 2048 && instrument.Name.EndsWith(".duration") && value >= 20. then
+                slowEvents.Add(box {| elapsedMs = clock.Elapsed.TotalMilliseconds; phase = phase; name = instrument.Name; durationMs = value |}))
+
     do
         listener.InstrumentPublished <- fun instrument owner ->
-            if instrument.Meter.Name = "Dreamsleeve.Server" || instrument.Meter.Name = "Dreamsleeve.Transport" then
+            if instrument.Meter.Name = "Dreamsleeve.Server" || instrument.Meter.Name = "Dreamsleeve.Transport"
+               || instrument.Meter.Name = "Dreamsleeve.Transport.Owner" then
                 owner.EnableMeasurementEvents instrument
-        listener.SetMeasurementEventCallback<double>(fun instrument value _ _ ->
-            lock gate (fun () ->
-                let values =
-                    match measurements.TryGetValue phase with
-                    | true, existing -> existing
-                    | false, _ ->
-                        let created = Dictionary()
-                        measurements.Add(phase, created)
-                        created
-                let distribution =
-                    match values.TryGetValue instrument.Name with
-                    | true, existing -> existing
-                    | false, _ ->
-                        let created = Distribution()
-                        values.Add(instrument.Name, created)
-                        created
-                distribution.Add value
-                if slowEvents.Count < 2048 && instrument.Name.EndsWith(".duration") && value >= 20. then
-                    slowEvents.Add(box {| elapsedMs = clock.Elapsed.TotalMilliseconds; phase = phase; name = instrument.Name; durationMs = value |})))
+        listener.SetMeasurementEventCallback<double>(fun instrument value _ _ -> record instrument value)
+        listener.SetMeasurementEventCallback<int>(fun instrument value _ _ -> record instrument (double value))
+        listener.SetMeasurementEventCallback<int64>(fun instrument value _ _ -> record instrument (double value))
         listener.Start()
 
     let timer = new Timer(TimerCallback sample, null, 0, 100)
