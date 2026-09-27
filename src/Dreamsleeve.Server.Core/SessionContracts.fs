@@ -89,7 +89,7 @@ type PresenceEvent =
     | Snapshot of PlayerSnapshot list
     | Joined of PlayerSnapshot
     | Updated of PlayerSnapshot
-    | Moved of (PlayerId * PlayerLocation voption) list
+    | Moved of MovementChange array
     | MetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | Left of PlayerId
 

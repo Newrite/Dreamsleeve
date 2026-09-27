@@ -138,3 +138,7 @@ module PlayerLocation =
             match tryDistanceSquared left right with
             | ValueSome squared -> Ok (squared <= radius64 * radius64)
             | ValueNone -> Ok false
+
+/// A detached batch element. Location is an immutable shared sample; ValueNone clears it.
+[<Struct>]
+type MovementChange = { PlayerId: PlayerId; Location: PlayerLocation voption }

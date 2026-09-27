@@ -396,3 +396,11 @@ ValueTask; ticker уже ожидает его напрямую, без AsTask �
   BeginCharacter/Leave создают отдельный storage. Domain suite: 44/44.
   Повторные пробы: Player.snapshot с 0/32/64 actor values теперь выделяет 80 B/op
   во всех трёх случаях (раньше 248 / 10648 / 25712).
+
+- Шаг 3: MovementChange — struct с shared immutable Location; PresenceEvent и
+  ServerResponse передают detached arrays. Presence переиспользует candidates и
+  рабочий ResizeArray; runtime/codec больше не создают list/tuple для движения.
+  Саморевью: recipients не разделяют изменяемый scratch; сортировка завершается
+  до отправки, каскадный Left не использует movement buffers. Wire не изменён.
+  Release build без предупреждений; весь managed suite: 269/269, включая AOI,
+  randomized visibility, slow consumers, split boundaries и lifecycle barriers.

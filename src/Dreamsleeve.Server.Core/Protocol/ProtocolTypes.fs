@@ -54,7 +54,7 @@ type ServerResponse =
     | PlayerJoined of PlayerSnapshot
     | PlayerLeft of PlayerId
     | PlayerUpdated of PlayerSnapshot
-    | PlayersMoved of (PlayerId * PlayerLocation voption) list
+    | PlayersMoved of MovementChange array
     | PlayerMetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | PlayerUpdateAccepted of requestId: uint64
 

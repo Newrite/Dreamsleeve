@@ -6,6 +6,9 @@ open Google.Protobuf
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 
+let private movementBatch items =
+    items |> List.map (fun (id, location) -> ({ PlayerId = id; Location = location }: Dreamsleeve.Server.Domain.MovementChange)) |> List.toArray
+
 let private config = ServerConfig.defaults
 
 let private ok = function
@@ -73,7 +76,7 @@ let private apply update = Player.create profile |> Player.applyUpdate update |>
 
 let tests = testList "Dreamsleeve.Server.Codec" [
     testCase "movement batches split exactly within configured packet limits" <| fun _ ->
-        let movements = [for id in 1UL .. 130UL -> pid id, ValueNone]
+        let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
         let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved movements) |> ok
         for limit in [12; 127; 128; packet.Length - 1; packet.Length] do
             let small = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = limit } |> ok
@@ -86,7 +89,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             Expect.equal decoded [1UL .. 130UL] "Every entry exactly once and in order."
         let tiny = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = 1 } |> ok
         Expect.isError (ProtocolCodec.encodeMovementPackets tiny movements) "An unsplittable entry fails before any send."
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved [])) "Empty batch is invalid."
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch []))) "Empty batch is invalid."
 
     testCase "source movement timestamp survives domain and both replication shapes" <| fun _ ->
         for stamp in [0UL; 123456789UL; UInt64.MaxValue] do
@@ -96,7 +99,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             let location = state.Location |> ValueOption.get
             Expect.equal location.SampledAtUs stamp "No clock conversion on the server."
 
-            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved [pid 7UL, state.Location]) |> ok |> parse
+            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, state.Location])) |> ok |> parse
             Expect.equal moved.PlayersMoved.Players[0].Location.SampledAtUs stamp "Compact movement retains time."
             let full = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             Expect.equal full.PlayerUpdated.Player.Location.SampledAtUs stamp "Snapshots retain the same measurement."
@@ -398,7 +401,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdateAccepted 0UL)) "zero acknowledgement ID rejected"
 
         for place in [state.Location; ValueNone] do
-            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved [pid 7UL, place]) |> ok |> parse
+            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, place])) |> ok |> parse
             Expect.isFalse moved.HasRequestId "movement has no command correlation"
             Expect.equal moved.PlayersMoved.Players[0].PlayerId 7UL "identity retained"
             Expect.equal (isNull moved.PlayersMoved.Players[0].Location) place.IsNone "unknown location survives"

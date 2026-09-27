@@ -10,6 +10,9 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
+let private movementBatch items =
+    items |> List.map (fun (id, location) -> ({ PlayerId = id; Location = location }: Dreamsleeve.Server.Domain.MovementChange)) |> List.toArray
+
 let private tick () =
     let now = System.Diagnostics.Stopwatch.GetTimestamp()
     PresenceCommand.Flush { DueTimestamp = now; QueuedTimestamp = now }
@@ -143,7 +146,7 @@ let private view fixture subscription events = task {
         match event with
         | PresenceEvent.Snapshot players -> result <- Some players
         | PresenceEvent.Moved movements ->
-            for movement in movements do changes.Add(PresenceEvent.Moved [movement])
+            for movement in movements do changes.Add(PresenceEvent.Moved [|movement|])
         | other -> changes.Add other
     return List.ofSeq changes, result.Value
 }
@@ -296,13 +299,13 @@ let tests = testList "PresenceAgent" [
             do! changed fixture moved
             do! post fixture.Presence (tick ())
             let! movement = receive fixture.AliceEvents
-            equal (PresenceEvent.Moved [moved.Data.PlayerId, moved.Location]) movement
+            equal (PresenceEvent.Moved (movementBatch [moved.Data.PlayerId, moved.Location])) movement
             let! observer = readSnapshot fixture fixture.Bob fixture.BobEvents
             equal [hidden moved; fixture.Bob.Snapshot] observer
             do! changed fixture { moved with Location = ValueNone }
             do! post fixture.Presence (tick ())
             let! cleared = receive fixture.AliceEvents
-            equal (PresenceEvent.Moved [moved.Data.PlayerId, ValueNone]) cleared
+            equal (PresenceEvent.Moved (movementBatch [moved.Data.PlayerId, ValueNone])) cleared
             let! observer = readSnapshot fixture fixture.Bob fixture.BobEvents
             equal [hidden moved; fixture.Bob.Snapshot] observer
 
@@ -476,8 +479,8 @@ let tests = testList "PresenceAgent" [
             let outside = { fixture.Alice.Snapshot with Location = ValueSome (location -1.0f) }
             do! changed fixture outside
             let! (author, _), (observer, _) = flushViewsNow fixture
-            equal [PresenceEvent.Moved [outside.Data.PlayerId, outside.Location]; PresenceEvent.Moved [fixture.Bob.Snapshot.Data.PlayerId, ValueNone]] author
-            equal [PresenceEvent.Moved [outside.Data.PlayerId, ValueNone]] observer
+            equal [PresenceEvent.Moved (movementBatch [outside.Data.PlayerId, outside.Location]); PresenceEvent.Moved (movementBatch [fixture.Bob.Snapshot.Data.PlayerId, ValueNone])] author
+            equal [PresenceEvent.Moved (movementBatch [outside.Data.PlayerId, ValueNone])] observer
 
             let hiddenMove = { outside with Location = ValueSome (location -2.0f) }
             do! changed fixture hiddenMove
@@ -496,7 +499,7 @@ let tests = testList "PresenceAgent" [
             let bob = { fixture.Bob.Snapshot with Location = ValueSome (location 5.0f) }
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, bob))
             let! _, (events, online) = flushViewsNow fixture
-            check (List.contains (PresenceEvent.Moved [fixture.Alice.Snapshot.Data.PlayerId, fixture.Alice.Snapshot.Location]) events) "Stationary source enters view."
+            check (List.contains (PresenceEvent.Moved (movementBatch [fixture.Alice.Snapshot.Data.PlayerId, fixture.Alice.Snapshot.Location])) events) "Stationary source enters view."
             equal fixture.Alice.Snapshot (List.head online)
 
             let otherSpace = FormKey.create (PluginName.create 255 "Other.esm" |> ok) (LocalFormId.create 60u |> ok)
@@ -504,14 +507,14 @@ let tests = testList "PresenceAgent" [
             let far = { bob with Location = ValueSome target }
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, far))
             let! _, (events, online) = flushViewsNow fixture
-            check (List.contains (PresenceEvent.Moved [fixture.Alice.Snapshot.Data.PlayerId, ValueNone]) events) "Different FormKey hides same coordinates and label."
+            check (List.contains (PresenceEvent.Moved (movementBatch [fixture.Alice.Snapshot.Data.PlayerId, ValueNone])) events) "Different FormKey hides same coordinates and label."
             equal (hidden fixture.Alice.Snapshot) (List.head online)
 
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, bob))
             let! _ = flushViewsNow fixture
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, { bob with Location = ValueNone }))
             let! _, (events, _) = flushViewsNow fixture
-            check (List.contains (PresenceEvent.Moved [fixture.Alice.Snapshot.Data.PlayerId, ValueNone]) events) "Losing own position clears remote presence."
+            check (List.contains (PresenceEvent.Moved (movementBatch [fixture.Alice.Snapshot.Data.PlayerId, ValueNone])) events) "Losing own position clears remote presence."
         }))
 
     case "simultaneously moving peers use a common old baseline and late join can observe reversal" (fun () ->
@@ -523,8 +526,8 @@ let tests = testList "PresenceAgent" [
             let! (aliceEvents, _), (bobEvents, _) = flushViewsNow fixture
             equal 2 aliceEvents.Length
             equal 2 bobEvents.Length
-            check (List.contains (PresenceEvent.Moved [a.Data.PlayerId, a.Location]) bobEvents) "Both move together and stay visible."
-            check (List.contains (PresenceEvent.Moved [b.Data.PlayerId, b.Location]) aliceEvents) "Visibility does not depend on source iteration order."
+            check (List.contains (PresenceEvent.Moved (movementBatch [a.Data.PlayerId, a.Location])) bobEvents) "Both move together and stay visible."
+            check (List.contains (PresenceEvent.Moved (movementBatch [b.Data.PlayerId, b.Location])) aliceEvents) "Visibility does not depend on source iteration order."
 
             let temporary = { a with Location = ValueSome (location 101.0f) }
             do! changed fixture temporary
@@ -535,7 +538,7 @@ let tests = testList "PresenceAgent" [
             do! changed fixture a
             do! post fixture.Presence (tick ())
             let! restored = receive fixture.LateEvents
-            equal (PresenceEvent.Moved [a.Data.PlayerId, a.Location]) restored
+            equal (PresenceEvent.Moved (movementBatch [a.Data.PlayerId, a.Location])) restored
         }))
 
     case "zero radius and invalid configuration are handled before startup" (fun () -> task {
@@ -548,7 +551,7 @@ let tests = testList "PresenceAgent" [
             equal fixture.Alice.Snapshot (List.head initial)
             do! changed fixture { fixture.Alice.Snapshot with Location = ValueSome (location 0.001f) }
             let! _, (events, _) = flushViewsNow fixture
-            equal [PresenceEvent.Moved [fixture.Alice.Snapshot.Data.PlayerId, ValueNone]] events
+            equal [PresenceEvent.Moved (movementBatch [fixture.Alice.Snapshot.Data.PlayerId, ValueNone])] events
         })
     })
 
@@ -565,7 +568,7 @@ let tests = testList "PresenceAgent" [
             do! changed fixture latest
             let! (author, _), (observer, _) = flushViewsNow fixture
             let expected = [PresenceEvent.MetadataChanged(initial.Data.PlayerId, ValueSome latest.ActorValues, ValueSome details);
-                            PresenceEvent.Moved [initial.Data.PlayerId, latest.Location]]
+                            PresenceEvent.Moved (movementBatch [initial.Data.PlayerId, latest.Location])]
             equal expected author
             equal expected observer
 
@@ -591,7 +594,7 @@ let tests = testList "PresenceAgent" [
             do! post fixture.Presence (tick ())
             for events in [fixture.AliceEvents; fixture.BobEvents] do
                 let! batch = receive events
-                equal (PresenceEvent.Moved [a.Data.PlayerId, a.Location; b.Data.PlayerId, b.Location]) batch
+                equal (PresenceEvent.Moved (movementBatch [a.Data.PlayerId, a.Location; b.Data.PlayerId, b.Location])) batch
         }))
 
     case "spatial candidates match exact visibility across cells and finite coordinate extremes" (fun () ->
@@ -601,7 +604,7 @@ let tests = testList "PresenceAgent" [
             let points = [-20.f; -10.f; -0.001f; 0.f; 10.f; 20.f; Single.MaxValue; -Single.MaxValue] @ points
             let mutable previousA = fixture.Alice.Snapshot
             let mutable previousB = fixture.Bob.Snapshot
-            let projected observer source =
+            let projected (observer: PlayerSnapshot) (source: PlayerSnapshot) =
                 let visible = PlayerLocation.isWithinRadius 10.0f<worldUnit> (ValueOption.get observer.Location) (ValueOption.get source.Location) |> ok
                 if visible then source.Location else ValueNone
             for x in points do
@@ -611,10 +614,10 @@ let tests = testList "PresenceAgent" [
                 do! changed fixture a
                 do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, b))
                 let! (ae, av), (be, bv) = flushViewsNow fixture
-                let expected beforeSelf beforeOther self other =
+                let expected (beforeSelf: PlayerSnapshot) (beforeOther: PlayerSnapshot) (self: PlayerSnapshot) (other: PlayerSnapshot) =
                     [if beforeSelf.Location <> self.Location then yield self.Data.PlayerId, self.Location
                      if projected beforeSelf beforeOther <> projected self other then yield other.Data.PlayerId, projected self other]
-                    |> List.sortBy fst |> List.map (fun item -> PresenceEvent.Moved [item])
+                    |> List.sortBy fst |> List.map (fun item -> PresenceEvent.Moved (movementBatch [item]))
                 equal (expected previousA previousB a b) ae
                 equal (expected previousB previousA b a) be
                 previousA <- a

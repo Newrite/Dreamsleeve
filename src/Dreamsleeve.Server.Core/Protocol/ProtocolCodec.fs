@@ -93,7 +93,7 @@ module ProtocolCodec =
                 if values.IsNone && details.IsNone then Some(ProtocolCodecFailure.InvalidPayload "player_metadata_changed")
                 else None
 
-            | ServerResponse.PlayersMoved [] -> Some(ProtocolCodecFailure.InvalidPayload "players_moved")
+            | ServerResponse.PlayersMoved [||] -> Some(ProtocolCodecFailure.InvalidPayload "players_moved")
             | ServerResponse.ChatAccepted _
             | ServerResponse.ChatPublished _
             | ServerResponse.PlayerJoined _
@@ -129,8 +129,8 @@ module ProtocolCodec =
                 packet.PlayerMetadataChanged <- PlayerCodec.metadataChanged playerId values metadata
             | ServerResponse.PlayersMoved movements ->
                 packet.PlayersMoved <- Dreamsleeve.Protocol.Chat.PlayersMoved()
-                for playerId, place in movements do
-                    packet.PlayersMoved.Players.Add(PlayerCodec.moved playerId place)
+                for movement in movements do
+                    packet.PlayersMoved.Players.Add(PlayerCodec.moved movement.PlayerId movement.Location)
             | ServerResponse.PlayerUpdateAccepted _ ->
                 packet.PlayerUpdateAccepted <- Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted()
             | ServerResponse.PlayerLeft value ->
@@ -146,7 +146,7 @@ module ProtocolCodec =
 
     /// Split on protobuf entry boundaries; never rely on ENet fragmentation to
     /// bypass the configured application packet limit. No partial send on failure.
-    let encodeMovementPackets (codec: ProtocolCodec) movements =
+    let encodeMovementPackets (codec: ProtocolCodec) (movements: MovementChange array) =
         let packets = ResizeArray<byte array>()
         let mutable batch = Dreamsleeve.Protocol.Chat.PlayersMoved()
         let mutable payloadSize = 0
@@ -163,8 +163,8 @@ module ProtocolCodec =
                 batch <- Dreamsleeve.Protocol.Chat.PlayersMoved()
                 payloadSize <- 0
 
-        for playerId, location in movements do
-            let item = PlayerCodec.moved playerId location
+        for movement in movements do
+            let item = PlayerCodec.moved movement.PlayerId movement.Location
             let size = CodedOutputStream.ComputeTagSize(Dreamsleeve.Protocol.Chat.PlayersMoved.PlayersFieldNumber)
                        + CodedOutputStream.ComputeMessageSize(item)
             if envelopeSize size > codec.Config.MaxPacketBytes then

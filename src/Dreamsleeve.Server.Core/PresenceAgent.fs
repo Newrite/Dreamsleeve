@@ -21,6 +21,8 @@ module PresenceAgent =
         Members: Dictionary<Guid, Member>
         Players: Dictionary<PlayerId, Guid>
         Dirty: HashSet<PlayerId>
+        Candidates: HashSet<Guid>
+        Movements: ResizeArray<MovementChange>
         LatestIndex: SpatialIndex.State
         PublishedIndex: SpatialIndex.State
         mutable Ticker: AgentTicker option
@@ -80,7 +82,7 @@ module PresenceAgent =
                 | ValueSome _ | ValueNone -> ValueNone
             | ValueNone, _ | _, ValueNone -> ValueNone
 
-    let private project state observer source =
+    let private project state observer (source: PlayerSnapshot) =
         { source with Location = visibleLocation state observer source }
 
     let private snapshot state observer =
@@ -112,25 +114,31 @@ module PresenceAgent =
                 deliverDelta state context observer (PresenceEvent.MetadataChanged(source.Latest.Data.PlayerId, values, details))
 
     let private publishMovement state context (changed: HashSet<Guid>) observer =
-        let candidates = HashSet<Guid>()
+        let candidates = state.Candidates
+        candidates.Clear()
         SpatialIndex.neighbors observer.Published.Location state.PublishedIndex candidates
         SpatialIndex.neighbors observer.Latest.Location state.LatestIndex candidates
         candidates.Add observer.ConnectionId |> ignore
         let observerMoved = observer.Published.Location <> observer.Latest.Location
-        let movements = ResizeArray<PlayerId * PlayerLocation voption>()
+        let movements = state.Movements
+        movements.Clear()
 
         for id in candidates do
             match state.Members.TryGetValue id with
             | true, source when (observerMoved || changed.Contains id) && identityEqual source.Published source.Latest ->
                 let previous = visibleLocation state observer.Published source.Published
                 let latest = visibleLocation state observer.Latest source.Latest
-                if previous <> latest then movements.Add(source.Latest.Data.PlayerId, latest)
+                if previous <> latest then movements.Add { PlayerId = source.Latest.Data.PlayerId; Location = latest }
             | true, _ | false, _ -> ()
 
         if movements.Count > 0 && state.Members.ContainsKey observer.ConnectionId then
             // Only one recipient's candidate set and batch are built at a time.
             // A slow recipient's Left cannot be followed by its stale coordinates.
-            let ordered = movements |> Seq.sortBy fst |> List.ofSeq
+            let ordered = movements.ToArray()
+            Array.sortInPlaceBy (fun (change: MovementChange) -> change.PlayerId) ordered
+            // The detached array belongs to the recipient. Scratch must not retain samples.
+            movements.Clear()
+            candidates.Clear()
             deliverDelta state context observer (PresenceEvent.Moved ordered)
 
     let private publishDirty state context =
@@ -266,6 +274,7 @@ module PresenceAgent =
         else
             let state = {
                 Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
+                Candidates = HashSet(); Movements = ResizeArray()
                 LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
                 PublishedIndex = SpatialIndex.create (double config.VisibilityDistance)
                 VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance

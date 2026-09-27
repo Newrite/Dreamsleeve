@@ -12,6 +12,9 @@ open Dreamsleeve.Protocol.Chat
 open Expecto
 open AgentTests
 
+let private movementBatch items =
+    items |> List.map (fun (id, location) -> ({ PlayerId = id; Location = location }: Dreamsleeve.Server.Domain.MovementChange)) |> List.toArray
+
 let private tick () =
     let now = System.Diagnostics.Stopwatch.GetTimestamp()
     ServerRuntimeMessage.Tick { DueTimestamp = now; QueuedTimestamp = now }
@@ -172,7 +175,7 @@ let tests = testList "ServerRuntime" [
                     (Dreamsleeve.Server.Domain.Location.create (space name) (Dreamsleeve.Server.Domain.LocationName.create 128 "Place" |> ok))
                     (Dreamsleeve.Server.Domain.Position.create x 0.f 0.f |> ok)
                     Dreamsleeve.Server.Domain.Rotation.zero
-            let move value = ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved [pid, value]))
+            let move value = ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved (movementBatch [pid, value])))
             do! post fixture.Runtime (move (ValueSome (location "Skyrim.esm" 1.f)))
             do! post fixture.Runtime (move (ValueSome (location "Skyrim.esm" 2.f)))
             let! _ = stats fixture
@@ -196,7 +199,7 @@ let tests = testList "ServerRuntime" [
             let! _, onTick = receive fixture.Output
             equal 5.f onTick.PlayersMoved.Players[0].Location.Position.X
 
-            let oversized = [for id in 1UL .. 3UL -> Dreamsleeve.Server.Domain.PlayerId.create id |> ok, ValueNone]
+            let oversized = movementBatch [for id in 1UL .. 3UL -> Dreamsleeve.Server.Domain.PlayerId.create id |> ok, ValueNone]
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved oversized)))
             let! state = stats fixture
             equal 1 state.Closing

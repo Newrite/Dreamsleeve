@@ -114,12 +114,17 @@ module ServerRuntime =
 
     let private flushMovement options state context (entry: SessionTable.Entry) =
         if entry.Movement.Count > 0 then
-            let movements = entry.Movement |> Seq.map (fun pair -> pair.Key, pair.Value) |> List.ofSeq
+            let movements = Array.zeroCreate<MovementChange> entry.Movement.Count
+            let mutable index = 0
+            for KeyValue(playerId, location) in entry.Movement do
+                movements[index] <- { PlayerId = playerId; Location = location }
+                index <- index + 1
             entry.Movement.Clear()
             ProtocolCodec.encodeMovementPackets state.Codec movements |> transmit options state context entry
 
-    let private queueMovement (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) movements =
-        for playerId, location in movements do
+    let private queueMovement (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) (movements: MovementChange array) =
+        for movement in movements do
+            let playerId, location = movement.PlayerId, movement.Location
             if entry.Phase = SessionTable.Ready then
                 // A clear or space transition is a stream boundary. Never replace
                 // it with a later pose while it is waiting for the transport tick.
