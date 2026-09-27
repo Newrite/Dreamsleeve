@@ -1,4 +1,4 @@
-namespace Dreamsleeve.Server.Core
+﻿namespace Dreamsleeve.Server.Core
 
 open System
 open System.Threading
@@ -47,6 +47,7 @@ module ServerRuntime =
     type private State = {
         Table: SessionTable.State
         Codec: ChatCodec
+        MaxActorValues: int
         Transport: ServerTransport
         Logger: ILogger
         mutable Sources: Sources option
@@ -139,7 +140,8 @@ module ServerRuntime =
                 match response with
                 | ChatResponse.RequestRejected _ -> send options state context entry response
                 | ChatResponse.SessionOpened _ | ChatResponse.ChatAccepted _ | ChatResponse.ChatPublished _
-                | ChatResponse.PlayerJoined _ | ChatResponse.PlayerLeft _ -> ()
+                | ChatResponse.PlayerJoined _ | ChatResponse.PlayerUpdated _ | ChatResponse.PlayerMoved _
+                | ChatResponse.PlayerUpdateAccepted _ | ChatResponse.PlayerLeft _ -> ()
             | Some _ | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->
@@ -149,11 +151,11 @@ module ServerRuntime =
             state.Logger.LogWarning("Slow consumer {ConnectionId}", connectionId)
             SessionTable.find connectionId state.Table |> Option.iter (close options state context)
 
-    let private openSession (options: ServerRuntimeOptions) globalId (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket =
+    let private openSession (options: ServerRuntimeOptions) maxActorValues globalId (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket =
         match state.Sources, context.Ref.TryReliable() with
         | Some sources, Some self ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket }
-            match PlayerSession.start options.Player globalId (authenticator.Requests)
+            match PlayerSession.start options.Player maxActorValues globalId (authenticator.Requests)
                       (sources.Chat.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                       (self.Map ServerRuntimeMessage.Host) request with
             | Error reason -> fail state context reason
@@ -162,6 +164,15 @@ module ServerRuntime =
                 entry.Phase <- SessionTable.Opening
                 context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
         | None, _ | _, None -> close options state context entry
+
+    let private forward (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) requestId message =
+        match entry.Child with
+        | Some child ->
+            match child.TryPost message with
+            | AgentPostResult.Posted -> ()
+            | AgentPostResult.Full -> reject options state context entry requestId RequestRejectionCode.Overloaded "Session input is full."
+            | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped -> close options state context entry
+        | None -> close options state context entry
 
     let private receive (options: ServerRuntimeOptions) globalId authenticator state context entry bytes =
         match ChatCodec.decodeClient state.Codec bytes with
@@ -172,20 +183,16 @@ module ServerRuntime =
         | Ok request ->
             match request.Command, entry.Phase with
             | ChatCommand.OpenSession sessionTicket, SessionTable.Waiting ->
-                openSession options globalId authenticator state context entry request.RequestId sessionTicket
+                openSession options state.MaxActorValues globalId authenticator state context entry request.RequestId sessionTicket
             | ChatCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
                 reject options state context entry request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
             | ChatCommand.SendChat(channelId, text), SessionTable.Ready ->
-                match entry.Child with
-                | Some child ->
-                    match child.TryPost(PlayerSessionMessage.SendChat(request.RequestId, channelId, text)) with
-                    | AgentPostResult.Posted -> ()
-                    | AgentPostResult.Full -> reject options state context entry request.RequestId RequestRejectionCode.Overloaded "Session input is full."
-                    | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped -> close options state context entry
-                | None -> close options state context entry
-            | ChatCommand.SendChat _, (SessionTable.Waiting | SessionTable.Opening) ->
+                forward options state context entry request.RequestId (PlayerSessionMessage.SendChat(request.RequestId, channelId, text))
+            | ChatCommand.UpdatePlayer update, SessionTable.Ready ->
+                forward options state context entry request.RequestId (PlayerSessionMessage.Update(request.RequestId, update))
+            | (ChatCommand.SendChat _ | ChatCommand.UpdatePlayer _), (SessionTable.Waiting | SessionTable.Opening) ->
                 reject options state context entry request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
-            | (ChatCommand.OpenSession _ | ChatCommand.SendChat _), SessionTable.Closing -> ()
+            | (ChatCommand.OpenSession _ | ChatCommand.SendChat _ | ChatCommand.UpdatePlayer _), SessionTable.Closing -> ()
 
     let private transportEvent (options: ServerRuntimeOptions) globalId authenticator state context event =
         match event with
@@ -355,15 +362,15 @@ module ServerRuntime =
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
         | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.Stop -> true
 
-    /// The caller keeps the profile store across restarts and disposes the
+    /// The caller owns authentication separately and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.
     let start (options: ServerRuntimeOptions) config (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let limits = [ options.MaxSessions; options.MailboxCapacity; options.ControlReserve; options.OpenTimeoutMs
                        options.ShutdownTimeoutMs; options.PollIntervalMs; options.Player.MailboxCapacity
-                       options.Player.ControlReserve; options.Player.MaxPendingChat; options.Player.MaxBootstrapEvents
+                       options.Player.ControlReserve; options.Player.MaxPendingChat; options.Player.MaxPendingUpdates; options.Player.MaxBootstrapEvents
                        options.Player.MaxPendingOutput; options.Chat.MailboxCapacity; options.Chat.ControlReserve
                        options.Chat.HistoryCapacity; options.Chat.MaxControlDeliveries; options.Presence.MailboxCapacity
-                       options.Presence.ControlReserve; options.Presence.MaxControlDeliveries ]
+                       options.Presence.ControlReserve; options.Presence.MaxControlDeliveries; options.Presence.ReplicationIntervalMs ]
         let errors = [
             if limits |> List.exists (fun value -> value < 1) then "Runtime capacities and deadlines must be positive."
             if int64 options.ControlReserve < 3L * int64 options.MaxSessions + 4L then
@@ -374,7 +381,8 @@ module ServerRuntime =
                 "Chat history must fit MaxRecentMessages."
             if int64 config.ServiceTimeoutMs + int64 options.PollIntervalMs > int64 (min options.OpenTimeoutMs options.ShutdownTimeoutMs) then
                 "Transport service wait plus poll interval must fit runtime deadlines."
-            if options.Player.MaxPendingChat > Int32.MaxValue - 2 || options.Player.MaxPendingOutput > Int32.MaxValue - 2 then
+            if options.Player.MaxPendingChat > Int32.MaxValue - 2 || options.Player.MaxPendingUpdates > Int32.MaxValue - 2
+               || options.Player.MaxPendingOutput > Int32.MaxValue - 2 then
                 "Session pending capacity plus cleanup reserve overflows."
             for ordinary, reserve in [options.MailboxCapacity, options.ControlReserve; options.Player.MailboxCapacity, options.Player.ControlReserve
                                       options.Chat.MailboxCapacity, options.Chat.ControlReserve; options.Presence.MailboxCapacity, options.Presence.ControlReserve] do
@@ -384,7 +392,8 @@ module ServerRuntime =
         match errors, ChatCodec.create config, ChatChannelId.create 1UL with
         | [], Ok codec, Ok globalId ->
             let state = {
-                Table = SessionTable.create(); Codec = codec; Transport = transport; Logger = logger
+                Table = SessionTable.create(); Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
+                Transport = transport; Logger = logger
                 Sources = None; Stopping = false; SourcesStopping = false; StopDeadline = 0L
             }
             let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }

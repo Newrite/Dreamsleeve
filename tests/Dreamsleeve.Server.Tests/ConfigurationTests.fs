@@ -67,4 +67,14 @@ let tests = testList "Server configuration" [
         ] do
             withFile source (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) "invalid settings rejected")
+
+    testCase "player input sections and telemetry budgets are validated" <| fun _ ->
+        for source in [
+            """{"Server":{"PlayerInput":null}}"""
+            """{"Server":{"PlayerInput":{"MaxActorValues":0}}}"""
+            """{"Server":{"PlayerInput":{"DetailsText":0}}}"""
+            """{"Server":{"PlayerInput":{"ActivityKey":0}}}"""
+        ] do
+            withFile source (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) "invalid telemetry input configuration rejected")
 ]

@@ -28,10 +28,22 @@ module PlayerData =
 /// A detached, immutable projection for other agents and outbound messages.
 type PlayerSnapshot = {
     Data: PlayerData
+    CharacterGeneration: uint64
     CharacterName: CharacterName voption
+    Details: PlayerDetails
     Location: PlayerLocation voption
     ActorValues: Map<ActorValueKey, ActorValueInfo>
 }
+
+/// Validated observations from the current game instance. A sample replaces the
+/// location and readings; membership, identity and admission limits belong to the session owner.
+[<RequireQualifiedAccess>]
+type PlayerUpdate =
+    | BeginCharacter of CharacterName
+    | RenameCharacter of CharacterName
+    | Sample of PlayerLocation voption * Map<ActorValueKey, ActorValueInfo>
+    | SetDetails of PlayerDetails
+    | LeaveGame
 
 /// Owned by one agent. Profile/location updates return a replacement record,
 /// while its private ActorValueStorage remains owned by that same agent.
@@ -39,19 +51,25 @@ type PlayerSnapshot = {
 type Player =
     private {
         data: PlayerData
+        characterGeneration: uint64
         characterName: CharacterName voption
+        details: PlayerDetails
         location: PlayerLocation voption
         actorValues: ActorValueStorage
     }
     member this.Data = this.data
+    member this.CharacterGeneration = this.characterGeneration
     member this.CharacterName = this.characterName
+    member this.Details = this.details
     member this.Location = this.location
 
 [<RequireQualifiedAccess>]
 module Player =
     let create data : Player =
         { data = data
+          characterGeneration = 0UL
           characterName = ValueNone
+          details = PlayerDetails.empty
           location = ValueNone
           actorValues = ActorValueStorage.create () }
 
@@ -80,13 +98,33 @@ module Player =
     /// and chat identity survive; the old character's storage is not reused.
     let clearGameState (player: Player) =
         { player with
+            characterGeneration = player.characterGeneration + 1UL
             characterName = ValueNone
+            details = PlayerDetails.empty
             location = ValueNone
             actorValues = ActorValueStorage.create () }
 
     /// Explicitly start a new character, even when its name matches the old one.
     let beginCharacter characterName player =
         clearGameState player |> withCharacterName characterName
+
+    /// Build a replacement storage before publishing the replacement player. No
+    /// observer can see a new location paired with readings from the previous sample.
+    let replaceSample location (entries: Map<ActorValueKey, ActorValueInfo>) (player: Player) =
+        let values = ActorValueStorage.create ()
+
+        for KeyValue(key, info) in entries do
+            ActorValueStorage.set key info values
+
+        { player with location = location; actorValues = values }
+
+    let applyUpdate update player =
+        match update with
+        | PlayerUpdate.BeginCharacter name -> beginCharacter name player
+        | PlayerUpdate.RenameCharacter name -> withCharacterName name player
+        | PlayerUpdate.Sample(location, values) -> replaceSample location values player
+        | PlayerUpdate.SetDetails details -> { player with details = details }
+        | PlayerUpdate.LeaveGame -> clearGameState player
 
     let setActorValue key info (player: Player) =
         ActorValueStorage.set key info player.actorValues
@@ -113,6 +151,8 @@ module Player =
     /// dictionary and its values are immutable.
     let snapshot (player: Player) : PlayerSnapshot =
         { Data = player.data
+          CharacterGeneration = player.characterGeneration
           CharacterName = player.characterName
+          Details = player.details
           Location = player.location
           ActorValues = actorValuesSnapshot player }

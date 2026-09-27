@@ -72,9 +72,9 @@ $metadata = [ordered]@{
     Notes = @(
         "Common case: one in-flight request per sender, N=1/16/32, one channel, retained history=64.",
         "New-only rooms: 1 or 4 independent room agents, same 4 senders joined to every room, same total requests/fanout.",
-        "New-only player state: one update plus snapshot read per operation, one benchmark reply driver per player, N=1/16/32.",
+        "New-only player state: one update plus correlated ACK and snapshot read per operation, one benchmark reply driver per player, N=1/16/32.",
         "P50/P95/P99 end at correlated acknowledgement (or completed state read); Admission percentiles end at awaited PostAsync and are null for player state.",
-        "PublishedPackets counts N recipients per chat operation; the author publication also acknowledges request_id. Player state emits no packets.",
+        "PublishedPackets counts N recipients per chat operation; the author publication also acknowledges request_id. Player state emits ACK/presence packets, excluded from the chat publication count.",
         "Baseline receiver encodes output; current runtime encodes output and also polls an empty transport.",
         "Finite generous benchmark queue limits are not production defaults; observed actor queue sums cover only named public owners, private runtime children excluded.",
         "ThreadPool and named actor queue sums are sampled every 10ms, so peaks between samples can be missed. Slow-consumer bounds/isolation use deterministic tests, not these throughput samples.",

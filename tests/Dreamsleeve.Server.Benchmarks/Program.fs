@@ -136,7 +136,7 @@ let private start count (probe: Probe) = task {
         ServerRuntimeOptions.defaults with
             MaxSessions = count; MailboxCapacity = 65536; ControlReserve = 3 * count + 4
             OpenTimeoutMs = 30000; ShutdownTimeoutMs = 5000
-            Player = { ServerRuntimeOptions.defaults.Player with MailboxCapacity = 1024; MaxPendingOutput = 1024 }
+            Player = { ServerRuntimeOptions.defaults.Player with MailboxCapacity = 1024; MaxPendingOutput = 1024; MaxPendingUpdates = 1024 }
             Chat = { ServerRuntimeOptions.defaults.Chat with MailboxCapacity = 256; HistoryCapacity = 64 }
     }
     let runtime = ServerRuntime.start options settings authenticator transport Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance |> ok
@@ -179,14 +179,20 @@ let private start count (probe: Probe) = task {
     }
 #else
     let name = CharacterName.create 64 "Benchmark character" |> ok
-    let readPlayer (player: AgentRef<PlayerSessionMessage>) _ (reply: ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>) = task {
-        let! updated = player.PostAsync(PlayerSessionMessage.Update(PlayerUpdate.BeginCharacter name))
-        if updated <> AgentPostResult.Posted then failwithf "Update admission: %A" updated
-        let! read = player.PostAsync(PlayerSessionMessage.Read reply)
-        if read <> AgentPostResult.Posted then failwithf "Read admission: %A" read
-    }
+    let readPlayer index (player: AgentRef<PlayerSessionMessage>) =
+        let mutable requestId = 1000000UL
+        let handle _ (reply: ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>) = task {
+            requestId <- requestId + 1UL
+            let accepted = probe.Expect(ids[index], requestId)
+            let! updated = player.PostAsync(PlayerSessionMessage.Update(requestId, PlayerUpdate.BeginCharacter name))
+            if updated <> AgentPostResult.Posted then failwithf "Update admission: %A" updated
+            let! _ = guard accepted
+            let! read = player.PostAsync(PlayerSessionMessage.Read reply)
+            if read <> AgentPostResult.Posted then failwithf "Read admission: %A" read
+        }
+        handle
     let readers = players |> Array.mapi (fun index player ->
-        Agent.Start({ AgentOptions.create (sprintf "benchmark-reader-%d" index) with Mailbox = AgentMailbox.boundedWait 1 }, readPlayer player))
+        Agent.Start({ AgentOptions.create (sprintf "benchmark-reader-%d" index) with Mailbox = AgentMailbox.boundedWait 1 }, readPlayer index player))
     let updateRead index : Task = task {
         let! result = readers[index].AskAsync id |> guard
         let snapshot = result |> ok

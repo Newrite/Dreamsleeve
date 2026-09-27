@@ -1,6 +1,7 @@
-﻿export module Dreamsleeve.Client.Domain;
+export module Dreamsleeve.Client.Domain;
 
 import std;
+export import Dreamsleeve.Protocol;
 
 export namespace Domain
 {
@@ -99,6 +100,45 @@ export namespace Domain
     bool operator==(const PlayerLocation&) const = default;
   };
 
+  using ActivityKind = ::Protocol::Chat::ActivityKind;
+  using LockDifficulty = ::Protocol::Chat::LockDifficulty;
+
+  struct NamedForm
+  {
+    FormKey form{};
+    std::string name{};
+    bool operator==(const NamedForm&) const = default;
+  };
+
+  struct PlayerActivity
+  {
+    ActivityKind kind{ActivityKind::Unknown};
+    std::optional<std::string> targetName;
+    LockDifficulty lockDifficulty{LockDifficulty::Unknown};
+    std::optional<std::string> menuKey;
+    bool operator==(const PlayerActivity&) const = default;
+  };
+
+  struct PlaceDescription
+  {
+    std::string worldspaceName;
+    std::string locationName;
+    std::string nearbyMarkerName;
+    std::string markerKind;
+    bool isInterior{};
+    bool operator==(const PlaceDescription&) const = default;
+  };
+
+  struct PlayerDetails
+  {
+    std::optional<NamedForm> race;
+    std::optional<std::uint32_t> level;
+    PlayerActivity activity{};
+    std::optional<PlaceDescription> place;
+    std::optional<std::int64_t> gameStartedAtUnixMs;
+    bool operator==(const PlayerDetails&) const = default;
+  };
+
   struct PlayerData final
   {
     PlayerId    playerId{};
@@ -114,6 +154,8 @@ export namespace Domain
     std::optional<CharacterName>  characterName{};
     std::optional<PlayerLocation> location{};
     ActorValueStorage             actorValues{};
+    std::uint64_t                 characterGeneration{};
+    PlayerDetails                 details{};
 
     bool operator==(const Player&) const = default;
   };

@@ -49,7 +49,7 @@ namespace
     auto* welcome = packet.mutable_session_opened();
     welcome->set_self_player_id(7);
     welcome->set_global_channel_id(1);
-    *welcome->add_players()         = published.chat_published().message().author();
+    *welcome->add_players()->mutable_profile() = published.chat_published().message().author();
     *welcome->add_recent_messages() = published.chat_published().message();
     return packet;
   }
@@ -150,7 +150,7 @@ TEST_CASE("Rejections retain unknown codes and correlation while presence events
   result = codec.Decode(Bytes(packet));
   REQUIRE(result);
   CHECK(std::get<PlayerRemoved>(*result).playerId == 7);
-  *packet.mutable_player_joined()->mutable_player() = Published().chat_published().message().author();
+  *packet.mutable_player_joined()->mutable_player()->mutable_profile() = Published().chat_published().message().author();
   result                                            = codec.Decode(Bytes(packet));
   REQUIRE(result);
   CHECK(std::get<PlayerUpserted>(*result).player.data.playerId == 7);
@@ -188,7 +188,7 @@ TEST_CASE("Malformed unsupported and structurally incomplete server packets retu
   auto bytes = Bytes(packet);
   bytes.insert(bytes.end(), {std::byte{0x98}, std::byte{0x06}, std::byte{0x01}});
   CHECK(codec.Decode(bytes));  // An unknown additive field is allowed within this version.
-  const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{0x02}, std::byte{0x7a}, std::byte{0x00}};
+  const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{0x03}, std::byte{0x92}, std::byte{0x01}, std::byte{0x00}};
   auto                         unknown = codec.Decode(futurePayload);
   REQUIRE_FALSE(unknown);
   CHECK(unknown.error().code == W::ErrorCode::InvalidPayload);
@@ -227,7 +227,7 @@ TEST_CASE("Bootstrap counts come from configuration and zero retained messages i
   auto          packet  = Welcome();
   auto*         welcome = packet.mutable_session_opened();
   auto          second  = welcome->players(0);
-  second.set_player_id(8);
+  second.mutable_profile()->set_player_id(8);
   *welcome->add_players()    = second;
   settings.maxInitialPlayers = 2;
   CHECK(MakeCodec(settings).Decode(Bytes(packet)));
@@ -307,6 +307,150 @@ TEST_CASE("Rejection codes share protobuf names and retain future signed enum va
   auto missing = codec.Decode(Bytes(packet));
   REQUIRE_FALSE(missing);
   CHECK(missing.error().field == "code");
+}
+
+
+TEST_CASE("Player update encoding retains full samples explicit zero resource values and structured details")
+{
+  const auto codec = MakeCodec();
+  LocalPlayerState sample;
+  sample.location = Domain::PlayerLocation{{{"skyrim.esm", 0x123}, "Whiterun"}, {1, 2, 3}, {0, 0, 3.14f}};
+  sample.actorValues.emplace("speed", Domain::ActorValueInfo{"Speed", Domain::ScalarActorValue{0}});
+  sample.actorValues.emplace("health", Domain::ActorValueInfo{"Health", Domain::ResourceActorValue{150, 100}});
+  auto encoded = codec.Encode(W::UpdatePlayer{51, sample});
+  REQUIRE(encoded);
+  P::ClientPacket packet;
+  REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  const auto& wire = packet.update_player().sample_player_state();
+  CHECK(wire.location().position().x() == 1);
+  CHECK(wire.location().rotation().z() == doctest::Approx(3.14));
+  CHECK(wire.actor_values_size() == 2);
+  for (const auto& entry : wire.actor_values())
+  {
+    if (entry.key() == "speed")
+    {
+      CHECK(entry.value_case() == P::ActorValueEntry::kScalar);
+      CHECK(entry.scalar() == 0);
+    }
+    else
+    {
+      CHECK(entry.resource().current() == 150);
+      CHECK(entry.resource().maximum() == 100);
+    }
+  }
+
+  Domain::PlayerDetails details;
+  details.race = Domain::NamedForm{{"skyrim.esm", 0x13746}, "Nord"};
+  details.level = 0;
+  details.activity = {Domain::ActivityKind::Lockpicking, "Chest", Domain::LockDifficulty::VeryHard, std::nullopt};
+  details.place = Domain::PlaceDescription{"Tamriel", "Whiterun", "Dragonsreach", "castle", false};
+  details.gameStartedAtUnixMs = 123456789;
+  encoded = codec.Encode(W::UpdatePlayer{52, PlayerDetailsChanged{details}});
+  REQUIRE(encoded);
+  REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  const auto& rich = packet.update_player().set_details();
+  CHECK(rich.has_level());
+  CHECK(rich.level() == 0);
+  CHECK(rich.race().name() == "Nord");
+  CHECK(rich.activity().kind() == P::ACTIVITY_KIND_LOCKPICKING);
+  CHECK(rich.activity().lock_difficulty() == P::LOCK_DIFFICULTY_VERY_HARD);
+  CHECK(rich.activity().target_name() == "Chest");
+  CHECK(rich.place().nearby_marker_name() == "Dragonsreach");
+  CHECK(rich.game_started_at_unix_ms() == 123456789);
+  details.place.reset();
+  encoded = codec.Encode(W::UpdatePlayer{53, PlayerDetailsChanged{details}});
+  REQUIRE(encoded);
+  REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  CHECK_FALSE(packet.update_player().set_details().has_place());
+}
+
+TEST_CASE("Full PlayerInfo preserves optional data zero scalars and generation for late join")
+{
+  const auto codec = MakeCodec();
+  auto packet = Welcome();
+  auto* source = packet.mutable_session_opened()->mutable_players(0);
+  source->set_character_name("Nerevar");
+  source->set_character_generation(5);
+  source->mutable_details()->set_level(25);
+  source->mutable_details()->mutable_activity()->set_kind(P::ACTIVITY_KIND_COMBAT);
+  source->mutable_details()->mutable_activity()->set_target_name("Dragon");
+  source->mutable_details()->set_game_started_at_unix_ms(123);
+  auto* scalar = source->add_actor_values();
+  scalar->set_key("zero");
+  scalar->set_scalar(0);
+  auto result = codec.Decode(Bytes(packet));
+  REQUIRE(result);
+  const auto& player = std::get<W::SessionOpened>(*result).players.front();
+  CHECK(player.characterName == "Nerevar");
+  CHECK(player.characterGeneration == 5);
+  CHECK(player.details.level == 25);
+  CHECK_FALSE(player.details.place);
+  CHECK(player.details.activity.kind == Domain::ActivityKind::Combat);
+  CHECK(player.details.activity.targetName == "Dragon");
+  CHECK(player.details.gameStartedAtUnixMs == 123);
+  CHECK(std::get<Domain::ScalarActorValue>(player.actorValues.at("zero").state).value == 0);
+
+  SUBCASE("missing actor value") { scalar->clear_value(); }
+  SUBCASE("nonfinite actor value") { scalar->set_scalar(std::numeric_limits<float>::infinity()); }
+  SUBCASE("duplicate actor key") { *source->add_actor_values() = *scalar; }
+  SUBCASE("too many values")
+  {
+    for (int index = 0; index < 64; ++index)
+    {
+      auto* value = source->add_actor_values();
+      value->set_key(std::to_string(index));
+      value->set_scalar(0);
+    }
+  }
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
+}
+
+TEST_CASE("Actor value limits are configured for both outgoing samples and incoming player state")
+{
+  Configuration settings;
+  settings.maxActorValues = 1;
+  const auto codec = MakeCodec(settings);
+  LocalPlayerState sample;
+  sample.actorValues.emplace("skyrim:health", Domain::ActorValueInfo{"Health", Domain::ScalarActorValue{0}});
+  sample.actorValues.emplace("skyrim:stamina", Domain::ActorValueInfo{"Stamina", Domain::ScalarActorValue{1}});
+  CHECK_FALSE(codec.Encode(W::UpdatePlayer{1, sample}));
+  auto packet = Welcome();
+  auto* player = packet.mutable_session_opened()->mutable_players(0);
+  for (const auto* key : {"skyrim:health", "skyrim:stamina"})
+  {
+    auto* value = player->add_actor_values();
+    value->set_key(key);
+    value->set_scalar(0);
+  }
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  settings.maxActorValues = 65;
+  CHECK(MakeCodec(settings).Decode(Bytes(packet)));
+  settings.maxActorValues = 0;
+  CHECK_FALSE(W::Codec::TryCreate(settings));
+}
+
+TEST_CASE("Player update correlation is distinct from uncorrelated full and compact replication")
+{
+  const auto codec = MakeCodec();
+  P::ServerPacket packet;
+  packet.set_protocol_version(W::Version);
+  packet.mutable_player_update_accepted();
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  packet.set_request_id(1);
+  auto accepted = codec.Decode(Bytes(packet));
+  REQUIRE(accepted);
+  CHECK(std::get<W::PlayerUpdateAccepted>(*accepted).requestId == 1);
+  packet.mutable_player_moved()->set_player_id(7);
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
+  packet.clear_request_id();
+  auto moved = codec.Decode(Bytes(packet));
+  REQUIRE(moved);
+  CHECK(std::get<PlayerLocationUpdated>(*moved).playerId == 7);
+  CHECK_FALSE(std::get<PlayerLocationUpdated>(*moved).location);
+  packet.mutable_player_updated()->mutable_player()->mutable_profile()->set_player_id(7);
+  REQUIRE(codec.Decode(Bytes(packet)));
+  packet.set_request_id(1);
+  CHECK_FALSE(codec.Decode(Bytes(packet)));
 }
 
 TEST_SUITE_END();

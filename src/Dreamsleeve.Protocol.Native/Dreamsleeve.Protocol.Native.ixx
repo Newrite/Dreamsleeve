@@ -33,3 +33,44 @@ export namespace Protocol::Chat
     AuthenticationFailed = 8,
   };
 }
+
+export namespace Protocol::Chat
+{
+  enum class ActivityKind : std::int32_t
+  {
+    Unknown = 0,
+    Exploring = 1,
+    Combat = 2,
+    Talking = 3,
+    Bartering = 4,
+    Training = 5,
+    Reading = 6,
+    Lockpicking = 7,
+    Crafting = 8,
+    UsingObject = 9,
+    Riding = 10,
+    Sneaking = 11,
+    Swimming = 12,
+    Flying = 13,
+    Dead = 14,
+    Ragdoll = 15,
+    Menu = 16,
+    NewGame = 17,
+    Loading = 18,
+  };
+}
+
+export namespace Protocol::Chat
+{
+  enum class LockDifficulty : std::int32_t
+  {
+    Unknown = 0,
+    Unlocked = 1,
+    VeryEasy = 2,
+    Easy = 3,
+    Average = 4,
+    Hard = 5,
+    VeryHard = 6,
+    RequiresKey = 7,
+  };
+}

@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.Tests.Program
+﻿module Dreamsleeve.Server.Tests.Program
 
 open Expecto
 
@@ -6,6 +6,7 @@ open Expecto
 let main argv =
     testList "Tests" [
         DomainTests.tests
+        PlayerDetailsTests.tests
         AgentTests.tests
         CodecTests.tests
         BackgroundTests.tests

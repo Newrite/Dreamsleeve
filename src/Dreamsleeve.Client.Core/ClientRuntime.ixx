@@ -21,7 +21,7 @@ public:
 
     static Result<Ptr> TryCreate(Configuration config, ClientExchange& exchange)
     {
-      if (config.chatCapacity == 0 || config.maxPendingChatRequests == 0 || config.sessionTimeoutMs == 0 || config.connectTimeoutMs == 0 || config.disconnectTimeoutMs == 0)
+      if (config.chatCapacity == 0 || config.maxPendingChatRequests == 0 || config.maxPendingPlayerUpdates == 0 || config.playerSampleIntervalMs == 0 || config.sessionTimeoutMs == 0 || config.connectTimeoutMs == 0 || config.disconnectTimeoutMs == 0)
         return std::unexpected{
             DreamNetError::Make(DreamNetErrorCode::InvalidConfig, "Session timeouts, chat and pending request capacities must be positive")
         };
@@ -70,6 +70,8 @@ public:
       opening   = Wire::OpenSession{*requestId, std::move(sessionTicket)};
       lastRequest = *requestId;
       pendingChats.clear();
+      pendingUpdates.clear();
+      nextPlayerSample = {};
       model.ResetSession();
       auto published = Publish();
       if (!published) return Fail(published.error());
@@ -150,6 +152,8 @@ private:
     Result<void> Clear(SessionPhase value)
     {
       pendingChats.clear();
+      pendingUpdates.clear();
+      nextPlayerSample = {};
       model.ResetSession();
       phase = value;
       auto published = Publish(true);
@@ -253,7 +257,8 @@ private:
         return Clear(SessionPhase::Disconnected);
       }
 
-      if (phase != SessionPhase::Ready || pendingChats.erase(rejection.requestId) == 0) return Unexpected("request_id");
+      if (phase != SessionPhase::Ready) return Unexpected("request_id");
+      if (pendingChats.erase(rejection.requestId) == 0 && pendingUpdates.erase(rejection.requestId) == 0) return Unexpected("request_id");
 
       return Apply(rejection);
     }
@@ -271,6 +276,17 @@ private:
       if (applied) pendingChats.erase(found);
 
       return applied;
+    }
+
+    Result<void> Receive(Wire::PlayerUpdateAccepted& accepted)
+    {
+      if (phase != SessionPhase::Ready || pendingUpdates.erase(accepted.requestId) == 0) return Unexpected("request_id");
+      return {};
+    }
+
+    Result<void> Receive(PlayerLocationUpdated& value)
+    {
+      return Apply(value);
     }
 
     Result<void> Receive(ChatMessagesReceived& value)
@@ -299,9 +315,9 @@ private:
       return Publish();
     }
 
-    Result<void> RejectCommand(std::uint64_t generation, const SendChat& command, CommandFailureCode code)
+    Result<void> RejectCommand(std::uint64_t generation, std::uint64_t requestId, CommandFailureCode code)
     {
-      if (!exchange.PublishCommandFailure({generation, command.requestId, code}))
+      if (!exchange.PublishCommandFailure({generation, requestId, code}))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
 
       return {};
@@ -309,16 +325,16 @@ private:
 
     Result<void> Process(std::uint64_t generation, SendChat& command)
     {
-      if (generation != model.Generation()) return RejectCommand(generation, command, CommandFailureCode::StaleGeneration);
-      if (phase != SessionPhase::Ready) return RejectCommand(generation, command, CommandFailureCode::SessionNotReady);
-      if (command.requestId <= lastRequest) return RejectCommand(generation, command, CommandFailureCode::InvalidRequest);
+      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
+      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
+      if (command.requestId <= lastRequest || pendingUpdates.contains(command.requestId)) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
 
       lastRequest = command.requestId;
-      if (!model.FindChatState(command.channelId)) return RejectCommand(generation, command, CommandFailureCode::InvalidRequest);
-      if (pendingChats.size() >= config.maxPendingChatRequests) return RejectCommand(generation, command, CommandFailureCode::Busy);
+      if (!model.FindChatState(command.channelId)) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      if (pendingChats.size() >= config.maxPendingChatRequests) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
       auto packet = codec.Encode(command);
-      if (!packet) return RejectCommand(generation, command, CommandFailureCode::EncodingFailed);
+      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
 
       auto sent = transport->Send(std::move(*packet));
       if (!sent) return Fail(sent.error());
@@ -332,19 +348,42 @@ private:
       return Publish(true);
     }
 
-    static Result<void> UnsupportedCommand()
+    template <class T>
+    Result<void> SendPlayerUpdate(std::uint64_t generation, T& command)
     {
-      return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Player telemetry has no wire contract yet")};
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId)
+        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Request IDs exhausted")};
+      if (generation != model.Generation()) return RejectCommand(generation, *requestId, CommandFailureCode::StaleGeneration);
+      if (phase != SessionPhase::Ready) return RejectCommand(generation, *requestId, CommandFailureCode::SessionNotReady);
+      if (pendingUpdates.size() >= config.maxPendingPlayerUpdates) return RejectCommand(generation, *requestId, CommandFailureCode::Busy);
+
+      auto packet = codec.Encode(Wire::UpdatePlayer{*requestId, std::move(command)});
+      if (!packet) return RejectCommand(generation, *requestId, CommandFailureCode::EncodingFailed);
+      auto sent = transport->Send(std::move(*packet));
+      if (!sent) return Fail(sent.error());
+
+      pendingUpdates.insert(*requestId);
+      return {};
     }
 
-    Result<void> Process(std::uint64_t, LocalPlayerState&) { return UnsupportedCommand(); }
-    Result<void> Process(std::uint64_t, CharacterStarted&) { return UnsupportedCommand(); }
-    Result<void> Process(std::uint64_t, GameExited&) { return UnsupportedCommand(); }
+    Result<void> Process(std::uint64_t generation, LocalPlayerState& command)
+    {
+      if (phase == SessionPhase::Ready && generation == model.Generation())
+        nextPlayerSample = Clock::now() + std::chrono::milliseconds(config.playerSampleIntervalMs);
+      return SendPlayerUpdate(generation, command);
+    }
+    Result<void> Process(std::uint64_t generation, CharacterStarted& command) { return SendPlayerUpdate(generation, command); }
+    Result<void> Process(std::uint64_t generation, CharacterRenamed& command) { return SendPlayerUpdate(generation, command); }
+    Result<void> Process(std::uint64_t generation, PlayerDetailsChanged& command) { return SendPlayerUpdate(generation, command); }
+    Result<void> Process(std::uint64_t generation, GameExited& command) { return SendPlayerUpdate(generation, command); }
 
     Result<void> ProcessCommands()
     {
       const auto openingReply = phase == SessionPhase::Connecting || phase == SessionPhase::Opening ? 1u : 0u;
-      exchange.TakeCommands(commands, pendingChats.size() + openingReply + model.PendingServerRejectionCount());
+      const auto sampleBudget = phase != SessionPhase::Ready ? std::numeric_limits<std::size_t>::max()
+        : Clock::now() >= nextPlayerSample ? 1u : 0u;
+      exchange.TakeCommands(commands, pendingChats.size() + pendingUpdates.size() + openingReply + model.PendingServerRejectionCount(), sampleBudget);
       Result<void> firstError;
 
       for (auto& queued : commands)
@@ -366,8 +405,10 @@ private:
     Wire::OpenSession        opening;
     std::uint64_t            lastRequest{};
     std::unordered_map<std::uint64_t, Domain::ChatChannelId> pendingChats;
+    std::unordered_set<std::uint64_t> pendingUpdates;
     std::vector<QueuedClientCommand> commands;
     Clock::time_point        deadline{};
+    Clock::time_point        nextPlayerSample{};
     std::vector<ClientEvent> events;
   };
 

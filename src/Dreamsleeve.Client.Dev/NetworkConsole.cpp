@@ -1,4 +1,5 @@
 #include "AuthHttp.h"
+#include <glaze/glaze.hpp>
 import std;
 import Dreamsleeve.Client.Runtime;
 import DreamNet.Runtime;
@@ -53,6 +54,69 @@ namespace
     output << '[' << message.channelId << "] " << message.author.displayName << ": " << message.messageText << '\n';
   }
 
+  void PrintPlayer(std::ostream& output, const Domain::Player& player)
+  {
+    auto json = glz::write_json(player);
+    if (json) output << "player " << *json << '\n';
+  }
+
+  constexpr std::string_view Commands =
+    "Commands: connect | disconnect | send <text> | begin <name> | rename <name> | "
+    "sample <json> | details <json> | clear-location | leave | read | quit\n";
+
+  bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation, LocalPlayerState& draft)
+  {
+    ClientCommand command;
+    if (line.starts_with("begin "))
+    {
+      command = CharacterStarted{line.substr(6)};
+    }
+    else if (line.starts_with("rename "))
+      command = CharacterRenamed{line.substr(7)};
+    else if (line == "leave")
+      command = GameExited{};
+    else if (line == "clear-location")
+    {
+      auto sample = draft;
+      sample.location.reset();
+      command = std::move(sample);
+    }
+    else if (line.starts_with("sample "))
+    {
+      LocalPlayerState sample;
+      if (glz::read_json(sample, std::string_view(line).substr(7)))
+      {
+        std::cout << "Invalid sample JSON\n";
+        return true;
+      }
+      command = std::move(sample);
+    }
+    else if (line.starts_with("details "))
+    {
+      PlayerDetailsChanged changed;
+      if (glz::read_json(changed.details, std::string_view(line).substr(8)))
+      {
+        std::cout << "Invalid details JSON\n";
+        return true;
+      }
+      command = std::move(changed);
+    }
+    else
+      return false;
+
+    const auto posted = exchange.Post({generation, command});
+    if (posted == CommandPostResult::Queued || posted == CommandPostResult::Replaced)
+    {
+      // Only the input draft changes here. Replicated Player state comes from read.
+      if (const auto* sample = std::get_if<LocalPlayerState>(&command)) draft = *sample;
+      if (std::holds_alternative<CharacterStarted>(command) || std::holds_alternative<GameExited>(command)) draft = {};
+      std::cout << "player command queued\n";
+    }
+    else
+      std::cout << "Command queue is full or closed\n";
+    return true;
+  }
+
   void Print(ClientExchange& exchange, std::uint64_t& generation, Domain::ChatChannelId& channel)
   {
     ClientOutput output;
@@ -68,7 +132,10 @@ namespace
       {
         console << "snapshot generation=" << snapshot->generation << " players=" << snapshot->players.size() << '\n';
         for (const auto& player : snapshot->players)
+        {
           console << player.data.playerId << ": " << player.data.displayName << '\n';
+          PrintPlayer(console, player);
+        }
 
         channel = snapshot->chats.empty() ? 0 : snapshot->chats.front().channelId;
         for (const auto& chat : snapshot->chats)
@@ -79,7 +146,10 @@ namespace
       {
         const auto& delta = std::get<ClientStateDelta>(update);
         for (const auto& player : delta.players)
+        {
           console << "online " << player.data.playerId << ": " << player.data.displayName << '\n';
+          PrintPlayer(console, player);
+        }
         for (const auto playerId : delta.removedPlayers)
           console << "offline " << playerId << '\n';
         for (const auto& change : delta.chatContent)
@@ -251,7 +321,8 @@ int RunNetworkConsole(int argc, char* argv[])
   std::uint64_t generation{};
   Domain::ChatChannelId channel{};
 
-  std::cout << "Real ENet connection. Commands: connect | disconnect | send <text> | read | quit\n";
+  LocalPlayerState draft;
+  std::cout << "Real ENet connection. " << Commands;
 
   std::string line;
   while (std::getline(std::cin, line) && line != "quit")
@@ -282,7 +353,10 @@ int RunNetworkConsole(int argc, char* argv[])
       }
     }
     else
-      std::cout << "Commands: connect | disconnect | send <text> | read | quit\n";
+    {
+      Print(**exchange, generation, channel);
+      if (!PostPlayerCommand(line, **exchange, generation, draft)) std::cout << Commands;
+    }
   }
 
   worker.request_stop();

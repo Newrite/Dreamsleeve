@@ -280,6 +280,45 @@ let private stateTests =
             Expect.equal cleared.Location ValueNone "No active coordinates"
             Expect.equal (Player.actorValueCount cleared) 0 "No old stats"
 
+        testCase "sample replacement removes absent values without mutating the previous state" <| fun _ ->
+            let name = characterName "Nerevar"
+            let healthKey = actorKey "skyrim:health"
+            let extraKey = actorKey "avg:extra"
+            let original = Player.create (profile 1UL "First") |> Player.applyUpdate (PlayerUpdate.BeginCharacter name)
+            let place = location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero
+            let first = original |> Player.applyUpdate (PlayerUpdate.Sample(ValueSome place, Map.ofList [healthKey, health 120.0f; extraKey, health 5.0f]))
+
+            let before = Player.snapshot first
+            let second = first |> Player.applyUpdate (PlayerUpdate.Sample(ValueNone, Map.ofList [healthKey, health -5.0f]))
+
+            Expect.equal second.Location ValueNone "unknown position replaces a previous known location"
+            Expect.equal (Player.actorValueCount second) 1 "a missing key is removed, not retained forever"
+            Expect.equal (Player.tryFindActorValue extraKey second) ValueNone "full sample replaces storage"
+            Expect.equal (Player.snapshot first) before "previous storage is detached from the replacement"
+            Expect.equal second.CharacterGeneration first.CharacterGeneration "samples do not switch character"
+
+        testCase "character generation and metadata follow explicit lifecycle operations" <| fun _ ->
+            let original = Player.create (profile 1UL "First")
+            let name = characterName "Nerevar"
+            let details = PlayerDetails.create ValueNone (ValueSome 80u) PlayerActivity.unknown ValueNone ValueNone |> ok
+            let first = original |> Player.applyUpdate (PlayerUpdate.BeginCharacter name)
+            let sampled = first |> Player.applyUpdate (PlayerUpdate.SetDetails details)
+            let renamed = sampled |> Player.applyUpdate (PlayerUpdate.RenameCharacter (characterName "Renamed"))
+
+            Expect.equal original.CharacterGeneration 0UL "initial connection has no character generation"
+            Expect.equal first.CharacterGeneration 1UL "first character starts a generation"
+            Expect.equal renamed.CharacterGeneration 1UL "rename retains generation"
+            Expect.equal renamed.Details details "rename retains metadata"
+
+            let restarted = renamed |> Player.applyUpdate (PlayerUpdate.BeginCharacter (characterName "Renamed"))
+            Expect.equal restarted.CharacterGeneration 2UL "same-name save switches are visible"
+            Expect.equal restarted.Details PlayerDetails.empty "race, level, activity and place do not leak across saves"
+
+            let left = restarted |> Player.applyUpdate PlayerUpdate.LeaveGame
+            Expect.equal left.CharacterGeneration 3UL "leaving ends the active generation"
+            Expect.equal left.CharacterName ValueNone "no active character"
+            Expect.equal left.Data original.Data "account profile survives game lifecycle"
+
         testCase "profile updates preserve player identity" <| fun _ ->
             let player = Player.create (profile 1UL "First")
             let nextProfile = PlayerData.withDisplayName (displayName "Renamed") player.Data

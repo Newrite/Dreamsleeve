@@ -24,6 +24,9 @@ export namespace Dreamsleeve::Client
     TimeOutMs       sessionTimeoutMs{5000};
     std::size_t     chatCapacity{512};
     std::size_t     maxPendingChatRequests{32};
+    std::size_t     maxPendingPlayerUpdates{32};
+    std::size_t     maxActorValues{64};
+    TimeOutMs       playerSampleIntervalMs{100};
 
     std::optional<std::string_view> InvalidProtocolSetting() const noexcept
     {
@@ -32,6 +35,7 @@ export namespace Dreamsleeve::Client
       if (network.maxWaitingData < network.maxPacketBytes) return "maxWaitingData";
       if (maxInitialPlayers == 0 || maxInitialPlayers > static_cast<std::size_t>(std::numeric_limits<int>::max()))
         return "maxInitialPlayers";
+      if (maxActorValues == 0 || maxActorValues > static_cast<std::size_t>(std::numeric_limits<int>::max())) return "maxActorValues";
       if (maxRecentMessages > static_cast<std::size_t>(std::numeric_limits<int>::max())) return "maxRecentMessages";
       return std::nullopt;
     }

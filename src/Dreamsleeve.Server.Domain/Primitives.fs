@@ -74,6 +74,7 @@ type DomainError =
     | InvalidLocalFormId of value: uint32
     | NonFiniteNumber of field: string
     | InvalidRadius
+    | InvalidPlayerDetails of field: string
     | PlayerIdentityMismatch
     | ChannelMismatch
     | NotChatMember of PlayerId

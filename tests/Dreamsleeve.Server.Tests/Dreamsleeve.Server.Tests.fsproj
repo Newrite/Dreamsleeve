@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="DomainTests.fs" />
+    <Compile Include="PlayerDetailsTests.fs" />
     <Compile Include="AgentTests.fs" />
     <Compile Include="CodecTests.fs" />
     <Compile Include="BackgroundTests.fs" />

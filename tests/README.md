@@ -81,15 +81,16 @@ python Scripts/smoke_chat.py
 ```
 
 Скрипт запускает F# ENet сервер и два C++ Client.Dev, проверяет авторитетную публикацию,
-доставку второй стороне, отключение/повторный вход и завершает дочерние процессы.
+доставку второй стороне, телеметрию автора/наблюдателя и поздний вход,
+сброс персонажа, отключение/повторный вход и завершает дочерние процессы.
 Сборку нужно выполнить заранее. Параметры: `python Scripts/smoke_chat.py --help`.
 
 Ручной запуск:
 
 ```powershell
 dotnet run --project src/Dreamsleeve.Server -c Release
-xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 alice "Alice"
-xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 bob "Bob"
+xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 alice --register "Alice"
+xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 bob --register "Bob"
 ```
 
 В Client.Dev: `send <text>`, `read`, `disconnect`, `connect`, `quit`.
@@ -150,3 +151,8 @@ MSVC/protobuf workaround и проверенные отрицательные к
 
 Auth smoke перезапускает настоящий сервер с той же временной SQLite-базой и проверяет
 сохранение PlayerId. Пароль передаётся через окружение, login выдаёт свежий билет.
+
+Телеметрия v3 проверяется на границах Domain/Codec, PlayerSession/PresenceAgent и
+ClientRuntime: полная замена Sample, scalar zero, ресурсы, rich details, bounded pending,
+отсутствие локального эха, частота Sample, компактное движение без потери метаданных,
+сброс поколения и поздняя подписка между обновлением и возвратом к прежнему состоянию.

@@ -1,4 +1,4 @@
-# Сервер: владельцы состояния и сетевой runtime
+﻿# Сервер: владельцы состояния и сетевой runtime
 
 Сервер запускается через `Dreamsleeve.Server`: SQLite, HTTP(S) authentication,
 ServerRuntime, PlayerSession для каждого соединения, ChatRoomAgent и PresenceAgent.
@@ -12,17 +12,18 @@ ServerRuntime, PlayerSession для каждого соединения, ChatRoo
 | SessionTable | Закрытые Dictionary маршрутов ConnectionId и резервов PlayerId внутри runtime; собственного агента нет |
 | PlayerSession | Domain.Player, вход, начальные снимки, квота собственных RequestId, порядок исходящих сообщений |
 | ChatRoomAgent | Членство конкретных соединений, авторство, ID/время сообщения, история и адресная рассылка |
-| PresenceAgent | Онлайн, начальный снимок и последующие Joined/Left |
+| PresenceAgent | Онлайн, последние полные снимки игроков, объединение изменений и периодическая репликация |
 | AuthService | Допуск account-операций и одноразовые билеты; bounded workers выполняют SQLite и проверку паролей |
 | EnetTransport | Адаптер yENet в том же контуре владения, без второго глобального роутера |
 
 ```mermaid
 flowchart LR
     ENet <--> Runtime[ServerRuntime + SessionTable]
-    Runtime -->|OpenSession / SendChat| Player[PlayerSession × N]
+    Runtime -->|OpenSession / SendChat / UpdatePlayer| Player[PlayerSession × N]
     Player -->|Publish| Chat[ChatRoomAgent]
     Chat -->|Accepted / Published| Player
-    Presence[PresenceAgent] -->|snapshot / deltas| Player
+    Player -->|snapshot update| Presence[PresenceAgent]
+    Presence -->|snapshot / deltas| Player
     HTTP[HTTP register/login] --> Auth[AuthService]
     Auth --> DB[SQLite workers]
     Player -->|ConsumeTicket| Auth
@@ -34,7 +35,8 @@ flowchart LR
 Агент выполняет один обработчик за раз; разные агенты могут работать параллельно
 через ThreadPool. Выделенного потока на каждого игрока нет. Коллекции состояния
 используются только обработчиком владельца. Адреса подписчиков не дают доступа
-к изменяемому Player; в них хранится неизменяемый профиль.
+к изменяемому Player. Чат хранит профиль для авторства, Presence — самостоятельные
+неизменяемые снимки; живой ActorValueStorage за пределы сессии не передаётся.
 
 ## Вход и личность
 
@@ -81,9 +83,42 @@ MessageId возрастает внутри канала; идентичност
 Принятое сообщение сохраняется при отключении автора или неудаче доставки.
 Повторы после сбоя не обеспечивают exactly-once и не выполняются автоматически.
 
-PlayerUpdate и PlayerSessionMessage.Read работают непосредственно с персональным
-владельцем. Снимок самостоятельный; смена персонажа/выход очищают игровые данные.
-Wire-контракт игровых показаний пока не подключён.
+В protocol v3 `UpdatePlayer` проходит через тот же персональный владелец. Команды
+`BeginCharacter`, `RenameCharacter`, `Sample`, `SetDetails`, `LeaveGame` не содержат
+PlayerId: профиль берётся из аутентифицированной сессии. Sample заменяет location
+и всю `Map<ActorValueKey, ActorValueInfo>`; отсутствие location означает неизвестную
+позицию, пустая карта удаляет прежние значения. При Rename/Sample нужен активный
+персонаж. SetDetails допускает меню, загрузку и новую игру до его появления;
+Race/Level без персонажа отклоняются. Лимиты применяются до изменения состояния.
+
+BeginCharacter всегда начинает новое поколение, даже при совпадении имени.
+Он и LeaveGame увеличивают CharacterGeneration, очищают location, actorvalues и
+Details. Rename сохраняет поколение и остальные данные. Details содержит расу,
+уровень, структурированную активность, подписи места и сообщённое клиентом время
+начала игры; это наблюдения клиента, не результат серверной симуляции.
+
+Сессия принимает команду только при свободном месте в ограниченном Presence outbox.
+`PlayerUpdateAccepted` завершает запрос; состояние клиента и автора обновляется
+после репликации тем же путём, что у остальных участников. Ошибка доставки в
+закрытый Presence завершает владельца наблюдаемым образом, без вечного pending.
+`PlayerSessionMessage.Read` возвращает собственный detached snapshot; отдельного
+внутреннего потока мутаций для тестов нет.
+
+Presence хранит Latest и Published на каждого игрока и множество dirty PlayerId.
+Один ожидающий таймер запускается при первом изменении; повторные наблюдения до
+flush заменяют Latest. При равных снимках пакет не отправляется. Если изменилась
+только location, отправляется короткий `PlayerMoved`; изменения профиля, имени,
+поколения, actorvalues или Details дают полный `PlayerUpdated`. Автор включён в
+рассылку. Это объединение состояний, поэтому промежуточные позиции не гарантируются.
+
+Перед snapshot нового подписчика Presence публикует накопленные изменения старым
+подписчикам и выравнивает общий Published baseline. Иначе возврат состояния B→A
+после входа с B мог бы оставить новичка без нужной дельты. Затем новый участник
+получает полный Latest snapshot, а следующие события идут за ним. Join не создаёт
+дополнительного таймера; Complete отсоединяет ожидающий таймер без ожидания интервала.
+Detach удаляет membership и dirty, устаревший ConnectionId не обновляет заменившую
+его сессию. Медленный адресат удаляется по прежней политике, остальные продолжают
+получать Updated/Moved/Left в порядке источника.
 
 ## Очереди и перегрузка
 
@@ -96,6 +131,7 @@ AgentMailbox.boundedWithControl задаёт общий FIFO и предел о�
 |---|---|
 | Runtime → PlayerSession | Неблокирующий TryPost; отказ запроса либо закрытие соединения |
 | Собственные публикации | MaxPendingChat на сессию; место освобождает Accepted/Rejected |
+| Сессия → Presence | MaxPendingUpdates плюс 2 места Join/Detach; переполнение возвращает Overloaded до мутации |
 | Исходящие команды сессии | Ограниченные ordered outbox; отдельное место для Join/Detach/Close |
 | Чат/онлайн → подписчик | TryPost, без фонового ожидания каждого получателя |
 | Bootstrap | MaxBootstrapEvents; переполнение закрывает открывающуюся сессию |
@@ -163,14 +199,18 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Pla
 
 По умолчанию ENet слушает 127.0.0.1:8778, auth HTTP — 127.0.0.1:8779.
 Пароль вводится скрыто; после регистрации запускайте без --register. В сетевом Client.Dev доступны
-`send <text>`, `read`, `disconnect`, `connect`, `quit`; сервер завершается по `quit`
+`send <text>`, `read`, команды наблюдений персонажа, `disconnect`, `connect`, `quit`; сервер завершается по `quit`
 или Ctrl+C. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
 
 JSON читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging.
 Неуказанные параметры сохраняют значения по умолчанию; неизвестные поля отклоняются.
 `--port` имеет приоритет над файлом. ServerConfig проверяет согласованность transport
 и codec, MaxSessions укладывается в PeerLimit/MaxInitialPlayers, история — в
-MaxRecentMessages. Лимиты не согласуются между клиентом и сервером по сети.
+MaxRecentMessages. `Server.PlayerInput` задаёт пределы строк игровых данных и
+`MaxActorValues` (по умолчанию 64), `Runtime.Player.MaxPendingUpdates` — личный
+выход в Presence (16), `Runtime.Presence.ReplicationIntervalMs` — интервал объединения
+изменений (100 мс). Очереди и интервалы проверяются при запуске. Лимиты не согласуются
+между клиентом и сервером по сети.
 
 См. [схему протокола](../../../Protocol/README.ru.md),
 [тесты](../../../tests/README.md), [план и расхождения](../../../docs/SessionArchitecturePlanRu.md).

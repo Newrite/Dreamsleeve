@@ -12,7 +12,7 @@ ClientExchange. Его создают и вызывают на одном сет
 из той же конфигурации и начинает подключение. При каждом новом входе вызывающий
 код передаёт новый одноразовый билет, полученный из HTTP login; Core не знает пароль
 и не выполняет HTTP. `Poll(waitMs)` обслуживает ENet;
-его нужно вызывать регулярно. Общий Exchange.NextRequestId() выдаёт ненулевые ID для OpenSession и SendChat.
+его нужно вызывать регулярно. Общий Exchange.NextRequestId() выдаёт ненулевые ID для OpenSession, SendChat и UpdatePlayer.
 Счётчик не сбрасывается при переподключении; исчерпание возвращает пустой результат.
 
 Фазы: Disconnected → Connecting → Opening → Ready. ENet Connected запускает
@@ -62,14 +62,45 @@ ChatMessagesReceived, что и публикации остальных игро
 StaleGeneration, SessionNotReady, Busy, InvalidRequest, EncodingFailed.
 Они сохраняют исходные generation/requestId и не выдаются за ServerRejection.
 Общий бюджет commandCapacity охватывает накопленные локальные и серверные отказы,
-а также места для возможных отказов ожидаемых SendChat и OpenSession. TakeCommands
+а также места для возможных отказов ожидаемых SendChat, UpdatePlayer и OpenSession. TakeCommands
 берёт команды с учётом этих резервов; Connect требует свободное место до начала входа.
 Если UI не вызывает Drain, команды остаются в ограниченной очереди, а Poll продолжает
 обслуживать сеть. Успешный ChatAccepted освобождает резерв: сообщение восстанавливается
 из снимка, а отказы сохраняются отдельно до Drain. Переполнение Publish при нарушении
 этого контракта возвращает явную ошибку, сохраняя отказы и публикуя терминальное состояние.
-RequestSnapshot работает и после смены generation. Игровые команды пока не имеют
-wire-контракта: Poll возвращает InvalidOperation, сохраняя сессию.
+RequestSnapshot работает и после смены generation.
+
+## Состояние персонажа и репликация
+
+`CharacterStarted`, `CharacterRenamed`, `LocalPlayerState`, `PlayerDetailsChanged`
+и `GameExited` отправляются через UpdatePlayer. ID выделяет сетевой владелец;
+producer передаёт только generation текущей сессии. `LocalPlayerState` — полный
+sample optional location и actorValues, лимит config.maxActorValues (по умолчанию 64). Отсутствующая location
+очищает позицию; пустой набор actorValues очищает значения. Scalar 0 отличается
+от отсутствующего значения; Resource хранит current/maximum без clamping.
+
+PlayerDetails содержит расу/FormKey, уровень, вид занятия и его контекст,
+описание места/ближайшего маркера и время начала игры в Unix ms. Это отдельная полная
+замена metadata; частые samples её не стирают. Enum ActivityKind/LockDifficulty
+генерируются из общего proto. BeginCharacter и LeaveGame на сервере очищают
+игровые поля/details и увеличивают characterGeneration, даже для того же имени.
+Rename сохраняет generation и остальное состояние. Клиент только принимает
+серверную generation в PlayerInfo.
+
+UpdatePlayer не меняет модель. Коррелированный PlayerUpdateAccepted освобождает
+ожидание; периодические PlayerUpdated/PlayerMoved без RequestId приходят также
+автору. PlayerUpdated заменяет полный PlayerInfo, PlayerMoved меняет только
+optional location. Bootstrap и PlayerJoined содержат полное состояние игрока.
+
+`maxPendingPlayerUpdates` (32) ограничивает ожидания ACK; они также занимают общий
+бюджет результатов Exchange. Отказ завершает один запрос и оставляет Ready.
+Disconnect очищает pending, IDs не используются повторно. ACK другого/старого ID
+считается ошибкой протокола. Для samples `playerSampleIntervalMs` (100 ms) ограничивает
+исходящую частоту; Exchange оставляет очередной sample в bounded очереди, где новые
+соседние samples заменяют его. За один owner batch выдаётся не более одного sample.
+Переходы персонажа сохраняют FIFO: чат за sample может ждать до следующего окна
+отправки (по умолчанию до 100 ms). Poll всё это время обслуживает ENet и ACK.
+В неактивной сессии stale-команды завершаются без ожидания sample-интервала.
 
 Тесты Client.Runtime используют настоящий ENet host и protobuf-пакеты на серверной
 стороне: отсутствие локального эха, корреляция, перегрузка, отказы без отключения,
@@ -96,8 +127,25 @@ HTTP допускается только на loopback, удалённый endpo
 `disconnect`, `connect`, `quit`. `read` печатает фазу, онлайн, принятые сообщения
 и отказы. Перед send консоль вычитывает актуальные generation/канал, затем Post. Сеть обслуживается отдельным потоком
 даже пока консоль ждёт ввода. EOF/quit закрывает соединение и завершает поток.
+Игровые команды: `begin <name>`, `rename <name>`, `leave`, `sample <json>`,
+`details <json>`, `clear-location`. Sample и details — полные замены своих частей;
+clear-location сохраняет actor values последнего введённого sample. Консоль хранит
+только черновик ввода: принятый PlayerInfo печатается через read строкой `player <json>`.
+Позиция измеряется игровыми world units, вращение XYZ — радианами.
+
+```text
+begin Nerevar
+sample {"location":{"location":{"locationId":{"pluginName":"Skyrim.esm","localFormId":291},"locationName":"Whiterun"},"position":{"X":1,"Y":2,"Z":3},"rotation":{"X":0,"Y":0,"Z":1.5}},"actorValues":{"skyrim:health":{"displayName":"Health","state":{"current":150,"maximum":100}},"skyrim:speed":{"displayName":"Speed","state":{"value":0}}}}
+details {"race":{"form":{"pluginName":"Skyrim.esm","localFormId":79686},"name":"Nord"},"level":25,"activity":{"kind":2,"targetName":"Dragon"},"place":{"worldspaceName":"Tamriel","locationName":"Whiterun","nearbyMarkerName":"Dragonsreach","markerKind":"castle","isInterior":false},"gameStartedAtUnixMs":1700000000000}
+clear-location
+rename Nerevar Renamed
+leave
+```
+
+В JSON enum задаются номерами из chat.proto: например activity.kind=2 — Combat,
+16 — Menu (menuKey="main" для главного меню), 18 — Loading. Внутри API это enum.
 Для подключения нужен Protocol/chat.proto на IPv4, reliable ENet channel 0,
-протокол версии 2 без checksum/compression. Старый `--state-demo` и консоль без аргументов
+протокол версии 3 без checksum/compression. Старый `--state-demo` и консоль без аргументов
 остаются явно синтетическими проверками очередей и чата.
 
 ## Проверка с реальным сервером
@@ -111,6 +159,8 @@ python Scripts/smoke_chat.py
 Smoke запускает два отдельных Client.Dev и F#-сервер на свободном локальном
 UDP-порту, проверяет оба направления чата, единственную публикацию автору,
 присутствие, reconnect со старым PlayerId/историей и штатную остановку.
+Дополнительно проверяет авторскую репликацию персонажа/details, полный late-join,
+движение/rotation, rename, сброс при same-name BeginCharacter и LeaveGame.
 Аккаунты регистрируются через Client.Dev, SQLite/config создаются во временной папке.
 После рестарта сервера проверяются тот же PlayerId и новый успешный login;
 история чата пока сохраняется только в памяти работающего сервера.

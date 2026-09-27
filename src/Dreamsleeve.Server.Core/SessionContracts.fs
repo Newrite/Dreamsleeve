@@ -1,4 +1,4 @@
-namespace Dreamsleeve.Server.Core
+﻿namespace Dreamsleeve.Server.Core
 
 open System
 open Dreamsleeve.Agent
@@ -16,16 +16,6 @@ type PlayerStateError =
     | NotReady
     | Closed
     | Busy
-
-/// Validated domain input from an adapter; no wire telemetry contract is implied.
-[<RequireQualifiedAccess>]
-type PlayerUpdate =
-    | BeginCharacter of CharacterName
-    | RenameCharacter of CharacterName
-    | SetLocation of PlayerLocation
-    | ClearLocation
-    | SetActorValues of (ActorValueKey * ActorValueInfo) list
-    | LeaveGame
 
 /// The adapter and the runtime share one sequential owner of every transport call.
 [<RequireQualifiedAccess>]
@@ -96,13 +86,23 @@ type ChatRoomCommand =
 
 [<RequireQualifiedAccess>]
 type PresenceEvent =
-    | Snapshot of PlayerData list
-    | Joined of PlayerData
+    | Snapshot of PlayerSnapshot list
+    | Joined of PlayerSnapshot
+    | Updated of PlayerSnapshot
+    | Moved of PlayerId * PlayerLocation voption
     | Left of PlayerId
+
+type PresenceSubscription = {
+    ConnectionId: Guid
+    Snapshot: PlayerSnapshot
+    Events: ReliableAgentRef<PresenceEvent>
+}
 
 [<RequireQualifiedAccess>]
 type PresenceCommand =
-    | Join of Subscription<PresenceEvent>
+    | Join of PresenceSubscription
+    | Update of connectionId: Guid * PlayerSnapshot
+    | Flush
     | Detach of SessionDetach
 
 type ChatRoomOptions = {
@@ -116,12 +116,14 @@ type PresenceOptions = {
     MailboxCapacity: int
     ControlReserve: int
     MaxControlDeliveries: int
+    ReplicationIntervalMs: int
 }
 
 type PlayerSessionOptions = {
     MailboxCapacity: int
     ControlReserve: int
     MaxPendingChat: int
+    MaxPendingUpdates: int
     MaxBootstrapEvents: int
     MaxPendingOutput: int
 }
@@ -147,8 +149,8 @@ module ServerRuntimeOptions =
         OpenTimeoutMs = 10000
         ShutdownTimeoutMs = 1500
         PollIntervalMs = 1
-        Player = { MailboxCapacity = 128; ControlReserve = 32; MaxPendingChat = 16;
+        Player = { MailboxCapacity = 128; ControlReserve = 32; MaxPendingChat = 16; MaxPendingUpdates = 16;
                    MaxBootstrapEvents = 128; MaxPendingOutput = 128 }
         Chat = { MailboxCapacity = 256; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128 }
-        Presence = { MailboxCapacity = 128; ControlReserve = 64; MaxControlDeliveries = 128 }
+        Presence = { MailboxCapacity = 128; ControlReserve = 64; MaxControlDeliveries = 128; ReplicationIntervalMs = 100 }
     }

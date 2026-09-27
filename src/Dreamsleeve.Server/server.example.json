@@ -18,6 +18,16 @@
       "Username": 32,
       "DisplayName": 64,
       "MessageText": 2000
+    },
+    "PlayerInput": {
+      "CharacterName": 128,
+      "PluginName": 260,
+      "LocationName": 256,
+      "ActorValueKey": 128,
+      "ActorValueName": 128,
+      "MaxActorValues": 64,
+      "DetailsText": 256,
+      "ActivityKey": 64
     }
   },
   "Runtime": {
@@ -31,6 +41,7 @@
       "MailboxCapacity": 128,
       "ControlReserve": 32,
       "MaxPendingChat": 16,
+      "MaxPendingUpdates": 16,
       "MaxBootstrapEvents": 128,
       "MaxPendingOutput": 128
     },
@@ -43,7 +54,8 @@
     "Presence": {
       "MailboxCapacity": 128,
       "ControlReserve": 64,
-      "MaxControlDeliveries": 128
+      "MaxControlDeliveries": 128,
+      "ReplicationIntervalMs": 100
     }
   },
   "Database": {

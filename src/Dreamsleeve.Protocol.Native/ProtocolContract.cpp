@@ -23,3 +23,34 @@ static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotCh
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Overloaded) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_OVERLOADED));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::AuthenticationFailed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED));
 static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 9);
+
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_UNKNOWN));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Exploring) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_EXPLORING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Combat) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_COMBAT));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Talking) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_TALKING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Bartering) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_BARTERING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Training) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_TRAINING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Reading) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_READING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Lockpicking) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_LOCKPICKING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Crafting) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_CRAFTING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::UsingObject) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_USING_OBJECT));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Riding) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_RIDING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Sneaking) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_SNEAKING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Swimming) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_SWIMMING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Flying) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_FLYING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Dead) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_DEAD));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Ragdoll) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_RAGDOLL));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Menu) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_MENU));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::NewGame) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_NEW_GAME));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Loading) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_LOADING));
+static_assert(Dreamsleeve::Protocol::Chat::ActivityKind_ARRAYSIZE == 19);
+
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Unknown) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_UNKNOWN));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Unlocked) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_UNLOCKED));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::VeryEasy) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_VERY_EASY));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Easy) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_EASY));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Average) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_AVERAGE));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Hard) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_HARD));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::VeryHard) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_VERY_HARD));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::RequiresKey) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_REQUIRES_KEY));
+static_assert(Dreamsleeve::Protocol::Chat::LockDifficulty_ARRAYSIZE == 8);

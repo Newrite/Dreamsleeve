@@ -26,13 +26,23 @@ export namespace Dreamsleeve::Client
     Domain::CharacterName name;
   };
 
+  struct CharacterRenamed
+  {
+    Domain::CharacterName name;
+  };
+
+  struct PlayerDetailsChanged
+  {
+    Domain::PlayerDetails details;
+  };
+
   struct GameExited
   {};
 
   struct RequestSnapshot
   {};
 
-  using ClientCommand = std::variant<SendChat, LocalPlayerState, CharacterStarted, GameExited, RequestSnapshot>;
+  using ClientCommand = std::variant<SendChat, LocalPlayerState, CharacterStarted, CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot>;
 
   struct QueuedClientCommand
   {
@@ -143,7 +153,7 @@ public:
 
     // Owner side, nonblocking so the network pump can continue polling ENet.
     // False means input is closed and all admitted commands have been taken.
-    bool TakeCommands(std::vector<QueuedClientCommand>& output, std::size_t pendingReplies = 0)
+    bool TakeCommands(std::vector<QueuedClientCommand>& output, std::size_t pendingReplies = 0, std::size_t sampleBudget = std::numeric_limits<std::size_t>::max())
     {
       output.clear();
 
@@ -152,7 +162,17 @@ public:
       // Existing requests retain their result slots until a reply arrives.
       const auto free = maxCommands - pendingFailures.size() - pendingRejections.size();
       const auto available = pendingReplies >= free ? 0 : free - pendingReplies;
-      const auto count = std::min(commands.size(), available);
+      auto count = std::min(commands.size(), available);
+      for (std::size_t index = 0; index < count; ++index)
+      {
+        if (!std::holds_alternative<LocalPlayerState>(commands[index].command)) continue;
+        if (sampleBudget == 0)
+        {
+          count = index;
+          break;
+        }
+        --sampleBudget;
+      }
       if (count == commands.size())
         commands.swap(output);
       else

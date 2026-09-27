@@ -1,4 +1,4 @@
-namespace Dreamsleeve.Server.Core
+﻿namespace Dreamsleeve.Server.Core
 
 open System
 open System.Collections.Generic
@@ -15,7 +15,7 @@ type PlayerSessionMessage =
     | ChatDetached of Guid
     | PresenceDetached of Guid
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
-    | Update of PlayerUpdate
+    | Update of requestId: uint64 * PlayerUpdate
     | Read of ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
     | Stop
 
@@ -25,7 +25,7 @@ module PlayerSession =
     type private Opening = {
         Player: Player
         mutable Chat: ChatSnapshot option
-        mutable Online: PlayerData list option
+        mutable Online: PlayerSnapshot list option
         Buffered: ResizeArray<ChatResponse>
     }
 
@@ -158,7 +158,7 @@ module PlayerSession =
                 }
                 let presence = {
                     ConnectionId = request.ConnectionId
-                    Profile = player.Data
+                    Snapshot = Player.snapshot player
                     Events = address.Map PlayerSessionMessage.PresenceEvent
                 }
                 state.ChatAttached <- state.Chat.TrySend(context, ChatRoomCommand.Join chat)
@@ -244,7 +244,9 @@ module PlayerSession =
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected presence snapshot."
-        | PresenceEvent.Joined profile -> publish options request state context (ChatResponse.PlayerJoined profile)
+        | PresenceEvent.Joined player -> publish options request state context (ChatResponse.PlayerJoined player)
+        | PresenceEvent.Updated player -> publish options request state context (ChatResponse.PlayerUpdated player)
+        | PresenceEvent.Moved(playerId, location) -> publish options request state context (ChatResponse.PlayerMoved(playerId, location))
         | PresenceEvent.Left playerId -> publish options request state context (ChatResponse.PlayerLeft playerId)
 
     let private sendChat (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context requestId channelId text =
@@ -272,18 +274,39 @@ module PlayerSession =
         | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
             reject options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
 
-    let private update command player =
+    let private validUpdate maxActorValues command (player: Player) =
         match command with
-        | PlayerUpdate.BeginCharacter name -> Player.beginCharacter name player
-        | PlayerUpdate.RenameCharacter name -> Player.withCharacterName name player
-        | PlayerUpdate.SetLocation location -> Player.withLocation location player
-        | PlayerUpdate.ClearLocation -> Player.clearLocation player
-        | PlayerUpdate.SetActorValues values ->
-            Player.setActorValues (List.toArray values) player
-            player
-        | PlayerUpdate.LeaveGame -> Player.clearGameState player
+        | PlayerUpdate.BeginCharacter _ | PlayerUpdate.LeaveGame -> true
+        | PlayerUpdate.RenameCharacter _ -> player.CharacterName.IsSome
+        | PlayerUpdate.SetDetails details ->
+            player.CharacterName.IsSome || (details.Race.IsNone && details.Level.IsNone)
+        | PlayerUpdate.Sample(_, values) ->
+            player.CharacterName.IsSome && values.Count <= maxActorValues
 
-    let private handle (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) message = task {
+    let private update (options: PlayerSessionOptions) maxActorValues (request: SessionOpenRequest) state context requestId command =
+        match state.Phase with
+        | Active player ->
+            if requestId = 0UL || state.Pending.Contains requestId then
+                close request state context "Request ID is invalid or already pending."
+            elif not (validUpdate maxActorValues command player) then
+                reject options request state context requestId RequestRejectionCode.InvalidRequest "Player update is invalid for the current state."
+            elif state.Presence.Count >= options.MaxPendingUpdates then
+                reject options request state context requestId RequestRejectionCode.Overloaded "Player update admission is full."
+            else
+                let updated = Player.applyUpdate command player
+                let change = PresenceCommand.Update(request.ConnectionId, Player.snapshot updated)
+                if state.Presence.TrySend(context, change) then
+                    state.Phase <- Active updated
+                    // This settles the request only. Author and observers apply the
+                    // same coalesced presence update to their local models later.
+                    send options request state context (ChatResponse.PlayerUpdateAccepted requestId)
+                else
+                    reject options request state context requestId RequestRejectionCode.Overloaded "Player update admission is full."
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
+            reject options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
+
+    let private handle (options: PlayerSessionOptions) maxActorValues globalId (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) message = task {
         match message with
         | PlayerSessionMessage.Begin -> beginResolve request state context
         | PlayerSessionMessage.Authenticated reply -> authenticated options request state context reply
@@ -298,10 +321,8 @@ module PlayerSession =
             completeIfDetached state context
         | PlayerSessionMessage.SendChat(requestId, channelId, text) ->
             sendChat options globalId request state context requestId channelId text
-        | PlayerSessionMessage.Update command ->
-            match state.Phase with
-            | Active player -> state.Phase <- Active(update command player)
-            | Starting | Resolving _ | Reserving _ | Opening _ | Closing -> ()
+        | PlayerSessionMessage.Update(requestId, command) ->
+            update options maxActorValues request state context requestId command
         | PlayerSessionMessage.Read reply ->
             match state.Phase with
             | Active player -> reply.Reply(Ok (Player.snapshot player))
@@ -320,16 +341,17 @@ module PlayerSession =
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Rejected _)
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Snapshot _) -> true
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Published _)
-        | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Left _)
+        | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.Left _)
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.Update _ | PlayerSessionMessage.Read _ -> false
 
-    let start (options: PlayerSessionOptions) globalId authentication chat presence host (request: SessionOpenRequest) =
-        let limits = [options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat;
+    let start (options: PlayerSessionOptions) maxActorValues globalId authentication chat presence host (request: SessionOpenRequest) =
+        let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
             Error "Session queue limits must be positive."
         elif int64 options.MailboxCapacity + int64 options.ControlReserve > int64 Int32.MaxValue
-             || options.MaxPendingChat > Int32.MaxValue - 2 || options.MaxPendingOutput > Int32.MaxValue - 2 then
+             || options.MaxPendingChat > Int32.MaxValue - 2 || options.MaxPendingUpdates > Int32.MaxValue - 2
+             || options.MaxPendingOutput > Int32.MaxValue - 2 then
             Error "Session queue limits exceed Int32.MaxValue."
         else
             let state = {
@@ -340,13 +362,13 @@ module PlayerSession =
                 Pending = HashSet()
                 Authentication = AgentOutbox(1, authentication)
                 Chat = AgentOutbox(options.MaxPendingChat + 2, chat)
-                Presence = AgentOutbox(2, presence)
+                Presence = AgentOutbox(options.MaxPendingUpdates + 2, presence)
                 Host = AgentOutbox(options.MaxPendingOutput + 2, host)
             }
             let settings = {
                 AgentOptions.create $"player-{request.ConnectionId}" with
                     Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
             }
-            let agent = Agent.Start(settings, handle options globalId request state, isControl = isControl)
+            let agent = Agent.Start(settings, handle options maxActorValues globalId request state, isControl = isControl)
             agent.TryPost PlayerSessionMessage.Begin |> ignore
             Ok agent

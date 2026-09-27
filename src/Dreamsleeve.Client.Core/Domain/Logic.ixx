@@ -177,6 +177,7 @@ export namespace Domain::Players
     player.characterName.reset();
     player.location.reset();
     player.actorValues.clear();
+    player.details = {};
   }
 
   // Even an equal character name may refer to a different save. Rename by

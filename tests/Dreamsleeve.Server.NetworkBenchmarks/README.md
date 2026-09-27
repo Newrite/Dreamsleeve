@@ -2,7 +2,7 @@
 
 This executable is a separate process from `Dreamsleeve.Server`. It uses yENet and
 protobuf from the existing Infrastructure references; no production code changes.
-It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v2 requires a ticket; no username enters OpenSession.
+It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v3 keeps ticket authentication and uses full player snapshots; no username enters OpenSession.
 
 ```powershell
 dotnet build tests/Dreamsleeve.Server.NetworkBenchmarks -c Release
@@ -27,7 +27,7 @@ The ramp services ENet between batches of at most eight admissions; HTTP waits c
 therefore add service delay to already connecting peers. Steady-state SendChat latency
 starts only after every peer is ready and the idle phase has completed. This tool is
 not an authentication throughput benchmark. Historical protocol-v1 measurements
-remain historical; protocol-v2 opening times are not directly comparable to them.
+remain historical; current opening times are not directly comparable to them.
 
 `--rate` is aggregate SendChat requests per second across all clients; zero means
 idle sessions throughout the load interval. Senders rotate. Connections use one

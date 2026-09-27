@@ -336,4 +336,31 @@ TEST_CASE("Rejection overflow is explicit and retry preserves correlation and te
   CHECK(output.rejections.front().rejection.requestId == 2);
 }
 
+
+TEST_CASE("Sample admission budget leaves the latest sample coalescible without reordering transitions")
+{
+  auto created = ClientExchange::TryCreate(8, 8);
+  REQUIRE(created);
+  auto exchange = std::move(*created);
+  REQUIRE(exchange->Post({1, CharacterStarted{"Name"}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, LocalPlayerState{}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, CharacterRenamed{"Rename"}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, LocalPlayerState{}}) == CommandPostResult::Queued);
+  REQUIRE(exchange->Post({1, GameExited{}}) == CommandPostResult::Queued);
+  std::vector<QueuedClientCommand> commands;
+  CHECK(exchange->TakeCommands(commands, 0, 0));
+  REQUIRE(commands.size() == 1);
+  CHECK(std::holds_alternative<CharacterStarted>(commands[0].command));
+  CHECK(exchange->TakeCommands(commands, 0, 1));
+  REQUIRE(commands.size() == 2);
+  CHECK(std::holds_alternative<LocalPlayerState>(commands[0].command));
+  CHECK(std::holds_alternative<CharacterRenamed>(commands[1].command));
+  CHECK(exchange->TakeCommands(commands, 0, 0));
+  CHECK(commands.empty());
+  CHECK(exchange->TakeCommands(commands, 0, 1));
+  REQUIRE(commands.size() == 2);
+  CHECK(std::holds_alternative<LocalPlayerState>(commands[0].command));
+  CHECK(std::holds_alternative<GameExited>(commands[1].command));
+}
+
 TEST_SUITE_END();

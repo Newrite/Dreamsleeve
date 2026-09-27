@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Tests.CodecTests
+module Dreamsleeve.Server.Tests.CodecTests
 
 open System
 open Expecto
@@ -22,6 +22,7 @@ let private configured settings = ChatCodec.create settings |> ok
 let private pid raw = PlayerId.create raw |> ok
 let private channel = ChatChannelId.create 1UL |> ok
 let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
+let private snapshot = Player.create profile |> Player.snapshot
 let private message =
     ChatMessage.create (ChatMessageId.create UInt64.MaxValue |> ok) channel profile
         (ChatMessageText.create 2000 "Привет\nworld" |> ok) (DateTimeOffset.FromUnixTimeMilliseconds(-1L))
@@ -35,9 +36,37 @@ let private decode (packet: Dreamsleeve.Protocol.Chat.ClientPacket) =
 let private welcome = {
     SelfPlayerId = pid 7UL
     GlobalChannelId = channel
-    Players = [profile]
+    Players = [snapshot]
     RecentMessages = [message]
 }
+
+let private updatePacket action =
+    Dreamsleeve.Protocol.Chat.ClientPacket(
+        ProtocolVersion = ChatCodec.Version, RequestId = 91UL, UpdatePlayer = action)
+
+let private update action = updatePacket action |> decode
+
+let private samplePacket (place: Dreamsleeve.Protocol.Chat.PlayerLocation) entries =
+    let sample = Dreamsleeve.Protocol.Chat.SamplePlayerState(Location = place)
+    sample.ActorValues.AddRange(entries: Dreamsleeve.Protocol.Chat.ActorValueEntry list)
+    Dreamsleeve.Protocol.Chat.UpdatePlayer(SamplePlayerState = sample)
+
+let private wireLocation () =
+    Dreamsleeve.Protocol.Chat.PlayerLocation(
+        Location = Dreamsleeve.Protocol.Chat.Location(
+            LocationId = Dreamsleeve.Protocol.Chat.FormKey(PluginName = "Skyrim.ESM", LocalFormId = 0x3Cu),
+            LocationName = "Тамриэль"),
+        Position = Dreamsleeve.Protocol.Chat.Position(), Rotation = Dreamsleeve.Protocol.Chat.Rotation())
+
+let private scalarEntry key scalar =
+    Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = key, DisplayName = "", Scalar = scalar)
+
+let private playerUpdate result =
+    match (result |> ok).Command with
+    | ChatCommand.UpdatePlayer value -> value
+    | ChatCommand.OpenSession _ | ChatCommand.SendChat _ -> failtest "Expected player update"
+
+let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
 let tests = testList "Dreamsleeve.Server.Codec" [
     testCase "open session carries only an opaque ticket without changing it" <| fun _ ->
@@ -49,7 +78,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal result.RequestId 42UL "request correlation"
         match result.Command with
         | ChatCommand.OpenSession actual -> Expect.equal actual ticket "credential preserved exactly"
-        | ChatCommand.SendChat _ -> failtest "Wrong command"
+        | ChatCommand.SendChat _ | ChatCommand.UpdatePlayer _ -> failtest "Wrong command"
 
         for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
             packet.OpenSession.SessionTicket <- invalid
@@ -90,7 +119,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         packet.RequestId <- 1UL
         packet.ClearPayload()
         Expect.equal (decode packet |> error).Failure (ChatCodecFailure.InvalidPayload "payload") "no known payload"
-        let futurePayload = [| 0x08uy; byte ChatCodec.Version; 0x10uy; 0x01uy; 0x62uy; 0x00uy |]
+        let futurePayload = [| 0x08uy; byte ChatCodec.Version; 0x10uy; 0x01uy; 0x9auy; 0x06uy; 0x00uy |]
         Expect.equal (ChatCodec.decodeClient codec futurePayload |> error).Failure
             (ChatCodecFailure.InvalidPayload "payload") "unknown oneof field is rejected"
         let additiveField = Array.append ((send 1UL "ok").ToByteArray()) [| 0x98uy; 0x06uy; 0x01uy |]
@@ -113,9 +142,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal packet.SessionOpened.Players.Count 1 "online"
         Expect.equal packet.SessionOpened.RecentMessages.Count 1 "initial retained history"
         Expect.isError (encode { welcome with SelfPlayerId = pid 8UL }) "self absent"
-        Expect.isError (encode { welcome with Players = [profile; profile] }) "duplicate player"
+        Expect.isError (encode { welcome with Players = [snapshot; snapshot] }) "duplicate player"
         Expect.isError (encode { welcome with RecentMessages = [message; message] }) "duplicate/out-of-order message"
-        Expect.isError (encode { welcome with Players = List.replicate (config.MaxInitialPlayers + 1) profile }) "count bound"
+        Expect.isError (encode { welcome with Players = List.replicate (config.MaxInitialPlayers + 1) snapshot }) "count bound"
         Expect.isError (ChatCodec.encodeServer codec (ChatResponse.SessionOpened(0UL, welcome))) "zero correlation"
         Expect.isError (ChatCodec.encodeServer codec (ChatResponse.ChatAccepted(0UL, message))) "zero chat correlation"
 
@@ -125,7 +154,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal packet.RequestRejected.Code RequestRejectionCode.AuthenticationFailed "shared protobuf code"
         Expect.equal packet.RequestId 9UL "required correlation"
         Expect.isError (ChatCodec.encodeServer codec (ChatResponse.RequestRejected(0UL, rejection))) "zero ID"
-        for response in [ChatResponse.PlayerJoined profile; ChatResponse.PlayerLeft (pid 7UL)] do
+        for response in [ChatResponse.PlayerJoined snapshot; ChatResponse.PlayerLeft (pid 7UL)] do
             let packet = ChatCodec.encodeServer codec response |> ok |> parse
             Expect.isFalse packet.HasRequestId "notifications cannot carry a request ID"
 
@@ -143,8 +172,8 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (ChatCodec.encodeServer (configured small) response |> error).Failure ChatCodecFailure.PacketTooLarge "output above configured limit"
 
     testCase "bootstrap counts and empty initial history are configurable" <| fun _ ->
-        let second = PlayerData.create (pid 8UL) profile.Username profile.DisplayName
-        let response = ChatResponse.SessionOpened(1UL, { welcome with Players = [profile; second] })
+        let second = PlayerData.create (pid 8UL) profile.Username profile.DisplayName |> Player.create |> Player.snapshot
+        let response = ChatResponse.SessionOpened(1UL, { welcome with Players = [snapshot; second] })
         Expect.isOk (ChatCodec.encodeServer (configured { config with MaxInitialPlayers = 2 }) response) "two unique players"
         Expect.isError (ChatCodec.encodeServer (configured { config with MaxInitialPlayers = 1 }) response) "configured count"
         let noHistory = { config with MaxRecentMessages = 0 }
@@ -161,6 +190,14 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             { config with ChatInput = { config.ChatInput with Username = 0 } }
             { config with ChatInput = { config.ChatInput with DisplayName = 0 } }
             { config with ChatInput = { config.ChatInput with MessageText = 0 } }
+            { config with PlayerInput = { config.PlayerInput with CharacterName = 0 } }
+            { config with PlayerInput = { config.PlayerInput with PluginName = 0 } }
+            { config with PlayerInput = { config.PlayerInput with LocationName = 0 } }
+            { config with PlayerInput = { config.PlayerInput with ActorValueKey = 0 } }
+            { config with PlayerInput = { config.PlayerInput with ActorValueName = 0 } }
+            { config with PlayerInput = { config.PlayerInput with MaxActorValues = 0 } }
+            { config with PlayerInput = { config.PlayerInput with DetailsText = 0 } }
+            { config with PlayerInput = { config.PlayerInput with ActivityKey = 0 } }
         ] do
             Expect.isError (ServerConfig.validate invalid) "startup validation"
             Expect.isError (ChatCodec.create invalid) "codec startup validation"
@@ -190,4 +227,205 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 Expect.equal packet.RequestRejected.Code code "generated enum survives serialization"
         for invalid in [RequestRejectionCode.Unspecified; enum<RequestRejectionCode> 0x7FFF0001; enum<RequestRejectionCode> -1] do
             Expect.equal (encode invalid |> error).Failure (ChatCodecFailure.InvalidPayload "code") "do not invent server codes"
+    testCase "player lifecycle commands preserve character names and require an action" <| fun _ ->
+        let name = "  Nerevar  "
+        let beginAction = Dreamsleeve.Protocol.Chat.UpdatePlayer(BeginCharacter = Dreamsleeve.Protocol.Chat.BeginCharacter(Name = name))
+        let renameAction = Dreamsleeve.Protocol.Chat.UpdatePlayer(RenameCharacter = Dreamsleeve.Protocol.Chat.RenameCharacter(Name = name))
+        let expected = CharacterName.create 128 name |> ok
+        Expect.equal (update beginAction |> playerUpdate) (PlayerUpdate.BeginCharacter expected) "name is an observation"
+        Expect.equal (update renameAction |> playerUpdate) (PlayerUpdate.RenameCharacter expected) "rename has its own command"
+        let leave = Dreamsleeve.Protocol.Chat.UpdatePlayer(LeaveGame = Dreamsleeve.Protocol.Chat.LeaveGame())
+        Expect.equal (update leave |> playerUpdate) PlayerUpdate.LeaveGame "leave is explicit"
+        Expect.equal (update (Dreamsleeve.Protocol.Chat.UpdatePlayer()) |> error).Failure
+            (ChatCodecFailure.InvalidPayload "update_player.action") "missing oneof rejected"
+        beginAction.BeginCharacter.Name <- " "
+        Expect.isError (update beginAction) "character name is required"
+
+    testCase "zero scalar differs from unset and resource values are not clamped" <| fun _ ->
+        let zero = scalarEntry "Skyrim:SpeedMult" 0.0f
+        let resource = Dreamsleeve.Protocol.Chat.ActorValueEntry(
+            Key = "skyrim:health", DisplayName = "Health",
+            Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = 120.0f, Maximum = 100.0f))
+        let decoded = samplePacket null [zero; resource] |> update |> playerUpdate |> apply
+        Expect.equal decoded.Location ValueNone "absent location is unknown"
+        let speed = decoded.ActorValues[ActorValueKey.create 128 "skyrim:speedmult" |> ok].State
+        Expect.equal (ActorValueState.current speed |> ActorValue.value) 0.0f "zero survived its oneof presence"
+        Expect.equal (ActorValueState.tryMaximum speed) ValueNone "scalar has no maximum"
+        let health = decoded.ActorValues[ActorValueKey.create 128 "skyrim:health" |> ok].State
+        Expect.equal (ActorValueState.current health |> ActorValue.value) 120.0f "above maximum preserved"
+        Expect.equal (ActorValueState.tryMaximum health |> ValueOption.map ActorValue.value) (ValueSome 100.0f) "maximum preserved"
+        zero.ClearValue()
+        Expect.equal (samplePacket null [zero] |> update |> error).Failure
+            (ChatCodecFailure.InvalidPayload "actor_value.value") "unset is not scalar zero"
+
+    testCase "present zero coordinates are distinct from an unknown location" <| fun _ ->
+        let decoded = samplePacket (wireLocation()) [] |> update |> playerUpdate |> apply
+        let place = decoded.Location |> ValueOption.get
+        Expect.equal place.Position Position.zero "all-zero coordinates are valid"
+        Expect.equal place.Rotation Rotation.zero "all-zero radians are valid"
+        Expect.equal (PluginName.value place.Location.LocationId.PluginName) "skyrim.esm" "canonical identity"
+        let noLocation = samplePacket null [] |> update |> playerUpdate |> apply
+        Expect.equal noLocation.Location ValueNone "unknown is represented by presence"
+        for field in [0; 1; 2; 3] do
+            let broken = wireLocation()
+            match field with
+            | 0 -> broken.Location <- null
+            | 1 -> broken.Location.LocationId <- null
+            | 2 -> broken.Position <- null
+            | _ -> broken.Rotation <- null
+            Expect.equal (samplePacket broken [] |> update |> error).Failure
+                (ChatCodecFailure.InvalidPayload "location") "partial location rejected"
+
+    testCase "nonfinite telemetry rejects the complete sample and preserves request correlation" <| fun _ ->
+        for bad in [Single.NaN; Single.PositiveInfinity; Single.NegativeInfinity] do
+            for index in 0..5 do
+                let place = wireLocation()
+                match index with
+                | 0 -> place.Position.X <- bad
+                | 1 -> place.Position.Y <- bad
+                | 2 -> place.Position.Z <- bad
+                | 3 -> place.Rotation.X <- bad
+                | 4 -> place.Rotation.Y <- bad
+                | _ -> place.Rotation.Z <- bad
+                let failure = samplePacket place [] |> update |> error
+                Expect.equal failure.RequestId (Some 91UL) "caller can reject without applying the sample"
+                match failure.Failure with
+                | ChatCodecFailure.InvalidDomain(DomainError.NonFiniteNumber _) -> ()
+                | value -> failtestf "Unexpected failure %A" value
+            for entry in [
+                scalarEntry "skyrim:health" bad
+                Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = "skyrim:health", Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = bad))
+                Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = "skyrim:health", Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Maximum = bad))
+            ] do
+                Expect.isError (samplePacket null [entry] |> update) "every actor value component must be finite"
+
+    testCase "sample admission checks count before accepting unique canonical keys" <| fun _ ->
+        let first = scalarEntry "Skyrim:Health" 1.0f
+        let duplicate = scalarEntry "skyrim:health" 2.0f
+        Expect.equal (samplePacket null [first; duplicate] |> update |> error).Failure
+            (ChatCodecFailure.InvalidPayload "actor_values.duplicate_key") "case does not create another stat"
+        let one = configured {config with PlayerInput = {config.PlayerInput with MaxActorValues = 1}}
+        let request entries = samplePacket null entries |> updatePacket |> fun packet -> packet.ToByteArray()
+        Expect.isOk (ChatCodec.decodeClient one (request [first])) "exact configured count"
+        Expect.equal (ChatCodec.decodeClient one (request [first; scalarEntry "avg:health" 1.0f]) |> error).Failure
+            (ChatCodecFailure.InvalidPayload "actor_values.count") "cannot grow state past the configured count"
+
+    testCase "configured telemetry text limits apply before domain commands are created" <| fun _ ->
+        let decodeWith limits action =
+            let parser = configured {config with PlayerInput = limits}
+            ChatCodec.decodeClient parser ((updatePacket action).ToByteArray())
+
+        let limits = config.PlayerInput
+        let shortName = {limits with CharacterName = 1}
+        let beginName name = Dreamsleeve.Protocol.Chat.UpdatePlayer(BeginCharacter = Dreamsleeve.Protocol.Chat.BeginCharacter(Name = name))
+        Expect.isOk (decodeWith shortName (beginName "Ж")) "exact scalar count"
+        Expect.isError (decodeWith shortName (beginName "Жа")) "character limit"
+
+        let place = wireLocation()
+        Expect.isError (decodeWith {limits with PluginName = 2} (samplePacket place [])) "plugin key limit"
+        Expect.isError (decodeWith {limits with LocationName = 2} (samplePacket place [])) "place label limit"
+
+        let entry = scalarEntry "skyrim:health" 0.0f
+        entry.DisplayName <- "Health"
+        Expect.isError (decodeWith {limits with ActorValueKey = 2} (samplePacket null [entry])) "actor key limit"
+        Expect.isError (decodeWith {limits with ActorValueName = 2} (samplePacket null [entry])) "actor label limit"
+
+        let description = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity(
+            Kind = Dreamsleeve.Protocol.Chat.ActivityKind.Talking, TargetName = "Nerevar"))
+        Expect.isError (decodeWith {limits with DetailsText = 2} (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = description))) "detail label limit"
+        description.Activity <- Dreamsleeve.Protocol.Chat.PlayerActivity(Kind = Dreamsleeve.Protocol.Chat.ActivityKind.Menu, MenuKey = "inventorymenu")
+        Expect.isError (decodeWith {limits with ActivityKey = 2} (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = description))) "activity key limit"
+
+    testCase "full player replication includes generation and all telemetry while moved omits other state" <| fun _ ->
+        let started = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Nerevar" |> ok)
+        let sampled = samplePacket (wireLocation()) [scalarEntry "skyrim:health" 0.0f] |> update |> playerUpdate
+        let state = started |> Player.applyUpdate sampled |> Player.snapshot
+        let joined = ChatCodec.encodeServer codec (ChatResponse.PlayerJoined state) |> ok |> parse
+        let changed = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+        let boot = ChatCodec.encodeServer codec (ChatResponse.SessionOpened(1UL, {welcome with Players = [state]})) |> ok |> parse
+        Expect.equal joined.PlayerJoined.Player changed.PlayerUpdated.Player "same complete state"
+        Expect.equal boot.SessionOpened.Players[0] joined.PlayerJoined.Player "bootstrap agrees with replication"
+        Expect.equal changed.PlayerUpdated.Player.CharacterGeneration 1UL "save generation retained"
+        Expect.equal changed.PlayerUpdated.Player.CharacterName "Nerevar" "name retained"
+        Expect.equal changed.PlayerUpdated.Player.ActorValues[0].ValueCase Dreamsleeve.Protocol.Chat.ActorValueEntry.ValueOneofCase.Scalar "zero is a present scalar"
+        Expect.isFalse changed.HasRequestId "periodic replication is a notification"
+
+        let ack = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdateAccepted 91UL) |> ok |> parse
+        Expect.equal ack.RequestId 91UL "admitted command has its own acknowledgement"
+        Expect.isNotNull ack.PlayerUpdateAccepted "empty but present acknowledgement"
+        Expect.isError (ChatCodec.encodeServer codec (ChatResponse.PlayerUpdateAccepted 0UL)) "zero acknowledgement ID rejected"
+
+        for place in [state.Location; ValueNone] do
+            let moved = ChatCodec.encodeServer codec (ChatResponse.PlayerMoved(pid 7UL, place)) |> ok |> parse
+            Expect.isFalse moved.HasRequestId "movement has no command correlation"
+            Expect.equal moved.PlayerMoved.PlayerId 7UL "identity retained"
+            Expect.equal (isNull moved.PlayerMoved.Location) place.IsNone "unknown location survives"
+            Expect.isNull moved.PlayerUpdated "movement does not resend actor values"
+
+    testCase "rich details roundtrip preserves optional zero time and descriptive places" <| fun _ ->
+        let source = Dreamsleeve.Protocol.Chat.PlayerDetails(
+            Race = Dreamsleeve.Protocol.Chat.NamedForm(
+                Form = Dreamsleeve.Protocol.Chat.FormKey(PluginName = "Skyrim.ESM", LocalFormId = 0x13749u), Name = "  Breton  "),
+            Level = UInt32.MaxValue,
+            Activity = Dreamsleeve.Protocol.Chat.PlayerActivity(Kind = Dreamsleeve.Protocol.Chat.ActivityKind.Lockpicking,
+                TargetName = "Chest", LockDifficulty = Dreamsleeve.Protocol.Chat.LockDifficulty.RequiresKey),
+            Place = Dreamsleeve.Protocol.Chat.PlaceDescription(WorldspaceName = "", LocationName = "Whiterun",
+                NearbyMarkerName = "", MarkerKind = "CITY", IsInterior = true),
+            GameStartedAtUnixMs = 0L)
+        let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
+        let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+
+        let actual = encoded.PlayerUpdated.Player.Details
+        Expect.equal actual.Race.Form.PluginName "skyrim.esm" "race key is canonical"
+        Expect.equal actual.Race.Name "  Breton  " "display label preserved"
+        Expect.equal actual.Level UInt32.MaxValue "level is not clamped to vanilla gameplay"
+        Expect.equal actual.Activity source.Activity "typed activity retained"
+        Expect.equal actual.Place.MarkerKind "city" "machine key canonicalized"
+        Expect.isTrue actual.Place.IsInterior "interior observation retained"
+        Expect.isTrue actual.HasGameStartedAtUnixMs "epoch is present, not unknown"
+        Expect.equal actual.GameStartedAtUnixMs 0L "epoch preserved"
+
+        source.ClearGameStartedAtUnixMs()
+        let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
+        Expect.equal state.Details.GameStartedAt ValueNone "absence remains optional"
+
+    testCase "all defined activity and lock enums map explicitly in both directions" <| fun _ ->
+        for kind in Enum.GetValues<Dreamsleeve.Protocol.Chat.ActivityKind>() do
+            let activity = Dreamsleeve.Protocol.Chat.PlayerActivity(Kind = kind)
+            if kind = Dreamsleeve.Protocol.Chat.ActivityKind.Menu then activity.MenuKey <- "InventoryMenu"
+            let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = activity)
+            let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
+            let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+            Expect.equal encoded.PlayerUpdated.Player.Details.Activity.Kind kind "activity mapping"
+        for difficulty in Enum.GetValues<Dreamsleeve.Protocol.Chat.LockDifficulty>() do
+            let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity(
+                Kind = Dreamsleeve.Protocol.Chat.ActivityKind.Lockpicking, LockDifficulty = difficulty))
+            let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
+            let encoded = ChatCodec.encodeServer codec (ChatResponse.PlayerUpdated state) |> ok |> parse
+            Expect.equal encoded.PlayerUpdated.Player.Details.Activity.LockDifficulty difficulty "difficulty mapping"
+
+    testCase "malformed details and undefined enums never enter the domain" <| fun _ ->
+        let valid () = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity())
+        let rejected source = Expect.isError (update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source))) "invalid details"
+        rejected (Dreamsleeve.Protocol.Chat.PlayerDetails())
+        let zero = valid()
+        zero.Level <- 0u
+        rejected zero
+        let race = valid()
+        race.Race <- Dreamsleeve.Protocol.Chat.NamedForm()
+        rejected race
+        let unknownKind = valid()
+        unknownKind.Activity.Kind <- enum<Dreamsleeve.Protocol.Chat.ActivityKind> 999
+        rejected unknownKind
+        let unknownLock = valid()
+        unknownLock.Activity.LockDifficulty <- enum<Dreamsleeve.Protocol.Chat.LockDifficulty> -1
+        rejected unknownLock
+        for outside in [-62135596800001L; 253402300800000L] do
+            let timestamp = valid()
+            timestamp.GameStartedAtUnixMs <- outside
+            rejected timestamp
+        for boundary in [-62135596800000L; 253402300799999L] do
+            let timestamp = valid()
+            timestamp.GameStartedAtUnixMs <- boundary
+            Expect.isOk (update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = timestamp))) "DateTimeOffset boundary is valid"
 ]

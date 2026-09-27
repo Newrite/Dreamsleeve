@@ -105,7 +105,7 @@ module Configuration =
 
     let private validate (config: ApplicationConfig) =
         if isNull (box config.Server) || isNull (box config.Runtime) || isNull (box config.Database) || isNull (box config.Authentication) || isNull (box config.Logging)
-           || isNull (box config.Server.ChatInput) || isNull (box config.Runtime.Player)
+           || isNull (box config.Server.ChatInput) || isNull (box config.Server.PlayerInput) || isNull (box config.Runtime.Player)
            || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
            || isNull (box config.Authentication.Service) then
             Error "Configuration sections cannot be null."

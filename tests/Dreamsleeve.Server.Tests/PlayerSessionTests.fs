@@ -10,6 +10,7 @@ open AgentTests
 open BackgroundTests
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private playerSnapshot profile = Player.snapshot (Player.create profile)
 let private globalId = ChatChannelId.create 1UL |> ok
 let private options = { ServerRuntimeOptions.defaults.Player with MaxPendingChat = 1; MaxBootstrapEvents = 4; MaxPendingOutput = 16 }
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
@@ -37,21 +38,21 @@ type private Fixture = {
     Host: Channel<SessionHostCommand>
 }
 
-let private withPlayer settings run = task {
+let private withPlayerUsingPresence settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
     let queries = Channel.CreateUnbounded<SessionAuthenticationRequest>()
     let chatCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
     use authentication = Agent.Start(AgentOptions.create "authentication", collect queries)
     use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
-    use presence = Agent.Start(AgentOptions.create "presence", collect presenceCommands)
+    use presence = createPresence presenceCommands
     use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
     let request = {
         ConnectionId = Guid.NewGuid()
         RequestId = 1UL
         SessionTicket = String('a', 43)
     }
-    use player = PlayerSession.start settings globalId
+    use player = PlayerSession.start settings 64 globalId
                      (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
     let fixture = { Request = request; Player = player; Authentication = queries;
@@ -68,6 +69,9 @@ let private withPlayer settings run = task {
     do! awaitUnit presence.Completion
     do! awaitUnit host.Completion
 }
+
+let private withPlayer settings run =
+    withPlayerUsingPresence settings (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
 
 let private resolve fixture = task {
     let! query = receive fixture.Authentication
@@ -104,7 +108,7 @@ let private snapshot (profile: PlayerData) = {
 let private ready fixture = task {
     let! profile, chat, presence = joins fixture
     do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
-    do! deliver presence.Events (PresenceEvent.Snapshot [profile])
+    do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
     let! command = receive fixture.Host
     match command with
     | SessionHostCommand.Activate(connectionId, requestId, welcome) ->
@@ -113,6 +117,29 @@ let private ready fixture = task {
         equal profile.PlayerId welcome.SelfPlayerId
     | other -> failwithf "Expected Activate: %A" other
     return profile, chat, presence
+}
+
+let private applyUpdate fixture requestId command = task {
+    do! post fixture.Player (PlayerSessionMessage.Update(requestId, command))
+    let! accepted = receive fixture.Host
+    equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerUpdateAccepted requestId)) accepted
+    let! change = receive fixture.Presence
+    match change with
+    | PresenceCommand.Update(connectionId, current) ->
+        equal fixture.Request.ConnectionId connectionId
+        return current
+    | other -> return failwithf "Expected presence update: %A" other
+}
+
+let private rejectUpdate fixture requestId command = task {
+    do! post fixture.Player (PlayerSessionMessage.Update(requestId, command))
+    let! rejected = receive fixture.Host
+    match rejected with
+    | SessionHostCommand.Send(_, ChatResponse.RequestRejected(id, rejection)) ->
+        equal requestId id
+        equal RequestRejectionCode.InvalidRequest rejection.Code
+    | other -> failwithf "Expected update refusal: %A" other
+    equal 0 fixture.Presence.Reader.Count
 }
 
 let private publication profile id =
@@ -142,7 +169,7 @@ let tests = testList "PlayerSession" [
             equal (Error PlayerStateError.NotReady) state
             equal 0 fixture.Host.Reader.Count
 
-            do! deliver presence.Events (PresenceEvent.Snapshot [profile])
+            do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
             let! first = receive fixture.Host
             match first with
             | SessionHostCommand.Activate(_, _, welcome) -> equal [] welcome.RecentMessages
@@ -157,12 +184,12 @@ let tests = testList "PlayerSession" [
     case "presence snapshot and later delta remain ordered while chat snapshot is delayed" (fun () ->
         withPlayer options (fun fixture -> task {
             let! profile, chat, presence = joins fixture
-            do! deliver presence.Events (PresenceEvent.Snapshot [profile])
+            do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
             do! deliver presence.Events (PresenceEvent.Left profile.PlayerId)
             do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
             let! welcome = receive fixture.Host
             match welcome with
-            | SessionHostCommand.Activate(_, _, value) -> equal [profile] value.Players
+            | SessionHostCommand.Activate(_, _, value) -> equal [playerSnapshot profile] value.Players
             | other -> failwithf "%A" other
             let! delta = receive fixture.Host
             equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerLeft profile.PlayerId)) delta
@@ -208,7 +235,7 @@ let tests = testList "PlayerSession" [
             let! profile, chat, presence = joins fixture
             do! post fixture.Player PlayerSessionMessage.Stop
             do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
-            do! deliver presence.Events (PresenceEvent.Snapshot [profile])
+            do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
             let! state = read fixture.Player
             equal (Error PlayerStateError.Closed) state
             do! finish fixture
@@ -270,18 +297,30 @@ let tests = testList "PlayerSession" [
             let location = PlayerLocation.create
                                (Location.create form (LocationName.create 128 "Whiterun" |> ok))
                                (Position.create 1.0f 2.0f 3.0f |> ok) Rotation.zero
-            let update value = post fixture.Player (PlayerSessionMessage.Update value)
+            let mutable nextRequestId = 2UL
+            let update value = task {
+                let requestId = nextRequestId
+                nextRequestId <- nextRequestId + 1UL
+                do! post fixture.Player (PlayerSessionMessage.Update(requestId, value))
+                let! accepted = receive fixture.Host
+                equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerUpdateAccepted requestId)) accepted
+                let! change = receive fixture.Presence
+                match change with
+                | PresenceCommand.Update(connectionId, current) ->
+                    equal fixture.Request.ConnectionId connectionId
+                    equal profile current.Data
+                | other -> failwithf "Expected presence update: %A" other
+            }
 
             do! update (PlayerUpdate.BeginCharacter name)
-            do! update (PlayerUpdate.SetLocation location)
-            do! update (PlayerUpdate.SetActorValues [(key, health 80.0f)])
+            do! update (PlayerUpdate.Sample(ValueSome location, Map.ofList [(key, health 80.0f)]))
             let! first = read fixture.Player
             let first = ok first
             equal profile first.Data
             equal (ValueSome name) first.CharacterName
             equal (ValueSome location) first.Location
 
-            do! update (PlayerUpdate.SetActorValues [(key, health 20.0f)])
+            do! update (PlayerUpdate.Sample(ValueSome location, Map.ofList [(key, health 20.0f)]))
             let! second = read fixture.Player
             equal (health 20.0f) (ok second).ActorValues[key]
             equal (health 80.0f) first.ActorValues[key]
@@ -290,12 +329,13 @@ let tests = testList "PlayerSession" [
             do! update (PlayerUpdate.BeginCharacter name)
             let! fresh = read fixture.Player
             let fresh = ok fresh
+            equal (first.CharacterGeneration + 1UL) fresh.CharacterGeneration
             equal (ValueSome name) fresh.CharacterName
             equal ValueNone fresh.Location
             equal Map.empty fresh.ActorValues
             do! update PlayerUpdate.LeaveGame
             let! cleared = read fixture.Player
-            equal { fresh with CharacterName = ValueNone } (ok cleared)
+            equal { fresh with CharacterName = ValueNone; CharacterGeneration = fresh.CharacterGeneration + 1UL } (ok cleared)
             equal 0 fixture.Host.Reader.Count
             do! post fixture.Player PlayerSessionMessage.Stop
             do! finish fixture
@@ -369,13 +409,112 @@ let tests = testList "PlayerSession" [
             ConnectionId = Guid.NewGuid(); RequestId = 1UL
             SessionTicket = String('b', 43)
         }
-        use player = PlayerSession.start options globalId
+        use player = PlayerSession.start options 64 globalId
                          (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
         equal 0 chatCommands.Reader.Count
         equal 0 presenceCommands.Reader.Count
+    })
+
+    case "telemetry validates character state and bounded full replacement without partial mutation" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! profile, _, presence = ready fixture
+            let name = CharacterName.create 128 "Nerevar" |> ok
+            let key = ActorValueKey.create 128 "skyrim:health" |> ok
+            let health = ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok) (ActorValueState.resource 20.0f 100.0f |> ok)
+            do! rejectUpdate fixture 2UL (PlayerUpdate.Sample(ValueNone, Map.ofList [(key, health)]))
+            do! rejectUpdate fixture 3UL (PlayerUpdate.RenameCharacter name)
+            let! beginning = applyUpdate fixture 4UL (PlayerUpdate.BeginCharacter name)
+            let oversized = [for index in 0 .. 64 -> (ActorValueKey.create 128 $"test:value{index}" |> ok), health] |> Map.ofList
+            do! rejectUpdate fixture 6UL (PlayerUpdate.Sample(ValueNone, oversized))
+            let! afterRejected = read fixture.Player
+            equal beginning (ok afterRejected)
+
+            let! populated = applyUpdate fixture 7UL (PlayerUpdate.Sample(ValueNone, Map.ofList [(key, health)]))
+            equal 1 populated.ActorValues.Count
+            let! cleared = applyUpdate fixture 8UL (PlayerUpdate.Sample(ValueNone, Map.empty))
+            equal Map.empty cleared.ActorValues
+            equal profile cleared.Data
+            equal 0 fixture.Host.Reader.Count
+            // Only the source's publication updates the author's outbound state.
+            do! deliver presence.Events (PresenceEvent.Updated cleared)
+            let! replicated = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ChatResponse.PlayerUpdated cleared)) replicated
+        }))
+
+    case "telemetry request ID cannot settle another pending chat command" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! _, _, _ = ready fixture
+            let text = ChatMessageText.create 2000 "pending" |> ok
+            do! post fixture.Player (PlayerSessionMessage.SendChat(2UL, globalId, text))
+            let! _ = receive fixture.Chat
+            do! post fixture.Player (PlayerSessionMessage.Update(2UL, PlayerUpdate.LeaveGame))
+            let! closed = receive fixture.Host
+            match closed with
+            | SessionHostCommand.Close(id, _) -> equal fixture.Request.ConnectionId id
+            | other -> failwithf "Expected collision close, no correlated refusal: %A" other
+            do! finish fixture
+        }))
+
+    case "menu details are valid before character while race and level require one and reset with it" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! _, _, _ = ready fixture
+            let activity = PlayerActivity.create 256 64 ActivityKind.Menu ValueNone LockDifficulty.Unknown (ValueSome "main_menu") |> ok
+            let menu = PlayerDetails.create ValueNone ValueNone activity ValueNone (ValueSome DateTimeOffset.UnixEpoch) |> ok
+            let leveled = PlayerDetails.create ValueNone (ValueSome 10u) activity ValueNone ValueNone |> ok
+            let! initial = applyUpdate fixture 2UL (PlayerUpdate.SetDetails menu)
+            equal ValueNone initial.CharacterName
+            equal menu initial.Details
+            do! rejectUpdate fixture 3UL (PlayerUpdate.SetDetails leveled)
+            let name = CharacterName.create 128 "Nerevar" |> ok
+            let! beginning = applyUpdate fixture 4UL (PlayerUpdate.BeginCharacter name)
+            equal PlayerDetails.empty beginning.Details
+            let! playing = applyUpdate fixture 5UL (PlayerUpdate.SetDetails leveled)
+            equal leveled playing.Details
+            let! leaving = applyUpdate fixture 6UL PlayerUpdate.LeaveGame
+            equal PlayerDetails.empty leaving.Details
+            equal ValueNone leaving.CharacterName
+        }))
+
+    case "a full presence outbox refuses new updates before changing session state" (fun () -> task {
+        let entered, release = gate<unit>(), gate<unit>()
+        let createPresence commands =
+            let handle (context: AgentContext<PresenceCommand>) command = task {
+                do! collect commands context command
+                match command with
+                | PresenceCommand.Update _ ->
+                    entered.TrySetResult() |> ignore
+                    do! release.Task.WaitAsync context.CancellationToken
+                | PresenceCommand.Join _ | PresenceCommand.Detach _ | PresenceCommand.Flush -> ()
+            }
+            Agent.Start({ AgentOptions.create "blocked-presence" with Mailbox = AgentMailbox.boundedWait 1 }, handle)
+        do! withPlayerUsingPresence { options with MaxPendingUpdates = 1 } createPresence (fun fixture -> task {
+            let! _, _, _ = ready fixture
+            let initial = CharacterName.create 128 "Original" |> ok
+            let! _ = applyUpdate fixture 2UL (PlayerUpdate.BeginCharacter initial)
+            do! awaitResult entered.Task
+            let mutable expected = initial
+            let mutable refused = 0
+            for requestId in 3UL .. 12UL do
+                let name = CharacterName.create 128 $"Character {requestId}" |> ok
+                do! post fixture.Player (PlayerSessionMessage.Update(requestId, PlayerUpdate.RenameCharacter name))
+                let! answer = receive fixture.Host
+                match answer with
+                | SessionHostCommand.Send(_, ChatResponse.PlayerUpdateAccepted id) ->
+                    equal requestId id
+                    expected <- name
+                | SessionHostCommand.Send(_, ChatResponse.RequestRejected(id, rejection)) ->
+                    equal requestId id
+                    equal RequestRejectionCode.Overloaded rejection.Code
+                    refused <- refused + 1
+                | other -> failwithf "Unexpected admission result: %A" other
+            check (refused > 0) "Blocked source accepted unlimited updates."
+            let! current = read fixture.Player
+            equal (ValueSome expected) (ok current).CharacterName
+            release.SetResult()
+        })
     })
 
 ]

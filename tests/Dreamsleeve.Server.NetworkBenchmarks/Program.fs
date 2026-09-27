@@ -136,7 +136,7 @@ let private opened state client (packet: ServerPacket) =
     let welcome = packet.SessionOpened
     if client.Ready || not packet.HasRequestId || packet.RequestId <> 1UL
        || welcome.SelfPlayerId <> client.AccountId || welcome.GlobalChannelId = 0UL
-       || not (welcome.Players |> Seq.exists (fun profile -> profile.PlayerId = welcome.SelfPlayerId)) then
+       || not (welcome.Players |> Seq.exists (fun player -> not (isNull player.Profile) && player.Profile.PlayerId = welcome.SelfPlayerId)) then
         fail state (sprintf "Client %d invalid session welcome" client.Index)
     else
         client.Ready <- true
@@ -145,7 +145,7 @@ let private opened state client (packet: ServerPacket) =
         client.ChannelId <- welcome.GlobalChannelId
         state.ReadyCount <- state.ReadyCount + 1
         for player in welcome.Players do
-            if not (client.Online.Add player.PlayerId) then fail state "Duplicate player in initial snapshot"
+            if not (client.Online.Add player.Profile.PlayerId) then fail state "Duplicate player in initial snapshot"
         // History is outside the measured load. Its tail establishes ordering.
         if welcome.RecentMessages.Count > 0 then
             client.LastMessageId <- welcome.RecentMessages[welcome.RecentMessages.Count - 1].MessageId
@@ -206,7 +206,8 @@ let private received state client (event: EnetEvent) =
                                     response.RequestRejected.Code response.RequestRejected.Message)
             | ServerPacket.PayloadOneofCase.PlayerJoined ->
                 if not client.Ready || isNull response.PlayerJoined.Player
-                   || not (client.Online.Add response.PlayerJoined.Player.PlayerId) then
+                   || isNull response.PlayerJoined.Player.Profile
+                   || not (client.Online.Add response.PlayerJoined.Player.Profile.PlayerId) then
                     fail state (sprintf "Client %d received an invalid/duplicate presence join" client.Index)
             | ServerPacket.PayloadOneofCase.PlayerLeft ->
                 client.Online.Remove response.PlayerLeft.PlayerId |> ignore

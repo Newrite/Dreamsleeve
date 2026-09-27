@@ -143,6 +143,24 @@ def message_once(sender: Child, receiver: Child, marker: str, timeout: float):
         check(count == 1, f"{child.name}: expected one publication for {marker}, got {count}")
 
 
+def player_states(lines: list[str], player_id: str):
+    for line in lines:
+        if line.startswith("player {"):
+            state = json.loads(line[7:])
+            if state["data"]["playerId"] == int(player_id):
+                yield state
+
+
+def wait_player(child: Child, player_id: str, predicate, timeout: float, start: int = 0):
+    lines = child.wait_for(lambda lines: any(predicate(state) for state in player_states(lines, player_id)),
+                           timeout, start, read=True)
+    return next(state for state in player_states(lines, player_id) if predicate(state))
+
+
+def game_empty(state):
+    return not state.get("location") and not state["actorValues"] and not state["details"].get("level")
+
+
 def smoke(args, log, directory: Path):
     children: list[Child] = []
     log_lock = threading.Lock()
@@ -198,13 +216,76 @@ def smoke(args, log, directory: Path):
         check(len(grant["sessionTicket"]) == 43, "Login did not issue a valid ticket")
         secrets.append(grant["sessionTicket"])
 
+        alice_start = alice.mark()
+        alice.send("begin Nerevar")
+        sample = {
+            "location": {"location": {"locationId": {"pluginName": "Skyrim.esm", "localFormId": 291},
+                                      "locationName": "Whiterun"},
+                         "position": {"X": 1, "Y": 2, "Z": 3}, "rotation": {"X": 0, "Y": 0, "Z": 1.5}},
+            "actorValues": {"skyrim:speed": {"displayName": "Speed", "state": {"value": 0}},
+                            "skyrim:health": {"displayName": "Health", "state": {"current": 150, "maximum": 100}}},
+        }
+        details = {"race": {"form": {"pluginName": "Skyrim.esm", "localFormId": 79686}, "name": "Nord"},
+                   "level": 25, "activity": {"kind": 2, "targetName": "Dragon"},
+                   "place": {"worldspaceName": "Tamriel", "locationName": "Whiterun",
+                             "nearbyMarkerName": "Dragonsreach", "markerKind": "castle", "isInterior": False},
+                   "gameStartedAtUnixMs": 1700000000000}
+        alice.send("sample " + json.dumps(sample))
+        alice.send("details " + json.dumps(details))
+        authoritative = wait_player(alice, alice_id,
+            lambda state: state.get("characterName") == "Nerevar" and state.get("location") is not None
+                and len(state["actorValues"]) == 2 and state["details"].get("level") == 25,
+            args.timeout, alice_start)
+        check(authoritative["characterGeneration"] == 1, "First character generation did not advance")
+        check(authoritative["actorValues"]["skyrim:speed"]["state"]["value"] == 0, "Zero scalar was lost")
+        check(authoritative["actorValues"]["skyrim:health"]["state"]["current"] == 150, "Resource value was clamped")
+        check(authoritative["details"]["activity"]["targetName"] == "Dragon", "Structured activity context was lost")
+        stage("author received authoritative character, XYZ/radians, scalar/resource values and rich details")
+
         bob = start_client("bob", "smoke_bob", "Smoke Bob")
         bob.phase("Ready", args.timeout)
         bob.wait_for(lambda lines: any(re.fullmatch(r"\d+: Smoke Bob", line) for line in lines), args.timeout, read=True)
         bob_id = next(line.split(":", 1)[0] for line in bob.output() if re.fullmatch(r"\d+: Smoke Bob", line))
         check(f"{alice_id}: Smoke Alice" in bob.output(), "Second client bootstrap missed the first player")
         alice.wait_for(lambda lines: f"online {bob_id}: Smoke Bob" in lines, args.timeout, read=True)
-        stage("both clients see the same online players")
+        late_join = wait_player(bob, alice_id, lambda state: state.get("characterName") == "Nerevar", args.timeout)
+        check(late_join == authoritative, "Late-join PlayerInfo missed the current game state")
+        stage("both clients see the same online players and late join receives complete PlayerInfo")
+
+        alice_start, bob_start = alice.mark(), bob.mark()
+        sample["location"]["position"]["X"] = 42
+        sample["location"]["rotation"]["Z"] = 2.5
+        alice.send("sample " + json.dumps(sample))
+        for child, start_at in ((alice, alice_start), (bob, bob_start)):
+            moved = wait_player(child, alice_id,
+                lambda state: state.get("location") is not None and state["location"]["position"]["X"] == 42,
+                args.timeout, start_at)
+            check(moved["details"] == authoritative["details"] and moved["actorValues"] == authoritative["actorValues"],
+                  "Movement changed character metadata or actor values")
+            check(moved["location"]["rotation"]["Z"] == 2.5, "Rotation did not replicate")
+        stage("periodic compact movement reaches author and peer without losing unchanged details")
+
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("rename Nerevar Renamed")
+        for child, start_at in ((alice, alice_start), (bob, bob_start)):
+            renamed = wait_player(child, alice_id, lambda state: state.get("characterName") == "Nerevar Renamed",
+                                  args.timeout, start_at)
+            check(renamed["characterGeneration"] == 1 and renamed["actorValues"] == authoritative["actorValues"],
+                  "Rename unexpectedly reset the character")
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("begin Nerevar Renamed")
+        for child, start_at in ((alice, alice_start), (bob, bob_start)):
+            reset = wait_player(child, alice_id, lambda state: state["characterGeneration"] == 2,
+                                args.timeout, start_at)
+            check(reset.get("characterName") == "Nerevar Renamed" and game_empty(reset),
+                  "Same-name BeginCharacter retained prior game state")
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("leave")
+        for child, start_at in ((alice, alice_start), (bob, bob_start)):
+            left = wait_player(child, alice_id, lambda state: state["characterGeneration"] == 3,
+                               args.timeout, start_at)
+            check(not left.get("characterName") and game_empty(left), "LeaveGame retained character state")
+        stage("rename preserves state; same-name begin and leave advance generation and reset game state")
 
         duplicate = start_client("duplicate", "smoke_alice")
         duplicate.wait_for(lambda lines: any("rejected (3):" in line for line in lines), args.timeout, read=True)

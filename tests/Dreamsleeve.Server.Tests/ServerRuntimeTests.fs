@@ -49,6 +49,19 @@ let private authentication (agent: Agent<SessionAuthenticationRequest>) : Sessio
 }
 let private chat requestId text = packet requestId (fun packet -> packet.SendChat <- SendChat(ChannelId = 1UL, Text = text))
 
+let private beginCharacter requestId name =
+    packet requestId (fun packet -> packet.UpdatePlayer <- UpdatePlayer(BeginCharacter = BeginCharacter(Name = name)))
+
+let private playerLocation x =
+    PlayerLocation(Location = Location(LocationId = FormKey(PluginName = "Skyrim.esm", LocalFormId = 60u), LocationName = "Whiterun"),
+                   Position = Position(X = x, Y = 2.0f, Z = 3.0f), Rotation = Rotation())
+
+let private telemetry requestId x =
+    packet requestId (fun packet ->
+        let sample = SamplePlayerState(Location = playerLocation x)
+        sample.ActorValues.Add(ActorValueEntry(Key = "skyrim:health", DisplayName = "Health", Resource = ResourceActorValue(Current = 75.0f, Maximum = 100.0f)))
+        packet.UpdatePlayer <- UpdatePlayer(SamplePlayerState = sample))
+
 type private Fixture = {
     Runtime: Agent<ServerRuntimeMessage>
     Input: ConcurrentQueue<ServerTransportEvent>
@@ -336,6 +349,56 @@ let tests = testList "ServerRuntime" [
             let! reset = receive fixture.Reset
             equal id reset
             do! awaitUnit fixture.Runtime.Completion
+        })
+    }
+
+    testTask "authenticated source owns telemetry and both author and observer receive replication" {
+        let options = { ServerRuntimeOptions.defaults with Presence = { ServerRuntimeOptions.defaults.Presence with ReplicationIntervalMs = 10 } }
+        do! withRuntime options (fun fixture -> task {
+            let alice = connect fixture "alice"
+            let! a = welcome fixture alice
+            let bob = connect fixture "bob"
+            let! _ = welcome fixture bob
+            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, beginCharacter 2UL "Nerevar"))
+            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, telemetry 3UL 10.0f))
+            let replicated = ResizeArray<Guid * PlayerInfo>()
+            let mutable accepted = false
+            while replicated.Count < 2 || not accepted do
+                let! id, response = receive fixture.Output
+                if id = alice && response.RequestId = 3UL then
+                    equal ServerPacket.PayloadOneofCase.PlayerUpdateAccepted response.PayloadCase
+                    accepted <- true
+                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
+                     && response.PlayerUpdated.Player.ActorValues.Count = 1 then
+                    replicated.Add(id, response.PlayerUpdated.Player)
+            equal (set [alice; bob]) (replicated |> Seq.map fst |> Set.ofSeq)
+            for _, current in replicated do
+                equal a.SelfPlayerId current.Profile.PlayerId
+                equal "Nerevar" current.CharacterName
+                equal 1UL current.CharacterGeneration
+                equal 10.0f current.Location.Position.X
+                equal 75.0f current.ActorValues[0].Resource.Current
+
+            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, telemetry 4UL 20.0f))
+            let moved = ResizeArray<Guid>()
+            let mutable movedAccepted = false
+            while moved.Count < 2 || not movedAccepted do
+                let! id, response = receive fixture.Output
+                if id = alice && response.RequestId = 4UL then
+                    equal ServerPacket.PayloadOneofCase.PlayerUpdateAccepted response.PayloadCase
+                    movedAccepted <- true
+                elif response.PayloadCase = ServerPacket.PayloadOneofCase.PlayerMoved then
+                    equal a.SelfPlayerId response.PlayerMoved.PlayerId
+                    equal 20.0f response.PlayerMoved.Location.Position.X
+                    moved.Add id
+            equal (set [alice; bob]) (Set.ofSeq moved)
+
+            let late = connect fixture "healthy"
+            let! initial = welcome fixture late
+            let current = initial.Players |> Seq.find (fun value -> value.Profile.PlayerId = a.SelfPlayerId)
+            equal 20.0f current.Location.Position.X
+            equal 1 current.ActorValues.Count
+            equal "Nerevar" current.CharacterName
         })
     }
 

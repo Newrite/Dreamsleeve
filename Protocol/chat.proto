@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package Dreamsleeve.Protocol.Chat;
 
-// One serialized envelope per reliable ENet packet. Version 2 opens sessions
+// One serialized envelope per reliable ENet packet. Version 3 replicates full player state and opens sessions
 // with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
 // requires reconnecting. Transport Connected alone is not application readiness.
 message ClientPacket {
@@ -11,6 +11,7 @@ message ClientPacket {
   oneof payload {
     OpenSession open_session = 10;
     SendChat send_chat = 11;
+    UpdatePlayer update_player = 12;
   }
 }
 
@@ -26,6 +27,9 @@ message ServerPacket {
     RequestRejected request_rejected = 12;
     PlayerJoined player_joined = 13;
     PlayerLeft player_left = 14;
+    PlayerUpdated player_updated = 15;
+    PlayerUpdateAccepted player_update_accepted = 16;
+    PlayerMoved player_moved = 17;
   }
 }
 
@@ -48,6 +52,117 @@ message PlayerProfile {
   string display_name = 3;
 }
 
+message FormKey {
+  string plugin_name = 1;
+  uint32 local_form_id = 2;
+}
+
+message Location {
+  FormKey location_id = 1;
+  string location_name = 2;
+}
+
+message Position { float x = 1; float y = 2; float z = 3; }
+// Euler angles in radians, in the same axes as Position.
+message Rotation { float x = 1; float y = 2; float z = 3; }
+
+message PlayerLocation {
+  Location location = 1;
+  Position position = 2;
+  Rotation rotation = 3;
+}
+
+message ResourceActorValue { float current = 1; float maximum = 2; }
+message ActorValueEntry {
+  string key = 1;
+  string display_name = 2;
+  oneof value {
+    float scalar = 3; // Explicit zero is a present scalar value.
+    ResourceActorValue resource = 4;
+  }
+}
+
+message PlayerInfo {
+  PlayerProfile profile = 1;
+  optional string character_name = 2;
+  PlayerLocation location = 3;
+  repeated ActorValueEntry actor_values = 4;
+  uint64 character_generation = 5;
+  PlayerDetails details = 6;
+}
+
+enum ActivityKind {
+  ACTIVITY_KIND_UNKNOWN = 0;
+  ACTIVITY_KIND_EXPLORING = 1;
+  ACTIVITY_KIND_COMBAT = 2;
+  ACTIVITY_KIND_TALKING = 3;
+  ACTIVITY_KIND_BARTERING = 4;
+  ACTIVITY_KIND_TRAINING = 5;
+  ACTIVITY_KIND_READING = 6;
+  ACTIVITY_KIND_LOCKPICKING = 7;
+  ACTIVITY_KIND_CRAFTING = 8;
+  ACTIVITY_KIND_USING_OBJECT = 9;
+  ACTIVITY_KIND_RIDING = 10;
+  ACTIVITY_KIND_SNEAKING = 11;
+  ACTIVITY_KIND_SWIMMING = 12;
+  ACTIVITY_KIND_FLYING = 13;
+  ACTIVITY_KIND_DEAD = 14;
+  ACTIVITY_KIND_RAGDOLL = 15;
+  ACTIVITY_KIND_MENU = 16;
+  ACTIVITY_KIND_NEW_GAME = 17;
+  ACTIVITY_KIND_LOADING = 18;
+}
+
+enum LockDifficulty {
+  LOCK_DIFFICULTY_UNKNOWN = 0;
+  LOCK_DIFFICULTY_UNLOCKED = 1;
+  LOCK_DIFFICULTY_VERY_EASY = 2;
+  LOCK_DIFFICULTY_EASY = 3;
+  LOCK_DIFFICULTY_AVERAGE = 4;
+  LOCK_DIFFICULTY_HARD = 5;
+  LOCK_DIFFICULTY_VERY_HARD = 6;
+  LOCK_DIFFICULTY_REQUIRES_KEY = 7;
+}
+
+message NamedForm { FormKey form = 1; string name = 2; }
+message PlayerActivity {
+  ActivityKind kind = 1;
+  optional string target_name = 2;
+  LockDifficulty lock_difficulty = 3;
+  optional string menu_key = 4;
+}
+message PlaceDescription {
+  string worldspace_name = 1;
+  string location_name = 2;
+  string nearby_marker_name = 3;
+  string marker_kind = 4;
+  bool is_interior = 5;
+}
+message PlayerDetails {
+  NamedForm race = 1;
+  optional uint32 level = 2;
+  PlayerActivity activity = 3;
+  PlaceDescription place = 4;
+  optional int64 game_started_at_unix_ms = 5;
+}
+
+message BeginCharacter { string name = 1; }
+message RenameCharacter { string name = 1; }
+message SamplePlayerState {
+  PlayerLocation location = 1; // Absence clears the current location.
+  repeated ActorValueEntry actor_values = 2; // Complete replacement, bounded by the configured actor-value limit.
+}
+message LeaveGame {}
+message UpdatePlayer {
+  oneof action {
+    BeginCharacter begin_character = 1;
+    RenameCharacter rename_character = 2;
+    SamplePlayerState sample_player_state = 3;
+    LeaveGame leave_game = 4;
+    PlayerDetails set_details = 5;
+  }
+}
+
 message ChatMessage {
   uint64 message_id = 1;
   uint64 channel_id = 2;
@@ -59,12 +174,18 @@ message ChatMessage {
 message SessionOpened {
   uint64 self_player_id = 1;
   uint64 global_channel_id = 2;
-  repeated PlayerProfile players = 3; // Complete online list, including self.
+  reserved 3; // Version 2 contained PlayerProfile entries here.
+  repeated PlayerInfo players = 5; // Complete online list, including self.
   repeated ChatMessage recent_messages = 4; // Retained tail, ascending message_id.
 }
 
 message ChatPublished { ChatMessage message = 1; }
-message PlayerJoined { PlayerProfile player = 1; }
+message PlayerJoined { PlayerInfo player = 1; }
+message PlayerUpdated { PlayerInfo player = 1; }
+// Location-only replication avoids resending unchanged actor values.
+message PlayerMoved { uint64 player_id = 1; PlayerLocation location = 2; }
+// Settles the command; authoritative state arrives through periodic replication.
+message PlayerUpdateAccepted {}
 message PlayerLeft { uint64 player_id = 1; }
 
 // Stable application rejection codes shared by client and server.

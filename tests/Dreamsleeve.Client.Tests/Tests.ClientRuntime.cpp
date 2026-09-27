@@ -49,6 +49,7 @@ namespace
       config.disconnectTimeoutMs = 100;
       config.chatCapacity        = 1;
       config.maxPendingChatRequests = maxPending;
+      config.maxPendingPlayerUpdates = maxPending;
       config.network.maxPacketBytes = packetBytes;
       client                     = Value(ClientRuntime::TryCreate(config, *exchange));
     }
@@ -140,7 +141,7 @@ namespace
     auto* welcome = packet.mutable_session_opened();
     welcome->set_self_player_id(7);
     welcome->set_global_channel_id(1);
-    auto* player = welcome->add_players();
+    auto* player = welcome->add_players()->mutable_profile();
     player->set_player_id(7);
     player->set_username("user");
     player->set_display_name("Player");
@@ -676,6 +677,182 @@ TEST_CASE("Opening reserves its terminal rejection slot before queued commands o
   REQUIRE(fixture.client->Connect(std::string(43, 'A')));
   CHECK(fixture.client->Phase() == SessionPhase::Connecting);
   CHECK(fixture.errors.empty());
+}
+
+
+TEST_CASE("Player commands and acknowledgements wait for authoritative replication including the author")
+{
+  Fixture fixture;
+  const auto generation = Ready(fixture);
+  // The UI allocated this ID before the networking owner allocates the begin ID.
+  const auto chatId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(fixture.exchange->Post({generation, CharacterStarted{"Same save name"}}) == CommandPostResult::Queued);
+  REQUIRE(fixture.exchange->Post({generation, SendChat{chatId, 1, "mixed batch"}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+  CHECK(fixture.requests[1].update_player().begin_character().name() == "Same save name");
+  CHECK(fixture.requests[1].request_id() > chatId);
+  CHECK(fixture.requests[2].request_id() == chatId);
+  CHECK(fixture.Drain().state.updates.empty());
+
+  P::ServerPacket ack;
+  ack.set_protocol_version(Wire::Version);
+  ack.set_request_id(fixture.requests[1].request_id());
+  ack.mutable_player_update_accepted();
+  fixture.Send(ack);
+  fixture.Send(Publication(chatId, 3));
+  const auto chat = fixture.ReceiveOutput();
+  REQUIRE(Added(chat).size() == 1);
+  for (const auto& update : chat.state.updates)
+    CHECK(std::get<ClientStateDelta>(update).players.empty());
+
+  P::ServerPacket replication;
+  replication.set_protocol_version(Wire::Version);
+  auto* player = replication.mutable_player_updated()->mutable_player();
+  player->mutable_profile()->set_player_id(7);
+  player->set_character_name("Server canonical name");
+  player->set_character_generation(2);
+  fixture.Send(replication);
+  const auto output = fixture.ReceiveOutput();
+  REQUIRE(output.state.updates.size() == 1);
+  const auto& accepted = std::get<ClientStateDelta>(output.state.updates[0]).players;
+  REQUIRE(accepted.size() == 1);
+  CHECK(accepted[0].characterName == "Server canonical name");
+  CHECK(accepted[0].characterGeneration == 2);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Player rejection settles only its bounded request and keeps the session usable")
+{
+  Fixture fixture{2000, 1};
+  const auto generation = Ready(fixture);
+  REQUIRE(fixture.exchange->Post({generation, CharacterStarted{"Name"}}) == CommandPostResult::Queued);
+  REQUIRE(fixture.exchange->Post({generation, CharacterRenamed{"Later"}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  const auto failed = fixture.Drain();
+  REQUIRE(failed.commandFailures.size() == 1);
+  CHECK(failed.commandFailures[0].code == CommandFailureCode::Busy);
+  fixture.Send(Rejection(fixture.requests.back().request_id()));
+  const auto rejected = fixture.ReceiveOutput();
+  REQUIRE(rejected.rejections.size() == 1);
+  CHECK(fixture.client->Phase() == SessionPhase::Ready);
+
+  REQUIRE(fixture.exchange->Post({generation, GameExited{}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+  CHECK(fixture.requests.back().update_player().has_leave_game());
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Sample cadence retains the latest sample and preserves transitions while ACKs progress")
+{
+  Fixture fixture;
+  const auto generation = Ready(fixture);
+  REQUIRE(fixture.exchange->Post({generation, LocalPlayerState{}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  P::ServerPacket ack;
+  ack.set_protocol_version(Wire::Version);
+  ack.set_request_id(fixture.requests.back().request_id());
+  ack.mutable_player_update_accepted();
+  fixture.Send(ack);
+
+  LocalPlayerState stale;
+  stale.actorValues.emplace("level", Domain::ActorValueInfo{"Level", Domain::ScalarActorValue{1}});
+  REQUIRE(fixture.exchange->Post({generation, stale}) == CommandPostResult::Queued);
+  auto latest = stale;
+  latest.actorValues.at("level").state = Domain::ScalarActorValue{2};
+  REQUIRE(fixture.exchange->Post({generation, latest}) == CommandPostResult::Replaced);
+  REQUIRE(fixture.exchange->Post({generation, GameExited{}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 4; });
+  const auto& sample = fixture.requests[2].update_player().sample_player_state();
+  REQUIRE(sample.actor_values_size() == 1);
+  CHECK(sample.actor_values(0).scalar() == 2);
+  CHECK(fixture.requests[3].update_player().has_leave_game());
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Undrained player rejections share the outcome bound and stale samples settle after disconnect")
+{
+  Fixture fixture{2000, 1, 1024 * 1024, 1};
+  const auto generation = Ready(fixture);
+  REQUIRE(fixture.exchange->Post({generation, CharacterStarted{"First"}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  REQUIRE(fixture.exchange->Post({generation, LocalPlayerState{}}) == CommandPostResult::Queued);
+  fixture.Send(Rejection(fixture.requests.back().request_id()));
+  fixture.peer->Disconnect(DisconnectType::Later, DisconnectReason::ServerShutdown);
+  fixture.server.FlushPackets();
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
+  CHECK(fixture.requests.size() == 2);
+  const auto rejected = fixture.Drain();
+  REQUIRE(rejected.rejections.size() == 1);
+  REQUIRE(fixture.client->Poll());
+  const auto stale = fixture.Drain();
+  REQUIRE(stale.commandFailures.size() == 1);
+  CHECK(stale.commandFailures[0].code == CommandFailureCode::StaleGeneration);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Compact movement only changes location and full reset replaces game state")
+{
+  Fixture fixture;
+  auto welcome = Welcome(fixture.Open());
+  auto* player = welcome.mutable_session_opened()->mutable_players(0);
+  player->set_character_name("Nerevar");
+  player->set_character_generation(1);
+  auto* value = player->add_actor_values();
+  value->set_key("health");
+  value->mutable_resource()->set_current(0);
+  value->mutable_resource()->set_maximum(100);
+  player->mutable_details()->set_level(12);
+  fixture.Send(welcome);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  fixture.Drain();
+
+  P::ServerPacket moved;
+  moved.set_protocol_version(Wire::Version);
+  moved.mutable_player_moved()->set_player_id(7);
+  auto* location = moved.mutable_player_moved()->mutable_location();
+  location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
+  location->mutable_location()->mutable_location_id()->set_local_form_id(0x123);
+  location->mutable_position()->set_x(42);
+  fixture.Send(moved);
+  auto output = fixture.ReceiveOutput();
+  auto changed = std::get<ClientStateDelta>(output.state.updates.back()).players.front();
+  REQUIRE(changed.location);
+  CHECK(changed.location->position.X == 42);
+  CHECK(changed.actorValues.size() == 1);
+  CHECK(changed.details.level == 12);
+  CHECK(changed.characterGeneration == 1);
+
+  moved.mutable_player_moved()->clear_location();
+  fixture.Send(moved);
+  output = fixture.ReceiveOutput();
+  CHECK_FALSE(std::get<ClientStateDelta>(output.state.updates.back()).players.front().location);
+
+  P::ServerPacket reset;
+  reset.set_protocol_version(Wire::Version);
+  reset.mutable_player_updated()->mutable_player()->mutable_profile()->set_player_id(7);
+  reset.mutable_player_updated()->mutable_player()->set_character_generation(2);
+  fixture.Send(reset);
+  output = fixture.ReceiveOutput();
+  changed = std::get<ClientStateDelta>(output.state.updates.back()).players.front();
+  CHECK(changed.characterGeneration == 2);
+  CHECK_FALSE(changed.characterName);
+  CHECK(changed.actorValues.empty());
+  CHECK_FALSE(changed.details.level);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Unexpected or reused update ACK is a protocol failure")
+{
+  Fixture fixture;
+  Ready(fixture);
+  P::ServerPacket ack;
+  ack.set_protocol_version(Wire::Version);
+  ack.set_request_id(999);
+  ack.mutable_player_update_accepted();
+  fixture.Send(ack);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
+  Empty(fixture.Drain());
+  REQUIRE(fixture.errors.size() == 1);
 }
 
 TEST_SUITE_END();

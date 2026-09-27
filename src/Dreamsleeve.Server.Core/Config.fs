@@ -9,6 +9,17 @@ type ChatInputLimits = {
     MessageText: int
 }
 
+type PlayerInputLimits = {
+    CharacterName: int
+    PluginName: int
+    LocationName: int
+    ActorValueKey: int
+    ActorValueName: int
+    MaxActorValues: int
+    DetailsText: int
+    ActivityKey: int
+}
+
 /// Supplied before starting the network owner; fixed for the host/session lifetime.
 type ServerConfig =
     {
@@ -27,6 +38,7 @@ type ServerConfig =
         MaxInitialPlayers: int
         MaxRecentMessages: int
         ChatInput: ChatInputLimits
+        PlayerInput: PlayerInputLimits
     }
 
 [<RequireQualifiedAccess>]
@@ -49,6 +61,11 @@ module ServerConfig =
             MaxInitialPlayers = 4096
             MaxRecentMessages = 512
             ChatInput = { Username = 32; DisplayName = 64; MessageText = 2000 }
+            PlayerInput = {
+                CharacterName = 128; PluginName = 260; LocationName = 256
+                ActorValueKey = 128; ActorValueName = 128; MaxActorValues = 64
+                DetailsText = 256; ActivityKey = 64
+            }
         }
 
     // Used at codec creation and host startup; no per-packet config validation.
@@ -62,6 +79,14 @@ module ServerConfig =
             if config.ChatInput.Username < 1 then "ChatInput.Username must be positive."
             if config.ChatInput.DisplayName < 1 then "ChatInput.DisplayName must be positive."
             if config.ChatInput.MessageText < 1 then "ChatInput.MessageText must be positive."
+            if config.PlayerInput.CharacterName < 1 then "PlayerInput.CharacterName must be positive."
+            if config.PlayerInput.PluginName < 1 then "PlayerInput.PluginName must be positive."
+            if config.PlayerInput.LocationName < 1 then "PlayerInput.LocationName must be positive."
+            if config.PlayerInput.ActorValueKey < 1 then "PlayerInput.ActorValueKey must be positive."
+            if config.PlayerInput.ActorValueName < 1 then "PlayerInput.ActorValueName must be positive."
+            if config.PlayerInput.MaxActorValues < 1 then "PlayerInput.MaxActorValues must be positive."
+            if config.PlayerInput.DetailsText < 1 then "PlayerInput.DetailsText must be positive."
+            if config.PlayerInput.ActivityKey < 1 then "PlayerInput.ActivityKey must be positive."
         ]
 
     /// Validate before initializing ENet or allocating its host.

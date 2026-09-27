@@ -1,15 +1,15 @@
-# Прикладной протокол чата, версия 2
+# Прикладной протокол сессии, версия 3
 
 Источник схемы — [chat.proto](chat.proto); [network.proto](network.proto) сохраняет
 причины отключения ENet. Это первый срез для Client.Dev и сервера: профили, онлайн
 и глобальный чат с отдельной HTTP-аутентификацией и постоянными профилями SQLite,
-без игровых показаний и пагинации.
+с игровым состоянием и структурированным presence, без пагинации.
 
 ## Оболочки и сессия
 
 Один ClientPacket/ServerPacket занимает один reliable ENet packet на прикладном
 канале 0. Внешний length prefix не нужен: границу даёт ENet. Обе оболочки содержат
-protocol_version = 2 и oneof payload. Неизвестные дополнительные поля допускаются;
+protocol_version = 3 и oneof payload. Неизвестные дополнительные поля допускаются;
 неизвестный/отсутствующий payload или другая версия дают ошибку codec.
 
 Сессия привязана к одному ENet-соединению. После транспортного Connected клиент
@@ -19,7 +19,7 @@ protocol_version = 2 и oneof payload. Неизвестные дополните
 
 OpenSession передаёт только session_ticket: одноразовый билет из HTTP login,
 32 случайных байта в base64url без padding (43 символа). Старые номера полей 1/2
-и имена username/display_name зарезервированы; версия 1 несовместима с версией 2.
+и имена username/display_name зарезервированы; версии 1/2 несовместимы с версией 3.
 Имя, отображаемое имя и PlayerId берутся из профиля, связанного с билетом.
 Отсутствующий, просроченный, неизвестный или использованный билет не открывает сессию.
 SessionTable резервирует PlayerId до завершения агента и очистки членства;
@@ -45,21 +45,24 @@ plain HTTP допустим только для явно разрешённой 
 | Сервер → клиент | SessionOpened | SelfPlayerId, GlobalChannelId, весь онлайн и хвост истории |
 | Сервер → клиент | ChatPublished | Одно принятое сообщение |
 | Сервер → клиент | RequestRejected | Общий RequestRejectionCode, объяснение, поле |
-| Сервер → клиент | PlayerJoined / PlayerLeft | Профиль нового игрока / ID ушедшего |
+| Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SamplePlayerState / LeaveGame / SetDetails |
+| Сервер → клиент | PlayerJoined / PlayerLeft | Полный PlayerInfo нового игрока / ID ушедшего |
+| Сервер → клиент | PlayerUpdated / PlayerMoved | Полный PlayerInfo / только optional location |
+| Сервер → клиент | PlayerUpdateAccepted | ACK команды UpdatePlayer |
 
 RequestId — ненулевой uint64, назначаемый клиентским API до отправки. Клиент должен
 выдавать уникальные ID в течение жизни соединения; пропуски допустимы. Это не
 ChatMessageId, не серверная последовательность и не обещание дедупликации запросов.
 Повторная отправка после переподключения не является безопасным retry без отдельного
 контракта. Счётчик общий для ClientRuntime и UI через ClientExchange.NextRequestId;
-владелец сопоставляет OpenSession и ограниченное число ожидающих SendChat.
+владелец сопоставляет OpenSession и ограниченное число ожидающих SendChat/UpdatePlayer.
 
 В ClientPacket RequestId обязателен. В ServerPacket его наличие различается:
 
-- SessionOpened и RequestRejected обязательно возвращают ID исходного запроса.
+- SessionOpened, PlayerUpdateAccepted и RequestRejected обязательно возвращают ID исходного запроса.
 - ChatPublished содержит RequestId только в копии инициатору. Остальные получают
   то же принятое сообщение без RequestId. ID других клиентов не завершает свои запросы.
-- PlayerJoined/PlayerLeft не содержат RequestId. Явный ноль всегда ошибочен.
+- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerMoved не содержат RequestId. Явный ноль всегда ошибочен.
 
 Optional RequestId существует только в общей protobuf-оболочке и диагностике codec.
 В прикладных ответах наличие ID закреплено вариантом типа:
@@ -83,6 +86,34 @@ option: пустой или повреждённый пакет может не 
 Корреляция относится к результату команды и не создаёт второй путь изменения чата.
 При обычной публикации сервер передаёт одно сообщение, а локальный UI получает
 Added/Removed из модели. Полная история не копируется при каждом сообщении.
+
+## Игровое состояние
+
+PlayerInfo включает неизменяемую идентичность PlayerProfile, optional character_name,
+optional PlayerLocation, actor_values, character_generation и PlayerDetails. SessionOpened
+содержит PlayerInfo в поле players=5; старое поле 3 зарезервировано. PlayerJoined тоже
+несёт PlayerInfo. Это несовместимое изменение, закреплённое protocol_version=3.
+
+PlayerLocation содержит Location(FormKey(plugin_name/local_form_id), location_name),
+Position XYZ в world units и Rotation XYZ в радианах. ActorValueEntry имеет key,
+display_name и oneof scalar/resource(current/maximum). Scalar 0 присутствует явно;
+отсутствующий oneof — ошибка. SamplePlayerState полностью заменяет location/actor_values:
+absence очищает location, пустой список очищает actor values. По умолчанию лимит 64 entries (настраивается одинаково на обеих сторонах),
+ключи уникальны после нормализации сервером. Значения конечны; current может превышать maximum.
+
+PlayerDetails отдельно заменяет расу (NamedForm), optional level, PlayerActivity,
+PlaceDescription и optional game_started_at_unix_ms. Занятие — общий ActivityKind с
+optional target_name/menu_key и LockDifficulty; место хранит worldspace/location,
+ближайший маркер, его вид и is_interior. Это данные для разных UI, а не готовая
+Discord-строка. Sample не стирает details. BeginCharacter/LeaveGame очищают игровой
+контекст и увеличивают character_generation, даже при повторе имени; Rename сохраняет
+остальные поля. Поля профиля клиент изменить этой командой не может.
+
+PlayerUpdateAccepted только завершает команду. Сервер периодически реплицирует
+изменённый PlayerInfo всем, включая автора. Для изменения одной лишь location
+используется PlayerMoved без actor values; отсутствие location означает clear.
+Bootstrap всегда полный. Между тиками остаётся последнее состояние, а ACK не создаёт
+локального эха. У всех уведомлений этой репликации отсутствует RequestId.
 
 ## Значения и начальное состояние
 
@@ -276,7 +307,7 @@ python Scripts/run_tests.py
 Использован установленный protoc 33.2; runtime — protobuf-cpp 33.2 и Google.Protobuf
 3.33.2. Сгенерированные .pb.h/.pb.cc/.g.cs хранятся в Protocol.Native/Protocol.Dotnet
 и не редактируются вручную. Этот же скрипт извлекает DisconnectReason и
-RequestRejectionCode из вывода protoc в Dreamsleeve.Protocol.Native.ixx и генерирует
+RequestRejectionCode, ActivityKind и LockDifficulty из вывода protoc в Dreamsleeve.Protocol.Native.ixx и генерирует
 ProtocolContract.cpp со static_assert для всех значений. Оба файла также generated;
 ручного списка числовых кодов на стороне клиента нет. Неожиданный формат enum
 в выводе protoc останавливает генерацию с ошибкой.
