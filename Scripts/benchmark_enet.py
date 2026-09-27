@@ -317,7 +317,7 @@ def main():
     parser.add_argument("--movement-packet-target", type=int, help="0 disables MTU-aware splitting; positive opts in")
     parser.add_argument("--client-hosts", type=positive_int, default=1)
     parser.add_argument("--client-buffer", type=positive_int, default=262144)
-    parser.add_argument("--replication-ms", type=positive_int, default=100)
+    parser.add_argument("--replication-ms", type=positive_int, default=50)
     parser.add_argument("--trace-server", type=Path, help="Path to dotnet-trace; separate profiled runs from baseline")
     parser.add_argument("--output", type=Path, default=ROOT / "build/benchmarks/enet" / datetime.now().strftime("%Y%m%d-%H%M%S"))
     args = parser.parse_args()

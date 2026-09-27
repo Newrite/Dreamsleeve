@@ -619,7 +619,7 @@ let private run (options: Options) =
         enet.ENET_API.enet_deinitialize()
 
 let private parse (args: string array) =
-    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Hosts = 1; Seconds = 10.; Rate = 10.; ReplicationMs = 100; Scenario = "chat"; Output = "build/network-benchmark.json" }
+    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Hosts = 1; Seconds = 10.; Rate = 10.; ReplicationMs = 50; Scenario = "chat"; Output = "build/network-benchmark.json" }
     if args.Length % 2 <> 0 then invalidArg "args" "Expected --auth-url URL --port P --clients N --seconds D --rate R --output path.json"
     for index in 0 .. 2 .. args.Length - 1 do
         let value = args[index + 1]
