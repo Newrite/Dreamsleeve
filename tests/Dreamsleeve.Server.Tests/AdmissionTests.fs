@@ -168,6 +168,26 @@ let tests = testList "Admission" [
         equal [|100; 101|] (seen.ToArray() |> Array.skip 8)
     })
 
+    case "shared quota notification wakes all remaining writers after one waiter cancels" (fun () -> task {
+        let seen = ConcurrentQueue<int>()
+        use agent = start 1 1 seen
+        let! release = hold true agent
+        equal AgentPostResult.Posted (agent.TryPost(Data 0))
+        use cancel = new CancellationTokenSource()
+        let canceled = agent.PostAsync(Data -1, cancellationToken = cancel.Token)
+        let waiting = [| for value in 1 .. 64 -> agent.PostAsync(Data value) |]
+        check (waiting |> Array.forall (fun work -> not work.IsCompleted)) "Writers must initially wait."
+
+        cancel.Cancel()
+        let! canceledResult = awaitResult canceled
+        equal AgentPostResult.Canceled canceledResult
+        release.SetResult()
+        let! admitted = Task.WhenAll waiting |> awaitResult
+        check (admitted |> Array.forall ((=) AgentPostResult.Posted)) "No lost wakeups between successive dequeues."
+        do! complete agent
+        equal [|0 .. 64|] (seen.ToArray() |> Array.sort)
+    })
+
     case "Complete releases quota waiters without waiting for the current handler" (fun () -> task {
         let seen = ConcurrentQueue<int>()
         use agent = start 1 1 seen

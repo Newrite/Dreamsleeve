@@ -299,6 +299,37 @@ type AgentTryDeliveryResult =
     | Full
     | Closed
 
+module private AdmissionTasks =
+    let private posted = Task.FromResult AgentPostResult.Posted
+    let private closed = Task.FromResult AgentPostResult.Closed
+    let private canceled = Task.FromResult AgentPostResult.Canceled
+    let private dropped = Task.FromResult AgentPostResult.Dropped
+    let private full = Task.FromResult AgentPostResult.Full
+
+    let post = function
+        | AgentPostResult.Posted -> posted
+        | AgentPostResult.Closed -> closed
+        | AgentPostResult.Canceled -> canceled
+        | AgentPostResult.Dropped -> dropped
+        | AgentPostResult.Full -> full
+
+    let deliveryValue = function
+        | AgentPostResult.Posted -> AgentDeliveryResult.Posted
+        | AgentPostResult.Closed -> AgentDeliveryResult.Closed
+        | AgentPostResult.Canceled -> AgentDeliveryResult.Canceled
+        | AgentPostResult.Full | AgentPostResult.Dropped ->
+            invalidOp "Non-dropping PostAsync violated its admission contract."
+
+    let private delivered = Task.FromResult AgentDeliveryResult.Posted
+    let private deliveryClosed = Task.FromResult AgentDeliveryResult.Closed
+    let private deliveryCanceled = Task.FromResult AgentDeliveryResult.Canceled
+
+    let delivery result =
+        match deliveryValue result with
+        | AgentDeliveryResult.Posted -> delivered
+        | AgentDeliveryResult.Closed -> deliveryClosed
+        | AgentDeliveryResult.Canceled -> deliveryCanceled
+
 /// A send-only address, available only for non-dropping mailboxes.
 /// Posted acknowledges admission, not processing or persistence.
 [<Sealed>]
@@ -335,17 +366,17 @@ type AgentRef<'Message> internal
         if not reliable then
             None
         else
-            let deliver message token = task {
-                let! result = postAsync message token
-
-                match result with
-                | AgentPostResult.Posted -> return AgentDeliveryResult.Posted
-                | AgentPostResult.Closed -> return AgentDeliveryResult.Closed
-                | AgentPostResult.Canceled -> return AgentDeliveryResult.Canceled
-                | AgentPostResult.Full
-                | AgentPostResult.Dropped ->
-                    return invalidOp "Non-dropping PostAsync violated its admission contract."
-            }
+            let deliver message token =
+                try
+                    let admission = postAsync message token
+                    if admission.IsCompletedSuccessfully then
+                        AdmissionTasks.delivery admission.Result
+                    else
+                        task {
+                            let! result = admission
+                            return AdmissionTasks.deliveryValue result
+                        }
+                with error -> Task.FromException<AgentDeliveryResult>(error)
 
             let tryDeliver message =
                 match tryPost message with
@@ -488,12 +519,13 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     // Both classes share the channel; a notification changes only after capacity or closure.
     let admissionGate = obj()
     let mutable ordinaryQueued = 0
-    let mutable admissionChanged = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+    let mutable admissionChanged: TaskCompletionSource<unit> = null
 
     let notifyAdmissionLocked () =
-        let previous = admissionChanged
-        admissionChanged <- TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-        previous.TrySetResult() |> ignore
+        if not (isNull admissionChanged) then
+            let previous = admissionChanged
+            admissionChanged <- null
+            previous.TrySetResult() |> ignore
 
     let notifyAdmission () =
         if ordinaryLimit.IsSome then
@@ -675,23 +707,28 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                 else
                     // Capture the change notification together with a failed attempt:
                     // a dequeue between the two must not leave an asynchronous writer asleep.
-                    let attempt, changed =
+                    let mutable changed: Task = null
+                    result <-
                         match ordinaryLimit with
                         | Some limit ->
                             lock admissionGate (fun () ->
-                                tryWriteReserved limit envelope, Some admissionChanged.Task)
-                        | None -> tryWriteUnrestricted envelope, None
-                    result <- attempt
+                                let admission = tryWriteReserved limit envelope
+                                if admission = AgentPostResult.Full then
+                                    if isNull admissionChanged then
+                                        admissionChanged <- TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+                                    changed <- admissionChanged.Task
+                                admission)
+                        | None -> tryWriteUnrestricted envelope
 
                     match result with
                     | AgentPostResult.Full ->
                         try
                             let! canWrite = task {
-                                match changed with
-                                | Some notification ->
-                                    do! notification.WaitAsync token
+                                if not (isNull changed) then
+                                    do! changed.WaitAsync token
                                     return true
-                                | None -> return! channel.Writer.WaitToWriteAsync(token).AsTask()
+                                else
+                                    return! channel.Writer.WaitToWriteAsync(token)
                             }
                             if not canWrite then
                                 result <- AgentPostResult.Closed
@@ -706,8 +743,15 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let tryPostCore message =
         tryWriteEnvelope (MailboxEnvelope(message, None, None, None) |> classify)
 
-    let postAsyncCore message token =
-        postEnvelopeAsync (MailboxEnvelope(message, None, None, None) |> classify) token
+    let postAsyncCore message (token: CancellationToken) =
+        let envelope = MailboxEnvelope(message, None, None, None) |> classify
+        if token.IsCancellationRequested then
+            AdmissionTasks.post AgentPostResult.Canceled
+        else
+            match tryWriteEnvelope envelope with
+            | AgentPostResult.Full -> postEnvelopeAsync envelope token
+            | (AgentPostResult.Posted | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped) as result ->
+                AdmissionTasks.post result
 
     // Only the handler adds work; finish reads after dispatch has stopped.
     let background = ResizeArray<Task>()
@@ -820,7 +864,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
             try
                 let mutable running = true
                 while running && not (isImmediateStopRequested ()) do
-                    let! canRead = channel.Reader.WaitToReadAsync(lifetimeToken).AsTask()
+                    let! canRead = channel.Reader.WaitToReadAsync(lifetimeToken)
                     if not canRead then
                         running <- false
                     else

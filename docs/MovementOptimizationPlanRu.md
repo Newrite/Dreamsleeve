@@ -404,3 +404,10 @@ ValueTask; ticker уже ожидает его напрямую, без AsTask �
   до отправки, каскадный Left не использует movement buffers. Wire не изменён.
   Release build без предупреждений; весь managed suite: 269/269, включая AOI,
   randomized visibility, slow consumers, split boundaries и lifecycle barriers.
+
+- Шаг 4a: admission TCS создаётся только при ожидании; освобождение места завершает
+  текущую общую notification и не создаёт следующую заранее. Убраны AsTask на
+  Channel waits; синхронные PostAsync и reliable projection возвращают кешированные
+  результатные Task. Саморевью: failed admission + capture notification атомарны
+  под прежним gate; cancellation отдельного writer не отменяет общий сигнал.
+  Добавлен сценарий с 64 ожидающими writers и отменой одного; managed suite 270/270.
