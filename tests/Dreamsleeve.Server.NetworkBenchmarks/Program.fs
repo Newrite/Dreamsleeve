@@ -1,4 +1,4 @@
-// Benchmark process only. One owner services every independent peer on one UDP socket.
+// Benchmark process only. One owner services independent peers across explicitly configured UDP sockets.
 #nowarn "104"
 module Dreamsleeve.Server.NetworkBenchmarks.Program
 
@@ -17,10 +17,11 @@ open Google.Protobuf
 open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.Infrastructure.Interop
 
-type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Seconds: float; Rate: float; ReplicationMs: int; Scenario: string; Output: string }
+type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Hosts: int; Seconds: float; Rate: float; ReplicationMs: int; Scenario: string; Output: string }
 
 type private Client = {
     Index: int
+    HostIndex: int
     AccountId: uint64
     mutable SessionTicket: string
     mutable Peer: EnetPeer
@@ -51,15 +52,15 @@ type private Submission = {
 type private State = {
     mutable Movement: Movement.Probe option
     Options: Options
-    Diagnostics: TransportDiagnostics
-    Host: EnetHost
+    Diagnostics: TransportDiagnostics array
+    Hosts: EnetHost array
     Authentication: HttpClient
     RegistrationMs: float
     mutable LoginMs: float
     Clock: Stopwatch
     Prefix: string
     Clients: Client array
-    Slots: Dictionary<uint16, Client>
+    Slots: Dictionary<struct (int * uint16), Client>
     Budget: PacketBudget
     Messages: ResizeArray<Submission>
     Errors: ResizeArray<string>
@@ -222,8 +223,8 @@ let private received state client (event: EnetEvent) =
                 | None -> fail state "Unexpected player update during chat benchmark"
             | unknown -> fail state (sprintf "Unknown server packet payload: %A" unknown)
 
-let private handle state (event: EnetEvent) =
-    match state.Slots.TryGetValue event.Peer.IncomingPeerId with
+let private handle state hostIndex (event: EnetEvent) =
+    match state.Slots.TryGetValue(struct (hostIndex, event.Peer.IncomingPeerId)) with
     | false, _ ->
         if event.Type = EnetEventType.Receive then event.Packet.Dispose()
         fail state "Event for unknown ENet peer slot"
@@ -239,14 +240,18 @@ let private handle state (event: EnetEvent) =
         | EnetEventType.None -> ()
         | unknown -> fail state (sprintf "Unknown ENet event: %A" unknown)
 
-let private pump state =
-    let started = state.Diagnostics.BeginPoll()
-    let mutable remaining = 4096
+let private pumpHost state hostIndex =
+    let host = state.Hosts[hostIndex]
+    let diagnostics = state.Diagnostics[hostIndex]
+    let started = diagnostics.BeginPoll()
+    let mutable remaining = max 1 (4096 / state.Hosts.Length)
     let mutable processed = 0
-    let mutable waitMs = 1u
+    // Multiple sockets are visited without blocking on an idle one.
+    let mutable waitMs = if state.Hosts.Length = 1 then 1u else 0u
+
     while remaining > 0 do
         let mutable event = Unchecked.defaultof<EnetEvent>
-        let result = state.Host.Service(waitMs, &event)
+        let result = host.Service(waitMs, &event)
         waitMs <- 0u
         if result < 0 then
             fail state "ENet Service failed"
@@ -255,9 +260,19 @@ let private pump state =
         else
             remaining <- remaining - 1
             processed <- processed + 1
-            handle state event
-    state.Host.Flush()
-    state.Diagnostics.EndPoll(started, processed, state.Host, state.Budget)
+            handle state hostIndex event
+
+    host.Flush()
+    diagnostics.EndPoll(started, processed, host, state.Budget)
+    processed
+
+let private pump state =
+    let mutable processed = 0
+    for index in 0 .. state.Hosts.Length - 1 do
+        processed <- processed + pumpHost state index
+
+    if processed = 0 && state.Hosts.Length > 1 then
+        System.Threading.Thread.Sleep 1
 
 let private address port =
     let mutable value = Unchecked.defaultof<enet.ENetAddress>
@@ -291,10 +306,10 @@ let private ramp state =
                 state.LoginMs <- state.LoginMs + elapsed
 
                 let mutable peer = Unchecked.defaultof<EnetPeer>
-                if state.Host.TryConnect(remote, 1un, 0u, &peer) then
+                if state.Hosts[client.HostIndex].TryConnect(remote, 1un, 0u, &peer) then
                     client.Peer <- peer
                     client.StartedMs <- now state
-                    state.Slots.Add(peer.IncomingPeerId, client)
+                    state.Slots.Add(struct (client.HostIndex, peer.IncomingPeerId), client)
                     started <- started + 1
                 else
                     fail state "ENet could not allocate a client peer"
@@ -421,7 +436,7 @@ let private disconnect state =
     state.Disconnecting <- true
     for client in state.Clients do
         if client.Peer.IsCreated && not client.Closed then client.Peer.DisconnectLater 0u
-    state.Host.Flush()
+    for host in state.Hosts do host.Flush()
     let deadline = now state + 10000.
     let stillConnected () = state.Clients |> Array.exists (fun client -> client.Peer.IsCreated && not client.Closed)
     while stillConnected () && now state < deadline do pump state
@@ -457,7 +472,7 @@ let private report state =
         rampIncludesLogin = true; authenticationConcurrency = 4
         rampMs = state.RampMs; loadMs = state.LoadMs; drainMs = state.DrainMs; totalMs = now state
         backpressuredMs = state.BackpressuredMs; maxInflight = state.MaxInflight; inflightLimit = 128; connectWindow = 4
-        hostCount = 1; socketCount = 1; serviceLoopCount = 1
+        hostCount = state.Hosts.Length; socketCount = state.Hosts.Length; serviceLoopCount = 1
         unexpectedDisconnects = state.Disconnections; rejections = state.Rejections; errorCount = state.ErrorCount
         errors = state.Errors.ToArray()
         transportConnectMs = state.Clients |> Array.filter _.Ready |> Array.map (fun client -> client.ConnectedMs - client.StartedMs) |> summary
@@ -483,23 +498,29 @@ let private run (options: Options) =
     registration.Stop()
 
     if enet.ENET_API.enet_initialize() <> 0 then invalidOp "ENet initialization failed"
+    let hosts = ResizeArray<EnetHost>()
     try
-        use host = EnetHost.Create(address 0us, unativeint options.Clients, 1un, 0u, 0u, EnetHostOption.Ipv4)
+        let capacity = (options.Clients + options.Hosts - 1) / options.Hosts
         let buffer = Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_CLIENT_BUFFER"
-        if not (String.IsNullOrEmpty buffer) then
-            let bytes = Int32.Parse buffer
-            if not (TransportDiagnostics.ConfigureBuffers(host, bytes, bytes)) then invalidOp "Cannot configure benchmark socket buffers"
-        host.SetMaximumPacketSize(1024un * 1024un)
-        host.SetMaximumWaitingData(32un * 1024un * 1024un)
+        for _ in 1 .. options.Hosts do
+            let host = EnetHost.Create(address 0us, unativeint capacity, 1un, 0u, 0u, EnetHostOption.Ipv4)
+            hosts.Add host
+            if not (String.IsNullOrEmpty buffer) then
+                let bytes = Int32.Parse buffer
+                if not (TransportDiagnostics.ConfigureBuffers(host, bytes, bytes)) then
+                    invalidOp "Cannot configure benchmark socket buffers"
+            host.SetMaximumPacketSize(1024un * 1024un)
+            host.SetMaximumWaitingData(32un * 1024un * 1024un)
+
         // Movement permits eight pending requests per peer. The aggregate
         // transport budget must accommodate the same finite per-peer window.
         let outgoingPackets = if options.Scenario = "chat" then 4096 else max 4096 (16 * options.Clients)
         let state = {
-            Diagnostics = TransportDiagnostics(); Movement = None; Options = options; Host = host; Authentication = authentication
+            Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics()); Movement = None; Options = options; Hosts = hosts.ToArray(); Authentication = authentication
             RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
             Clock = Stopwatch.StartNew(); Prefix = prefix
             Clients = Array.init options.Clients (fun index -> {
-                Index = index; AccountId = accounts[index]; SessionTicket = ""; Peer = Unchecked.defaultof<EnetPeer>; Budget = PacketBudget(16, 1024L * 1024L)
+                Index = index; HostIndex = index % options.Hosts; AccountId = accounts[index]; SessionTicket = ""; Peer = Unchecked.defaultof<EnetPeer>; Budget = PacketBudget(16, 1024L * 1024L)
                 StartedMs = 0.; ConnectedMs = 0.; ReadyMs = 0.; Ready = false; Closed = false
                 PlayerId = 0UL; ChannelId = 0UL; LastMessageId = 0UL; Received = 0; Pending = Dictionary(); Online = HashSet()
             })
@@ -517,10 +538,12 @@ let private run (options: Options) =
         with error -> fail state (error.ToString())
         try disconnect state with error -> fail state ("Cleanup: " + error.Message)
         report state
-    finally enet.ENET_API.enet_deinitialize()
+    finally
+        for host in hosts do host.Dispose()
+        enet.ENET_API.enet_deinitialize()
 
 let private parse (args: string array) =
-    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Seconds = 10.; Rate = 10.; ReplicationMs = 100; Scenario = "chat"; Output = "build/network-benchmark.json" }
+    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Hosts = 1; Seconds = 10.; Rate = 10.; ReplicationMs = 100; Scenario = "chat"; Output = "build/network-benchmark.json" }
     if args.Length % 2 <> 0 then invalidArg "args" "Expected --auth-url URL --port P --clients N --seconds D --rate R --output path.json"
     for index in 0 .. 2 .. args.Length - 1 do
         let value = args[index + 1]
@@ -528,6 +551,7 @@ let private parse (args: string array) =
         | "--auth-url" -> options <- { options with AuthUrl = Uri(value.TrimEnd('/') + "/", UriKind.Absolute) }
         | "--port" -> options <- { options with Port = UInt16.Parse value }
         | "--clients" -> options <- { options with Clients = Int32.Parse value }
+        | "--hosts" -> options <- { options with Hosts = Int32.Parse value }
         | "--seconds" -> options <- { options with Seconds = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--rate" -> options <- { options with Rate = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--replication-ms" -> options <- { options with ReplicationMs = Int32.Parse(value, CultureInfo.InvariantCulture) }
@@ -536,6 +560,7 @@ let private parse (args: string array) =
         | unknown -> invalidArg "args" ("Unknown option: " + unknown)
     if (options.AuthUrl.Scheme <> Uri.UriSchemeHttps && (options.AuthUrl.Scheme <> Uri.UriSchemeHttp || not options.AuthUrl.IsLoopback)) then
         invalidArg "args" "Authentication URL must use HTTPS, or HTTP on loopback for local benchmarks."
+    if options.Hosts < 1 || options.Hosts > options.Clients then invalidArg "args" "Hosts must be between 1 and clients."
     if options.ReplicationMs < 1 || options.Port = 0us || options.Clients < 1 || options.Clients > 4095
        || not (Double.IsFinite options.Seconds) || options.Seconds <= 0. || options.Seconds > 300.
        || not (Double.IsFinite options.Rate) || options.Rate < 0. || options.Rate > 1000.

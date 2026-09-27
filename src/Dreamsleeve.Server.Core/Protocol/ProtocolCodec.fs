@@ -144,11 +144,14 @@ module ProtocolCodec =
             else
                 Ok(packet.ToByteArray())
 
-    /// Split at entry boundaries within the configured target and peer MTU budget.
+    /// Split at entry boundaries within the application cap. A positive target
+    /// additionally opts into splitting within the peer MTU budget.
     /// An indivisible entry may fragment, but never exceed MaxPacketBytes.
     /// No partial send on failure; array order is preserved.
     let encodeMovementPackets (codec: ProtocolCodec) maxUnfragmentedPayloadBytes (movements: MovementChange array) =
-        let target = min codec.Config.MaxPacketBytes (min codec.Config.MovementPacketTargetBytes maxUnfragmentedPayloadBytes)
+        let target =
+            if codec.Config.MovementPacketTargetBytes = 0 then codec.Config.MaxPacketBytes
+            else min codec.Config.MaxPacketBytes (min codec.Config.MovementPacketTargetBytes maxUnfragmentedPayloadBytes)
         let packets = ResizeArray<byte array>()
         let mutable batch = Dreamsleeve.Protocol.Chat.PlayersMoved()
         let mutable payloadSize = 0

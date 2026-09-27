@@ -33,6 +33,8 @@ public sealed class TransportDiagnostics
             FragmentedPacketSize.Record(bytes);
     }
 
+    private static readonly Histogram<double> TimeoutAge = Meter.CreateHistogram<double>("transport.peer.timeout.age.max", "ms");
+    private static readonly Histogram<double> ReceiveAge = Meter.CreateHistogram<double>("transport.peer.receive.age.max", "ms");
     private long lastPoll;
     private long lastSample;
 
@@ -74,18 +76,24 @@ public sealed class TransportDiagnostics
         PendingPackets.Record(budget.Packets);
         SentPackets.Record(host.TotalSentPackets);
         ReceivedPackets.Record(host.TotalReceivedPackets);
-        double rtt = 0, inflight = 0, loss = 0;
+        double rtt = 0, inflight = 0, loss = 0, timeoutAge = 0, receiveAge = 0;
         for (var i = 0; i < (int)host.PeerCount; i++)
         {
             if (!host.TryGetPeer((ushort)i, out var peer)) continue;
             if (peer.State != EnetPeerState.Connected) continue;
             rtt = Math.Max(rtt, peer.RoundTripTime);
+            if (peer.EarliestTimeout != 0)
+                timeoutAge = Math.Max(timeoutAge, unchecked(host.ServiceTime - peer.EarliestTimeout));
+            if (peer.LastReceiveTime != 0)
+                receiveAge = Math.Max(receiveAge, unchecked(host.ServiceTime - peer.LastReceiveTime));
             inflight += peer.ReliableDataInTransit;
             loss += peer.PacketsLost; // ENet resets these windows; NOT a cumulative loss counter.
         }
         Rtt.Record(rtt);
         InTransit.Record(inflight);
         Loss.Record(loss);
+        TimeoutAge.Record(timeoutAge);
+        ReceiveAge.Record(receiveAge);
     }
 
     public static long BeginSend() => SendDuration.Enabled ? Stopwatch.GetTimestamp() : 0;

@@ -91,6 +91,13 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (ProtocolCodec.encodeMovementPackets tiny Int32.MaxValue movements) "An unsplittable entry fails before any send."
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch []))) "Empty batch is invalid."
 
+    testCase "default batching does not amplify packet count to avoid transport fragmentation" <| fun _ ->
+        let movements = movementBatch [for id in 1UL .. 200UL -> pid id, ValueNone]
+        let expected = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved movements) |> ok
+        let packets = ProtocolCodec.encodeMovementPackets codec 548 movements |> ok
+        Expect.isGreaterThan expected.Length 548 "Fixture crosses the transport fragmentation threshold."
+        Expect.equal packets [expected] "Default keeps one valid reliable packet; ENet owns fragmentation."
+
     testCase "movement target is clamped by negotiated transport and application budgets" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
         for target, transport, application in [64, 128, 1024; 128, 64, 1024; 128, 1024, 64] do

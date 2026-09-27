@@ -168,7 +168,7 @@ C++ ClientRuntime реализует этот обработчик, сверяе
 | Настройка | Default | Где применяется |
 |---|---|---|
 | MaxPacketBytes / network.maxPacketBytes | 1 MiB | Вход/выход codec и ENet maximumPacketSize |
-| Server.MovementPacketTargetBytes | 1200 B | Цель исходящей пачки движения; ограничивается MaxPacketBytes и бюджетом согласованного MTU пира. Неделимая запись может фрагментироваться в пределах MaxPacketBytes |
+| Server.MovementPacketTargetBytes | 0 (выключено) | 0 сохраняет пачки до MaxPacketBytes с фрагментацией ENet. Положительное значение включает целевой размер, ограниченный также MTU-бюджетом пира; неделимая запись может фрагментироваться |
 | MaxWaitingData / network.maxWaitingData | 32 MiB | ENet maximumWaitingData, бюджет ожидающих данных на peer |
 | MaxInitialPlayers / maxInitialPlayers | 4096 | Число игроков в начальном состоянии |
 | MaxRecentMessages / maxRecentMessages | 512 | Число сообщений начальной истории; 0 отключает её |

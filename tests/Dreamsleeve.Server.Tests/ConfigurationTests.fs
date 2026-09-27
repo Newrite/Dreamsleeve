@@ -23,14 +23,15 @@ let tests = testList "Server configuration" [
                 Expect.equal config.Server.MaxOutgoingBytes Configuration.defaults.Server.MaxOutgoingBytes "omitted budget preserved"
             | other -> failwithf "Expected valid config: %A" other)
 
-    testCase "movement packet target loads from JSON and rejects nonpositive values" <| fun _ ->
+    testCase "movement packet target supports opt-out and rejects negative values" <| fun _ ->
         withFile """{"Server":{"MovementPacketTargetBytes":900}}""" (fun path ->
             match Configuration.parse [|"--config"; path|] with
             | Ok (LaunchCommand.Run config) -> Expect.equal config.Server.MovementPacketTargetBytes 900 "Configured target."
             | other -> failwithf "%A" other)
-        for target in [0; -1] do
-            withFile (sprintf """{"Server":{"MovementPacketTargetBytes":%d}}""" target) (fun path ->
-                Expect.isError (Configuration.parse [|"--config"; path|]) "Invalid target rejected at startup.")
+        withFile """{"Server":{"MovementPacketTargetBytes":0}}""" (fun path ->
+            Expect.isOk (Configuration.parse [|"--config"; path|]) "Zero disables the optional MTU target.")
+        withFile """{"Server":{"MovementPacketTargetBytes":-1}}""" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "Invalid target rejected at startup.")
 
     testCase "unknown properties, wrong types and null sections are rejected" <| fun _ ->
         for source in ["{\"Server\":{\"Typo\":1}}"; "{\"Runtime\":null}"; "{\"Server\":null}"; "{\"Server\":{\"BindAddress\":42}}"; "[]"] do

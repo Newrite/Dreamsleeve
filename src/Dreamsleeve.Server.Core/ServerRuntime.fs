@@ -270,6 +270,9 @@ module ServerRuntime =
             match SessionTable.find connectionId state.Table with
             | None -> ()
             | Some entry ->
+                if entry.Phase <> SessionTable.Closing then
+                    state.Logger.LogInformation("Transport disconnected {ConnectionId} during {Phase}", connectionId, entry.Phase)
+
                 entry.TransportClosed <- true
                 close options state context entry
                 if SessionTable.clean entry then SessionTable.remove entry state.Table
@@ -307,6 +310,8 @@ module ServerRuntime =
         | Some entry ->
             match outcome with
             | Error error when entry.Phase <> SessionTable.Closing -> state.Logger.LogError(error, "Player session {ConnectionId} terminated", connectionId)
+            | Ok () when entry.Phase <> SessionTable.Closing ->
+                state.Logger.LogWarning("Player session {ConnectionId} completed unexpectedly during {Phase}", connectionId, entry.Phase)
             | Error _ | Ok () -> ()
 
             close options state context entry

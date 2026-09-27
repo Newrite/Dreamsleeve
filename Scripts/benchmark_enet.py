@@ -182,6 +182,8 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
     config = configuration(clients, free_port(), args.profile, case)
     config["Server"].update(ReceiveBufferBytes=args.server_buffer, SendBufferBytes=args.server_buffer)
     config["Runtime"]["Presence"]["ReplicationIntervalMs"] = args.replication_ms
+    if args.movement_packet_target is not None:
+        config["Server"]["MovementPacketTargetBytes"] = args.movement_packet_target
     config_path = case / "server.json"
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     env = os.environ.copy()
@@ -216,7 +218,7 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
             samples.append({"seconds": time.monotonic() - started, "phase": phase, "server": server.metrics.sample()})
             time.sleep(0.1)
         client = Child(["dotnet", str(CLIENT), "--auth-url", config["Authentication"]["ListenUrl"], "--port", str(config["Server"]["Port"]),
-            "--clients", str(clients), "--seconds", str(args.seconds), "--rate", str(rate),
+            "--clients", str(clients), "--hosts", str(args.client_hosts), "--seconds", str(args.seconds), "--rate", str(rate),
             "--replication-ms", str(args.replication_ms), "--scenario", scenario, "--output", str(case / "client.json")], case / "client.log", env)
         while True:
             for line in client.output():
@@ -312,11 +314,17 @@ def main():
     parser.add_argument("--timeout", type=positive_int, default=180)
     parser.add_argument("--profile", choices=["minimal", "scaled", "movement"], default="scaled")
     parser.add_argument("--server-buffer", type=positive_int, default=262144)
+    parser.add_argument("--movement-packet-target", type=int, help="0 disables MTU-aware splitting; positive opts in")
+    parser.add_argument("--client-hosts", type=positive_int, default=1)
     parser.add_argument("--client-buffer", type=positive_int, default=262144)
     parser.add_argument("--replication-ms", type=positive_int, default=100)
     parser.add_argument("--trace-server", type=Path, help="Path to dotnet-trace; separate profiled runs from baseline")
     parser.add_argument("--output", type=Path, default=ROOT / "build/benchmarks/enet" / datetime.now().strftime("%Y%m%d-%H%M%S"))
     args = parser.parse_args()
+    if args.movement_packet_target is not None and args.movement_packet_target < 0:
+        parser.error("movement-packet-target must be nonnegative")
+    if args.client_hosts > min(args.clients):
+        parser.error("client-hosts must not exceed the smallest client count")
     if args.trace_server and not args.trace_server.is_file():
         parser.error("dotnet-trace executable not found")
     if os.name != "nt":
@@ -332,7 +340,9 @@ def main():
     destination = args.output.resolve()
     destination.mkdir(parents=True, exist_ok=False)
     source = [Path(__file__), *sorted((ROOT / "tests/Dreamsleeve.Server.NetworkBenchmarks").glob("*.fs")),
-              *sorted((ROOT / "src/Dreamsleeve.Server.Core").glob("*.fs")),
+              *sorted(p for p in (ROOT / "src/Dreamsleeve.Server.Core").rglob("*.fs") if "obj" not in p.parts and "bin" not in p.parts),
+              *sorted((ROOT / "src/Dreamsleeve.Agent").glob("*.fs")),
+              *sorted((ROOT / "src/Dreamsleeve.Server.Domain").glob("*.fs")),
               ROOT / "src/Dreamsleeve.Server.Infrastructure/EnetTransport.fs",
               *sorted((ROOT / "src/Dreamsleeve.Server.Infrastructure.Interop").glob("*.cs"))]
     metadata = {
@@ -346,7 +356,7 @@ def main():
         "sourceSha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source},
         "binarySha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                          for p in [SERVER, CLIENT, *sorted(CLIENT.parent.glob("Dreamsleeve.*.dll"))]},
-        "diagnostics": {"serverBuffer": args.server_buffer, "clientBuffer": args.client_buffer,
+        "diagnostics": {"movementPacketTargetOverride": args.movement_packet_target, "clientHosts": args.client_hosts, "serverBuffer": args.server_buffer, "clientBuffer": args.client_buffer,
                         "replicationMs": args.replication_ms, "traceServer": str(args.trace_server) if args.trace_server else None},
         "sampleIntervalMs": 100, "durationSeconds": args.seconds, "runs": [],
     }

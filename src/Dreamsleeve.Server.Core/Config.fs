@@ -30,6 +30,7 @@ type ServerConfig =
         ServiceTimeoutMs: uint32
         EventBudget: int
         MaxPacketBytes: int
+        /// Zero keeps application-size batches; positive values opt into MTU-aware splitting.
         MovementPacketTargetBytes: int
         ReceiveBufferBytes: int
         SendBufferBytes: int
@@ -56,7 +57,7 @@ module ServerConfig =
             ServiceTimeoutMs = 10u
             EventBudget = 64
             MaxPacketBytes = 1024 * 1024
-            MovementPacketTargetBytes = 1200
+            MovementPacketTargetBytes = 0
             ReceiveBufferBytes = 256 * 1024
             SendBufferBytes = 256 * 1024
             MaxWaitingData = 32 * 1024 * 1024
@@ -77,7 +78,7 @@ module ServerConfig =
     // Used at codec creation and host startup; no per-packet config validation.
     let protocolErrors (config: ServerConfig) =
         [
-            if config.MovementPacketTargetBytes < 1 then "MovementPacketTargetBytes must be positive."
+            if config.MovementPacketTargetBytes < 0 then "MovementPacketTargetBytes must be nonnegative."
             if config.MaxPacketBytes < 1 then "MaxPacketBytes must be positive."
             if config.MaxWaitingData < config.MaxPacketBytes then
                 "MaxWaitingData must allow at least one maximum-size packet."

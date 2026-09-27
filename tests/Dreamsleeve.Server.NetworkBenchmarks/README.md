@@ -32,8 +32,9 @@ not an authentication throughput benchmark. Historical protocol-v1 measurements
 remain historical; current opening times are not directly comparable to them.
 
 `--rate` is aggregate SendChat requests per second across all clients; zero means
-idle sessions throughout the load interval. Senders rotate. Connections use one
-ENet host, one UDP socket and one client service loop, with up to four application
+idle sessions throughout the load interval. Senders rotate. By default connections use one
+ENet host/socket. `--hosts H` distributes peers round-robin over H independent
+ENet hosts/sockets, still serviced by one client loop, with up to four application
 opens in flight. These are independent protocol peers and profiles, not 1000 game
 processes or 1000 independent IP addresses. No packet loss, latency or WAN jitter
 is injected. This measures the server plus local network/protobuf/ENet path.
@@ -289,3 +290,35 @@ reports wall-clock costs of complete model publication and complete consumer fra
 The stalled case skips consumption for two virtual seconds, then verifies snapshot
 recovery and the final pose. snapshotRecoveriesObserved counts delivered replacement
 snapshots, not all queue overflows that occurred during the stall.
+
+## Regression isolation: socket topology and movement target
+
+The runner accepts `--client-hosts H` (default 1), passed as `--hosts H` to the
+load generator. Require 1 <= H <= the smallest client count. Incoming peer slots
+are scoped to a host, and each socket receives the configured `--client-buffer`.
+Multi-host mode never blocks waiting on one idle socket; all hosts share one
+service loop and an aggregate finite outgoing budget. Reports record the actual
+host/socket count. Client transport histograms combine per-host polls; global
+pending-budget samples may be repeated across hosts and must not be summed.
+
+A single socket shared by 500/1000 clients has a single receive buffer; it cannot
+be treated as 500/1000 independent real clients with one buffer each. Dense
+replication can overwhelm that shared receiver and cause ENet retransmit timeout.
+Use explicit topology/buffer controls, rather than interpreting every failure as
+server capacity. Multi-host mode still does not distribute client processing over
+multiple cores or machines.
+
+```powershell
+python Scripts/benchmark_enet.py --clients 500 --rates 10 --scenarios dense --seconds 10 --timeout 600 --profile movement --client-hosts 64 --movement-packet-target 0 --output build/benchmarks/batch-control
+python Scripts/benchmark_enet.py --clients 500 --rates 10 --scenarios dense --seconds 10 --timeout 600 --profile movement --client-hosts 64 --movement-packet-target 1200 --output build/benchmarks/mtu-control
+```
+
+`--movement-packet-target` explicitly overrides the saved server configuration;
+0 keeps application-size batches, a positive value enables MTU-aware splitting.
+Omission preserves the example configuration. Compare these cases with identical
+socket counts, buffers and source/replication rates. Server host count remains one.
+
+`transport.peer.timeout.age.max` records the age of the earliest timed-out send
+among connected peers, `transport.peer.receive.age.max` the greatest time since
+receiving traffic. Both are sampled by the transport owner. They help identify
+retry stalls but are not packet loss counts or definitive disconnect reasons.
