@@ -185,3 +185,8 @@ Protocol v5: отдельные Move/SetActorValues/SetDetails, объедине
 Он выводит JSON с паузами GC, потерянными событиями и выборочными аллокациями;
 сервер и генератор на этот проект не ссылаются. Команды профилирования приведены
 в [NetworkBenchmarks](Dreamsleeve.Server.NetworkBenchmarks/README.md).
+
+`Dreamsleeve.AllocationProbes` — [изолированные синхронные пробы](Dreamsleeve.AllocationProbes/README.md)
+Task/ValueTask, struct/list/array, HashSet reuse и snapshot actor values. Это
+диагностический executable без новых пакетов, не набор функциональных тестов и
+не замена сетевым бенчмаркам.

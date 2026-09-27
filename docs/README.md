@@ -42,3 +42,5 @@
 - [Повторная матрица движения v5](benchmarks/movement-v5-2026-09-27.md): эффект индекса и batching, ограничения плотной рассылки.
 
 - [Диагностика движения: таймер, UDP, ENet и GC](benchmarks/movement-diagnostics-2026-09-27.md): частоты, буферные эксперименты и EventPipe-профили.
+
+- [План первой волны оптимизации движения](MovementOptimizationPlanRu.md): конкретные hot paths, Task/ValueTask, struct/DU, reuse и порядок проверок; пока не реализован.
