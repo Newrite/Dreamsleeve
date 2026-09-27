@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "chat.pb.h"
+#include "protocol.pb.h"
 import std;
 import Dreamsleeve.Client.Runtime;
 import DreamNet.Runtime;

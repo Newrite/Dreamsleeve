@@ -89,7 +89,7 @@ export namespace Dreamsleeve::Client
   };
 
   // A rejection of a specific request after decoding, not a transport error.
-  // Codes come from chat.proto; unknown nonzero values retain their message.
+  // Codes come from protocol.proto; unknown nonzero values retain their message.
   struct ServerRejection
   {
     std::uint64_t        requestId;

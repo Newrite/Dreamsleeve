@@ -1,5 +1,5 @@
 module;
-#include "chat.pb.h"
+#include "protocol.pb.h"
 
 module Dreamsleeve.Client.Codec;
 

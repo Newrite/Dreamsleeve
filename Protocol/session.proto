@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package Dreamsleeve.Protocol.Chat;
+
+import "chat.proto";
+import "player.proto";
+
+// Opaque single-use credential: 32 random bytes encoded as unpadded base64url.
+// Identity comes from the authenticated ticket; do not send player-supplied names.
+message OpenSession {
+  reserved 1, 2;
+  reserved "username", "display_name";
+  string session_ticket = 3;
+}
+
+message SessionOpened {
+  uint64 self_player_id = 1;
+  uint64 global_channel_id = 2;
+  reserved 3; // Version 2 contained PlayerProfile entries here.
+  repeated PlayerInfo players = 5; // Complete online list, including self.
+  repeated ChatMessage recent_messages = 4; // Retained tail, ascending message_id.
+}

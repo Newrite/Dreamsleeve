@@ -8,7 +8,8 @@
 ## Реальный контракт проекта
 
 Source of truth — `Protocol/*.proto`: `network.proto` с DisconnectReason и
-`chat.proto` для первого среза сессии/чата. Генерацию C++ и C# выполняет `Scripts/generate_protocol.py`.
+`common.proto`, `chat.proto`, `player.proto`, `session.proto`, `protocol.proto`
+для прикладных сообщений и оболочек. Генерацию C++ и C# выполняет `Scripts/generate_protocol.py`.
 `Dreamsleeve.Protocol.Dotnet` содержит generated C# и Google.Protobuf, а
 Dreamsleeve.Protocol.Native — generated C++ и модульную границу. Рецепт
 Grpc.Tools ниже описывает альтернативную настройку, не текущую сборку.

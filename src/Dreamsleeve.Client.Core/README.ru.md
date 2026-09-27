@@ -158,9 +158,9 @@ rename Nerevar Renamed
 leave
 ```
 
-В JSON enum задаются номерами из chat.proto: например activity.kind=2 — Combat,
+В JSON enum задаются номерами из player.proto: например activity.kind=2 — Combat,
 16 — Menu (menuKey="main" для главного меню), 18 — Loading. Внутри API это enum.
-Для подключения нужен Protocol/chat.proto на IPv4, reliable ENet channel 0,
+Для подключения нужен Protocol/protocol.proto на IPv4, reliable ENet channel 0,
 протокол версии 4 без checksum/compression. Старый `--state-demo` и консоль без аргументов
 остаются явно синтетическими проверками очередей и чата.
 

@@ -1,9 +1,21 @@
 # Прикладной протокол сессии, версия 4
 
-Источник схемы — [chat.proto](chat.proto); [network.proto](network.proto) сохраняет
-причины отключения ENet. Это первый срез для Client.Dev и сервера: профили, онлайн
-и глобальный чат с отдельной HTTP-аутентификацией и постоянными профилями SQLite,
-с игровым состоянием и структурированным presence, без пагинации.
+Схемы разделены по назначению:
+
+| Файл | Содержимое |
+|---|---|
+| [common.proto](common.proto) | PlayerProfile и FormKey |
+| [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished |
+| [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
+| [session.proto](session.proto) | OpenSession и начальный SessionOpened |
+| [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
+| [network.proto](network.proto) | Причины отключения ENet |
+
+Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
+циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
+имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
+версия остаётся 4. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
@@ -237,7 +249,7 @@ F# перехватывает InvalidProtocolBufferException на границе
 
 ## Коды отказа
 
-`RequestRejected.code` имеет тип `RequestRejectionCode` из chat.proto. Это общий
+`RequestRejected.code` имеет тип `RequestRejectionCode` из protocol.proto. Это общий
 контракт клиента и сервера; логика различает причины по enum, а не по тексту message.
 
 | Значение | Имя в C++ / F# | Смысл |

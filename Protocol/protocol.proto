@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package Dreamsleeve.Protocol.Chat;
+
+import "chat.proto";
+import "session.proto";
+import "player.proto";
+
+// One serialized envelope per reliable ENet packet. Version 4 replicates full player state and opens sessions
+// with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
+// requires reconnecting. Transport Connected alone is not application readiness.
+message ClientPacket {
+  uint32 protocol_version = 1;
+  uint64 request_id = 2; // Nonzero, assigned by the initiating client.
+  oneof payload {
+    OpenSession open_session = 10;
+    SendChat send_chat = 11;
+    UpdatePlayer update_player = 12;
+  }
+}
+
+// Correlation is recipient-specific. A chat broadcast includes request_id only
+// in the copy sent to its initiating connection. Others receive the same message
+// without request_id and apply it through the same state-update path.
+message ServerPacket {
+  uint32 protocol_version = 1;
+  optional uint64 request_id = 2;
+  oneof payload {
+    SessionOpened session_opened = 10;
+    ChatPublished chat_published = 11;
+    RequestRejected request_rejected = 12;
+    PlayerJoined player_joined = 13;
+    PlayerLeft player_left = 14;
+    PlayerUpdated player_updated = 15;
+    PlayerUpdateAccepted player_update_accepted = 16;
+    PlayerMoved player_moved = 17;
+    PlayerMetadataChanged player_metadata_changed = 18;
+  }
+}
+
+// Settles the command; authoritative state arrives through periodic replication.
+message PlayerUpdateAccepted {}
+
+// Stable application rejection codes shared by client and server.
+// Never reuse numeric values; reserve removed values/names when evolving this enum.
+enum RequestRejectionCode {
+  REQUEST_REJECTION_CODE_UNSPECIFIED = 0; // Invalid in a RequestRejected response.
+  REQUEST_REJECTION_CODE_INVALID_REQUEST = 1; // Invalid field or command arguments.
+  REQUEST_REJECTION_CODE_SESSION_NOT_READY = 2; // No ready application session.
+  REQUEST_REJECTION_CODE_SESSION_ALREADY_OPEN = 3; // Repeated OpenSession.
+  REQUEST_REJECTION_CODE_USERNAME_TAKEN = 4; // Requested username is already reserved.
+  REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND = 5; // Requested channel does not exist.
+  REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER = 6; // Sender may not publish to this channel.
+  REQUEST_REJECTION_CODE_OVERLOADED = 7; // Request was not admitted; the session remains usable.
+  REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED = 8; // Missing, expired, invalid or already consumed ticket.
+}
+
+// Code controls program behavior; message is a display/diagnostic fallback.
+// Clients preserve unknown nonzero codes from newer servers with their message.
+// request_id in the envelope is mandatory for this first command-response slice.
+message RequestRejected {
+  RequestRejectionCode code = 1;
+  string message = 2;
+  string field = 3;
+}

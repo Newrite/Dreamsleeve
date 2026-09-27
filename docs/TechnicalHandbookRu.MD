@@ -14,7 +14,7 @@ Client предназначен для SKSE/PrismaUI. Кодеки и ENet runti
 Актуальные контракты: [Server.Core](../src/Dreamsleeve.Server.Core/README.ru.md).
 
 Protobuf генерируется `Scripts/generate_protocol.py` из `Protocol/*.proto`
-в Native и Dotnet проекты; схемы — DisconnectReason и chat.proto.
+в Native и Dotnet проекты; схемы — common/chat/player/session/protocol и network (DisconnectReason).
 [Прикладной контракт](../Protocol/README.ru.md) описывает текущий срез.
 Grpc.Tools из ранних примеров не подключён к текущему csproj.
 
