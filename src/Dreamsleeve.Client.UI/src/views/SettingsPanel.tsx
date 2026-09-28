@@ -125,7 +125,7 @@ export function SettingsPanel({
       >
         Сбросить расположение
       </button>
-      <fieldset className={styles.fireflies}>
+      <fieldset className={styles.group}>
         <legend>Имена над светлячками</legend>
         {(
           [
@@ -169,6 +169,56 @@ export function SettingsPanel({
         <p className={styles.muted}>
           Применяются после сохранения, без перезапуска игры. Высота — в игровых
           единицах. Имена пока доступны только в SE/AE.
+        </p>
+      </fieldset>
+      <fieldset className={styles.group}>
+        <legend>Сообщения над игроками</legend>
+        {(
+          [
+            ["showBubbles", "Показывать сообщения"],
+            ["bubbleFade", "Плавно скрывать сообщение"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              checked={s[key]}
+              onChange={(e) => chat.configure({ [key]: e.target.checked })}
+            />
+          </label>
+        ))}
+        {(
+          [
+            ["bubbleDuration", "Время показа, с", 1, 60, 1],
+            ["bubbleFadeDuration", "Длительность исчезновения, с", 0.1, 5, 0.1],
+            ["bubbleFontSize", "Размер шрифта сообщения", 8, 48, 1],
+            ["bubbleMaxWidth", "Максимальная ширина", 120, 800, 10],
+            ["bubbleBackground", "Непрозрачность фона сообщения", 0, 1, 0.05],
+          ] as const
+        ).map(([key, label, min, max, step]) => (
+          <label key={key} className={styles.range}>
+            <span>
+              {label}
+              <output>{s[key].toFixed(step < 1 ? 2 : 0)}</output>
+            </span>
+            <input
+              type="range"
+              aria-label={label}
+              min={min}
+              max={max}
+              step={step}
+              value={s[key]}
+              onChange={(e) =>
+                chat.configure({ [key]: Number(e.target.value) })
+              }
+            />
+          </label>
+        ))}
+        <p className={styles.muted}>
+          Последнее сообщение общего канала показывается над светлячком автора;
+          новое сообщение заменяет предыдущее. Не зависит от показа имён и
+          затухания окна чата. Только SE/AE.
         </p>
       </fieldset>
       <button className={styles.primary} onClick={chat.save}>

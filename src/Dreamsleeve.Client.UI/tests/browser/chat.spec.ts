@@ -663,21 +663,86 @@ test("channel selector uses the active theme instead of native appearance", asyn
 test("firefly name preferences save and restore", async ({ page }) => {
   const openSettings = async () => {
     await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
-    await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+    await page
+      .getByRole("button", { name: "Открыть меню Dreamsleeve" })
+      .click();
     await page.getByRole("button", { name: "Настройки", exact: true }).click();
   };
   await openSettings();
   await page.getByLabel("Показывать имена", { exact: true }).uncheck();
   await page.getByLabel("Скрывать имена за препятствиями").uncheck();
   await page.getByRole("slider", { name: "Размер шрифта имени" }).fill("26");
-  await page.getByRole("slider", { name: "Высота имени над светлячком" }).fill("70");
+  await page
+    .getByRole("slider", { name: "Высота имени над светлячком" })
+    .fill("70");
   await page.getByRole("button", { name: "Сохранить настройки" }).click();
   await page.reload();
   await openSettings();
-  await expect(page.getByLabel("Показывать имена", { exact: true })).not.toBeChecked();
-  await expect(page.getByLabel("Скрывать имена за препятствиями")).not.toBeChecked();
-  await expect(page.getByRole("slider", { name: "Размер шрифта имени" })).toHaveValue("26");
-  await expect(page.getByRole("slider", { name: "Высота имени над светлячком" })).toHaveValue("70");
-  await page.getByRole("group", { name: "Имена над светлячками" }).scrollIntoViewIfNeeded();
+  await expect(
+    page.getByLabel("Показывать имена", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByLabel("Скрывать имена за препятствиями"),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole("slider", { name: "Размер шрифта имени" }),
+  ).toHaveValue("26");
+  await expect(
+    page.getByRole("slider", { name: "Высота имени над светлячком" }),
+  ).toHaveValue("70");
+  await page
+    .getByRole("group", { name: "Имена над светлячками" })
+    .scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/firefly-settings.png" });
+});
+
+test("chat bubble preferences save and restore independently of names", async ({
+  page,
+}) => {
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+    await page
+      .getByRole("button", { name: "Открыть меню Dreamsleeve" })
+      .click();
+    await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  };
+  await openSettings();
+  await page.getByLabel("Показывать сообщения", { exact: true }).uncheck();
+  await page.getByLabel("Плавно скрывать сообщение", { exact: true }).uncheck();
+  await page.getByRole("slider", { name: "Время показа, с" }).fill("15");
+  await page
+    .getByRole("slider", { name: "Размер шрифта сообщения" })
+    .fill("20");
+  await page.getByRole("slider", { name: "Максимальная ширина" }).fill("400");
+  await page
+    .getByRole("slider", { name: "Непрозрачность фона сообщения" })
+    .fill("0.4");
+  await page.getByRole("button", { name: "Сохранить настройки" }).click();
+  await page.reload();
+  await openSettings();
+  await expect(
+    page.getByLabel("Показывать сообщения", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByLabel("Плавно скрывать сообщение", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByLabel("Показывать имена", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("slider", { name: "Время показа, с" }),
+  ).toHaveValue("15");
+  await expect(
+    page.getByRole("slider", { name: "Размер шрифта сообщения" }),
+  ).toHaveValue("20");
+  await expect(
+    page.getByRole("slider", { name: "Максимальная ширина" }),
+  ).toHaveValue("400");
+  await expect(
+    page.getByRole("slider", { name: "Непрозрачность фона сообщения" }),
+  ).toHaveValue("0.4");
+  await page
+    .getByRole("group", { name: "Сообщения над игроками" })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/bubble-settings.png" });
 });

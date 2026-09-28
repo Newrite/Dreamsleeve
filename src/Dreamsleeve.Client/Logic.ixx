@@ -34,6 +34,7 @@ namespace Logic
     Clock::time_point            nextReconnect{};
     std::chrono::seconds         reconnectDelay{ReconnectMinimum};
     Clock::time_point            readySince{};
+    std::uint64_t                bubbleGeneration{};
   };
 
   State& Get()
@@ -178,7 +179,7 @@ namespace Logic
     if (runtime.app->ConnectSaved()) logger::info("Reconnecting with saved login");
   }
 
-  void Drain()
+  void Drain(Clock::time_point now)
   {
     auto& runtime = Runtime::Get();
     auto& state   = Get();
@@ -190,6 +191,15 @@ namespace Logic
     for (const auto& note : frame.notes)
       logger::warn("{}", note);
     PrismaUI::Dispatch(frame.events);
+
+    // Bubbles belong to one session: a disconnect or a new generation drops
+    // them. Only live confirmed publications from this drain are admitted.
+    const auto generation = runtime.session.Generation();
+    if (!runtime.session.Ready() || generation != state.bubbleGeneration) runtime.bubbles.Clear();
+    state.bubbleGeneration = generation;
+    if (runtime.ui.ui.chat.showBubbles)
+      for (const auto& message : frame.freshMessages)
+        runtime.bubbles.Post(message.author.playerId, message.messageText, now);
   }
 
   void PublishMenuSnapshot()
@@ -226,7 +236,7 @@ namespace Logic
 
     const auto now = Clock::now();
     HandleNotices();
-    Drain();
+    Drain(now);
     SessionPolicy(now);
     ProbeContext(now);
     Telemetry::Tick(now);

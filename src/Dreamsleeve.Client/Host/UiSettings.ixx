@@ -16,10 +16,18 @@ export namespace Dreamsleeve::Host
   // Mirrors bridge/types.ts Settings, including the same defaults and bounds.
   struct UiSettings
   {
-    bool        showFireflyNames{true};
-    bool        fireflyNameOcclusion{true};
-    double      fireflyNameFontSize{18};
-    double      fireflyNameOffset{35};
+    bool   showFireflyNames{true};
+    bool   fireflyNameOcclusion{true};
+    double fireflyNameFontSize{18};
+    double fireflyNameOffset{35};
+    // Chat bubbles above fireflies; independent of names and of the chat window fade.
+    bool        showBubbles{true};
+    double      bubbleDuration{8.0};      // Seconds a message stays fully visible.
+    bool        bubbleFade{true};
+    double      bubbleFadeDuration{1.0};  // Seconds of the fade-out after the display time.
+    double      bubbleFontSize{16};       // HUD units.
+    double      bubbleMaxWidth{320};      // HUD units, including padding.
+    double      bubbleBackground{0.65};   // Background fill only; the text stays opaque.
     std::string onlineView{"cards"};
     bool        fade{true};
     double      delay{12.0};
@@ -94,6 +102,11 @@ export namespace Dreamsleeve::Host
 
     value.fireflyNameFontSize = Clamp(value.fireflyNameFontSize, 8, 48, defaults.fireflyNameFontSize);
     value.fireflyNameOffset   = Clamp(value.fireflyNameOffset, 0, 512, defaults.fireflyNameOffset);
+    value.bubbleDuration      = Clamp(value.bubbleDuration, 1, 60, defaults.bubbleDuration);
+    value.bubbleFadeDuration  = Clamp(value.bubbleFadeDuration, 0.1, 5, defaults.bubbleFadeDuration);
+    value.bubbleFontSize      = Clamp(value.bubbleFontSize, 8, 48, defaults.bubbleFontSize);
+    value.bubbleMaxWidth      = Clamp(value.bubbleMaxWidth, 120, 800, defaults.bubbleMaxWidth);
+    value.bubbleBackground    = Clamp(value.bubbleBackground, 0, 1, defaults.bubbleBackground);
     value.delay               = Clamp(value.delay, 0, 120, defaults.delay);
     value.duration            = Clamp(value.duration, 0, 5, defaults.duration);
     value.idleOpacity         = Clamp(value.idleOpacity, 0, 1, defaults.idleOpacity);

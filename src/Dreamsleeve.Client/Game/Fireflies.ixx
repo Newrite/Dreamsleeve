@@ -62,6 +62,7 @@ namespace Fireflies
       Remove(handle);
     state.refs.clear();
     state.space.reset();
+    Runtime::Get().bubbles.Clear();
     Nameplates::Publish({});
   }
 
@@ -130,6 +131,11 @@ namespace Fireflies
     const Domain::Position               origin{self.x, self.y, self.z};
     std::unordered_set<Domain::PlayerId> visible;
     Nameplates::Frame                    names;
+    const auto&                          ui = runtime.ui.ui.chat;
+    names.style = {static_cast<float>(ui.bubbleFontSize), static_cast<float>(ui.bubbleMaxWidth), static_cast<float>(ui.bubbleBackground)};
+    // Expired texts and those of players who left are dropped here, once per
+    // frame; a message is never kept waiting for its author to appear.
+    runtime.bubbles.Prune(now, ui, [&](Domain::PlayerId id) { return runtime.session.OnlinePlayers().contains(id); });
     for (const auto& [id, remote] : runtime.session.OnlinePlayers())
     {
       if (runtime.session.SelfId() == id) continue;
@@ -160,23 +166,24 @@ namespace Fireflies
         ref->Update3DPosition(true);
       }
       visible.insert(id);
-      const auto& nameSettings = runtime.ui.ui.chat;
-      if (nameSettings.showFireflyNames)
-      {
-        auto anchor  = position;
-        anchor.z    += static_cast<float>(nameSettings.fireflyNameOffset);
-        Nameplates::Add(
-          names,
-          id,
-          remote.data.displayName,
-          anchor,
-          static_cast<float>(nameSettings.fireflyNameFontSize),
-          nameSettings.fireflyNameOcclusion);
-      }
+      // Name and bubble share one anchor, projection and occlusion pick. The
+      // name size is passed even when names are hidden: it fixes the baseline
+      // above which the bubble sits.
+      Nameplates::Label label{.id = id, .nameSize = static_cast<float>(ui.fireflyNameFontSize)};
+      if (ui.showFireflyNames) label.name = remote.data.displayName;
+      if (ui.showBubbles)
+        if (const auto active = runtime.bubbles.Find(id, now, ui))
+        {
+          label.bubble      = std::string{active->text};
+          label.bubbleAlpha = active->alpha;
+        }
+      auto anchor  = position;
+      anchor.z    += static_cast<float>(ui.fireflyNameOffset);
+      Nameplates::Add(names, std::move(label), anchor, ui.fireflyNameOcclusion);
     }
 
-    auto* ui = RE::UI::GetSingleton();
-    if (!ui || ui->GameIsPaused() || !ui->menuSystemVisible) names.clear();
+    auto* menus = RE::UI::GetSingleton();
+    if (!menus || menus->GameIsPaused() || !menus->menuSystemVisible) names.labels.clear();
     Nameplates::Publish(std::move(names));
 
     std::erase_if(state.refs, [&](auto& entry) {

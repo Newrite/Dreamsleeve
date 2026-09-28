@@ -7,22 +7,44 @@ export module Dreamsleeve.UI.Nameplates;
 import std;
 import Dreamsleeve.Client.Domain;
 
-// A small Scaleform HUD layer. Game objects are read only on the main thread;
-// the HUD callback consumes copied screen coordinates and owns all GFx values.
+// A small Scaleform HUD layer: a name and, optionally, one chat bubble above
+// each visible firefly. Game objects are read only on the main thread; the HUD
+// callback consumes copied strings and screen coordinates and owns all GFx values.
 namespace Nameplates
 {
 
-  struct Label
+  // Bubble look shared by every label of a frame; a change rebuilds the bubbles.
+  export struct BubbleStyle
+  {
+    float fontSize{16};
+    float maxWidth{320};  // HUD units, including padding.
+    float background{0.65f};
+
+    bool operator==(const BubbleStyle&) const = default;
+  };
+
+  // Both texts are plain UTF-8. An empty name hides the name field but keeps
+  // its baseline, so the bubble never jumps when names are switched off.
+  export struct Label
   {
     Domain::PlayerId id{};
-    std::string      text;
-    float            x{}, y{}, size{};
+    std::string      name;
+    float            nameSize{};
+    std::string      bubble;
+    float            bubbleAlpha{1.0f};
+    float            x{}, y{};  // Filled by Add: normalized screen position of the anchor.
+  };
+
+  export struct Frame
+  {
+    std::vector<Label> labels;
+    BubbleStyle        style;
   };
 
   struct Exchange
   {
-    std::mutex         mutex;
-    std::vector<Label> labels;
+    std::mutex mutex;
+    Frame      frame;
   };
 
   Exchange& GetExchange()
@@ -30,8 +52,6 @@ namespace Nameplates
     static Exchange exchange;
     return exchange;
   }
-
-  export using Frame = std::vector<Label>;
 
   bool ClearSight(const RE::NiPoint3& from, const RE::NiPoint3& to)
   {
@@ -49,32 +69,75 @@ namespace Nameplates
     return !pick.pickFailed && !pick.rayOutput.HasHit();
   }
 
-  export void Add(Frame& frame, Domain::PlayerId id, const std::string& text, RE::NiPoint3 position, float size, bool occlusion)
+  // One projection and at most one line-of-sight pick per player serve both
+  // the name and the bubble.
+  export void Add(Frame& frame, Label label, RE::NiPoint3 anchor, bool occlusion)
   {
     // A VR HUD is a world-space plane: a flat camera projection would drift
     // between the eyes. Do not install the flat renderer on that runtime.
-    if (REL::Module::IsVR() || text.empty()) return;
+    if (REL::Module::IsVR() || (label.name.empty() && label.bubble.empty())) return;
     auto* camera = RE::Main::WorldRootCamera();
     if (!camera) return;
     float x{}, y{}, z{};
     if (
-      !camera->WorldPtToScreenPt3(position, x, y, z, 1e-5f) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || z <= 0 ||
+      !camera->WorldPtToScreenPt3(anchor, x, y, z, 1e-5f) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || z <= 0 ||
       x < 0 || x > 1 || y < 0 || y > 1)
       return;
-    if (occlusion && !ClearSight(camera->world.translate, position)) return;
-    frame.push_back({id, text, x, 1.0f - y, size});
+    if (occlusion && !ClearSight(camera->world.translate, anchor)) return;
+    label.x = x;
+    label.y = 1.0f - y;
+    frame.labels.push_back(std::move(label));
   }
 
   export void Publish(Frame frame)
   {
     auto&            exchange = GetExchange();
     std::scoped_lock lock{exchange.mutex};
-    exchange.labels = std::move(frame);
+    exchange.frame = std::move(frame);
   }
 
-  constexpr std::uint32_t TextColor = 0xEEECE5;
+  constexpr std::uint32_t TextColor         = 0xEEECE5;
+  constexpr std::uint32_t BubbleFill        = 0x0A0A0C;
+  constexpr std::uint32_t BubbleBorder      = 0x9C9A90;
+  constexpr double        BubbleBorderAlpha = 55;    // Percent.
+  constexpr double        BubblePadding     = 8;
+  constexpr double        BubbleGap         = 6;     // Between the name line and the bubble bottom.
+  constexpr double        TextGutter        = 2;     // Flash text fields keep a 2px inner margin.
+  constexpr double        LineHeightFactor  = 1.25;  // Estimated line advance relative to the font size.
+  constexpr int           BubbleMaxLines    = 6;
+  constexpr std::size_t   BubbleMaxChars    = 320;   // Code points before trimming starts.
 
-  struct Field
+  // Height reserved for the name line, from the font size only: the same value
+  // whether the name is drawn or hidden.
+  double NameBlock(float nameSize)
+  {
+    return static_cast<double>(nameSize) + 8;
+  }
+
+  std::size_t Utf8Length(std::string_view text)
+  {
+    std::size_t count = 0;
+    for (unsigned char byte : text)
+      if ((byte & 0xC0) != 0x80) ++count;
+    return count;
+  }
+
+  // Keeps the first `count` code points and appends an ellipsis.
+  std::string TrimUtf8(std::string_view text, std::size_t count)
+  {
+    std::size_t end = 0;
+    for (std::size_t seen = 0; end < text.size(); ++end)
+    {
+      if ((static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) continue;
+      if (seen == count) break;
+      ++seen;
+    }
+    while (end > 0 && text[end - 1] == ' ')
+      --end;
+    return std::string{text.substr(0, end)} + "\xE2\x80\xA6";
+  }
+
+  struct NameField
   {
     RE::GFxValue value;
     std::string  text;
@@ -82,18 +145,34 @@ namespace Nameplates
     double       width{}, height{};
   };
 
+  struct BubbleClip
+  {
+    RE::GFxValue clip;
+    RE::GFxValue text;
+    std::string  content;
+    BubbleStyle  style;
+    double       width{}, height{};
+    double       alpha{-1};
+  };
+
+  struct Entry
+  {
+    NameField  name;
+    BubbleClip bubble;
+  };
+
   struct Renderer
   {
     // Declare movie first: the managed GFx values must die before the movie.
     RE::GPtr<RE::GFxMovieView>                  movie;
     RE::GFxValue                                layer;
-    std::unordered_map<Domain::PlayerId, Field> fields;
+    std::unordered_map<Domain::PlayerId, Entry> entries;
 
     bool Bind(RE::GFxMovieView* current)
     {
       if (movie.get() != current)
       {
-        fields.clear();
+        entries.clear();
         if (layer.IsDisplayObject()) layer.Invoke("removeMovieClip", nullptr);
         layer.SetUndefined();
         movie.reset(current);
@@ -108,44 +187,57 @@ namespace Nameplates
       return layer.IsDisplayObject();
     }
 
-    bool MakeText(RE::GFxValue& out, const std::string& name, float size, std::uint32_t color)
+    bool MakeText(RE::GFxValue& parent, RE::GFxValue& out, const std::string& name, float size, double width, bool wrap)
     {
       RE::GFxValue depth;
-      if (!layer.Invoke("getNextHighestDepth", &depth) || !depth.IsNumber()) return false;
+      if (!parent.Invoke("getNextHighestDepth", &depth) || !depth.IsNumber()) return false;
       RE::GFxValue args[]{
           RE::GFxValue(name.c_str()),
           depth,
           RE::GFxValue(0.0),
           RE::GFxValue(0.0),
-          RE::GFxValue(400.0),
+          RE::GFxValue(width),
           RE::GFxValue(static_cast<double>(size + 8))
       };
-      if (!layer.Invoke("createTextField", nullptr, args, 6) || !layer.GetMember(name.c_str(), &out) || !out.IsDisplayObject())
+      if (!parent.Invoke("createTextField", nullptr, args, 6) || !parent.GetMember(name.c_str(), &out) || !out.IsDisplayObject())
         return false;
       out.SetMember("selectable", RE::GFxValue(false));
-      out.SetMember("multiline", RE::GFxValue(false));
-      out.SetMember("wordWrap", RE::GFxValue(false));
-      out.SetMember("autoSize", RE::GFxValue("center"));
+      out.SetMember("multiline", RE::GFxValue(wrap));
+      out.SetMember("wordWrap", RE::GFxValue(wrap));
+      out.SetMember("autoSize", RE::GFxValue(wrap ? "left" : "center"));
       out.SetMember("embedFonts", RE::GFxValue(true));
       RE::GFxValue format;
       movie->CreateObject(&format, "TextFormat");
       format.SetMember("font", RE::GFxValue("$EverywhereFont"));
       format.SetMember("size", RE::GFxValue(static_cast<double>(size)));
-      format.SetMember("color", RE::GFxValue(static_cast<double>(color)));
-      format.SetMember("align", RE::GFxValue("center"));
+      format.SetMember("color", RE::GFxValue(static_cast<double>(TextColor)));
+      format.SetMember("align", RE::GFxValue(wrap ? "left" : "center"));
       out.Invoke("setNewTextFormat", nullptr, &format, 1);
       return true;
     }
 
-    static void Remove(Field& field)
+    static double Number(RE::GFxValue& object, const char* member)
     {
-      if (field.value.IsDisplayObject()) field.value.Invoke("removeTextField", nullptr);
+      RE::GFxValue value;
+      object.GetMember(member, &value);
+      return value.IsNumber() ? value.GetNumber() : 0;
     }
 
-    // Outline copies come first: later depths draw on top, so the label stays above them.
-    bool Create(Field& field, Domain::PlayerId id, float size)
+    static void Remove(NameField& field)
     {
-      if (!MakeText(field.value, std::format("player_{}", id), size, TextColor)) return false;
+      if (field.value.IsDisplayObject()) field.value.Invoke("removeTextField", nullptr);
+      field = {};
+    }
+
+    static void Remove(BubbleClip& bubble)
+    {
+      if (bubble.clip.IsDisplayObject()) bubble.clip.Invoke("removeMovieClip", nullptr);
+      bubble = {};
+    }
+
+    bool CreateName(NameField& field, Domain::PlayerId id, float size)
+    {
+      if (!MakeText(layer, field.value, std::format("player_{}", id), size, 400, false)) return false;
       Outline(field.value);
       field.size = size;
       return true;
@@ -181,61 +273,150 @@ namespace Nameplates
       text.SetMember("filters", filters);
     }
 
+    // A nested clip owns the background drawing and the wrapped text field, so
+    // the fade applies to the whole bubble through the clip's alpha while the
+    // background opacity setting only affects the fill.
+    bool CreateBubble(BubbleClip& bubble, Domain::PlayerId id, const BubbleStyle& style)
+    {
+      if (!layer.CreateEmptyMovieClip(&bubble.clip, std::format("bubble_{}", id).c_str()) || !bubble.clip.IsDisplayObject()) return false;
+      bubble.clip.SetMember("tabEnabled", RE::GFxValue(false));
+      const double textWidth = std::max(32.0, static_cast<double>(style.maxWidth) - 2 * BubblePadding + 2 * TextGutter);
+      if (!MakeText(bubble.clip, bubble.text, "text", style.fontSize, textWidth, true))
+      {
+        Remove(bubble);
+        return false;
+      }
+      RE::GFxValue::DisplayInfo info;
+      info.SetPosition(BubblePadding - TextGutter, BubblePadding - TextGutter);
+      bubble.text.SetDisplayInfo(info);
+      bubble.style = style;
+      return true;
+    }
+
+    // Sets the text, trims it to the line budget and redraws the box around the
+    // measured text. Runs only when the content or the style changed.
+    void LayoutBubble(BubbleClip& bubble, const std::string& content)
+    {
+      const auto  maxHeight = BubbleMaxLines * bubble.style.fontSize * LineHeightFactor + 2 * TextGutter;
+      std::string text      = Utf8Length(content) > BubbleMaxChars ? TrimUtf8(content, BubbleMaxChars) : content;
+      // Plain UTF-8 text, never HTML or ActionScript from the network.
+      bubble.text.SetText(text.c_str());
+      double textHeight = Number(bubble.text, "textHeight");
+      for (int step = 0; textHeight > maxHeight && step < 24; ++step)
+      {
+        const auto length = Utf8Length(text);
+        if (length <= 8) break;
+        text = TrimUtf8(text, length - std::max<std::size_t>(4, length / 8));
+        bubble.text.SetText(text.c_str());
+        textHeight = Number(bubble.text, "textHeight");
+      }
+      const double textWidth = Number(bubble.text, "textWidth");
+      bubble.width           = std::min(static_cast<double>(bubble.style.maxWidth), textWidth + 2 * BubblePadding + 2 * TextGutter);
+      bubble.height          = textHeight + 2 * BubblePadding + 2 * TextGutter;
+      bubble.content         = content;
+
+      bubble.clip.Invoke("clear", nullptr);
+      const RE::GFxValue line[]{RE::GFxValue(1.0), RE::GFxValue(static_cast<double>(BubbleBorder)), RE::GFxValue(BubbleBorderAlpha)};
+      bubble.clip.Invoke("lineStyle", nullptr, line, 3);
+      const RE::GFxValue fill[]{
+          RE::GFxValue(static_cast<double>(BubbleFill)),
+          RE::GFxValue(std::clamp(bubble.style.background, 0.0f, 1.0f) * 100.0)
+      };
+      bubble.clip.Invoke("beginFill", nullptr, fill, 2);
+      const auto corner = [&](double x, double y, const char* method) {
+        const RE::GFxValue point[]{RE::GFxValue(x), RE::GFxValue(y)};
+        bubble.clip.Invoke(method, nullptr, point, 2);
+      };
+      corner(0.5, 0.5, "moveTo");
+      corner(bubble.width - 0.5, 0.5, "lineTo");
+      corner(bubble.width - 0.5, bubble.height - 0.5, "lineTo");
+      corner(0.5, bubble.height - 0.5, "lineTo");
+      corner(0.5, 0.5, "lineTo");
+      bubble.clip.Invoke("endFill", nullptr);
+    }
+
     // Releases every GFx object and the movie reference while Scaleform is alive.
     void Reset()
     {
-      for (auto& [id, field] : fields)
-        Remove(field);
-      fields.clear();
+      for (auto& [id, entry] : entries)
+      {
+        Remove(entry.name);
+        Remove(entry.bubble);
+      }
+      entries.clear();
       if (layer.IsDisplayObject()) layer.Invoke("removeMovieClip", nullptr);
       layer.SetUndefined();
       movie.reset();
+    }
+
+    void DrawName(Entry& entry, const Label& label, double x, double y)
+    {
+      auto& field = entry.name;
+      if (label.name.empty())
+      {
+        Remove(field);
+        return;
+      }
+      if (field.value.IsDisplayObject() && field.size != label.nameSize) Remove(field);
+      if (!field.value.IsDisplayObject() && !CreateName(field, label.id, label.nameSize)) return;
+      if (field.text != label.name)
+      {
+        // Plain UTF-8 text, never HTML or ActionScript from the network.
+        field.value.SetText(label.name.c_str());
+        field.text   = label.name;
+        field.width  = Number(field.value, "_width");
+        field.height = Number(field.value, "_height");
+      }
+      RE::GFxValue::DisplayInfo info;
+      info.SetPosition(x - field.width / 2, y - field.height);
+      info.SetVisible(true);
+      field.value.SetDisplayInfo(info);
+    }
+
+    // The bubble bottom sits a fixed gap above the name block; more lines grow it upwards.
+    void DrawBubble(Entry& entry, const Label& label, const BubbleStyle& style, double x, double y)
+    {
+      auto& bubble = entry.bubble;
+      if (label.bubble.empty())
+      {
+        Remove(bubble);
+        return;
+      }
+      if (bubble.clip.IsDisplayObject() && bubble.style != style) Remove(bubble);
+      if (!bubble.clip.IsDisplayObject() && !CreateBubble(bubble, label.id, style)) return;
+      if (bubble.content != label.bubble) LayoutBubble(bubble, label.bubble);
+      const double              alpha = std::clamp(static_cast<double>(label.bubbleAlpha), 0.0, 1.0) * 100.0;
+      RE::GFxValue::DisplayInfo info;
+      info.SetPosition(x - bubble.width / 2, y - NameBlock(label.nameSize) - BubbleGap - bubble.height);
+      info.SetVisible(true);
+      if (alpha != bubble.alpha) info.SetAlpha(alpha);
+      bubble.alpha = alpha;
+      bubble.clip.SetDisplayInfo(info);
     }
 
     void Draw(RE::GFxMovieView* current, const Frame& frame)
     {
       if (!Bind(current)) return;
       std::unordered_set<Domain::PlayerId> visible;
-      visible.reserve(frame.size());
-      for (const auto& label : frame)
+      visible.reserve(frame.labels.size());
+      for (const auto& label : frame.labels)
         visible.insert(label.id);
-      std::erase_if(fields, [&](auto& entry) {
+      std::erase_if(entries, [&](auto& entry) {
         if (visible.contains(entry.first)) return false;
-        Remove(entry.second);
+        Remove(entry.second.name);
+        Remove(entry.second.bubble);
         return true;
       });
       const auto rect = movie->GetVisibleFrameRect();
       if (!(rect.right > rect.left && rect.bottom > rect.top)) return;
-      for (const auto& label : frame)
+      for (const auto& label : frame.labels)
       {
-        auto& field = fields[label.id];
-        if (field.value.IsDisplayObject() && field.size != label.size)
-        {
-          Remove(field);
-          field = {};
-        }
-        if (!field.value.IsDisplayObject() && !Create(field, label.id, label.size))
-        {
-          fields.erase(label.id);
-          continue;
-        }
-        if (field.text != label.text)
-        {
-          // Plain UTF-8 text, never HTML or ActionScript from the network.
-          field.value.SetText(label.text.c_str());
-          field.text = label.text;
-          RE::GFxValue width, height;
-          field.value.GetMember("_width", &width);
-          field.value.GetMember("_height", &height);
-          field.width  = width.IsNumber() ? width.GetNumber() : 0;
-          field.height = height.IsNumber() ? height.GetNumber() : 0;
-        }
-        RE::GFxValue::DisplayInfo info;
-        info.SetPosition(
-          rect.left + label.x * (rect.right - rect.left) - field.width / 2,
-          rect.top + label.y * (rect.bottom - rect.top) - field.height);
-        info.SetVisible(true);
-        field.value.SetDisplayInfo(info);
+        auto&        entry = entries[label.id];
+        const double x     = rect.left + label.x * (rect.right - rect.left);
+        const double y     = rect.top + label.y * (rect.bottom - rect.top);
+        DrawName(entry, label, x, y);
+        DrawBubble(entry, label, frame.style, x, y);
+        if (!entry.name.value.IsDisplayObject() && !entry.bubble.clip.IsDisplayObject()) entries.erase(label.id);
       }
     }
   };
@@ -266,7 +447,7 @@ namespace Nameplates
     {
       auto&            exchange = GetExchange();
       std::scoped_lock lock{exchange.mutex};
-      frame = exchange.labels;
+      frame = exchange.frame;
     }
     auto&            host = GetHost();
     std::scoped_lock lock{host.mutex};

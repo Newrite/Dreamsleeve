@@ -20,8 +20,12 @@ public:
     {
       std::vector<std::string> events;  // Encoded JSON, in delivery order.
       std::vector<std::string> notes;   // Diagnostics for the host logger.
-      bool                     snapshot{};
-      bool                     playersChanged{};
+      // Live publications of other players in the global channel, confirmed by
+      // the server in this Process call: never snapshot history, replays or
+      // authorless (system) messages. Consumed by the firefly chat bubbles.
+      std::vector<Domain::ChatMessage> freshMessages;
+      bool                             snapshot{};
+      bool                             playersChanged{};
     };
 
     using Players = std::unordered_map<Domain::PlayerId, Domain::Player>;
@@ -153,6 +157,14 @@ private:
       channels.clear();
       for (const auto& chat : snapshot.chats)
         channels.push_back(chat.channelId);
+      // Protocol v6 opens exactly one channel (SessionOpened.global_channel_id)
+      // and the snapshot labels every channel "global"; bubbles follow the first
+      // one. Retained history sets the floor: only later IDs are live.
+      globalChannel = snapshot.chats.empty() ? std::nullopt : std::optional{snapshot.chats.front().channelId};
+      bubbleFloor   = 0;
+      for (const auto& chat : snapshot.chats)
+        if (globalChannel && chat.channelId == *globalChannel && !chat.messages.empty())
+          bubbleFloor = std::max(bubbleFloor, chat.messages.back().messageId);
 
       // A new generation cannot complete requests of the previous session.
       std::erase_if(pendingChats, [&](const auto& entry) { return entry.second.generation != generation; });
@@ -220,8 +232,20 @@ private:
       for (const auto& change : delta.chatContent)
         if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
           for (const auto& message : added->messages)
+          {
             messages.messages.push_back(Bridge::ToUiMessage(message));
+            if (Fresh(message)) frame.freshMessages.push_back(message);
+          }
       if (!messages.messages.empty()) Emit(frame, messages);
+    }
+
+    // Bubble admission: global channel, newer than anything seen (history
+    // pages and repeated events stay out), a real author other than self.
+    bool Fresh(const Domain::ChatMessage& message)
+    {
+      if (!globalChannel || message.channelId != *globalChannel || message.messageId <= bubbleFloor) return false;
+      bubbleFloor = message.messageId;
+      return message.author.playerId != 0 && message.author.playerId != selfId;
     }
 
     void Complete(Frame& frame, std::uint64_t requestId, std::optional<std::string> messageId, std::optional<std::string> error)
@@ -266,6 +290,8 @@ private:
     std::optional<Domain::PlayerId>                selfId;
     std::string                                    serverName;
     std::vector<Domain::ChatChannelId>             channels;
+    std::optional<Domain::ChatChannelId>           globalChannel;
+    Domain::ChatMessageId                          bubbleFloor{};
     Players                                        players;
     std::unordered_map<std::uint64_t, PendingChat> pendingChats;
     std::optional<ClientStatus>                    lastStatus;

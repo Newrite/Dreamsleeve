@@ -1,5 +1,16 @@
 # Proposed native host UI settings; not yet a ClientSettings section.
 [ui.chat]
+showFireflyNames = true
+fireflyNameOcclusion = true
+fireflyNameFontSize = 18
+fireflyNameOffset = 35
+showBubbles = true
+bubbleDuration = 8.0
+bubbleFade = true
+bubbleFadeDuration = 1.0
+bubbleFontSize = 16
+bubbleMaxWidth = 320
+bubbleBackground = 0.65
 onlineView = "cards"
 fade = true
 delay = 12.0

@@ -74,6 +74,13 @@ export interface Settings {
   fireflyNameOcclusion: boolean;
   fireflyNameFontSize: number;
   fireflyNameOffset: number;
+  showBubbles: boolean;
+  bubbleDuration: number;
+  bubbleFade: boolean;
+  bubbleFadeDuration: number;
+  bubbleFontSize: number;
+  bubbleMaxWidth: number;
+  bubbleBackground: number;
   onlineView: "cards" | "list";
   fade: boolean;
   delay: number;

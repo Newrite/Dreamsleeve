@@ -9,6 +9,7 @@ export import Dreamsleeve.Client.Application;
 export import Dreamsleeve.Client.MovementView;
 export import Dreamsleeve.Host.Session;
 export import Dreamsleeve.Host.UiSettings;
+export import Dreamsleeve.Host.Bubbles;
 
 // Single owner of the Core application, the interpolation view, the UI session
 // projection and the settings files. Every accessor below is main-thread only,
@@ -75,6 +76,7 @@ export namespace Runtime
     Dream::ClientApplication::Ptr app;
     Dream::MovementView::Ptr      movement;
     Host::Session                 session;
+    Host::Bubbles                 bubbles;  // Active chat texts above fireflies; main thread only.
     Host::UiFile                  ui;
     std::filesystem::path         clientPath{std::filesystem::path{ConfigDirectory} / ClientConfig};
     std::filesystem::path         uiPath{std::filesystem::path{ConfigDirectory} / UiConfig};

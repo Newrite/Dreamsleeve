@@ -147,6 +147,27 @@ describe("settings", () => {
     });
     expect(settingsFrom({})).toEqual(defaults);
   });
+  it("keeps bubble defaults for settings saved before bubbles existed and clamps new values", () => {
+    const old = settingsFrom({ fontSize: 20, showFireflyNames: false });
+    expect(old.showBubbles).toBe(true);
+    expect(old.bubbleDuration).toBe(8);
+    expect(old.bubbleFade).toBe(true);
+    expect(old.bubbleMaxWidth).toBe(320);
+    const edited = settingsFrom({
+      showBubbles: false,
+      bubbleDuration: 500,
+      bubbleFadeDuration: 0,
+      bubbleFontSize: 4,
+      bubbleMaxWidth: 5000,
+      bubbleBackground: -1,
+    });
+    expect(edited.showBubbles).toBe(false);
+    expect(edited.bubbleDuration).toBe(60);
+    expect(edited.bubbleFadeDuration).toBe(0.1);
+    expect(edited.bubbleFontSize).toBe(8);
+    expect(edited.bubbleMaxWidth).toBe(800);
+    expect(edited.bubbleBackground).toBe(0);
+  });
 });
 
 it("editing settings during a save does not show a stale success", () => {

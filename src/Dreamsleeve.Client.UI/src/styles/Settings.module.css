@@ -52,7 +52,7 @@
   }
 }
 
-.fireflies {
+.group {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -62,11 +62,11 @@
   border: 1px solid var(--border);
   min-width: 0;
 }
-.fireflies legend {
+.group legend {
   color: var(--accent);
   padding: 0 8px;
 }
-.fireflies p {
+.group p {
   grid-column: 1 / -1;
   margin: 0;
 }

@@ -2,6 +2,7 @@
 #include <glaze/glaze.hpp>
 import std;
 import Dreamsleeve.Host.Session;
+import Dreamsleeve.Host.Bubbles;
 import Dreamsleeve.Client.Model;
 
 namespace
@@ -405,6 +406,176 @@ TEST_CASE("Session reconnect: disconnect snapshot is silent and the new generati
   // Core publishes a delta after ClearOnlineState; the host must request a snapshot for the UI.
   Settle(session, *exchange, model, frame);
   CHECK(frame.snapshot);
+}
+
+TEST_CASE("Older UI files keep bubble defaults and new bubble values are bounded")
+{
+  TempPath file;
+  {
+    std::ofstream output{file.path};
+    output << "[ui.chat]\nfontSize = 20\nshowFireflyNames = false\n";
+  }
+  auto loaded = LoadUiFile(file.path);
+  REQUIRE(loaded);
+  const UiSettings defaults{};
+  CHECK(loaded->ui.chat.showBubbles == defaults.showBubbles);
+  CHECK(loaded->ui.chat.bubbleDuration == defaults.bubbleDuration);
+  CHECK(loaded->ui.chat.bubbleFade == defaults.bubbleFade);
+  CHECK(loaded->ui.chat.bubbleFadeDuration == defaults.bubbleFadeDuration);
+  CHECK(loaded->ui.chat.bubbleFontSize == defaults.bubbleFontSize);
+  CHECK(loaded->ui.chat.bubbleMaxWidth == defaults.bubbleMaxWidth);
+  CHECK(loaded->ui.chat.bubbleBackground == defaults.bubbleBackground);
+  CHECK_FALSE(loaded->ui.chat.showFireflyNames);
+
+  UiFile edited;
+  edited.ui.chat.showBubbles        = false;
+  edited.ui.chat.bubbleDuration     = 15;
+  edited.ui.chat.bubbleFade         = false;
+  edited.ui.chat.bubbleFadeDuration = 2.5;
+  edited.ui.chat.bubbleFontSize     = 20;
+  edited.ui.chat.bubbleMaxWidth     = 400;
+  edited.ui.chat.bubbleBackground   = 0.4;
+  REQUIRE(SaveUiFile(file.path, edited));
+  auto saved = LoadUiFile(file.path);
+  REQUIRE(saved);
+  CHECK(*saved == edited);
+
+  auto invalid               = edited.ui.chat;
+  invalid.bubbleDuration     = 1000;
+  invalid.bubbleFadeDuration = 0;
+  invalid.bubbleFontSize     = 1;
+  invalid.bubbleMaxWidth     = 10;
+  invalid.bubbleBackground   = 3;
+  auto normalized            = Dreamsleeve::Host::Normalize(invalid);
+  CHECK(normalized.bubbleDuration == 60);
+  CHECK(normalized.bubbleFadeDuration == 0.1);
+  CHECK(normalized.bubbleFontSize == 8);
+  CHECK(normalized.bubbleMaxWidth == 120);
+  CHECK(normalized.bubbleBackground == 1);
+}
+
+TEST_CASE("Bubbles keep one text per player, replace it, expire and fade on elapsed time only")
+{
+  using namespace std::chrono_literals;
+  Bubbles    bubbles;
+  UiSettings settings;
+  settings.bubbleDuration     = 8;
+  settings.bubbleFade         = true;
+  settings.bubbleFadeDuration = 2;
+  const auto start            = Bubbles::Clock::time_point{} + 100s;
+
+  bubbles.Post(7, "first", start);
+  bubbles.Post(9, "other", start);
+  REQUIRE(bubbles.Find(7, start + 1s, settings));
+  CHECK(bubbles.Find(7, start + 1s, settings)->text == "first");
+  CHECK(bubbles.Find(7, start + 1s, settings)->alpha == 1.0f);
+
+  // Replacement restarts the timer; the old text is gone.
+  bubbles.Post(7, "second", start + 5s);
+  CHECK(bubbles.Find(7, start + 12s, settings)->text == "second");
+  CHECK(bubbles.Size() == 2);
+
+  // Fully visible until the display time, then fading, then gone. Visibility is
+  // not an input: the same clock decides whether or not the author was on screen.
+  CHECK(bubbles.Find(7, start + 12900ms, settings)->alpha == 1.0f);
+  const auto mid = bubbles.Find(7, start + 14s, settings);
+  REQUIRE(mid);
+  CHECK(mid->alpha == doctest::Approx(0.5f));
+  CHECK_FALSE(bubbles.Find(7, start + 15s, settings));
+
+  // Without fade the text disappears exactly after the display time.
+  settings.bubbleFade = false;
+  CHECK(bubbles.Find(9, start + 7900ms, settings));
+  CHECK_FALSE(bubbles.Find(9, start + 8s, settings));
+
+  // Pruning drops expired texts and players that left; the rest survive.
+  bubbles.Post(11, "stays", start + 20s);
+  bubbles.Prune(start + 20s, settings, [](Domain::PlayerId id) { return id != 7; });
+  CHECK(bubbles.Size() == 1);
+  CHECK(bubbles.Find(11, start + 20s, settings));
+  bubbles.Clear();
+  CHECK(bubbles.Size() == 0);
+}
+
+TEST_CASE("Session admits only live global-channel publications of other players as fresh")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    OnlinePlayersReplaced{
+        {MakePlayer(1, "Alice"), MakePlayer(7, "Seven")}
+  }));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ChatMessagesReceived{
+        1,
+        {MakeMessage(10, 1, "history"), MakeMessage(11, 1, "older")}
+  }));
+  Session        session;
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  Settle(session, *exchange, model, frame);
+  REQUIRE(frame.snapshot);
+  // Retained history in the snapshot never produces bubbles.
+  CHECK(frame.freshMessages.empty());
+
+  auto self     = MakeMessage(13, 1, "mine");
+  self.author   = {1, "user1", "Alice"};
+  auto system   = MakeMessage(14, 1, "announcement");
+  system.author = {};
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ChatMessagesReceived{
+        1,
+        {MakeMessage(12, 1, "live"), self, system}
+  }));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  REQUIRE(frame.freshMessages.size() == 1);
+  CHECK(frame.freshMessages[0].messageId == 12);
+  CHECK(frame.freshMessages[0].author.playerId == 7);
+  CHECK(frame.freshMessages[0].messageText == "live");
+  // The UI still receives every message.
+  CHECK(std::ranges::any_of(frame.events, [](const auto& e) { return Type(e) == "messages"; }));
+
+  // A repeated or older ID (history page, replay) is not fresh again.
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ChatMessagesReceived{
+        1,
+        {MakeMessage(12, 1, "live"), MakeMessage(11, 1, "older")}
+  }));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  CHECK(frame.freshMessages.empty());
+
+  // A view reset replays the snapshot: still no bubbles from history.
+  session.ResetView();
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  Settle(session, *exchange, model, frame);
+  REQUIRE(frame.snapshot);
+  CHECK(frame.freshMessages.empty());
+
+  // Another channel is not the global one.
+  REQUIRE(model.RegisterChannel(2, 16));
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{2, {MakeMessage(20, 2, "elsewhere")}}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  CHECK(frame.freshMessages.empty());
+  if (session.NeedsSnapshot()) Settle(session, *exchange, model, frame);
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{2, {MakeMessage(21, 2, "elsewhere")}}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  CHECK(frame.freshMessages.empty());
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {MakeMessage(22, 1, "global again")}}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  REQUIRE(frame.freshMessages.size() == 1);
+  CHECK(frame.freshMessages[0].messageText == "global again");
 }
 
 TEST_SUITE_END();

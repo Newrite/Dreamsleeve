@@ -26,8 +26,8 @@ unreliable sequenced канал в том же WRLD/CELL и радиусе ви�
 Конфигурация сервера загружается из TOML при запуске. Клиент хранит поток измерений
 и вычисляет интерполированные положения на потоке потребителя; [демо и настройки](docs/MovementInterpolationRu.md).
 SKSE-клиент реализован: DLL на CommonLibSSE-NG с хуком `Main::Update`, PrismaUI-host
-production UI, страницей SKSE Menu Framework, сбором телеметрии и светлячками;
-[описание адаптера](docs/SkseClientRu.md). Интерфейс администрирования остаётся следующим этапом.
+production UI, страницей SKSE Menu Framework, сбором телеметрии, светлячками, именами и
+облачками чата над ними; [описание адаптера](docs/SkseClientRu.md). Интерфейс администрирования остаётся следующим этапом.
 Сервер пишет структурированные логи через Serilog в консоль и JSON-файлы.
 [Авторизация, БД и зависимости](docs/AuthenticationRu.md).
 Контракт: [Protocol/README.ru.md](Protocol/README.ru.md).

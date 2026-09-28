@@ -423,6 +423,10 @@ batching: в прежней версии настройка MovementPacketTarget
 - Телеметрия: имя/раса/уровень, WRLD/CELL FormKey, позиция и углы, activity/place/меню,
   HP/MP/SP как Resource; движение unreliable по интервалу, details/AV reliable по изменению.
 - Светлячки: placed reference `FXGlowFillRoundXBrt` на видимого игрока из `MovementView`.
+- Имена и облачка (29.09.2026): Scaleform-слой в HUD показывает displayName и последнее
+  подтверждённое сообщение общего канала над светлячком автора; история и повторы не
+  воспроизводятся, один текст на игрока, таймер идёт независимо от видимости, настройки
+  блока «Сообщения над игроками» в `ui.toml`. SE/AE; в VR отключено.
 - Dist: `python Scripts/package_dist.py` → `dist/Client` (DLL, `client.toml`, `PrismaUI/views/Dreamsleeve`,
   README, THIRD_PARTY_NOTICES) и `dist/Server` (`dotnet publish` сервера, `server.example.toml`, README).
 
@@ -436,6 +440,11 @@ batching: в прежней версии настройка MovementPacketTarget
 по флагу `kIsMarker`; GFx-объекты имён над светлячками освобождаются до остановки Scaleform
 (`Nameplates::Release/Shutdown`), рендерер не уничтожается статическим деструктором DLL.
 После правок DLL собирается, 234 native-теста проходят; игровые проверки этих сценариев остаются ручными.
+
+Облачка чата (29.09.2026): DLL собирается, 237 native-тестов (новые: фильтр свежих сообщений
+в `Session`, `Host::Bubbles`, совместимость `ui.toml`), 27 vitest, production build UI и
+Playwright-сценарий настроек. Рендер в Skyrim не проверялся: см. ручные сценарии в
+[SkseClientRu.md](SkseClientRu.md#облачка-чат-сообщений-над-светлячками).
 
 Проверки выполнены без запуска Skyrim (28.09.2026): сборка DLL (xmake, MSVC 14.51, SE/AE/VR
 включены), 234 native-тестов включая новый набор `Client.Host` (bridge, ui.toml, корреляция и
