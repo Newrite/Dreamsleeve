@@ -16,6 +16,7 @@ export namespace Dreamsleeve::Client
     std::string   authUrl{"http://127.0.0.1:8779"};
     std::size_t   commandCapacity{8};
     std::size_t   stateCapacity{8};
+    bool          allowInsecureRemoteAuth{false};
   };
 
 }
@@ -152,6 +153,7 @@ namespace Dreamsleeve::Client
       InterpolationFile interpolation{};
       std::size_t       commandCapacity{ClientSettings{}.commandCapacity};
       std::size_t       stateCapacity{ClientSettings{}.stateCapacity};
+      bool              allowInsecureRemoteAuth{false};
     };
 
   }
@@ -160,7 +162,7 @@ namespace Dreamsleeve::Client
   {
     if (auto field = settings.client.InvalidSetting()) return std::unexpected{"Invalid client setting: " + std::string{*field}};
     if (settings.commandCapacity == 0 || settings.stateCapacity == 0) return std::unexpected{"Client exchange capacities must be positive"};
-    return Auth::ValidateUrl(settings.authUrl);
+    return Auth::ValidateUrl(settings.authUrl, settings.allowInsecureRemoteAuth);
   }
 
   // The caller chooses the path. Missing/invalid files never silently use defaults.
@@ -192,7 +194,8 @@ namespace Dreamsleeve::Client
     const auto& view          = file.interpolation;
     file.client.movement =
       {std::chrono::milliseconds{view.delayMs}, std::chrono::milliseconds{view.maxGapMs}, view.historyCapacity, view.teleportDistance};
-    ClientSettings result{std::move(file.client), std::move(file.authUrl), file.commandCapacity, file.stateCapacity};
+    ClientSettings
+      result{std::move(file.client), std::move(file.authUrl), file.commandCapacity, file.stateCapacity, file.allowInsecureRemoteAuth};
     if (auto valid = ValidateClientSettings(result); !valid) return std::unexpected{valid.error()};
     return result;
   }

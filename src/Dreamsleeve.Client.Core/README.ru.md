@@ -17,7 +17,8 @@ ClientExchange. После создания им владеет один сет�
 `import Dreamsleeve.Client.Application;` экспортирует `ClientSettings`,
 `LoadClientSettings(path)`, `ClientApplication` и существующий Exchange/Runtime.
 [client.example.toml](client.example.toml) показывает все настройки файла версии 1.
-Путь типа `std::filesystem::path` выбирает конечный клиент или SKSE-плагин:
+Путь типа `std::filesystem::path` выбирает конечный клиент или SKSE-плагин
+(плагин читает `Data/SKSE/Plugins/Dreamsleeve/client.toml`, см. docs/SkseClientRu.md):
 библиотека не ищет файл в cwd/Data/AppData и не создаёт его автоматически.
 Относительный путь имеет обычную семантику файловой системы вызывающей программы.
 
@@ -214,7 +215,7 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --auth-url http
 Допустимы 12–128 байт UTF-8 без trim/нормализации. Пароль и билет не попадают в argv
 или вывод. --register выполняется один раз, затем каждый connect получает свежий
 билет через POST /auth/login. Auth URL по умолчанию http://127.0.0.1:8779;
-HTTP допускается только на loopback, удалённый endpoint требует HTTPS с обычной
+По умолчанию HTTP допускается только на loopback; удалённый endpoint требует HTTPS с обычной
 проверкой сертификата. HTTP redirects не выполняются. Ответы ограничены 16 KiB,
 отдельные сетевые операции имеют таймауты 5 секунд; чтение тела дополнительно
 прерывается по общему сроку запроса, чтобы медленная передача не удерживала поток.
@@ -283,3 +284,8 @@ Apply принимает StateUpdateBatch из ClientExchange, Sample вычис
 
 Client.Dev: --movement-demo выводит детерминированную трассу с джиттером; в --connect
 команды pose <id> и watch <id> <ms> показывают вычисленные координаты реального игрока.
+
+Для явного разрешения HTTP по удалённому IP/домену задайте корневой параметр
+`allowInsecureRemoteAuth = true`. По умолчанию он выключен. Сервер отдельно
+должен разрешить `[Authentication].AllowInsecureRemote = true`.
+См. режим тестирования в `docs/AuthenticationRu.md`.

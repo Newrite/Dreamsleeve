@@ -3,6 +3,7 @@ import type { Chat, ChatState, Panel } from "../state/chat";
 import { SettingsPanel } from "./SettingsPanel";
 import { OnlinePanel } from "./OnlinePanel";
 import { PlayerDetails } from "./PlayerDetails";
+import { AccountPanel } from "./AccountPanel";
 import { useDialog } from "../features/useDialog";
 import styles from "../styles/Workspace.module.css";
 const tabs: { id: Exclude<Panel, null>; label: string }[] = [
@@ -10,6 +11,7 @@ const tabs: { id: Exclude<Panel, null>; label: string }[] = [
   { id: "profile", label: "Профиль" },
   { id: "stats", label: "Статистика" },
   { id: "settings", label: "Настройки" },
+  { id: "account", label: "Аккаунт" },
 ];
 export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
   const dialog = useDialog();
@@ -70,6 +72,7 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
             ) : (
               <p>Игрок сейчас не в сети. Данные профиля недоступны.</p>
             ))}
+          {s.panel === "account" && <AccountPanel chat={chat} state={s} />}
           {s.panel === "stats" && (
             <>
               <h3>Состояние клиента</h3>

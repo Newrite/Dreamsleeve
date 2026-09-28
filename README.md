@@ -25,7 +25,9 @@ unreliable sequenced канал в том же WRLD/CELL и радиусе ви�
 [Контракт и границы телеметрии](docs/PlayerTelemetryPlanRu.md).
 Конфигурация сервера загружается из TOML при запуске. Клиент хранит поток измерений
 и вычисляет интерполированные положения на потоке потребителя; [демо и настройки](docs/MovementInterpolationRu.md).
-SKSE/PrismaUI и интерфейс администрирования остаются следующими этапами.
+SKSE-клиент реализован: DLL на CommonLibSSE-NG с хуком `Main::Update`, PrismaUI-host
+production UI, страницей SKSE Menu Framework, сбором телеметрии и светлячками;
+[описание адаптера](docs/SkseClientRu.md). Интерфейс администрирования остаётся следующим этапом.
 Сервер пишет структурированные логи через Serilog в консоль и JSON-файлы.
 [Авторизация, БД и зависимости](docs/AuthenticationRu.md).
 Контракт: [Protocol/README.ru.md](Protocol/README.ru.md).
@@ -35,13 +37,13 @@ SKSE/PrismaUI и интерфейс администрирования оста�
 и адаптером PrismaUI. [Требования и этапы UI](docs/ClientUiPlanRu.md) включают
 чат, системные объявления, fade, настройки и перемещение/изменение размера окна.
 Браузерный UI уже реализован: [запуск и bridge](src/Dreamsleeve.Client.UI/README.ru.md).
-Подключение C++ host и проверка внутри PrismaUI/SKSE остаются следующим этапом.
+C++ host подключён в SKSE DLL; проверки внутри Skyrim перечислены в [SkseClientRu.md](docs/SkseClientRu.md).
 
 | Каталог | Назначение |
 |---|---|
 | `src/Dreamsleeve.Client.UI` | React/TypeScript: чат, панели и темы, отдельные browser/game сборки |
 | `src/Dreamsleeve.Client.Core` | C++23: DreamNet, независимый от Skyrim домен и состояние клиента |
-| `src/Dreamsleeve.Client` | Заготовка игрового адаптера; пока static library, будущий SKSE-плагин |
+| `src/Dreamsleeve.Client` | SKSE DLL: адаптер игры к Core, PrismaUI-host, SKSE Menu, телеметрия, светлячки |
 | `src/Dreamsleeve.Client.Dev` | Двухпоточная консоль: сетевой вход через --connect и отдельное синтетическое демо |
 | `src/Dreamsleeve.Server.Domain` | F#/.NET 10: проверяемые значения, игроки, ограниченная история чата |
 | `src/Dreamsleeve.Agent` | Последовательные агенты на Channels/Task и примеры |
@@ -66,7 +68,8 @@ python Scripts/run_tests.py
 ```
 
 SKSE-плагин собирается командой `xmake build Dreamsleeve.Client` при настроенном
-`CommonLibSSE-NG`. В xmake для CommonLib и Core явно согласованы настройки spdlog:
+`CommonLibSSE-NG`; `python Scripts/package_dist.py` собирает DLL, UI и публикацию сервера
+в `dist/Client` и `dist/Server`. В xmake для CommonLib и Core явно согласованы настройки spdlog:
 compiled library, wchar и std::format. Header-only вариант подключает Windows-макросы
 в PCH CommonLib и конфликтует с её `REX::W32` именами; порядок зависимостей сам по
 себе не заменяет согласованную конфигурацию.

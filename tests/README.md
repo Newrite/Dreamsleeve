@@ -27,6 +27,7 @@ python Scripts/run_tests.py --suite managed
 |---|---|
 | Client Domain/State/Changes/Exchange | Владение моделью, дельты вместо копирования истории, bounded FIFO команд, снимок/восстановление UI, отсутствие локального эха |
 | Client.Movement | История замеров, джиттер, rotation wrap, остановки, переходы, лимиты и восстановление снимком |
+| Client.Host | Host-модули SKSE-адаптера без Skyrim: JSON bridge (строковые uint64, безопасный текст, команды UI), ui.toml (round trip, нормализация, атомарная запись), Session (снимок только при Ready, корреляция requestId, отказы, проекция онлайна, сброс view, reconnect) |
 | DreamNet/Client.Runtime | ENet ownership, лимиты host/peer, коррелированный вход и чат, таймаут/повторный вход, ошибочные и запоздалые ответы |
 | Server Domain/Codec | Правила value objects/хранилищ, bootstrap, доменные ошибки, общий enum отказов, обязательная корреляция, повреждённые пакеты и конфигурация |
 | Agent/Background/Outbox/Lifetimes | Последовательный handler, bounded доставка, отмена, наблюдение Completion, owned children и независимый Watch |
@@ -63,6 +64,7 @@ runner; фиксированный счётчик в документации н
 xmake build Dreamsleeve.Client.Tests
 xmake run Dreamsleeve.Client.Tests --test-suite=Client.Runtime
 xmake run Dreamsleeve.Client.Tests --test-suite=Client.Exchange
+xmake run Dreamsleeve.Client.Tests --test-suite=Client.Host
 xmake run Dreamsleeve.Client.Tests --test-suite=DreamNet.Network
 
 dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list Admission

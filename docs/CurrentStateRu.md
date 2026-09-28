@@ -21,8 +21,8 @@
 их серверная доставка — отдельный близкий к MVP шаг; она ещё не реализована.
 Вопрос имени персонажа в истории отложен до завершения UI-задачи.
 Рабочий проект и инструкции: [Client.UI](../src/Dreamsleeve.Client.UI/README.ru.md).
-C++ host, запись TOML через UI и фактическая PrismaUI-интеграция пока впереди.
-SKSE и светлячки не входят в браузерный сценарий.
+C++ host, запись TOML через UI и PrismaUI-интеграция реализованы в SKSE DLL
+([SkseClientRu.md](SkseClientRu.md)); браузерный стенд по-прежнему не заменяет проверку в Skyrim.
 
 ## Стек и границы модулей
 
@@ -31,8 +31,9 @@ SKSE и светлячки не входят в браузерный сцена�
 - `Client.Core` содержит DreamNet, домен, модель, AuthHttp и ClientApplication без зависимостей от Skyrim.
   ClientApplication владеет сетевым потоком и входом; TOML читает LoadClientSettings
   по пути, который передаёт конечный клиент. Client.Dev использует этот общий запуск.
-  `Client` предназначен для SKSE/CommonLib, преобразования игровых типов,
-  светлячков и PrismaUI. Пока это заглушка static library, не готовая DLL.
+  `Client` — SKSE DLL на CommonLibSSE-NG: преобразование игровых типов, PrismaUI-host,
+  SKSE Menu Framework, светлячки. Host-модули без CommonLib (bridge, ui.toml, корреляция)
+  тестируются в native-наборе.
 - `DreamNetClient` — автомат одного транспортного соединения. `Poll` обрабатывает
   события в пределах бюджета; внешний владелец управляет циклом выполнения.
   ENet Connected не означает готовую прикладную сессию.
@@ -204,7 +205,7 @@ PlayerLocation.sampled_at_us, время приёма фиксируется п�
 
 Интерполяция XYZ и rotation работает без экстраполяции. Есть конфигурация задержки,
 ёмкости и порогов, детерминированное --movement-demo и pose/watch для реального ENet.
-SKSE-адаптер и автоматический игровой frame hook пока не реализованы.
+SKSE-адаптер вызывает Apply/Sample из хука `Main::Update`; светлячки берут позы из Sample.
 [Контракт, ограничения и проверки](MovementInterpolationRu.md).
 
 ## Что реализовано и что остаётся открытым
@@ -400,6 +401,40 @@ batching: в прежней версии настройка MovementPacketTarget
 Плотные 500 и boundaries/1000 остаются перегруженными: сходимость после drain
 не означает устойчивые 10 Гц. Ни шардирование, ни настройки GC не добавлялись.
 
+## SKSE-клиент
+
+Реализовано 28 сентября 2026 года: `src/Dreamsleeve.Client` собирается в
+`Dreamsleeve.Client.dll` (CommonLibSSE-NG, SE/AE/VR в одном DLL). Полное описание —
+[SkseClientRu.md](SkseClientRu.md), исследование смерти/AV — [DeathAndActorValuesRu.md](DeathAndActorValuesRu.md).
+
+- Владение: `Runtime::Get()` хранит единственный `ClientApplication`, `MovementView`,
+  `Host::Session` и `ui.toml`; прежний getter с `std::move` статического владельца заменён.
+- Хук `Main::Update` пользователя сохранён и проверен в IDA для SE 1.5.97, AE 1.6.1170 и VR;
+  он вызывается при паузе, в главном меню и на загрузках. Drain/UI обслуживаются каждый кадр
+  независимо от готовности персонажа; телеметрия — только при готовности мира.
+- PrismaUI: production UI из `dist` UI-проекта, listener `dreamsleeveCommand`, события через
+  `InteropCall`, корреляция requestId, снимок только для Ready-сессии, защита от ответов
+  старого view, settings при готовности страницы, атомарная запись `ui.toml`.
+- Авторизация из окна чата (вкладка «Аккаунт»): регистрация, вход, remember через Windows
+  Credential Manager, вход сохранённой сессией, выход, забыть; автоматический resume и
+  повтор с backoff после потери соединения.
+- Ввод: Enter/F2 активирует чат без паузы игры, Escape освобождает focus; видимость
+  вычисляется по всему набору открытых меню; полное отключение — в SKSE Menu Framework.
+- Телеметрия: имя/раса/уровень, WRLD/CELL FormKey, позиция и углы, activity/place/меню,
+  HP/MP/SP как Resource; движение unreliable по интервалу, details/AV reliable по изменению.
+- Светлячки: placed reference `FXGlowFillRoundXBrt` на видимого игрока из `MovementView`.
+- Dist: `python Scripts/package_dist.py` → `dist/Client` (DLL, `client.toml`, `PrismaUI/views/Dreamsleeve`,
+  README, THIRD_PARTY_NOTICES) и `dist/Server` (`dotnet publish` сервера, `server.example.toml`, README).
+
+Проверки выполнены без запуска Skyrim (28.09.2026): сборка DLL (xmake, MSVC 14.51, SE/AE/VR
+включены), 226 native-тестов включая новый набор `Client.Host` (bridge, ui.toml, корреляция и
+lifecycle сессии), UI: 26 vitest, tsc, production build, bundle check и 14 Playwright-сценариев
+в Edge, `smoke_chat.py` (20 проверок) и `smoke_saved_auth.py` (4 проверки) с настоящим сервером
+и двумя Client.Dev, `python Scripts/package_dist.py` собрал `dist/Client` и `dist/Server`. Игровые проверки (focus, Enter/Escape, меню, скрытие, pause/load,
+new game/load save, главное меню, смерть/revive, AV, торговля, активности, смена локации,
+светлячки, VR) не выполнялись автоматически и остаются ручными; на этой машине доступен
+только SE 1.5.97.
+
 ## Сохранённая аутентификация
 
 Client.Core использует Windows Credential Manager для токена входа на выбранный
@@ -419,4 +454,4 @@ Client.Dev печатает его. Веб-UI использует snapshot.serv
 Pending-строки существуют только в UI; Core отдаёт bounded chatConfirmations с
 корреляцией requestId/messageId, а история остаётся авторитетной. Явный отказ даёт
 ручной повтор, обрыв или 15 секунд ожидания — неопределённую доставку без автоповтора.
-Интеграция PrismaUI host остаётся частью SKSE-адаптера.
+PrismaUI host реализован в SKSE-адаптере: [SkseClientRu.md](SkseClientRu.md).

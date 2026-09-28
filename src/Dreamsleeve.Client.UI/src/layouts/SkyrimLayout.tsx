@@ -1,3 +1,4 @@
+import { controlKey } from "../features/keyboard";
 import { connectionLabels } from "../state/connection";
 import type { CSSProperties, FormEvent } from "react";
 import type { Chat } from "../state/chat";
@@ -63,8 +64,8 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
             <>
               <button
                 aria-label="Открыть меню Dreamsleeve"
-                title="Онлайн, профиль и настройки"
-                onClick={() => chat.open("online")}
+                title="Онлайн, профиль, аккаунт и настройки"
+                onClick={() => chat.open(s.connected ? "online" : "account")}
               >
                 ☰
               </button>
@@ -112,24 +113,26 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
         {s.active ? (
           <>
             <form className={styles.composer} onSubmit={submit}>
-              <select
-                aria-label="Канал отправки"
-                value={s.target}
-                onChange={(e) =>
-                  chat.store.setState({ target: e.target.value })
-                }
-              >
-                {!s.channels.some((c) => c.writable) && (
-                  <option value="">Нет каналов</option>
-                )}
-                {s.channels
-                  .filter((c) => c.writable)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-              </select>
+              <div className={styles.channelPicker}>
+                <select
+                  aria-label="Канал отправки"
+                  value={s.target}
+                  onChange={(e) =>
+                    chat.store.setState({ target: e.target.value })
+                  }
+                >
+                  {!s.channels.some((c) => c.writable) && (
+                    <option value="">Нет каналов</option>
+                  )}
+                  {s.channels
+                    .filter((c) => c.writable)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
               <input
                 ref={input}
                 aria-label="Сообщение"
@@ -141,8 +144,15 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
                 )}
                 onChange={(e) => chat.setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.nativeEvent.isComposing && e.key === "Enter")
-                    e.preventDefault();
+                  if (controlKey(e.nativeEvent) !== "Enter") return;
+                  e.preventDefault();
+                  if (
+                    e.nativeEvent.isComposing ||
+                    e.keyCode === 229 ||
+                    e.repeat
+                  )
+                    return;
+                  chat.submit();
                 }}
               />
               <button
@@ -161,7 +171,9 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
               <button onClick={() => chat.open("online")}>
                 Онлайн <span>{s.players.length}</span>
               </button>
-
+              {!s.connected && (
+                <button onClick={() => chat.open("account")}>Аккаунт</button>
+              )}
               <small>ESC · закрыть</small>
             </footer>
             {!settings.locked && (
@@ -175,10 +187,17 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
             )}
           </>
         ) : (
-          <div className={styles.hint}>
-            Онлайн {s.players.length} · {settings.activationKey} · написать
-            сообщение
-          </div>
+          <>
+            <div className={styles.hint}>
+              Онлайн {s.players.length} · {settings.activationKey} · написать
+              сообщение
+            </div>
+            {!s.connected && !s.auth.savedLogin && (
+              <div className={styles.accountHint} role="note">
+                Нет сохранённого входа · {settings.activationKey} → ☰ → Аккаунт
+              </div>
+            )}
+          </>
         )}
       </section>
       {s.active && s.panel && <Panels chat={chat} state={s} />}

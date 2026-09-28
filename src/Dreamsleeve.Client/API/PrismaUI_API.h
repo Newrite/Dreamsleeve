@@ -156,7 +156,7 @@ public:
   /// has already been loaded
   [[nodiscard]] inline void* RequestPluginAPI(InterfaceVersion a_interfaceVersion = InterfaceVersion::V1)
   {
-    auto pluginHandle = GetModuleHandle(L"PrismaUI.dll");
+    auto pluginHandle = GetModuleHandleW(L"PrismaUI.dll");  // Explicit W: the plugin PCH does not define UNICODE.
     if (!pluginHandle)
     {
       return nullptr;

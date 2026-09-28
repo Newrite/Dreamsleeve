@@ -56,3 +56,7 @@
 - [План рефакторинга каналов, движения и владельца ENet](EnetMovementRefactorPlanRu.md): три канала, периодические позиции без подтверждений, reliable-границы и последовательная проверка транспорта.
 
 - [Movement v6: каналы и production ENet owner](benchmarks/movement-v6-owner-2026-09-27.md): 1000 клиентов, 20 Гц, AOI по 25/100, сравнение inline/owner и отдельный прогрев видимости.
+
+- [SKSE-клиент](SkseClientRu.md): модули DLL, сообщения SKSE, потоки, хук Main::Update, PrismaUI host, телеметрия, светлячки, конфигурация и dist.
+
+- [Смерть и actor values](DeathAndActorValuesRu.md): исследованные события/хуки, покрытие и выбранный sampling.

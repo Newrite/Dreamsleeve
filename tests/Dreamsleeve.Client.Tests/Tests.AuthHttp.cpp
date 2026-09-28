@@ -29,3 +29,17 @@ TEST_CASE("Auth origins reject embedded credentials and URL components that chan
 }
 
 TEST_SUITE_END();
+
+TEST_CASE("Remote HTTP authentication requires explicit opt-in")
+{
+  for (const auto url : {"http://auth.example.test:8779", "http://192.168.1.10:8779"})
+  {
+    CHECK_FALSE(Auth::ValidateUrl(url));
+    CHECK(Auth::ValidateUrl(url, true));
+    CHECK(Auth::CredentialTarget(url, true));
+  }
+  CHECK_FALSE(Auth::ValidateUrl("http://user:secret@example.test", true));
+  CHECK_FALSE(Auth::ValidateUrl("http://example.test/auth/login", true));
+  CHECK_FALSE(Auth::ValidateUrl("ftp://example.test", true));
+  CHECK(Auth::CredentialTarget("http://example.test", true).value() != Auth::CredentialTarget("https://example.test", true).value());
+}

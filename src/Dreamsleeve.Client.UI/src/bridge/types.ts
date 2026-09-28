@@ -7,6 +7,33 @@ export type ConnectionPhase =
   | "connected"
   | "disconnecting"
   | "faulted";
+export type AuthOperation =
+  | "none"
+  | "passwordLogin"
+  | "resume"
+  | "signOut"
+  | "forgetSavedLogin"
+  | "resetPassword";
+export type AuthFailure =
+  | "none"
+  | "invalidCredentials"
+  | "usernameTaken"
+  | "invalidRequest"
+  | "registrationDisabled"
+  | "busy"
+  | "unavailable"
+  | "invalidResponse"
+  | "credentialStorage"
+  | "canceled";
+// Typed authentication state; no password or token ever crosses the bridge.
+export interface AuthState {
+  authenticating: boolean;
+  operation: AuthOperation;
+  failure: AuthFailure;
+  error: string;
+  savedLogin: boolean;
+  savedUsername: string;
+}
 export type ChannelKind =
   "global" | "local" | "party" | "guild" | "whisper" | "system";
 export interface Channel {
@@ -67,7 +94,20 @@ export interface Settings {
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
   | { type: "close" }
-  | { type: "saveSettings"; settings: Settings; revision: number };
+  | { type: "saveSettings"; settings: Settings; revision: number }
+  // displayName present and non-empty: register first, then sign in.
+  | {
+      type: "signIn";
+      username: string;
+      password: string;
+      remember: boolean;
+      displayName?: string;
+    }
+  | { type: "signInSaved" }
+  | { type: "signOut" }
+  | { type: "forgetLogin" }
+  | { type: "disconnect" };
+export type AuthEvent = { type: "auth"; phase: ConnectionPhase } & AuthState;
 export type HostEvent =
   | {
       type: "snapshot";
@@ -85,6 +125,9 @@ export type HostEvent =
   | { type: "activate" }
   | { type: "deactivate" }
   | { type: "connection"; connected: boolean; phase?: ConnectionPhase }
+  // Sent when the page is (re)created: applies the saved window settings before any snapshot.
+  | { type: "settings"; settings: Partial<Settings> }
+  | AuthEvent
   | { type: "sendResult"; requestId: string; messageId: Id; error?: never }
   | { type: "sendResult"; requestId: string; error: string; messageId?: never }
   | { type: "settingsResult"; revision: number; error?: string };

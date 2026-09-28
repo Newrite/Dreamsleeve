@@ -1,0 +1,63 @@
+.account {
+  display: grid;
+  gap: 18px;
+  max-width: 620px;
+}
+.summary {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.summary span:first-child {
+  color: var(--muted);
+  font-size: 13px;
+}
+.form {
+  display: grid;
+  gap: 12px;
+}
+.form label {
+  display: grid;
+  gap: 5px;
+  font-size: 0.9em;
+}
+.form input:not([type="checkbox"]) {
+  width: 100%;
+}
+.form .check {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.actions button {
+  border: 1px solid var(--border);
+}
+.actions button:disabled {
+  opacity: 0.45;
+}
+.actions button:disabled:hover {
+  background: transparent;
+}
+.primary {
+  color: var(--accent);
+}
+.status {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--accent);
+  font-size: 0.9em;
+}
+.status[data-failure="true"] {
+  color: var(--error);
+}
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85em;
+}

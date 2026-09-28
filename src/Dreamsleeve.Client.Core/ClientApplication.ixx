@@ -138,21 +138,21 @@ private:
 
     AuthResult ForgetLogin()
     {
-      auto result = CredentialStore::Forget(settings.authUrl);
+      auto result = CredentialStore::Forget(settings.authUrl, settings.allowInsecureRemoteAuth);
       if (result) exchange->PublishSavedLogin(false);
       return result;
     }
 
     AuthResult SignOutSaved()
     {
-      auto saved = CredentialStore::Load(settings.authUrl);
+      auto saved = CredentialStore::Load(settings.authUrl, settings.allowInsecureRemoteAuth);
       if (!saved) return std::unexpected{saved.error()};
       if (!*saved)
       {
         exchange->PublishSavedLogin(false);
         return {};
       }
-      auto result = Auth::Logout(settings.authUrl, (**saved).token);
+      auto result = Auth::Logout(settings.authUrl, (**saved).token, settings.allowInsecureRemoteAuth);
       // Keep the credential on transient failure so the UI can retry revocation.
       // ForgetSavedLogin is the explicit offline alternative.
       if (!result) return result;
@@ -165,7 +165,7 @@ private:
       if (!grant) return std::unexpected{grant.error()};
       if (remember)
       {
-        auto saved = CredentialStore::Save(settings.authUrl, {grant->username, grant->rememberToken});
+        auto saved = CredentialStore::Save(settings.authUrl, {grant->username, grant->rememberToken}, settings.allowInsecureRemoteAuth);
         if (!saved) return saved;
         exchange->PublishSavedLogin(true, grant->username);
       }
@@ -181,16 +181,19 @@ private:
     {
       if (request.registerName)
       {
-        auto registered = Auth::RegisterAccount(settings.authUrl, request.credentials, *request.registerName);
+        auto registered =
+          Auth::RegisterAccount(settings.authUrl, request.credentials, *request.registerName, settings.allowInsecureRemoteAuth);
         if (exchange->AuthenticationCanceled()) return {};
         if (!registered) return registered;
       }
-      return ConnectGrant(Auth::LoginGrant(settings.authUrl, request.credentials, request.remember), request.remember);
+      return ConnectGrant(
+        Auth::LoginGrant(settings.authUrl, request.credentials, request.remember, settings.allowInsecureRemoteAuth),
+        request.remember);
     }
 
     AuthResult Authenticate(const ResumeLogin&)
     {
-      auto saved = CredentialStore::Load(settings.authUrl);
+      auto saved = CredentialStore::Load(settings.authUrl, settings.allowInsecureRemoteAuth);
       if (!saved) return std::unexpected{saved.error()};
       if (!*saved)
       {
@@ -199,7 +202,7 @@ private:
             Auth::Failure{Auth::FailureCode::InvalidCredentials, "Sign in to this server first"}
         };
       }
-      auto grant = Auth::Resume(settings.authUrl, (**saved).token);
+      auto grant = Auth::Resume(settings.authUrl, (**saved).token, settings.allowInsecureRemoteAuth);
       if (!grant && grant.error().code == Auth::FailureCode::InvalidCredentials)
       {
         if (auto forgotten = ForgetLogin(); !forgotten) return forgotten;
@@ -222,7 +225,7 @@ private:
 
     AuthResult Authenticate(const ResetAccountPassword& request)
     {
-      auto result = Auth::ResetPassword(settings.authUrl, request.code, request.password);
+      auto result = Auth::ResetPassword(settings.authUrl, request.code, request.password, settings.allowInsecureRemoteAuth);
       if (!result) return result;
       return ForgetLogin();
     }
@@ -234,7 +237,7 @@ private:
 
     void RunLoop()
     {
-      auto saved = CredentialStore::Load(settings.authUrl);
+      auto saved = CredentialStore::Load(settings.authUrl, settings.allowInsecureRemoteAuth);
       if (saved)
         exchange->PublishSavedLogin(saved->has_value(), saved->has_value() ? (**saved).username : std::string{});
       else

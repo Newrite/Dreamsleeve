@@ -1,3 +1,4 @@
+import { controlKey } from "./keyboard";
 import { useEffect, useRef } from "react";
 export function useDialog() {
   const ref = useRef<HTMLElement>(null);
@@ -5,7 +6,7 @@ export function useDialog() {
     const prior = document.activeElement as HTMLElement | null;
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
     function trap(event: KeyboardEvent) {
-      if (event.key !== "Tab") return;
+      if (controlKey(event) !== "Tab") return;
       const nodes = Array.from(
         ref.current?.querySelectorAll<HTMLElement>(
           'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]',

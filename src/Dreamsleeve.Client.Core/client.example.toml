@@ -3,6 +3,7 @@ version = 1
 serverIp = "127.0.0.1"
 serverPort = 8778
 authUrl = "http://127.0.0.1:8779"
+allowInsecureRemoteAuth = false
 commandCapacity = 8
 stateCapacity = 8
 

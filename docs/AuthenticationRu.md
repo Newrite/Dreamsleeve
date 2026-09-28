@@ -70,8 +70,8 @@ SQLite имеет WAL, foreign keys, конечный busy timeout; каждая
 
 ## Транспорт и область защиты
 
-HTTP без TLS разрешён только при явном AllowInsecureLoopback и буквальном
-loopback-адресе; это локальный dev-режим. Для удалённого входа нужен HTTPS:
+По умолчанию HTTP без TLS разрешён только при явном AllowInsecureLoopback и буквальном
+loopback-адресе; это локальный dev-режим. Для удалённого входа по умолчанию нужен HTTPS (явный HTTP opt-in описан ниже):
 Authentication.ListenUrl, CertificatePath и при необходимости пароль сертификата
 в `DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD`. Без CertificatePath используются
 стандартные настройки сертификата Kestrel. Клиент проверяет сертификат и не
@@ -250,3 +250,20 @@ Steam-адаптер должен серверно проверить доказ
 Основания для системного хранения и одноразового восстановления:
 [Microsoft Credential Manager](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-credwritew),
 [OWASP Forgot Password](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
+
+
+## Явное разрешение удалённого HTTP для тестирования
+
+На сервере в `[Authentication]` установите `AllowInsecureRemote = true` и,
+например, `ListenUrl = "http://0.0.0.0:8779"`. На клиенте в корне TOML:
+`allowInsecureRemoteAuth = true`, `authUrl = "http://адрес-сервера:8779"`.
+Поддерживаются IP и доменные имена. Оба флага по умолчанию `false`.
+Это независимое разрешение на каждой стороне, не согласование по сети.
+Изменения применяются после перезапуска. ENet по-прежнему настраивается отдельно.
+
+В этом режиме пароли, session tickets и сохранённые токены передаются без TLS.
+Флаг не отключает проверку сертификатов HTTPS и не разрешает redirects.
+Разрешение действует также на регистрацию, resume, logout и сброс пароля.
+Windows Credential Manager сохраняет HTTP и HTTPS origins раздельно.
+`AllowInsecureLoopback` сохраняет прежнее назначение; `AllowInsecureRemote`
+разрешает HTTP для любого адреса прослушивания, включая loopback.

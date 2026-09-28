@@ -1,10 +1,10 @@
-﻿module;
+module;
 
 #include "Prelude.hpp"
 
 export module Dreamsleeve.Hooks;
 
-import Dreamsleeve.Runtime;
+import std;
 import Dreamsleeve.Logic;
 
 namespace Hooks
@@ -13,6 +13,9 @@ namespace Hooks
   namespace Address
   {
 
+    // The window message loop: SE 0x1405AF3D0 (1.5.97), AE WinMain 0x14063E970
+    // (1.6.1170), VR 0x1405B6D70 (1.4.15). Its per-iteration call of
+    // Main::Update runs while paused, in the main menu and under loading screens.
     auto MainUpdate = REL::RelocationID(35551, 36544);
 
   }
@@ -20,15 +23,18 @@ namespace Hooks
   namespace Offset
   {
 
+    // Verified in IDA: the `call Main::Update` inside the loop on each runtime;
+    // VR shares the SE layout. A new game build needs its own entry here.
     auto MainUpdate = REL::Relocate(0x11F, 0x160);
 
   }
 
   struct MainUpdate
   {
-    static void Update(RE::Main* this_, float shouldBeDelta)
+    static void Update(RE::Main* self)
     {
-      UpdateOriginal(this_, shouldBeDelta);
+      UpdateOriginal(self);
+      Logic::OnFrame();
     }
 
     static inline REL::Relocation<decltype(Update)> UpdateOriginal;
@@ -36,10 +42,13 @@ namespace Hooks
 
   export void InstallHooks()
   {
-    auto& trampoline = SKSE::GetTrampoline();
-    trampoline.create(1024);
+    static bool installed = false;
+    if (installed) return;
+    installed = true;
 
+    auto& trampoline           = SKSE::GetTrampoline();
     MainUpdate::UpdateOriginal = trampoline.write_call<5>(Address::MainUpdate.address() + Offset::MainUpdate, MainUpdate::Update);
+    logger::info("Main::Update hook installed (runtime {})", REL::Module::get().version().string());
   }
 
 }

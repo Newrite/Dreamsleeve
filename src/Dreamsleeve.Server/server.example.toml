@@ -78,6 +78,8 @@ BusyTimeoutSeconds = 5
 [Authentication]
 ListenUrl = "http://127.0.0.1:8779"
 AllowInsecureLoopback = true
+# Explicit opt-in for remote HTTP; passwords and tokens are sent without TLS.
+AllowInsecureRemote = false
 AllowRegistration = true
 CertificatePath = ""
 RequestsPerMinute = 120

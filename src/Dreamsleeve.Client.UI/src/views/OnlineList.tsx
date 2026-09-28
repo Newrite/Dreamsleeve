@@ -1,3 +1,4 @@
+import { resourceKey } from "./resources";
 import type { Player } from "../bridge/types";
 import styles from "../styles/OnlineList.module.css";
 const resources = [
@@ -10,7 +11,7 @@ function Resources({ player }: { player: Player }) {
     <div className={styles.resources}>
       {resources.map(([key, label]) => {
         const value = player.actorValues?.find(
-          (v) => v.key.toLowerCase() === key,
+          (v) => resourceKey(v.key) === key,
         )?.value;
         const resource = typeof value === "object" ? value : undefined;
         const text = resource

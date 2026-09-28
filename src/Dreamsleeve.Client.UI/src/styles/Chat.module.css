@@ -148,10 +148,43 @@
   min-width: 0;
   padding: 5px 8px;
 }
-.composer select {
+.channelPicker {
+  position: relative;
   max-width: 30%;
+  min-width: 0;
+  display: flex;
   border-right: 1px solid var(--border);
+  background: rgb(var(--surface));
+}
+.channelPicker::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid var(--accent);
+  border-bottom: 1px solid var(--accent);
+  transform: translateY(-75%) rotate(45deg);
+  pointer-events: none;
+}
+.window .composer select {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 5px 28px 5px 10px;
+  width: 100%;
+  cursor: pointer;
   font-size: 0.85em;
+}
+.composer select option {
+  background: rgb(var(--surface));
+  color: var(--ink);
+}
+.channelPicker:hover select {
+  color: var(--accent);
 }
 .composer input {
   flex: 1;
@@ -182,6 +215,14 @@
   color: var(--accent);
   padding: 0 16px;
   font-size: 0.8em;
+}
+/* Passive, disconnected, nothing saved: the only pointer to the account tab. */
+.accountHint {
+  text-align: right;
+  color: var(--muted);
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 0.7em;
+  padding: 0 15px 6px;
 }
 .empty {
   color: var(--muted);
@@ -244,6 +285,9 @@
   transition-timing-function: ease-out;
 }
 .window[data-active="false"] .notice {
+  opacity: var(--chrome-opacity);
+  transition: opacity ease-out;
+  transition-duration: inherit;
   background: rgba(var(--surface), 0.65);
 }
 

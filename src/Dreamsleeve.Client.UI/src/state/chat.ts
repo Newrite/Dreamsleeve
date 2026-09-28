@@ -1,5 +1,8 @@
 import { createStore } from "zustand/vanilla";
 import type {
+  AuthOperation,
+  AuthState,
+  Command,
   ConnectionPhase,
   Channel,
   HostEvent,
@@ -8,9 +11,11 @@ import type {
   Send,
   Settings,
 } from "../bridge/types";
+import { idleAuth } from "./auth";
 import { defaults, settingsFrom } from "./settings";
 export const HISTORY_LIMIT = 500;
-export type Panel = "online" | "profile" | "stats" | "settings" | null;
+export type Panel =
+  "online" | "profile" | "stats" | "settings" | "account" | null;
 export interface PendingMessage {
   channelId: string;
   text: string;
@@ -30,6 +35,7 @@ export interface ChatState {
   serverName: string;
   connected: boolean;
   connectionPhase: ConnectionPhase;
+  auth: AuthState;
   initialized: boolean;
   visible: boolean;
   active: boolean;
@@ -60,6 +66,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     serverName: "",
     connected: false,
     connectionPhase: "disconnected",
+    auth: { ...idleAuth },
     initialized: false,
     visible: true,
     active: false,
@@ -198,6 +205,21 @@ export function makeChat(send: Send, now = () => Date.now()) {
         }
         touch();
         break;
+      case "auth":
+        // The host mirrors the phase here; pending rows react to "connection".
+        store.setState({
+          auth: {
+            authenticating: event.authenticating,
+            operation: event.operation,
+            failure: event.failure,
+            error: event.error,
+            savedLogin: event.savedLogin,
+            savedUsername: event.savedUsername,
+          },
+          connected: event.phase === "connected",
+          connectionPhase: event.phase,
+        });
+        break;
       case "sendResult": {
         const item = state.pending[event.requestId];
         if (!item) break;
@@ -216,6 +238,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
         store.setState({ pending });
         break;
       }
+      case "settings":
+        store.setState({ settings: settingsFrom(event.settings) });
+        break;
       case "settingsResult":
         if (event.revision !== state.revision) break;
         store.setState({
@@ -285,6 +310,27 @@ export function makeChat(send: Send, now = () => Date.now()) {
     }
     store.setState({ drafts: { ...s.drafts, [s.target]: "" } });
     close();
+  }
+  // One auth operation at a time. The command carries the secret; the store
+  // only ever holds the typed state the host reports back.
+  function authenticate(command: Command, operation: AuthOperation) {
+    const s = store.getState();
+    if (s.auth.authenticating) return;
+    store.setState({
+      auth: {
+        ...s.auth,
+        authenticating: true,
+        operation,
+        failure: "none",
+        error: "",
+      },
+      notice: "",
+    });
+    if (!send(command))
+      store.setState({
+        auth: s.auth,
+        notice: "Команда не принята приложением",
+      });
   }
   function save() {
     const s = store.getState();
@@ -364,6 +410,45 @@ export function makeChat(send: Send, now = () => Date.now()) {
     save,
     select,
     read,
+    signIn(
+      username: string,
+      password: string,
+      remember: boolean,
+      displayName?: string,
+    ) {
+      const name = username.trim();
+      const display = displayName?.trim();
+      if (!name || !password) return;
+      authenticate(
+        {
+          type: "signIn",
+          username: name,
+          password,
+          remember,
+          ...(display ? { displayName: display } : {}),
+        },
+        "passwordLogin",
+      );
+    },
+    signInSaved() {
+      if (!store.getState().auth.savedLogin) return;
+      authenticate({ type: "signInSaved" }, "resume");
+    },
+    signOut() {
+      const s = store.getState();
+      if (!s.connected && !s.auth.savedLogin) return;
+      authenticate({ type: "signOut" }, "signOut");
+    },
+    forgetLogin() {
+      if (!store.getState().auth.savedLogin) return;
+      authenticate({ type: "forgetLogin" }, "forgetSavedLogin");
+    },
+    disconnect() {
+      const s = store.getState();
+      if (!s.connected || s.auth.authenticating) return;
+      if (!send({ type: "disconnect" }))
+        store.setState({ notice: "Команда не принята приложением" });
+    },
     setDraft(text: string) {
       const s = store.getState();
       store.setState({ drafts: { ...s.drafts, [s.target]: text } });

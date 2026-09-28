@@ -1,18 +1,35 @@
-﻿module;
+module;
 
 #include "Prelude.hpp"
 
 export module Dreamsleeve.Events;
 
+import std;
 import Dreamsleeve.Runtime;
-import Dreamsleeve.Logic;
 
+// Game event sinks. They only post notices; ScriptEventSourceHolder events can
+// arrive from AI or script threads, so no game state is touched here.
 namespace Events
 {
 
+  using Key = RE::BSKeyboardDevice::Keys;
+
+  // Mirrored by the main thread from ui.toml; read on the input thread.
+  std::atomic<std::uint32_t> activationKey{Key::kEnter};
+
+  export void SetActivationKey(std::string_view name)
+  {
+    activationKey.store(name == "F2" ? Key::kF2 : Key::kEnter, std::memory_order_relaxed);
+  }
+
+  bool IsPlayer(const RE::TESObjectREFR* ref)
+  {
+    return ref && ref == RE::PlayerCharacter::GetSingleton();
+  }
+
   export struct MenuEventHandler final : RE::BSTEventSink<RE::MenuOpenCloseEvent>
   {
-    static auto get_singleton() -> MenuEventHandler*
+    static auto GetSingleton() -> MenuEventHandler*
     {
       static MenuEventHandler singleton;
       return std::addressof(singleton);
@@ -20,29 +37,22 @@ namespace Events
 
     static auto RegisterHandler() -> void
     {
-      logger::info("Start register menu open close handler"sv);
       if (const auto ui = RE::UI::GetSingleton())
       {
-        ui->AddEventSink(get_singleton());
-        logger::info("Finish register menu open close handler"sv);
+        ui->AddEventSink(GetSingleton());
+        logger::info("Menu open/close sink registered");
       }
     }
 
-    auto ProcessEvent(const RE::MenuOpenCloseEvent* menu_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>* event_source)
-      -> RE::BSEventNotifyControl override
+    auto ProcessEvent(const RE::MenuOpenCloseEvent* event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*) -> RE::BSEventNotifyControl override
     {
-      if (!menu_event || !event_source)
-      {
-        return RE::BSEventNotifyControl::kContinue;
-      }
-
+      if (event) Runtime::Post({Runtime::NoticeKind::MenuChanged});
       return RE::BSEventNotifyControl::kContinue;
     }
   };
 
   export struct InputEventHandler final : RE::BSTEventSink<RE::InputEvent*>
   {
-
     static auto GetSingleton() -> InputEventHandler*
     {
       static InputEventHandler singleton;
@@ -51,41 +61,25 @@ namespace Events
 
     static auto RegisterHandler() -> void
     {
-      const auto device_manager = RE::BSInputDeviceManager::GetSingleton();
-      logger::info("Start register input event handler"sv);
-      if (device_manager)
+      if (const auto manager = RE::BSInputDeviceManager::GetSingleton())
       {
-        device_manager->AddEventSink(GetSingleton());
-        logger::info("Finish register input event handler"sv);
+        manager->AddEventSink(GetSingleton());
+        logger::info("Input sink registered");
       }
     }
 
-    auto ProcessEvent(RE::InputEvent* const* event, RE::BSTEventSource<RE::InputEvent*>* event_source) -> RE::BSEventNotifyControl override
+    auto ProcessEvent(RE::InputEvent* const* events, RE::BSTEventSource<RE::InputEvent*>*) -> RE::BSEventNotifyControl override
     {
-      for (auto input_event = *event; input_event; input_event = input_event->next)
+      if (!events) return RE::BSEventNotifyControl::kContinue;
+      const auto wanted = activationKey.load(std::memory_order_relaxed);
+      for (auto event = *events; event; event = event->next)
       {
-        if (const auto button = input_event->AsButtonEvent(); button)
-        {
-          const auto device = input_event->GetDevice();
-
-          auto key = button->GetIDCode();
-
-          switch (device)
-          {
-            case RE::INPUT_DEVICE::kMouse:
-              key += SKSE::InputMap::kMacro_MouseButtonOffset;
-              break;
-            case RE::INPUT_DEVICE::kGamepad:
-              key = SKSE::InputMap::GamepadMaskToKeycode(key);
-              break;
-            default:
-              break;
-          }
-
-          // some call there
-        }
+        const auto button = event->AsButtonEvent();
+        if (!button || event->GetDevice() != RE::INPUT_DEVICE::kKeyboard || !button->IsDown()) continue;
+        const auto key     = button->GetIDCode();
+        const bool matches = key == wanted || (wanted == Key::kEnter && key == Key::kKP_Enter);
+        if (matches) Runtime::Post({Runtime::NoticeKind::ActivationKey});
       }
-
       return RE::BSEventNotifyControl::kContinue;
     }
   };
@@ -100,38 +94,60 @@ namespace Events
 
     static auto RegisterHandler() -> void
     {
-      const auto ScriptEventSourceHandler = RE::ScriptEventSourceHolder::GetSingleton();
-      logger::info("Start register death handler"sv);
-
-      if (ScriptEventSourceHandler)
+      const auto holder = RE::ScriptEventSourceHolder::GetSingleton();
+      if (!holder) return;
+      if (const auto source = holder->GetEventSource<RE::TESDeathEvent>())
       {
-        const auto ScriptEventSource = ScriptEventSourceHandler->GetEventSource<RE::TESDeathEvent>();
-
-        if (ScriptEventSource)
-        {
-          ScriptEventSource->AddEventSink(GetSingleton());
-          logger::info("Finish register death handler"sv);
-        }
+        source->AddEventSink(GetSingleton());
+        logger::info("Death sink registered");
       }
     }
 
-    auto ProcessEvent(const RE::TESDeathEvent* event, RE::BSTEventSource<RE::TESDeathEvent>*) -> RE::BSEventNotifyControl
+    // May fire twice per death (dying, then dead) and from non-main threads.
+    auto ProcessEvent(const RE::TESDeathEvent* event, RE::BSTEventSource<RE::TESDeathEvent>*) -> RE::BSEventNotifyControl override
     {
-      if (!event)
-      {
-        return RE::BSEventNotifyControl::kContinue;
-      }
-
-      // some call here
+      if (event && IsPlayer(event->actorDying.get())) Runtime::Post({Runtime::NoticeKind::PlayerDeath, event->dead});
       return RE::BSEventNotifyControl::kContinue;
     }
   };
 
+  export struct ActivateEventHandler final : RE::BSTEventSink<RE::TESActivateEvent>
+  {
+    static auto GetSingleton() noexcept -> ActivateEventHandler*
+    {
+      static ActivateEventHandler singleton;
+      return std::addressof(singleton);
+    }
+
+    static auto RegisterHandler() -> void
+    {
+      const auto holder = RE::ScriptEventSourceHolder::GetSingleton();
+      if (!holder) return;
+      if (const auto source = holder->GetEventSource<RE::TESActivateEvent>())
+      {
+        source->AddEventSink(GetSingleton());
+        logger::info("Activate sink registered");
+      }
+    }
+
+    auto ProcessEvent(const RE::TESActivateEvent* event, RE::BSTEventSource<RE::TESActivateEvent>*) -> RE::BSEventNotifyControl override
+    {
+      if (event && event->objectActivated && IsPlayer(event->actionRef.get()))
+        Runtime::Post({Runtime::NoticeKind::PlayerActivated, false, event->objectActivated->GetFormID()});
+      return RE::BSEventNotifyControl::kContinue;
+    }
+  };
+
+  // kDataLoaded, once: every source exists by then.
   export void RegisterEvents()
   {
+    static bool registered = false;
+    if (registered) return;
+    registered = true;
     MenuEventHandler::RegisterHandler();
     InputEventHandler::RegisterHandler();
     DeathEventHandler::RegisterHandler();
+    ActivateEventHandler::RegisterHandler();
   }
 
 }

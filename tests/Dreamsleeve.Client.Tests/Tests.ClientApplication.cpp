@@ -6,14 +6,25 @@ using namespace Dreamsleeve::Client;
 
 namespace
 {
+
   struct SettingsFixture
   {
-    std::filesystem::path path = std::filesystem::temp_directory_path() /
+    std::filesystem::path path =
+      std::filesystem::temp_directory_path() /
       (L"dreamsleeve-config-" + std::to_wstring(std::chrono::steady_clock::now().time_since_epoch().count()) + L"-тест.toml");
-    ~SettingsFixture() { std::error_code error; std::filesystem::remove(path, error); }
+
+    ~SettingsFixture()
+    {
+      std::error_code error;
+      std::filesystem::remove(path, error);
+    }
+
     auto Load(std::string_view source)
     {
-      { std::ofstream file{path, std::ios::binary}; file << source; }
+      {
+        std::ofstream file{path, std::ios::binary};
+        file << source;
+      }
       return LoadClientSettings(path);
     }
   };
@@ -25,6 +36,7 @@ namespace
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
     return !app.Status().authenticating;
   }
+
 }
 
 TEST_SUITE_BEGIN("Client.Application");
@@ -68,37 +80,54 @@ historyCapacity = 16
 TEST_CASE("Configuration rejects malformed files, unknown fields and invalid bounds before startup")
 {
   SettingsFixture fixture;
-  for (auto source : { "[]", "null", "{", "{} {}", "{} trailing", R"(password = "must-not-be-stored"
-)", R"(version = 2
+  for (
+    auto source :
+    {"[]",
+     "null",
+     "{",
+     "{} {}",
+     "{} trailing",
+     R"(password = "must-not-be-stored"
 )",
-    R"([client]
+     R"(version = 2
+)",
+     R"([client]
 typo = 3
-)", R"(client = 0
-)", R"(serverPort = 0
-)", R"(serverPort = 65536
 )",
-    R"(serverIp = "not-an-ip"
-)", R"([client]
+     R"(client = 0
+)",
+     R"(serverPort = 0
+)",
+     R"(serverPort = 65536
+)",
+     R"(serverIp = "not-an-ip"
+)",
+     R"([client]
 playerSampleIntervalMs = 0
 )",
-    R"(commandCapacity = 0
-)", R"(stateCapacity = 0
-)", R"([client.network]
+     R"(commandCapacity = 0
+)",
+     R"(stateCapacity = 0
+)",
+     R"([client.network]
 maxPeers = 2
 )",
-    R"([client.network]
+     R"([client.network]
 channelLimit = 2
-)", R"([client.network]
+)",
+     R"([client.network]
 maxWaitingData = 1
 )",
-    R"([interpolation]
+     R"([interpolation]
 delayMs = -1
-)", R"([interpolation]
+)",
+     R"([interpolation]
 maxGapMs = 100
 )",
-    R"([client]
+     R"([client]
 visibilityDistance = -1
-)", R"(authUrl = "http://192.168.1.2:8779"
+)",
+     R"(authUrl = "http://192.168.1.2:8779"
 )"})
   {
     CAPTURE(std::string_view{source});
@@ -115,10 +144,19 @@ TEST_CASE("TOML supports comments inline tables and rejects ambiguous scalar val
   REQUIRE(loaded);
   CHECK(loaded->client.serverAddress.GetPort() == 9001);
   CHECK_FALSE(loaded->client.showFireflies);
-  for (const auto source : {"serverPort=9000\nserverPort=9001", "serverPort=9000.5", "serverPort='9000'",
-       "client={showFireflies=true, showFireflies=false}",
-       "client.showFireflies=true\n[client]\nshowFireflies=false", "[client]\n[client]",
-       "serverPort=-1", "ServerPort=9000", "client.visibilityDistance=nan", "client.visibilityDistance=inf", "{}"})
+  for (
+    const auto source :
+    {"serverPort=9000\nserverPort=9001",
+     "serverPort=9000.5",
+     "serverPort='9000'",
+     "client={showFireflies=true, showFireflies=false}",
+     "client.showFireflies=true\n[client]\nshowFireflies=false",
+     "[client]\n[client]",
+     "serverPort=-1",
+     "ServerPort=9000",
+     "client.visibilityDistance=nan",
+     "client.visibilityDistance=inf",
+     "{}"})
   {
     CAPTURE(std::string_view{source});
     CHECK_FALSE(fixture.Load(source));
@@ -171,8 +209,19 @@ TEST_CASE("Programmatic startup uses the same validation as file configuration")
   settings.client.playerSampleIntervalMs = 0;
   CHECK_FALSE(ClientApplication::TryCreate(settings));
   settings.client.playerSampleIntervalMs = 50;
-  settings.authUrl = "http://remote.example.test";
+  settings.authUrl                       = "http://remote.example.test";
   CHECK_FALSE(ClientApplication::TryCreate(settings));
 }
 
 TEST_SUITE_END();
+
+TEST_CASE("Remote HTTP opt-in loads from client TOML")
+{
+  SettingsFixture fixture;
+  CHECK_FALSE(fixture.Load("authUrl='http://auth.example.test:8779'"));
+  auto settings = fixture.Load("authUrl='http://auth.example.test:8779'\nallowInsecureRemoteAuth=true");
+  REQUIRE(settings);
+  CHECK(settings->allowInsecureRemoteAuth);
+  CHECK(ValidateClientSettings(*settings));
+  CHECK_FALSE(fixture.Load("allowInsecureRemoteAuth='true'"));
+}

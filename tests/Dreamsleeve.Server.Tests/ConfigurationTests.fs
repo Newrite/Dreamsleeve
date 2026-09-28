@@ -105,6 +105,16 @@ let tests = testList "Server configuration" [
         withFile "[Authentication]\nListenUrl = \"https://example.com:9443\"\nAllowInsecureLoopback = false\n" (fun path ->
             Expect.isOk (Configuration.parse [|"--config"; path|]) "TLS endpoint accepted")
 
+    testCase "remote HTTP requires explicit opt-in without weakening URL validation" <| fun _ ->
+        for url in [ "http://0.0.0.0:8779"; "http://192.168.1.10:8779"; "http://auth.example.test:8779" ] do
+            let source = sprintf "[Authentication]\nListenUrl = \"%s\"\nAllowInsecureLoopback = false\n" url
+            withFile source (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) "default rejects HTTP")
+            withFile (source + "AllowInsecureRemote = true\n") (fun path ->
+                Expect.isOk (Configuration.parse [|"--config"; path|]) "explicit opt-in accepts HTTP")
+        withFile "[Authentication]\nListenUrl = \"http://user:secret@example.test\"\nAllowInsecureRemote = true\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "credentials in URL remain forbidden")
+
     testCase "account and logging limits and wrong section types fail before startup" <| fun _ ->
         for source in [
             "Authentication = 0\n"; "Database = 0\n"; "Logging = 0\n"

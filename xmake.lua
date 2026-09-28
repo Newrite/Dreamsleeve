@@ -160,6 +160,9 @@ target("Dreamsleeve.Client.Tests")
     add_includedirs("tests/Dreamsleeve.Client.Tests")
     add_visible_headers("tests/Dreamsleeve.Client.Tests")
     add_cpp_files("tests/Dreamsleeve.Client.Tests")
+    -- Game-independent host modules of the SKSE adapter are compiled here too:
+    -- they depend on Core only, so bridge/settings/session logic is tested without Skyrim.
+    add_module_interface_files("src/Dreamsleeve.Client/Host")
 
     add_deps("Dreamsleeve.Client.Core")
     add_packages("doctest")

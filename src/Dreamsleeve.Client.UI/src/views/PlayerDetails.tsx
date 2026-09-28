@@ -1,3 +1,4 @@
+import { resourceKey } from "./resources";
 import type { ActorValue, Player } from "../bridge/types";
 import styles from "../styles/Workspace.module.css";
 const number = (n: number) =>
@@ -14,7 +15,7 @@ export function ActorValueView({ entry }: { entry: ActorValue }) {
   const fraction =
     maximum > 0 ? Math.max(0, Math.min(1, current / maximum)) : 0;
   return (
-    <div className={styles.resource} data-resource={entry.key.toLowerCase()}>
+    <div className={styles.resource} data-resource={resourceKey(entry.key)}>
       <div>
         <span>{entry.name || entry.key}</span>
         <strong>

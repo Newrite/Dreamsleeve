@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { makeChat, HISTORY_LIMIT } from "../src/state/chat";
 import { frame, defaults, settingsFrom } from "../src/state/settings";
-import type { HostEvent, Message, Command } from "../src/bridge/types";
+import { accountActions, authStatus, idleAuth } from "../src/state/auth";
+import type {
+  AuthEvent,
+  HostEvent,
+  Message,
+  Command,
+} from "../src/bridge/types";
 const snapshot: HostEvent = {
   type: "snapshot",
   serverName: "Голоса Тамриэля",
@@ -267,5 +273,170 @@ it("hide is effective even without a native command listener", () => {
   expect(chat.store.getState()).toMatchObject({
     visible: false,
     active: false,
+  });
+});
+
+const authEvent = (patch: Partial<AuthEvent> = {}): AuthEvent => ({
+  type: "auth",
+  authenticating: false,
+  operation: "none",
+  failure: "none",
+  error: "",
+  savedLogin: false,
+  savedUsername: "",
+  phase: "disconnected",
+  ...patch,
+});
+describe("account", () => {
+  it("sends the password once with the command and never keeps it in state", () => {
+    const send = vi.fn((_command: Command) => true);
+    const chat = makeChat(send);
+    chat.signIn("  northern ", "s3cret", true);
+    chat.signIn("northern", "s3cret", true);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0]).toEqual({
+      type: "signIn",
+      username: "northern",
+      password: "s3cret",
+      remember: true,
+    });
+    expect(JSON.stringify(chat.store.getState())).not.toContain("s3cret");
+    expect(chat.store.getState().auth).toMatchObject({
+      authenticating: true,
+      operation: "passwordLogin",
+    });
+    chat.receive(authEvent({ failure: "invalidCredentials" }));
+    expect(chat.store.getState().auth.authenticating).toBe(false);
+    chat.signIn("northern", "again", false, " Довакин ");
+    expect(send.mock.calls[1][0]).toEqual({
+      type: "signIn",
+      username: "northern",
+      password: "again",
+      remember: false,
+      displayName: "Довакин",
+    });
+    expect(JSON.stringify(chat.store.getState())).not.toContain("again");
+  });
+  it("refuses empty credentials and stays idle when the host listener is missing", () => {
+    const chat = makeChat(() => false);
+    chat.signIn("", "x", true);
+    chat.signIn("x", "", true);
+    expect(chat.store.getState().auth).toEqual(idleAuth);
+    chat.receive(authEvent({ savedLogin: true, savedUsername: "northern" }));
+    chat.signInSaved();
+    expect(chat.store.getState().auth.authenticating).toBe(false);
+    expect(chat.store.getState().notice).toContain("не принята");
+  });
+  it("maps failure codes to Russian text and appends the raw host error", () => {
+    const labels = {
+      invalidCredentials: "Неверное имя или пароль",
+      usernameTaken: "Имя занято",
+      invalidRequest: "Некорректный запрос",
+      registrationDisabled: "Регистрация отключена",
+      busy: "Сервер занят, повторите позже",
+      unavailable: "Сервер недоступен",
+      invalidResponse: "Некорректный ответ сервера",
+      credentialStorage: "Ошибка хранилища учётных данных Windows",
+      canceled: "Операция отменена",
+    } as const;
+    for (const [failure, label] of Object.entries(labels))
+      expect(
+        authStatus({ ...idleAuth, failure: failure as keyof typeof labels }),
+      ).toBe(label);
+    expect(
+      authStatus({ ...idleAuth, failure: "unavailable", error: "timeout" }),
+    ).toBe("Сервер недоступен: timeout");
+    expect(authStatus({ ...idleAuth, error: "Только текст" })).toBe(
+      "Только текст",
+    );
+    expect(
+      authStatus({ ...idleAuth, authenticating: true, operation: "resume" }),
+    ).toBe("Вход сохранённой сессией…");
+    expect(authStatus(idleAuth)).toBe("");
+  });
+  it("disables every account button while authenticating and gates the rest", () => {
+    const form = { username: "northern", password: "x", displayName: "Дов" };
+    const busy = accountActions(
+      { ...idleAuth, authenticating: true, savedLogin: true },
+      true,
+      form,
+    );
+    expect(Object.values(busy)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(accountActions(idleAuth, false, form)).toEqual({
+      signIn: true,
+      register: true,
+      resume: false,
+      disconnect: false,
+      signOut: false,
+      forget: false,
+    });
+    expect(
+      accountActions({ ...idleAuth, savedLogin: true }, true, {
+        ...form,
+        password: "",
+        displayName: "",
+      }),
+    ).toEqual({
+      signIn: false,
+      register: false,
+      resume: true,
+      disconnect: true,
+      signOut: true,
+      forget: true,
+    });
+  });
+  it("mirrors the phase from auth events and guards the saved-login commands", () => {
+    const { chat, send } = ready();
+    chat.receive(
+      authEvent({
+        phase: "authenticating",
+        authenticating: true,
+        operation: "resume",
+      }),
+    );
+    expect(chat.store.getState()).toMatchObject({
+      connected: false,
+      connectionPhase: "authenticating",
+    });
+    chat.signOut();
+    chat.disconnect();
+    expect(send).not.toHaveBeenCalled();
+    chat.receive(
+      authEvent({ phase: "connected", savedLogin: true, savedUsername: "n" }),
+    );
+    expect(chat.store.getState().connected).toBe(true);
+    chat.disconnect();
+    chat.forgetLogin();
+    expect(chat.store.getState().auth.operation).toBe("forgetSavedLogin");
+    chat.signInSaved();
+    chat.receive(authEvent({ phase: "disconnected" }));
+    chat.forgetLogin();
+    chat.signInSaved();
+    chat.signOut();
+    expect(send.mock.calls.map(([c]) => c.type)).toEqual([
+      "disconnect",
+      "forgetLogin",
+    ]);
+    chat.receive(authEvent({ phase: "connected" }));
+    chat.signOut();
+    expect(send.mock.calls.at(-1)?.[0]).toEqual({ type: "signOut" });
+    expect(chat.store.getState().auth.authenticating).toBe(true);
+  });
+  it("opens the account panel without a snapshot", () => {
+    const chat = makeChat(() => true);
+    chat.receive({ type: "activate" });
+    chat.open("account");
+    expect(chat.store.getState()).toMatchObject({
+      initialized: false,
+      active: true,
+      panel: "account",
+    });
   });
 });

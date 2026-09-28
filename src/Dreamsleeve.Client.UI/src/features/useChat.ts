@@ -1,3 +1,4 @@
+import { controlKey } from "./keyboard";
 import { useEffect, useRef } from "react";
 import { useStore } from "zustand";
 import type { Chat } from "../state/chat";
@@ -31,7 +32,7 @@ export function useChat(chat: Chat) {
   useEffect(() => {
     function key(event: KeyboardEvent) {
       if (!chat.store.getState().active || event.isComposing) return;
-      if (event.key === "Escape") {
+      if (controlKey(event) === "Escape") {
         event.preventDefault();
         if (chat.store.getState().panel) chat.open(null);
         else chat.close();

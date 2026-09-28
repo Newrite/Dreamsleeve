@@ -131,7 +131,7 @@ namespace Dreamsleeve::Client::Auth
       return result;
     }
 
-    Result<Endpoint> ParseUrl(std::string_view url)
+    Result<Endpoint> ParseUrl(std::string_view url, bool allowInsecureRemote = false)
     {
       auto wide = Wide(url);
       if (!wide) return std::unexpected{wide.error()};
@@ -157,15 +157,15 @@ namespace Dreamsleeve::Client::Auth
       if (!result.secure)
       {
         if (_wcsicmp(result.host.c_str(), L"localhost") == 0) result.host = L"127.0.0.1";
-        if (result.host != L"127.0.0.1" && result.host != L"::1" && result.host != L"[::1]")
+        if (!allowInsecureRemote && result.host != L"127.0.0.1" && result.host != L"::1" && result.host != L"[::1]")
           return std::unexpected{"Plain HTTP authentication is permitted only on loopback; use HTTPS remotely"};
       }
       return result;
     }
 
-    Result<HttpResponse> Post(std::string_view url, const wchar_t* path, const std::string& body)
+    Result<HttpResponse> Post(std::string_view url, const wchar_t* path, const std::string& body, bool allowInsecureRemote = false)
     {
-      auto endpoint = ParseUrl(url);
+      auto endpoint = ParseUrl(url, allowInsecureRemote);
       if (!endpoint) return std::unexpected{endpoint.error()};
       if (body.size() > 16384) return std::unexpected{"Authentication request is too large"};
 
@@ -237,16 +237,16 @@ namespace Dreamsleeve::Client::Auth
   }
 
   // Same URL policy for configuration checks and actual HTTP requests.
-  export Result<void> ValidateUrl(std::string_view url)
+  export Result<void> ValidateUrl(std::string_view url, bool allowInsecureRemote = false)
   {
-    auto parsed = ParseUrl(url);
+    auto parsed = ParseUrl(url, allowInsecureRemote);
     if (!parsed) return std::unexpected{parsed.error()};
     return {};
   }
 
-  export Result<std::wstring> CredentialTarget(std::string_view url)
+  export Result<std::wstring> CredentialTarget(std::string_view url, bool allowInsecureRemote = false)
   {
-    auto endpoint = ParseUrl(url);
+    auto endpoint = ParseUrl(url, allowInsecureRemote);
     if (!endpoint) return std::unexpected{endpoint.error()};
     for (auto& c : endpoint->host)
       if (c >= L'A' && c <= L'Z') c += L'a' - L'A';
@@ -278,7 +278,11 @@ namespace Dreamsleeve::Client::Auth
     return {code, "Authentication failed (HTTP " + std::to_string(status) + ")"};
   }
 
-  export std::expected<void, Failure> RegisterAccount(std::string_view url, const Credentials& credentials, std::string_view displayName)
+  export std::expected<void, Failure> RegisterAccount(
+    std::string_view   url,
+    const Credentials& credentials,
+    std::string_view   displayName,
+    bool               allowInsecureRemote = false)
   {
     if (auto checked = ValidatePassword(credentials.password); !checked)
       return std::unexpected{
@@ -289,7 +293,7 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode registration request"}
       };
-    auto response = Post(url, L"/auth/register", *body);
+    auto response = Post(url, L"/auth/register", *body, allowInsecureRemote);
     SecureZeroMemory(body->data(), body->size());
     if (!response)
       return std::unexpected{
@@ -299,16 +303,20 @@ namespace Dreamsleeve::Client::Auth
     return {};
   }
 
-  export Result<void> Register(std::string_view url, const Credentials& credentials, std::string_view displayName)
+  export Result<void> Register(
+    std::string_view   url,
+    const Credentials& credentials,
+    std::string_view   displayName,
+    bool               allowInsecureRemote = false)
   {
-    auto result = RegisterAccount(url, credentials, displayName);
+    auto result = RegisterAccount(url, credentials, displayName, allowInsecureRemote);
     if (!result) return std::unexpected{result.error().message};
     return {};
   }
 
-  GrantResult RequestGrant(std::string_view url, const wchar_t* path, std::string body)
+  GrantResult RequestGrant(std::string_view url, const wchar_t* path, std::string body, bool allowInsecureRemote = false)
   {
-    auto response = Post(url, path, body);
+    auto response = Post(url, path, body, allowInsecureRemote);
     SecureZeroMemory(body.data(), body.size());
     if (!response)
       return std::unexpected{
@@ -328,7 +336,7 @@ namespace Dreamsleeve::Client::Auth
     return Grant{std::move(decoded.sessionTicket), std::move(decoded.rememberToken), std::move(decoded.username)};
   }
 
-  export GrantResult LoginGrant(std::string_view url, const Credentials& credentials, bool remember)
+  export GrantResult LoginGrant(std::string_view url, const Credentials& credentials, bool remember, bool allowInsecureRemote = false)
   {
     if (auto checked = ValidatePassword(credentials.password); !checked)
       return std::unexpected{
@@ -339,7 +347,7 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode login request"}
       };
-    auto grant = RequestGrant(url, L"/auth/login", std::move(*body));
+    auto grant = RequestGrant(url, L"/auth/login", std::move(*body), allowInsecureRemote);
     if (grant && remember && grant->rememberToken.empty())
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Server did not issue a saved login token"}
@@ -347,19 +355,23 @@ namespace Dreamsleeve::Client::Auth
     return grant;
   }
 
-  export GrantResult Resume(std::string_view url, std::string_view token)
+  export GrantResult Resume(std::string_view url, std::string_view token, bool allowInsecureRemote = false)
   {
     auto body = glz::write_json(TokenRequest{token});
     if (!body)
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode resume request"}
       };
-    return RequestGrant(url, L"/auth/resume", std::move(*body));
+    return RequestGrant(url, L"/auth/resume", std::move(*body), allowInsecureRemote);
   }
 
-  std::expected<void, Failure> RequestCompletion(std::string_view url, const wchar_t* path, std::string body)
+  std::expected<void, Failure> RequestCompletion(
+    std::string_view url,
+    const wchar_t*   path,
+    std::string      body,
+    bool             allowInsecureRemote = false)
   {
-    auto response = Post(url, path, body);
+    auto response = Post(url, path, body, allowInsecureRemote);
     SecureZeroMemory(body.data(), body.size());
     if (!response)
       return std::unexpected{
@@ -369,17 +381,21 @@ namespace Dreamsleeve::Client::Auth
     return {};
   }
 
-  export std::expected<void, Failure> Logout(std::string_view url, std::string_view token)
+  export std::expected<void, Failure> Logout(std::string_view url, std::string_view token, bool allowInsecureRemote = false)
   {
     auto body = glz::write_json(TokenRequest{token});
     if (!body)
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode logout request"}
       };
-    return RequestCompletion(url, L"/auth/logout", std::move(*body));
+    return RequestCompletion(url, L"/auth/logout", std::move(*body), allowInsecureRemote);
   }
 
-  export std::expected<void, Failure> ResetPassword(std::string_view url, std::string_view code, std::string_view password)
+  export std::expected<void, Failure> ResetPassword(
+    std::string_view url,
+    std::string_view code,
+    std::string_view password,
+    bool             allowInsecureRemote = false)
   {
     if (auto checked = ValidatePassword(password); !checked)
       return std::unexpected{
@@ -390,12 +406,12 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode password reset"}
       };
-    return RequestCompletion(url, L"/auth/reset-password", std::move(*body));
+    return RequestCompletion(url, L"/auth/reset-password", std::move(*body), allowInsecureRemote);
   }
 
-  export Result<std::string> Login(std::string_view url, const Credentials& credentials)
+  export Result<std::string> Login(std::string_view url, const Credentials& credentials, bool allowInsecureRemote = false)
   {
-    auto grant = LoginGrant(url, credentials, false);
+    auto grant = LoginGrant(url, credentials, false, allowInsecureRemote);
     if (!grant) return std::unexpected{grant.error().message};
     return std::move(grant->sessionTicket);
   }

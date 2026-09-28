@@ -392,4 +392,60 @@ TEST_CASE("A character change invalidates old realtime before its visibility bas
   CHECK(model.FindPlayer(7)->location->position.X == 20);
 }
 
+TEST_CASE("Realtime poses reach the renderer and loading clears them before reentry")
+{
+  MovementFixture fixture;
+  const auto      generation = fixture.model.Generation();
+  auto            publish    = [&](const ClientUpdate& update, int now) {
+    REQUIRE(fixture.model.Apply(generation, update, At(now)));
+    REQUIRE(fixture.exchange->Publish(fixture.model));
+    fixture.Drain(now);
+  };
+
+  publish(PlayerLocationUpdated{7, MovementLocation(0), 1, 0}, 100);
+  publish(
+    PlayerMovementReceived{
+        7,
+        1,
+        1,
+        {{10, 0, 0}, {}, 1100000}
+  },
+    200);
+  publish(
+    PlayerMovementReceived{
+        7,
+        1,
+        2,
+        {{20, 0, 0}, {}, 1200000}
+  },
+    300);
+  REQUIRE(fixture.view->Sample(7, At(350)));
+  CHECK(fixture.view->Sample(7, At(350))->position.X == doctest::Approx(10));
+  CHECK(fixture.view->Sample(7, At(500))->position.X == 20);
+
+  publish(PlayerLocationUpdated{7, std::nullopt, 2, 0}, 400);
+  CHECK_FALSE(fixture.view->Sample(7, At(400)));
+  publish(
+    PlayerMovementReceived{
+        7,
+        1,
+        3,
+        {{30, 0, 0}, {}, 1300000}
+  },
+    410);
+  CHECK_FALSE(fixture.view->Sample(7, At(410)));
+
+  publish(PlayerLocationUpdated{7, MovementLocation(100, 2000000), 3, 0}, 1000);
+  publish(
+    PlayerMovementReceived{
+        7,
+        3,
+        1,
+        {{110, 0, 0}, {}, 2100000}
+  },
+    1100);
+  REQUIRE(fixture.view->Sample(7, At(1200)));
+  CHECK(fixture.view->Sample(7, At(1200))->position.X == doctest::Approx(105));
+}
+
 TEST_SUITE_END();

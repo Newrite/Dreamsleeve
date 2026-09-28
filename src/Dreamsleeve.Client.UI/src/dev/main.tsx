@@ -1,8 +1,13 @@
 import { installVisibility } from "../bridge/visibility";
 import { createRoot } from "react-dom/client";
-import { useState } from "react";
+import { useStore } from "zustand";
 import { makeChat } from "../state/chat";
-import type { Command } from "../bridge/types";
+import type {
+  AuthFailure,
+  AuthState,
+  Command,
+  ConnectionPhase,
+} from "../bridge/types";
 import { defaults, settingsFrom } from "../state/settings";
 import { App } from "../views/App";
 import { channels, messages, players } from "./fixture";
@@ -11,6 +16,34 @@ import "../themes/skyrim.css";
 import "./workshop.css";
 let nextId = 100;
 let rejectNext = false;
+// Fake account: the stand starts signed in through a remembered login. Only
+// typed state is kept; the password from a signIn command is never read.
+const auth: AuthState = {
+  authenticating: false,
+  operation: "none",
+  failure: "none",
+  error: "",
+  savedLogin: true,
+  savedUsername: players[0].username,
+};
+function connection(phase: ConnectionPhase) {
+  chat.receive({ type: "connection", connected: phase === "connected", phase });
+}
+function emitAuth(next: Partial<AuthState>, phase: ConnectionPhase) {
+  Object.assign(auth, next);
+  chat.receive({ type: "auth", ...auth, phase });
+}
+function snapshot(settings = chat.store.getState().settings) {
+  chat.receive({
+    type: "snapshot",
+    serverName: "Голоса Тамриэля",
+    channels,
+    messages,
+    players,
+    selfId: players[0].id,
+    settings,
+  });
+}
 function command(c: Command) {
   if (c.type === "close") return true;
   if (c.type === "saveSettings") {
@@ -34,6 +67,74 @@ function command(c: Command) {
         50,
       );
     }
+    return true;
+  }
+  if (c.type === "signIn" || c.type === "signInSaved") {
+    const resume = c.type === "signInSaved";
+    const username = resume ? auth.savedUsername : c.username;
+    const failure: AuthFailure =
+      resume && !auth.savedLogin
+        ? "credentialStorage"
+        : !resume && c.username === "bad"
+          ? "invalidCredentials"
+          : !resume && c.displayName && c.username === "taken"
+            ? "usernameTaken"
+            : "none";
+    connection("authenticating");
+    emitAuth(
+      {
+        authenticating: true,
+        operation: resume ? "resume" : "passwordLogin",
+        failure: "none",
+        error: "",
+      },
+      "authenticating",
+    );
+    setTimeout(() => {
+      if (failure !== "none") {
+        connection("disconnected");
+        emitAuth({ authenticating: false, failure }, "disconnected");
+        return;
+      }
+      const remember = resume || c.remember;
+      connection("connected");
+      emitAuth(
+        {
+          authenticating: false,
+          operation: "none",
+          savedLogin: remember,
+          savedUsername: remember ? username : "",
+        },
+        "connected",
+      );
+      snapshot();
+    }, 400);
+    return true;
+  }
+  if (c.type === "signOut") {
+    connection("disconnected");
+    emitAuth(
+      {
+        operation: "none",
+        failure: "none",
+        error: "",
+        savedLogin: false,
+        savedUsername: "",
+      },
+      "disconnected",
+    );
+    return true;
+  }
+  if (c.type === "forgetLogin") {
+    emitAuth(
+      { savedLogin: false, savedUsername: "" },
+      chat.store.getState().connectionPhase,
+    );
+    return true;
+  }
+  if (c.type === "disconnect") {
+    connection("disconnected");
+    emitAuth({}, "disconnected");
     return true;
   }
   const rejected = rejectNext;
@@ -74,15 +175,8 @@ try {
 } catch {
   /* Local preview only. */
 }
-chat.receive({
-  type: "snapshot",
-  serverName: "Голоса Тамриэля",
-  channels,
-  messages,
-  players,
-  selfId: players[0].id,
-  settings,
-});
+snapshot(settings);
+emitAuth({}, "connected");
 window.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
   if (
@@ -115,7 +209,8 @@ function publish(system = false) {
   });
 }
 function Workshop() {
-  const [connected, setConnected] = useState(true);
+  const connected = useStore(chat.store, (s) => s.connected);
+  const savedLogin = useStore(chat.store, (s) => s.auth.savedLogin);
   return (
     <>
       <div className="landscape" aria-hidden="true">
@@ -172,11 +267,25 @@ function Workshop() {
         </button>
         <button
           onClick={() => {
-            chat.receive({ type: "connection", connected: !connected });
-            setConnected(!connected);
+            const phase = connected ? "disconnected" : "connected";
+            connection(phase);
+            emitAuth({}, phase);
           }}
         >
           {connected ? "Отключить" : "Подключить"}
+        </button>
+        <button
+          onClick={() =>
+            emitAuth(
+              {
+                savedLogin: !savedLogin,
+                savedUsername: savedLogin ? "" : players[0].username,
+              },
+              chat.store.getState().connectionPhase,
+            )
+          }
+        >
+          Сохранённый вход: {savedLogin ? "есть" : "нет"}
         </button>
       </aside>
       <App chat={chat} />

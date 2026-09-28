@@ -12,6 +12,7 @@ open Dreamsleeve.Server.Infrastructure
 
 type AuthenticationSettings = {
     ListenUrl: string
+    AllowInsecureRemote: bool
     AllowInsecureLoopback: bool
     AllowRegistration: bool
     CertificatePath: string
@@ -41,7 +42,7 @@ module Configuration =
         Runtime = ServerRuntimeOptions.defaults
         Database = { DatabasePath = "data/dreamsleeve.db"; BusyTimeoutSeconds = 5 }
         Authentication = {
-            ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowRegistration = true
+            ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; AllowRegistration = true
             CertificatePath = ""; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
             Service = AuthService.defaults
         }
@@ -154,9 +155,9 @@ module Configuration =
                 Error "Authentication URL must contain only scheme, host and port."
             | true, uri when uri.Scheme <> "http" && uri.Scheme <> "https" ->
                 Error "Authentication requires HTTP(S)."
-            | true, uri when uri.Scheme = "http" && not (config.Authentication.AllowInsecureLoopback
-                                  && (uri.Host = "127.0.0.1" || uri.Host = "[::1]" || uri.Host = "::1")) ->
-                Error "Unencrypted authentication is allowed only on an explicitly enabled literal loopback address."
+            | true, uri when uri.Scheme = "http" && not (config.Authentication.AllowInsecureRemote || (config.Authentication.AllowInsecureLoopback
+                                  && (uri.Host = "127.0.0.1" || uri.Host = "[::1]" || uri.Host = "::1"))) ->
+                Error "Remote HTTP authentication requires Authentication.AllowInsecureRemote; otherwise use HTTPS or explicitly enabled literal loopback."
             | true, _ ->
                 ServerLogging.validate config.Logging
                 |> Result.bind (fun () -> ServerConfig.validate config.Server |> Result.mapError (String.concat " "))

@@ -23,13 +23,17 @@ export const players: Player[] = [
     markerKind: "Дворец",
     actorValues: [
       {
-        key: "health",
+        key: "skyrim:health",
         name: "Здоровье",
         value: { current: 153, maximum: 153 },
       },
-      { key: "magicka", name: "Магия", value: { current: 72, maximum: 100 } },
       {
-        key: "stamina",
+        key: "skyrim:magicka",
+        name: "Магия",
+        value: { current: 72, maximum: 100 },
+      },
+      {
+        key: "skyrim:stamina",
         name: "Запас сил",
         value: { current: 420, maximum: 569 },
       },
@@ -49,13 +53,17 @@ export const players: Player[] = [
     nearbyMarker: "Спящий великан",
     actorValues: [
       {
-        key: "health",
+        key: "skyrim:health",
         name: "Здоровье",
         value: { current: 218, maximum: 300 },
       },
-      { key: "magicka", name: "Магия", value: { current: 340, maximum: 400 } },
       {
-        key: "stamina",
+        key: "skyrim:magicka",
+        name: "Магия",
+        value: { current: 340, maximum: 400 },
+      },
+      {
+        key: "skyrim:stamina",
         name: "Запас сил",
         value: { current: 120, maximum: 180 },
       },
@@ -75,7 +83,7 @@ export const players: Player[] = [
     interior: true,
     actorValues: [
       {
-        key: "health",
+        key: "skyrim:health",
         name: "Здоровье",
         value: { current: 640, maximum: 640 },
       },

@@ -7,6 +7,36 @@ const finite = (v: unknown) => typeof v === "number" && Number.isFinite(v);
 const id = (v: unknown) => text(v) && v.length > 0 && v.length <= 128;
 const list = (v: unknown, check: (x: unknown) => boolean, limit: number) =>
   Array.isArray(v) && v.length <= limit && v.every(check);
+const label = (v: unknown) => text(v) && v.length <= 512;
+const phases = [
+  "disconnected",
+  "authenticating",
+  "connecting",
+  "opening",
+  "connected",
+  "disconnecting",
+  "faulted",
+];
+const operations = [
+  "none",
+  "passwordLogin",
+  "resume",
+  "signOut",
+  "forgetSavedLogin",
+  "resetPassword",
+];
+const failures = [
+  "none",
+  "invalidCredentials",
+  "usernameTaken",
+  "invalidRequest",
+  "registrationDisabled",
+  "busy",
+  "unavailable",
+  "invalidResponse",
+  "credentialStorage",
+  "canceled",
+];
 function actorValue(v: unknown): boolean {
   return (
     object(v) &&
@@ -98,17 +128,18 @@ export function parseHostEvent(source: string): HostEvent {
     case "connection":
       valid =
         typeof v.connected === "boolean" &&
-        (v.phase === undefined ||
-          [
-            "disconnected",
-            "authenticating",
-            "connecting",
-            "opening",
-            "connected",
-            "disconnecting",
-            "faulted",
-          ].includes(String(v.phase))) &&
+        (v.phase === undefined || phases.includes(String(v.phase))) &&
         (v.phase === undefined || v.connected === (v.phase === "connected"));
+      break;
+    case "auth":
+      valid =
+        typeof v.authenticating === "boolean" &&
+        operations.includes(String(v.operation)) &&
+        failures.includes(String(v.failure)) &&
+        label(v.error) &&
+        typeof v.savedLogin === "boolean" &&
+        label(v.savedUsername) &&
+        phases.includes(String(v.phase));
       break;
     case "sendResult":
       valid =
@@ -121,6 +152,9 @@ export function parseHostEvent(source: string): HostEvent {
       valid =
         Number.isSafeInteger(v.revision) &&
         (v.error === undefined || text(v.error));
+      break;
+    case "settings":
+      valid = object(v.settings);
       break;
   }
   if (!valid) throw new Error("Invalid UI event");

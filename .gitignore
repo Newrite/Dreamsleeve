@@ -11,3 +11,4 @@ tests/**/bin/
 **/__pycache__/
 logs/
 data/
+dist/

@@ -28,9 +28,9 @@ export namespace Dreamsleeve::Client::CredentialStore
     };
   }
 
-  Result<std::optional<SavedLogin>> Load(std::string_view origin)
+  Result<std::optional<SavedLogin>> Load(std::string_view origin, bool allowInsecureRemote = false)
   {
-    auto target = Auth::CredentialTarget(origin);
+    auto target = Auth::CredentialTarget(origin, allowInsecureRemote);
     if (!target) return Error(target.error());
     PCREDENTIALW credential{};
     if (!CredReadW(target->c_str(), CRED_TYPE_GENERIC, 0, &credential))
@@ -49,10 +49,10 @@ export namespace Dreamsleeve::Client::CredentialStore
     return saved;
   }
 
-  Result<void> Save(std::string_view origin, const SavedLogin& saved)
+  Result<void> Save(std::string_view origin, const SavedLogin& saved, bool allowInsecureRemote = false)
   {
     if (saved.token.size() != 43) return Error("Invalid saved login token");
-    auto target = Auth::CredentialTarget(origin);
+    auto target = Auth::CredentialTarget(origin, allowInsecureRemote);
     if (!target) return Error(target.error());
     auto blob = glz::write_json(saved);
     if (!blob) return Error("Cannot encode saved login");
@@ -69,9 +69,9 @@ export namespace Dreamsleeve::Client::CredentialStore
     return {};
   }
 
-  Result<void> Forget(std::string_view origin)
+  Result<void> Forget(std::string_view origin, bool allowInsecureRemote = false)
   {
-    auto target = Auth::CredentialTarget(origin);
+    auto target = Auth::CredentialTarget(origin, allowInsecureRemote);
     if (!target) return Error(target.error());
     if (!CredDeleteW(target->c_str(), CRED_TYPE_GENERIC, 0) && GetLastError() != ERROR_NOT_FOUND)
       return Error("Cannot remove saved login from Windows Credential Manager");

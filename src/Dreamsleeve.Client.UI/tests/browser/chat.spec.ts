@@ -550,3 +550,123 @@ test("native Hide and Show preserve chat but release focus and hide the workspac
     ),
   ).toEqual(["close"]);
 });
+
+test("Ultralight key codes submit once and Escape closes panel then chat", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const input = page.getByRole("textbox", { name: "Сообщение" });
+  await input.fill("Ultralight keyboard regression");
+  await input.dispatchEvent("keydown", {
+    key: "Unidentified",
+    keyCode: 13,
+    isComposing: true,
+  });
+  await expect(input).toHaveValue("Ultralight keyboard regression");
+  await input.dispatchEvent("keydown", { key: "Unidentified", keyCode: 13 });
+  await expect(
+    page
+      .locator('[data-part="message"]')
+      .filter({ hasText: "Ultralight keyboard regression" }),
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  const escape = () =>
+    page.evaluate(() =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Unidentified",
+          keyCode: 27,
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    );
+  await escape();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator('[data-part="chat"]')).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+  await escape();
+  await expect(page.locator('[data-part="chat"]')).toHaveAttribute(
+    "data-active",
+    "false",
+  );
+});
+
+test("Skyrim actor value keys retain colors and values in cards and list", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.locator('[data-resource="health"]').first(),
+  ).toContainText("153 / 153");
+  const colors = await dialog
+    .locator("[data-resource] i")
+    .evaluateAll((nodes) =>
+      nodes.slice(0, 3).map((node) => getComputedStyle(node).backgroundColor),
+    );
+  expect(new Set(colors).size).toBe(3);
+  await page.getByRole("button", { name: "Список", exact: true }).click();
+  await expect(
+    dialog.locator('[data-resource="health"]').first(),
+  ).toContainText("153 / 153");
+  await expect(
+    dialog.locator('[data-resource="magicka"]').first(),
+  ).toContainText("72 / 100");
+  await expect(
+    dialog.locator('[data-resource="stamina"]').first(),
+  ).toContainText("420 / 569");
+});
+
+test("settings notice fades after Escape with the passive HUD", async ({
+  page,
+}) => {
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "dreamsleeve.ui.settings",
+      JSON.stringify({ delay: 0.1, duration: 0 }),
+    ),
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByRole("button", { name: "Сохранить настройки" }).click();
+  await page.keyboard.press("Escape");
+  const notice = page.locator('[data-part="chat"] [role="status"]');
+  await expect(notice).toContainText("Настройки сохранены");
+  await expect(notice).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Escape");
+  await expect(notice).toHaveCSS("opacity", "0");
+  await page
+    .getByRole("button", { name: "Новое сообщение", exact: true })
+    .click();
+  await expect(notice).toHaveCSS("opacity", "0");
+});
+
+test("channel selector uses the active theme instead of native appearance", async ({
+  page,
+}) => {
+  for (const theme of ["skyrim", "contrast"]) {
+    await page.evaluate(
+      (theme) =>
+        localStorage.setItem(
+          "dreamsleeve.ui.settings",
+          JSON.stringify({ theme }),
+        ),
+      theme,
+    );
+    await page.reload();
+    await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+    const select = page.getByLabel("Канал отправки");
+    await expect(select).toHaveCSS("appearance", "none");
+    await expect(select).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await select.selectOption({ label: "Общий" });
+    await expect(select).toHaveValue("1");
+    await page.screenshot({ path: `test-results/channel-${theme}.png` });
+  }
+});
