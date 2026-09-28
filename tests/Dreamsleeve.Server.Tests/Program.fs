@@ -6,6 +6,7 @@ open Expecto
 let main argv =
     testList "Tests" [
         DomainTests.tests
+        ModerationTests.tests
         PlayerDetailsTests.tests
         AgentTests.tests
         CodecTests.tests

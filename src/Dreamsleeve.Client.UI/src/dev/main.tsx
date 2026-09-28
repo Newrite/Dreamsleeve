@@ -7,6 +7,9 @@ import type {
   AuthState,
   Command,
   ConnectionPhase,
+  Message,
+  Player,
+  Settings,
 } from "../bridge/types";
 import { defaults, settingsFrom } from "../state/settings";
 import { App } from "../views/App";
@@ -33,19 +36,93 @@ function emitAuth(next: Partial<AuthState>, phase: ConnectionPhase) {
   Object.assign(auth, next);
   chat.receive({ type: "auth", ...auth, phase });
 }
-function snapshot(settings = chat.store.getState().settings) {
+// Stand-in for the C++ host projection: one resolved name per player, and
+// in streamer mode only pseudonyms. The real resolver lives in Host/Names.ixx.
+const aliases = new Map<string, string>();
+const aliasPool = ["Странник", "Следопыт", "Бард", "Страж"];
+const ignored = new Map<string, string>();
+function alias(id: string) {
+  if (!aliases.has(id))
+    aliases.set(
+      id,
+      aliasPool[aliases.size % aliasPool.length] +
+        (aliases.size >= aliasPool.length ? " 2" : ""),
+    );
+  return aliases.get(id)!;
+}
+function project(p: Player, s: Settings, character = p.character): Player {
+  if (s.streamerMode) {
+    const name = alias(p.id);
+    return {
+      ...p,
+      name,
+      alias: name,
+      displayName: name,
+      username: "",
+      character: undefined,
+    };
+  }
+  const name =
+    s.nameMode === "username"
+      ? p.username
+      : s.nameMode === "character" && character
+        ? character
+        : p.displayName;
+  return { ...p, name, character };
+}
+function projectMessages(list: Message[], s: Settings) {
+  return list
+    .filter((m) => m.source === "system" || !ignored.has(m.author.id))
+    .map((m) =>
+      m.source === "system" ? m : { ...m, author: project(m.author, s) },
+    );
+}
+function ignoredEvent(s = chat.store.getState().settings) {
+  chat.receive({
+    type: "ignored",
+    players: [...ignored].map(([id, name]) => ({
+      id,
+      name: s.streamerMode ? alias(id) : name,
+    })),
+  });
+}
+const history: Message[] = [...messages];
+function snapshot(settings = chat.store.getState().settings, refresh = false) {
   chat.receive({
     type: "snapshot",
     serverName: "Голоса Тамриэля",
     channels,
-    messages,
-    players,
+    messages: projectMessages(history, settings),
+    players: players.map((p) => project(p, settings)),
     selfId: players[0].id,
     settings,
+    refresh,
   });
 }
 function command(c: Command) {
   if (c.type === "close") return true;
+  if (c.type === "ignore" || c.type === "unignore") {
+    const known = players.find((p) => p.id === c.playerId);
+    if (c.type === "ignore") ignored.set(c.playerId, known?.displayName ?? "");
+    else ignored.delete(c.playerId);
+    setTimeout(() => {
+      ignoredEvent();
+      snapshot(chat.store.getState().settings, true);
+    }, 50);
+    return true;
+  }
+  if (c.type === "nameSettings") {
+    setTimeout(() => {
+      const settings = {
+        ...chat.store.getState().settings,
+        nameMode: c.nameMode,
+        streamerMode: c.streamerMode,
+      };
+      ignoredEvent(settings);
+      snapshot(settings, true);
+    }, 50);
+    return true;
+  }
   if (c.type === "saveSettings") {
     try {
       localStorage.setItem(
@@ -141,27 +218,29 @@ function command(c: Command) {
   rejectNext = false;
   setTimeout(() => {
     const messageId = String(nextId++);
+    const settings = chat.store.getState().settings;
     chat.receive({
       type: "sendResult",
       requestId: c.requestId,
       ...(rejected
-        ? { error: "Сообщение отклонено сервером." }
+        ? { error: "Сообщение содержит запрещённые слова" }
         : { messageId }),
     });
-    if (!rejected)
+    if (!rejected) {
+      const message: Message = {
+        id: messageId,
+        channelId: c.channelId,
+        source: "player",
+        author: players[0],
+        text: c.text,
+        time: Date.now(),
+      };
+      history.push(message);
       chat.receive({
         type: "messages",
-        messages: [
-          {
-            id: messageId,
-            channelId: c.channelId,
-            source: "player",
-            author: players[0],
-            text: c.text,
-            time: Date.now(),
-          },
-        ],
+        messages: projectMessages([message], settings),
       });
+    }
   }, 600);
   return true;
 }
@@ -191,21 +270,21 @@ window.addEventListener("keydown", (e) => {
   }
 });
 function publish(system = false) {
+  const message: Message = {
+    id: String(nextId++),
+    channelId: system ? "announcements" : "1",
+    text: system
+      ? "Объявление сервера: сегодня дороги открыты для всех странников."
+      : "Встретимся у старой башни. Я уже в пути.",
+    time: Date.now(),
+    ...(system
+      ? { source: "system" as const }
+      : { source: "player" as const, author: players[1] }),
+  };
+  history.push(message);
   chat.receive({
     type: "messages",
-    messages: [
-      {
-        id: String(nextId++),
-        channelId: system ? "announcements" : "1",
-        text: system
-          ? "Объявление сервера: сегодня дороги открыты для всех странников."
-          : "Встретимся у старой башни. Я уже в пути.",
-        time: Date.now(),
-        ...(system
-          ? { source: "system" as const }
-          : { source: "player" as const, author: players[1] }),
-      },
-    ],
+    messages: projectMessages([message], chat.store.getState().settings),
   });
 }
 function Workshop() {
@@ -239,6 +318,7 @@ function Workshop() {
               players: Array.from({ length: 48 }, (_, i) => ({
                 ...players[i % players.length],
                 id: i === 0 ? players[0].id : `demo-player-${i}`,
+                name: i === 0 ? players[0].name : `Странник ${i + 1}`,
                 displayName:
                   i === 0 ? players[0].displayName : `Странник ${i + 1}`,
                 username: `traveler${i + 1}`,

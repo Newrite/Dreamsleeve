@@ -24,6 +24,7 @@ export namespace Runtime
   constexpr std::string_view ConfigDirectory = "Data/SKSE/Plugins/Dreamsleeve"sv;
   constexpr std::string_view ClientConfig    = "client.toml"sv;
   constexpr std::string_view UiConfig        = "ui.toml"sv;
+  constexpr std::string_view AliasConfig     = "aliases.toml"sv;
 
   enum class NoticeKind
   {
@@ -80,6 +81,7 @@ export namespace Runtime
     Host::UiFile                  ui;
     std::filesystem::path         clientPath{std::filesystem::path{ConfigDirectory} / ClientConfig};
     std::filesystem::path         uiPath{std::filesystem::path{ConfigDirectory} / UiConfig};
+    std::filesystem::path         aliasPath{std::filesystem::path{ConfigDirectory} / AliasConfig};
     GameContext                   context{GameContext::MainMenu};
     bool                          dataLoaded{};
     bool                          shutdown{};
@@ -173,9 +175,11 @@ export namespace Runtime
     return state.app ? &state.app->Settings() : nullptr;
   }
 
+  // The name book lives in the session's Names; the file gets its current copy.
   std::expected<void, std::string> SaveUi()
   {
-    auto& state = Get();
+    auto& state    = Get();
+    state.ui.names = state.session.PlayerNames().Book();
     return Host::SaveUiFile(state.uiPath, state.ui);
   }
 
@@ -234,6 +238,15 @@ export namespace Runtime
     else
       logger::warn("UI settings ignored: {}", ui.error());
 
+    // Account IDs are unique per server: the address scopes pseudonyms and ignores.
+    auto dictionary = Host::LoadAliasDictionary(state.aliasPath);
+    if (!dictionary.warning.empty()) logger::warn("{}", dictionary.warning);
+    auto& names = state.session.PlayerNames();
+    names.Configure(
+      std::format("{}:{}", settings->client.serverAddress.ToIpString().value_or("?"), settings->client.serverAddress.GetPort()),
+      std::move(dictionary.names));
+    names.Load(std::move(state.ui.names));
+
     state.movement = std::move(*movement);
     state.app      = std::move(*app);
     logger::info(
@@ -249,6 +262,9 @@ export namespace Runtime
     auto& state = Get();
     if (state.shutdown) return;
     state.shutdown = true;
+    // Pseudonyms are saved in batches; keep the last ones assigned this session.
+    if (state.session.PlayerNames().TakeDirty())
+      if (auto saved = SaveUi(); !saved) logger::warn("{}", saved.error());
     if (state.app) state.app->Stop();
     logger::info("Client application stopped");
   }

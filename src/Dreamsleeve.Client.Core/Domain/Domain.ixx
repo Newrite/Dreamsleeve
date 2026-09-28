@@ -166,6 +166,9 @@ export namespace Domain
     PlayerDetails                 details{};
     std::uint64_t                 viewRevision{};
     std::uint64_t                 movementSequence{};
+    // In a character whose game name the server refused to publish;
+    // characterName is then empty and display falls back to the profile.
+    bool characterNameWithheld{};
 
     bool operator==(const Player&) const = default;
   };
@@ -177,6 +180,8 @@ export namespace Domain
     PlayerData      author{};
     ChatMessageText messageText{};
     MessageTime     sentAt{};
+    // Published character name at sending; absent for old history and outside a character.
+    std::optional<CharacterName> characterName{};
 
     bool operator==(const ChatMessage&) const = default;
   };

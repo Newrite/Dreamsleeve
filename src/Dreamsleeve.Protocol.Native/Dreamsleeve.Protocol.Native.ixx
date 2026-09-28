@@ -34,6 +34,8 @@ export namespace Protocol::Chat
     NotChannelMember     = 6,
     Overloaded           = 7,
     AuthenticationFailed = 8,
+    TextNotAllowed       = 9,
+    RateLimited          = 10,
   };
 
 }

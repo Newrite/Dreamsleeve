@@ -26,7 +26,8 @@ export namespace Dreamsleeve::Client::Auth
     Unavailable,
     InvalidResponse,
     CredentialStorage,
-    Canceled
+    Canceled,
+    NameNotAllowed  // Registration: the server word list refused a name.
   };
 
   struct Failure
@@ -78,6 +79,11 @@ namespace Dreamsleeve::Client::Auth
     std::string_view username;
     std::string_view displayName;
     std::string_view password;
+  };
+
+  struct ErrorResponse
+  {
+    std::string code;
   };
 
   struct LoginResponse
@@ -299,6 +305,21 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::Unavailable, response.error()}
       };
+    if (response->status == 400)
+    {
+      ErrorResponse error;
+      if (!glz::read<glz::opts{.error_on_unknown_keys = false}>(error, response->body))
+      {
+        if (error.code == "username_not_allowed")
+          return std::unexpected{
+              Failure{FailureCode::NameNotAllowed, "Username contains words that are not allowed"}
+          };
+        if (error.code == "display_name_not_allowed")
+          return std::unexpected{
+              Failure{FailureCode::NameNotAllowed, "Display name contains words that are not allowed"}
+          };
+      }
+    }
     if (response->status != 201) return std::unexpected{HttpFailure(response->status)};
     return {};
   }

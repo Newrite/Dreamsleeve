@@ -7,6 +7,7 @@ open System.Globalization
 open Microsoft.FSharp.Reflection
 open Tomlyn
 open Tomlyn.Model
+open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 
@@ -21,12 +22,20 @@ type AuthenticationSettings = {
     Service: AccountServiceOptions
 }
 
+/// Word-list filtering of names and chat text. Anti-spam limits are in Runtime.Chat.
+type ModerationSettings = {
+    Enabled: bool
+    /// Separate TOML with words/substrings/exceptions, relative to the working directory.
+    RulesPath: string
+}
+
 type ApplicationConfig = {
     Server: ServerConfig
     Runtime: ServerRuntimeOptions
     Database: SqliteAccountStoreConfig
     Authentication: AuthenticationSettings
     Logging: LoggingSettings
+    Moderation: ModerationSettings
 }
 
 [<RequireQualifiedAccess>]
@@ -47,6 +56,7 @@ module Configuration =
             Service = AuthService.defaults
         }
         Logging = ServerLogging.defaults
+        Moderation = { Enabled = true; RulesPath = "moderation.toml" }
     }
 
     // Records remain immutable domain settings. TOML overrides only supplied fields.
@@ -128,7 +138,7 @@ module Configuration =
         if isNull (box config.Server) || isNull (box config.Runtime) || isNull (box config.Database) || isNull (box config.Authentication) || isNull (box config.Logging)
            || isNull (box config.Server.ChatInput) || isNull (box config.Server.PlayerInput) || isNull (box config.Runtime.Player)
            || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
-           || isNull (box config.Authentication.Service) then
+           || isNull (box config.Authentication.Service) || isNull (box config.Moderation) then
             Error "Configuration sections cannot be null."
         elif not (Single.IsFinite config.Runtime.Presence.VisibilityDistance) || config.Runtime.Presence.VisibilityDistance < 0.0f then
             Error "Presence.VisibilityDistance must be finite and non-negative."
@@ -145,6 +155,8 @@ module Configuration =
              || config.Authentication.RequestTimeoutSeconds < 1 || config.Authentication.RequestTimeoutSeconds > 120
              || isNull config.Authentication.CertificatePath then
             Error "Invalid authentication request limits or certificate path."
+        elif isNull config.Moderation.RulesPath || (config.Moderation.Enabled && String.IsNullOrWhiteSpace config.Moderation.RulesPath) then
+            Error "Moderation.RulesPath must be set when moderation is enabled."
         elif not (AuthService.validate config.Authentication.Service).IsEmpty then
             Error (String.concat " " (AuthService.validate config.Authentication.Service))
         else
@@ -162,6 +174,53 @@ module Configuration =
                 ServerLogging.validate config.Logging
                 |> Result.bind (fun () -> ServerConfig.validate config.Server |> Result.mapError (String.concat " "))
                 |> Result.map (fun _ -> config)
+
+    [<Literal>]
+    let private MaxRulesBytes = 1048576L
+
+    let private stringList (table: TomlTable) name =
+        match table.TryGetValue name with
+        | false, _ -> Ok []
+        | true, (:? TomlArray as values) ->
+            let items = values |> Seq.toList
+            if items |> List.forall (fun item -> item :? string) then Ok (items |> List.map unbox<string>)
+            else Error $"Moderation rules: {name} must contain only strings."
+        | true, _ -> Error $"Moderation rules: {name} must be an array of strings."
+
+    /// Parses the separate word-list file. Returns rules and an optional warning.
+    let parseModeration (source: string) =
+        let document = Tomlyn.Parsing.SyntaxParser.Parse(source, "moderation", true)
+        if document.HasErrors then Error $"Invalid moderation TOML: {document.Diagnostics}"
+        else
+            let table = TomlSerializer.Deserialize<TomlTable>(source)
+            let known = set ["words"; "substrings"; "exceptions"]
+            match table.Keys |> Seq.tryFind (fun key -> not (known.Contains key)) with
+            | Some key -> Error $"Unknown moderation setting: {key}"
+            | None ->
+                match stringList table "words", stringList table "substrings", stringList table "exceptions" with
+                | Ok words, Ok substrings, Ok exceptions ->
+                    Ok (Moderation.create { Words = words; Substrings = substrings; Exceptions = exceptions })
+                | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+
+    /// Disabled moderation uses empty rules. A missing file is a warning: the
+    /// server runs with an empty list rather than refusing to start.
+    let loadModeration (settings: ModerationSettings) : Result<ModerationRules * string option, string> =
+        if not settings.Enabled then Ok (Moderation.empty, None)
+        else
+            try
+                let file = FileInfo settings.RulesPath
+                if not file.Exists then
+                    Ok (Moderation.empty, Some $"Moderation rules file not found: {file.FullName}; the word list is empty.")
+                elif file.Length > MaxRulesBytes then Error "Moderation rules must not exceed 1 MiB."
+                else
+                    parseModeration (File.ReadAllText file.FullName)
+                    |> Result.map (fun rules ->
+                        rules, (if rules.IsEmpty then Some "Moderation rules contain no words or substrings." else None))
+            with
+            | :? TomlException as error -> Error $"Invalid moderation TOML: {error.Message}"
+            | :? IOException as error -> Error $"Cannot read moderation rules: {error.Message}"
+            | :? UnauthorizedAccessException as error -> Error $"Cannot read moderation rules: {error.Message}"
+            | :? ArgumentException as error -> Error $"Cannot read moderation rules: {error.Message}"
 
     let rec private arguments configFile port (remainingArgs: string list) =
         match remainingArgs with

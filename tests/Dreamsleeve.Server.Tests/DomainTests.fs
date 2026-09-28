@@ -35,7 +35,7 @@ let private chat capacity =
     value
 
 let private message channel id author =
-    ChatMessage.create (messageId id) (channelId channel) author
+    ChatMessage.create (messageId id) (channelId channel) author ValueNone
         (ChatMessageText.create 2000 "Hello" |> ok) DateTimeOffset.UnixEpoch
 
 let private append id value =
@@ -437,7 +437,7 @@ let private chatTests =
         testCase "message timestamp is UTC and author remains the send-time profile" <| fun _ ->
             let author = profile 1UL "Original"
             let instant = DateTimeOffset(2026, 9, 26, 2, 0, 0, TimeSpan.FromHours 7.0)
-            let value = ChatMessage.create (messageId 1UL) (channelId 1UL) author
+            let value = ChatMessage.create (messageId 1UL) (channelId 1UL) author ValueNone
                             (ChatMessageText.create 128 "Hello" |> ok) instant
             let renamed = PlayerData.withDisplayName (displayName "Renamed") author
             Expect.equal value.SentAt.Offset TimeSpan.Zero "Wire-facing timestamp is canonical UTC"

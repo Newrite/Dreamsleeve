@@ -43,6 +43,9 @@ module PlayerSession =
         mutable ChatAttached: bool
         mutable PresenceAttached: bool
         mutable CloseSent: bool
+        /// The current character name failed moderation and is not published.
+        mutable CharacterWithheld: bool
+        Moderation: ModerationRules
         Pending: HashSet<uint64>
         Authentication: AgentOutbox<SessionAuthenticationRequest>
         Chat: AgentOutbox<ChatRoomCommand>
@@ -51,6 +54,16 @@ module PlayerSession =
     }
 
     let private reliable (context: AgentContext<PlayerSessionMessage>) = context.Ref.TryReliable()
+
+    // Every outbound projection of this player passes here: a withheld game
+    // name never reaches presence, bootstrap snapshots or chat messages.
+    let private publicSnapshot state player =
+        let snapshot = Player.snapshot player
+        if state.CharacterWithheld then { snapshot with CharacterName = ValueNone; CharacterNameWithheld = true }
+        else snapshot
+
+    let private publicCharacterName state (player: Player) =
+        if state.CharacterWithheld then ValueNone else player.CharacterName
 
     let private completeIfDetached state (context: AgentContext<PlayerSessionMessage>) =
         match state.Phase with
@@ -136,7 +149,10 @@ module PlayerSession =
         match state.Phase with
         | Resolving operationId when reply.OperationId = operationId ->
             match reply.Result, reliable context with
-            | Ok profile, Some address ->
+            | Ok stored, Some address ->
+                // Accounts created under older rules keep their stored names;
+                // every copy leaving this session uses the moderated profile.
+                let profile = Moderation.publicProfile state.Moderation stored
                 state.Phase <- Reserving(Player.create profile)
                 emit options request state context
                     (SessionHostCommand.Reserve(request.ConnectionId, profile.PlayerId,
@@ -163,7 +179,7 @@ module PlayerSession =
                 }
                 let presence = {
                     ConnectionId = request.ConnectionId
-                    Snapshot = Player.snapshot player
+                    Snapshot = publicSnapshot state player
                     Events = address.Map PlayerSessionMessage.PresenceEvent
                 }
                 state.ChatAttached <- state.Chat.TrySend(context, ChatRoomCommand.Join chat)
@@ -265,7 +281,7 @@ module PlayerSession =
 
     let private sendChat (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context requestId channelId text =
         match state.Phase, reliable context with
-        | Active _, Some address ->
+        | Active player, Some address ->
             if requestId = 0UL || state.Pending.Contains requestId then
                 // A second reply with this ID could settle the original request.
                 close request state context "Request ID is invalid or already pending."
@@ -273,11 +289,17 @@ module PlayerSession =
                 rejectChat options request state context requestId RequestRejectionCode.ChannelNotFound "Channel does not exist."
             elif state.Pending.Count >= options.MaxPendingChat then
                 rejectChat options request state context requestId RequestRejectionCode.Overloaded "Too many pending chat requests."
+            elif not (Moderation.allows state.Moderation (ChatMessageText.value text)) then
+                // Refused before the channel sees it: nothing is stored or relayed.
+                let rejection = { Code = RequestRejectionCode.TextNotAllowed; Message = "Message contains words that are not allowed."; Field = "text" }
+                send options request state context (ServerResponse.ChatRejected(requestId, rejection))
             else
                 let submission = {
                     ConnectionId = request.ConnectionId
                     RequestId = requestId
                     Text = text
+                    CharacterName = publicCharacterName state player
+                    Fingerprint = Moderation.normalize (ChatMessageText.value text)
                     ReplyTo = address.Map PlayerSessionMessage.ChatEvent
                 }
                 if state.Chat.TrySend(context, ChatRoomCommand.Publish submission) then
@@ -310,13 +332,23 @@ module PlayerSession =
                 reject options request state context requestId RequestRejectionCode.Overloaded "Player update admission is full."
             else
                 let updated = Player.applyUpdate command player
-                let change = PresenceCommand.Update(request.ConnectionId, Player.snapshot updated)
+                let withheld =
+                    match command with
+                    | PlayerUpdate.BeginCharacter name | PlayerUpdate.RenameCharacter name ->
+                        // The game save keeps its name; only publication is refused.
+                        not (Moderation.allows state.Moderation (CharacterName.value name))
+                    | PlayerUpdate.LeaveGame -> false
+                    | PlayerUpdate.SetLocation _ | PlayerUpdate.SetActorValues _ | PlayerUpdate.SetDetails _ -> state.CharacterWithheld
+                let previous = state.CharacterWithheld
+                state.CharacterWithheld <- withheld
+                let change = PresenceCommand.Update(request.ConnectionId, publicSnapshot state updated)
                 if state.Presence.TrySend(context, change) then
                     state.Phase <- Active updated
                     // This settles the request only. Author and observers apply the
                     // same coalesced presence update to their local models later.
                     send options request state context (ServerResponse.PlayerUpdateAccepted requestId)
                 else
+                    state.CharacterWithheld <- previous
                     reject options request state context requestId RequestRejectionCode.Overloaded "Player update admission is full."
         | Closing -> ()
         | Starting | Resolving _ | Reserving _ | Opening _ ->
@@ -327,7 +359,7 @@ module PlayerSession =
         | Active player when state.Presence.Count < options.MaxPendingUpdates ->
             match Player.tryApplyMovement sample player with
             | ValueSome updated ->
-                let change = PresenceCommand.Update(request.ConnectionId, Player.snapshot updated)
+                let change = PresenceCommand.Update(request.ConnectionId, publicSnapshot state updated)
                 if state.Presence.TrySend(context, change) then
                     state.Phase <- Active updated
             | ValueNone -> ()
@@ -354,7 +386,7 @@ module PlayerSession =
             sampleMovement options request state context sample
         | PlayerSessionMessage.Read reply ->
             match state.Phase with
-            | Active player -> reply.Reply(Ok (Player.snapshot player))
+            | Active player -> reply.Reply(Ok (publicSnapshot state player))
             | Closing -> reply.Reply(Error PlayerStateError.Closed)
             | Starting | Resolving _ | Reserving _ | Opening _ -> reply.Reply(Error PlayerStateError.NotReady)
         | PlayerSessionMessage.Stop -> stop request state context
@@ -374,7 +406,7 @@ module PlayerSession =
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _
         | PlayerSessionMessage.Read _ -> false
 
-    let start (options: PlayerSessionOptions) maxActorValues globalId authentication chat presence host (request: SessionOpenRequest) =
+    let start (options: PlayerSessionOptions) maxActorValues moderation globalId authentication chat presence host (request: SessionOpenRequest) =
         let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
@@ -389,6 +421,8 @@ module PlayerSession =
                 ChatAttached = false
                 PresenceAttached = false
                 CloseSent = false
+                CharacterWithheld = false
+                Moderation = moderation
                 Pending = HashSet()
                 Authentication = AgentOutbox(1, authentication)
                 Chat = AgentOutbox(options.MaxPendingChat + 2, chat)

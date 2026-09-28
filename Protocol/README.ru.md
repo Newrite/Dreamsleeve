@@ -120,7 +120,11 @@ Added/Removed из модели. Полная история не копируе
 
 PlayerInfo включает неизменяемую идентичность PlayerProfile, optional character_name,
 optional PlayerLocation, actor_values, character_generation, PlayerDetails,
-view_revision и movement_sequence. SessionOpened
+view_revision, movement_sequence и character_name_withheld (персонаж есть, но его имя
+не прошло серверный словарь и не публикуется). ChatMessage несёт optional
+character_name — снимок опубликованного имени персонажа на момент отправки; у старой
+истории его нет. Коды отказа TEXT_NOT_ALLOWED (9) и RATE_LIMITED (10) добавлены
+совместимо в рамках v6; см. [модерация и имена](../docs/ModerationAndNamesRu.md). SessionOpened
 содержит PlayerInfo в поле players=5; старое поле 3 зарезервировано. PlayerJoined тоже
 несёт PlayerInfo. Это несовместимое изменение, закреплённое protocol_version=3.
 

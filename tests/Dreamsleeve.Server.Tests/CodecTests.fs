@@ -29,7 +29,7 @@ let private channel = ChatChannelId.create 1UL |> ok
 let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
 let private snapshot = Player.create profile |> Player.snapshot
 let private message =
-    ChatMessage.create (ChatMessageId.create UInt64.MaxValue |> ok) channel profile
+    ChatMessage.create (ChatMessageId.create UInt64.MaxValue |> ok) channel profile ValueNone
         (ChatMessageText.create 2000 "Привет\nworld" |> ok) (DateTimeOffset.FromUnixTimeMilliseconds(-1L))
 let private parseMovement bytes = Dreamsleeve.Protocol.Chat.ServerMovementPacket.Parser.ParseFrom(bytes: byte array)
 let private parse bytes = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes: byte array)
@@ -211,6 +211,24 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal own.ChatPublished.Message.SentAtUnixMs -1L "signed Unix milliseconds"
         Expect.equal own.ChatPublished.Message.Author.DisplayName "Игрок" "author profile"
         Expect.isNull own.SessionOpened "no history in normal publication"
+
+    testCase "character snapshots and withheld names are encoded without leaking the game name" <| fun _ ->
+        let plain = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok |> parse
+        Expect.isFalse plain.ChatPublished.Message.HasCharacterName "no snapshot outside a character"
+        let lydia = CharacterName.create 128 "Lydia" |> ok
+        let named = ChatMessage.create (ChatMessageId.create 5UL |> ok) channel profile (ValueSome lydia)
+                        (ChatMessageText.create 2000 "hi" |> ok) DateTimeOffset.UnixEpoch
+        let packet = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished named) |> ok |> parse
+        Expect.equal packet.ChatPublished.Message.CharacterName "Lydia" "snapshot at sending"
+        let withheld = { snapshot with CharacterName = ValueNone; CharacterNameWithheld = true }
+        let player = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined withheld) |> ok |> parse
+        Expect.isTrue player.PlayerJoined.Player.CharacterNameWithheld "withheld flag"
+        Expect.isFalse player.PlayerJoined.Player.HasCharacterName "withheld name absent"
+        let tooLong = send 3UL (String('x', config.ChatInput.MessageText + 1))
+        match (ProtocolCodec.decodeClient codec (tooLong.ToByteArray()) |> error).Failure with
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.TooLong maximum)) ->
+            Expect.equal maximum config.ChatInput.MessageText "configured maximum length"
+        | other -> failtestf "Expected length failure: %A" other
 
     testCase "welcome requires unique online IDs self membership and ordered channel history" <| fun _ ->
         let encode value = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, value))

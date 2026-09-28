@@ -11,7 +11,8 @@ open AgentTests
 open BackgroundTests
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
-let private config = { MailboxCapacity = 4; ControlReserve = 2; HistoryCapacity = 2; MaxControlDeliveries = 4 }
+let private config = { MailboxCapacity = 4; ControlReserve = 2; HistoryCapacity = 2; MaxControlDeliveries = 4
+                       RateBurst = 100; RateRefillMs = 1000; DuplicateWindowMs = 0 }
 let private channelId = ChatChannelId.create 1UL |> ok
 let private profile number =
     PlayerData.create (PlayerId.create number |> ok)
@@ -36,6 +37,7 @@ let private publish (room: Agent<ChatRoomCommand>) (subscriber: Subscription<Cha
     post room (ChatRoomCommand.Publish {
         ConnectionId = subscriber.ConnectionId; RequestId = requestId
         Text = ChatMessageText.create 256 text |> ok; ReplyTo = subscriber.Events
+        CharacterName = ValueNone; Fingerprint = Moderation.normalize text
     })
 let private accepted requestId = function
     | ChatRoomEvent.Accepted(actual, message) -> equal requestId actual; message
@@ -67,7 +69,80 @@ let private block (agent: Agent<SlowMessage<'T>>) = task {
     return release
 }
 
+let private rateLimited requestId = function
+    | ChatRoomEvent.Rejected(actual, rejection) ->
+        equal requestId actual
+        equal RequestRejectionCode.RateLimited rejection.Code
+    | other -> failwithf "Expected rate limit: %A" other
+
 let tests = testList "ChatRoomAgent" [
+    case "burst limit is per account and survives a reconnect; refusals are not stored" (fun () -> task {
+        let hostEvents, events, replies = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<Guid>()
+        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = Agent.Start(AgentOptions.create "player", collect events)
+        use cleanup = Agent.Start(AgentOptions.create "cleanup", collect replies)
+        let limited = { config with HistoryCapacity = 8; RateBurst = 2; RateRefillMs = 60000; DuplicateWindowMs = 0 }
+        use room = ChatRoomAgent.start limited channelId (host.Ref.TryReliable().Value) |> ok
+        let first = subscription 1UL player
+        do! post room (ChatRoomCommand.Join first)
+        let! _ = receive events
+        do! publish room first 1UL "one"
+        let! one = receive events
+        accepted 1UL one |> ignore
+        do! publish room first 2UL "two"
+        let! two = receive events
+        accepted 2UL two |> ignore
+
+        // A new connection of the same account inherits the spent burst.
+        do! post room (ChatRoomCommand.Detach { ConnectionId = first.ConnectionId; ReplyTo = cleanup.Ref.TryReliable().Value })
+        let! _ = receive replies
+        let second = subscription 1UL player
+        do! post room (ChatRoomCommand.Join second)
+        let! _ = receive events
+        do! publish room second 3UL "three"
+        let! refused = receive events
+        rateLimited 3UL refused
+        let! retained = history room
+        equal 2 retained.Messages.Length
+
+        // Another account has its own budget.
+        let otherEvents = Channel.CreateUnbounded<ChatRoomEvent>()
+        use otherPlayer = Agent.Start(AgentOptions.create "other", collect otherEvents)
+        let other = subscription 2UL otherPlayer
+        do! post room (ChatRoomCommand.Join other)
+        let! _ = receive otherEvents
+        do! publish room other 4UL "three"
+        let! own = receive otherEvents
+        accepted 4UL own |> ignore
+        do! stop room
+    })
+
+    case "normalized repeats are refused within the window and tokens refill over time" (fun () -> task {
+        let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
+        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = Agent.Start(AgentOptions.create "player", collect events)
+        let limited = { config with HistoryCapacity = 8; RateBurst = 1; RateRefillMs = 50; DuplicateWindowMs = 60000 }
+        use room = ChatRoomAgent.start limited channelId (host.Ref.TryReliable().Value) |> ok
+        let alice = subscription 1UL player
+        do! post room (ChatRoomCommand.Join alice)
+        let! _ = receive events
+        do! publish room alice 1UL "Hello   there"
+        let! first = receive events
+        accepted 1UL first |> ignore
+        do! publish room alice 2UL "different"
+        let! tooFast = receive events
+        rateLimited 2UL tooFast
+        do! Task.Delay 120
+        // Case, spacing and a zero-width space do not make a new message.
+        do! publish room alice 3UL "HELLO there\u200B"
+        let! repeated = receive events
+        rateLimited 3UL repeated
+        do! publish room alice 4UL "different"
+        let! later = receive events
+        accepted 4UL later |> ignore
+        do! stop room
+    })
+
     case "channel creates the authoritative publication and orders snapshot before later events" (fun () -> task {
         let hostEvents, aliceEvents, bobEvents, nextEvents =
             Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(),

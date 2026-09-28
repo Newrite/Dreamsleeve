@@ -2,6 +2,7 @@ import { PendingMessages } from "./PendingMessages";
 import { useMessageFade } from "../features/useMessageFade";
 import { useEffect, useRef } from "react";
 import { visible, type Chat, type ChatState } from "../state/chat";
+import { playerName } from "../state/names";
 import styles from "../styles/Chat.module.css";
 export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
   const list = useRef<HTMLDivElement>(null);
@@ -75,9 +76,7 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
                   disabled={!s.active}
                   onClick={() => chat.open("profile", m.author.id)}
                 >
-                  {m.author.displayName}
-                  {s.settings.nameMode === "account" && `@${m.author.username}`}
-                  :
+                  {playerName(m.author, s.settings)}:
                 </button>
               )}
               <span className={styles.text}> {m.text}</span>

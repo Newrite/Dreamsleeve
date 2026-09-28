@@ -14,9 +14,11 @@ const ranges = [
 export function SettingsPanel({
   chat,
   settings: s,
+  ignored,
 }: {
   chat: Chat;
   settings: Settings;
+  ignored: { id: string; name: string }[];
 }) {
   return (
     <div className={styles.settings}>
@@ -71,18 +73,6 @@ export function SettingsPanel({
         </select>
       </label>
       <label>
-        Имя автора
-        <select
-          value={s.nameMode}
-          onChange={(e) =>
-            chat.configure({ nameMode: e.target.value as Settings["nameMode"] })
-          }
-        >
-          <option value="display">DisplayName</option>
-          <option value="account">DisplayName@Username</option>
-        </select>
-      </label>
-      <label>
         Тема
         <select
           value={s.theme}
@@ -125,6 +115,61 @@ export function SettingsPanel({
       >
         Сбросить расположение
       </button>
+      <fieldset className={styles.group}>
+        <legend>Отображение имён</legend>
+        <label>
+          Показывать
+          <select
+            aria-label="Отображаемое имя"
+            value={s.nameMode}
+            disabled={s.streamerMode}
+            onChange={(e) =>
+              chat.configure({
+                nameMode: e.target.value as Settings["nameMode"],
+              })
+            }
+          >
+            <option value="username">Имя пользователя</option>
+            <option value="display">Отображаемое имя</option>
+            <option value="character">Имя персонажа</option>
+          </select>
+        </label>
+        <label>
+          <span>Режим стримера</span>
+          <input
+            type="checkbox"
+            aria-label="Режим стримера"
+            checked={s.streamerMode}
+            onChange={(e) => chat.configure({ streamerMode: e.target.checked })}
+          />
+        </label>
+        <p className={styles.muted}>
+          Одно имя везде: чат, онлайн, профиль, надписи и сообщения над
+          светлячками. Без имени персонажа показывается отображаемое имя. Режим
+          стримера заменяет все имена локальными псевдонимами (они не уходят на
+          сервер), но не скрывает имена, написанные в тексте сообщений.
+          Применяется сразу.
+        </p>
+      </fieldset>
+      <fieldset className={styles.group}>
+        <legend>Игнорируемые игроки</legend>
+        {ignored.length ? (
+          <ul className={styles.ignored} aria-label="Игнорируемые игроки">
+            {ignored.map((p) => (
+              <li key={p.id}>
+                <span>{p.name}</span>
+                <button onClick={() => chat.unignore(p.id)}>Убрать</button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.muted}>Список пуст.</p>
+        )}
+        <p className={styles.muted}>
+          Добавить игрока: «Игнорировать» в его профиле. Список хранится
+          локально для этого сервера.
+        </p>
+      </fieldset>
       <fieldset className={styles.group}>
         <legend>Имена над светлячками</legend>
         {(

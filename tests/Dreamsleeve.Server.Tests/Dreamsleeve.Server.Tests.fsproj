@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="DomainTests.fs" />
+    <Compile Include="ModerationTests.fs" />
     <Compile Include="PlayerDetailsTests.fs" />
     <Compile Include="AgentTests.fs" />
     <Compile Include="CodecTests.fs" />

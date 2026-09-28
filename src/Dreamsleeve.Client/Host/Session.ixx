@@ -39,20 +39,16 @@ public:
       for (const auto& update : output.state.updates)
         std::visit([&](const auto& value) { Apply(value, settings, ready, frame); }, update);
 
-      if (frame.playersChanged && !frame.snapshot) Emit(frame, Bridge::PlayersEvent{.players = PlayerList()});
+      if (frame.playersChanged && !frame.snapshot) Emit(frame, Bridge::PlayersEvent{.players = PlayerList(settings)});
 
       for (const auto& confirmation : output.chatConfirmations)
         Complete(frame, confirmation.requestId, Bridge::Id(confirmation.messageId), {});
       for (const auto& event : output.rejections)
-        Complete(
-          frame,
-          event.rejection.requestId,
-          {},
-          event.rejection.message.empty() ? "Сервер отклонил сообщение" : event.rejection.message);
+        Complete(frame, event.rejection.requestId, {}, Bridge::RejectionText(event.rejection.code, event.rejection.message));
       for (const auto& failure : output.commandFailures)
         Complete(frame, failure.requestId, {}, std::string{Bridge::FailureText(failure.code)});
 
-      PublishStatus(output.status, frame);
+      PublishStatus(output.status, settings, frame);
       RequestSnapshotIfNeeded(exchange, frame);
     }
 
@@ -62,8 +58,49 @@ public:
     {
       needsSnapshot     = true;
       snapshotRequested = false;
+      refreshing        = false;
       pendingChats.clear();
       lastStatus.reset();
+    }
+
+    // Names or the ignore list changed: the same session is projected again.
+    // Pending sends keep their correlation; status events are re-sent too.
+    void Refresh()
+    {
+      needsSnapshot     = true;
+      snapshotRequested = false;
+      refreshing        = true;
+      lastStatus.reset();
+    }
+
+    Names& PlayerNames() noexcept
+    {
+      return names;
+    }
+
+    // Returns whether the list changed. A player need not be online: authors
+    // of retained history can be ignored by ID as well.
+    bool Ignore(Domain::PlayerId id)
+    {
+      const Domain::PlayerData* known = nullptr;
+      if (const auto online = players.find(id); online != players.end())
+        known = &online->second.data;
+      else if (const auto author = authors.find(id); author != authors.end())
+        known = &author->second;
+      return names.Ignore(id, selfId, known);
+    }
+
+    bool Unignore(Domain::PlayerId id)
+    {
+      return names.Unignore(id);
+    }
+
+    Bridge::IgnoredEvent IgnoredList(const UiSettings& settings)
+    {
+      Bridge::IgnoredEvent event;
+      for (auto& entry : names.IgnoredList(settings))
+        event.players.push_back({Bridge::Id(entry.id), std::move(entry.name)});
+      return event;
     }
 
     std::expected<void, std::string> SendChat(ClientExchange& exchange, const Bridge::UiCommand& command)
@@ -135,14 +172,29 @@ private:
         frame.notes.push_back(json.error());
     }
 
-    std::vector<Bridge::UiPlayer> PlayerList() const
+    std::vector<Bridge::UiPlayer> PlayerList(const UiSettings& settings)
     {
       std::vector<Bridge::UiPlayer> list;
       list.reserve(players.size());
       for (const auto& [id, player] : players)
-        list.push_back(Bridge::ToUiPlayer(player));
-      std::ranges::sort(list, {}, &Bridge::UiPlayer::displayName);
+        list.push_back(Bridge::ToUiPlayer(player, names, settings));
+      std::ranges::sort(list, {}, &Bridge::UiPlayer::name);
       return list;
+    }
+
+    // Ignored authors are dropped from every UI projection; self and system
+    // messages (author 0) are never filtered.
+    bool Hidden(const Domain::ChatMessage& message) const
+    {
+      const auto author = message.author.playerId;
+      return author != 0 && author != selfId && names.Ignored(author);
+    }
+
+    void Remember(const Domain::ChatMessage& message)
+    {
+      if (message.author.playerId == 0) return;
+      if (authors.size() >= MaxKnownAuthors && !authors.contains(message.author.playerId)) authors.clear();
+      authors.insert_or_assign(message.author.playerId, message.author);
     }
 
     // The UI treats every snapshot as a connected session, so only a Ready
@@ -160,8 +212,11 @@ private:
       // Protocol v6 opens exactly one channel (SessionOpened.global_channel_id)
       // and the snapshot labels every channel "global"; bubbles follow the first
       // one. Retained history sets the floor: only later IDs are live.
-      globalChannel = snapshot.chats.empty() ? std::nullopt : std::optional{snapshot.chats.front().channelId};
-      bubbleFloor   = 0;
+      globalChannel      = snapshot.chats.empty() ? std::nullopt : std::optional{snapshot.chats.front().channelId};
+      const bool refresh = std::exchange(refreshing, false) && snapshot.generation == refreshGeneration;
+      refreshGeneration  = snapshot.generation;
+      authors.clear();
+      bubbleFloor = 0;
       for (const auto& chat : snapshot.chats)
         if (globalChannel && chat.channelId == *globalChannel && !chat.messages.empty())
           bubbleFloor = std::max(bubbleFloor, chat.messages.back().messageId);
@@ -185,9 +240,13 @@ private:
       {
         const auto first = chat.messages.size() > Bridge::MaxSnapshotRows ? chat.messages.size() - Bridge::MaxSnapshotRows : 0;
         for (std::size_t index = first; index < chat.messages.size(); ++index)
-          event.messages.push_back(Bridge::ToUiMessage(chat.messages[index]));
+        {
+          Remember(chat.messages[index]);
+          if (!Hidden(chat.messages[index])) event.messages.push_back(Bridge::ToUiMessage(chat.messages[index], names, settings));
+        }
       }
-      event.players    = PlayerList();
+      event.players    = PlayerList(settings);
+      event.refresh    = refresh;
       event.selfId     = selfId ? Bridge::Id(*selfId) : "0";
       event.serverName = serverName;
       event.settings   = settings;
@@ -197,7 +256,7 @@ private:
       needsSnapshot  = false;
     }
 
-    void Apply(const ClientStateDelta& delta, const UiSettings&, bool, Frame& frame)
+    void Apply(const ClientStateDelta& delta, const UiSettings& settings, bool, Frame& frame)
     {
       if (delta.generation != generation)
       {
@@ -233,8 +292,11 @@ private:
         if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
           for (const auto& message : added->messages)
           {
-            messages.messages.push_back(Bridge::ToUiMessage(message));
-            if (Fresh(message)) frame.freshMessages.push_back(message);
+            Remember(message);
+            // Fresh() runs first: it advances the bubble floor even for an
+            // ignored author, so unignoring never replays old messages.
+            if (Fresh(message) && !Hidden(message)) frame.freshMessages.push_back(message);
+            if (!Hidden(message)) messages.messages.push_back(Bridge::ToUiMessage(message, names, settings));
           }
       if (!messages.messages.empty()) Emit(frame, messages);
     }
@@ -261,7 +323,7 @@ private:
       pendingChats.erase(found);
     }
 
-    void PublishStatus(const ClientStatus& status, Frame& frame)
+    void PublishStatus(const ClientStatus& status, const UiSettings& settings, Frame& frame)
     {
       const bool first = !lastStatus;
       const bool connectionChanged =
@@ -271,7 +333,7 @@ private:
                                lastStatus->authFailure != status.authFailure || lastStatus->error != status.error ||
                                lastStatus->savedLogin != status.savedLogin || lastStatus->savedUsername != status.savedUsername;
       if (connectionChanged) Emit(frame, Bridge::ConnectionState(status));
-      if (authChanged || connectionChanged) Emit(frame, Bridge::AuthState(status));
+      if (authChanged || connectionChanged) Emit(frame, Bridge::AuthState(status, settings.streamerMode));
       lastStatus = status;
     }
 
@@ -297,6 +359,12 @@ private:
     std::optional<ClientStatus>                    lastStatus;
     bool                                           needsSnapshot{true};
     bool                                           snapshotRequested{};
+    bool                                           refreshing{};
+    std::uint64_t                                  refreshGeneration{};
+    // Profiles of retained authors, so offline players can be ignored by name.
+    static constexpr std::size_t                             MaxKnownAuthors = 2048;
+    std::unordered_map<Domain::PlayerId, Domain::PlayerData> authors;
+    Names                                                    names;
   };
 
 }

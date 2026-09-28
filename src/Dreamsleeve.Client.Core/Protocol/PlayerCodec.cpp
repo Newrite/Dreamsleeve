@@ -209,6 +209,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     result.movementSequence = source.movement_sequence();
     result.details          = ReadDetails(source.details());
     if (source.has_character_name()) result.characterName = source.character_name();
+    result.characterNameWithheld = source.character_name_withheld() && !result.characterName;
     if (source.has_location())
     {
       auto location = ReadLocation(source.location());

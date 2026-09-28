@@ -25,6 +25,8 @@ let private profile = PlayerData.create (PlayerId.create 42UL |> ok)
 let private ticket = String('a', 43)
 let private signedIn = Ok (AccountAccessResult.SignedIn { Profile = profile; SessionTicket = ticket; ExpiresInSeconds = 60; RememberToken = "" })
 
+let private moderation = Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
+
 let private withHost customize execute run = task {
     let received = ConcurrentQueue<AccountAccessCommand>()
     let handle (_: AgentContext<AuthMessage>) message = task {
@@ -42,7 +44,7 @@ let private withHost customize execute run = task {
             Authentication = { Configuration.defaults.Authentication with ListenUrl = "http://127.0.0.1:0" }
     }
     let settings = customize initial
-    let app = AuthenticationHttp.build settings auth logger
+    let app = AuthenticationHttp.build settings moderation auth logger
     let! outcome = task {
         try
             do! app.StartAsync()
@@ -125,6 +127,25 @@ let tests = testSequenced (testList "Authentication HTTP" [
             use login = JsonDocument.Parse loginText
             equal ticket (login.RootElement.GetProperty("sessionTicket").GetString())
             equal 60 (login.RootElement.GetProperty("expiresInSeconds").GetInt32())
+        }))
+
+    case "registration refuses listed names and reserved placeholders before the auth agent" (fun () ->
+        let execute command (response: ReplyChannel<_>) =
+            match command with
+            | AccountAccessCommand.Login _ -> response.Reply signedIn
+            | _ -> failtest "A refused name reached the auth agent"
+        withHost id execute (fun http received -> task {
+            for username, displayName, expected in [ "bad_word_x", "Fine", "username_not_allowed"
+                                                     "hidden.7", "Fine", "username_not_allowed"
+                                                     "player", "B4DW0RD", "display_name_not_allowed" ] do
+                use! response = post http "auth/register" {| username = username; displayName = displayName; password = password |}
+                status 400 response
+                let! actual = code response
+                equal expected actual
+            equal 0 received.Count
+            // Sign-in never re-checks names: stored accounts keep working.
+            use! login = post http "auth/login" {| username = "badword"; password = password |}
+            status 200 login
         }))
 
     case "malformed input and oversized known or chunked bodies never reach the auth agent" (fun () ->

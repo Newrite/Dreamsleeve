@@ -53,6 +53,8 @@ export interface ChatState {
   activity: number;
   revision: number;
   savedRevision: number;
+  // Personal ignore list of the current server, named by the host.
+  ignored: { id: string; name: string }[];
 }
 export const visible = (message: Message, filter: string) =>
   filter === "all" || message.channelId === filter;
@@ -84,6 +86,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     activity: now(),
     revision: 0,
     savedRevision: 0,
+    ignored: [],
   }));
   let sequence = 0;
   const touch = () => store.setState({ activity: now(), faded: false });
@@ -92,6 +95,29 @@ export function makeChat(send: Send, now = () => Date.now()) {
     switch (event.type) {
       case "snapshot": {
         const channels = event.channels;
+        if (event.refresh && state.initialized) {
+          // Same session re-projected: keep pending rows, filters and scroll.
+          const messages = event.messages.slice(-HISTORY_LIMIT);
+          const retained = new Set(messages.map((m) => m.id));
+          const receivedAt = Object.fromEntries(
+            Object.entries(state.receivedAt).filter(([id]) => retained.has(id)),
+          );
+          store.setState({
+            channels,
+            messages,
+            receivedAt,
+            players: event.players,
+            settings: event.settings
+              ? settingsFrom({
+                  ...event.settings,
+                  // A local switch may be newer than the host copy.
+                  nameMode: state.settings.nameMode,
+                  streamerMode: state.settings.streamerMode,
+                })
+              : state.settings,
+          });
+          break;
+        }
         store.setState({
           channels,
           messages: event.messages.slice(-HISTORY_LIMIT),
@@ -163,6 +189,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
       }
       case "players":
         store.setState({ players: event.players });
+        break;
+      case "ignored":
+        store.setState({ ignored: event.players });
         break;
       case "hide":
         store.setState({ visible: false, active: false, panel: null });
@@ -455,12 +484,39 @@ export function makeChat(send: Send, now = () => Date.now()) {
     },
     configure(patch: Partial<Settings>) {
       const current = store.getState();
+      const settings = settingsFrom({ ...current.settings, ...patch });
       store.setState({
-        settings: settingsFrom({ ...current.settings, ...patch }),
+        settings,
         revision: current.revision + 1,
         notice: "Настройки изменены. Нажмите «Сохранить настройки».",
       });
+      // Name settings apply to every surface at once, the game included.
+      if (
+        settings.nameMode !== current.settings.nameMode ||
+        settings.streamerMode !== current.settings.streamerMode
+      ) {
+        if (
+          !send({
+            type: "nameSettings",
+            nameMode: settings.nameMode,
+            streamerMode: settings.streamerMode,
+          })
+        )
+          store.setState({ notice: "Команда не принята приложением" });
+        else store.setState({ notice: "Отображение имён применено" });
+      }
       touch();
+    },
+    // A personal filter by account ID; the host keeps and saves the list.
+    ignore(playerId: string) {
+      const s = store.getState();
+      if (!playerId || playerId === s.selfId) return;
+      if (!send({ type: "ignore", playerId }))
+        store.setState({ notice: "Команда не принята приложением" });
+    },
+    unignore(playerId: string) {
+      if (!send({ type: "unignore", playerId }))
+        store.setState({ notice: "Команда не принята приложением" });
     },
     open(panel: Panel, playerId?: string) {
       if (!store.getState().visible) return;

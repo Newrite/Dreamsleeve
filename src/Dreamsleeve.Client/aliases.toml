@@ -1,0 +1,17 @@
+# Dreamsleeve streamer-mode pseudonyms. Local to this game: the server never
+# assigns or stores them. Each account gets one name picked at random from this
+# list (never derived from its real name); equal picks get a short number,
+# "Страж 2". The assignment is kept per server in ui.toml ([[names.aliases]]),
+# so a player keeps the same pseudonym between launches.
+#
+# Rules: 1..48 bytes of UTF-8, no leading/trailing spaces, no control
+# characters or < >. Invalid entries are skipped; a missing, empty or broken
+# file falls back to the built-in list. Nameplates need a game font with these
+# letters: on an install without Cyrillic fonts use Latin names here.
+version = 1
+names = [
+  "Странник", "Следопыт", "Бард", "Изгнанник", "Наёмник", "Паломник",
+  "Охотник", "Кузнец", "Травник", "Мореход", "Караванщик", "Лучник",
+  "Страж", "Скиталец", "Отшельник", "Алхимик", "Чародей", "Воитель",
+  "Рудокоп", "Лесоруб", "Рыбак", "Менестрель", "Ловчий", "Книжник",
+]

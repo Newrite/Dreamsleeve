@@ -5186,6 +5186,7 @@ class PlayerInfo final : public ::google::protobuf::Message
     kCharacterGenerationFieldNumber = 5,
     kViewRevisionFieldNumber = 7,
     kMovementSequenceFieldNumber = 8,
+    kCharacterNameWithheldFieldNumber = 9,
   };
   // repeated .Dreamsleeve.Protocol.Chat.ActorValueEntry actor_values = 4;
   int actor_values_size() const;
@@ -5295,11 +5296,21 @@ class PlayerInfo final : public ::google::protobuf::Message
   void _internal_set_movement_sequence(::uint64_t value);
 
   public:
+  // bool character_name_withheld = 9;
+  void clear_character_name_withheld() ;
+  bool character_name_withheld() const;
+  void set_character_name_withheld(bool value);
+
+  private:
+  bool _internal_character_name_withheld() const;
+  void _internal_set_character_name_withheld(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayerInfo)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 8,
+  static const ::google::protobuf::internal::TcParseTable<4, 9,
                                    4, 67,
                                    2>
       _table_;
@@ -5329,6 +5340,7 @@ class PlayerInfo final : public ::google::protobuf::Message
     ::uint64_t character_generation_;
     ::uint64_t view_revision_;
     ::uint64_t movement_sequence_;
+    bool character_name_withheld_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7517,6 +7529,31 @@ inline ::uint64_t PlayerInfo::_internal_movement_sequence() const {
 inline void PlayerInfo::_internal_set_movement_sequence(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.movement_sequence_ = value;
+}
+
+// bool character_name_withheld = 9;
+inline void PlayerInfo::clear_character_name_withheld() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_name_withheld_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000100U);
+}
+inline bool PlayerInfo::character_name_withheld() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerInfo.character_name_withheld)
+  return _internal_character_name_withheld();
+}
+inline void PlayerInfo::set_character_name_withheld(bool value) {
+  _internal_set_character_name_withheld(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerInfo.character_name_withheld)
+}
+inline bool PlayerInfo::_internal_character_name_withheld() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_name_withheld_;
+}
+inline void PlayerInfo::_internal_set_character_name_withheld(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_name_withheld_ = value;
 }
 
 // -------------------------------------------------------------------

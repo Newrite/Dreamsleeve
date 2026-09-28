@@ -212,7 +212,7 @@ namespace PrismaUI
   void SendAuthError(std::string error)
   {
     auto& runtime = Runtime::Get();
-    auto  event   = Bridge::AuthState(runtime.app->Status());
+    auto  event   = Bridge::AuthState(runtime.app->Status(), runtime.ui.ui.chat.streamerMode);
     event.error   = std::move(error);
     Send(event);
   }
@@ -235,9 +235,42 @@ namespace PrismaUI
       Deactivate();
       return;
     }
+    if (type == "ignore" || type == "unignore")
+    {
+      const auto id = Bridge::ParseId(command.playerId);
+      if (!id) return;
+      auto& session = runtime.session;
+      if (type == "ignore" ? session.Ignore(*id) : session.Unignore(*id))
+      {
+        // A visible bubble goes at once; history is re-projected without it.
+        if (type == "ignore") runtime.bubbles.Erase(*id);
+        if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
+        session.Refresh();
+      }
+      Send(session.IgnoredList(runtime.ui.ui.chat));
+      return;
+    }
+    if (type == "nameSettings")
+    {
+      // Applied and saved at once: every surface switches without reconnecting.
+      auto& chat        = runtime.ui.ui.chat;
+      chat.nameMode     = command.nameMode;
+      chat.streamerMode = command.streamerMode;
+      if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
+      runtime.session.Refresh();
+      Send(runtime.session.IgnoredList(chat));
+      return;
+    }
     if (type == "saveSettings")
     {
+      const bool names =
+        runtime.ui.ui.chat.nameMode != command.settings->nameMode || runtime.ui.ui.chat.streamerMode != command.settings->streamerMode;
       runtime.ui.ui.chat = *command.settings;
+      if (names)
+      {
+        runtime.session.Refresh();
+        Send(runtime.session.IgnoredList(runtime.ui.ui.chat));
+      }
       Events::SetActivationKey(runtime.ui.ui.chat.activationKey);
       auto                        saved = Runtime::SaveUi();
       Bridge::SettingsResultEvent result{.revision = command.revision};
@@ -312,6 +345,7 @@ namespace PrismaUI
     state.jsHidden = false;
     logger::info("Dreamsleeve view ready");
     Send(Bridge::SettingsEvent{.settings = Runtime::Get().ui.ui.chat});
+    Send(Runtime::Get().session.IgnoredList(Runtime::Get().ui.ui.chat));
     RecomputeMenus();
     Runtime::Get().session.ResetView();
   }

@@ -174,7 +174,10 @@ def smoke(args, log, directory: Path):
     config = directory / "server.toml"
     database = directory / "accounts.sqlite"
     secrets = [client_env["DREAMSLEEVE_PASSWORD"]]
+    moderation = directory / "moderation.toml"
+    moderation.write_text(tomli_w.dumps({"words": ["forbiddenword"], "exceptions": []}), encoding="utf-8")
     config.write_text(tomli_w.dumps({
+        "Moderation": {"Enabled": True, "RulesPath": str(moderation)},
         "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
         "Authentication": {"ListenUrl": auth_url, "AllowInsecureLoopback": True, "AllowRegistration": True},
         "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},
@@ -447,6 +450,22 @@ def smoke(args, log, directory: Path):
         message_once(alice, bob, first, args.timeout)
         message_once(bob, alice, second, args.timeout)
         stage("both directions delivered exactly one authoritative publication to author and peer")
+
+        def refused(text: str, code: int):
+            alice_start, bob_start = alice.mark(), bob.mark()
+            alice.send("send " + text)
+            alice.wait_for(lambda lines: any(f"rejected ({code})" in line for line in lines),
+                           args.timeout, alice_start, read=True)
+            settle_reads(bob, args.timeout)
+            check(not any(text in line for line in bob.output(bob_start)), f"Refused text reached the peer: {text}")
+            check(not any(text in line and line.startswith("[1] ") for line in alice.output(alice_start)),
+                  f"Refused text was published to its author: {text}")
+
+        refused(f"you F0RB1DDENW0RD {nonce}", 9)
+        repeat = f"smoke-repeat-{nonce}"
+        message_once(alice, bob, repeat, args.timeout)
+        refused(repeat.upper(), 10)
+        stage("word list and repeated-text limit refuse messages before storage and relay")
 
         alice_start, bob_start = alice.mark(), bob.mark()
         alice.send("disconnect")

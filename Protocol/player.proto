@@ -43,6 +43,9 @@ message PlayerInfo {
   PlayerDetails details = 6;
   uint64 view_revision = 7;
   uint64 movement_sequence = 8;
+  // The player is in a character whose game name failed server moderation;
+  // character_name is then absent and clients use their own fallback.
+  bool character_name_withheld = 9;
 }
 
 enum ActivityKind {

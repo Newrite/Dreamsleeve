@@ -80,6 +80,10 @@ type ChatSubmission = {
     ConnectionId: Guid
     RequestId: uint64
     Text: ChatMessageText
+    /// Published character name at sending, already moderated by the session.
+    CharacterName: CharacterName voption
+    /// Normalized projection used for the repeated-message check; never published.
+    Fingerprint: string
     /// Also available after membership disappears, so refusals settle the request.
     ReplyTo: ReliableAgentRef<ChatRoomEvent>
 }
@@ -119,6 +123,12 @@ type ChatRoomOptions = {
     ControlReserve: int
     HistoryCapacity: int
     MaxControlDeliveries: int
+    /// Messages an account may send at once before the refill rate applies.
+    RateBurst: int
+    /// One more message is allowed per this interval, up to RateBurst.
+    RateRefillMs: int
+    /// The same normalized text is refused within this window; 0 disables the check.
+    DuplicateWindowMs: int
 }
 
 type PresenceOptions = {
@@ -161,6 +171,7 @@ module ServerRuntimeOptions =
         PollIntervalMs = 1
         Player = { MailboxCapacity = 128; ControlReserve = 32; MaxPendingChat = 16; MaxPendingUpdates = 16;
                    MaxBootstrapEvents = 128; MaxPendingOutput = 128 }
-        Chat = { MailboxCapacity = 256; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128 }
+        Chat = { MailboxCapacity = 256; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128
+                 RateBurst = 5; RateRefillMs = 2000; DuplicateWindowMs = 30000 }
         Presence = { MailboxCapacity = 128; ControlReserve = 64; MaxControlDeliveries = 128; ReplicationIntervalMs = 50; VisibilityDistance = 8192.0f }
     }

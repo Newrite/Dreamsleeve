@@ -62,6 +62,9 @@ inline constexpr ChatMessage::Impl_::Impl_(
         text_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        character_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         author_{nullptr},
         message_id_{::uint64_t{0u}},
         channel_id_{::uint64_t{0u}},
@@ -130,17 +133,19 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ChatMessage, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ChatMessage, _impl_.message_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ChatMessage, _impl_.channel_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ChatMessage, _impl_.author_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ChatMessage, _impl_.text_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ChatMessage, _impl_.sent_at_unix_ms_),
-        2,
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ChatMessage, _impl_.character_name_),
         3,
-        1,
-        0,
         4,
+        2,
+        0,
+        5,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ChatPublished, _impl_._has_bits_),
         4, // hasbit index offset
@@ -152,7 +157,7 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::SendChat)},
         {7, sizeof(::Dreamsleeve::Protocol::Chat::ChatMessage)},
-        {20, sizeof(::Dreamsleeve::Protocol::Chat::ChatPublished)},
+        {22, sizeof(::Dreamsleeve::Protocol::Chat::ChatPublished)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_SendChat_default_instance_._instance,
@@ -163,13 +168,14 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     protodesc_cold) = {
     "\n\nchat.proto\022\031Dreamsleeve.Protocol.Chat\032"
     "\014common.proto\",\n\010SendChat\022\022\n\nchannel_id\030"
-    "\001 \001(\004\022\014\n\004text\030\002 \001(\t\"\226\001\n\013ChatMessage\022\022\n\nm"
+    "\001 \001(\004\022\014\n\004text\030\002 \001(\t\"\306\001\n\013ChatMessage\022\022\n\nm"
     "essage_id\030\001 \001(\004\022\022\n\nchannel_id\030\002 \001(\004\0228\n\006a"
     "uthor\030\003 \001(\0132(.Dreamsleeve.Protocol.Chat."
     "PlayerProfile\022\014\n\004text\030\004 \001(\t\022\027\n\017sent_at_u"
-    "nix_ms\030\005 \001(\003\"H\n\rChatPublished\0227\n\007message"
-    "\030\001 \001(\0132&.Dreamsleeve.Protocol.Chat.ChatM"
-    "essageb\006proto3"
+    "nix_ms\030\005 \001(\003\022\033\n\016character_name\030\006 \001(\tH\000\210\001"
+    "\001B\021\n\017_character_name\"H\n\rChatPublished\0227\n"
+    "\007message\030\001 \001(\0132&.Dreamsleeve.Protocol.Ch"
+    "at.ChatMessageb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_chat_2eproto_deps[1] = {
@@ -179,7 +185,7 @@ static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    334,
+    382,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
@@ -518,7 +524,7 @@ void ChatMessage::clear_author() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.author_ != nullptr) _impl_.author_->Clear();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000004U);
 }
 ChatMessage::ChatMessage(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -535,7 +541,8 @@ PROTOBUF_NDEBUG_INLINE ChatMessage::Impl_::Impl_(
     [[maybe_unused]] const ::Dreamsleeve::Protocol::Chat::ChatMessage& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        text_(arena, from.text_) {}
+        text_(arena, from.text_),
+        character_name_(arena, from.character_name_) {}
 
 ChatMessage::ChatMessage(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -551,7 +558,7 @@ ChatMessage::ChatMessage(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.author_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+  _impl_.author_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.author_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
@@ -568,7 +575,8 @@ PROTOBUF_NDEBUG_INLINE ChatMessage::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        text_(arena) {}
+        text_(arena),
+        character_name_(arena) {}
 
 inline void ChatMessage::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -591,6 +599,7 @@ inline void ChatMessage::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.text_.Destroy();
+  this_._impl_.character_name_.Destroy();
   delete this_._impl_.author_;
   this_._impl_.~Impl_();
 }
@@ -638,16 +647,16 @@ ChatMessage::GetClassData() const {
   return ChatMessage_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 5, 1, 50, 2>
+const ::_pbi::TcParseTable<3, 6, 1, 64, 2>
 ChatMessage::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_._has_bits_),
     0, // no _extensions_
-    5, 56,  // max_field_number, fast_idx_mask
+    6, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967264,  // skipmap
+    4294967232,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    5,  // num_field_entries
+    6,  // num_field_entries
     1,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ChatMessage_class_data_.base(),
@@ -659,48 +668,54 @@ ChatMessage::_table_ = {
   }, {{
     {::_pbi::TcParser::MiniParse, {}},
     // uint64 message_id = 1;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatMessage, _impl_.message_id_), 2>(),
-     {8, 2, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatMessage, _impl_.message_id_), 3>(),
+     {8, 3, 0,
       PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.message_id_)}},
     // uint64 channel_id = 2;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatMessage, _impl_.channel_id_), 3>(),
-     {16, 3, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatMessage, _impl_.channel_id_), 4>(),
+     {16, 4, 0,
       PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.channel_id_)}},
     // .Dreamsleeve.Protocol.Chat.PlayerProfile author = 3;
     {::_pbi::TcParser::FastMtS1,
-     {26, 1, 0,
+     {26, 2, 0,
       PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.author_)}},
     // string text = 4;
     {::_pbi::TcParser::FastUS1,
      {34, 0, 0,
       PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.text_)}},
     // int64 sent_at_unix_ms = 5;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatMessage, _impl_.sent_at_unix_ms_), 4>(),
-     {40, 4, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatMessage, _impl_.sent_at_unix_ms_), 5>(),
+     {40, 5, 0,
       PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.sent_at_unix_ms_)}},
-    {::_pbi::TcParser::MiniParse, {}},
+    // optional string character_name = 6;
+    {::_pbi::TcParser::FastUS1,
+     {50, 1, 0,
+      PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.character_name_)}},
     {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
     // uint64 message_id = 1;
-    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.message_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.message_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // uint64 channel_id = 2;
-    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.channel_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.channel_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // .Dreamsleeve.Protocol.Chat.PlayerProfile author = 3;
-    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.author_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.author_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     // string text = 4;
     {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.text_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // int64 sent_at_unix_ms = 5;
-    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.sent_at_unix_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.sent_at_unix_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    // optional string character_name = 6;
+    {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.character_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerProfile>()},
   }},
   {{
-    "\45\0\0\0\4\0\0\0"
+    "\45\0\0\0\4\0\16\0"
     "Dreamsleeve.Protocol.Chat.ChatMessage"
     "text"
+    "character_name"
   }},
 };
 PROTOBUF_NOINLINE void ChatMessage::Clear() {
@@ -711,16 +726,19 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.text_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.character_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(_impl_.author_ != nullptr);
       _impl_.author_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000038U)) {
     ::memset(&_impl_.message_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.sent_at_unix_ms_) -
         reinterpret_cast<char*>(&_impl_.message_id_)) + sizeof(_impl_.sent_at_unix_ms_));
@@ -749,7 +767,7 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 message_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_message_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -758,7 +776,7 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
   }
 
   // uint64 channel_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_channel_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -767,7 +785,7 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
   }
 
   // .Dreamsleeve.Protocol.Chat.PlayerProfile author = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *this_._impl_.author_, this_._impl_.author_->GetCachedSize(), target,
         stream);
@@ -784,12 +802,20 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
   }
 
   // int64 sent_at_unix_ms = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_sent_at_unix_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<5>(
               stream, this_._internal_sent_at_unix_ms(), target);
     }
+  }
+
+  // optional string character_name = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    const ::std::string& _s = this_._internal_character_name();
+    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+        _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Dreamsleeve.Protocol.Chat.ChatMessage.character_name");
+    target = stream->WriteStringMaybeAliased(6, _s, target);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -817,7 +843,7 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string text = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_text().empty()) {
@@ -825,27 +851,32 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
                                         this_._internal_text());
       }
     }
-    // .Dreamsleeve.Protocol.Chat.PlayerProfile author = 3;
+    // optional string character_name = 6;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_character_name());
+    }
+    // .Dreamsleeve.Protocol.Chat.PlayerProfile author = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.author_);
     }
     // uint64 message_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_message_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_message_id());
       }
     }
     // uint64 channel_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_channel_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_channel_id());
       }
     }
     // int64 sent_at_unix_ms = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_sent_at_unix_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_sent_at_unix_ms());
@@ -871,7 +902,7 @@ void ChatMessage::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_text().empty()) {
         _this->_internal_set_text(from._internal_text());
@@ -882,6 +913,9 @@ void ChatMessage::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_set_character_name(from._internal_character_name());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(from._impl_.author_ != nullptr);
       if (_this->_impl_.author_ == nullptr) {
         _this->_impl_.author_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.author_);
@@ -889,17 +923,17 @@ void ChatMessage::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.author_->MergeFrom(*from._impl_.author_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_message_id() != 0) {
         _this->_impl_.message_id_ = from._impl_.message_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_channel_id() != 0) {
         _this->_impl_.channel_id_ = from._impl_.channel_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_sent_at_unix_ms() != 0) {
         _this->_impl_.sent_at_unix_ms_ = from._impl_.sent_at_unix_ms_;
       }
@@ -925,6 +959,7 @@ void ChatMessage::InternalSwap(ChatMessage* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.text_, &other->_impl_.text_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.character_name_, &other->_impl_.character_name_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.sent_at_unix_ms_)
       + sizeof(ChatMessage::_impl_.sent_at_unix_ms_)

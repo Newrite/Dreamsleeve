@@ -1,5 +1,6 @@
 import { resourceKey } from "./resources";
-import type { ActorValue, Player } from "../bridge/types";
+import type { ActorValue, Player, Settings } from "../bridge/types";
+import { characterLine, playerName, realNames } from "../state/names";
 import styles from "../styles/Workspace.module.css";
 const number = (n: number) =>
   n.toLocaleString("ru", { maximumFractionDigits: 1 });
@@ -28,7 +29,14 @@ export function ActorValueView({ entry }: { entry: ActorValue }) {
     </div>
   );
 }
-export function PlayerDetails({ player: p }: { player: Player }) {
+export function PlayerDetails({
+  player: p,
+  settings,
+}: {
+  player: Player;
+  settings: Settings;
+}) {
+  const real = realNames(p, settings);
   return (
     <>
       <div className={styles.identity}>
@@ -39,9 +47,10 @@ export function PlayerDetails({ player: p }: { player: Player }) {
           {p.level ?? "—"}
         </span>
         <div>
-          <h3>{p.character ?? "Персонаж не выбран"}</h3>
+          <h3>{playerName(p, settings)}</h3>
           <span>
-            {p.displayName} · @{p.username}
+            {real ? `${real.displayName} · @${real.username} · ` : ""}
+            {characterLine(p, settings)}
             {p.race ? ` · ${p.race}` : ""}
           </span>
         </div>

@@ -23,7 +23,10 @@ lineHeight = 1.45
 background = 0.82
 timestamps = true
 fullColor = false
+# username | display | character; without a character name the display name is shown.
 nameMode = "display"
+# Local pseudonyms (aliases.toml) instead of every real name on every surface.
+streamerMode = false
 locked = true
 x = 0.025
 y = 0.42
@@ -31,3 +34,16 @@ width = 680
 height = 390
 activationKey = "Enter"
 theme = "skyrim"
+
+# Written by the plugin, never sent to the server. IDs are scoped by the
+# server address "ip:port": an account ID is unique only within its server.
+# [[names.aliases]]
+# server = "127.0.0.1:8778"
+# id = "42"
+# name = "Страж 2"
+#
+# [[names.ignored]]
+# server = "127.0.0.1:8778"
+# id = "7"
+# displayName = "Name when ignored"   # shown outside streamer mode only
+# username = "name"

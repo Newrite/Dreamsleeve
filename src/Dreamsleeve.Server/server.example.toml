@@ -63,6 +63,12 @@ MailboxCapacity = 256
 ControlReserve = 64
 HistoryCapacity = 512
 MaxControlDeliveries = 128
+# Anti-spam per stable account ID; reconnecting does not reset it.
+# Up to RateBurst messages at once, then one more per RateRefillMs.
+RateBurst = 5
+RateRefillMs = 2000
+# The same normalized text is refused again within this window; 0 disables the check.
+DuplicateWindowMs = 30000
 
 [Runtime.Presence]
 MailboxCapacity = 128
@@ -101,3 +107,11 @@ Console = true
 FilePath = "logs/server-.json"
 FileSizeLimitBytes = 10485760
 RetainedFileCount = 14
+
+[Moderation]
+# Word-list checks of new usernames/display names, chat text and published
+# character names. false disables only the word list; anti-spam stays active.
+Enabled = true
+# Separate TOML (see moderation.example.toml), relative to the working directory.
+# A missing file starts the server with an empty list and a warning.
+RulesPath = "moderation.toml"

@@ -1,5 +1,6 @@
 import { resourceKey } from "./resources";
-import type { Player } from "../bridge/types";
+import type { Player, Settings } from "../bridge/types";
+import { characterLine, playerName, realNames } from "../state/names";
 import styles from "../styles/OnlineList.module.css";
 const resources = [
   ["health", "HP"],
@@ -49,11 +50,13 @@ export function OnlineList({
   players,
   selfId,
   connected,
+  settings,
   openProfile,
 }: {
   players: Player[];
   selfId: string;
   connected: boolean;
+  settings: Settings;
   openProfile: (id: string) => void;
 }) {
   return (
@@ -76,46 +79,53 @@ export function OnlineList({
           </tr>
         </thead>
         <tbody>
-          {players.map((p) => (
-            <tr key={p.id} data-self={p.id === selfId}>
-              <td>
-                <button
-                  className={styles.name}
-                  onClick={() => openProfile(p.id)}
-                  title={`${p.displayName} @${p.username} · ${p.character ?? "Вне персонажа"}`}
-                >
-                  <strong>
-                    {p.displayName}
-                    {p.id === selfId ? " · вы" : ""}
-                  </strong>
-                  <small>
-                    {p.character ?? "Вне персонажа"}
-                    {p.race ? ` · ${p.race}` : ""}
+          {players.map((p) => {
+            const real = realNames(p, settings);
+            return (
+              <tr key={p.id} data-self={p.id === selfId}>
+                <td>
+                  <button
+                    className={styles.name}
+                    onClick={() => openProfile(p.id)}
+                    title={
+                      real
+                        ? `${real.displayName} @${real.username} · ${characterLine(p, settings)}`
+                        : playerName(p, settings)
+                    }
+                  >
+                    <strong>
+                      {playerName(p, settings)}
+                      {p.id === selfId ? " · вы" : ""}
+                    </strong>
+                    <small>
+                      {characterLine(p, settings)}
+                      {p.race ? ` · ${p.race}` : ""}
+                    </small>
+                  </button>
+                </td>
+                <td className={styles.level}>{p.level ?? "—"}</td>
+                <td>
+                  <span className={styles.ellipsis} title={p.zone}>
+                    {p.zone ?? "—"}
+                  </span>
+                  <small className={styles.ellipsis} title={p.location}>
+                    {p.location ?? "Неизвестно"}
                   </small>
-                </button>
-              </td>
-              <td className={styles.level}>{p.level ?? "—"}</td>
-              <td>
-                <span className={styles.ellipsis} title={p.zone}>
-                  {p.zone ?? "—"}
-                </span>
-                <small className={styles.ellipsis} title={p.location}>
-                  {p.location ?? "Неизвестно"}
-                </small>
-              </td>
-              <td>
-                <span className={styles.ellipsis} title={p.activity}>
-                  {connected ? (p.activity ?? "—") : "Нет соединения"}
-                </span>
-                <small className={styles.ellipsis} title={p.activityTarget}>
-                  {connected ? (p.activityTarget ?? "") : "Последние данные"}
-                </small>
-              </td>
-              <td>
-                <Resources player={p} />
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td>
+                  <span className={styles.ellipsis} title={p.activity}>
+                    {connected ? (p.activity ?? "—") : "Нет соединения"}
+                  </span>
+                  <small className={styles.ellipsis} title={p.activityTarget}>
+                    {connected ? (p.activityTarget ?? "") : "Последние данные"}
+                  </small>
+                </td>
+                <td>
+                  <Resources player={p} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

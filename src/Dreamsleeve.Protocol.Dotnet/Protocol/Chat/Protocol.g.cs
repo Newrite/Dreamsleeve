@@ -57,7 +57,7 @@ namespace Dreamsleeve.Protocol.Chat {
             "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk1vdmVtZW50U2FtcGxlImwKFFNl",
             "cnZlck1vdmVtZW50UGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0S",
             "OgoJbW92ZW1lbnRzGAIgASgLMicuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
-            "dC5QbGF5ZXJzTW92ZWQqqgMKFFJlcXVlc3RSZWplY3Rpb25Db2RlEiYKIlJF",
+            "dC5QbGF5ZXJzTW92ZWQqgAQKFFJlcXVlc3RSZWplY3Rpb25Db2RlEiYKIlJF",
             "UVVFU1RfUkVKRUNUSU9OX0NPREVfVU5TUEVDSUZJRUQQABIqCiZSRVFVRVNU",
             "X1JFSkVDVElPTl9DT0RFX0lOVkFMSURfUkVRVUVTVBABEiwKKFJFUVVFU1Rf",
             "UkVKRUNUSU9OX0NPREVfU0VTU0lPTl9OT1RfUkVBRFkQAhIvCitSRVFVRVNU",
@@ -66,8 +66,9 @@ namespace Dreamsleeve.Protocol.Chat {
             "U1RfUkVKRUNUSU9OX0NPREVfQ0hBTk5FTF9OT1RfRk9VTkQQBRItCilSRVFV",
             "RVNUX1JFSkVDVElPTl9DT0RFX05PVF9DSEFOTkVMX01FTUJFUhAGEiUKIVJF",
             "UVVFU1RfUkVKRUNUSU9OX0NPREVfT1ZFUkxPQURFRBAHEjAKLFJFUVVFU1Rf",
-            "UkVKRUNUSU9OX0NPREVfQVVUSEVOVElDQVRJT05fRkFJTEVEEAhiBnByb3Rv",
-            "Mw=="));
+            "UkVKRUNUSU9OX0NPREVfQVVUSEVOVElDQVRJT05fRkFJTEVEEAgSKwonUkVR",
+            "VUVTVF9SRUpFQ1RJT05fQ09ERV9URVhUX05PVF9BTExPV0VEEAkSJwojUkVR",
+            "VUVTVF9SRUpFQ1RJT05fQ09ERV9SQVRFX0xJTUlURUQQCmIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.RequestRejectionCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -124,6 +125,14 @@ namespace Dreamsleeve.Protocol.Chat {
     /// Missing, expired, invalid or already consumed ticket.
     /// </summary>
     [pbr::OriginalName("REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED")] AuthenticationFailed = 8,
+    /// <summary>
+    /// Text matched the server word list.
+    /// </summary>
+    [pbr::OriginalName("REQUEST_REJECTION_CODE_TEXT_NOT_ALLOWED")] TextNotAllowed = 9,
+    /// <summary>
+    /// Too frequent or repeated; retry later.
+    /// </summary>
+    [pbr::OriginalName("REQUEST_REJECTION_CODE_RATE_LIMITED")] RateLimited = 10,
   }
 
   #endregion

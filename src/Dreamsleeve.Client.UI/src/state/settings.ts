@@ -24,6 +24,7 @@ export const defaults: Settings = {
   timestamps: true,
   fullColor: false,
   nameMode: "display",
+  streamerMode: false,
   locked: true,
   x: 0.025,
   y: 0.42,
@@ -54,6 +55,9 @@ const bounds: Partial<Record<keyof Settings, [number, number]>> = {
 };
 export function settingsFrom(input: Partial<Settings>): Settings {
   const result = { ...defaults };
+  // Files from before the character mode used "account" for the username.
+  if ((input.nameMode as string) === "account")
+    input = { ...input, nameMode: "username" };
   for (const key of Object.keys(defaults) as (keyof Settings)[]) {
     const value = input[key];
     if (typeof value !== typeof defaults[key]) continue;
@@ -69,7 +73,8 @@ export function settingsFrom(input: Partial<Settings>): Settings {
       (key === "onlineView" && ["cards", "list"].includes(String(value))) ||
       (key === "font" && ["serif", "sans"].includes(String(value))) ||
       (key === "theme" && ["skyrim", "contrast"].includes(String(value))) ||
-      (key === "nameMode" && ["display", "account"].includes(String(value))) ||
+      (key === "nameMode" &&
+        ["username", "display", "character"].includes(String(value))) ||
       (key === "activationKey" && ["Enter", "F2"].includes(String(value)))
     )
       Object.assign(result, { [key]: value });

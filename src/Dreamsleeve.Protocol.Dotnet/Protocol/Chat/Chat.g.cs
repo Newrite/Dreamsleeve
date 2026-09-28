@@ -26,17 +26,18 @@ namespace Dreamsleeve.Protocol.Chat {
           string.Concat(
             "CgpjaGF0LnByb3RvEhlEcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Ggxjb21t",
             "b24ucHJvdG8iLAoIU2VuZENoYXQSEgoKY2hhbm5lbF9pZBgBIAEoBBIMCgR0",
-            "ZXh0GAIgASgJIpYBCgtDaGF0TWVzc2FnZRISCgptZXNzYWdlX2lkGAEgASgE",
+            "ZXh0GAIgASgJIsYBCgtDaGF0TWVzc2FnZRISCgptZXNzYWdlX2lkGAEgASgE",
             "EhIKCmNoYW5uZWxfaWQYAiABKAQSOAoGYXV0aG9yGAMgASgLMiguRHJlYW1z",
             "bGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJQcm9maWxlEgwKBHRleHQYBCAB",
-            "KAkSFwoPc2VudF9hdF91bml4X21zGAUgASgDIkgKDUNoYXRQdWJsaXNoZWQS",
-            "NwoHbWVzc2FnZRgBIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQu",
-            "Q2hhdE1lc3NhZ2ViBnByb3RvMw=="));
+            "KAkSFwoPc2VudF9hdF91bml4X21zGAUgASgDEhsKDmNoYXJhY3Rlcl9uYW1l",
+            "GAYgASgJSACIAQFCEQoPX2NoYXJhY3Rlcl9uYW1lIkgKDUNoYXRQdWJsaXNo",
+            "ZWQSNwoHbWVzc2FnZRgBIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
+            "YXQuQ2hhdE1lc3NhZ2ViBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SendChat), global::Dreamsleeve.Protocol.Chat.SendChat.Parser, new[]{ "ChannelId", "Text" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatMessage), global::Dreamsleeve.Protocol.Chat.ChatMessage.Parser, new[]{ "MessageId", "ChannelId", "Author", "Text", "SentAtUnixMs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatMessage), global::Dreamsleeve.Protocol.Chat.ChatMessage.Parser, new[]{ "MessageId", "ChannelId", "Author", "Text", "SentAtUnixMs", "CharacterName" }, new[]{ "CharacterName" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatPublished), global::Dreamsleeve.Protocol.Chat.ChatPublished.Parser, new[]{ "Message" }, null, null, null, null)
           }));
     }
@@ -319,6 +320,7 @@ namespace Dreamsleeve.Protocol.Chat {
       author_ = other.author_ != null ? other.author_.Clone() : null;
       text_ = other.text_;
       sentAtUnixMs_ = other.sentAtUnixMs_;
+      characterName_ = other.characterName_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -391,6 +393,36 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "character_name" field.</summary>
+    public const int CharacterNameFieldNumber = 6;
+    private readonly static string CharacterNameDefaultValue = "";
+
+    private string characterName_;
+    /// <summary>
+    /// Published character name at the time of sending. Absent for messages sent
+    /// outside a character, with a withheld name, or by servers before this field.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string CharacterName {
+      get { return characterName_ ?? CharacterNameDefaultValue; }
+      set {
+        characterName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+    /// <summary>Gets whether the "character_name" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasCharacterName {
+      get { return characterName_ != null; }
+    }
+    /// <summary>Clears the value of the "character_name" field</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearCharacterName() {
+      characterName_ = null;
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -411,6 +443,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (!object.Equals(Author, other.Author)) return false;
       if (Text != other.Text) return false;
       if (SentAtUnixMs != other.SentAtUnixMs) return false;
+      if (CharacterName != other.CharacterName) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -423,6 +456,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (author_ != null) hash ^= Author.GetHashCode();
       if (Text.Length != 0) hash ^= Text.GetHashCode();
       if (SentAtUnixMs != 0L) hash ^= SentAtUnixMs.GetHashCode();
+      if (HasCharacterName) hash ^= CharacterName.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -461,6 +495,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(40);
         output.WriteInt64(SentAtUnixMs);
       }
+      if (HasCharacterName) {
+        output.WriteRawTag(50);
+        output.WriteString(CharacterName);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -491,6 +529,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(40);
         output.WriteInt64(SentAtUnixMs);
       }
+      if (HasCharacterName) {
+        output.WriteRawTag(50);
+        output.WriteString(CharacterName);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -515,6 +557,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (SentAtUnixMs != 0L) {
         size += 1 + pb::CodedOutputStream.ComputeInt64Size(SentAtUnixMs);
+      }
+      if (HasCharacterName) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(CharacterName);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -545,6 +590,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (other.SentAtUnixMs != 0L) {
         SentAtUnixMs = other.SentAtUnixMs;
+      }
+      if (other.HasCharacterName) {
+        CharacterName = other.CharacterName;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -588,6 +636,10 @@ namespace Dreamsleeve.Protocol.Chat {
             SentAtUnixMs = input.ReadInt64();
             break;
           }
+          case 50: {
+            CharacterName = input.ReadString();
+            break;
+          }
         }
       }
     #endif
@@ -628,6 +680,10 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 40: {
             SentAtUnixMs = input.ReadInt64();
+            break;
+          }
+          case 50: {
+            CharacterName = input.ReadString();
             break;
           }
         }

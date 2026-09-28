@@ -9,6 +9,7 @@ type ChatMessage =
         messageId: ChatMessageId
         channelId: ChatChannelId
         author: PlayerData
+        characterName: CharacterName voption
         messageText: ChatMessageText
         sentAt: DateTimeOffset
     }
@@ -16,18 +17,22 @@ type ChatMessage =
     member this.MessageId = this.messageId
     member this.ChannelId = this.channelId
     member this.Author = this.author
+    /// Published character name when the message was sent; never updated later.
+    member this.CharacterName = this.characterName
     member this.MessageText = this.messageText
     member this.SentAt = this.sentAt
 
 [<RequireQualifiedAccess>]
 module ChatMessage =
     /// Components have already passed their own domain validation.
-    /// The server supplies the ID and timestamp; the author's profile is immutable.
-    let create messageId channelId author messageText (sentAt: DateTimeOffset) =
+    /// The server supplies the ID and timestamp; the author's profile and
+    /// character name are snapshots taken at sending and are immutable.
+    let create messageId channelId author characterName messageText (sentAt: DateTimeOffset) =
         {
             messageId = messageId
             channelId = channelId
             author = author
+            characterName = characterName
             messageText = messageText
             sentAt = sentAt.ToUniversalTime()
         }

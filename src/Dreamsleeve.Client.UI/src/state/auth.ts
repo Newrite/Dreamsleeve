@@ -9,6 +9,7 @@ export const failureLabels: Record<Exclude<AuthFailure, "none">, string> = {
   invalidResponse: "Некорректный ответ сервера",
   credentialStorage: "Ошибка хранилища учётных данных Windows",
   canceled: "Операция отменена",
+  nameNotAllowed: "Имя содержит недопустимые слова",
 };
 export const operationLabels: Record<Exclude<AuthOperation, "none">, string> = {
   passwordLogin: "Вход по паролю…",

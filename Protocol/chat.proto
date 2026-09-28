@@ -15,6 +15,9 @@ message ChatMessage {
   PlayerProfile author = 3; // Profile at the time of sending, possibly offline now.
   string text = 4;
   int64 sent_at_unix_ms = 5;
+  // Published character name at the time of sending. Absent for messages sent
+  // outside a character, with a withheld name, or by servers before this field.
+  optional string character_name = 6;
 }
 
 message ChatPublished { ChatMessage message = 1; }

@@ -10,7 +10,9 @@ export function AccountPanel({
   chat: Chat;
   state: ChatState;
 }) {
-  const [username, setUsername] = useState(s.auth.savedUsername);
+  const [username, setUsername] = useState(
+    s.settings.streamerMode ? "" : s.auth.savedUsername,
+  );
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [remember, setRemember] = useState(true);
@@ -36,7 +38,7 @@ export function AccountPanel({
         <span>{connectionLabels[s.connectionPhase]}</span>
         <span>
           {s.auth.savedLogin
-            ? `Сохранённый вход: ${s.auth.savedUsername || "есть"}`
+            ? `Сохранённый вход: ${(!s.settings.streamerMode && s.auth.savedUsername) || "есть"}`
             : "Нет сохранённого входа"}
         </span>
       </p>

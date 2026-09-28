@@ -30,6 +30,9 @@ type PlayerSnapshot = {
     Data: PlayerData
     CharacterGeneration: uint64
     CharacterName: CharacterName voption
+    /// The session withheld a character name that failed moderation;
+    /// CharacterName is then ValueNone although a character is active.
+    CharacterNameWithheld: bool
     Details: PlayerDetails
     Location: PlayerLocation voption
     MovementContext: uint64
@@ -181,6 +184,7 @@ module Player =
         { Data = player.data
           CharacterGeneration = player.characterGeneration
           CharacterName = player.characterName
+          CharacterNameWithheld = false
           Details = player.details
           Location = player.location
           MovementContext = player.movementContext

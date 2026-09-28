@@ -44,6 +44,11 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player
 | POST /auth/logout | token | 204: токен отозван (повторный вызов допустим) |
 | POST /auth/reset-password | code, password | 204: пароль заменён, прежний доступ отозван |
 
+Регистрация проверяет username и displayName по серверному словарю: отказ — 400
+`username_not_allowed` / `display_name_not_allowed` (клиент показывает «Имя содержит
+недопустимые слова»); префикс `hidden.` зарезервирован для заместителей имён старых
+аккаунтов. Вход имена не проверяет. См. [ModerationAndNamesRu.md](ModerationAndNamesRu.md).
+
 Ошибка возвращает `{code,message}`. Неверный пароль или отсутствующий аккаунт —
 одинаковый 401, занятый Username — 409, перегрузка — 503, rate limit — 429.
 Регистрацию можно выключить `Authentication.AllowRegistration=false`.

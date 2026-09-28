@@ -31,12 +31,20 @@ module AuthenticationHttp =
     let private unavailable () = error 503 "unavailable" "Authentication is temporarily unavailable."
     let private invalid () = error 400 "invalid_request" "Invalid authentication request."
 
+    // Separate codes let the client say which field to change.
+    let private nameNotAllowed field = error 400 $"{field}_not_allowed" "Name contains words that are not allowed."
+
+    /// Registration only: existing accounts keep signing in with their stored names.
+    let private allowedUsername moderation (username: Username) =
+        let text = Username.value username
+        not (text.StartsWith Moderation.HiddenUsernamePrefix) && Moderation.allows moderation text
+
     let private field (body: JsonElement) name =
         match body.TryGetProperty(name: string) with
         | true, value when value.ValueKind = JsonValueKind.String -> value.GetString()
         | true, _ | false, _ -> null
 
-    let private command settings operation (body: JsonElement) =
+    let private command settings moderation operation (body: JsonElement) =
         if body.ValueKind <> JsonValueKind.Object then Error (invalid ())
         else
             match operation with
@@ -60,8 +68,11 @@ module AuthenticationHttp =
                     | Ok username ->
                         if operation = Operation.Register then
                             match DisplayName.create settings.Server.ChatInput.DisplayName (field body "displayName") with
-                            | Ok displayName -> Ok (AccountAccessCommand.Register(username, displayName, password))
                             | Error _ -> Error (invalid ())
+                            | Ok _ when not (allowedUsername moderation username) -> Error (nameNotAllowed "username")
+                            | Ok displayName when not (Moderation.allows moderation (DisplayName.value displayName)) ->
+                                Error (nameNotAllowed "display_name")
+                            | Ok displayName -> Ok (AccountAccessCommand.Register(username, displayName, password))
                         else
                             match body.TryGetProperty "rememberMe" with
                             | false, _ -> Ok (AccountAccessCommand.Login(username, password))
@@ -69,7 +80,7 @@ module AuthenticationHttp =
                             | true, value when value.ValueKind = JsonValueKind.True -> Ok (AccountAccessCommand.RememberLogin(username, password))
                             | true, _ -> Error (invalid ())
 
-    let private read settings operation (context: HttpContext) token = task {
+    let private read settings moderation operation (context: HttpContext) token = task {
         if not (context.Request.HasJsonContentType()) then
             return Error (error 415 "unsupported_content_type" "Use application/json.")
         elif context.Request.ContentLength.HasValue && context.Request.ContentLength.Value > int64 MaxBodyBytes then
@@ -88,7 +99,7 @@ module AuthenticationHttp =
                 return Error (error 413 "request_too_large" "Authentication request is too large.")
             else
                 use body = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes, 0, count), JsonDocumentOptions(MaxDepth = 8))
-                return command settings operation body.RootElement
+                return command settings moderation operation body.RootElement
     }
 
     let private response = function
@@ -106,7 +117,7 @@ module AuthenticationHttp =
         | Error AccountAccessError.Busy -> error 503 "busy" "Authentication is busy. Try again later."
         | Error AccountAccessError.Unavailable -> unavailable ()
 
-    let private handle settings (auth: Agent<AuthMessage>) (logger: Serilog.ILogger) operation (context: HttpContext) : Task<IResult> = task {
+    let private handle settings moderation (auth: Agent<AuthMessage>) (logger: Serilog.ILogger) operation (context: HttpContext) : Task<IResult> = task {
         context.Response.Headers.CacheControl <- "no-store"
         use deadline = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted)
         deadline.CancelAfter(TimeSpan.FromSeconds(float settings.Authentication.RequestTimeoutSeconds))
@@ -114,7 +125,7 @@ module AuthenticationHttp =
             if operation = Operation.Register && not settings.Authentication.AllowRegistration then
                 return error 403 "registration_disabled" "Registration is disabled."
             else
-                let! input = read settings operation context deadline.Token
+                let! input = read settings moderation operation context deadline.Token
                 match input with
                 | Error failure -> return failure
                 | Ok command ->
@@ -179,16 +190,16 @@ module AuthenticationHttp =
         | false, _ -> server.ListenAnyIP(address.Port, configure)
 
     /// The caller starts/stops this host and owns the authentication agent separately.
-    let build settings (auth: Agent<AuthMessage>) (logger: Serilog.ILogger) =
+    let build settings moderation (auth: Agent<AuthMessage>) (logger: Serilog.ILogger) =
         let builder = WebApplication.CreateBuilder(WebApplicationOptions(Args = Array.empty))
         builder.Host.UseSerilog(logger, dispose = false) |> ignore
         builder.WebHost.ConfigureKestrel(Action<KestrelServerOptions>(configureServer settings)) |> ignore
         builder.Services.AddRateLimiter(Action<RateLimiterOptions>(configureRate settings)) |> ignore
         let app = builder.Build()
         app.UseRateLimiter() |> ignore
-        app.MapPost("/auth/register", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.Register)) |> ignore
-        app.MapPost("/auth/login", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.Login)) |> ignore
-        app.MapPost("/auth/resume", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.Resume)) |> ignore
-        app.MapPost("/auth/logout", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.Logout)) |> ignore
-        app.MapPost("/auth/reset-password", Func<HttpContext, Task<IResult>>(handle settings auth logger Operation.ResetPassword)) |> ignore
+        app.MapPost("/auth/register", Func<HttpContext, Task<IResult>>(handle settings moderation auth logger Operation.Register)) |> ignore
+        app.MapPost("/auth/login", Func<HttpContext, Task<IResult>>(handle settings moderation auth logger Operation.Login)) |> ignore
+        app.MapPost("/auth/resume", Func<HttpContext, Task<IResult>>(handle settings moderation auth logger Operation.Resume)) |> ignore
+        app.MapPost("/auth/logout", Func<HttpContext, Task<IResult>>(handle settings moderation auth logger Operation.Logout)) |> ignore
+        app.MapPost("/auth/reset-password", Func<HttpContext, Task<IResult>>(handle settings moderation auth logger Operation.ResetPassword)) |> ignore
         app

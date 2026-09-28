@@ -38,7 +38,9 @@ type private Fixture = {
     Host: Channel<SessionHostCommand>
 }
 
-let private withPlayerUsingPresence settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
+let private rules = Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
+
+let private withModeratedPlayer moderation settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
     let queries = Channel.CreateUnbounded<SessionAuthenticationRequest>()
     let chatCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
@@ -52,7 +54,7 @@ let private withPlayerUsingPresence settings (createPresence: Channel<PresenceCo
         RequestId = 1UL
         SessionTicket = String('a', 43)
     }
-    use player = PlayerSession.start settings 64 globalId
+    use player = PlayerSession.start settings 64 moderation globalId
                      (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
     let fixture = { Request = request; Player = player; Authentication = queries;
@@ -69,6 +71,12 @@ let private withPlayerUsingPresence settings (createPresence: Channel<PresenceCo
     do! awaitUnit presence.Completion
     do! awaitUnit host.Completion
 }
+
+let private withPlayerUsingPresence settings createPresence run =
+    withModeratedPlayer Moderation.empty settings createPresence run
+
+let private withRules settings run =
+    withModeratedPlayer rules settings (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
 
 let private withPlayer settings run =
     withPlayerUsingPresence settings (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
@@ -143,7 +151,7 @@ let private rejectUpdate fixture requestId command = task {
 }
 
 let private publication profile id =
-    ChatMessage.create (ChatMessageId.create id |> ok) globalId profile
+    ChatMessage.create (ChatMessageId.create id |> ok) globalId profile ValueNone
         (ChatMessageText.create 2000 $"message {id}" |> ok) DateTimeOffset.UnixEpoch
 
 let private finish fixture = task {
@@ -158,7 +166,75 @@ let private finish fixture = task {
     | other -> failwithf "Expected detach: %A" other
 }
 
+let private submitted fixture requestId text = task {
+    do! post fixture.Player (PlayerSessionMessage.SendChat(requestId, globalId, ChatMessageText.create 2000 text |> ok))
+    let! command = receive fixture.Chat
+    match command with
+    | ChatRoomCommand.Publish value -> return value
+    | other -> return failwithf "Expected publication: %A" other
+}
+
 let tests = testList "PlayerSession" [
+    case "word list refuses chat text before the channel sees it" (fun () ->
+        withRules options (fun fixture -> task {
+            let! _ = ready fixture
+            do! post fixture.Player (PlayerSessionMessage.SendChat(2UL, globalId, ChatMessageText.create 2000 "you B@DW0RD!" |> ok))
+            let! refused = receive fixture.Host
+            match refused with
+            | SessionHostCommand.Send(_, ServerResponse.ChatRejected(2UL, rejection)) ->
+                equal RequestRejectionCode.TextNotAllowed rejection.Code
+                equal "text" rejection.Field
+            | other -> failwithf "Expected text refusal: %A" other
+            equal 0 fixture.Chat.Reader.Count
+            let! accepted = submitted fixture 3UL "badwordless text"
+            equal "badwordless text" (ChatMessageText.value accepted.Text)
+            equal (Moderation.normalize "badwordless text") accepted.Fingerprint
+        }))
+
+    case "stored names failing current rules leave the session only as placeholders" (fun () ->
+        withRules options (fun fixture -> task {
+            let! query = receive fixture.Authentication
+            let stored = PlayerData.create (PlayerId.create 42UL |> ok)
+                             (Username.create 32 "bad.word" |> ok) (DisplayName.create 64 "Sir Badword" |> ok)
+            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok stored }
+            let! reserve = receive fixture.Host
+            let reply =
+                match reserve with
+                | SessionHostCommand.Reserve(_, playerId, reply) -> equal stored.PlayerId playerId; reply
+                | other -> failwithf "Expected Reserve: %A" other
+            do! deliver reply IdentityAdmission.Reserved
+            let! chatCommand = receive fixture.Chat
+            let! presenceCommand = receive fixture.Presence
+            match chatCommand, presenceCommand with
+            | ChatRoomCommand.Join chat, PresenceCommand.Join presence ->
+                for profile in [chat.Profile; presence.Snapshot.Data] do
+                    equal stored.PlayerId profile.PlayerId
+                    equal "hidden.42" (Username.value profile.Username)
+                    equal "Player 42" (DisplayName.value profile.DisplayName)
+            | other -> failwithf "Expected subscriptions: %A" other
+        }))
+
+    case "a failing character name is withheld from presence and chat without being lost" (fun () ->
+        withRules options (fun fixture -> task {
+            let! _ = ready fixture
+            let! hidden = applyUpdate fixture 2UL (PlayerUpdate.BeginCharacter(CharacterName.create 128 "Badword" |> ok))
+            equal ValueNone hidden.CharacterName
+            check hidden.CharacterNameWithheld "A withheld name is still an active character."
+            let! first = submitted fixture 3UL "hello"
+            equal ValueNone first.CharacterName
+            let! state = read fixture.Player
+            equal ValueNone (ok state).CharacterName
+
+            let lydia = CharacterName.create 128 "Lydia" |> ok
+            let! renamed = applyUpdate fixture 4UL (PlayerUpdate.RenameCharacter lydia)
+            equal (ValueSome lydia) renamed.CharacterName
+            check (not renamed.CharacterNameWithheld) "An allowed name is published again."
+            do! deliver (fixture.Player.Ref.TryReliable().Value) (PlayerSessionMessage.ChatEvent(ChatRoomEvent.Rejected(3UL, { Code = RequestRejectionCode.RateLimited; Message = ""; Field = "" })))
+            let! _ = receive fixture.Host
+            let! second = submitted fixture 5UL "hello again"
+            equal (ValueSome lydia) second.CharacterName
+        }))
+
     case "bootstrap orders history before later chat and buffers independent presence changes" (fun () ->
         withPlayer options (fun fixture -> task {
             let! profile, chat, presence = joins fixture
@@ -451,7 +527,7 @@ let tests = testList "PlayerSession" [
             ConnectionId = Guid.NewGuid(); RequestId = 1UL
             SessionTicket = String('b', 43)
         }
-        use player = PlayerSession.start options 64 globalId
+        use player = PlayerSession.start options 64 Moderation.empty globalId
                          (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
         let! failure = terminal player.Completion

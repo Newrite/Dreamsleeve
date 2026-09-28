@@ -36,6 +36,7 @@ const failures = [
   "invalidResponse",
   "credentialStorage",
   "canceled",
+  "nameNotAllowed",
 ];
 function actorValue(v: unknown): boolean {
   return (
@@ -50,6 +51,9 @@ function player(v: unknown): boolean {
   return (
     object(v) &&
     id(v.id) &&
+    text(v.name) &&
+    (v.alias === undefined || text(v.alias)) &&
+    typeof v.inCharacter === "boolean" &&
     text(v.displayName) &&
     text(v.username) &&
     (v.character === undefined || text(v.character)) &&
@@ -111,7 +115,15 @@ export function parseHostEvent(source: string): HostEvent {
         id(v.selfId) &&
         text(v.serverName) &&
         v.serverName.length <= 512 &&
-        (v.settings === undefined || object(v.settings));
+        (v.settings === undefined || object(v.settings)) &&
+        (v.refresh === undefined || typeof v.refresh === "boolean");
+      break;
+    case "ignored":
+      valid = list(
+        v.players,
+        (p) => object(p) && id(p.id) && text(p.name),
+        1000,
+      );
       break;
     case "messages":
       valid = list(v.messages, message, 500);

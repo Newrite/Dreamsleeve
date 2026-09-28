@@ -52,6 +52,7 @@ module ServerRuntime =
         mutable RouteScratch: SessionTable.Entry array
         Codec: ProtocolCodec
         MaxActorValues: int
+        Moderation: ModerationRules
         Transport: ServerTransport
         Logger: ILogger
         mutable Sources: Sources option
@@ -182,7 +183,7 @@ module ServerRuntime =
         match state.Sources, context.Ref.TryReliable() with
         | Some sources, Some self ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket }
-            match PlayerSession.start options.Player maxActorValues globalId (authenticator.Requests)
+            match PlayerSession.start options.Player maxActorValues state.Moderation globalId (authenticator.Requests)
                       (sources.Chat.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                       (self.Map ServerRuntimeMessage.Host) request with
             | Error reason -> fail state context reason
@@ -214,9 +215,12 @@ module ServerRuntime =
         else
             match ProtocolCodec.decodeClient state.Codec bytes with
             | Error error ->
-                match error.RequestId with
-                | None -> close options state context entry
-                | Some requestId -> reject options state context entry lane requestId RequestRejectionCode.InvalidRequest "Invalid request."
+                match error.RequestId, error.Failure with
+                | None, _ -> close options state context entry
+                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.TooLong maximum)) ->
+                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = $"Message exceeds {maximum} characters."; Field = "text" }
+                    send options state context entry (ServerResponse.ChatRejected(requestId, rejection))
+                | Some requestId, _ -> reject options state context entry lane requestId RequestRejectionCode.InvalidRequest "Invalid request."
             | Ok request when ProtocolCodec.requestLane request <> lane -> close options state context entry
             | Ok request ->
                 match request.Command, entry.Phase with
@@ -440,7 +444,8 @@ module ServerRuntime =
 
     /// The caller owns authentication separately and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.
-    let start (options: ServerRuntimeOptions) config (authenticator: SessionAuthenticator) transport (logger: ILogger) =
+    /// Moderation rules are fixed for the runtime lifetime, like the rest of config.
+    let start (options: ServerRuntimeOptions) config (moderation: ModerationRules) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let limits = [ options.MaxSessions; options.MailboxCapacity; options.ControlReserve; options.OpenTimeoutMs
                        options.ShutdownTimeoutMs; options.PollIntervalMs; options.Player.MailboxCapacity
                        options.Player.ControlReserve; options.Player.MaxPendingChat; options.Player.MaxPendingUpdates; options.Player.MaxBootstrapEvents
@@ -471,6 +476,7 @@ module ServerRuntime =
         | [], Ok codec, Ok globalId ->
             let state = {
                 Table = SessionTable.create(); RouteScratch = Array.empty; Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
+                Moderation = moderation
                 Transport = transport; Logger = logger
                 Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
             }

@@ -293,6 +293,7 @@ module internal PlayerCodec =
         let result = Dreamsleeve.Protocol.Chat.PlayerInfo(
             Profile = profile value.Data,
             ViewRevision = value.ViewRevision, MovementSequence = value.MovementSequence, CharacterGeneration = value.CharacterGeneration,
+            CharacterNameWithheld = value.CharacterNameWithheld,
             Details = details value.Details)
 
         value.CharacterName |> ValueOption.iter (fun name -> result.CharacterName <- CharacterName.value name)

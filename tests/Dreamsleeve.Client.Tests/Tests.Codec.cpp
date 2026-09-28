@@ -18,7 +18,7 @@ namespace
     return std::move(*result);
   }
 
-  template<class T>
+  template <class T>
   std::vector<std::byte> Bytes(const T& packet)
   {
     std::vector<std::byte> bytes(packet.ByteSizeLong());
@@ -51,7 +51,7 @@ namespace
     welcome->set_self_player_id(7);
     welcome->set_global_channel_id(1);
     *welcome->add_players()->mutable_profile() = published.chat_published().message().author();
-    *welcome->add_recent_messages() = published.chat_published().message();
+    *welcome->add_recent_messages()            = published.chat_published().message();
     return packet;
   }
 
@@ -103,6 +103,28 @@ TEST_CASE("Own and broadcast chat decode into the same owned normal chat event")
   CHECK(first.messages[0].messageText == "Привет\nworld");
 }
 
+TEST_CASE("Chat messages keep the character snapshot and players the withheld-name flag")
+{
+  const auto codec  = MakeCodec();
+  auto       packet = Published();
+  auto       plain  = codec.Decode(Bytes(packet), W::Channel::Chat);
+  REQUIRE(plain);
+  CHECK_FALSE(std::get<ChatMessagesReceived>(*plain).messages[0].characterName);  // Old history: no snapshot.
+
+  packet.mutable_chat_published()->mutable_message()->set_character_name("Lydia");
+  auto named = codec.Decode(Bytes(packet), W::Channel::Chat);
+  REQUIRE(named);
+  CHECK(std::get<ChatMessagesReceived>(*named).messages[0].characterName == "Lydia");
+
+  auto welcome = Welcome();
+  welcome.mutable_session_opened()->mutable_players(0)->set_character_name_withheld(true);
+  auto opened = codec.Decode(Bytes(welcome), W::Channel::Control);
+  REQUIRE(opened);
+  const auto& player = std::get<W::SessionOpened>(*opened).players.front();
+  CHECK(player.characterNameWithheld);
+  CHECK_FALSE(player.characterName);
+}
+
 TEST_CASE("Welcome decoding returns ordinary player and chat data without applying model policy")
 {
   const auto codec  = MakeCodec();
@@ -124,7 +146,9 @@ TEST_CASE("Welcome decoding returns ordinary player and chat data without applyi
   *welcome->add_players() = duplicate;
   welcome->set_self_player_id(8);
   welcome->mutable_recent_messages(0)->set_channel_id(2);
-  CHECK(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));  // Store/state policy is not repeated in the codec.
+  CHECK(codec.Decode(
+    Bytes(packet),
+    packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));  // Store/state policy is not repeated in the codec.
   packet.clear_request_id();
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
 }
@@ -152,7 +176,7 @@ TEST_CASE("Rejections retain unknown codes and correlation while presence events
   REQUIRE(result);
   CHECK(std::get<PlayerRemoved>(*result).playerId == 7);
   *packet.mutable_player_joined()->mutable_player()->mutable_profile() = Published().chat_published().message().author();
-  result                                            = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
+  result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
   CHECK(std::get<PlayerUpserted>(*result).player.data.playerId == 7);
 }
@@ -173,7 +197,9 @@ TEST_CASE("Malformed unsupported and structurally incomplete server packets retu
   packet.mutable_chat_published()->clear_message();
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.mutable_chat_published()->mutable_message();
-  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));  // Present but empty is equally invalid.
+  CHECK_FALSE(codec.Decode(
+    Bytes(packet),
+    packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));  // Present but empty is equally invalid.
   packet = Published();
   packet.mutable_chat_published()->mutable_message()->clear_author();
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
@@ -310,16 +336,29 @@ TEST_CASE("Rejection codes share protobuf names and retain future signed enum va
   CHECK(missing.error().field == "code");
 }
 
-
 TEST_CASE("Player update encoding retains full samples explicit zero resource values and structured details")
 {
-  const auto codec = MakeCodec();
+  const auto    codec = MakeCodec();
   LocalMovement sample;
-  sample.location = Domain::PlayerLocation{{{"skyrim.esm", 0x123}, "Whiterun"}, {1, 2, 3}, {0, 0, 3.14f}, 123456789};
+  sample.location = Domain::PlayerLocation{
+      {{"skyrim.esm", 0x123}, "Whiterun"},
+      {1, 2, 3},
+      {0, 0, 3.14f},
+      123456789
+  };
   LocalActorValues values;
   values.actorValues.emplace("speed", Domain::ActorValueInfo{"Speed", Domain::ScalarActorValue{0}});
-  values.actorValues.emplace("health", Domain::ActorValueInfo{"Health", Domain::ResourceActorValue{150, 100}});
-  auto encoded = codec.Encode(W::UpdatePlayer{51, W::SetLocation{1, sample.location}});
+  values.actorValues.emplace(
+    "health",
+    Domain::ActorValueInfo{
+        "Health",
+        Domain::ResourceActorValue{150, 100}
+  });
+  auto encoded = codec.Encode(
+    W::UpdatePlayer{
+        51,
+        W::SetLocation{1, sample.location}
+  });
   REQUIRE(encoded);
   P::ClientPacket packet;
   REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
@@ -347,12 +386,15 @@ TEST_CASE("Player update encoding retains full samples explicit zero resource va
   }
 
   Domain::PlayerDetails details;
-  details.race = Domain::NamedForm{{"skyrim.esm", 0x13746}, "Nord"};
-  details.level = 0;
-  details.activity = {Domain::ActivityKind::Lockpicking, "Chest", Domain::LockDifficulty::VeryHard, std::nullopt};
-  details.place = Domain::PlaceDescription{"Tamriel", "Whiterun", "Dragonsreach", "castle", false};
+  details.race = Domain::NamedForm{
+      {"skyrim.esm", 0x13746},
+      "Nord"
+  };
+  details.level               = 0;
+  details.activity            = {Domain::ActivityKind::Lockpicking, "Chest", Domain::LockDifficulty::VeryHard, std::nullopt};
+  details.place               = Domain::PlaceDescription{"Tamriel", "Whiterun", "Dragonsreach", "castle", false};
   details.gameStartedAtUnixMs = 123456789;
-  encoded = codec.Encode(W::UpdatePlayer{52, PlayerDetailsChanged{details}});
+  encoded                     = codec.Encode(W::UpdatePlayer{52, PlayerDetailsChanged{details}});
   REQUIRE(encoded);
   REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
   const auto& rich = packet.update_player().set_details();
@@ -373,9 +415,9 @@ TEST_CASE("Player update encoding retains full samples explicit zero resource va
 
 TEST_CASE("Full PlayerInfo preserves optional data zero scalars and generation for late join")
 {
-  const auto codec = MakeCodec();
-  auto packet = Welcome();
-  auto* source = packet.mutable_session_opened()->mutable_players(0);
+  const auto codec  = MakeCodec();
+  auto       packet = Welcome();
+  auto*      source = packet.mutable_session_opened()->mutable_players(0);
   source->set_character_name("Nerevar");
   source->set_character_generation(5);
   source->mutable_details()->set_level(25);
@@ -397,9 +439,18 @@ TEST_CASE("Full PlayerInfo preserves optional data zero scalars and generation f
   CHECK(player.details.gameStartedAtUnixMs == 123);
   CHECK(std::get<Domain::ScalarActorValue>(player.actorValues.at("zero").state).value == 0);
 
-  SUBCASE("missing actor value") { scalar->clear_value(); }
-  SUBCASE("nonfinite actor value") { scalar->set_scalar(std::numeric_limits<float>::infinity()); }
-  SUBCASE("duplicate actor key") { *source->add_actor_values() = *scalar; }
+  SUBCASE("missing actor value")
+  {
+    scalar->clear_value();
+  }
+  SUBCASE("nonfinite actor value")
+  {
+    scalar->set_scalar(std::numeric_limits<float>::infinity());
+  }
+  SUBCASE("duplicate actor key")
+  {
+    *source->add_actor_values() = *scalar;
+  }
   SUBCASE("too many values")
   {
     for (int index = 0; index < 64; ++index)
@@ -416,12 +467,12 @@ TEST_CASE("Actor value limits are configured for both outgoing samples and incom
 {
   Configuration settings;
   settings.maxActorValues = 1;
-  const auto codec = MakeCodec(settings);
+  const auto       codec  = MakeCodec(settings);
   LocalActorValues sample;
   sample.actorValues.emplace("skyrim:health", Domain::ActorValueInfo{"Health", Domain::ScalarActorValue{0}});
   sample.actorValues.emplace("skyrim:stamina", Domain::ActorValueInfo{"Stamina", Domain::ScalarActorValue{1}});
   CHECK_FALSE(codec.Encode(W::UpdatePlayer{1, sample}));
-  auto packet = Welcome();
+  auto  packet = Welcome();
   auto* player = packet.mutable_session_opened()->mutable_players(0);
   for (const auto* key : {"skyrim:health", "skyrim:stamina"})
   {
@@ -438,7 +489,7 @@ TEST_CASE("Actor value limits are configured for both outgoing samples and incom
 
 TEST_CASE("Player update correlation is distinct from uncorrelated full and compact replication")
 {
-  const auto codec = MakeCodec();
+  const auto      codec = MakeCodec();
   P::ServerPacket packet;
   packet.set_protocol_version(W::Version);
   packet.mutable_player_update_accepted();
@@ -464,7 +515,7 @@ TEST_CASE("Player update correlation is distinct from uncorrelated full and comp
 
 TEST_CASE("Metadata notifications distinguish omitted components from empty replacements")
 {
-  const auto codec = MakeCodec();
+  const auto      codec = MakeCodec();
   P::ServerPacket packet;
   packet.set_protocol_version(W::Version);
   auto* patch = packet.mutable_player_metadata_changed();
@@ -489,11 +540,14 @@ TEST_CASE("Metadata notifications distinguish omitted components from empty repl
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
 }
 
-
 TEST_CASE("Movement uses a separate unreliable envelope bounded by negotiated payload")
 {
-  const auto codec = MakeCodec();
-  W::MovementSample source{11, 42, {{0, 2, 3}, {0, 0, 1}, 12345}};
+  const auto        codec = MakeCodec();
+  W::MovementSample source{
+      11,
+      42,
+      {{0, 2, 3}, {0, 0, 1}, 12345}
+  };
   auto encoded = codec.Encode(source, 1200);
   REQUIRE(encoded);
   CHECK(encoded->Flags() == PacketFlag::None);
@@ -509,7 +563,7 @@ TEST_CASE("Movement uses a separate unreliable envelope bounded by negotiated pa
 
 TEST_CASE("Movement batch validates sequence context finite pose and selected channel")
 {
-  const auto codec = MakeCodec();
+  const auto              codec = MakeCodec();
   P::ServerMovementPacket packet;
   packet.set_protocol_version(W::Version);
   CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Realtime));
@@ -527,11 +581,23 @@ TEST_CASE("Movement batch validates sequence context finite pose and selected ch
   CHECK(std::get<W::PlayersMoved>(*decoded).players[1].playerId == 8);
   CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Control));
   packet.mutable_movements()->mutable_players(0)->set_sequence(0);
-  CHECK(codec.Decode(Bytes(packet), W::Channel::Realtime)); // A repeated reliable baseline.
-  SUBCASE("unknown player") { packet.mutable_movements()->mutable_players(1)->set_player_id(0); }
-  SUBCASE("empty context") { packet.mutable_movements()->mutable_players(1)->set_view_revision(0); }
-  SUBCASE("nonfinite pose") { packet.mutable_movements()->mutable_players(1)->mutable_pose()->mutable_position()->set_x(std::numeric_limits<float>::infinity()); }
-  SUBCASE("wrong version") { packet.set_protocol_version(5); }
+  CHECK(codec.Decode(Bytes(packet), W::Channel::Realtime));  // A repeated reliable baseline.
+  SUBCASE("unknown player")
+  {
+    packet.mutable_movements()->mutable_players(1)->set_player_id(0);
+  }
+  SUBCASE("empty context")
+  {
+    packet.mutable_movements()->mutable_players(1)->set_view_revision(0);
+  }
+  SUBCASE("nonfinite pose")
+  {
+    packet.mutable_movements()->mutable_players(1)->mutable_pose()->mutable_position()->set_x(std::numeric_limits<float>::infinity());
+  }
+  SUBCASE("wrong version")
+  {
+    packet.set_protocol_version(5);
+  }
   CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Realtime));
 }
 

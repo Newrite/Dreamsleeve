@@ -12,6 +12,7 @@
         <Compile Include="PlayerDetails.fs" />
         <Compile Include="Players.fs" />
         <Compile Include="Chat.fs" />
+        <Compile Include="Moderation.fs" />
         <Compile Include="Core.fs" />
     </ItemGroup>
 

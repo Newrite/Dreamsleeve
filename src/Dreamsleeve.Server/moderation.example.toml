@@ -1,0 +1,46 @@
+# Dreamsleeve server word list. Copy to moderation.toml next to the server
+# (Moderation.RulesPath in server.toml). Read once at startup.
+#
+# Checked: username and display name at registration, every chat message before
+# it is stored or relayed, and the character name before it is published.
+# Stored accounts are never rewritten: names that fail these rules are shown to
+# other players as "Player <id>" / "hidden.<id>", and a failing character name
+# is withheld (clients fall back to the display name).
+#
+# Matching uses a separate normalized copy of the text; the original is kept:
+# case, Unicode compatibility forms (NFKC), accents and other combining marks,
+# invisible/format characters, look-alike Cyrillic/Greek letters, digits and
+# symbols typed as letters (4/@ → a, 3 → e, 1/!/| → i, 0 → o, 5/$ → s, 7 → t,
+# 8 → b), letters repeated more often than in the rule, and punctuation typed
+# inside a word ("b.a.d"). This is a baseline filter, not complete moderation.
+
+# Whole words or phrases: a match needs a word boundary on both sides, so
+# "shit" does not match "shiitake". Spaces in a phrase match any spacing.
+words = [
+  "fuck",
+  "fucking",
+  "motherfucker",
+  "shit",
+  "bitch",
+  "хуй",
+  "хуйня",
+  "пизда",
+  "блядь",
+  "сука",
+  "мудак",
+]
+
+# Substrings match anywhere, including inside longer words. Use them only for
+# roots that do not occur in ordinary words.
+substrings = [
+  "fuck",
+  "cunt",
+  "пизд",
+  "бляд",
+]
+
+# Allowed whole words or phrases. A rule match lying entirely inside one of them
+# is ignored (the classic case: the substring "cunt" inside "Scunthorpe").
+exceptions = [
+  "Scunthorpe",
+]

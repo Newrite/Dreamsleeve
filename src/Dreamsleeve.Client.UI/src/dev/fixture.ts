@@ -9,6 +9,8 @@ export const channels: Channel[] = [
 export const players: Player[] = [
   {
     id: "18446744073709551601",
+    name: "Северный",
+    inCharacter: true,
     displayName: "Северный",
     username: "northern",
     character: "Довакин",
@@ -41,6 +43,8 @@ export const players: Player[] = [
   },
   {
     id: "2",
+    name: "Мира",
+    inCharacter: true,
     displayName: "Мира",
     username: "mira",
     character: "Эйра",
@@ -71,6 +75,8 @@ export const players: Player[] = [
   },
   {
     id: "3",
+    name: "Седобородый",
+    inCharacter: true,
     displayName: "Седобородый",
     username: "greybeard",
     character: "Хальвар",

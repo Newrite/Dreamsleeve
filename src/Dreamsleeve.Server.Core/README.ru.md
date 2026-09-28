@@ -66,6 +66,12 @@ PlayerLeft. Оно содержит профиль автора и коррек�
 
 ## Чат и состояние игрока
 
+PlayerSession проверяет текст по словарю (`ModerationRules`, передаётся в
+`ServerRuntime.start`) до передачи в канал и публикует профиль и имя персонажа только
+в модерированном виде. ChatRoomAgent ограничивает частоту, всплеск и повторы по
+стабильному PlayerId (`Runtime.Chat.RateBurst/RateRefillMs/DuplicateWindowMs`) и
+отклоняет лишнее до `Chat.append`. См. [модерация и имена](../../docs/ModerationAndNamesRu.md).
+
 Путь публикации: `runtime → PlayerSession → ChatRoomAgent → PlayerSession получателя → runtime`.
 Переход через персональный агент ограничивает незавершённые запросы отправителя;
 общего словаря ожиданий публикаций нет. Перегрузка до передачи команды возвращает

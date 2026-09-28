@@ -7,6 +7,7 @@ export module Dreamsleeve.Host.Bridge;
 import std;
 import Dreamsleeve.Client.Exchange;
 export import Dreamsleeve.Host.UiSettings;
+export import Dreamsleeve.Host.Names;
 
 // In-process JSON contract with the web UI (src/Dreamsleeve.Client.UI/src/bridge/types.ts).
 // Host -> UI payloads are handed to InteropCall as a string argument and parsed
@@ -33,12 +34,18 @@ export namespace Dreamsleeve::Host::Bridge
     std::variant<double, UiResource> value{0.0};
   };
 
+  // name is the one resolved label for every surface. In streamer mode the
+  // real username/displayName/character never cross the bridge: displayName
+  // and alias carry the local pseudonym, the others stay empty.
   struct UiPlayer
   {
     std::string                              id;
+    std::string                              name;
+    std::optional<std::string>               alias;
     std::string                              displayName;
     std::string                              username;
     std::optional<std::string>               character;
+    bool                                     inCharacter{};
     std::optional<std::uint32_t>             level;
     std::optional<std::string>               location;
     std::optional<std::string>               zone;
@@ -81,6 +88,9 @@ export namespace Dreamsleeve::Host::Bridge
     std::string               selfId;
     std::string               serverName;
     std::optional<UiSettings> settings;
+    // Same session re-projected (names or ignore list changed): the UI keeps
+    // its pending rows, filters and scroll instead of treating it as new.
+    bool refresh{};
   };
 
   struct MessagesEvent
@@ -100,6 +110,18 @@ export namespace Dreamsleeve::Host::Bridge
     std::string type{"connection"};
     bool        connected{};
     std::string phase{"disconnected"};
+  };
+
+  struct UiIgnored
+  {
+    std::string id;
+    std::string name;
+  };
+
+  struct IgnoredEvent
+  {
+    std::string            type{"ignored"};
+    std::vector<UiIgnored> players;
   };
 
   struct SendResultEvent
@@ -156,6 +178,9 @@ export namespace Dreamsleeve::Host::Bridge
     std::string               password;
     std::string               displayName;
     bool                      remember{};
+    std::string               playerId;
+    std::string               nameMode;
+    bool                      streamerMode{};
   };
 
   constexpr std::size_t MaxChatText     = 16000;
@@ -194,6 +219,11 @@ export namespace Dreamsleeve::Host::Bridge
   }
 
   Encoded Encode(const ConnectionEvent& event)
+  {
+    return Detail::Write(event);
+  }
+
+  Encoded Encode(const IgnoredEvent& event)
   {
     return Detail::Write(event);
   }
@@ -246,6 +276,18 @@ export namespace Dreamsleeve::Host::Bridge
     if (type == "signIn")
     {
       if (command.username.empty() || command.password.empty()) return std::unexpected{"signIn requires username and password"};
+      return command;
+    }
+    if (type == "ignore" || type == "unignore")
+    {
+      if (command.playerId.empty()) return std::unexpected{type + " requires playerId"};
+      return command;
+    }
+    if (type == "nameSettings")
+    {
+      UiSettings names;
+      names.nameMode   = command.nameMode;
+      command.nameMode = Normalize(names).nameMode;
       return command;
     }
     if (type == "close" || type == "signInSaved" || type == "signOut" || type == "forgetLogin" || type == "disconnect") return command;
@@ -442,20 +484,34 @@ export namespace Dreamsleeve::Host::Bridge
     return std::string{value.substr(0, end)};
   }
 
-  UiPlayer ToUiAuthor(const Domain::PlayerData& data)
+  UiPlayer ToUiAuthor(
+    const Domain::PlayerData&                   data,
+    const std::optional<Domain::CharacterName>& character,
+    bool                                        inCharacter,
+    Names&                                      names,
+    const UiSettings&                           settings)
   {
     UiPlayer player;
     player.id          = Id(data.playerId);
+    player.name        = names.NameFor(data.playerId, data, character, settings);
+    player.inCharacter = inCharacter;
+    if (settings.streamerMode)
+    {
+      player.alias       = player.name;
+      player.displayName = player.name;
+      return player;
+    }
     player.displayName = data.displayName;
     player.username    = data.username;
+    player.character   = character;
     return player;
   }
 
-  UiPlayer ToUiPlayer(const Domain::Player& source)
+  UiPlayer ToUiPlayer(const Domain::Player& source, Names& names, const UiSettings& settings)
   {
-    auto        player  = ToUiAuthor(source.data);
+    auto player =
+      ToUiAuthor(source.data, source.characterName, source.characterName.has_value() || source.characterNameWithheld, names, settings);
     const auto& details = source.details;
-    player.character    = source.characterName;
     player.level        = details.level;
     if (details.race) player.race = Text(details.race->name);
     if (details.place)
@@ -494,14 +550,16 @@ export namespace Dreamsleeve::Host::Bridge
     return player;
   }
 
-  UiMessage ToUiMessage(const Domain::ChatMessage& message)
+  // The author is named from the snapshot taken at sending, never from the
+  // character the player uses now.
+  UiMessage ToUiMessage(const Domain::ChatMessage& message, Names& names, const UiSettings& settings)
   {
     UiMessage result;
     result.id        = Id(message.messageId);
     result.channelId = Id(message.channelId);
     result.text      = message.messageText;
     result.time      = Domain::ToUnixMilliseconds(message.sentAt);
-    result.author    = ToUiAuthor(message.author);
+    result.author    = ToUiAuthor(message.author, message.characterName, message.characterName.has_value(), names, settings);
     return result;
   }
 
@@ -569,6 +627,8 @@ export namespace Dreamsleeve::Host::Bridge
         return "credentialStorage";
       case FailureCode::Canceled:
         return "canceled";
+      case FailureCode::NameNotAllowed:
+        return "nameNotAllowed";
       case FailureCode::None:
         break;
     }
@@ -583,7 +643,8 @@ export namespace Dreamsleeve::Host::Bridge
     return event;
   }
 
-  AuthEvent AuthState(const ClientStatus& status)
+  // Streamer mode hides the saved account name as well.
+  AuthEvent AuthState(const ClientStatus& status, bool streamerMode = false)
   {
     AuthEvent event;
     event.authenticating = status.authenticating;
@@ -591,9 +652,28 @@ export namespace Dreamsleeve::Host::Bridge
     event.failure        = FailureName(status.authFailure);
     event.error          = ClipUtf8(status.error, MaxErrorBytes);
     event.savedLogin     = status.savedLogin;
-    event.savedUsername  = status.savedUsername;
+    event.savedUsername  = streamerMode ? std::string{} : status.savedUsername;
     event.phase          = PhaseName(status);
     return event;
+  }
+
+  // Known server refusals in the UI language; unknown codes keep the server text.
+  std::string RejectionText(Dreamsleeve::Client::RequestRejectionCode code, std::string_view message)
+  {
+    using Code = Dreamsleeve::Client::RequestRejectionCode;
+    switch (code)
+    {
+      case Code::TextNotAllowed:
+        return "Сообщение содержит запрещённые слова";
+      case Code::RateLimited:
+        return "Слишком часто или повтор того же сообщения. Подождите немного";
+      case Code::InvalidRequest:
+        if (message.starts_with("Message exceeds")) return "Сообщение слишком длинное";
+        break;
+      default:
+        break;
+    }
+    return message.empty() ? std::string{"Сервер отклонил сообщение"} : std::string{message};
   }
 
   std::string_view FailureText(CommandFailureCode code)

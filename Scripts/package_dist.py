@@ -4,14 +4,17 @@
 dist/Client (copy into Skyrim Data or install as a mod):
   SKSE/Plugins/Dreamsleeve.Client.dll (+ .pdb)
   SKSE/Plugins/Dreamsleeve/client.toml            defaults; edited by the user
+  SKSE/Plugins/Dreamsleeve/aliases.toml           streamer-mode pseudonym dictionary
   PrismaUI/views/Dreamsleeve/                     production web UI (index.html, assets, theme.user.css)
   Dreamsleeve/README.md, THIRD_PARTY_NOTICES.md   install notes and licenses
 
 dist/Server (framework-dependent `dotnet publish` of Dreamsleeve.Server, Release):
-  Dreamsleeve.Server.dll and dependencies, db/migrations, server.example.toml, README.md
+  Dreamsleeve.Server.dll and dependencies, db/migrations, server.example.toml, README.md,
+  moderation.example.toml and moderation.toml (word list, created only when absent)
 
 The script never touches a game folder or a running server: installing is a copy,
 and an existing client.toml/ui.toml/server.toml must not be overwritten on update.
+User files already inside dist (configs, word list, database, logs) are kept across rebuilds.
 """
 from __future__ import annotations
 
@@ -23,10 +26,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 UI = ROOT / "src" / "Dreamsleeve.Client.UI"
+CLIENT = ROOT / "src" / "Dreamsleeve.Client"
 SERVER = ROOT / "src" / "Dreamsleeve.Server"
 BUILD = ROOT / "build" / "windows" / "x64" / "releasedbg"
 FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data")
 FORBIDDEN_SUFFIXES = (".map", ".db", ".log")
+# Relative to dist/: user-owned files and folders that a rebuild must not replace.
+PRESERVED = (
+    "Client/SKSE/Plugins/Dreamsleeve/client.toml",
+    "Client/SKSE/Plugins/Dreamsleeve/ui.toml",
+    "Client/SKSE/Plugins/Dreamsleeve/aliases.toml",
+    "Server/server.toml",
+    "Server/moderation.toml",
+    "Server/data",
+    "Server/logs",
+)
 
 CLIENT_TOML = """# Dreamsleeve client. Omitted settings keep defaults; keys are case-sensitive.
 # Full reference: src/Dreamsleeve.Client.Core/client.example.toml in the repository.
@@ -113,6 +127,12 @@ def client_readme() -> str:
 Положение окна и внешний вид сохраняются в `ui.toml`; полное отключение интерфейса —
 в SKSE Menu Framework (Dreamsleeve → Настройки).
 
+Имена: в настройках чата выбирается имя пользователя, отображаемое имя или имя
+персонажа; режим стримера заменяет все имена локальными псевдонимами из
+`SKSE/Plugins/Dreamsleeve/aliases.toml` (назначение хранится в `ui.toml`, на сервер
+не передаётся). Личный список игнора тоже хранится в `ui.toml`, отдельно для
+каждого адреса сервера. Имена над светлячками — только SE/AE.
+
 Логи: `Documents/My Games/Skyrim Special Edition/SKSE/DreamsleeveClient.log`.
 """
 
@@ -134,6 +154,12 @@ dotnet Dreamsleeve.Server.dll --config server.toml         # запуск
 см. docs/AuthenticationRu.md в репозитории. База SQLite и логи создаются относительно
 рабочего каталога (`data/`, `logs/`); миграции лежат в `db/migrations` и применяются при старте.
 Остановка: `quit` в консоли или Ctrl+C. Существующий `server.toml` при обновлении не перезаписывайте.
+
+Модерация: `moderation.toml` — словарь запрещённых слов, подстрок и исключений
+(формат описан в `moderation.example.toml`). Он проверяет новые username/display name,
+текст сообщений и публикуемое имя персонажа; отключается `[Moderation] Enabled = false`.
+Антиспам (частота, всплеск, повторы) настраивается в `[Runtime.Chat]`. Это базовая
+защита, а не полная модерация. Изменения читаются только при запуске.
 """
 
 
@@ -156,6 +182,17 @@ def main() -> int:
         raise SystemExit(f"Missing {ui_dist / 'index.html'}; run npm run build first")
 
     output = Path(args.output)
+    stash = output.parent / (output.name + ".preserve")
+    if stash.exists():
+        shutil.rmtree(stash)
+    kept = []
+    for relative in PRESERVED:
+        source = output / relative
+        if source.exists():
+            target = stash / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), str(target))
+            kept.append(relative)
     if output.exists():
         shutil.rmtree(output)
     client = output / "Client"
@@ -168,6 +205,7 @@ def main() -> int:
     config = plugins / "Dreamsleeve"
     config.mkdir()
     (config / "client.toml").write_text(CLIENT_TOML, encoding="utf-8")
+    shutil.copy2(CLIENT / "aliases.toml", config / "aliases.toml")
 
     views = client / "PrismaUI" / "views" / "Dreamsleeve"
     copied = copy_tree(ui_dist, views)
@@ -181,12 +219,27 @@ def main() -> int:
         server = output / "Server"
         run(["dotnet", "publish", str(SERVER), "-c", "Release", "-o", str(server), "--nologo"], ROOT)
         shutil.copy2(SERVER / "server.example.toml", server / "server.example.toml")
+        shutil.copy2(SERVER / "moderation.example.toml", server / "moderation.example.toml")
+        # Enabled by default: a fresh server starts with the example word list.
+        shutil.copy2(SERVER / "moderation.example.toml", server / "moderation.toml")
         (server / "README.md").write_text(server_readme(), encoding="utf-8")
 
     for item in output.rglob("*"):
         relative = item.relative_to(output).parts
         if any(part in FORBIDDEN for part in relative) or item.suffix in FORBIDDEN_SUFFIXES:
             raise SystemExit(f"Forbidden content in dist: {item}")
+    for relative in kept:
+        target = output / relative
+        if target.is_dir():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(stash / relative), str(target))
+    if stash.exists():
+        shutil.rmtree(stash)
+    if kept:
+        print("Kept user files: " + ", ".join(kept))
     print(f"dist assembled at {output}: Client (DLL, config, {copied} UI files){'' if args.no_server else ', Server (dotnet publish)'}")
     return 0
 

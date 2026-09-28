@@ -318,7 +318,7 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     ".Protocol.Chat.MovementSample\"l\n\024ServerM"
     "ovementPacket\022\030\n\020protocol_version\030\001 \001(\r\022"
     ":\n\tmovements\030\002 \001(\0132\'.Dreamsleeve.Protoco"
-    "l.Chat.PlayersMoved*\252\003\n\024RequestRejection"
+    "l.Chat.PlayersMoved*\200\004\n\024RequestRejection"
     "Code\022&\n\"REQUEST_REJECTION_CODE_UNSPECIFI"
     "ED\020\000\022*\n&REQUEST_REJECTION_CODE_INVALID_R"
     "EQUEST\020\001\022,\n(REQUEST_REJECTION_CODE_SESSI"
@@ -329,7 +329,9 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "EST_REJECTION_CODE_NOT_CHANNEL_MEMBER\020\006\022"
     "%\n!REQUEST_REJECTION_CODE_OVERLOADED\020\007\0220"
     "\n,REQUEST_REJECTION_CODE_AUTHENTICATION_"
-    "FAILED\020\010b\006proto3"
+    "FAILED\020\010\022+\n\'REQUEST_REJECTION_CODE_TEXT_"
+    "NOT_ALLOWED\020\t\022\'\n#REQUEST_REJECTION_CODE_"
+    "RATE_LIMITED\020\nb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_protocol_2eproto_deps[3] = {
@@ -341,7 +343,7 @@ static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    1936,
+    2022,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -362,7 +364,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_
   return file_level_enum_descriptors_protocol_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t RequestRejectionCode_internal_data_[] = {
-    589824u, 0u, };
+    720896u, 0u, };
 // ===================================================================
 
 class ClientPacket::_Internal {

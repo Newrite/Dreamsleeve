@@ -86,7 +86,7 @@ namespace
 
   // A Ready publication that is only a delta makes the session ask Core for a
   // snapshot; this answers that request the way ClientRuntime would.
-  void Settle(Session& session, ClientExchange& exchange, ClientModel& model, Session::Frame& frame)
+  void Settle(Session& session, ClientExchange& exchange, ClientModel& model, Session::Frame& frame, const UiSettings& settings = {})
   {
     if (frame.snapshot) return;
     std::vector<QueuedClientCommand> commands;
@@ -96,7 +96,7 @@ namespace
     ClientOutput output;
     exchange.Drain(output);
     frame = {};
-    session.Process(exchange, output, UiSettings{}, frame);
+    session.Process(exchange, output, settings, frame);
   }
 
 }
@@ -171,12 +171,15 @@ TEST_CASE("Older UI files inherit name preferences from client configuration")
 
 TEST_CASE("Bridge encodes players with string identifiers and safe text")
 {
-  auto player = MakePlayer(18446744073709551615ull, "Display");
-  auto json   = Bridge::Encode(Bridge::PlayersEvent{.players = {Bridge::ToUiPlayer(player)}});
+  Names names;
+  auto  player = MakePlayer(18446744073709551615ull, "Display");
+  auto  json   = Bridge::Encode(Bridge::PlayersEvent{.players = {Bridge::ToUiPlayer(player, names, UiSettings{})}});
   REQUIRE(json);
   auto  value = Parse(*json);
   auto& first = value["players"][0];
   CHECK(first["id"].get<std::string>() == "18446744073709551615");
+  CHECK(first["name"].get<std::string>() == "Display");
+  CHECK(first["inCharacter"].get<bool>());
   CHECK(first["level"].get<double>() == 0);
   CHECK(first["race"].get<std::string>() == "Nord");
   CHECK(first["activity"].get<std::string>() == "Разговор");
@@ -188,7 +191,7 @@ TEST_CASE("Bridge encodes players with string identifiers and safe text")
   CHECK(json->find("\"menu\"") == std::string::npos);
 
   auto message = MakeMessage(5, 1, "<script>alert('x')</script> \"quoted\" \\ end");
-  auto encoded = Bridge::Encode(Bridge::MessagesEvent{.messages = {Bridge::ToUiMessage(message)}});
+  auto encoded = Bridge::Encode(Bridge::MessagesEvent{.messages = {Bridge::ToUiMessage(message, names, UiSettings{})}});
   REQUIRE(encoded);
   auto parsed = Parse(*encoded);
   CHECK(parsed["messages"][0]["text"].get<std::string>() == message.messageText);
@@ -576,6 +579,273 @@ TEST_CASE("Session admits only live global-channel publications of other players
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
   REQUIRE(frame.freshMessages.size() == 1);
   CHECK(frame.freshMessages[0].messageText == "global again");
+}
+
+TEST_CASE("Name resolution follows the mode and falls back to checked names")
+{
+  const Domain::PlayerData profile{5, "lydia", "Lydia of Whiterun"};
+  CHECK(ResolveName(NameMode::Username, profile, "Housecarl") == "lydia");
+  CHECK(ResolveName(NameMode::Display, profile, "Housecarl") == "Lydia of Whiterun");
+  CHECK(ResolveName(NameMode::Character, profile, "Housecarl") == "Housecarl");
+  CHECK(ResolveName(NameMode::Character, profile, std::nullopt) == "Lydia of Whiterun");
+  CHECK(ResolveName(NameMode::Character, profile, std::string{}) == "Lydia of Whiterun");
+  CHECK(ResolveName(NameMode::Character, Domain::PlayerData{5, "", ""}, std::nullopt) == NeutralName);
+  CHECK(ModeOf("username") == NameMode::Username);
+  CHECK(ModeOf("unknown") == NameMode::Display);
+
+  UiSettings legacy;
+  legacy.nameMode = "account";
+  CHECK(Dreamsleeve::Host::Normalize(legacy).nameMode == "username");
+  legacy.nameMode = "character";
+  CHECK(Dreamsleeve::Host::Normalize(legacy).nameMode == "character");
+}
+
+TEST_CASE("Pseudonyms are stable, scoped by server, numbered on collision and persisted")
+{
+  Names names;
+  names.Configure("127.0.0.1:8778", {"Страж"});
+  const auto first  = names.Alias(1);
+  const auto second = names.Alias(2);
+  CHECK(first == "Страж");
+  CHECK(second == "Страж 2");
+  CHECK(names.Alias(1) == first);
+  CHECK(names.TakeDirty());
+  CHECK_FALSE(names.TakeDirty());
+
+  // The same account ID on another server is another player.
+  Names other;
+  other.Configure("10.0.0.2:8778", {"Страж"});
+  other.Load(names.Book());
+  CHECK(other.Alias(2) == "Страж");
+
+  TempPath file;
+  UiFile   saved;
+  saved.names = names.Book();
+  REQUIRE(SaveUiFile(file.path, saved));
+  auto loaded = LoadUiFile(file.path);
+  REQUIRE(loaded);
+  Names restarted;
+  restarted.Configure("127.0.0.1:8778", {"Бард"});
+  restarted.Load(loaded->names);
+  CHECK(restarted.Alias(1) == first);
+  CHECK(restarted.Alias(2) == second);
+  CHECK_FALSE(restarted.TakeDirty());
+
+  // A pseudonym comes from the dictionary, never from the real name.
+  UiSettings streamer;
+  streamer.streamerMode = true;
+  const auto alias      = restarted.NameFor(3, {3, "realuser", "Real Name"}, "Real Character", streamer);
+  CHECK(alias == "Бард");
+  CHECK(alias.find("Real") == std::string::npos);
+}
+
+TEST_CASE("Alias dictionary falls back to built-in names for missing, broken or empty files")
+{
+  TempPath file;
+  auto     missing = LoadAliasDictionary(file.path);
+  CHECK_FALSE(missing.names.empty());
+  CHECK_FALSE(missing.warning.empty());
+  const auto write = [&](std::string_view text) {
+    std::ofstream output{file.path, std::ios::binary | std::ios::trunc};
+    output << text;
+  };
+  write("names = [\"Страж\", \"\", \" padded\", \"<b>\", \"Страж\", \"Бард\"]\n");
+  auto filtered = LoadAliasDictionary(file.path);
+  CHECK(filtered.warning.empty());
+  CHECK(filtered.names == std::vector<std::string>{"Страж", "Бард"});
+  write("names = [\n");
+  auto broken = LoadAliasDictionary(file.path);
+  CHECK_FALSE(broken.names.empty());
+  CHECK_FALSE(broken.warning.empty());
+  write("names = []\n");
+  CHECK(LoadAliasDictionary(file.path).names == missing.names);
+  write("");
+  CHECK(LoadAliasDictionary(file.path).names == missing.names);
+}
+
+TEST_CASE("Ignore list is per server, refuses self and system, and survives a restart")
+{
+  Names names;
+  names.Configure("a:1", {});
+  const Domain::PlayerData bob{7, "bob", "Bob"};
+  CHECK_FALSE(names.Ignore(0, 1, nullptr));
+  CHECK_FALSE(names.Ignore(1, 1, nullptr));
+  CHECK(names.Ignore(7, 1, &bob));
+  CHECK_FALSE(names.Ignore(7, 1, &bob));
+  CHECK(names.Ignored(7));
+  REQUIRE(names.IgnoredList(UiSettings{}).size() == 1);
+  CHECK(names.IgnoredList(UiSettings{})[0].name == "Bob");
+
+  UiSettings streamer;
+  streamer.streamerMode = true;
+  const auto hidden     = names.IgnoredList(streamer);
+  REQUIRE(hidden.size() == 1);
+  CHECK(hidden[0].name != "Bob");
+  CHECK(hidden[0].name == names.Alias(7));
+
+  TempPath file;
+  UiFile   saved;
+  saved.names = names.Book();
+  REQUIRE(SaveUiFile(file.path, saved));
+  auto loaded = LoadUiFile(file.path);
+  REQUIRE(loaded);
+  Names same;
+  same.Configure("a:1", {});
+  same.Load(loaded->names);
+  CHECK(same.Ignored(7));
+  Names otherServer;
+  otherServer.Configure("b:1", {});
+  otherServer.Load(loaded->names);
+  CHECK_FALSE(otherServer.Ignored(7));
+  CHECK(otherServer.IgnoredList(UiSettings{}).empty());
+  CHECK(same.Unignore(7));
+  CHECK_FALSE(same.Ignored(7));
+}
+
+TEST_CASE("Ignored authors disappear from history, deltas and bubbles; unignore never replays bubbles")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    OnlinePlayersReplaced{
+        {MakePlayer(1, "Alice"), MakePlayer(7, "Seven")}
+  }));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  auto own   = MakeMessage(11, 1, "mine");
+  own.author = {1, "user1", "Alice"};
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ChatMessagesReceived{
+        1,
+        {MakeMessage(10, 1, "seven history"), own}
+  }));
+  Session session;
+  session.PlayerNames().Configure("srv:1", {});
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  Settle(session, *exchange, model, frame);
+  REQUIRE(frame.snapshot);
+
+  CHECK_FALSE(session.Ignore(1));  // Self.
+  CHECK(session.Ignore(7));
+  session.Refresh();
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  Settle(session, *exchange, model, frame);
+  REQUIRE(frame.snapshot);
+  auto snapshot = Parse(frame.events[0]);
+  CHECK(snapshot["refresh"].get<bool>());
+  REQUIRE(snapshot["messages"].get_array().size() == 1);
+  CHECK(snapshot["messages"][0]["text"].get<std::string>() == "mine");
+  CHECK(snapshot["players"].get_array().size() == 2);  // Presence stays.
+
+  auto system   = MakeMessage(13, 1, "announcement");
+  system.author = {};
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ChatMessagesReceived{
+        1,
+        {MakeMessage(12, 1, "seven live"), system}
+  }));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  CHECK(frame.freshMessages.empty());
+  REQUIRE(frame.events.size() == 1);
+  auto delta = Parse(frame.events[0]);
+  REQUIRE(delta["messages"].get_array().size() == 1);
+  CHECK(delta["messages"][0]["text"].get<std::string>() == "announcement");
+
+  // Unignore: history returns in the chat, but as a refresh without bubbles.
+  CHECK(session.Unignore(7));
+  session.Refresh();
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  Settle(session, *exchange, model, frame);
+  REQUIRE(frame.snapshot);
+  CHECK(Parse(frame.events[0])["messages"].get_array().size() == 4);
+  CHECK(frame.freshMessages.empty());
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {MakeMessage(14, 1, "seven again")}}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  REQUIRE(frame.freshMessages.size() == 1);
+  CHECK(frame.freshMessages[0].messageId == 14);
+}
+
+TEST_CASE("Streamer mode projects only pseudonyms; messages keep their character snapshot")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    OnlinePlayersReplaced{
+        {MakePlayer(1, "Alice"), MakePlayer(7, "Seven")}
+  }));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  auto snapshotted          = MakeMessage(10, 1, "hello");
+  snapshotted.characterName = "Lydia";
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ChatMessagesReceived{
+        1,
+        {snapshotted, MakeMessage(11, 1, "old history")}
+  }));
+
+  UiSettings character;
+  character.nameMode = "character";
+  Session session;
+  session.PlayerNames().Configure("srv:1", {});
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), character, frame);
+  Settle(session, *exchange, model, frame, character);
+  REQUIRE(frame.snapshot);
+  auto plain = Parse(frame.events[0]);
+  // Snapshot at sending, not the current "Nerevar"; no snapshot falls back to the display name.
+  CHECK(plain["messages"][0]["author"]["name"].get<std::string>() == "Lydia");
+  CHECK(plain["messages"][1]["author"]["name"].get<std::string>() == "Seven");
+  CHECK(plain["players"][0]["name"].get<std::string>() == "Nerevar");
+
+  UiSettings streamer   = character;
+  streamer.streamerMode = true;
+  session.Refresh();
+  frame                       = {};
+  auto output                 = Drain(*exchange, model, SessionPhase::Ready);
+  output.status.savedLogin    = true;
+  output.status.savedUsername = "user1";
+  session.Process(*exchange, output, streamer, frame);
+  std::string all;
+  for (const auto& event : frame.events)
+    all += event;
+  Settle(session, *exchange, model, frame, streamer);
+  REQUIRE(frame.snapshot);
+  for (const auto& event : frame.events)
+    all += event;
+  for (std::string_view real : {"Alice", "Seven", "user1", "user7", "Nerevar", "Lydia"})
+    CHECK_MESSAGE(all.find(real) == std::string::npos, real);
+  auto  hidden  = Parse(frame.events[0]);
+  auto& players = hidden["players"];
+  for (auto& player : players.get_array())
+  {
+    const auto name = player["name"].get<std::string>();
+    CHECK(player["alias"].get<std::string>() == name);
+    CHECK(player["username"].get<std::string>().empty());
+    const auto id = Bridge::ParseId(player["id"].get<std::string>());
+    REQUIRE(id);
+    // Nameplates ask the same resolver: identical label.
+    CHECK(session.PlayerNames().NameFor(*id, session.OnlinePlayers().at(*id).data, "Nerevar", streamer) == name);
+  }
+}
+
+TEST_CASE("Server refusals map to readable reasons")
+{
+  using Code = Dreamsleeve::Client::RequestRejectionCode;
+  CHECK(Bridge::RejectionText(Code::TextNotAllowed, "x") == "Сообщение содержит запрещённые слова");
+  CHECK(Bridge::RejectionText(Code::RateLimited, "x").starts_with("Слишком часто"));
+  CHECK(Bridge::RejectionText(Code::InvalidRequest, "Message exceeds 2000 characters.") == "Сообщение слишком длинное");
+  CHECK(Bridge::RejectionText(static_cast<Code>(99), "future reason") == "future reason");
+  CHECK(Bridge::RejectionText(Code::NotChannelMember, "") == "Сервер отклонил сообщение");
 }
 
 TEST_SUITE_END();

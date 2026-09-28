@@ -55,6 +55,8 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER = 6; // Sender may not publish to this channel.
   REQUEST_REJECTION_CODE_OVERLOADED = 7; // Request was not admitted; the session remains usable.
   REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED = 8; // Missing, expired, invalid or already consumed ticket.
+  REQUEST_REJECTION_CODE_TEXT_NOT_ALLOWED = 9; // Text matched the server word list.
+  REQUEST_REJECTION_CODE_RATE_LIMITED = 10; // Too frequent or repeated; retry later.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

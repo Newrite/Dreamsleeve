@@ -54,7 +54,13 @@ static_assert(
 static_assert(
   static_cast<long long>(Protocol::Chat::RequestRejectionCode::AuthenticationFailed) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 9);
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::TextNotAllowed) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_TEXT_NOT_ALLOWED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::RateLimited) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_RATE_LIMITED));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 11);
 
 static_assert(
   static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) ==

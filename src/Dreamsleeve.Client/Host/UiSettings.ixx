@@ -40,7 +40,10 @@ export namespace Dreamsleeve::Host
     double      background{0.82};
     bool        timestamps{true};
     bool        fullColor{false};
+    // username | display | character. "account" from older files reads as username.
     std::string nameMode{"display"};
+    // Local pseudonyms instead of every real name; not sent to the server.
+    bool        streamerMode{false};
     bool        locked{true};
     double      x{0.025};
     double      y{0.42};
@@ -51,6 +54,40 @@ export namespace Dreamsleeve::Host
 
     bool operator==(const UiSettings&) const = default;
   };
+
+  // Host-owned records, never round-tripped through the web UI. IDs are
+  // decimal strings scoped by the server address: an account ID is unique
+  // only within the server that issued it.
+  struct AliasRecord
+  {
+    std::string server;
+    std::string id;
+    std::string name;
+
+    bool operator==(const AliasRecord&) const = default;
+  };
+
+  struct IgnoredRecord
+  {
+    std::string server;
+    std::string id;
+    // Names known when the player was ignored; shown only outside streamer mode.
+    std::string displayName;
+    std::string username;
+
+    bool operator==(const IgnoredRecord&) const = default;
+  };
+
+  struct NameBook
+  {
+    std::vector<AliasRecord>   aliases;
+    std::vector<IgnoredRecord> ignored;
+
+    bool operator==(const NameBook&) const = default;
+  };
+
+  constexpr std::size_t MaxAliasRecords   = 4096;
+  constexpr std::size_t MaxIgnoredRecords = 1000;
 
   struct UiSection
   {
@@ -65,6 +102,7 @@ export namespace Dreamsleeve::Host
   {
     int       version{1};
     UiSection ui{};
+    NameBook  names{};
 
     bool operator==(const UiFile&) const = default;
   };
@@ -96,7 +134,8 @@ export namespace Dreamsleeve::Host
 
     Choose(value.onlineView, {"cards", "list"}, defaults.onlineView);
     Choose(value.font, {"serif", "sans"}, defaults.font);
-    Choose(value.nameMode, {"display", "account"}, defaults.nameMode);
+    if (value.nameMode == "account") value.nameMode = "username";
+    Choose(value.nameMode, {"username", "display", "character"}, defaults.nameMode);
     Choose(value.activationKey, {"Enter", "F2"}, defaults.activationKey);
     Choose(value.theme, {"skyrim", "contrast"}, defaults.theme);
 
@@ -121,6 +160,28 @@ export namespace Dreamsleeve::Host
     return value;
   }
 
+  // Hand-edited records: drop incomplete or duplicate entries and keep the
+  // newest ones within the bounds.
+  NameBook Normalize(NameBook book)
+  {
+    const auto incomplete = [](const auto& record) {
+      return record.server.empty() || record.id.empty();
+    };
+    std::erase_if(book.aliases, [&](const AliasRecord& record) { return incomplete(record) || record.name.empty(); });
+    std::erase_if(book.ignored, incomplete);
+    const auto unique = [](auto& records) {
+      std::set<std::pair<std::string, std::string>> seen;
+      std::erase_if(records, [&](const auto& record) { return !seen.emplace(record.server, record.id).second; });
+    };
+    unique(book.aliases);
+    unique(book.ignored);
+    if (book.aliases.size() > MaxAliasRecords)
+      book.aliases.erase(book.aliases.begin(), book.aliases.end() - static_cast<std::ptrdiff_t>(MaxAliasRecords));
+    if (book.ignored.size() > MaxIgnoredRecords)
+      book.ignored.erase(book.ignored.begin(), book.ignored.end() - static_cast<std::ptrdiff_t>(MaxIgnoredRecords));
+    return book;
+  }
+
   // A missing file is the ordinary first run and yields defaults. A present but
   // unreadable file is an error: the caller keeps its current values and reports it.
   std::expected<UiFile, std::string> LoadUiFile(const std::filesystem::path& path, UiFile defaults = {})
@@ -131,7 +192,8 @@ export namespace Dreamsleeve::Host
     std::ifstream input{path, std::ios::binary | std::ios::ate};
     if (!input) return std::unexpected{"Cannot open UI settings"};
     const auto length = input.tellg();
-    if (length < 0 || length > 65536) return std::unexpected{"UI settings must contain 0..65536 bytes"};
+    // Pseudonyms and the ignore list share the file, hence the larger bound.
+    if (length < 0 || length > (1 << 20)) return std::unexpected{"UI settings must not exceed 1 MiB"};
 
     std::string source(static_cast<std::size_t>(length), '\0');
     input.seekg(0);
@@ -143,6 +205,7 @@ export namespace Dreamsleeve::Host
     if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};
 
     file.ui.chat = Normalize(file.ui.chat);
+    file.names   = Normalize(std::move(file.names));
     return file;
   }
 

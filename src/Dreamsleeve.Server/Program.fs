@@ -84,10 +84,10 @@ let private stopRuntime settings (logger: ILogger) (runtime: Agent<ServerRuntime
         do! runtime.Completion
 }
 
-let private serve settings authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
-    let web = AuthenticationHttp.build settings authentication log
+let private serve settings moderation authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
+    let web = AuthenticationHttp.build settings moderation authentication log
     try
-        match ServerRuntime.start settings.Runtime settings.Server (AuthService.authenticator authentication) transport logger with
+        match ServerRuntime.start settings.Runtime settings.Server moderation (AuthService.authenticator authentication) transport logger with
         | Error errors ->
             logger.LogError("Runtime configuration failed: {Errors}", String.concat " " errors)
             return 1
@@ -148,6 +148,13 @@ let private run settings = task {
     use factory = new SerilogLoggerFactory(log, dispose = false)
     let logger = factory.CreateLogger("Dreamsleeve.Server")
 
+    match Configuration.loadModeration settings.Moderation with
+    | Error error ->
+        logger.LogError("Moderation configuration failed: {Failure}", error)
+        return 1
+    | Ok (moderation, warning) ->
+    warning |> Option.iter (fun text -> logger.LogWarning("{Warning}", text))
+    logger.LogInformation("Moderation word list: {State}", if settings.Moderation.Enabled then "enabled" else "disabled")
     try
         // Migrations and password-hasher startup run before either listener.
         let! initialized = Task.Run(fun () -> SqliteAccountStore.initialize settings.Database)
@@ -170,7 +177,7 @@ let private run settings = task {
                             logger.LogError("ENet startup failed: {Failure}", error)
                             return 1
                         | Ok transport ->
-                            try return! serve settings authentication transport logger log
+                            try return! serve settings moderation authentication transport logger log
                             finally transport.Dispose()
                     with error ->
                         logger.LogError(error, "Server startup failed")

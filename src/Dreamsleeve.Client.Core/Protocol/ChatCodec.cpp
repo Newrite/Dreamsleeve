@@ -23,7 +23,8 @@ namespace Dreamsleeve::Client::Wire::Detail
         message.channel_id(),
         std::move(*author),
         message.text(),
-        Domain::FromUnixMilliseconds(message.sent_at_unix_ms())
+        Domain::FromUnixMilliseconds(message.sent_at_unix_ms()),
+        message.has_character_name() ? std::optional{message.character_name()} : std::nullopt
     };
   }
 

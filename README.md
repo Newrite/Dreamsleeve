@@ -25,6 +25,8 @@ unreliable sequenced канал в том же WRLD/CELL и радиусе ви�
 [Контракт и границы телеметрии](docs/PlayerTelemetryPlanRu.md).
 Конфигурация сервера загружается из TOML при запуске. Клиент хранит поток измерений
 и вычисляет интерполированные положения на потоке потребителя; [демо и настройки](docs/MovementInterpolationRu.md).
+Базовая модерация (серверный словарь и антиспам), личный игнор, выбор отображаемого
+имени и режим стримера: [ModerationAndNamesRu.md](docs/ModerationAndNamesRu.md).
 SKSE-клиент реализован: DLL на CommonLibSSE-NG с хуком `Main::Update`, PrismaUI-host
 production UI, страницей SKSE Menu Framework, сбором телеметрии, светлячками, именами и
 облачками чата над ними; [описание адаптера](docs/SkseClientRu.md). Интерфейс администрирования остаётся следующим этапом.

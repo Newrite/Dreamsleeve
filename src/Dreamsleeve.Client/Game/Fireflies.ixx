@@ -170,7 +170,8 @@ namespace Fireflies
       // name size is passed even when names are hidden: it fixes the baseline
       // above which the bubble sits.
       Nameplates::Label label{.id = id, .nameSize = static_cast<float>(ui.fireflyNameFontSize)};
-      if (ui.showFireflyNames) label.name = remote.data.displayName;
+      // Same resolver as the web UI, so a pseudonym matches on both surfaces.
+      if (ui.showFireflyNames) label.name = runtime.session.PlayerNames().NameFor(id, remote.data, remote.characterName, ui);
       if (ui.showBubbles)
         if (const auto active = runtime.bubbles.Find(id, now, ui))
         {

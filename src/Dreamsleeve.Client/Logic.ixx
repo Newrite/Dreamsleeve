@@ -21,9 +21,10 @@ namespace Logic
   namespace Dream = Dreamsleeve::Client;
   using Clock     = std::chrono::steady_clock;
 
-  constexpr auto ReconnectMinimum = std::chrono::seconds{5};
-  constexpr auto ReconnectMaximum = std::chrono::seconds{60};
-  constexpr auto ReadyProbeWindow = std::chrono::milliseconds{500};
+  constexpr auto ReconnectMinimum  = std::chrono::seconds{5};
+  constexpr auto ReconnectMaximum  = std::chrono::seconds{60};
+  constexpr auto ReadyProbeWindow  = std::chrono::milliseconds{500};
+  constexpr auto NamesSaveInterval = std::chrono::seconds{5};
 
   struct State
   {
@@ -35,6 +36,7 @@ namespace Logic
     std::chrono::seconds         reconnectDelay{ReconnectMinimum};
     Clock::time_point            readySince{};
     std::uint64_t                bubbleGeneration{};
+    Clock::time_point            nextNamesSave{};
   };
 
   State& Get()
@@ -191,6 +193,12 @@ namespace Logic
     for (const auto& note : frame.notes)
       logger::warn("{}", note);
     PrismaUI::Dispatch(frame.events);
+    // New pseudonyms are batched: at most one ui.toml write per interval.
+    if (now >= state.nextNamesSave && runtime.session.PlayerNames().TakeDirty())
+    {
+      state.nextNamesSave = now + NamesSaveInterval;
+      if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
+    }
 
     // Bubbles belong to one session: a disconnect or a new generation drops
     // them. Only live confirmed publications from this drain are admitted.
@@ -209,7 +217,7 @@ namespace Logic
     Runtime::MenuSnapshot snapshot;
     snapshot.phase          = std::string{Dreamsleeve::Host::Bridge::PhaseName(status)};
     snapshot.serverName     = status.serverName;
-    snapshot.savedUsername  = status.savedUsername;
+    snapshot.savedUsername  = runtime.ui.ui.chat.streamerMode ? std::string{} : status.savedUsername;
     snapshot.error          = status.error;
     snapshot.activationKey  = runtime.ui.ui.chat.activationKey;
     snapshot.online         = runtime.session.OnlinePlayers().size();

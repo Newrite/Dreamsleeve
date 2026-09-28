@@ -27,12 +27,16 @@ test("publication, announcements, settings, and saved configuration", async ({
   ).not.toContainText(["Объявления"]);
   await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByLabel("Имя автора").selectOption("account");
+  await page.getByLabel("Отображаемое имя").selectOption("username");
   await page.getByRole("button", { name: "Сохранить настройки" }).click();
   await page.getByRole("button", { name: "Закрыть панель" }).click();
-  await expect(page.locator('[data-part="messages"]')).toContainText("@");
+  await expect(page.locator('[data-part="messages"]')).toContainText(
+    "greybeard:",
+  );
   await page.reload();
-  await expect(page.locator('[data-part="messages"]')).toContainText("@");
+  await expect(page.locator('[data-part="messages"]')).toContainText(
+    "greybeard:",
+  );
 });
 test("fade wakes without grabbing focus; active chat does not fade", async ({
   page,
@@ -180,7 +184,7 @@ test("rejection allows explicit retry and level zero remains visible", async ({
     .click();
   await page.getByLabel("Сообщение", { exact: true }).fill("Не потерять");
   await page.getByLabel("Сообщение", { exact: true }).press("Enter");
-  await expect(page.getByRole("status")).toContainText("отклонено");
+  await expect(page.getByRole("status")).toContainText("запрещённые слова");
   await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
   await expect(page.locator('[data-part="pending-message"]')).toContainText(
     "Не потерять",
@@ -434,7 +438,13 @@ test("server label and dim pending row survive delayed acknowledgement without w
             id: "42",
             channelId: "1",
             source: "player",
-            author: { id: "7", displayName: "Северный", username: "north" },
+            author: {
+              id: "7",
+              name: "Северный",
+              inCharacter: false,
+              displayName: "Северный",
+              username: "north",
+            },
             text: "Встречаемся в Ривервуде",
             time: Date.now(),
           },
@@ -745,4 +755,57 @@ test("chat bubble preferences save and restore independently of names", async ({
     .getByRole("group", { name: "Сообщения над игроками" })
     .scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/bubble-settings.png" });
+});
+
+test("streamer mode hides real names everywhere and ignore hides history without hiding presence", async ({
+  page,
+}) => {
+  await page.goto("/demo.html");
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByLabel("Режим стримера").check();
+  await page.getByRole("button", { name: "Онлайн", exact: true }).click();
+  const workspace = page.locator('[data-part="workspace"]');
+  const history = page.locator('[data-part="messages"]');
+  // "Мира" alone also occurs in the place name "Глотка Мира".
+  for (const real of [
+    "mira",
+    "Седобородый",
+    "greybeard",
+    "Эйра",
+    "Северный",
+    "Довакин",
+    "Хальвар",
+  ]) {
+    await expect(workspace).not.toContainText(real);
+    await expect(history).not.toContainText(real);
+  }
+  await page.getByPlaceholder("Имя, персонаж или место…").fill("greybeard");
+  await expect(page.getByText("Игроки не найдены.")).toBeVisible();
+  await page.getByPlaceholder("Имя, персонаж или место…").fill("");
+
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByLabel("Режим стримера").uncheck();
+  await expect(history).toContainText("Мира:");
+  await page.getByRole("button", { name: "Закрыть панель" }).click();
+
+  // Ignore Mira from her profile: her lines leave the chat, presence stays.
+  await page.getByRole("button", { name: "Мира:" }).first().click();
+  await page.getByRole("button", { name: "Игнорировать", exact: true }).click();
+  await expect(history).not.toContainText("Мира:");
+  await expect(
+    page.getByRole("button", { name: "Не игнорировать" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Онлайн", exact: true }).click();
+  await expect(workspace).toContainText("Мира");
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  const list = page.getByLabel("Игнорируемые игроки");
+  await expect(list).toContainText("Мира");
+  await page.getByLabel("Режим стримера").check();
+  await expect(list).not.toContainText("Мира");
+  await page.getByLabel("Режим стримера").uncheck();
+  await list.getByRole("button", { name: "Убрать" }).click();
+  await expect(list).toHaveCount(0);
+  await expect(history).toContainText("Мира:");
 });

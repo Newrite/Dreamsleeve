@@ -134,6 +134,7 @@ module PresenceAgent =
 
     let private identityEqual (previous: PlayerSnapshot) (latest: PlayerSnapshot) =
         previous.Data = latest.Data && previous.CharacterName = latest.CharacterName
+        && previous.CharacterNameWithheld = latest.CharacterNameWithheld
         && previous.CharacterGeneration = latest.CharacterGeneration
 
     let private deliverDelta state context subscriber event =

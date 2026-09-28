@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Chat, ChatState } from "../state/chat";
 import { OnlineList } from "./OnlineList";
 import { PlayerDetails } from "./PlayerDetails";
+import { playerName, realNames } from "../state/names";
 import styles from "../styles/Workspace.module.css";
 export function OnlinePanel({
   chat,
@@ -12,11 +13,18 @@ export function OnlinePanel({
 }) {
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLocaleLowerCase("ru");
-  const players = s.players.filter((p) =>
-    [p.displayName, p.username, p.character, p.location, p.zone].some((v) =>
-      v?.toLocaleLowerCase("ru").includes(normalized),
-    ),
-  );
+  // Streamer mode searches only what is shown: pseudonyms and places.
+  const players = s.players.filter((p) => {
+    const real = realNames(p, s.settings);
+    return [
+      playerName(p, s.settings),
+      real?.displayName,
+      real?.username,
+      real?.character,
+      p.location,
+      p.zone,
+    ].some((v) => v?.toLocaleLowerCase("ru").includes(normalized));
+  });
   return (
     <>
       <div className={styles.toolbar}>
@@ -59,6 +67,7 @@ export function OnlinePanel({
           players={players}
           selfId={s.selfId}
           connected={s.connected}
+          settings={s.settings}
           openProfile={(id) => chat.open("profile", id)}
         />
       ) : (
@@ -77,7 +86,7 @@ export function OnlinePanel({
                   Профиль →
                 </button>
               </header>
-              <PlayerDetails player={p} />
+              <PlayerDetails player={p} settings={s.settings} />
             </article>
           ))}
         </div>

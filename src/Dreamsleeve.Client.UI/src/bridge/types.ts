@@ -24,7 +24,8 @@ export type AuthFailure =
   | "unavailable"
   | "invalidResponse"
   | "credentialStorage"
-  | "canceled";
+  | "canceled"
+  | "nameNotAllowed";
 // Typed authentication state; no password or token ever crosses the bridge.
 export interface AuthState {
   authenticating: boolean;
@@ -47,8 +48,14 @@ export interface ActorValue {
   name: string;
   value: number | { current: number; maximum: number };
 }
+// `name` is the host-resolved label for the current name settings. In streamer
+// mode `alias` carries the local pseudonym and the real username, displayName
+// and character never arrive (displayName repeats the alias, username is empty).
 export interface Player {
   id: Id;
+  name: string;
+  alias?: string;
+  inCharacter: boolean;
   displayName: string;
   username: string;
   character?: string;
@@ -93,7 +100,8 @@ export interface Settings {
   background: number;
   timestamps: boolean;
   fullColor: boolean;
-  nameMode: "display" | "account";
+  nameMode: "username" | "display" | "character";
+  streamerMode: boolean;
   locked: boolean;
   x: number;
   y: number;
@@ -114,6 +122,14 @@ export type Command =
       remember: boolean;
       displayName?: string;
     }
+  | { type: "ignore"; playerId: Id }
+  | { type: "unignore"; playerId: Id }
+  // Applied and saved by the host at once; it re-projects every surface.
+  | {
+      type: "nameSettings";
+      nameMode: Settings["nameMode"];
+      streamerMode: boolean;
+    }
   | { type: "signInSaved" }
   | { type: "signOut" }
   | { type: "forgetLogin" }
@@ -128,7 +144,11 @@ export type HostEvent =
       selfId: Id;
       serverName: string;
       settings?: Partial<Settings>;
+      // Same session projected again (names or ignore list changed).
+      refresh?: boolean;
     }
+  // Personal ignore list of this server, already named for current settings.
+  | { type: "ignored"; players: { id: Id; name: string }[] }
   | { type: "messages"; messages: Message[] }
   | { type: "players"; players: Player[] }
   | { type: "show" }

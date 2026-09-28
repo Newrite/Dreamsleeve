@@ -14,6 +14,46 @@ let private withFile (text: string) action =
         File.Delete path
 
 let tests = testList "Server configuration" [
+    testCase "moderation is on by default, switchable and loads a separate word list" <| fun _ ->
+        Expect.isTrue Configuration.defaults.Moderation.Enabled "enabled by default"
+        withFile "[Moderation]\nEnabled = false\nRulesPath = ''\n" (fun path ->
+            match Configuration.parse [|"--config"; path|] with
+            | Ok (LaunchCommand.Run config) ->
+                Expect.isFalse config.Moderation.Enabled "switched off"
+                match Configuration.loadModeration config.Moderation with
+                | Ok (rules, warning) ->
+                    Expect.isTrue rules.IsEmpty "disabled list"
+                    Expect.isNone warning "no warning when disabled"
+                | Error error -> failtest error
+            | other -> failtestf "%A" other)
+        withFile "[Moderation]\nRulesPath = ''\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "enabled moderation needs a path")
+        match Configuration.loadModeration { Enabled = true; RulesPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") } with
+        | Ok (rules, Some _) -> Expect.isTrue rules.IsEmpty "missing file warns and runs with an empty list"
+        | other -> failtestf "%A" other
+        withFile "words = ['badword']\nsubstrings = ['cunt']\nexceptions = ['Scunthorpe']\n" (fun path ->
+            match Configuration.loadModeration { Enabled = true; RulesPath = path } with
+            | Ok (rules, None) ->
+                Expect.isFalse (Dreamsleeve.Server.Domain.Moderation.allows rules "b4dword") "word rule"
+                Expect.isTrue (Dreamsleeve.Server.Domain.Moderation.allows rules "Scunthorpe") "exception"
+            | other -> failtestf "%A" other)
+        for invalid in ["words = 'badword'\n"; "words = [1]\n"; "phrases = ['x']\n"; "words = ['x'\n"] do
+            Expect.isError (Configuration.parseModeration invalid) $"invalid rules: {invalid}"
+
+    testCase "bundled moderation example parses and blocks its sample words" <| fun _ ->
+        let root = DirectoryInfo(AppContext.BaseDirectory)
+        let rec find (directory: DirectoryInfo) =
+            let candidate = Path.Combine(directory.FullName, "src", "Dreamsleeve.Server", "moderation.example.toml")
+            if File.Exists candidate then candidate
+            elif isNull directory.Parent then failtest "moderation.example.toml not found"
+            else find directory.Parent
+        match Configuration.parseModeration (File.ReadAllText(find root)) with
+        | Ok rules ->
+            Expect.isFalse (Dreamsleeve.Server.Domain.Moderation.allows rules "what the f.u.c.k") "sample word"
+            Expect.isTrue (Dreamsleeve.Server.Domain.Moderation.allows rules "Scunthorpe") "sample exception"
+            Expect.isTrue (Dreamsleeve.Server.Domain.Moderation.allows rules "Hello, Dragonborn") "ordinary text"
+        | Error error -> failtest error
+
     testCase "server display name loads from TOML and rejects invalid labels" <| fun _ ->
         withFile "[Server]\nServerName = 'Голоса Тамриэля'\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with

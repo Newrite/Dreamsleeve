@@ -63,15 +63,38 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
                 Изменения применяются к чату. Это окно сохраняет своё положение
                 и размер.
               </p>
-              <SettingsPanel chat={chat} settings={s.settings} />
+              <SettingsPanel
+                chat={chat}
+                settings={s.settings}
+                ignored={s.ignored}
+              />
             </>
           )}
           {s.panel === "profile" &&
             (player ? (
-              <PlayerDetails player={player} />
+              <PlayerDetails player={player} settings={s.settings} />
             ) : (
               <p>Игрок сейчас не в сети. Данные профиля недоступны.</p>
             ))}
+          {s.panel === "profile" &&
+            s.selectedPlayer &&
+            s.selectedPlayer !== s.selfId && (
+              <div className={styles.playerActions}>
+                {s.ignored.some((p) => p.id === s.selectedPlayer) ? (
+                  <button onClick={() => chat.unignore(s.selectedPlayer!)}>
+                    Не игнорировать
+                  </button>
+                ) : (
+                  <button onClick={() => chat.ignore(s.selectedPlayer!)}>
+                    Игнорировать
+                  </button>
+                )}
+                <small className={styles.muted}>
+                  Скрывает сообщения игрока в чате и над светлячком только у
+                  вас. Сам светлячок и онлайн остаются.
+                </small>
+              </div>
+            )}
           {s.panel === "account" && <AccountPanel chat={chat} state={s} />}
           {s.panel === "stats" && (
             <>
