@@ -3,7 +3,7 @@
 .xmake/
 build/
 .vs/
-vsxmake2026/
+vsxmake*/
 src/**/obj/
 src/**/bin/
 tests/**/obj/

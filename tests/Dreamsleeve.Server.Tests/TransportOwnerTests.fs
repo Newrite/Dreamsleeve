@@ -69,6 +69,15 @@ let private setup settings = task {
 let private observed fake name = fake.Calls |> Seq.exists (fun (call, _) -> call = name)
 
 let tests = testList "TransportOwner" [
+    case "owner continues servicing transport while application consumer is idle" (fun () -> task {
+        let! fake, owner = setup config
+        try
+            let polls () = fake.Calls |> Seq.filter (fun (name, _) -> name = "poll") |> Seq.length
+            let before = polls()
+            do! eventually (fun () -> polls() >= before + 5)
+        finally owner.Dispose()
+    })
+
     case "factory protocol calls FIFO send close and disposal have one dedicated owner" (fun () -> task {
         let caller = Environment.CurrentManagedThreadId
         let! fake, owner = setup config
@@ -198,6 +207,7 @@ let tests = testList "TransportOwner" [
     case "handoff rejects oversized realtime before admission and enforces byte quota" (fun () -> task {
         let! fake, owner = setup config
         try
+            Expect.isError (owner.Send(fake.Id, packet DeliveryLane.Control (config.MaxPacketBytes + 1))) "Reliable packet limit is checked before native admission."
             Expect.isError (owner.Send(fake.Id, packet DeliveryLane.Realtime 1201)) "MTU rejection is synchronous."
             Expect.isFalse (observed fake "send") "Oversized realtime never reaches native ENet."
         finally owner.Dispose()

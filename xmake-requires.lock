@@ -91,7 +91,7 @@
             },
             version = "v8.92"
         },
-        ["spdlog 1.17.0#f56260b5"] = {
+        ["spdlog 1.17.0#09c8c173"] = {
             repo = {
                 branch = "master",
                 commit = "e97add9a9781124ffc3804f50e5d03a1b5cb4a65",

@@ -65,6 +65,12 @@ dotnet run --project src/Dreamsleeve.Server -c Release
 python Scripts/run_tests.py
 ```
 
+SKSE-плагин собирается командой `xmake build Dreamsleeve.Client` при настроенном
+`CommonLibSSE-NG`. В xmake для CommonLib и Core явно согласованы настройки spdlog:
+compiled library, wchar и std::format. Header-only вариант подключает Windows-макросы
+в PCH CommonLib и конфликтует с её `REX::W32` именами; порядок зависимостей сам по
+себе не заменяет согласованную конфигурацию.
+
 Выбор набора и команды отдельных проектов: [tests/README.md](tests/README.md).
 Без аргументов Client.Dev запускает синтетическую консоль с командами: `send <text>`, `accept`, `reject`,
 `receive <text>`, `sample`, `read`, `snapshot`, `reset`, `quit`. Отправленный чат

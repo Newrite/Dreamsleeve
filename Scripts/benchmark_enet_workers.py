@@ -60,8 +60,7 @@ def run(args, workers, repetition, destination):
         server = Child(["dotnet", "exec", "--runtimeconfig", str(SERVER.with_suffix(".runtimeconfig.json")),
                         str(args.server_benchmark or CLIENT), "--server-config", str(config_path),
                         "--metrics-output", str(case / "metrics.json")], case / "server.log",
-                       dict(env, DOTNET_STARTUP_HOOKS=str(args.enet_probe.resolve()),
-                            DREAMSLEEVE_ENET_PROBE_OUTPUT=str(case / "enet-probe.json")) if args.enet_probe else env)
+                       env)
         ready = False
         while not ready:
             lines = list(server.output())
@@ -188,15 +187,12 @@ def main():
     parser.add_argument("--udp-trace", action="store_true", help="Separate diagnostic run: ETW drops and OS endpoints")
     parser.add_argument("--peer-trace", action="store_true", help="Also record bounded per-peer ENet command snapshots; adds synchronous I/O")
     parser.add_argument("--server-benchmark", type=Path, help="Isolated server diagnostic benchmark DLL")
-    parser.add_argument("--enet-probe", type=Path, help="Startup hook for instrumented server")
-    parser.add_argument("--worker-send-budget", type=int, default=2048, help="Production Server.Worker.SendCommandsPerPass (inline baseline ignores it)")
+    parser.add_argument("--worker-send-budget", type=int, default=2048, help="Production Server.Worker.SendCommandsPerPass")
     parser.add_argument("--server-buffer", type=int, default=262144)
     parser.add_argument("--client-buffer", type=int, default=262144)
     parser.add_argument("--scenario", choices=["sparse", "spaces", "dense", "boundaries"], default="sparse")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if args.enet_probe and not args.server_benchmark:
-        parser.error("--enet-probe requires an isolated --server-benchmark")
     if not 1 <= args.clients <= 1000 or not 1 <= args.hosts <= args.clients:
         parser.error("Require 1 <= hosts <= clients <= 1000")
     if any(p < 1 or args.clients % p or args.hosts % p for p in args.workers):
@@ -206,7 +202,6 @@ def main():
     destination = args.output.resolve()
     destination.mkdir(parents=True, exist_ok=False)
     sources = [Path(__file__), ROOT / "Scripts/benchmark_enet.py",
-               ROOT / "Scripts/build_enet_worker_experiment.py",
                ROOT / "src/Dreamsleeve.Server.Infrastructure/TransportOwner.fs",
                *sorted((ROOT / "tests/Dreamsleeve.Server.NetworkBenchmarks").glob("*.fs"))]
     result = dict(measuredAtUtc=datetime.now(timezone.utc).isoformat(), args={k: str(v) if isinstance(v, Path) else v for k,v in vars(args).items()},
@@ -214,8 +209,7 @@ def main():
         worktree=subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).splitlines(),
         diagnosticBinarySha256={str(p): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in ([args.server_benchmark.resolve(), args.server_benchmark.resolve().parent / "xENet.dll",
-                       args.server_benchmark.resolve().parent / "Dreamsleeve.Server.Infrastructure.dll"] if args.server_benchmark else [])
-            + ([args.enet_probe.resolve()] if args.enet_probe else [])},
+                       args.server_benchmark.resolve().parent / "Dreamsleeve.Server.Infrastructure.dll"] if args.server_benchmark else [])},
         logicalProcessors=os.cpu_count(), clock="same-machine Stopwatch monotonic; not a distributed-host runner",
         sourceSha256={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources},
         binarySha256={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(CLIENT.parent.glob("Dreamsleeve.*.dll"))}, runs=[])

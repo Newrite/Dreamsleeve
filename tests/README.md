@@ -190,21 +190,21 @@ MovementSample. Managed/native тесты проверяют view/context revisi
 сервер и генератор на этот проект не ссылаются. Команды профилирования приведены
 в [NetworkBenchmarks](Dreamsleeve.Server.NetworkBenchmarks/README.md).
 
-`Dreamsleeve.AllocationProbes` — [изолированные синхронные пробы](Dreamsleeve.AllocationProbes/README.md)
-Task/ValueTask, struct/list/array, HashSet reuse и snapshot actor values. Это
-диагностический executable без новых пакетов, не набор функциональных тестов и
-не замена сетевым бенчмаркам.
-
 Многопроцессное сравнение движения запускает `Scripts/benchmark_enet_workers.py`:
 один сервер, одинаковые суммарные клиенты/сокеты, синхронное измерение и проверка
 межпроцессной доставки. [Методика](Dreamsleeve.Server.NetworkBenchmarks/README.md#multiple-load-processes),
 [результаты 1000 клиентов при 20 Гц](../docs/benchmarks/movement-workers-2026-09-27.md).
 
-## Изоляция ENet
+## Проверки владельца ENet
 
-[Транспортный стенд и измеритель установленной DLL](Dreamsleeve.EnetIsolation/README.md) сравнивают xENet с нативным ENet в одинаковом цикле, отдельно от серверных агентов и кодеков. Запускаются вручную, вне обычной тестовой команды.
+Регрессии production `TransportOwner` входят в `Dreamsleeve.Server.Tests`:
+единственный владелец, непрерывное обслуживание, bounded очереди, перегрузка,
+ошибки, уведомления и остановка. Отдельный экспериментальный проект удалён.
 
-[Выделенный владелец ENet](Dreamsleeve.EnetWorkerExperiment/README.md) — regression-проверки production TransportOwner; историческое имя проекта сохранено. A/B полного сервера использует одинаковый v6 с inline и owner.
+Разовые стенды сравнения библиотек, патчи DLL/исходников и allocation probes
+удалены после завершения расследования. Сохранённые результаты — исторические
+измерения; актуальные нагрузочные инструменты — Server.Benchmarks,
+Server.NetworkBenchmarks, TraceReport и скрипты benchmark_server/enet/enet_workers.
 
 Клиентский общий запуск проверяется в Tests.ClientApplication.cpp: путь к файлу,
 частичные overrides/defaults, строгая схема/лимиты, ошибка auth и повторный вход,

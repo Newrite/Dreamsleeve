@@ -25,7 +25,8 @@ includes(os.getenv("CommonLibSSE-NG"))
 set_project("Dreamsleeve")
 
 add_requires("enet 1.3.18")
-add_requires("spdlog 1.17.0")
+-- Keep CommonLib and Core on the same compiled spdlog configuration.
+add_requires("spdlog 1.17.0", {configs = {header_only = false, wchar = true, std_format = true}})
 add_requires("glaze 7.0.2")
 add_requires("toml++ 3.4.0")
 add_requires("doctest 2.5.0")
@@ -116,6 +117,7 @@ target("Dreamsleeve.Client")
 
     add_includedirs("src/Dreamsleeve.Client")
     add_visible_headers("src/Dreamsleeve.Client")
+    add_module_interface_files("src/Dreamsleeve.Client")
     add_cpp_files("src/Dreamsleeve.Client")
 
     add_deps("Dreamsleeve.Client.Core")
