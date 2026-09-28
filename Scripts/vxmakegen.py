@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -71,7 +72,10 @@ def gather_solution_candidates(repo_root: Path) -> list[Path]:
     candidates: dict[Path, Path] = {}
     for directory in directories:
         for extension in SOLUTION_EXTENSIONS:
-            for path in directory.rglob(f"*{extension}"):
+            # Only the generated directories need recursion. In particular,
+            # do not traverse the UI's node_modules looking for solutions.
+            paths = directory.glob(f"*{extension}") if directory == repo_root else directory.rglob(f"*{extension}")
+            for path in paths:
                 if path.is_file():
                     candidates[path.resolve()] = path.resolve()
 
@@ -105,8 +109,16 @@ def find_solution_path(repo_root: Path, before: dict[Path, int]) -> Path:
             "Expected xmake to produce a .sln/.slnx under the repo root, a vsxmake* directory, or .vs."
         )
 
-    changed_candidates = [item for item in candidates if item.changed]
-    preferred = changed_candidates or candidates
+    preferred = [
+        item for item in candidates
+        if item.changed and item.path.stem == "Dreamsleeve"
+    ]
+    if not preferred:
+        raise FileNotFoundError(
+            "Dreamsleeve.sln/.slnx was not updated by xmake. "
+            "Check that set_project(\"Dreamsleeve\") follows includes in xmake.lua. "
+            "Refusing to modify an unrelated or stale solution."
+        )
     preferred.sort(
         key=lambda item: (
             0 if item.path.suffix.lower() == ".sln" else 1,
@@ -118,12 +130,16 @@ def find_solution_path(repo_root: Path, before: dict[Path, int]) -> Path:
 
 
 def collect_managed_projects(repo_root: Path) -> list[Path]:
-    projects = [
-        path.resolve()
-        for directory in (repo_root / "src", repo_root / "tests")
-        for path in directory.rglob("*")
-        if path.is_file() and path.suffix.lower() in {".csproj", ".fsproj"}
-    ]
+    projects = []
+    excluded = {"node_modules", "bin", "obj", "dist", "dist-demo", "test-results", ".git"}
+    for directory in (repo_root / "src", repo_root / "tests"):
+        for parent, directories, files in os.walk(directory):
+            directories[:] = [name for name in directories if name not in excluded]
+            projects.extend(
+                (Path(parent) / name).resolve()
+                for name in files
+                if Path(name).suffix.lower() in {".csproj", ".fsproj"}
+            )
     return sorted(projects)
 
 
@@ -183,7 +199,7 @@ def add_projects_to_solution(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Generate a vsxmake Visual Studio solution and add managed projects."
+        description="Generate a vsxmake solution with native targets and UI sources, then add managed projects."
     )
     parser.add_argument(
         "--repo-root",
@@ -222,7 +238,7 @@ def main() -> int:
 
         managed_projects = collect_managed_projects(repo_root)
         if not managed_projects:
-            print("No managed projects found under src.")
+            print("No managed projects found under src or tests.")
             return 0
 
         added, skipped = add_projects_to_solution(

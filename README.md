@@ -79,6 +79,9 @@ Auth HTTP по умолчанию доступен только локально
 Сервер запускается в отдельном терминале; по умолчанию адрес 127.0.0.1:8778. [Контракт runtime](src/Dreamsleeve.Client.Core/README.ru.md).
 Генерация protobuf: `python Scripts/generate_protocol.py --help`.
 Генерация IDE solution: `python Scripts/vxmakegen.py --help`.
+`py .\Scripts\vxmakegen.py` также добавляет `UI / Dreamsleeve.Client.UI` с исходниками,
+ресурсами, тестами и конфигами. Сборка UI остаётся через npm/Vite; `node_modules`,
+`dist`, `dist-demo` и результаты тестов в IDE-проект не включаются.
 
 ## Документация
 

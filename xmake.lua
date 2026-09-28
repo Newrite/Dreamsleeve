@@ -1,4 +1,3 @@
-set_project("Dreamsleeve")
 set_version("0.1.0")
 
 add_rules("mode.debug", "mode.releasedbg")
@@ -19,6 +18,11 @@ set_warnings("allextra")
 add_cxflags("/utf-8", "/external:anglebrackets", "/external:W0", "/external:templates-", {tools = "cl"})
 add_syslinks("ws2_32", "winmm")
 
+-- includes
+includes(os.getenv("CommonLibSSE-NG"))
+
+-- Included projects may set their own name; restore the solution name afterwards.
+set_project("Dreamsleeve")
 
 add_requires("enet 1.3.18")
 add_requires("spdlog 1.17.0")
@@ -27,6 +31,11 @@ add_requires("toml++ 3.4.0")
 add_requires("doctest 2.5.0")
 add_requires("magic_enum 0.9.7")
 add_requires("protobuf-cpp 33.2")
+
+set_config("skyrim_vr", true)
+set_config("skyrim_ae", true)
+set_config("skyrim_se", true)
+set_config("skse_xbyak", true)
 
 local function add_module_interface_files(dir)
     local ixx_files = os.files(path.join(dir, "**.ixx"))
@@ -110,6 +119,13 @@ target("Dreamsleeve.Client")
     add_cpp_files("src/Dreamsleeve.Client")
 
     add_deps("Dreamsleeve.Client.Core")
+    add_deps("commonlibsse-ng")
+
+    add_rules("commonlibsse-ng.plugin", {
+        name = "DreamsleeveClient",
+        author = "Newrite",
+        description = "Skyrim online chat and players presence system."
+    })
 
 -- Dev executable
 target("Dreamsleeve.Client.Dev")
@@ -121,6 +137,19 @@ target("Dreamsleeve.Client.Dev")
     add_cpp_files("src/Dreamsleeve.Client.Dev")
 
     add_deps("Dreamsleeve.Client.Core")
+
+-- UI sources for IDE navigation. Vite remains the UI build entry point.
+target("Dreamsleeve.Client.UI")
+    set_kind("phony")
+    set_group("UI")
+    set_default(false)
+
+    local ui = "src/Dreamsleeve.Client.UI"
+    add_extrafiles(path.join(ui, "*"))
+    add_extrafiles(path.join(ui, ".gitignore"))
+    for _, dir in ipairs({"src", "public", "scripts", "tests"}) do
+        add_extrafiles(path.join(ui, dir, "**"))
+    end
 
 -- Test executable
 target("Dreamsleeve.Client.Tests")
