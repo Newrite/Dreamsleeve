@@ -90,7 +90,7 @@ namespace Events
     }
   };
 
-  struct DeathEventHandler final : RE::BSTEventSink<RE::TESDeathEvent>
+  export struct DeathEventHandler final : RE::BSTEventSink<RE::TESDeathEvent>
   {
     static auto GetSingleton() noexcept -> DeathEventHandler*
     {
