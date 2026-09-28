@@ -90,10 +90,48 @@ namespace Events
     }
   };
 
+  struct DeathEventHandler final : RE::BSTEventSink<RE::TESDeathEvent>
+  {
+    static auto GetSingleton() noexcept -> DeathEventHandler*
+    {
+      static DeathEventHandler singleton;
+      return std::addressof(singleton);
+    }
+
+    static auto RegisterHandler() -> void
+    {
+      const auto ScriptEventSourceHandler = RE::ScriptEventSourceHolder::GetSingleton();
+      logger::info("Start register death handler"sv);
+
+      if (ScriptEventSourceHandler)
+      {
+        const auto ScriptEventSource = ScriptEventSourceHandler->GetEventSource<RE::TESDeathEvent>();
+
+        if (ScriptEventSource)
+        {
+          ScriptEventSource->AddEventSink(GetSingleton());
+          logger::info("Finish register death handler"sv);
+        }
+      }
+    }
+
+    auto ProcessEvent(const RE::TESDeathEvent* event, RE::BSTEventSource<RE::TESDeathEvent>*) -> RE::BSEventNotifyControl
+    {
+      if (!event)
+      {
+        return RE::BSEventNotifyControl::kContinue;
+      }
+
+      // some call here
+      return RE::BSEventNotifyControl::kContinue;
+    }
+  };
+
   export void RegisterEvents()
   {
     MenuEventHandler::RegisterHandler();
     InputEventHandler::RegisterHandler();
+    DeathEventHandler::RegisterHandler();
   }
 
 }

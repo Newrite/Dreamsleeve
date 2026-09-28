@@ -66,7 +66,7 @@ namespace Dreamsleeve::Client
     // Reuse its tokenizer to check document structure before populating settings.
     struct DocumentCheck
     {
-      glz::context context{};
+      glz::context                       context{};
       std::set<std::vector<std::string>> keys;
       std::set<std::vector<std::string>> tables;
 
@@ -76,8 +76,16 @@ namespace Dreamsleeve::Client
         {
           glz::skip_ws_and_comments(it, end);
           if (it == end) return !inlined;
-          if (!inlined && (*it == '\n' || *it == '\r')) { ++it; continue; }
-          if (inlined && *it == '}') { ++it; return true; }
+          if (!inlined && (*it == '\n' || *it == '\r'))
+          {
+            ++it;
+            continue;
+          }
+          if (inlined && *it == '}')
+          {
+            ++it;
+            return true;
+          }
 
           const bool table = *it == '[';
           if (table && inlined) return false;
@@ -115,7 +123,11 @@ namespace Dreamsleeve::Client
           {
             glz::skip_ws_and_comments(it, end);
             if (it == end) return false;
-            if (*it == '}') { ++it; return true; }
+            if (*it == '}')
+            {
+              ++it;
+              return true;
+            }
             if (*it++ != ',') return false;
           }
         }
@@ -163,7 +175,7 @@ namespace Dreamsleeve::Client
     input.seekg(0);
     if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read client configuration"};
 
-    const char* cursor = source.data();
+    const char*                   cursor = source.data();
     SettingsDetail::DocumentCheck document;
     if (!document.Members(cursor, cursor + source.size()))
       return std::unexpected{"Invalid client TOML: malformed document or duplicate key/table"};
