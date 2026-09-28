@@ -14,6 +14,7 @@ message OpenSession {
 }
 
 message SessionOpened {
+  string server_name = 6;
   uint64 self_player_id = 1;
   uint64 global_channel_id = 2;
   reserved 3; // Version 2 contained PlayerProfile entries here.

@@ -442,4 +442,22 @@ TEST_CASE("Main thread drains coherent phase and snapshots during concurrent own
   CHECK(accepted);
 }
 
+TEST_CASE("Chat confirmations reserve bounded reply slots until the main thread drains")
+{
+  auto exchange = Exchange(1, 1);
+  ClientModel model;
+  REQUIRE(exchange->Publish(model, true, SessionPhase::Ready, "Test", ChatConfirmation{model.Generation(), 1, 42}));
+  CHECK_FALSE(exchange->CanAcceptReplies());
+  CHECK_FALSE(exchange->PublishCommandFailure({model.Generation(), 2, CommandFailureCode::Busy}));
+
+  ClientOutput output;
+  exchange->Drain(output);
+  REQUIRE(output.chatConfirmations.size() == 1);
+  CHECK(output.chatConfirmations[0].messageId == 42);
+  CHECK(output.status.serverName == "Test");
+  CHECK(exchange->CanAcceptReplies());
+  exchange->Drain(output);
+  CHECK(output.chatConfirmations.empty());
+}
+
 TEST_SUITE_END();

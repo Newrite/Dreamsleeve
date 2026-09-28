@@ -67,6 +67,7 @@ public:
       transport   = std::move(*created);
       opening     = Wire::OpenSession{*requestId, std::move(sessionTicket)};
       lastRequest = *requestId;
+      serverName.clear();
       pendingChats.clear();
       pendingUpdates.clear();
       ResetMovement();
@@ -152,6 +153,7 @@ private:
 
     Result<void> Clear(SessionPhase value)
     {
+      serverName.clear();
       pendingChats.clear();
       pendingUpdates.clear();
       ResetMovement();
@@ -163,9 +165,9 @@ private:
       return published;
     }
 
-    Result<void> Publish(bool requestSnapshot = false)
+    Result<void> Publish(bool requestSnapshot = false, std::optional<ChatConfirmation> confirmation = std::nullopt)
     {
-      if (!exchange.Publish(model, requestSnapshot, phase))
+      if (!exchange.Publish(model, requestSnapshot, phase, serverName, confirmation))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
 
       return {};
@@ -253,6 +255,7 @@ private:
       auto self = model.SetSelfPlayer(generation, opened.selfPlayerId);
       if (!self) return std::unexpected{self.error()};
 
+      serverName = std::move(opened.serverName);
       phase = SessionPhase::Ready;
       for (const auto& message : earlyChat)
       {
@@ -294,10 +297,12 @@ private:
 
       // The server's publication is the only source of accepted chat content.
       // Correlation settles the command; the model path is shared with broadcasts.
-      auto applied = Apply(accepted.changes);
-      if (applied) pendingChats.erase(found);
+      const ChatConfirmation confirmation{model.Generation(), accepted.requestId, accepted.changes.messages.front().messageId};
+      auto applied = model.Apply(model.Generation(), accepted.changes);
+      if (!applied) return std::unexpected{applied.error()};
 
-      return applied;
+      pendingChats.erase(found);
+      return Publish(false, confirmation);
     }
 
     Result<void> Receive(Wire::PlayerUpdateAccepted& accepted)
@@ -528,6 +533,7 @@ private:
     ClientModel                                              model;
     SessionPhase                                             phase{SessionPhase::Disconnected};
     Wire::OpenSession                                        opening;
+    std::string                                              serverName;
     std::uint64_t                                            lastRequest{};
     std::unordered_map<std::uint64_t, Domain::ChatChannelId> pendingChats;
     std::unordered_set<std::uint64_t>                        pendingUpdates;

@@ -215,6 +215,10 @@ let tests = testList "Dreamsleeve.Server.Codec" [
     testCase "welcome requires unique online IDs self membership and ordered channel history" <| fun _ ->
         let encode value = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, value))
         let packet = encode welcome |> ok |> parse
+        Expect.equal packet.SessionOpened.ServerName config.ServerName "configured server name"
+        let named = configured { config with ServerName = "Голоса Тамриэля" }
+        let namedPacket = ProtocolCodec.encodeServer named (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> parse
+        Expect.equal namedPacket.SessionOpened.ServerName "Голоса Тамриэля" "name comes from this server configuration"
         Expect.equal packet.SessionOpened.Players.Count 1 "online"
         Expect.equal packet.SessionOpened.RecentMessages.Count 1 "initial retained history"
         Expect.isError (encode { welcome with SelfPlayerId = pid 8UL }) "self absent"

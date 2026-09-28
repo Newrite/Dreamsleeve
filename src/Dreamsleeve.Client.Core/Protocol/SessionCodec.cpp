@@ -19,6 +19,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       return Invalid("initial_count");
 
     SessionOpened result{requestId, source.self_player_id(), source.global_channel_id()};
+    result.serverName = source.server_name();
     for (const auto& player : source.players())
     {
       auto decoded = Player(config, player);

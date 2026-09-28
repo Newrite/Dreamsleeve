@@ -167,6 +167,7 @@ namespace
     packet.set_request_id(requestId);
     auto* welcome = packet.mutable_session_opened();
     welcome->set_self_player_id(7);
+    welcome->set_server_name("Tamriel Test Server");
     welcome->set_global_channel_id(1);
     auto* player = welcome->add_players()->mutable_profile();
     player->set_player_id(7);
@@ -265,6 +266,7 @@ TEST_CASE("Real transport opens publishes a complete session and reconnects with
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
   auto ready = fixture.Drain();
   CHECK(ready.status.phase == SessionPhase::Ready);
+  CHECK(ready.status.serverName == "Tamriel Test Server");
   REQUIRE(ready.state.updates.size() == 1);
   const auto& snapshot = std::get<ClientSnapshot>(ready.state.updates[0]);
   CHECK(snapshot.selfPlayerId == 7);
@@ -497,7 +499,13 @@ TEST_CASE("SendChat has no local echo and own publications use the broadcast del
   CHECK(fixture.Drain().state.updates.empty());
 
   fixture.Send(Publication(requestId, 3));
-  const auto own = Added(fixture.ReceiveOutput());
+  const auto confirmed = fixture.ReceiveOutput();
+  REQUIRE(confirmed.chatConfirmations.size() == 1);
+  CHECK(confirmed.chatConfirmations[0].requestId == requestId);
+  CHECK(confirmed.chatConfirmations[0].messageId == 3);
+  CHECK(confirmed.chatConfirmations[0].generation == generation);
+  CHECK(fixture.Drain().chatConfirmations.empty());
+  const auto own = Added(confirmed);
   REQUIRE(own.size() == 1);
   CHECK(own.front().messageId == 3);
   CHECK(own.front().messageText == "accepted by server");

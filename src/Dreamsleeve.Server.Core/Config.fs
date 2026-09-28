@@ -33,6 +33,7 @@ type TransportWorkerOptions = {
 /// Supplied before starting the network owner; fixed for the host/session lifetime.
 type ServerConfig =
     {
+        ServerName: string
         BindAddress: IPAddress
         Port: uint16
         PeerLimit: int
@@ -61,6 +62,7 @@ module ServerConfig =
     /// IPv4 must match the native ENet client. Checksums and compression remain disabled.
     let defaults =
         {
+            ServerName = "Dreamsleeve"
             BindAddress = IPAddress.Loopback
             Port = 8778us
             PeerLimit = 32
@@ -92,6 +94,9 @@ module ServerConfig =
     // Used at codec creation and host startup; no per-packet config validation.
     let protocolErrors (config: ServerConfig) =
         [
+            if System.String.IsNullOrWhiteSpace config.ServerName || config.ServerName.Length > 128
+               || config.ServerName |> Seq.exists System.Char.IsControl then
+                "ServerName must contain 1–128 characters without control characters."
             if config.MovementPacketTargetBytes < 0 then "MovementPacketTargetBytes must be nonnegative."
             if config.MaxPacketBytes < 1 then "MaxPacketBytes must be positive."
             if config.MaxWaitingData < config.MaxPacketBytes then

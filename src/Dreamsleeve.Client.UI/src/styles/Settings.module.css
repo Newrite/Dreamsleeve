@@ -1,0 +1,53 @@
+.settings {
+  display: grid;
+  gap: 12px;
+}
+.settings label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.9em;
+}
+.settings input {
+  accent-color: var(--accent);
+}
+.settings .range {
+  display: block;
+}
+.range span {
+  display: flex;
+  justify-content: space-between;
+}
+.range input {
+  width: 100%;
+}
+.range output {
+  color: var(--accent);
+}
+.primary {
+  border: 1px solid var(--border);
+  color: var(--accent);
+  padding: 10px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.settings {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 28px;
+  align-items: start;
+}
+@media (max-width: 700px) {
+  .settings {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1050px) {
+  .settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

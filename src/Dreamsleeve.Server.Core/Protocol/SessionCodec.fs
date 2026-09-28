@@ -26,8 +26,9 @@ module internal SessionCodec =
             Error(ProtocolCodecFailure.InvalidPayload "session_ticket")
         else Ok(ClientCommand.OpenSession ticket)
 
-    let welcome (value: SessionWelcome) =
+    let welcome (config: ServerConfig) (value: SessionWelcome) =
         let result = Dreamsleeve.Protocol.Chat.SessionOpened(
+            ServerName = config.ServerName,
             SelfPlayerId = PlayerId.value value.SelfPlayerId,
             GlobalChannelId = ChatChannelId.value value.GlobalChannelId)
         result.Players.AddRange(value.Players |> Seq.map PlayerCodec.player)

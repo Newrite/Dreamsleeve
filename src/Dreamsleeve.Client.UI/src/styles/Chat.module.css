@@ -1,0 +1,284 @@
+.window {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  font-family: var(--chat-font);
+  font-size: var(--chat-font-size);
+  line-height: var(--chat-line-height);
+  border: 1px solid var(--border);
+  background: rgba(var(--surface), var(--chat-background));
+  transition-property: opacity;
+  transition-timing-function: ease-out;
+}
+.window[data-active="false"] {
+  pointer-events: none;
+}
+.window button {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  padding: 5px 10px;
+}
+.window button:hover:not(:disabled) {
+  color: var(--accent);
+  background: #ffffff0d;
+}
+.header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  min-height: 50px;
+  padding: 0 12px;
+}
+.ornament {
+  font-size: 30px;
+  color: var(--accent);
+  padding-right: 12px;
+}
+.title {
+  min-width: 0;
+  flex: 1;
+  user-select: none;
+  cursor: move;
+  line-height: 1.1;
+  padding: 9px 0;
+}
+.title > span {
+  letter-spacing: 0.24em;
+  font-size: 0.9em;
+}
+.title small {
+  display: block;
+  font:
+    9px/1.6 "Segoe UI",
+    sans-serif;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+}
+.connection {
+  font-size: 10px;
+  color: var(--guild);
+  padding: 8px;
+}
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #74736570;
+  padding: 0 8px;
+}
+.tabs button {
+  color: var(--muted);
+  font-size: 0.85em;
+  border-bottom: 2px solid transparent;
+}
+.tabs button[data-selected="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+.tabs sup {
+  margin-left: 5px;
+  font:
+    10px "Segoe UI",
+    sans-serif;
+}
+.history {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.messages {
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px 18px;
+  scrollbar-width: thin;
+  scrollbar-color: #747365 transparent;
+}
+.messages::-webkit-scrollbar {
+  width: 5px;
+}
+.messages::-webkit-scrollbar-thumb {
+  background: #747365;
+}
+.message {
+  overflow-wrap: anywhere;
+  padding: 2px 0;
+}
+.message time {
+  color: var(--muted);
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+}
+.channel {
+  color: var(--channel-color);
+  font-size: 0.85em;
+}
+.window .author {
+  color: var(--channel-color);
+  font-weight: bold;
+  padding: 0;
+  text-align: left;
+}
+.text {
+  white-space: pre-wrap;
+}
+.message[data-source="system"] .text,
+.window[data-full-color="true"] .text {
+  color: var(--channel-color);
+}
+.newMessages {
+  position: absolute;
+  bottom: 2px;
+  right: 12px;
+  background: #172021 !important;
+  border: 1px solid var(--border) !important;
+  font-size: 0.85em;
+}
+.composer {
+  display: flex;
+  margin: 5px 12px;
+  border: 1px solid var(--border);
+  min-height: 36px;
+}
+.window select,
+.window input:not([type="checkbox"]):not([type="range"]) {
+  color: var(--ink);
+  background: #0c1214;
+  border: 0;
+  min-width: 0;
+  padding: 5px 8px;
+}
+.composer select {
+  max-width: 30%;
+  border-right: 1px solid var(--border);
+  font-size: 0.85em;
+}
+.composer input {
+  flex: 1;
+  width: 0;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0 6px 6px;
+  font-size: 0.75em;
+}
+.footer span {
+  color: var(--accent);
+}
+.footer small {
+  margin-left: auto;
+  color: var(--muted);
+  padding-right: 10px;
+}
+.hint {
+  text-align: right;
+  color: var(--muted);
+  font-size: 0.75em;
+  padding: 3px 15px 6px;
+}
+.notice {
+  color: var(--accent);
+  padding: 0 16px;
+  font-size: 0.8em;
+}
+.empty {
+  color: var(--muted);
+  font-style: italic;
+}
+.resize {
+  position: absolute;
+  bottom: -3px;
+  right: -6px;
+  cursor: nwse-resize;
+  color: var(--accent) !important;
+}
+
+.connection {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 0.7em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.connection[data-connected="false"] {
+  color: var(--error);
+}
+
+@media (max-width: 560px) {
+  .title > span {
+    letter-spacing: 0.1em;
+    font-size: 0.75em;
+  }
+  .title small {
+    display: none;
+  }
+  .header {
+    padding: 0 6px;
+  }
+  .connection {
+    font-size: 11px;
+    white-space: normal;
+  }
+  .ornament {
+    display: none;
+  }
+}
+
+/* Passive HUD: fresh lines remain visible independently of the frame/history. */
+.window[data-active="false"] {
+  background: transparent;
+  border-color: transparent;
+}
+.window[data-active="false"] .header,
+.window[data-active="false"] .hint {
+  opacity: var(--chrome-opacity);
+  transition: opacity 0.25s ease-out;
+  border-color: transparent;
+}
+.window[data-active="false"] .messages {
+  overflow: hidden;
+}
+.message {
+  transition-property: opacity;
+  transition-timing-function: ease-out;
+}
+.window[data-active="false"] .notice {
+  background: rgba(var(--surface), 0.65);
+}
+
+.window[data-active="false"][data-connected="true"] .header,
+.window[data-active="false"] .hint {
+  visibility: hidden;
+  opacity: 0;
+  transition: none;
+}
+.window[data-active="false"][data-connected="false"] .title,
+.window[data-active="false"][data-connected="false"] .ornament {
+  visibility: hidden;
+}
+
+.pendingMessage {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+.pendingText {
+  opacity: 0.5;
+}
+.pendingMessage small {
+  color: var(--muted);
+  font-size: 0.8em;
+}
+.pendingMessage[data-status="failed"] small {
+  color: #dba097;
+}
+.pendingMessage button {
+  margin-left: 0.6em;
+  font-size: 0.8em;
+}
+.title span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

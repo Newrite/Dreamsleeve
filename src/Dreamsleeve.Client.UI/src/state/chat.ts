@@ -1,0 +1,370 @@
+import { createStore } from "zustand/vanilla";
+import type {
+  ConnectionPhase,
+  Channel,
+  HostEvent,
+  Message,
+  Player,
+  Send,
+  Settings,
+} from "../bridge/types";
+import { defaults, settingsFrom } from "./settings";
+export const HISTORY_LIMIT = 500;
+export type Panel = "online" | "profile" | "stats" | "settings" | null;
+export interface PendingMessage {
+  channelId: string;
+  text: string;
+  time: number;
+  status: "sending" | "failed" | "unknown";
+  error?: string;
+  messageId?: string;
+}
+export const sending = (state: ChatState) =>
+  Object.values(state.pending).some((p) => p.status === "sending");
+export interface ChatState {
+  channels: Channel[];
+  messages: Message[];
+  receivedAt: Record<string, number>;
+  players: Player[];
+  selfId: string;
+  serverName: string;
+  connected: boolean;
+  connectionPhase: ConnectionPhase;
+  initialized: boolean;
+  active: boolean;
+  faded: boolean;
+  filter: string;
+  target: string;
+  unread: Record<string, number>;
+  drafts: Record<string, string>;
+  scrolled: boolean;
+  panel: Panel;
+  selectedPlayer: string | null;
+  settings: Settings;
+  notice: string;
+  pending: Record<string, PendingMessage>;
+  activity: number;
+  revision: number;
+  savedRevision: number;
+}
+export const visible = (message: Message, filter: string) =>
+  filter === "all" || message.channelId === filter;
+export function makeChat(send: Send, now = () => Date.now()) {
+  const store = createStore<ChatState>(() => ({
+    channels: [],
+    messages: [],
+    receivedAt: {},
+    players: [],
+    selfId: "",
+    serverName: "",
+    connected: false,
+    connectionPhase: "disconnected",
+    initialized: false,
+    active: false,
+    faded: false,
+    filter: "all",
+    target: "",
+    unread: {},
+    drafts: {},
+    scrolled: false,
+    panel: null,
+    selectedPlayer: null,
+    settings: { ...defaults },
+    notice: "",
+    pending: {},
+    activity: now(),
+    revision: 0,
+    savedRevision: 0,
+  }));
+  let sequence = 0;
+  const touch = () => store.setState({ activity: now(), faded: false });
+  function receive(event: HostEvent) {
+    const state = store.getState();
+    switch (event.type) {
+      case "snapshot": {
+        const channels = event.channels;
+        store.setState({
+          channels,
+          messages: event.messages.slice(-HISTORY_LIMIT),
+          receivedAt: {},
+          players: event.players,
+          selfId: event.selfId,
+          serverName: event.serverName,
+          initialized: true,
+          connected: true,
+          connectionPhase: "connected",
+          pending:
+            state.selfId === event.selfId &&
+            state.serverName === event.serverName
+              ? Object.fromEntries(
+                  Object.entries(state.pending)
+                    .filter(
+                      ([, p]) =>
+                        !event.messages.some((m) => m.id === p.messageId),
+                    )
+                    .map(([id, p]) => [
+                      id,
+                      p.status === "sending"
+                        ? { ...p, status: "unknown" as const }
+                        : p,
+                    ]),
+                )
+              : {},
+          unread: {},
+          filter: "all",
+          target: channels.find((c) => c.writable)?.id ?? "",
+          settings: event.settings
+            ? settingsFrom(event.settings)
+            : state.settings,
+          notice: "",
+          scrolled: false,
+        });
+        touch();
+        break;
+      }
+      case "messages": {
+        const seen = new Set(state.messages.map((m) => m.id));
+        const channels = new Set(state.channels.map((c) => c.id));
+        const added = event.messages.filter((m) => {
+          if (seen.has(m.id) || !channels.has(m.channelId)) return false;
+          seen.add(m.id);
+          return true;
+        });
+        const unread = { ...state.unread };
+        for (const m of added)
+          if (!state.active || state.scrolled || !visible(m, state.filter))
+            unread[m.channelId] = Math.min(
+              HISTORY_LIMIT,
+              (unread[m.channelId] ?? 0) + 1,
+            );
+        const messages = [...state.messages, ...added].slice(-HISTORY_LIMIT);
+        const receivedAt = { ...state.receivedAt };
+        const receipt = now();
+        for (const message of added) receivedAt[message.id] = receipt;
+        const retained = new Set(messages.map((message) => message.id));
+        for (const id of Object.keys(receivedAt))
+          if (!retained.has(id)) delete receivedAt[id];
+        const pending = Object.fromEntries(
+          Object.entries(state.pending).filter(
+            ([, p]) => !seen.has(p.messageId ?? ""),
+          ),
+        );
+        store.setState({ messages, receivedAt, unread, pending });
+        break;
+      }
+      case "players":
+        store.setState({ players: event.players });
+        break;
+      case "activate":
+        store.setState({ active: true });
+        touch();
+        break;
+      case "deactivate":
+        store.setState({ active: false, panel: null, scrolled: false });
+        touch();
+        break;
+      case "connection":
+        store.setState({
+          connected: event.connected,
+          connectionPhase:
+            event.phase ?? (event.connected ? "connected" : "disconnected"),
+          notice:
+            !event.connected &&
+            state.initialized &&
+            (!event.phase || ["disconnected", "faulted"].includes(event.phase))
+              ? "Соединение потеряно. Доставка ожидающих сообщений неизвестна."
+              : "",
+        });
+        if (!event.connected) {
+          const pending = Object.fromEntries(
+            Object.entries(state.pending).map(([id, p]) => [
+              id,
+              p.status === "sending" ? { ...p, status: "unknown" as const } : p,
+            ]),
+          );
+          store.setState({ pending });
+        }
+        touch();
+        break;
+      case "sendResult": {
+        const item = state.pending[event.requestId];
+        if (!item) break;
+        const pending = { ...state.pending };
+        if (event.error !== undefined) {
+          pending[event.requestId] = {
+            ...item,
+            status: "failed",
+            error: event.error,
+          };
+        } else if (state.messages.some((m) => m.id === event.messageId)) {
+          delete pending[event.requestId];
+        } else {
+          pending[event.requestId] = { ...item, messageId: event.messageId };
+        }
+        store.setState({ pending });
+        break;
+      }
+      case "settingsResult":
+        if (event.revision !== state.revision) break;
+        store.setState({
+          savedRevision: event.error ? state.savedRevision : event.revision,
+          notice: event.error ?? "Настройки сохранены",
+        });
+        break;
+    }
+  }
+  function close() {
+    if (!send({ type: "close" })) {
+      store.setState({ notice: "Не удалось вернуть управление игре" });
+      return;
+    }
+    receive({ type: "deactivate" });
+  }
+  function submit() {
+    const s = store.getState();
+    const text = s.drafts[s.target] ?? "";
+    if (sending(s)) return;
+    if (!text.trim()) {
+      close();
+      return;
+    }
+    if (
+      !s.connected ||
+      !s.channels.some((c) => c.id === s.target && c.writable)
+    )
+      return;
+    if (Object.keys(s.pending).length >= 16) {
+      store.setState({
+        notice: "Удалите старые неподтверждённые сообщения перед отправкой.",
+      });
+      return;
+    }
+    const requestId = String(++sequence);
+    store.setState({
+      filter: s.filter === "all" ? "all" : s.target,
+      scrolled: false,
+      pending: {
+        ...s.pending,
+        [requestId]: {
+          channelId: s.target,
+          text,
+          time: now(),
+          status: "sending",
+        },
+      },
+      notice: "",
+    });
+    if (!send({ type: "sendChat", requestId, channelId: s.target, text })) {
+      store.setState({
+        pending: {
+          ...s.pending,
+          [requestId]: {
+            channelId: s.target,
+            text,
+            time: now(),
+            status: "failed",
+            error: "Команда не принята приложением",
+          },
+        },
+        drafts: { ...s.drafts, [s.target]: "" },
+      });
+      return;
+    }
+    store.setState({ drafts: { ...s.drafts, [s.target]: "" } });
+    close();
+  }
+  function save() {
+    const s = store.getState();
+    const revision = s.revision + 1;
+    store.setState({ revision, notice: "Сохранение…" });
+    if (!send({ type: "saveSettings", settings: s.settings, revision }))
+      store.setState({
+        notice: "Настройки применены, но не сохранены: приложение недоступно.",
+      });
+  }
+  function select(filter: string) {
+    if (
+      filter !== "all" &&
+      !store.getState().channels.some((c) => c.id === filter)
+    )
+      return;
+    store.setState({ filter, scrolled: false });
+    touch();
+  }
+  function read() {
+    const s = store.getState();
+    const unread = { ...s.unread };
+    for (const id of Object.keys(unread))
+      if (s.filter === "all" || id === s.filter) unread[id] = 0;
+    store.setState({ unread, scrolled: false });
+  }
+  return {
+    store,
+    expirePending() {
+      const s = store.getState();
+      const pending = Object.fromEntries(
+        Object.entries(s.pending).map(([id, p]) => [
+          id,
+          p.status === "sending" && now() - p.time >= 15000
+            ? { ...p, status: "unknown" as const }
+            : p,
+        ]),
+      );
+      store.setState({ pending });
+    },
+    dismiss(requestId: string) {
+      const pending = { ...store.getState().pending };
+      if (pending[requestId]?.status === "sending") return;
+      delete pending[requestId];
+      store.setState({ pending });
+    },
+    retry(requestId: string) {
+      const s = store.getState();
+      const item = s.pending[requestId];
+      if (!item || item.status !== "failed" || !s.connected || sending(s))
+        return;
+      if (s.drafts[item.channelId]) {
+        store.setState({
+          notice: "Сначала отправьте или очистите черновик этого канала.",
+        });
+        return;
+      }
+      const pending = { ...s.pending };
+      delete pending[requestId];
+      store.setState({
+        pending,
+        target: item.channelId,
+        drafts: { ...s.drafts, [item.channelId]: item.text },
+      });
+      submit();
+    },
+    receive,
+    touch,
+    close,
+    submit,
+    save,
+    select,
+    read,
+    setDraft(text: string) {
+      const s = store.getState();
+      store.setState({ drafts: { ...s.drafts, [s.target]: text } });
+    },
+    configure(patch: Partial<Settings>) {
+      const current = store.getState();
+      store.setState({
+        settings: settingsFrom({ ...current.settings, ...patch }),
+        revision: current.revision + 1,
+        notice: "Настройки изменены. Нажмите «Сохранить настройки».",
+      });
+      touch();
+    },
+    open(panel: Panel, playerId?: string) {
+      store.setState({
+        panel,
+        selectedPlayer: playerId ?? store.getState().selfId,
+      });
+      touch();
+    },
+  };
+}
+export type Chat = ReturnType<typeof makeChat>;

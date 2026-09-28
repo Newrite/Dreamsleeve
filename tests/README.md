@@ -223,3 +223,13 @@ HTTP-ответ проверяет, что Disconnect во время регис
 отзыв билетов и одноразовый reset. SqliteAccountStoreTests проверяет миграцию v1 → v2.
 `python Scripts/smoke_saved_auth.py` проходит полный путь через native Core, Credential
 Manager, HTTP, SQLite и ENet, включая отзыв живой сессии администратором.
+
+## Клиентский web UI
+
+`src/Dreamsleeve.Client.UI` имеет отдельные TypeScript/Vitest/Playwright проверки.
+Из его каталога: `npm ci`, `npm test`, `npm run build`, `npm run test:browser`.
+Для Playwright нужен Chromium (`npx playwright install chromium`) либо установленный
+Edge (`$env:UI_BROWSER_CHANNEL='msedge'`). Проверяются публикации/отказы, readonly
+объявления, fade, scroll/unread, геометрия, сохранение dev-настроек и native JS bridge.
+Game build автоматически проверяется на отсутствие dev fixtures и localStorage.
+Это не тест Skyrim/PrismaUI; [граница интеграции](../src/Dreamsleeve.Client.UI/README.ru.md).

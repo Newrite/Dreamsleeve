@@ -282,3 +282,10 @@ MovementView принадлежит игровому потоку. После ex
 movement.Apply(output.state), затем Sample(playerId, frameTime) каждый кадр.
 Полный снимок/playersReplaced переустанавливает базу истории. Старые generation/revision
 не возвращают исчезнувшие треки. [Подробности](../../../docs/MovementInterpolationRu.md).
+
+`ClientOutput.chatConfirmations` отдаёт `(generation, requestId, messageId)` для
+собственных подтверждённых сообщений. Эти результаты занимают тот же ограниченный
+бюджет, что локальные отказы и серверные rejections, до Drain основного потока.
+UI-host связывает pending-строки по ID, не по тексту; контент по-прежнему приходит
+через обычные chatContent/snapshot. Статус содержит serverName из welcome;
+при завершении сессии имя очищается вместе с моделью.

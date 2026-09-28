@@ -27,16 +27,17 @@ namespace Dreamsleeve.Protocol.Chat {
             "Cg1zZXNzaW9uLnByb3RvEhlEcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Ggpj",
             "aGF0LnByb3RvGgxwbGF5ZXIucHJvdG8iSQoLT3BlblNlc3Npb24SFgoOc2Vz",
             "c2lvbl90aWNrZXQYAyABKAlKBAgBEAJKBAgCEANSCHVzZXJuYW1lUgxkaXNw",
-            "bGF5X25hbWUiwQEKDVNlc3Npb25PcGVuZWQSFgoOc2VsZl9wbGF5ZXJfaWQY",
-            "ASABKAQSGQoRZ2xvYmFsX2NoYW5uZWxfaWQYAiABKAQSNgoHcGxheWVycxgF",
-            "IAMoCzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVySW5mbxI/",
-            "Cg9yZWNlbnRfbWVzc2FnZXMYBCADKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
-            "bC5DaGF0LkNoYXRNZXNzYWdlSgQIAxAEYgZwcm90bzM="));
+            "bGF5X25hbWUi1gEKDVNlc3Npb25PcGVuZWQSEwoLc2VydmVyX25hbWUYBiAB",
+            "KAkSFgoOc2VsZl9wbGF5ZXJfaWQYASABKAQSGQoRZ2xvYmFsX2NoYW5uZWxf",
+            "aWQYAiABKAQSNgoHcGxheWVycxgFIAMoCzIlLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLkNoYXQuUGxheWVySW5mbxI/Cg9yZWNlbnRfbWVzc2FnZXMYBCADKAsy",
+            "Ji5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRNZXNzYWdlSgQIAxAE",
+            "YgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.OpenSession), global::Dreamsleeve.Protocol.Chat.OpenSession.Parser, new[]{ "SessionTicket" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "SelfPlayerId", "GlobalChannelId", "Players", "RecentMessages" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "GlobalChannelId", "Players", "RecentMessages" }, null, null, null, null)
           }));
     }
     #endregion
@@ -280,6 +281,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public SessionOpened(SessionOpened other) : this() {
+      serverName_ = other.serverName_;
       selfPlayerId_ = other.selfPlayerId_;
       globalChannelId_ = other.globalChannelId_;
       players_ = other.players_.Clone();
@@ -291,6 +293,18 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public SessionOpened Clone() {
       return new SessionOpened(this);
+    }
+
+    /// <summary>Field number for the "server_name" field.</summary>
+    public const int ServerNameFieldNumber = 6;
+    private string serverName_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string ServerName {
+      get { return serverName_; }
+      set {
+        serverName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
     }
 
     /// <summary>Field number for the "self_player_id" field.</summary>
@@ -360,6 +374,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (ReferenceEquals(other, this)) {
         return true;
       }
+      if (ServerName != other.ServerName) return false;
       if (SelfPlayerId != other.SelfPlayerId) return false;
       if (GlobalChannelId != other.GlobalChannelId) return false;
       if(!players_.Equals(other.players_)) return false;
@@ -371,6 +386,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
+      if (ServerName.Length != 0) hash ^= ServerName.GetHashCode();
       if (SelfPlayerId != 0UL) hash ^= SelfPlayerId.GetHashCode();
       if (GlobalChannelId != 0UL) hash ^= GlobalChannelId.GetHashCode();
       hash ^= players_.GetHashCode();
@@ -403,6 +419,10 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       recentMessages_.WriteTo(output, _repeated_recentMessages_codec);
       players_.WriteTo(output, _repeated_players_codec);
+      if (ServerName.Length != 0) {
+        output.WriteRawTag(50);
+        output.WriteString(ServerName);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -423,6 +443,10 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       recentMessages_.WriteTo(ref output, _repeated_recentMessages_codec);
       players_.WriteTo(ref output, _repeated_players_codec);
+      if (ServerName.Length != 0) {
+        output.WriteRawTag(50);
+        output.WriteString(ServerName);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -433,6 +457,9 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
+      if (ServerName.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(ServerName);
+      }
       if (SelfPlayerId != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(SelfPlayerId);
       }
@@ -452,6 +479,9 @@ namespace Dreamsleeve.Protocol.Chat {
     public void MergeFrom(SessionOpened other) {
       if (other == null) {
         return;
+      }
+      if (other.ServerName.Length != 0) {
+        ServerName = other.ServerName;
       }
       if (other.SelfPlayerId != 0UL) {
         SelfPlayerId = other.SelfPlayerId;
@@ -496,6 +526,10 @@ namespace Dreamsleeve.Protocol.Chat {
             players_.AddEntriesFrom(input, _repeated_players_codec);
             break;
           }
+          case 50: {
+            ServerName = input.ReadString();
+            break;
+          }
         }
       }
     #endif
@@ -529,6 +563,10 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 42: {
             players_.AddEntriesFrom(ref input, _repeated_players_codec);
+            break;
+          }
+          case 50: {
+            ServerName = input.ReadString();
             break;
           }
         }

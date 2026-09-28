@@ -1,0 +1,22 @@
+# Proposed native host UI settings; not yet a ClientSettings section.
+[ui.chat]
+onlineView = "cards"
+fade = true
+delay = 12.0
+duration = 1.0
+idleOpacity = 0.0
+scale = 1.0
+fontSize = 16
+font = "sans"
+lineHeight = 1.45
+background = 0.82
+timestamps = true
+fullColor = false
+nameMode = "display"
+locked = true
+x = 0.025
+y = 0.42
+width = 680
+height = 390
+activationKey = "Enter"
+theme = "skyrim"

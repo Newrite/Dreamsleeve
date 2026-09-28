@@ -73,6 +73,7 @@ export namespace Dreamsleeve::Client::Wire
     Domain::ChatChannelId            globalChannelId;
     std::vector<Domain::Player>      players;
     std::vector<Domain::ChatMessage> recentMessages;
+    std::string                     serverName;
   };
 
   struct ChatAccepted

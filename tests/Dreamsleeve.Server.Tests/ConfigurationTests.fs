@@ -14,6 +14,15 @@ let private withFile (text: string) action =
         File.Delete path
 
 let tests = testList "Server configuration" [
+    testCase "server display name loads from TOML and rejects invalid labels" <| fun _ ->
+        withFile "[Server]\nServerName = 'Голоса Тамриэля'\n" (fun path ->
+            match Configuration.parse [|"--config"; path|] with
+            | Ok (LaunchCommand.Run config) -> Expect.equal config.Server.ServerName "Голоса Тамриэля" "name"
+            | other -> failtestf "%A" other)
+        for name in [""; "   "; String.replicate 129 "x"] do
+            withFile (sprintf "[Server]\nServerName = '%s'\n" name) (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) "invalid name")
+
     testCase "TOML comments empty tables literal paths and inline tables are supported" <| fun _ ->
         withFile "# defaults\n" (fun path ->
             Expect.equal (Configuration.parse [|"--config"; path|]) (Ok (LaunchCommand.Run Configuration.defaults)) "Comments-only TOML keeps defaults.")

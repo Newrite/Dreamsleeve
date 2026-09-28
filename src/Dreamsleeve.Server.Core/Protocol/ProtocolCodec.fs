@@ -144,7 +144,7 @@ module ProtocolCodec =
 
             match response with
             | ServerResponse.SessionOpened(_, value) ->
-                packet.SessionOpened <- SessionCodec.welcome value
+                packet.SessionOpened <- SessionCodec.welcome codec.Config value
 
             | ServerResponse.ChatAccepted(_, value)
             | ServerResponse.ChatPublished value ->

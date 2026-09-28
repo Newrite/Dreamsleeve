@@ -1,0 +1,40 @@
+[data-part="chat"],
+[data-part="workspace"] {
+  --ink: #eeeef0;
+  --muted: #aaaeb2;
+  --accent: #eeeeee;
+  --border: #73787d;
+  --surface: 12, 14, 17;
+  --global: #e6e6e6;
+  --local: #d7c493;
+  --party: #9dccdf;
+  --guild: #a8ce85;
+  --whisper: #d6ace4;
+  --system: #dfc482;
+  --error: #e39685;
+}
+[data-theme="contrast"] {
+  --ink: #fff;
+  --muted: #ccc;
+  --accent: #ffdf86;
+  --border: #c9c9bd;
+  --surface: 0, 0, 0;
+}
+[data-channel="global"] {
+  --channel-color: var(--global);
+}
+[data-channel="local"] {
+  --channel-color: var(--local);
+}
+[data-channel="party"] {
+  --channel-color: var(--party);
+}
+[data-channel="guild"] {
+  --channel-color: var(--guild);
+}
+[data-channel="whisper"] {
+  --channel-color: var(--whisper);
+}
+[data-channel="system"] {
+  --channel-color: var(--system);
+}

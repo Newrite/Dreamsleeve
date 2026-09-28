@@ -31,11 +31,15 @@ SKSE/PrismaUI и интерфейс администрирования оста�
 Контракт: [Protocol/README.ru.md](Protocol/README.ru.md).
 
 Ближайшее направление — работающий `Client.Dev` и сервер без запуска Skyrim.
-Будущий интерфейс на HTML/CSS/JS планируется переиспользовать в PrismaUI через
-адаптер; реализация интерфейса и игровая интеграция остаются следующими этапами.
+Для общего интерфейса выбран TypeScript/React/Vite/Zustand с отдельными CSS-темами
+и адаптером PrismaUI. [Требования и этапы UI](docs/ClientUiPlanRu.md) включают
+чат, системные объявления, fade, настройки и перемещение/изменение размера окна.
+Браузерный UI уже реализован: [запуск и bridge](src/Dreamsleeve.Client.UI/README.ru.md).
+Подключение C++ host и проверка внутри PrismaUI/SKSE остаются следующим этапом.
 
 | Каталог | Назначение |
 |---|---|
+| `src/Dreamsleeve.Client.UI` | React/TypeScript: чат, панели и темы, отдельные browser/game сборки |
 | `src/Dreamsleeve.Client.Core` | C++23: DreamNet, независимый от Skyrim домен и состояние клиента |
 | `src/Dreamsleeve.Client` | Заготовка игрового адаптера; пока static library, будущий SKSE-плагин |
 | `src/Dreamsleeve.Client.Dev` | Двухпоточная консоль: сетевой вход через --connect и отдельное синтетическое демо |

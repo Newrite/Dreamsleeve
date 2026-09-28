@@ -1,0 +1,117 @@
+.scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: thin;
+}
+.table {
+  width: 100%;
+  min-width: 860px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.table th {
+  position: sticky;
+  top: 0;
+  background: rgb(var(--surface));
+  z-index: 1;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.table td {
+  height: 52px;
+  padding: 5px 10px;
+  border-bottom: 1px solid #ffffff16;
+  vertical-align: middle;
+}
+.table tr:hover td {
+  background: #ffffff08;
+}
+.table tr[data-self="true"] td:first-child {
+  border-left: 2px solid var(--muted);
+}
+.nameColumn {
+  width: 24%;
+}
+.levelColumn {
+  width: 5%;
+}
+.placeColumn {
+  width: 21%;
+}
+.activityColumn {
+  width: 16%;
+}
+.resourcesColumn {
+  width: 34%;
+}
+.table .name {
+  display: block;
+  padding: 0;
+  width: 100%;
+  text-align: left;
+}
+.name strong,
+.name small,
+.ellipsis {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.name strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.table small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.level {
+  font-variant-numeric: tabular-nums;
+}
+.resources {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.resource {
+  min-width: 0;
+  font-size: 9px;
+  color: var(--muted);
+}
+.resource > span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.resource b {
+  color: var(--ink);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.resource i {
+  display: block;
+  background: #0009;
+  border: 1px solid #ffffff30;
+  height: 5px;
+  margin-top: 5px;
+}
+.resource em {
+  display: block;
+  height: 100%;
+  background: #a82e32;
+}
+.resource[data-resource="magicka"] em {
+  background: #365ca4;
+}
+.resource[data-resource="stamina"] em {
+  background: #408448;
+}

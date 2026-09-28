@@ -1,0 +1,105 @@
+body {
+  background: #111f28;
+}
+.landscape {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(#101b27, #455b63 72%, #1b2828);
+}
+.moon {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  right: 25%;
+  top: 12%;
+  border-radius: 50%;
+  background: #adbbb7;
+  opacity: 0.35;
+}
+.ridge {
+  position: absolute;
+  width: 115%;
+  left: -5%;
+  height: 80%;
+  bottom: -25%;
+  clip-path: polygon(
+    0 60%,
+    10% 34%,
+    16% 49%,
+    30% 0,
+    34% 16%,
+    40% 9%,
+    58% 59%,
+    66% 28%,
+    76% 8%,
+    90% 45%,
+    100% 19%,
+    100% 100%,
+    0 100%
+  );
+}
+.far {
+  background: #58696c;
+  bottom: -12%;
+  opacity: 0.7;
+}
+.near {
+  background: #172b30;
+  transform: scaleX(-1);
+}
+.workshop-title {
+  position: fixed;
+  top: 9%;
+  left: 5%;
+  color: #d6d7ce;
+  font-family: Georgia, serif;
+}
+.workshop-title > span {
+  font:
+    10px "Segoe UI",
+    sans-serif;
+  letter-spacing: 0.3em;
+  color: #a7b2b3;
+}
+.workshop-title h1 {
+  font-weight: normal;
+  font-size: 54px;
+  line-height: 1.05;
+  margin: 24px 0 12px;
+}
+.workshop-title p {
+  color: #b2c0be;
+  font-size: 16px;
+}
+.workshop-controls {
+  position: fixed;
+  right: 30px;
+  bottom: 28px;
+  width: 240px;
+  padding: 18px;
+  background: #0c141bdd;
+  border: 1px solid #657372;
+  color: #d9dfd7;
+  font:
+    12px "Segoe UI",
+    sans-serif;
+}
+.workshop-controls span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: #92a5a8;
+  margin-bottom: 12px;
+}
+.workshop-controls button {
+  display: block;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+.workshop-controls button:hover {
+  color: #e3cb8f;
+}

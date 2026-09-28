@@ -141,6 +141,7 @@ namespace
 
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.status.phase) << '\n';
+    if (!output.status.serverName.empty()) console << "server=" << output.status.serverName << '\n';
     if (output.status.authenticating) console << "auth=Pending\n";
     else console << "auth=Idle operation=" << static_cast<int>(output.status.authOperation)
                  << " failure=" << static_cast<int>(output.status.authFailure)
