@@ -256,7 +256,7 @@ private:
       if (!self) return std::unexpected{self.error()};
 
       serverName = std::move(opened.serverName);
-      phase = SessionPhase::Ready;
+      phase      = SessionPhase::Ready;
       for (const auto& message : earlyChat)
       {
         auto applied = model.Apply(generation, message);
@@ -298,7 +298,7 @@ private:
       // The server's publication is the only source of accepted chat content.
       // Correlation settles the command; the model path is shared with broadcasts.
       const ChatConfirmation confirmation{model.Generation(), accepted.requestId, accepted.changes.messages.front().messageId};
-      auto applied = model.Apply(model.Generation(), accepted.changes);
+      auto                   applied = model.Apply(model.Generation(), accepted.changes);
       if (!applied) return std::unexpected{applied.error()};
 
       pendingChats.erase(found);

@@ -106,44 +106,64 @@ export namespace Dreamsleeve::Client
 
   using Credentials = Auth::Credentials;
 
-  enum class AuthOperation { None, PasswordLogin, Resume, SignOut, ForgetSavedLogin, ResetPassword };
+  enum class AuthOperation
+  {
+    None,
+    PasswordLogin,
+    Resume,
+    SignOut,
+    ForgetSavedLogin,
+    ResetPassword
+  };
 
   struct ChatConfirmation
   {
-    std::uint64_t generation{};
-    std::uint64_t requestId{};
+    std::uint64_t         generation{};
+    std::uint64_t         requestId{};
     Domain::ChatMessageId messageId{};
   };
 
   struct ClientStatus
   {
-    SessionPhase phase{SessionPhase::Disconnected};
-    bool         authenticating{};
-    bool         stopped{};
-    std::string  error;
-    std::string  serverName;
+    SessionPhase      phase{SessionPhase::Disconnected};
+    bool              authenticating{};
+    bool              stopped{};
+    std::string       error;
+    std::string       serverName;
     Auth::FailureCode authFailure{};
-    AuthOperation authOperation{};
-    bool savedLogin{};
-    std::string savedUsername;
+    AuthOperation     authOperation{};
+    bool              savedLogin{};
+    std::string       savedUsername;
   };
 
   struct PasswordLogin
   {
-    static constexpr auto Operation = AuthOperation::PasswordLogin;
-    Credentials credentials;
+    static constexpr auto      Operation = AuthOperation::PasswordLogin;
+    Credentials                credentials;
     std::optional<std::string> registerName;
-    bool remember{};
+    bool                       remember{};
   };
 
-  struct ResumeLogin { static constexpr auto Operation = AuthOperation::Resume; };
-  struct SignOutAccount { static constexpr auto Operation = AuthOperation::SignOut; };
-  struct ForgetLogin { static constexpr auto Operation = AuthOperation::ForgetSavedLogin; };
+  struct ResumeLogin
+  {
+    static constexpr auto Operation = AuthOperation::Resume;
+  };
+
+  struct SignOutAccount
+  {
+    static constexpr auto Operation = AuthOperation::SignOut;
+  };
+
+  struct ForgetLogin
+  {
+    static constexpr auto Operation = AuthOperation::ForgetSavedLogin;
+  };
+
   struct ResetAccountPassword
   {
     static constexpr auto Operation = AuthOperation::ResetPassword;
-    std::string code;
-    std::string password;
+    std::string           code;
+    std::string           password;
   };
 
   using AuthenticationRequest = std::variant<PasswordLogin, ResumeLogin, SignOutAccount, ForgetLogin, ResetAccountPassword>;
@@ -151,7 +171,7 @@ export namespace Dreamsleeve::Client
   struct ClientControl
   {
     std::optional<AuthenticationRequest> authentication;
-    bool                        disconnect{};
+    bool                                 disconnect{};
   };
 
   struct ClientOutput
@@ -193,7 +213,10 @@ public:
 
     // Main thread. Lifecycle has a reserved slot, independent of game-command
     // capacity and reply backpressure. Admission does not mean authentication.
-    std::expected<void, std::string> PostLogin(Credentials credentials, std::optional<std::string> registerName = std::nullopt, bool remember = false)
+    std::expected<void, std::string> PostLogin(
+      Credentials                credentials,
+      std::optional<std::string> registerName = std::nullopt,
+      bool                       remember     = false)
     {
       return PostAuthentication(PasswordLogin{std::move(credentials), std::move(registerName), remember});
     }
@@ -202,16 +225,17 @@ public:
     {
       std::lock_guard lock{mutex};
       if (inputClosed) return std::unexpected{"Client input is closed"};
-      const auto operation = std::visit([](const auto& value) { return value.Operation; }, request);
+      const auto operation     = std::visit([](const auto& value) { return value.Operation; }, request);
       const bool activeAllowed = operation == AuthOperation::SignOut || operation == AuthOperation::ForgetSavedLogin;
-      if (status.authenticating || disconnectRequested ||
-          (!activeAllowed && status.phase != SessionPhase::Disconnected && status.phase != SessionPhase::Faulted))
+      if (
+        status.authenticating || disconnectRequested ||
+        (!activeAllowed && status.phase != SessionPhase::Disconnected && status.phase != SessionPhase::Faulted))
         return std::unexpected{"A connection operation or session is already active"};
 
       authenticationCanceled = false;
-      status.authenticating = true;
-      status.authOperation = operation;
-      status.authFailure = Auth::FailureCode::None;
+      status.authenticating  = true;
+      status.authOperation   = operation;
+      status.authFailure     = Auth::FailureCode::None;
       status.error.clear();
       pendingAuthentication.emplace(std::move(request));
       wake.notify_one();
@@ -223,16 +247,16 @@ public:
     {
       std::lock_guard lock{mutex};
       if (stopRequested || status.stopped) return;
-      authenticationCanceled       = true;
-      disconnectRequested = true;
+      authenticationCanceled = true;
+      disconnectRequested    = true;
       wake.notify_one();
     }
 
     void RequestStop()
     {
       std::lock_guard lock{mutex};
-      inputClosed   = true;
-      stopRequested = true;
+      inputClosed            = true;
+      stopRequested          = true;
       authenticationCanceled = true;
       pendingAuthentication.reset();
       wake.notify_one();
@@ -269,7 +293,8 @@ public:
     {
       std::lock_guard lock{mutex};
       status.authenticating = false;
-      if (authenticationCanceled) status.authFailure = Auth::FailureCode::Canceled;
+      if (authenticationCanceled)
+        status.authFailure = Auth::FailureCode::Canceled;
       else
       {
         status.authFailure = failure;
@@ -280,7 +305,7 @@ public:
     void PublishSavedLogin(bool available, std::string username = {})
     {
       std::lock_guard lock{mutex};
-      status.savedLogin = available;
+      status.savedLogin    = available;
       status.savedUsername = std::move(username);
     }
 
@@ -293,7 +318,9 @@ public:
     void WaitForControl()
     {
       std::unique_lock lock{mutex};
-      wake.wait_for(lock, std::chrono::milliseconds{10}, [&] { return stopRequested || pendingAuthentication.has_value() || disconnectRequested; });
+      wake.wait_for(lock, std::chrono::milliseconds{10}, [&] {
+        return stopRequested || pendingAuthentication.has_value() || disconnectRequested;
+      });
     }
 
     // Shared by the network owner and its UI producer. Never reset on reconnect.
@@ -389,8 +416,12 @@ public:
     // False preserves model rejections for retry after Drain. State and phase
     // still publish so terminal failure can clear the UI. Only this owner adds
     // results; a concurrent Drain can only free room between check and insertion.
-    [[nodiscard]] bool Publish(ClientModel& model, bool requestSnapshot = false, std::optional<SessionPhase> nextPhase = std::nullopt,
-                               std::string_view serverName = {}, std::optional<ChatConfirmation> confirmation = std::nullopt)
+    [[nodiscard]] bool Publish(
+      ClientModel&                    model,
+      bool                            requestSnapshot = false,
+      std::optional<SessionPhase>     nextPhase       = std::nullopt,
+      std::string_view                serverName      = {},
+      std::optional<ChatConfirmation> confirmation    = std::nullopt)
     {
       const bool                       accepted   = CanAcceptReplies(model.PendingServerRejectionCount() + (confirmation ? 1 : 0));
       auto                             rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
@@ -453,8 +484,8 @@ public:
     void Finish()
     {
       std::lock_guard lock{mutex};
-      inputClosed   = true;
-      stopRequested = true;
+      inputClosed            = true;
+      stopRequested          = true;
       authenticationCanceled = true;
       pendingAuthentication.reset();
       commands.clear();
@@ -467,23 +498,23 @@ private:
 
     ClientExchange(std::size_t capacity, StateUpdateQueue::Ptr queue) : maxCommands{capacity}, state{std::move(queue)} {}
 
-    mutable std::mutex                mutex;
-    std::condition_variable           wake;
-    const std::size_t                 maxCommands;
-    std::vector<QueuedClientCommand>  commands;
-    bool                              inputClosed{};
-    std::uint64_t                     nextRequestId{1};
-    std::vector<CommandFailure>       pendingFailures;
-    std::vector<ChatConfirmation>     pendingConfirmations;
-    ClientStatus                      status;
-    std::optional<AuthenticationRequest>       pendingAuthentication;
-    bool                              disconnectRequested{};
-    bool                              authenticationCanceled{};
-    bool                              stopRequested{};
-    StateUpdateQueue::Ptr             state;
-    std::vector<ServerRejectionEvent> pendingRejections;
-    ChangeBatch                       scratch;                     // Owner only.
-    bool                              needsInitialSnapshot{true};  // Owner only.
+    mutable std::mutex                   mutex;
+    std::condition_variable              wake;
+    const std::size_t                    maxCommands;
+    std::vector<QueuedClientCommand>     commands;
+    bool                                 inputClosed{};
+    std::uint64_t                        nextRequestId{1};
+    std::vector<CommandFailure>          pendingFailures;
+    std::vector<ChatConfirmation>        pendingConfirmations;
+    ClientStatus                         status;
+    std::optional<AuthenticationRequest> pendingAuthentication;
+    bool                                 disconnectRequested{};
+    bool                                 authenticationCanceled{};
+    bool                                 stopRequested{};
+    StateUpdateQueue::Ptr                state;
+    std::vector<ServerRejectionEvent>    pendingRejections;
+    ChangeBatch                          scratch;                     // Owner only.
+    bool                                 needsInitialSnapshot{true};  // Owner only.
   };
 
 }

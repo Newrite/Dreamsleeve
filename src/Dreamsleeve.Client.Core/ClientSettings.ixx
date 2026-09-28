@@ -130,11 +130,10 @@ namespace Dreamsleeve::Client
         }
 
         std::expected<void, std::string> result;
-        std::size_t index{};
+        std::size_t                      index{};
         glz::for_each_field(value, [&](auto& field) {
           const auto key = glz::reflect<T>::keys[index++];
-          if (const auto* child = table->get(key); child && result)
-            result = Read(*child, field, path + std::string{key} + ".");
+          if (const auto* child = table->get(key); child && result) result = Read(*child, field, path + std::string{key} + ".");
         });
         return result;
       }
@@ -164,7 +163,7 @@ namespace Dreamsleeve::Client
     if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read client configuration"};
 
     SettingsDetail::SettingsFile file;
-    auto parsed = toml::parse(source);
+    auto                         parsed = toml::parse(source);
     if (!parsed) return std::unexpected{"Invalid client TOML: " + std::string{parsed.error().description()}};
     if (auto loaded = SettingsDetail::Read(parsed.table(), file, ""); !loaded) return std::unexpected{loaded.error()};
     if (file.version != 1) return std::unexpected{"Unsupported client configuration version"};

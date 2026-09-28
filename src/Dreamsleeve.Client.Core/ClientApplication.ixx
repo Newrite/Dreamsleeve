@@ -65,7 +65,10 @@ public:
       return exchange->Status();
     }
 
-    std::expected<void, std::string> Connect(Credentials credentials, std::optional<std::string> registerName = std::nullopt, bool remember = false)
+    std::expected<void, std::string> Connect(
+      Credentials                credentials,
+      std::optional<std::string> registerName = std::nullopt,
+      bool                       remember     = false)
     {
       return exchange->PostLogin(std::move(credentials), std::move(registerName), remember);
     }
@@ -166,7 +169,10 @@ private:
         exchange->PublishSavedLogin(true, grant->username);
       }
       auto connected = runtime->Connect(std::move(grant->sessionTicket));
-      if (!connected) return std::unexpected{Auth::Failure{Auth::FailureCode::Unavailable, Describe(connected.error())}};
+      if (!connected)
+        return std::unexpected{
+            Auth::Failure{Auth::FailureCode::Unavailable, Describe(connected.error())}
+        };
       return {};
     }
 
@@ -188,7 +194,9 @@ private:
       if (!*saved)
       {
         exchange->PublishSavedLogin(false);
-        return std::unexpected{Auth::Failure{Auth::FailureCode::InvalidCredentials, "Sign in to this server first"}};
+        return std::unexpected{
+            Auth::Failure{Auth::FailureCode::InvalidCredentials, "Sign in to this server first"}
+        };
       }
       auto grant = Auth::Resume(settings.authUrl, (**saved).token);
       if (!grant && grant.error().code == Auth::FailureCode::InvalidCredentials)
@@ -201,11 +209,15 @@ private:
     AuthResult Authenticate(const SignOutAccount&)
     {
       Report(runtime->Disconnect());
-      while (runtime->Phase() == SessionPhase::Disconnecting) Report(runtime->Poll(10));
+      while (runtime->Phase() == SessionPhase::Disconnecting)
+        Report(runtime->Poll(10));
       return SignOutSaved();
     }
 
-    AuthResult Authenticate(const Dreamsleeve::Client::ForgetLogin&) { return ForgetLogin(); }
+    AuthResult Authenticate(const Dreamsleeve::Client::ForgetLogin&)
+    {
+      return ForgetLogin();
+    }
 
     AuthResult Authenticate(const ResetAccountPassword& request)
     {
@@ -222,18 +234,22 @@ private:
     void RunLoop()
     {
       auto saved = CredentialStore::Load(settings.authUrl);
-      if (saved) exchange->PublishSavedLogin(saved->has_value(), saved->has_value() ? (**saved).username : std::string{});
-      else exchange->PublishError(saved.error().message);
+      if (saved)
+        exchange->PublishSavedLogin(saved->has_value(), saved->has_value() ? (**saved).username : std::string{});
+      else
+        exchange->PublishError(saved.error().message);
 
       while (!exchange->StopRequested())
       {
         auto control = exchange->TakeControl();
         if (control.authentication)
         {
-          auto result = exchange->AuthenticationCanceled() ? AuthResult{} :
-            std::visit([this](const auto& request) { return Authenticate(request); }, *control.authentication);
-          exchange->CompleteAuthentication(result ? std::string{} : std::move(result.error().message),
-                                  result ? Auth::FailureCode::None : result.error().code);
+          auto result = exchange->AuthenticationCanceled()
+                        ? AuthResult{}
+                        : std::visit([this](const auto& request) { return Authenticate(request); }, *control.authentication);
+          exchange->CompleteAuthentication(
+            result ? std::string{} : std::move(result.error().message),
+            result ? Auth::FailureCode::None : result.error().code);
         }
         if (exchange->StopRequested()) break;
         if (control.disconnect || (control.authentication && exchange->AuthenticationCanceled())) Report(runtime->Disconnect());

@@ -11,17 +11,21 @@ import Dreamsleeve.Client.Auth;
 
 export namespace Dreamsleeve::Client::CredentialStore
 {
+
   struct SavedLogin
   {
     std::string username;
     std::string token;
   };
 
-  template<class T> using Result = std::expected<T, Auth::Failure>;
+  template <class T>
+  using Result = std::expected<T, Auth::Failure>;
 
   auto Error(std::string message)
   {
-    return std::unexpected{Auth::Failure{Auth::FailureCode::CredentialStorage, std::move(message)}};
+    return std::unexpected{
+        Auth::Failure{Auth::FailureCode::CredentialStorage, std::move(message)}
+    };
   }
 
   Result<std::optional<SavedLogin>> Load(std::string_view origin)
@@ -39,10 +43,9 @@ export namespace Dreamsleeve::Client::CredentialStore
       CredFree(value);
     };
     std::unique_ptr<CREDENTIALW, decltype(release)> owned{credential, release};
-    SavedLogin saved;
+    SavedLogin                                      saved;
     const std::string_view bytes{reinterpret_cast<char*>(credential->CredentialBlob), credential->CredentialBlobSize};
-    if (glz::read_json(saved, bytes) || saved.token.size() != 43)
-      return Error("Invalid saved credential; forget it and sign in again");
+    if (glz::read_json(saved, bytes) || saved.token.size() != 43) return Error("Invalid saved credential; forget it and sign in again");
     return saved;
   }
 
@@ -55,12 +58,12 @@ export namespace Dreamsleeve::Client::CredentialStore
     if (!blob) return Error("Cannot encode saved login");
     if (blob->size() > CRED_MAX_CREDENTIAL_BLOB_SIZE) return Error("Saved login is too large");
     CREDENTIALW credential{};
-    credential.Type = CRED_TYPE_GENERIC;
-    credential.TargetName = target->data();
-    credential.Persist = CRED_PERSIST_LOCAL_MACHINE;
+    credential.Type               = CRED_TYPE_GENERIC;
+    credential.TargetName         = target->data();
+    credential.Persist            = CRED_PERSIST_LOCAL_MACHINE;
     credential.CredentialBlobSize = static_cast<DWORD>(blob->size());
-    credential.CredentialBlob = reinterpret_cast<BYTE*>(blob->data());
-    const bool written = CredWriteW(&credential, 0) != FALSE;
+    credential.CredentialBlob     = reinterpret_cast<BYTE*>(blob->data());
+    const bool written            = CredWriteW(&credential, 0) != FALSE;
     SecureZeroMemory(blob->data(), blob->size());
     if (!written) return Error("Cannot save login in Windows Credential Manager");
     return {};
@@ -74,4 +77,5 @@ export namespace Dreamsleeve::Client::CredentialStore
       return Error("Cannot remove saved login from Windows Credential Manager");
     return {};
   }
+
 }

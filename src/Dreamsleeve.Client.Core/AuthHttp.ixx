@@ -15,7 +15,19 @@ export namespace Dreamsleeve::Client::Auth
   template <class T>
   using Result = std::expected<T, std::string>;
 
-  enum class FailureCode { None, InvalidCredentials, UsernameTaken, InvalidRequest, RegistrationDisabled, Busy, Unavailable, InvalidResponse, CredentialStorage, Canceled };
+  enum class FailureCode
+  {
+    None,
+    InvalidCredentials,
+    UsernameTaken,
+    InvalidRequest,
+    RegistrationDisabled,
+    Busy,
+    Unavailable,
+    InvalidResponse,
+    CredentialStorage,
+    Canceled
+  };
 
   struct Failure
   {
@@ -47,11 +59,19 @@ namespace Dreamsleeve::Client::Auth
   {
     std::string_view username;
     std::string_view password;
-    bool rememberMe{};
+    bool             rememberMe{};
   };
 
-  struct TokenRequest { std::string_view token; };
-  struct ResetRequest { std::string_view code; std::string_view password; };
+  struct TokenRequest
+  {
+    std::string_view token;
+  };
+
+  struct ResetRequest
+  {
+    std::string_view code;
+    std::string_view password;
+  };
 
   struct RegisterRequest
   {
@@ -65,8 +85,8 @@ namespace Dreamsleeve::Client::Auth
     std::string   sessionTicket;
     std::uint64_t expiresInSeconds{};
     std::uint64_t playerId{};
-    std::string rememberToken;
-    std::string username;
+    std::string   rememberToken;
+    std::string   username;
   };
 
   namespace
@@ -228,8 +248,10 @@ namespace Dreamsleeve::Client::Auth
   {
     auto endpoint = ParseUrl(url);
     if (!endpoint) return std::unexpected{endpoint.error()};
-    for (auto& c : endpoint->host) if (c >= L'A' && c <= L'Z') c += L'a' - L'A';
-    return L"Dreamsleeve/Auth/v1/" + std::wstring(endpoint->secure ? L"https/" : L"http/") + endpoint->host + L"/" + std::to_wstring(endpoint->port);
+    for (auto& c : endpoint->host)
+      if (c >= L'A' && c <= L'Z') c += L'a' - L'A';
+    return L"Dreamsleeve/Auth/v1/" + std::wstring(endpoint->secure ? L"https/" : L"http/") + endpoint->host + L"/" +
+           std::to_wstring(endpoint->port);
   }
 
   Failure HttpFailure(DWORD status)
@@ -237,11 +259,21 @@ namespace Dreamsleeve::Client::Auth
     FailureCode code = FailureCode::Unavailable;
     switch (status)
     {
-    case 400: code = FailureCode::InvalidRequest; break;
-    case 401: code = FailureCode::InvalidCredentials; break;
-    case 403: code = FailureCode::RegistrationDisabled; break;
-    case 409: code = FailureCode::UsernameTaken; break;
-    case 429: code = FailureCode::Busy; break;
+      case 400:
+        code = FailureCode::InvalidRequest;
+        break;
+      case 401:
+        code = FailureCode::InvalidCredentials;
+        break;
+      case 403:
+        code = FailureCode::RegistrationDisabled;
+        break;
+      case 409:
+        code = FailureCode::UsernameTaken;
+        break;
+      case 429:
+        code = FailureCode::Busy;
+        break;
     }
     return {code, "Authentication failed (HTTP " + std::to_string(status) + ")"};
   }
@@ -249,12 +281,20 @@ namespace Dreamsleeve::Client::Auth
   export std::expected<void, Failure> RegisterAccount(std::string_view url, const Credentials& credentials, std::string_view displayName)
   {
     if (auto checked = ValidatePassword(credentials.password); !checked)
-      return std::unexpected{Failure{FailureCode::InvalidRequest, checked.error()}};
+      return std::unexpected{
+          Failure{FailureCode::InvalidRequest, checked.error()}
+      };
     auto body = glz::write_json(RegisterRequest{credentials.username, displayName, credentials.password});
-    if (!body) return std::unexpected{Failure{FailureCode::InvalidResponse, "Cannot encode registration request"}};
+    if (!body)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Cannot encode registration request"}
+      };
     auto response = Post(url, L"/auth/register", *body);
     SecureZeroMemory(body->data(), body->size());
-    if (!response) return std::unexpected{Failure{FailureCode::Unavailable, response.error()}};
+    if (!response)
+      return std::unexpected{
+          Failure{FailureCode::Unavailable, response.error()}
+      };
     if (response->status != 201) return std::unexpected{HttpFailure(response->status)};
     return {};
   }
@@ -270,34 +310,50 @@ namespace Dreamsleeve::Client::Auth
   {
     auto response = Post(url, path, body);
     SecureZeroMemory(body.data(), body.size());
-    if (!response) return std::unexpected{Failure{FailureCode::Unavailable, response.error()}};
+    if (!response)
+      return std::unexpected{
+          Failure{FailureCode::Unavailable, response.error()}
+      };
     if (response->status != 200) return std::unexpected{HttpFailure(response->status)};
 
     LoginResponse decoded;
-    const auto error = glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, response->body);
+    const auto    error = glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, response->body);
     SecureZeroMemory(response->body.data(), response->body.size());
-    if (error || decoded.playerId == 0 || decoded.expiresInSeconds == 0 || decoded.sessionTicket.size() != 43 ||
-        (!decoded.rememberToken.empty() && decoded.rememberToken.size() != 43))
-      return std::unexpected{Failure{FailureCode::InvalidResponse, "Invalid authentication response"}};
+    if (
+      error || decoded.playerId == 0 || decoded.expiresInSeconds == 0 || decoded.sessionTicket.size() != 43 ||
+      (!decoded.rememberToken.empty() && decoded.rememberToken.size() != 43))
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Invalid authentication response"}
+      };
     return Grant{std::move(decoded.sessionTicket), std::move(decoded.rememberToken), std::move(decoded.username)};
   }
 
   export GrantResult LoginGrant(std::string_view url, const Credentials& credentials, bool remember)
   {
     if (auto checked = ValidatePassword(credentials.password); !checked)
-      return std::unexpected{Failure{FailureCode::InvalidCredentials, checked.error()}};
+      return std::unexpected{
+          Failure{FailureCode::InvalidCredentials, checked.error()}
+      };
     auto body = glz::write_json(LoginRequest{credentials.username, credentials.password, remember});
-    if (!body) return std::unexpected{Failure{FailureCode::InvalidResponse, "Cannot encode login request"}};
+    if (!body)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Cannot encode login request"}
+      };
     auto grant = RequestGrant(url, L"/auth/login", std::move(*body));
     if (grant && remember && grant->rememberToken.empty())
-      return std::unexpected{Failure{FailureCode::InvalidResponse, "Server did not issue a saved login token"}};
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Server did not issue a saved login token"}
+      };
     return grant;
   }
 
   export GrantResult Resume(std::string_view url, std::string_view token)
   {
     auto body = glz::write_json(TokenRequest{token});
-    if (!body) return std::unexpected{Failure{FailureCode::InvalidResponse, "Cannot encode resume request"}};
+    if (!body)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Cannot encode resume request"}
+      };
     return RequestGrant(url, L"/auth/resume", std::move(*body));
   }
 
@@ -305,7 +361,10 @@ namespace Dreamsleeve::Client::Auth
   {
     auto response = Post(url, path, body);
     SecureZeroMemory(body.data(), body.size());
-    if (!response) return std::unexpected{Failure{FailureCode::Unavailable, response.error()}};
+    if (!response)
+      return std::unexpected{
+          Failure{FailureCode::Unavailable, response.error()}
+      };
     if (response->status != 204) return std::unexpected{HttpFailure(response->status)};
     return {};
   }
@@ -313,16 +372,24 @@ namespace Dreamsleeve::Client::Auth
   export std::expected<void, Failure> Logout(std::string_view url, std::string_view token)
   {
     auto body = glz::write_json(TokenRequest{token});
-    if (!body) return std::unexpected{Failure{FailureCode::InvalidResponse, "Cannot encode logout request"}};
+    if (!body)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Cannot encode logout request"}
+      };
     return RequestCompletion(url, L"/auth/logout", std::move(*body));
   }
 
   export std::expected<void, Failure> ResetPassword(std::string_view url, std::string_view code, std::string_view password)
   {
     if (auto checked = ValidatePassword(password); !checked)
-      return std::unexpected{Failure{FailureCode::InvalidCredentials, checked.error()}};
+      return std::unexpected{
+          Failure{FailureCode::InvalidCredentials, checked.error()}
+      };
     auto body = glz::write_json(ResetRequest{code, password});
-    if (!body) return std::unexpected{Failure{FailureCode::InvalidResponse, "Cannot encode password reset"}};
+    if (!body)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Cannot encode password reset"}
+      };
     return RequestCompletion(url, L"/auth/reset-password", std::move(*body));
   }
 
