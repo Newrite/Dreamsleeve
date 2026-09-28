@@ -94,6 +94,25 @@ let private withAdapter settings run =
         transport.Dispose()
 
 let tests = testSequenced <| testList "ENet transport" [
+    testCase "pump captures socket send failure and clears diagnostic on success" <| fun _ ->
+        Expect.equal (enet.ENET_API.enet_initialize()) 0 "initialize"
+        try
+            use host = EnetHost.Create(address 0us, 1un, 3un, 0u, 0u, EnetHostOption.Ipv4)
+            let mutable endpoint = Unchecked.defaultof<enet.ENetAddress>
+            Expect.equal (enet.ENetAddress.FromIpAddress(IPAddress.Broadcast, 8778us, &endpoint)) SocketError.Success "address"
+            let mutable peer = Unchecked.defaultof<EnetPeer>
+            Expect.isTrue (host.TryConnect(endpoint, 3un, 0u, &peer)) "queue connect"
+            Expect.equal (enet.ENET_API.enet_socket_set_option(host.Socket, enet.ENetSocketOption.ENET_SOCKOPT_BROADCAST, 0)) 0 "disable broadcast"
+            // With broadcast disabled the OS rejects this send locally.
+            let mutable socketError = SocketError.Success
+            Expect.equal (EnetPump.Service(host, &socketError)) -1 "send error propagated"
+            Expect.equal socketError SocketError.AccessDenied "actual socket reason preserved"
+            peer.Reset()
+            Expect.equal (EnetPump.Service(host, &socketError)) 0 "healthy host still services"
+            Expect.equal socketError SocketError.Success "do not attach stale OS errors to success"
+        finally
+            enet.ENET_API.enet_deinitialize()
+
     testCase "payload budget follows negotiated MTU and ENet fragmentation overhead" <| fun _ ->
         for mtu in [576u; 1392u] do
             withPeersAtMtu mtu (fun _ peer pump ->

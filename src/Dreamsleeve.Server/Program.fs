@@ -120,7 +120,10 @@ let private serve settings authentication transport (logger: ILogger) (log: Seri
 
                 try do! stopRuntime settings logger runtime
                 with error ->
-                    logger.LogError(error, "Game runtime stopped with an error")
+                    match error with
+                    | :? OperationCanceledException when runtime.Completion.IsCanceled ->
+                        logger.LogError("Game runtime was aborted; see the preceding runtime failure")
+                    | _ -> logger.LogError(error, "Game runtime stopped with an error")
                     runtime.Abort()
                     try do! runtime.Completion with _ -> ()
                     exitCode <- 1

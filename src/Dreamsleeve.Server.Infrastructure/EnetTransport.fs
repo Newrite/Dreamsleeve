@@ -105,8 +105,12 @@ module EnetTransport =
             let started = state.Diagnostics.BeginPoll()
             let events = ResizeArray<ServerTransportEvent>()
             let mutable remaining = state.Config.EventBudget
+            let mutable socketError = SocketError.Success
+            let pumpResult = EnetPump.Service(state.Host, &socketError)
             let mutable error =
-                if EnetPump.Service(state.Host) < 0 then Some "ENet protocol pump failed." else None
+                if pumpResult < 0 then
+                    Some $"ENet protocol pump failed (result {pumpResult}; last socket error: {socketError}, code {int socketError}; active peers: {state.Connections.Count})."
+                else None
 
             while remaining > 0 && error.IsNone do
                 let mutable event = Unchecked.defaultof<EnetEvent>
