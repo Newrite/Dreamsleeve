@@ -1,3 +1,4 @@
+import { installVisibility } from "../bridge/visibility";
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import { makeChat } from "../state/chat";
@@ -64,6 +65,7 @@ function command(c: Command) {
   return true;
 }
 const chat = makeChat(command);
+installVisibility(chat);
 let settings = defaults;
 try {
   settings = settingsFrom(
@@ -84,6 +86,7 @@ chat.receive({
 window.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
   if (
+    chat.store.getState().visible &&
     !e.repeat &&
     !chat.store.getState().active &&
     e.key === chat.store.getState().settings.activationKey &&

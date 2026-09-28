@@ -1,6 +1,7 @@
 #include "Prelude.hpp"
 
 import Dreamsleeve.Logging;
+import Dreamsleeve.SKSEMenu;
 
 void SkseMessageHandle(SKSE::MessagingInterface::Message* message)
 {
@@ -22,7 +23,7 @@ void SkseMessageHandle(SKSE::MessagingInterface::Message* message)
 
 SKSEPluginLoad(const SKSE::LoadInterface* skse)
 {
-  SetupLog();
+  Logging::SetupLog();
 
   const auto plugin = SKSE::PluginDeclaration::GetSingleton();
   logger::info("{} v{} is loading...", plugin->GetName(), plugin->GetVersion());
@@ -30,6 +31,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse)
   SKSE::Init(skse);
 
   SKSE::GetMessagingInterface()->RegisterListener(SkseMessageHandle);
+  
+  SKSEMenu::RegisterSKSEMenu();
 
   logger::info("{} has finished loading.", plugin->GetName());
 

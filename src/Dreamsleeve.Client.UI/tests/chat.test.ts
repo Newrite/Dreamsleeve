@@ -228,3 +228,44 @@ it("a new identity cannot inherit pending rows, and snapshot reconciliation uses
   chat.receive({ ...snapshot, selfId: "different" });
   expect(chat.store.getState().pending).toEqual({});
 });
+
+it("hide preserves data, ignores activation and snapshots, and show stays passive", () => {
+  const { chat, send } = ready();
+  chat.setDraft("Черновик");
+  chat.receive({ type: "activate" });
+  chat.open("settings");
+  chat.receive({ type: "hide" });
+  chat.receive({ type: "hide" });
+  expect(send.mock.calls.filter(([c]) => c.type === "close")).toHaveLength(1);
+  chat.receive({ type: "activate" });
+  chat.open("online");
+  chat.submit();
+  chat.receive({ ...snapshot, messages: [message("hidden")] });
+  expect(chat.store.getState()).toMatchObject({
+    visible: false,
+    active: false,
+    panel: null,
+    drafts: { "1": "Черновик" },
+  });
+  chat.receive({ type: "messages", messages: [message("new")] });
+  chat.receive({ type: "show" });
+  expect(chat.store.getState()).toMatchObject({
+    visible: true,
+    active: false,
+    panel: null,
+  });
+  expect(chat.store.getState().messages).toHaveLength(2);
+  expect(send.mock.calls.filter(([c]) => c.type === "sendChat")).toHaveLength(
+    0,
+  );
+});
+it("hide is effective even without a native command listener", () => {
+  const chat = makeChat(() => false);
+  chat.receive(snapshot);
+  chat.receive({ type: "activate" });
+  chat.receive({ type: "hide" });
+  expect(chat.store.getState()).toMatchObject({
+    visible: false,
+    active: false,
+  });
+});

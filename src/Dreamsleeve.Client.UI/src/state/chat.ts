@@ -31,6 +31,7 @@ export interface ChatState {
   connected: boolean;
   connectionPhase: ConnectionPhase;
   initialized: boolean;
+  visible: boolean;
   active: boolean;
   faded: boolean;
   filter: string;
@@ -60,6 +61,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     connected: false,
     connectionPhase: "disconnected",
     initialized: false,
+    visible: true,
     active: false,
     faded: false,
     filter: "all",
@@ -155,7 +157,17 @@ export function makeChat(send: Send, now = () => Date.now()) {
       case "players":
         store.setState({ players: event.players });
         break;
+      case "hide":
+        store.setState({ visible: false, active: false, panel: null });
+        // Visibility is authoritative even if the native listener is unavailable.
+        // Native also releases Prisma focus when reacting to a Skyrim menu.
+        if (state.active) send({ type: "close" });
+        break;
+      case "show":
+        store.setState({ visible: true });
+        break;
       case "activate":
+        if (!state.visible) break;
         store.setState({ active: true });
         touch();
         break;
@@ -222,6 +234,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
   }
   function submit() {
     const s = store.getState();
+    if (!s.visible) return;
     const text = s.drafts[s.target] ?? "";
     if (sending(s)) return;
     if (!text.trim()) {
@@ -321,7 +334,13 @@ export function makeChat(send: Send, now = () => Date.now()) {
     retry(requestId: string) {
       const s = store.getState();
       const item = s.pending[requestId];
-      if (!item || item.status !== "failed" || !s.connected || sending(s))
+      if (
+        !s.visible ||
+        !item ||
+        item.status !== "failed" ||
+        !s.connected ||
+        sending(s)
+      )
         return;
       if (s.drafts[item.channelId]) {
         store.setState({
@@ -359,6 +378,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
       touch();
     },
     open(panel: Panel, playerId?: string) {
+      if (!store.getState().visible) return;
       store.setState({
         panel,
         selectedPlayer: playerId ?? store.getState().selfId,

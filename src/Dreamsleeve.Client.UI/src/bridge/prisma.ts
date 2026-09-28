@@ -1,3 +1,4 @@
+import { installVisibility } from "./visibility";
 import { makeChat } from "../state/chat";
 import { parseHostEvent } from "./parse";
 declare global {
@@ -25,3 +26,5 @@ window.dreamsleeveReceive = (payload) => {
     });
   }
 };
+
+installVisibility(chat);

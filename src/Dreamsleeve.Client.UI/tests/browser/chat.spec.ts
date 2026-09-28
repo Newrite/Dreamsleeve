@@ -461,3 +461,92 @@ test("server label and dim pending row survive delayed acknowledgement without w
   await expect(pending).toHaveCount(0);
   await expect(page.locator('[data-part="message"]')).toHaveCount(1);
 });
+
+test("native Hide and Show preserve chat but release focus and hide the workspace", async ({
+  page,
+}) => {
+  await page.goto("/index.html");
+  await page.evaluate(() => {
+    (window as unknown as Window & { commands: string[] }).commands = [];
+    window.dreamsleeveCommand = (json) =>
+      (window as unknown as Window & { commands: string[] }).commands.push(
+        json,
+      );
+    window.Hide();
+    window.dreamsleeveReceive!(
+      JSON.stringify({
+        type: "snapshot",
+        serverName: "Test",
+        selfId: "7",
+        channels: [{ id: "1", kind: "global", name: "Общий", writable: true }],
+        messages: [],
+        players: [],
+      }),
+    );
+    window.dreamsleeveReceive!(JSON.stringify({ type: "activate" }));
+  });
+  await expect(page.locator('[data-part="chat"]')).toHaveCount(0);
+  await page.evaluate(() => window.Show());
+  await expect(page.locator('[data-part="chat"]')).toHaveAttribute(
+    "data-active",
+    "false",
+  );
+  await page.evaluate(() =>
+    window.dreamsleeveReceive!(JSON.stringify({ type: "activate" })),
+  );
+  await page
+    .getByLabel("Сообщение", { exact: true })
+    .fill("Не потерять черновик");
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.evaluate(() => {
+    window.Hide();
+    window.Hide();
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator('[data-part="chat"]')).toHaveCount(0);
+  expect(
+    await page.evaluate(() => document.activeElement === document.body),
+  ).toBe(true);
+  await page.evaluate(() => {
+    window.dreamsleeveReceive!(
+      JSON.stringify({
+        type: "messages",
+        messages: [
+          {
+            id: "1",
+            channelId: "1",
+            source: "system",
+            text: "Пришло пока скрыто",
+            time: Date.now(),
+          },
+        ],
+      }),
+    );
+    window.dreamsleeveReceive!(
+      JSON.stringify({ type: "connection", connected: false }),
+    );
+    window.dreamsleeveReceive!(JSON.stringify({ type: "activate" }));
+  });
+  await expect(page.locator('[data-part="chat"]')).toHaveCount(0);
+  await page.evaluate(() => window.Show());
+  await expect(page.locator('[data-part="chat"]')).toHaveAttribute(
+    "data-active",
+    "false",
+  );
+  await expect(page.getByLabel("История сообщений")).toContainText(
+    "Пришло пока скрыто",
+  );
+  await page.evaluate(() =>
+    window.dreamsleeveReceive!(JSON.stringify({ type: "activate" })),
+  );
+  await expect(page.getByLabel("Сообщение", { exact: true })).toHaveValue(
+    "Не потерять черновик",
+  );
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as Window & { commands: string[] }).commands.map(
+        (s) => JSON.parse(s).type,
+      ),
+    ),
+  ).toEqual(["close"]);
+});

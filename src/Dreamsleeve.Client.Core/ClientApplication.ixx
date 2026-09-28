@@ -17,6 +17,7 @@ export namespace Dreamsleeve::Client
 public:
 
     using Result = std::expected<std::unique_ptr<ClientApplication>, std::string>;
+    using Ptr    = std::unique_ptr<ClientApplication>;
 
     static Result TryCreate(ClientSettings settings)
     {

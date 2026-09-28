@@ -89,6 +89,8 @@ export function parseHostEvent(source: string): HostEvent {
     case "players":
       valid = list(v.players, player, 4096);
       break;
+    case "show":
+    case "hide":
     case "activate":
     case "deactivate":
       valid = true;

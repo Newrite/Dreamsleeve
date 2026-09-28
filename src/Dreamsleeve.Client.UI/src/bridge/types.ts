@@ -80,6 +80,8 @@ export type HostEvent =
     }
   | { type: "messages"; messages: Message[] }
   | { type: "players"; players: Player[] }
+  | { type: "show" }
+  | { type: "hide" }
   | { type: "activate" }
   | { type: "deactivate" }
   | { type: "connection"; connected: boolean; phase?: ConnectionPhase }
