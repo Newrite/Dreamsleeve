@@ -54,6 +54,12 @@ struct glz::meta<Dreamsleeve::Client::Configuration>
     &T::visibilityDistance,
     "showFireflies",
     &T::showFireflies,
+    "fireflyPlugin",
+    &T::fireflyPlugin,
+    "fireflyFormId",
+    &T::fireflyFormId,
+    "fireflyScale",
+    &T::fireflyScale,
     "maxPendingMovementSamples",
     &T::maxPendingMovementSamples);
 };

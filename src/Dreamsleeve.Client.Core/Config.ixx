@@ -45,6 +45,9 @@ export namespace Dreamsleeve::Client
     // Future game-view preferences. They do not change server subscriptions.
     double           visibilityDistance{8192.0};
     bool             showFireflies{true};
+    std::string      fireflyPlugin{"Skyrim.esm"};
+    std::uint32_t    fireflyFormId{0x02EB0F};
+    float            fireflyScale{0.25f};
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{4096};
 
@@ -61,6 +64,9 @@ export namespace Dreamsleeve::Client
       if (sessionTimeoutMs == 0) return "sessionTimeoutMs";
       if (connectTimeoutMs == 0) return "connectTimeoutMs";
       if (disconnectTimeoutMs == 0) return "disconnectTimeoutMs";
+      if (fireflyPlugin.empty() || fireflyPlugin.find_first_of("/\\:\0", 0, 4) != std::string::npos) return "fireflyPlugin";
+      if (fireflyFormId == 0 || fireflyFormId > 0xFFFFFF) return "fireflyFormId";
+      if (!std::isfinite(fireflyScale) || fireflyScale < 0.01f || fireflyScale > 10.0f) return "fireflyScale";
       if (!movement.Valid()) return "movement";
       if (maxPendingMovementSamples == 0) return "maxPendingMovementSamples";
       if (!std::isfinite(visibilityDistance) || visibilityDistance < 0) return "visibilityDistance";

@@ -77,6 +77,23 @@ historyCapacity = 16
   CHECK(loaded->client.movement.historyCapacity == 16);
 }
 
+TEST_CASE("Firefly base form settings use plugin-local IDs and preserve defaults")
+{
+  SettingsFixture fixture;
+  auto defaults = fixture.Load("version = 1\n");
+  REQUIRE(defaults);
+  CHECK(defaults->client.fireflyPlugin == "Skyrim.esm");
+  CHECK(defaults->client.fireflyFormId == 0x02EB0F);
+  CHECK(defaults->client.fireflyScale == doctest::Approx(0.25f));
+  auto custom = fixture.Load("[client]\nfireflyPlugin = \"MyGlow.esl\"\nfireflyFormId = 0xABC\nfireflyScale = 1.5\n");
+  REQUIRE(custom);
+  CHECK(custom->client.fireflyPlugin == "MyGlow.esl");
+  CHECK(custom->client.fireflyFormId == 0xABC);
+  CHECK(custom->client.fireflyScale == doctest::Approx(1.5f));
+  for (auto bad : {"fireflyScale = 0", "fireflyScale = -1", "fireflyScale = 10.1", "fireflyScale = nan", "fireflyScale = inf", "fireflyFormId = 0", "fireflyFormId = 0xFE000ABC", "fireflyFormId = -1", "fireflyPlugin = ''", "fireflyPlugin = 'dir/MyGlow.esp'"})
+    CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad));
+}
+
 TEST_CASE("Configuration rejects malformed files, unknown fields and invalid bounds before startup")
 {
   SettingsFixture fixture;

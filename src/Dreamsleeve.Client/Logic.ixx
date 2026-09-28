@@ -75,7 +75,8 @@ namespace Logic
         if (runtime.context == Runtime::GameContext::Playing) LeavePlaying(Runtime::GameContext::Loading);
         break;
       case Runtime::NoticeKind::SaveGame:
-        Fireflies::ClearAll();  // Never let temporary references reach the save.
+        // Fireflies are marked temporary when created. A queued notification
+        // is too late to clean up before serialization; keep the live visuals.
         break;
       case Runtime::NoticeKind::MenuChanged:
         PrismaUI::RecomputeMenus();

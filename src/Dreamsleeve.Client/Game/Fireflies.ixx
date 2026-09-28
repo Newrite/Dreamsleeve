@@ -10,19 +10,15 @@ import Dreamsleeve.Game.Telemetry;
 
 // Presence of other players as a glowing placed reference per visible player.
 // One reference per player, moved every frame from MovementView; nothing else
-// of the remote actor is reproduced. References are deleted before saves and
-// on every context change so they never persist.
+// of the remote actor is reproduced. References are temporary from creation
+// and deleted on context changes; save notifications must not recreate them.
 namespace Fireflies
 {
 
   namespace Dream = Dreamsleeve::Client;
   using Clock     = std::chrono::steady_clock;
 
-  // Skyrim.esm STAT FXGlowFillRoundXBrt: a soft round glow with no collision.
-  constexpr RE::FormID       BaseFormId   = 0x02EB0F;
-  constexpr std::string_view BasePlugin   = "Skyrim.esm"sv;
-  constexpr float            HeightOffset = 110.0f;  // Roughly head height above the pose origin.
-  constexpr float            Scale        = 0.25f;
+  constexpr float HeightOffset = 110.0f;  // Roughly head height above the pose origin.
 
   struct State
   {
@@ -41,6 +37,9 @@ namespace Fireflies
   {
     if (auto ref = handle.get())
     {
+      logger::info("Removing firefly reference {:08X}", ref->GetFormID());
+      // Hide immediately even if engine detachment is deferred.
+      if (auto* node = ref->Get3D()) node->SetAppCulled(true);
       ref->Disable();
       ref->SetDelete(true);
     }
@@ -58,10 +57,13 @@ namespace Fireflies
   // kDataLoaded: the base form is resolved once; a missing form disables fireflies.
   export void ResolveForms()
   {
-    auto& state = Get();
-    auto* data  = RE::TESDataHandler::GetSingleton();
-    state.base  = data ? data->LookupForm<RE::TESObjectSTAT>(BaseFormId, BasePlugin) : nullptr;
-    if (!state.base) logger::error("Firefly base form {:X} in {} not found; fireflies disabled", BaseFormId, BasePlugin);
+    auto&       state   = Get();
+    auto*       data    = RE::TESDataHandler::GetSingleton();
+    const auto& runtime = Runtime::Get();
+    if (!runtime.app) return;
+    const auto& config = runtime.app->Settings().client;
+    state.base         = data ? data->LookupForm<RE::TESObjectSTAT>(config.fireflyFormId, config.fireflyPlugin) : nullptr;
+    if (!state.base) logger::error("Firefly STAT {:X} in {} not found; fireflies disabled", config.fireflyFormId, config.fireflyPlugin);
   }
 
   std::optional<RE::ObjectRefHandle> Spawn(RE::PlayerCharacter* player, const RE::NiPoint3& position)
@@ -83,7 +85,9 @@ namespace Fireflies
       true);
     auto ref = handle.get();
     if (!ref) return std::nullopt;
-    ref->SetScale(Scale);
+    // Dynamic FormID alone does not exclude a reference from saved changes.
+    ref->SetTemporary();
+    ref->SetScale(Runtime::Get().app->Settings().client.fireflyScale);
     return handle;
   }
 
@@ -129,6 +133,7 @@ namespace Fireflies
         auto spawned = Spawn(player, position);
         if (!spawned) continue;
         state.refs[id] = *spawned;
+        if (auto created = spawned->get()) logger::info("Spawned firefly player {} reference {:08X}", id, created->GetFormID());
       }
       else
       {

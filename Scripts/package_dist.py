@@ -39,6 +39,10 @@ allowInsecureRemoteAuth = false
 [client]
 visibilityDistance = 8192
 showFireflies = true
+# STAT base form: plugin-local ID, without the load-order prefix.
+fireflyPlugin = "Skyrim.esm"
+fireflyFormId = 0x02EB0F
+fireflyScale = 0.25 # 0.01..10.0; engine precision is 0.01
 """
 
 
