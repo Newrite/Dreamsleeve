@@ -10,9 +10,10 @@ import std;
 
 namespace Logging
 {
+
   class FormatterFlag : public spdlog::custom_flag_formatter
   {
-  public:
+public:
 
     void format(const spdlog::details::log_msg& msg, const std::tm&, spdlog::memory_buf_t& dest) override
     {
@@ -54,4 +55,5 @@ namespace Logging
     spdlog::set_formatter(std::move(formatter));
     //spdlog::set_pattern("[%H:%M:%S.%e] %16s:%-5# | %v"); // %<x>s: x = # of characters in longest file name//https://github.com/gabime/spdlog/wiki/Custom-formatting
   }
+
 }

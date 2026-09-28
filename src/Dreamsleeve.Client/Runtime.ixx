@@ -16,9 +16,9 @@ namespace Runtime
   Dream::ClientApplication::Ptr GetClientApplication()
   {
     static Dream::ClientApplication::Ptr clientApplication = nullptr;
-  
+
     if (clientApplication) return std::move(clientApplication);
-  
+
     auto settings = Dream::LoadClientSettings(settingPath);
     if (!settings)
     {
@@ -32,10 +32,10 @@ namespace Runtime
       logger::error("Could not create Dream::ClientApplication, error: {}", client.error());
       return nullptr;
     }
-  
+
     clientApplication = std::move(*client);
-  
+
     return std::move(clientApplication);
-  
   }
+
 }

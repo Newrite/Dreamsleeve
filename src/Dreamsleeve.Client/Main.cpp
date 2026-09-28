@@ -2,6 +2,8 @@
 
 import Dreamsleeve.Logging;
 import Dreamsleeve.SKSEMenu;
+import Dreamsleeve.Events;
+import Dreamsleeve.Hooks;
 
 void SkseMessageHandle(SKSE::MessagingInterface::Message* message)
 {
@@ -10,7 +12,11 @@ void SkseMessageHandle(SKSE::MessagingInterface::Message* message)
     case SKSE::MessagingInterface::kPostLoad:
     case SKSE::MessagingInterface::kPostPostLoad:
     case SKSE::MessagingInterface::kInputLoaded:
-    case SKSE::MessagingInterface::kDataLoaded:
+    case SKSE::MessagingInterface::kDataLoaded: {
+      Hooks::InstallHooks();
+      Events::RegisterEvents();
+      break;
+    }
     case SKSE::MessagingInterface::kNewGame:
     case SKSE::MessagingInterface::kPreLoadGame:
     case SKSE::MessagingInterface::kPostLoadGame:
@@ -31,7 +37,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse)
   SKSE::Init(skse);
 
   SKSE::GetMessagingInterface()->RegisterListener(SkseMessageHandle);
-  
+
   SKSEMenu::RegisterSKSEMenu();
 
   logger::info("{} has finished loading.", plugin->GetName());

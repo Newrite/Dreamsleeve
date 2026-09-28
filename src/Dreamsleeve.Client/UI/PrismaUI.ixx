@@ -5,6 +5,4 @@
 export module Dreamsleeve.PrismaUI;
 
 namespace PrismaUI
-{
-  
-}
+{}
