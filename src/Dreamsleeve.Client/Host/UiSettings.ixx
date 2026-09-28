@@ -16,6 +16,10 @@ export namespace Dreamsleeve::Host
   // Mirrors bridge/types.ts Settings, including the same defaults and bounds.
   struct UiSettings
   {
+    bool        showFireflyNames{true};
+    bool        fireflyNameOcclusion{true};
+    double      fireflyNameFontSize{18};
+    double      fireflyNameOffset{35};
     std::string onlineView{"cards"};
     bool        fade{true};
     double      delay{12.0};
@@ -88,26 +92,28 @@ export namespace Dreamsleeve::Host
     Choose(value.activationKey, {"Enter", "F2"}, defaults.activationKey);
     Choose(value.theme, {"skyrim", "contrast"}, defaults.theme);
 
-    value.delay       = Clamp(value.delay, 0, 120, defaults.delay);
-    value.duration    = Clamp(value.duration, 0, 5, defaults.duration);
-    value.idleOpacity = Clamp(value.idleOpacity, 0, 1, defaults.idleOpacity);
-    value.scale       = Clamp(value.scale, 0.7, 1.5, defaults.scale);
-    value.fontSize    = Clamp(value.fontSize, 12, 26, defaults.fontSize);
-    value.lineHeight  = Clamp(value.lineHeight, 1.1, 2, defaults.lineHeight);
-    value.background  = Clamp(value.background, 0, 1, defaults.background);
-    value.x           = Clamp(value.x, 0, 1, defaults.x);
-    value.y           = Clamp(value.y, 0, 1, defaults.y);
-    value.width       = Clamp(value.width, 320, 1600, defaults.width);
-    value.height      = Clamp(value.height, 220, 1200, defaults.height);
+    value.fireflyNameFontSize = Clamp(value.fireflyNameFontSize, 8, 48, defaults.fireflyNameFontSize);
+    value.fireflyNameOffset   = Clamp(value.fireflyNameOffset, 0, 512, defaults.fireflyNameOffset);
+    value.delay               = Clamp(value.delay, 0, 120, defaults.delay);
+    value.duration            = Clamp(value.duration, 0, 5, defaults.duration);
+    value.idleOpacity         = Clamp(value.idleOpacity, 0, 1, defaults.idleOpacity);
+    value.scale               = Clamp(value.scale, 0.7, 1.5, defaults.scale);
+    value.fontSize            = Clamp(value.fontSize, 12, 26, defaults.fontSize);
+    value.lineHeight          = Clamp(value.lineHeight, 1.1, 2, defaults.lineHeight);
+    value.background          = Clamp(value.background, 0, 1, defaults.background);
+    value.x                   = Clamp(value.x, 0, 1, defaults.x);
+    value.y                   = Clamp(value.y, 0, 1, defaults.y);
+    value.width               = Clamp(value.width, 320, 1600, defaults.width);
+    value.height              = Clamp(value.height, 220, 1200, defaults.height);
     return value;
   }
 
   // A missing file is the ordinary first run and yields defaults. A present but
   // unreadable file is an error: the caller keeps its current values and reports it.
-  std::expected<UiFile, std::string> LoadUiFile(const std::filesystem::path& path)
+  std::expected<UiFile, std::string> LoadUiFile(const std::filesystem::path& path, UiFile defaults = {})
   {
     std::error_code probe;
-    if (!std::filesystem::exists(path, probe)) return UiFile{};
+    if (!std::filesystem::exists(path, probe)) return defaults;
 
     std::ifstream input{path, std::ios::binary | std::ios::ate};
     if (!input) return std::unexpected{"Cannot open UI settings"};
@@ -118,7 +124,7 @@ export namespace Dreamsleeve::Host
     input.seekg(0);
     if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read UI settings"};
 
-    UiFile file;
+    UiFile file = std::move(defaults);
     if (auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(file, source); !source.empty() && error)
       return std::unexpected{"Invalid UI TOML: " + glz::format_error(error, source)};
     if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};

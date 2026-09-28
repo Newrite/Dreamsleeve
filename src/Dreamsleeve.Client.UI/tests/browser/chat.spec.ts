@@ -269,46 +269,30 @@ test("large menu stays independent of chat geometry and exposes player metadata"
   await expect(page.getByLabel("Масштаб", { exact: true })).toHaveValue("1.5");
 });
 
-test("connection phases are readable and disconnect does not fade away", async ({
+test("connection status stays hidden until activation and hides again on Escape", async ({
   page,
 }) => {
-  await page.goto("/index.html");
+  await page.goto("http://127.0.0.1:5179");
   await page.evaluate(() => {
-    window.dreamsleeveReceive!(
-      JSON.stringify({
-        type: "connection",
-        connected: false,
-        phase: "authenticating",
-      }),
-    );
+    window.dreamsleeveCommand = () => {};
   });
-  await expect(page.getByLabel("Состояние подключения")).toHaveText(
-    "Авторизация…",
-  );
-  await page.evaluate(() => {
-    window.dreamsleeveReceive!(
-      JSON.stringify({
-        type: "snapshot",
-        serverName: "Голоса Тамриэля",
-        selfId: "1",
-        channels: [],
-        players: [],
-        messages: [],
-        settings: { delay: 0, duration: 0 },
-      }),
+  const hud = page.locator('[data-part="chat"]');
+  await expect(hud).toBeHidden();
+  for (const phase of ["authenticating", "faulted", "disconnected"] as const) {
+    await page.evaluate((phase) => {
+      window.dreamsleeveReceive!(
+        JSON.stringify({ type: "connection", connected: false, phase }),
+      );
+    }, phase);
+    await expect(hud).toBeHidden();
+    await page.evaluate(() =>
+      window.dreamsleeveReceive!(JSON.stringify({ type: "activate" })),
     );
-    window.dreamsleeveReceive!(
-      JSON.stringify({
-        type: "connection",
-        connected: false,
-        phase: "faulted",
-      }),
-    );
-  });
-  await expect(page.getByLabel("Состояние подключения")).toHaveText(
-    "Ошибка подключения",
-  );
-  await expect(page.locator('[data-part="chat"]')).toHaveCSS("opacity", "1");
+    await expect(hud).toBeVisible();
+    await expect(page.getByLabel("Состояние подключения")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(hud).toBeHidden();
+  }
 });
 
 test("compact online handles dozens of players and remembers the selected view", async ({
@@ -620,6 +604,11 @@ test("Skyrim actor value keys retain colors and values in cards and list", async
   await expect(
     dialog.locator('[data-resource="stamina"]').first(),
   ).toContainText("420 / 569");
+  await expect(dialog.locator('[data-resource="health"] b').first()).toHaveCSS(
+    "font-size",
+    "13px",
+  );
+  await page.screenshot({ path: "test-results/online-readable-resources.png" });
 });
 
 test("settings notice fades after Escape with the passive HUD", async ({
@@ -669,4 +658,26 @@ test("channel selector uses the active theme instead of native appearance", asyn
     await expect(select).toHaveValue("1");
     await page.screenshot({ path: `test-results/channel-${theme}.png` });
   }
+});
+
+test("firefly name preferences save and restore", async ({ page }) => {
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+    await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+    await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  };
+  await openSettings();
+  await page.getByLabel("Показывать имена", { exact: true }).uncheck();
+  await page.getByLabel("Скрывать имена за препятствиями").uncheck();
+  await page.getByRole("slider", { name: "Размер шрифта имени" }).fill("26");
+  await page.getByRole("slider", { name: "Высота имени над светлячком" }).fill("70");
+  await page.getByRole("button", { name: "Сохранить настройки" }).click();
+  await page.reload();
+  await openSettings();
+  await expect(page.getByLabel("Показывать имена", { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel("Скрывать имена за препятствиями")).not.toBeChecked();
+  await expect(page.getByRole("slider", { name: "Размер шрифта имени" })).toHaveValue("26");
+  await expect(page.getByRole("slider", { name: "Высота имени над светлячком" })).toHaveValue("70");
+  await page.getByRole("group", { name: "Имена над светлячками" }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/firefly-settings.png" });
 });

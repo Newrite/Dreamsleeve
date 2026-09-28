@@ -291,3 +291,7 @@ Client.Dev: --movement-demo выводит детерминированную т
 `allowInsecureRemoteAuth = true`. По умолчанию он выключен. Сервер отдельно
 должен разрешить `[Authentication].AllowInsecureRemote = true`.
 См. режим тестирования в `docs/AuthenticationRu.md`.
+
+Имена над светлячками: `showFireflyNames = true`, `fireflyNameOcclusion = true`,
+`fireflyNameFontSize = 18` (8..48), `fireflyNameOffset = 35` (0..512).
+Настройки относятся к Scaleform-адаптеру SE/AE. Через UI они сохраняются в ui.toml и применяются без перезапуска; значения client.toml служат начальными.

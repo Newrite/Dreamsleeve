@@ -43,6 +43,10 @@ showFireflies = true
 fireflyPlugin = "Skyrim.esm"
 fireflyFormId = 0x02EB0F
 fireflyScale = 0.25 # 0.01..10.0; engine precision is 0.01
+showFireflyNames = true
+fireflyNameOcclusion = true # Hide names behind collision geometry
+fireflyNameFontSize = 18 # HUD units, 8..48
+fireflyNameOffset = 35 # Height above the firefly, 0..512 game units
 """
 
 

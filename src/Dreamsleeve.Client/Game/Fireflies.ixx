@@ -7,6 +7,7 @@ export module Dreamsleeve.Game.Fireflies;
 import std;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.Game.Telemetry;
+import Dreamsleeve.UI.Nameplates;
 
 // Presence of other players as a glowing placed reference per visible player.
 // One reference per player, moved every frame from MovementView; nothing else
@@ -52,6 +53,7 @@ namespace Fireflies
       Remove(handle);
     state.refs.clear();
     state.space.reset();
+    Nameplates::Publish({});
   }
 
   // kDataLoaded: the base form is resolved once; a missing form disables fireflies.
@@ -118,6 +120,7 @@ namespace Fireflies
     const auto                           self = player->GetPosition();
     const Domain::Position               origin{self.x, self.y, self.z};
     std::unordered_set<Domain::PlayerId> visible;
+    Nameplates::Frame                    names;
     for (const auto& [id, remote] : runtime.session.OnlinePlayers())
     {
       if (runtime.session.SelfId() == id) continue;
@@ -143,7 +146,24 @@ namespace Fireflies
         ref->Update3DPosition(true);
       }
       visible.insert(id);
+      const auto& nameSettings = runtime.ui.ui.chat;
+      if (nameSettings.showFireflyNames)
+      {
+        auto anchor  = position;
+        anchor.z    += static_cast<float>(nameSettings.fireflyNameOffset);
+        Nameplates::Add(
+          names,
+          id,
+          remote.data.displayName,
+          anchor,
+          static_cast<float>(nameSettings.fireflyNameFontSize),
+          nameSettings.fireflyNameOcclusion);
+      }
     }
+
+    auto* ui = RE::UI::GetSingleton();
+    if (!ui || ui->GameIsPaused() || !ui->menuSystemVisible) names.clear();
+    Nameplates::Publish(std::move(names));
 
     std::erase_if(state.refs, [&](auto& entry) {
       if (visible.contains(entry.first)) return false;

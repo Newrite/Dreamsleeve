@@ -1,5 +1,9 @@
 import type { Settings } from "../bridge/types";
 export const defaults: Settings = {
+  showFireflyNames: true,
+  fireflyNameOcclusion: true,
+  fireflyNameFontSize: 18,
+  fireflyNameOffset: 35,
   onlineView: "cards",
   fade: true,
   delay: 12,
@@ -22,6 +26,8 @@ export const defaults: Settings = {
   theme: "skyrim",
 };
 const bounds: Partial<Record<keyof Settings, [number, number]>> = {
+  fireflyNameFontSize: [8, 48],
+  fireflyNameOffset: [0, 512],
   delay: [0, 120],
   duration: [0, 5],
   idleOpacity: [0, 1],

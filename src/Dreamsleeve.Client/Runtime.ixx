@@ -189,7 +189,7 @@ export namespace Runtime
     std::ofstream output{path, std::ios::binary};
     if (!output) return std::unexpected{"Cannot write " + path.string()};
     output
-      << "# Dreamsleeve client. Omitted settings keep defaults; keys are case-sensitive.\n" "version = 1\n" "serverIp = \"127.0.0.1\"\n" "serverPort = 8778\n" "authUrl = \"http://127.0.0.1:8779\"\n" "\n" "[client]\n" "visibilityDistance = 8192\n" "showFireflies = true\n" "fireflyPlugin = \"Skyrim.esm\"\n" "fireflyFormId = 0x02EB0F\n" "fireflyScale = 0.25\n";
+      << "# Dreamsleeve client. Omitted settings keep defaults; keys are case-sensitive.\n" "version = 1\n" "serverIp = \"127.0.0.1\"\n" "serverPort = 8778\n" "authUrl = \"http://127.0.0.1:8779\"\n" "\n" "[client]\n" "visibilityDistance = 8192\n" "showFireflies = true\n" "fireflyPlugin = \"Skyrim.esm\"\n" "fireflyFormId = 0x02EB0F\n" "fireflyScale = 0.25\n" "showFireflyNames = true\n" "fireflyNameOcclusion = true\n" "fireflyNameFontSize = 18\n" "fireflyNameOffset = 35\n";
     return {};
   }
 
@@ -222,7 +222,12 @@ export namespace Runtime
       return false;
     }
 
-    if (auto ui = Host::LoadUiFile(state.uiPath))
+    // client.toml supplies initial values; saved UI preferences override them.
+    state.ui.ui.chat.showFireflyNames = settings->client.showFireflyNames;
+    state.ui.ui.chat.fireflyNameOcclusion = settings->client.fireflyNameOcclusion;
+    state.ui.ui.chat.fireflyNameFontSize = settings->client.fireflyNameFontSize;
+    state.ui.ui.chat.fireflyNameOffset = settings->client.fireflyNameOffset;
+    if (auto ui = Host::LoadUiFile(state.uiPath, state.ui))
       state.ui = *ui;
     else
       logger::warn("UI settings ignored: {}", ui.error());

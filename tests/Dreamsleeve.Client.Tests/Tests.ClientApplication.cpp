@@ -94,6 +94,26 @@ TEST_CASE("Firefly base form settings use plugin-local IDs and preserve defaults
     CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad));
 }
 
+TEST_CASE("Firefly name settings have safe defaults and reject invalid rendering values")
+{
+  SettingsFixture fixture;
+  auto defaults = fixture.Load("version = 1\n");
+  REQUIRE(defaults);
+  CHECK(defaults->client.showFireflyNames);
+  CHECK(defaults->client.fireflyNameOcclusion);
+  CHECK(defaults->client.fireflyNameFontSize == doctest::Approx(18));
+  CHECK(defaults->client.fireflyNameOffset == doctest::Approx(35));
+  auto custom = fixture.Load("[client]\nshowFireflyNames = false\nfireflyNameOcclusion = false\nfireflyNameFontSize = 24\nfireflyNameOffset = 0\n");
+  REQUIRE(custom);
+  CHECK_FALSE(custom->client.showFireflyNames);
+  CHECK_FALSE(custom->client.fireflyNameOcclusion);
+  CHECK(custom->client.fireflyNameFontSize == doctest::Approx(24));
+  CHECK(custom->client.fireflyNameOffset == doctest::Approx(0));
+  for (auto bad : {"fireflyNameFontSize = 7", "fireflyNameFontSize = 49", "fireflyNameFontSize = nan",
+                   "fireflyNameOffset = -1", "fireflyNameOffset = 513", "fireflyNameOffset = inf"})
+    CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad));
+}
+
 TEST_CASE("Configuration rejects malformed files, unknown fields and invalid bounds before startup")
 {
   SettingsFixture fixture;

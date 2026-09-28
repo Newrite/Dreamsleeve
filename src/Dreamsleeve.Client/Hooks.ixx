@@ -6,6 +6,7 @@ export module Dreamsleeve.Hooks;
 
 import std;
 import Dreamsleeve.Logic;
+import Dreamsleeve.UI.Nameplates;
 
 namespace Hooks
 {
@@ -45,6 +46,7 @@ namespace Hooks
     static bool installed = false;
     if (installed) return;
     installed = true;
+    Nameplates::Install();
 
     auto& trampoline           = SKSE::GetTrampoline();
     MainUpdate::UpdateOriginal = trampoline.write_call<5>(Address::MainUpdate.address() + Offset::MainUpdate, MainUpdate::Update);

@@ -326,3 +326,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A disconnected HUD is only shown when explicitly opened. */
+.window[data-active="false"][data-connected="false"] {
+  display: none;
+}

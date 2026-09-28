@@ -70,6 +70,10 @@ export type Message = { id: Id; channelId: Id; text: string; time: number } & (
   { source: "player"; author: Player } | { source: "system" }
 );
 export interface Settings {
+  showFireflyNames: boolean;
+  fireflyNameOcclusion: boolean;
+  fireflyNameFontSize: number;
+  fireflyNameOffset: number;
   onlineView: "cards" | "list";
   fade: boolean;
   delay: number;

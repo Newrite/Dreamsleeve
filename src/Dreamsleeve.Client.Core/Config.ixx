@@ -48,6 +48,10 @@ export namespace Dreamsleeve::Client
     std::string      fireflyPlugin{"Skyrim.esm"};
     std::uint32_t    fireflyFormId{0x02EB0F};
     float            fireflyScale{0.25f};
+    bool             showFireflyNames{true};
+    bool             fireflyNameOcclusion{true};
+    float            fireflyNameFontSize{18.0f};
+    float            fireflyNameOffset{35.0f};
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{4096};
 
@@ -67,6 +71,8 @@ export namespace Dreamsleeve::Client
       if (fireflyPlugin.empty() || fireflyPlugin.find_first_of("/\\:\0", 0, 4) != std::string::npos) return "fireflyPlugin";
       if (fireflyFormId == 0 || fireflyFormId > 0xFFFFFF) return "fireflyFormId";
       if (!std::isfinite(fireflyScale) || fireflyScale < 0.01f || fireflyScale > 10.0f) return "fireflyScale";
+      if (!std::isfinite(fireflyNameFontSize) || fireflyNameFontSize < 8 || fireflyNameFontSize > 48) return "fireflyNameFontSize";
+      if (!std::isfinite(fireflyNameOffset) || fireflyNameOffset < 0 || fireflyNameOffset > 512) return "fireflyNameOffset";
       if (!movement.Valid()) return "movement";
       if (maxPendingMovementSamples == 0) return "maxPendingMovementSamples";
       if (!std::isfinite(visibilityDistance) || visibilityDistance < 0) return "visibilityDistance";

@@ -111,6 +111,10 @@ TEST_CASE("UI settings round trip through TOML with normalization and atomic rep
   CHECK_FALSE(missing->ui.hideUi);
 
   UiFile edited;
+  edited.ui.chat.showFireflyNames = false;
+  edited.ui.chat.fireflyNameOcclusion = false;
+  edited.ui.chat.fireflyNameFontSize = 24;
+  edited.ui.chat.fireflyNameOffset = 80;
   edited.ui.hideUi             = true;
   edited.ui.chat.x             = 0.5;
   edited.ui.chat.width         = 900;
@@ -136,6 +140,32 @@ TEST_CASE("UI settings round trip through TOML with normalization and atomic rep
     output << "version = 2\n";
   }
   CHECK_FALSE(LoadUiFile(file.path));
+}
+
+TEST_CASE("Older UI files inherit name preferences from client configuration")
+{
+  TempPath file;
+  UiFile seed;
+  seed.ui.chat.showFireflyNames = false;
+  seed.ui.chat.fireflyNameFontSize = 30;
+  auto missing = LoadUiFile(file.path, seed);
+  REQUIRE(missing);
+  CHECK(*missing == seed);
+  {
+    std::ofstream output{file.path};
+    output << "[ui.chat]\nfontSize = 20\nfireflyNameOffset = 75\n";
+  }
+  auto loaded = LoadUiFile(file.path, seed);
+  REQUIRE(loaded);
+  CHECK_FALSE(loaded->ui.chat.showFireflyNames);
+  CHECK(loaded->ui.chat.fireflyNameFontSize == 30);
+  CHECK(loaded->ui.chat.fireflyNameOffset == 75);
+  auto invalid = loaded->ui.chat;
+  invalid.fireflyNameFontSize = 100;
+  invalid.fireflyNameOffset = -1;
+  auto normalized = Dreamsleeve::Host::Normalize(invalid);
+  CHECK(normalized.fireflyNameFontSize == 48);
+  CHECK(normalized.fireflyNameOffset == 0);
 }
 
 TEST_CASE("Bridge encodes players with string identifiers and safe text")

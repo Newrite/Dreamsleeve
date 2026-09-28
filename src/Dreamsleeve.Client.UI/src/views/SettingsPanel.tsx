@@ -125,6 +125,52 @@ export function SettingsPanel({
       >
         Сбросить расположение
       </button>
+      <fieldset className={styles.fireflies}>
+        <legend>Имена над светлячками</legend>
+        {(
+          [
+            ["showFireflyNames", "Показывать имена"],
+            ["fireflyNameOcclusion", "Скрывать имена за препятствиями"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              checked={s[key]}
+              onChange={(e) => chat.configure({ [key]: e.target.checked })}
+            />
+          </label>
+        ))}
+        {(
+          [
+            ["fireflyNameFontSize", "Размер шрифта имени", 8, 48],
+            ["fireflyNameOffset", "Высота имени над светлячком", 0, 512],
+          ] as const
+        ).map(([key, label, min, max]) => (
+          <label key={key} className={styles.range}>
+            <span>
+              {label}
+              <output>{s[key].toFixed(0)}</output>
+            </span>
+            <input
+              type="range"
+              aria-label={label}
+              min={min}
+              max={max}
+              step={1}
+              value={s[key]}
+              onChange={(e) =>
+                chat.configure({ [key]: Number(e.target.value) })
+              }
+            />
+          </label>
+        ))}
+        <p className={styles.muted}>
+          Применяются после сохранения, без перезапуска игры. Высота — в игровых
+          единицах. Имена пока доступны только в SE/AE.
+        </p>
+      </fieldset>
       <button className={styles.primary} onClick={chat.save}>
         Сохранить настройки
       </button>
