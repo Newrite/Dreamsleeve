@@ -9,19 +9,35 @@ void SkseMessageHandle(SKSE::MessagingInterface::Message* message)
 {
   switch (message->type)
   {
-    case SKSE::MessagingInterface::kPostLoad:
-    case SKSE::MessagingInterface::kPostPostLoad:
-    case SKSE::MessagingInterface::kInputLoaded:
+    case SKSE::MessagingInterface::kPostLoad: {
+      break;
+    }
+    case SKSE::MessagingInterface::kPostPostLoad: {
+      break;
+    }
+    case SKSE::MessagingInterface::kInputLoaded: {
+      break;
+    }
     case SKSE::MessagingInterface::kDataLoaded: {
       Hooks::InstallHooks();
       Events::RegisterEvents();
       break;
     }
-    case SKSE::MessagingInterface::kNewGame:
-    case SKSE::MessagingInterface::kPreLoadGame:
-    case SKSE::MessagingInterface::kPostLoadGame:
-    case SKSE::MessagingInterface::kSaveGame:
-    case SKSE::MessagingInterface::kDeleteGame:
+    case SKSE::MessagingInterface::kNewGame: {
+      break;
+    }
+    case SKSE::MessagingInterface::kPreLoadGame: {
+      break;
+    }
+    case SKSE::MessagingInterface::kPostLoadGame: {
+      break;
+    }
+    case SKSE::MessagingInterface::kSaveGame: {
+      break;
+    }
+    case SKSE::MessagingInterface::kDeleteGame: {
+      break;
+    }
     default:
       break;
   }
