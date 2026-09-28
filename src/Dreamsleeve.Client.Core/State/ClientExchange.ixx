@@ -134,6 +134,7 @@ export namespace Dreamsleeve::Client
     AuthOperation     authOperation{};
     bool              savedLogin{};
     std::string       savedUsername;
+    std::uint32_t     authSequence{};  // Bumped per completion so an identical repeat is still observable.
   };
 
   struct PasswordLogin
@@ -293,6 +294,7 @@ public:
     {
       std::lock_guard lock{mutex};
       status.authenticating = false;
+      ++status.authSequence;
       if (authenticationCanceled)
         status.authFailure = Auth::FailureCode::Canceled;
       else

@@ -117,12 +117,25 @@ private:
           runtime(std::move(client))
     {}
 
+    // Status text shown to the user: code and message only. ToLogString() adds
+    // source locations and full function signatures, which belong in logs.
     static std::string Describe(const ClientRuntime::Error& error)
     {
       return std::visit(
         [](const auto& value) -> std::string {
-          if constexpr (requires { value.ToLogString(); })
-            return value.ToLogString();
+          if constexpr (std::is_same_v<std::decay_t<decltype(value)>, DreamNetError>)
+          {
+            std::string text{value.CodeName()};
+            if (!value.message.empty()) text += ": " + value.message;
+            if (const auto* cause = value.Cause())
+            {
+              text += " (";
+              text += cause->CodeName();
+              if (!cause->message.empty()) text += ": " + cause->message;
+              text += ")";
+            }
+            return text;
+          }
           else
             return "Client error " + std::to_string(static_cast<int>(value.code)) + ": " + value.field;
         },

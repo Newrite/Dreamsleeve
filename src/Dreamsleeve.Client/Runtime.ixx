@@ -81,7 +81,7 @@ export namespace Runtime
     GameContext                   context{GameContext::MainMenu};
     bool                          dataLoaded{};
     bool                          shutdown{};
-    bool                          manualDisconnect{};  // Stops automatic reconnects until the next Ready.
+    bool                          manualDisconnect{};  // Stops automatic reconnects until an explicit sign-in.
   };
 
   State& Get()
@@ -223,10 +223,10 @@ export namespace Runtime
     }
 
     // client.toml supplies initial values; saved UI preferences override them.
-    state.ui.ui.chat.showFireflyNames = settings->client.showFireflyNames;
+    state.ui.ui.chat.showFireflyNames     = settings->client.showFireflyNames;
     state.ui.ui.chat.fireflyNameOcclusion = settings->client.fireflyNameOcclusion;
-    state.ui.ui.chat.fireflyNameFontSize = settings->client.fireflyNameFontSize;
-    state.ui.ui.chat.fireflyNameOffset = settings->client.fireflyNameOffset;
+    state.ui.ui.chat.fireflyNameFontSize  = settings->client.fireflyNameFontSize;
+    state.ui.ui.chat.fireflyNameOffset    = settings->client.fireflyNameOffset;
     if (auto ui = Host::LoadUiFile(state.uiPath, state.ui))
       state.ui = *ui;
     else

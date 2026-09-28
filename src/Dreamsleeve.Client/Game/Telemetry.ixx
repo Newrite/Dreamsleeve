@@ -214,8 +214,30 @@ namespace Telemetry
     return name;
   }
 
-  // Hidden furniture helpers (mining, mod shrines) carry marker flags or an
-  // empty name. Prefer what the player actually activated just before use.
+  bool ContainsInsensitive(std::string_view text, std::string_view needle)
+  {
+    auto lower = [](unsigned char c) {
+      return std::tolower(c);
+    };
+    return !std::ranges::search(text, needle, {}, lower, lower).empty();
+  }
+
+  // Hidden furniture helpers are not always flagged: Skyrim.esm's mining
+  // markers (PickaxeMining*Marker) have plain record flags, a *Marker.nif model
+  // and the placeholder name "This should not be visible".
+  bool HiddenFurniture(const RE::TESBoundObject* base)
+  {
+    if (!base) return true;
+    if ((base->GetFormFlags() & RE::TESFurniture::RecordFlags::kIsMarker) != 0) return true;
+    if (const auto* model = base->As<RE::TESModel>(); model && model->GetModel() && ContainsInsensitive(model->GetModel(), "marker"))
+      return true;
+    const auto* full = base->As<RE::TESFullName>();
+    if (!full || full->GetFullNameLength() == 0) return true;
+    return ContainsInsensitive(full->GetFullName(), "should not be visible");
+  }
+
+  // Prefer what the player actually activated just before use (the ore vein,
+  // a shrine): a hidden helper only ever names itself by a placeholder.
   std::optional<std::string> FurnitureName(RE::TESObjectREFR* furniture, Clock::time_point now)
   {
     auto&      state  = Get();
@@ -228,9 +250,7 @@ namespace Telemetry
       state.furnitureLabel = FurnitureLabel{handle, std::move(activated)};
     }
 
-    const auto* base   = furniture->GetBaseObject();
-    const bool  marker = base && (base->GetFormFlags() & RE::TESFurniture::RecordFlags::kIsMarker) != 0;
-    if (!marker)
+    if (!HiddenFurniture(furniture->GetBaseObject()))
       if (auto name = RefName(furniture)) return name;
     return state.furnitureLabel->name;
   }

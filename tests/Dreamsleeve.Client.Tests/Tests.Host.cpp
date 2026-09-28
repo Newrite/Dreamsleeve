@@ -111,15 +111,15 @@ TEST_CASE("UI settings round trip through TOML with normalization and atomic rep
   CHECK_FALSE(missing->ui.hideUi);
 
   UiFile edited;
-  edited.ui.chat.showFireflyNames = false;
+  edited.ui.chat.showFireflyNames     = false;
   edited.ui.chat.fireflyNameOcclusion = false;
-  edited.ui.chat.fireflyNameFontSize = 24;
-  edited.ui.chat.fireflyNameOffset = 80;
-  edited.ui.hideUi             = true;
-  edited.ui.chat.x             = 0.5;
-  edited.ui.chat.width         = 900;
-  edited.ui.chat.theme         = "contrast";
-  edited.ui.chat.activationKey = "F2";
+  edited.ui.chat.fireflyNameFontSize  = 24;
+  edited.ui.chat.fireflyNameOffset    = 80;
+  edited.ui.hideUi                    = true;
+  edited.ui.chat.x                    = 0.5;
+  edited.ui.chat.width                = 900;
+  edited.ui.chat.theme                = "contrast";
+  edited.ui.chat.activationKey        = "F2";
   REQUIRE(SaveUiFile(file.path, edited));
   auto loaded = LoadUiFile(file.path);
   REQUIRE(loaded);
@@ -145,10 +145,10 @@ TEST_CASE("UI settings round trip through TOML with normalization and atomic rep
 TEST_CASE("Older UI files inherit name preferences from client configuration")
 {
   TempPath file;
-  UiFile seed;
-  seed.ui.chat.showFireflyNames = false;
+  UiFile   seed;
+  seed.ui.chat.showFireflyNames    = false;
   seed.ui.chat.fireflyNameFontSize = 30;
-  auto missing = LoadUiFile(file.path, seed);
+  auto missing                     = LoadUiFile(file.path, seed);
   REQUIRE(missing);
   CHECK(*missing == seed);
   {
@@ -160,10 +160,10 @@ TEST_CASE("Older UI files inherit name preferences from client configuration")
   CHECK_FALSE(loaded->ui.chat.showFireflyNames);
   CHECK(loaded->ui.chat.fireflyNameFontSize == 30);
   CHECK(loaded->ui.chat.fireflyNameOffset == 75);
-  auto invalid = loaded->ui.chat;
+  auto invalid                = loaded->ui.chat;
   invalid.fireflyNameFontSize = 100;
-  invalid.fireflyNameOffset = -1;
-  auto normalized = Dreamsleeve::Host::Normalize(invalid);
+  invalid.fireflyNameOffset   = -1;
+  auto normalized             = Dreamsleeve::Host::Normalize(invalid);
   CHECK(normalized.fireflyNameFontSize == 48);
   CHECK(normalized.fireflyNameOffset == 0);
 }
@@ -193,6 +193,50 @@ TEST_CASE("Bridge encodes players with string identifiers and safe text")
   CHECK(parsed["messages"][0]["text"].get<std::string>() == message.messageText);
   CHECK(parsed["messages"][0]["time"].get<double>() == 1700000000000.0);
   CHECK(parsed["messages"][0]["author"]["id"].get<std::string>() == "7");
+}
+
+TEST_CASE("Bridge clips overlong auth errors on a UTF-8 boundary")
+{
+  ClientStatus status;
+  status.error = "ConnectTimeout: OpenSession timed out";
+  auto json    = Bridge::Encode(Bridge::AuthState(status));
+  REQUIRE(json);
+  CHECK(Parse(*json)["error"].get<std::string>() == status.error);
+
+  status.error = std::string(510, 'a') + "Привет";
+  json         = Bridge::Encode(Bridge::AuthState(status));
+  REQUIRE(json);
+  auto clipped = Parse(*json)["error"].get<std::string>();
+  CHECK(clipped.size() == 512);
+  CHECK(clipped == std::string(510, 'a') + "П");
+
+  status.error = std::string(511, 'a') + "Привет";
+  json         = Bridge::Encode(Bridge::AuthState(status));
+  REQUIRE(json);
+  CHECK(Parse(*json)["error"].get<std::string>() == std::string(511, 'a'));
+}
+
+TEST_CASE("Session reports every authentication completion, even an identical repeat")
+{
+  auto           exchange = MakeExchange();
+  ClientModel    model;
+  Session        session;
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, frame);
+  REQUIRE(frame.events.size() == 2);
+
+  for (int attempt = 0; attempt < 2; ++attempt)
+  {
+    REQUIRE(exchange->PostLogin(Credentials{"user", "short"}));
+    exchange->CompleteAuthentication("Password must be 12 to 128 UTF-8 bytes", Auth::FailureCode::InvalidCredentials);
+    frame = {};
+    session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, frame);
+    REQUIRE(frame.events.size() == 1);
+    CHECK(Type(frame.events[0]) == "auth");
+    auto auth = Parse(frame.events[0]);
+    CHECK(auth["authenticating"].get<bool>() == false);
+    CHECK(auth["error"].get<std::string>() == "Password must be 12 to 128 UTF-8 bytes");
+  }
 }
 
 TEST_CASE("Bridge validates UI commands")

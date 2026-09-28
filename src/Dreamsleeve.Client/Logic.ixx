@@ -9,6 +9,7 @@ import Dreamsleeve.Runtime;
 import Dreamsleeve.PrismaUI;
 import Dreamsleeve.Game.Telemetry;
 import Dreamsleeve.Game.Fireflies;
+import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
 import Dreamsleeve.Host.Bridge;
 
@@ -58,6 +59,7 @@ namespace Logic
       logger::info("Character context ended");
     }
     Fireflies::ClearAll();
+    Nameplates::Release();
     runtime.context = next;
   }
 
@@ -138,7 +140,9 @@ namespace Logic
   }
 
   // Saved login resumes once; an unexpected loss retries with backoff until the
-  // user disconnects or signs out. No automatic password retry exists.
+  // user disconnects or signs out. No automatic password retry exists. Only an
+  // explicit sign-in lifts a manual disconnect: the frame that requests the
+  // disconnect still drains a Ready status, so Ready itself proves nothing.
   void SessionPolicy(Clock::time_point now)
   {
     auto&       runtime = Runtime::Get();
@@ -149,9 +153,8 @@ namespace Logic
 
     if (status.phase == Dream::SessionPhase::Ready)
     {
-      state.wasReady           = true;
-      runtime.manualDisconnect = false;
-      state.reconnectDelay     = ReconnectMinimum;
+      state.wasReady       = true;
+      state.reconnectDelay = ReconnectMinimum;
       return;
     }
     if (!idle || !status.savedLogin || runtime.manualDisconnect) return;
@@ -216,6 +219,7 @@ namespace Logic
     if (auto* main = RE::Main::GetSingleton(); main && main->GetRuntimeData().quitGame)
     {
       LeavePlaying(Runtime::GameContext::MainMenu);
+      Nameplates::Shutdown();  // GFx objects go before the engine tears Scaleform down.
       Runtime::Shutdown();
       return;
     }

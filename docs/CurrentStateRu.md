@@ -426,8 +426,19 @@ batching: в прежней версии настройка MovementPacketTarget
 - Dist: `python Scripts/package_dist.py` → `dist/Client` (DLL, `client.toml`, `PrismaUI/views/Dreamsleeve`,
   README, THIRD_PARTY_NOTICES) и `dist/Server` (`dotnet publish` сервера, `server.example.toml`, README).
 
+Ревью и исправления (29.09.2026): адверсариальное ревью изменений с db399a2 подтвердило шесть
+дефектов, все исправлены: ручное отключение (`disconnect`/`signOut`/`forgetLogin`) больше не
+снимается статусом Ready в том же кадре; светлячок пересоздаётся, когда ячейка его спавна
+отсоединяется; событие `auth` уходит при каждом завершении операции (`ClientStatus::authSequence`),
+поэтому повтор одинаковой ошибки не оставляет панель аккаунта в состоянии «авторизация»; текст
+ошибки для UI — код и сообщение без сигнатур функций, обрезка до 512 байт по границе UTF-8;
+скрытая furniture добычи руды определяется по модели `*marker*` и placeholder-имени, а не только
+по флагу `kIsMarker`; GFx-объекты имён над светлячками освобождаются до остановки Scaleform
+(`Nameplates::Release/Shutdown`), рендерер не уничтожается статическим деструктором DLL.
+После правок DLL собирается, 234 native-теста проходят; игровые проверки этих сценариев остаются ручными.
+
 Проверки выполнены без запуска Skyrim (28.09.2026): сборка DLL (xmake, MSVC 14.51, SE/AE/VR
-включены), 226 native-тестов включая новый набор `Client.Host` (bridge, ui.toml, корреляция и
+включены), 234 native-тестов включая новый набор `Client.Host` (bridge, ui.toml, корреляция и
 lifecycle сессии), UI: 26 vitest, tsc, production build, bundle check и 14 Playwright-сценариев
 в Edge, `smoke_chat.py` (20 проверок) и `smoke_saved_auth.py` (4 проверки) с настоящим сервером
 и двумя Client.Dev, `python Scripts/package_dist.py` собрал `dist/Client` и `dist/Server`. Игровые проверки (focus, Enter/Escape, меню, скрытие, pause/load,

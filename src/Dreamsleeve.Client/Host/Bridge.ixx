@@ -429,6 +429,19 @@ export namespace Dreamsleeve::Host::Bridge
     return std::string{value};
   }
 
+  // parse.ts drops an event whose error exceeds 512 UTF-16 units; a UTF-8 byte
+  // bound is never looser, and the cut stays on a code point boundary.
+  constexpr std::size_t MaxErrorBytes = 512;
+
+  std::string ClipUtf8(std::string_view value, std::size_t maxBytes)
+  {
+    if (value.size() <= maxBytes) return std::string{value};
+    auto end = maxBytes;
+    while (end > 0 && (static_cast<unsigned char>(value[end]) & 0xC0) == 0x80)
+      --end;
+    return std::string{value.substr(0, end)};
+  }
+
   UiPlayer ToUiAuthor(const Domain::PlayerData& data)
   {
     UiPlayer player;
@@ -576,7 +589,7 @@ export namespace Dreamsleeve::Host::Bridge
     event.authenticating = status.authenticating;
     event.operation      = OperationName(status.authOperation);
     event.failure        = FailureName(status.authFailure);
-    event.error          = status.error;
+    event.error          = ClipUtf8(status.error, MaxErrorBytes);
     event.savedLogin     = status.savedLogin;
     event.savedUsername  = status.savedUsername;
     event.phase          = PhaseName(status);

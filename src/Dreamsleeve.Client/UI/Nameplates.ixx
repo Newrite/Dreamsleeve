@@ -72,6 +72,8 @@ namespace Nameplates
     exchange.labels = std::move(frame);
   }
 
+  constexpr std::uint32_t TextColor = 0xEEECE5;
+
   struct Field
   {
     RE::GFxValue value;
@@ -106,9 +108,8 @@ namespace Nameplates
       return layer.IsDisplayObject();
     }
 
-    bool Create(Field& field, Domain::PlayerId id, float size)
+    bool MakeText(RE::GFxValue& out, const std::string& name, float size, std::uint32_t color)
     {
-      auto         name = std::format("player_{}", id);
       RE::GFxValue depth;
       if (!layer.Invoke("getNextHighestDepth", &depth) || !depth.IsNumber()) return false;
       RE::GFxValue args[]{
@@ -119,26 +120,76 @@ namespace Nameplates
           RE::GFxValue(400.0),
           RE::GFxValue(static_cast<double>(size + 8))
       };
-      if (
-        !layer.Invoke("createTextField", nullptr, args, 6) || !layer.GetMember(name.c_str(), &field.value) ||
-        !field.value.IsDisplayObject())
+      if (!layer.Invoke("createTextField", nullptr, args, 6) || !layer.GetMember(name.c_str(), &out) || !out.IsDisplayObject())
         return false;
-      field.value.SetMember("selectable", RE::GFxValue(false));
-      field.value.SetMember("multiline", RE::GFxValue(false));
-      field.value.SetMember("wordWrap", RE::GFxValue(false));
-      field.value.SetMember("autoSize", RE::GFxValue("center"));
-      field.value.SetMember("embedFonts", RE::GFxValue(true));
-      field.value.SetMember("background", RE::GFxValue(true));
-      field.value.SetMember("backgroundColor", RE::GFxValue(0x151719));
+      out.SetMember("selectable", RE::GFxValue(false));
+      out.SetMember("multiline", RE::GFxValue(false));
+      out.SetMember("wordWrap", RE::GFxValue(false));
+      out.SetMember("autoSize", RE::GFxValue("center"));
+      out.SetMember("embedFonts", RE::GFxValue(true));
       RE::GFxValue format;
       movie->CreateObject(&format, "TextFormat");
       format.SetMember("font", RE::GFxValue("$EverywhereFont"));
       format.SetMember("size", RE::GFxValue(static_cast<double>(size)));
-      format.SetMember("color", RE::GFxValue(0xEEECE5));
+      format.SetMember("color", RE::GFxValue(static_cast<double>(color)));
       format.SetMember("align", RE::GFxValue("center"));
-      field.value.Invoke("setNewTextFormat", nullptr, &format, 1);
+      out.Invoke("setNewTextFormat", nullptr, &format, 1);
+      return true;
+    }
+
+    static void Remove(Field& field)
+    {
+      if (field.value.IsDisplayObject()) field.value.Invoke("removeTextField", nullptr);
+    }
+
+    // Outline copies come first: later depths draw on top, so the label stays above them.
+    bool Create(Field& field, Domain::PlayerId id, float size)
+    {
+      if (!MakeText(field.value, std::format("player_{}", id), size, TextColor)) return false;
+      Outline(field.value);
       field.size = size;
       return true;
+    }
+
+    // Plain text with a stroke instead of a box: a tight, strong glow reads as
+    // an outline and stays legible on snow and sky. Text filters need the
+    // embedded font set in MakeText.
+    void Outline(RE::GFxValue& text)
+    {
+      const RE::GFxValue glow[]{
+          RE::GFxValue(0.0),    // color: black
+          RE::GFxValue(1.0),    // alpha
+          RE::GFxValue(3.0),    // blurX
+          RE::GFxValue(3.0),    // blurY
+          RE::GFxValue(12.0),   // strength
+          RE::GFxValue(2.0),    // quality
+          RE::GFxValue(false),  // inner
+          RE::GFxValue(false)   // knockout
+      };
+      RE::GFxValue filter;
+      movie->CreateObject(&filter, "flash.filters.GlowFilter", glow, 8);
+      if (!filter.IsObject())
+      {
+        static bool warned = false;
+        if (!warned) logger::warn("flash.filters.GlowFilter unavailable; firefly names are drawn without an outline");
+        warned = true;
+        return;
+      }
+      RE::GFxValue filters;
+      movie->CreateArray(&filters);
+      filters.PushBack(filter);
+      text.SetMember("filters", filters);
+    }
+
+    // Releases every GFx object and the movie reference while Scaleform is alive.
+    void Reset()
+    {
+      for (auto& [id, field] : fields)
+        Remove(field);
+      fields.clear();
+      if (layer.IsDisplayObject()) layer.Invoke("removeMovieClip", nullptr);
+      layer.SetUndefined();
+      movie.reset();
     }
 
     void Draw(RE::GFxMovieView* current, const Frame& frame)
@@ -150,7 +201,7 @@ namespace Nameplates
         visible.insert(label.id);
       std::erase_if(fields, [&](auto& entry) {
         if (visible.contains(entry.first)) return false;
-        entry.second.value.Invoke("removeTextField", nullptr);
+        Remove(entry.second);
         return true;
       });
       const auto rect = movie->GetVisibleFrameRect();
@@ -160,7 +211,7 @@ namespace Nameplates
         auto& field = fields[label.id];
         if (field.value.IsDisplayObject() && field.size != label.size)
         {
-          field.value.Invoke("removeTextField", nullptr);
+          Remove(field);
           field = {};
         }
         if (!field.value.IsDisplayObject() && !Create(field, label.id, label.size))
@@ -189,6 +240,22 @@ namespace Nameplates
     }
   };
 
+  // The renderer is never destroyed: the DLL's static destructors run after the
+  // engine has torn Scaleform down, so GFx values and the movie reference are
+  // released explicitly (Release/Shutdown) and the object itself is leaked.
+  struct Host
+  {
+    std::mutex mutex;
+    Renderer*  renderer{};
+    bool       stopped{};
+  };
+
+  Host& GetHost()
+  {
+    static Host host;
+    return host;
+  }
+
   void                               Advance(RE::HUDMenu* menu, float interval, std::uint32_t time);
   REL::Relocation<decltype(Advance)> original;
 
@@ -201,8 +268,29 @@ namespace Nameplates
       std::scoped_lock lock{exchange.mutex};
       frame = exchange.labels;
     }
-    static Renderer renderer;
-    renderer.Draw(menu->uiMovie.get(), frame);
+    auto&            host = GetHost();
+    std::scoped_lock lock{host.mutex};
+    if (host.stopped) return;
+    if (!host.renderer) host.renderer = new Renderer;
+    host.renderer->Draw(menu->uiMovie.get(), frame);
+  }
+
+  // Main thread. Drops the layer, the text fields and the movie reference so a
+  // replaced HUD (main menu, load) is not kept alive by this plugin.
+  export void Release()
+  {
+    auto&            host = GetHost();
+    std::scoped_lock lock{host.mutex};
+    if (host.renderer) host.renderer->Reset();
+  }
+
+  // Main thread, on the frame quitGame is first seen: the UI still exists.
+  export void Shutdown()
+  {
+    auto&            host = GetHost();
+    std::scoped_lock lock{host.mutex};
+    host.stopped = true;
+    if (host.renderer) host.renderer->Reset();
   }
 
   export void Install()

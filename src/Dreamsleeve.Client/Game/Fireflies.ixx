@@ -46,6 +46,15 @@ namespace Fireflies
     }
   }
 
+  // SetPosition never re-parents a reference: it stays in the cell it was
+  // created in. Once that cell detaches its 3D unloads while the handle stays
+  // valid, so the glow has to be recreated in the player's current cell.
+  bool CellAttached(RE::TESObjectREFR& ref)
+  {
+    auto* cell = ref.GetParentCell();
+    return cell && cell->IsAttached();
+  }
+
   export void ClearAll()
   {
     auto& state = Get();
@@ -131,6 +140,11 @@ namespace Fireflies
       const RE::NiPoint3 position{pose->position.X, pose->position.Y, pose->position.Z + HeightOffset};
       auto               found = state.refs.find(id);
       auto               ref   = found == state.refs.end() ? RE::NiPointer<RE::TESObjectREFR>{} : found->second.get();
+      if (ref && !CellAttached(*ref))
+      {
+        Remove(found->second);
+        ref.reset();
+      }
       if (!ref)
       {
         auto spawned = Spawn(player, position);

@@ -242,10 +242,10 @@ private:
       const bool first = !lastStatus;
       const bool connectionChanged =
         first || Bridge::PhaseName(*lastStatus) != Bridge::PhaseName(status) || lastStatus->serverName != status.serverName;
-      const bool authChanged = first || lastStatus->authenticating != status.authenticating ||
-                               lastStatus->authOperation != status.authOperation || lastStatus->authFailure != status.authFailure ||
-                               lastStatus->error != status.error || lastStatus->savedLogin != status.savedLogin ||
-                               lastStatus->savedUsername != status.savedUsername;
+      const bool authChanged = first || lastStatus->authSequence != status.authSequence ||
+                               lastStatus->authenticating != status.authenticating || lastStatus->authOperation != status.authOperation ||
+                               lastStatus->authFailure != status.authFailure || lastStatus->error != status.error ||
+                               lastStatus->savedLogin != status.savedLogin || lastStatus->savedUsername != status.savedUsername;
       if (connectionChanged) Emit(frame, Bridge::ConnectionState(status));
       if (authChanged || connectionChanged) Emit(frame, Bridge::AuthState(status));
       lastStatus = status;
