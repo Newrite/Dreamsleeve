@@ -28,7 +28,6 @@ add_requires("enet 1.3.18")
 -- Keep CommonLib and Core on the same compiled spdlog configuration.
 add_requires("spdlog 1.17.0", {configs = {header_only = false, wchar = true, std_format = true}})
 add_requires("glaze 7.0.2")
-add_requires("toml++ 3.4.0")
 add_requires("doctest 2.5.0")
 add_requires("magic_enum 0.9.7")
 add_requires("protobuf-cpp 33.2")
@@ -107,7 +106,7 @@ target("Dreamsleeve.Client.Core")
 
     add_packages("enet", {public = true})
     add_packages("spdlog", {public = true})
-    add_packages("glaze", "toml++", {public = true})
+    add_packages("glaze", {public = true})
     add_packages("magic_enum", {public = true})
 
 -- Thin client static library

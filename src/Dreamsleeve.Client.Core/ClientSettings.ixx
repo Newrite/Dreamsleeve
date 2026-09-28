@@ -1,7 +1,5 @@
 module;
-#define TOML_EXCEPTIONS 0
-#include <toml++/toml.hpp>
-#include <glaze/core/reflect.hpp>
+#include <glaze/toml.hpp>
 
 export module Dreamsleeve.Client.Settings;
 
@@ -64,6 +62,66 @@ namespace Dreamsleeve::Client
   namespace SettingsDetail
   {
 
+    // Glaze 7.0.2 reads values directly but does not reject duplicate keys.
+    // Reuse its tokenizer to check document structure before populating settings.
+    struct DocumentCheck
+    {
+      glz::context context{};
+      std::set<std::vector<std::string>> keys;
+      std::set<std::vector<std::string>> tables;
+
+      bool Members(const char*& it, const char* end, std::vector<std::string> scope = {}, bool inlined = false)
+      {
+        while (true)
+        {
+          glz::skip_ws_and_comments(it, end);
+          if (it == end) return !inlined;
+          if (!inlined && (*it == '\n' || *it == '\r')) { ++it; continue; }
+          if (inlined && *it == '}') { ++it; return true; }
+
+          const bool table = *it == '[';
+          if (table && inlined) return false;
+          if (table) ++it;
+
+          std::vector<std::string> path;
+          if (!glz::parse_toml_key(path, context, it, end)) return false;
+
+          if (table)
+          {
+            if (it == end || *it++ != ']' || !tables.insert(path).second || keys.contains(path)) return false;
+            scope = std::move(path);
+          }
+          else
+          {
+            if (it == end || *it++ != '=') return false;
+            path.insert(path.begin(), scope.begin(), scope.end());
+            if (!keys.insert(path).second) return false;
+
+            glz::skip_ws_and_comments(it, end);
+            if (it == end) return false;
+            if (*it == '{')
+            {
+              ++it;
+              if (!Members(it, end, path, true)) return false;
+            }
+            else
+            {
+              glz::skip_value<glz::TOML>::op<glz::opts{.format = glz::TOML}>(context, it, end);
+              if (context.error != glz::error_code::none) return false;
+            }
+          }
+
+          if (inlined)
+          {
+            glz::skip_ws_and_comments(it, end);
+            if (it == end) return false;
+            if (*it == '}') { ++it; return true; }
+            if (*it++ != ',') return false;
+          }
+        }
+      }
+    };
+
     struct InterpolationFile
     {
       std::int64_t delayMs{MovementSettings{}.delay.count()};
@@ -83,63 +141,6 @@ namespace Dreamsleeve::Client
       std::size_t       commandCapacity{ClientSettings{}.commandCapacity};
       std::size_t       stateCapacity{ClientSettings{}.stateCapacity};
     };
-
-    // Reuse the field metadata, without serializing an intermediate JSON document.
-    template <class T>
-    std::expected<void, std::string> Read(const toml::node& node, T& value, const std::string& path)
-    {
-      if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, bool>)
-      {
-        if (auto parsed = node.value<T>())
-        {
-          value = std::move(*parsed);
-          return {};
-        }
-      }
-      else if constexpr (std::is_integral_v<T>)
-      {
-        if (node.is_integer())
-        {
-          if (auto parsed = node.value<std::int64_t>(); parsed && std::in_range<T>(*parsed))
-          {
-            value = static_cast<T>(*parsed);
-            return {};
-          }
-        }
-      }
-      else if constexpr (std::is_floating_point_v<T>)
-      {
-        if (node.is_integer() || node.is_floating_point())
-        {
-          if (auto parsed = node.value<double>(); parsed && std::isfinite(*parsed) && std::abs(*parsed) <= std::numeric_limits<T>::max())
-          {
-            value = static_cast<T>(*parsed);
-            return {};
-          }
-        }
-      }
-      else
-      {
-        const auto* table = node.as_table();
-        if (!table) return std::unexpected{"Expected TOML table: " + path};
-
-        for (const auto& [key, item] : *table)
-        {
-          if (std::ranges::find(glz::reflect<T>::keys, key.str()) == std::ranges::end(glz::reflect<T>::keys))
-            return std::unexpected{"Unknown setting: " + path + std::string{key.str()}};
-        }
-
-        std::expected<void, std::string> result;
-        std::size_t                      index{};
-        glz::for_each_field(value, [&](auto& field) {
-          const auto key = glz::reflect<T>::keys[index++];
-          if (const auto* child = table->get(key); child && result) result = Read(*child, field, path + std::string{key} + ".");
-        });
-        return result;
-      }
-
-      return std::unexpected{"Invalid setting type or numeric range: " + path};
-    }
 
   }
 
@@ -162,10 +163,14 @@ namespace Dreamsleeve::Client
     input.seekg(0);
     if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read client configuration"};
 
+    const char* cursor = source.data();
+    SettingsDetail::DocumentCheck document;
+    if (!document.Members(cursor, cursor + source.size()))
+      return std::unexpected{"Invalid client TOML: malformed document or duplicate key/table"};
+
     SettingsDetail::SettingsFile file;
-    auto                         parsed = toml::parse(source);
-    if (!parsed) return std::unexpected{"Invalid client TOML: " + std::string{parsed.error().description()}};
-    if (auto loaded = SettingsDetail::Read(parsed.table(), file, ""); !loaded) return std::unexpected{loaded.error()};
+    if (auto error = glz::read_toml(file, source); !source.empty() && error)
+      return std::unexpected{"Invalid client TOML: " + glz::format_error(error, source)};
     if (file.version != 1) return std::unexpected{"Unsupported client configuration version"};
     if (file.serverIp.find('\0') != std::string::npos) return std::unexpected{"Invalid serverIp"};
     auto address = DreamNetAddress::TryParseIp(file.serverIp, file.serverPort);

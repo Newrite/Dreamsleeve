@@ -101,7 +101,7 @@ visibilityDistance = -1
 )", R"(authUrl = "http://192.168.1.2:8779"
 )"})
   {
-    CAPTURE(source);
+    CAPTURE(std::string_view{source});
     CHECK_FALSE(fixture.Load(source));
   }
   CHECK_FALSE(fixture.Load(std::string(65537, ' ')));
@@ -116,9 +116,11 @@ TEST_CASE("TOML supports comments inline tables and rejects ambiguous scalar val
   CHECK(loaded->client.serverAddress.GetPort() == 9001);
   CHECK_FALSE(loaded->client.showFireflies);
   for (const auto source : {"serverPort=9000\nserverPort=9001", "serverPort=9000.5", "serverPort='9000'",
+       "client={showFireflies=true, showFireflies=false}",
+       "client.showFireflies=true\n[client]\nshowFireflies=false", "[client]\n[client]",
        "serverPort=-1", "ServerPort=9000", "client.visibilityDistance=nan", "client.visibilityDistance=inf", "{}"})
   {
-    CAPTURE(source);
+    CAPTURE(std::string_view{source});
     CHECK_FALSE(fixture.Load(source));
   }
 }
