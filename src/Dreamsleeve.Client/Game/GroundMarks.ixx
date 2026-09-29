@@ -215,8 +215,9 @@ namespace GroundMarks
         .style     = Style(ui, death)
     };
     if (visual.nameShown)
-      label.name =
-        Host::Names::PlateName(runtime.session.PlayerNames().NameFor(mark.author.playerId, mark.author, mark.characterName, ui), mark.author);
+      label.name = Host::Names::PlateName(
+        runtime.session.PlayerNames().NameFor(mark.author.playerId, mark.author, mark.characterName, ui),
+        mark.author);
     // The same filter of server-flagged ranges as chat lines and bubbles.
     if (visual.textShown)
       if (auto text = Host::Bridge::FilterText(mark.text, mark.flagged, ui, own)) label.bubble = std::move(*text);

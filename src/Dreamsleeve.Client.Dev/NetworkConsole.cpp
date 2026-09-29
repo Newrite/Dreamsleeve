@@ -213,7 +213,7 @@ namespace
     ClientCommand command;
     if (line.starts_with("unmark "))
     {
-      Domain::GroundMarkId id{};
+      Domain::GroundMarkId   id{};
       const std::string_view raw{line};
       const auto             parsed = std::from_chars(raw.data() + 7, raw.data() + raw.size(), id);
       if (parsed.ec != std::errc{} || id == 0)
@@ -324,7 +324,8 @@ namespace
 
     for (const auto& confirmation : output.identityConfirmations)
       console << "request " << confirmation.requestId << " identity "
-              << (confirmation.pseudonym ? "hidden as " + *confirmation.pseudonym + " " + std::string{HidingName(confirmation.hiding)} : "shown")
+              << (confirmation.pseudonym ? "hidden as " + *confirmation.pseudonym + " " + std::string{HidingName(confirmation.hiding)}
+                                         : "shown")
               << '\n';
 
     for (const auto& event : output.rejections)
@@ -480,8 +481,8 @@ int RunNetworkConsole(int argc, char* argv[])
     std::cerr << started.error() << '\n';
     return 1;
   }
-  std::uint64_t         generation{};
-  Channels              channel{};
+  std::uint64_t generation{};
+  Channels      channel{};
 
   std::cout << "Real ENet connection. " << Commands;
 
@@ -543,12 +544,16 @@ int RunNetworkConsole(int argc, char* argv[])
     {
       Print(exchange, generation, channel, **movement);
       const auto requestId = exchange.NextRequestId();
-      const auto requested = line == "hide on"             ? Domain::HiddenIdentity::Everywhere
+      const auto requested = line == "hide on"           ? Domain::HiddenIdentity::Everywhere
                            : line == "hide except-marks" ? Domain::HiddenIdentity::ExceptGroundMarks
-                                                           : Domain::HiddenIdentity::None;
+                                                         : Domain::HiddenIdentity::None;
       if (!requestId)
         std::cout << "Request IDs exhausted\n";
-      else if (exchange.Post({generation, SetIdentityVisibility{*requestId, requested}}) == CommandPostResult::Queued)
+      else if (
+        exchange.Post({
+            generation,
+            SetIdentityVisibility{*requestId, requested}
+      }) == CommandPostResult::Queued)
       {
         // The next session opens the same way.
         exchange.SetHideIdentity(requested);

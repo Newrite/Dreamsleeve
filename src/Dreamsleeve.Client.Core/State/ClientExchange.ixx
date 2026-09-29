@@ -177,9 +177,9 @@ export namespace Dreamsleeve::Client
   // itself changes through the ordinary GroundMarksChanged delta.
   struct GroundMarkConfirmation
   {
-    std::uint64_t                       generation{};
-    std::uint64_t                       requestId{};
-    Domain::GroundMarkId                markId{};
+    std::uint64_t        generation{};
+    std::uint64_t        requestId{};
+    Domain::GroundMarkId markId{};
     // The author's oldest mark of the same kind that gave way to this one.
     std::optional<Domain::GroundMarkId> evictedId;
     bool                                removed{};
@@ -256,7 +256,7 @@ export namespace Dreamsleeve::Client
     StateUpdateBatch state;
     ClientStatus     status;
     // Not reconstructible from a snapshot. Original generation is retained.
-    std::vector<ServerRejectionEvent> rejections;
+    std::vector<ServerRejectionEvent>   rejections;
     std::vector<CommandFailure>         commandFailures;
     std::vector<ChatConfirmation>       chatConfirmations;
     std::vector<GroundMarkConfirmation> groundMarkConfirmations;
@@ -528,8 +528,8 @@ public:
       std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt,
       std::optional<IdentityConfirmation>   identity         = std::nullopt)
     {
-      const bool accepted = CanAcceptReplies(
-        model.PendingServerRejectionCount() + (confirmation ? 1 : 0) + (markConfirmation ? 1 : 0) + (identity ? 1 : 0));
+      const bool accepted =
+        CanAcceptReplies(model.PendingServerRejectionCount() + (confirmation ? 1 : 0) + (markConfirmation ? 1 : 0) + (identity ? 1 : 0));
       auto                             rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
       std::optional<ClientStateUpdate> update;
 

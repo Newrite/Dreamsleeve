@@ -61,7 +61,7 @@ export namespace Dreamsleeve::Client
   {
     ChatChannelId           channelId{};
     Domain::ChatChannelKind kind{Domain::ChatChannelKind::Global};
-    std::size_t   capacity{};
+    std::size_t             capacity{};
     // Ascending MessageId, independently of timestamps and arrival order.
     std::vector<ChatMessage> messages{};
     ChatHistoryState         history{};

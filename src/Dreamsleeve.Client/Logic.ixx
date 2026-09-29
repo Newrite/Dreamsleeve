@@ -30,15 +30,15 @@ namespace Logic
 
   struct State
   {
-    std::vector<Runtime::Notice> notices;
-    Dream::ClientOutput          output;
-    bool                         resumeTried{};
-    bool                         wasReady{};
-    Clock::time_point            nextReconnect{};
-    std::chrono::seconds         reconnectDelay{ReconnectMinimum};
-    Clock::time_point            readySince{};
-    std::uint64_t                bubbleGeneration{};
-    Clock::time_point            nextNamesSave{};
+    std::vector<Runtime::Notice>                           notices;
+    Dream::ClientOutput                                    output;
+    bool                                                   resumeTried{};
+    bool                                                   wasReady{};
+    Clock::time_point                                      nextReconnect{};
+    std::chrono::seconds                                   reconnectDelay{ReconnectMinimum};
+    Clock::time_point                                      readySince{};
+    std::uint64_t                                          bubbleGeneration{};
+    Clock::time_point                                      nextNamesSave{};
     std::vector<Dreamsleeve::Host::Announcements::Request> announcements;
   };
 

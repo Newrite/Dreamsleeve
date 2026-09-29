@@ -351,13 +351,19 @@ private:
     {
       if (phase != SessionPhase::Ready || pendingMarks.erase(placed.requestId) == 0) return Unexpected("request_id");
       if (placed.mark.author.playerId != model.SelfPlayerId()) return Unexpected("author");
-      return Publish(false, std::nullopt, GroundMarkConfirmation{model.Generation(), placed.requestId, placed.mark.markId, placed.evictedId, false});
+      return Publish(
+        false,
+        std::nullopt,
+        GroundMarkConfirmation{model.Generation(), placed.requestId, placed.mark.markId, placed.evictedId, false});
     }
 
     Result<void> Receive(Wire::GroundMarkRemoved& removed)
     {
       if (phase != SessionPhase::Ready || pendingMarks.erase(removed.requestId) == 0) return Unexpected("request_id");
-      return Publish(false, std::nullopt, GroundMarkConfirmation{model.Generation(), removed.requestId, removed.markId, std::nullopt, true});
+      return Publish(
+        false,
+        std::nullopt,
+        GroundMarkConfirmation{model.Generation(), removed.requestId, removed.markId, std::nullopt, true});
     }
 
     // The self entry keeps the real profile; the status carries what the others see.
@@ -481,10 +487,9 @@ private:
     {
       using Utils::Text::CodePoints;
       const bool labelRequired = command.source == Domain::ClientAnnouncementSource::ThirdParty;
-      const bool valid         = announcementPolicy.Allows(command.source) && !command.text.empty() &&
-                                 CodePoints(command.text) <= announcementPolicy.maxTextLength &&
-                                 (!labelRequired || !command.signature.empty()) &&
-                                 CodePoints(command.signature) <= announcementPolicy.maxSignatureLength;
+      const bool valid = announcementPolicy.Allows(command.source) && !command.text.empty() &&
+                         CodePoints(command.text) <= announcementPolicy.maxTextLength && (!labelRequired || !command.signature.empty()) &&
+                         CodePoints(command.signature) <= announcementPolicy.maxSignatureLength;
       return SendToChannel(generation, command, Domain::ChatChannelKind::System, valid);
     }
 
@@ -507,7 +512,8 @@ private:
 
       lastRequest = command.requestId;
       if (!valid) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
-      if (pendingMarks.size() >= config.maxPendingChatRequests) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+      if (pendingMarks.size() >= config.maxPendingChatRequests)
+        return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
       auto packet = codec.Encode(command);
       if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);

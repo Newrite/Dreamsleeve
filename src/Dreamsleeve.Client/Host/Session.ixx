@@ -27,8 +27,8 @@ public:
       std::vector<Domain::ChatMessage> freshMessages;
       // Final results of announcements requested through the plugin API.
       std::vector<Announcements::Outcome> announcementResults;
-      bool                             snapshot{};
-      bool                             playersChanged{};
+      bool                                snapshot{};
+      bool                                playersChanged{};
       // The set of marks the game draws changed in this Process call.
       bool visibleMarksChanged{};
       // The server confirmed a switch of "hide my name": the preference to keep.
@@ -63,8 +63,8 @@ public:
       {
         auto reason = Bridge::RejectionText(event.rejection.code, event.rejection.message);
         if (
-          Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason) || FailMark(frame, event.rejection.requestId, reason) ||
-          FailIdentity(event.rejection.requestId, reason))
+          Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason) ||
+          FailMark(frame, event.rejection.requestId, reason) || FailIdentity(event.rejection.requestId, reason))
           continue;
         if (event.rejection.code == Dreamsleeve::Client::RequestRejectionCode::HiddenIdentityNotAllowed)
         {
@@ -148,8 +148,11 @@ public:
     }
 
     // A note where the player stands, requested by the web UI.
-    std::expected<void, std::string>
-      PlaceGroundNote(ClientExchange& exchange, std::string uiRequestId, std::string text, const Domain::GroundMarkPlacement& placement)
+    std::expected<void, std::string> PlaceGroundNote(
+      ClientExchange&                    exchange,
+      std::string                        uiRequestId,
+      std::string                        text,
+      const Domain::GroundMarkPlacement& placement)
     {
       if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
       const auto requestId = exchange.NextRequestId();
@@ -337,8 +340,8 @@ private:
     {
       Domain::ChatChannelId channelId{};
       std::string           signature;
-      std::string   text;
-      std::uint64_t generation{};
+      std::string           text;
+      std::uint64_t         generation{};
     };
 
     enum class MarkRequest
@@ -732,28 +735,28 @@ private:
         frame.notes.push_back("RequestSnapshot deferred: command queue unavailable");
     }
 
-    std::uint64_t                                  generation{};
-    std::optional<Domain::PlayerId>                selfId;
-    std::string                                    serverName;
+    std::uint64_t                                                      generation{};
+    std::optional<Domain::PlayerId>                                    selfId;
+    std::string                                                        serverName;
     std::unordered_map<Domain::ChatChannelId, Domain::ChatChannelKind> channels;
-    std::optional<Domain::ChatChannelId>           globalChannel;
-    Domain::ChatMessageId                          bubbleFloor{};
-    Players                                        players;
-    Marks                                          visibleMarks;
-    Marks                                          ownMarks;
-    bool                                           ownMarksChanged{};
-    std::unordered_map<std::uint64_t, PendingChat> pendingChats;
-    std::unordered_map<std::uint64_t, PendingMark> pendingMarks;
-    std::unordered_map<std::uint64_t, PendingAnnouncement> pendingAnnouncements;
-    std::unordered_map<std::uint64_t, PendingIdentity>     pendingIdentity;
-    std::optional<std::string>                             pseudonym;
-    std::optional<std::string>                             identityError;
-    std::optional<Bridge::IdentityEvent>                   lastIdentity;
-    std::optional<ClientStatus>                    lastStatus;
-    bool                                           needsSnapshot{true};
-    bool                                           snapshotRequested{};
-    bool                                           refreshing{};
-    std::uint64_t                                  refreshGeneration{};
+    std::optional<Domain::ChatChannelId>                               globalChannel;
+    Domain::ChatMessageId                                              bubbleFloor{};
+    Players                                                            players;
+    Marks                                                              visibleMarks;
+    Marks                                                              ownMarks;
+    bool                                                               ownMarksChanged{};
+    std::unordered_map<std::uint64_t, PendingChat>                     pendingChats;
+    std::unordered_map<std::uint64_t, PendingMark>                     pendingMarks;
+    std::unordered_map<std::uint64_t, PendingAnnouncement>             pendingAnnouncements;
+    std::unordered_map<std::uint64_t, PendingIdentity>                 pendingIdentity;
+    std::optional<std::string>                                         pseudonym;
+    std::optional<std::string>                                         identityError;
+    std::optional<Bridge::IdentityEvent>                               lastIdentity;
+    std::optional<ClientStatus>                                        lastStatus;
+    bool                                                               needsSnapshot{true};
+    bool                                                               snapshotRequested{};
+    bool                                                               refreshing{};
+    std::uint64_t                                                      refreshGeneration{};
     // Profiles of retained authors, so offline players can be ignored by name.
     static constexpr std::size_t                             MaxKnownAuthors = 2048;
     std::unordered_map<Domain::PlayerId, Domain::PlayerData> authors;

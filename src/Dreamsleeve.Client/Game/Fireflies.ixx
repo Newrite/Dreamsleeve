@@ -94,11 +94,11 @@ namespace Fireflies
     if (!space) return;
     state.space = space;
 
-    const auto                           self = player->GetPosition();
-    const Domain::Position               origin{self.x, self.y, self.z};
-    const float                          height    = static_cast<float>(ui.fireflyHeightOffset);
-    const auto                           style     = BubbleStyle(ui);
-    const auto                           nameColor = Dreamsleeve::Host::ParseColor(ui.fireflyNameColor).value_or(Nameplates::DefaultTextColor);
+    const auto             self = player->GetPosition();
+    const Domain::Position origin{self.x, self.y, self.z};
+    const float            height    = static_cast<float>(ui.fireflyHeightOffset);
+    const auto             style     = BubbleStyle(ui);
+    const auto             nameColor = Dreamsleeve::Host::ParseColor(ui.fireflyNameColor).value_or(Nameplates::DefaultTextColor);
     std::unordered_set<Domain::PlayerId> visible;
     // Expired texts and those of players who left are dropped here, once per
     // frame; a message is never kept waiting for its author to appear.
@@ -130,10 +130,10 @@ namespace Fireflies
       // name size is passed even when names are hidden: it fixes the baseline
       // above which the bubble sits.
       Nameplates::Label label{
-          .key = {Nameplates::LabelKind::Player, id},
-          .nameSize = static_cast<float>(ui.fireflyNameFontSize),
+          .key       = {Nameplates::LabelKind::Player, id},
+          .nameSize  = static_cast<float>(ui.fireflyNameFontSize),
           .nameColor = nameColor,
-          .style = style
+          .style     = style
       };
       // Same resolver as the web UI, so a pseudonym matches on both surfaces.
       if (ui.showFireflyNames && !(combat && ui.combatHideNames))

@@ -33,11 +33,11 @@ namespace Dreamsleeve::Client::Wire::Detail
   // Ranges inside the text, ascending, disjoint, on code point boundaries.
   Result<std::vector<Domain::TextSpan>> ReadFlagged(const std::string&, const google::protobuf::RepeatedPtrField<P::TextSpan>&);
 
-  bool                       ValidPlacement(const Domain::GroundMarkPlacement&);
-  void                       WriteNote(P::PlaceGroundNote&, const PlaceGroundNote&);
-  void                       WriteDeath(P::ReportDeath&, const ReportDeath&);
-  Result<Domain::GroundMark> Mark(const P::GroundMark&);
-  Result<GroundMarksChanged> ReadMarksChanged(const P::GroundMarksChanged&);
+  bool                           ValidPlacement(const Domain::GroundMarkPlacement&);
+  void                           WriteNote(P::PlaceGroundNote&, const PlaceGroundNote&);
+  void                           WriteDeath(P::ReportDeath&, const ReportDeath&);
+  Result<Domain::GroundMark>     Mark(const P::GroundMark&);
+  Result<GroundMarksChanged>     ReadMarksChanged(const P::GroundMarksChanged&);
   Result<OwnGroundMarksReplaced> ReadOwnMarks(const P::OwnGroundMarks&);
 
   void                  WriteSession(P::OpenSession&, const OpenSession&);

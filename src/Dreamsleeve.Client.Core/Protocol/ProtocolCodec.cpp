@@ -271,7 +271,8 @@ namespace Dreamsleeve::Client::Wire
         return IdentityVisibilityChanged{
             packet.request_id(),
             changed.has_pseudonym() ? std::optional{changed.pseudonym()} : std::nullopt,
-            static_cast<Domain::HiddenIdentity>(changed.hidden())};
+            static_cast<Domain::HiddenIdentity>(changed.hidden())
+        };
       }
       case P::ServerPacket::PAYLOAD_NOT_SET:
         return Invalid("payload");

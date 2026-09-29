@@ -219,12 +219,12 @@ export namespace Domain
 
   struct ChatMessage final
   {
-    ChatMessageId   messageId{};
-    ChatChannelId   channelId{};
+    ChatMessageId messageId{};
+    ChatChannelId channelId{};
     // Absent only for server announcements: the system is not a player.
     std::optional<PlayerData> author{};
     ChatMessageText           messageText{};
-    MessageTime     sentAt{};
+    MessageTime               sentAt{};
     // Published character name at sending; absent for old history and outside a character.
     std::optional<CharacterName> characterName{};
     // Ranges the server marked without refusing the message; ascending, disjoint.
@@ -257,7 +257,7 @@ export namespace Domain
   // place a character died. Not a chat message: never in history or bubbles.
   struct GroundMark final
   {
-    GroundMarkId   markId{};
+    GroundMarkId markId{};
     // Author profile at the time of sending; the mark itself stores only the ID.
     PlayerData     author{};
     GroundMarkKind kind{GroundMarkKind::Note};

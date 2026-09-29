@@ -758,7 +758,11 @@ export namespace Dreamsleeve::Host::Bridge
   // What the local filter lets through: the text, a masked copy, or nothing.
   // One's own hidden text stays as a placeholder so its pending row settles
   // visibly. The one rule for chat lines, bubbles and ground marks.
-  std::optional<std::string> FilterText(const std::string& text, const std::vector<Domain::TextSpan>& flagged, const UiSettings& settings, bool own)
+  std::optional<std::string> FilterText(
+    const std::string&                   text,
+    const std::vector<Domain::TextSpan>& flagged,
+    const UiSettings&                    settings,
+    bool                                 own)
   {
     if (flagged.empty() || settings.textFilter == "off") return text;
     if (settings.textFilter == "mask") return MaskFlagged(text, flagged);

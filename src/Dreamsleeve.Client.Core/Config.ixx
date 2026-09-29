@@ -43,24 +43,24 @@ export namespace Dreamsleeve::Client
     std::size_t     maxActorValues{64};
     TimeOutMs       playerSampleIntervalMs{50};
     // Future game-view preferences. They do not change server subscriptions.
-    double           visibilityDistance{8192.0};
-    bool             showFireflies{true};
-    std::string      fireflyPlugin{"Skyrim.esm"};
-    std::uint32_t    fireflyFormId{0x02EB0F};
-    float            fireflyScale{0.25f};
-    bool             showFireflyNames{true};
-    bool             fireflyNameOcclusion{true};
-    float            fireflyNameFontSize{18.0f};
-    float            fireflyNameOffset{35.0f};
+    double        visibilityDistance{8192.0};
+    bool          showFireflies{true};
+    std::string   fireflyPlugin{"Skyrim.esm"};
+    std::uint32_t fireflyFormId{0x02EB0F};
+    float         fireflyScale{0.25f};
+    bool          showFireflyNames{true};
+    bool          fireflyNameOcclusion{true};
+    float         fireflyNameFontSize{18.0f};
+    float         fireflyNameOffset{35.0f};
     // Withhold keyboard events from the game and other SKSE mods while the chat is open.
-    bool             captureKeyboard{true};
+    bool captureKeyboard{true};
     // Ground mark visuals: STAT base forms without collision (plugin-local IDs).
-    std::string   groundNotePlugin{"Skyrim.esm"};
-    std::uint32_t groundNoteFormId{0x075DDB};  // FXGlowFlatRndBrt
-    float         groundNoteScale{0.5f};
-    std::string   deathMarkPlugin{"Skyrim.esm"};
-    std::uint32_t deathMarkFormId{0x075DD9};  // FXGlowFlatRndDim
-    float         deathMarkScale{0.5f};
+    std::string      groundNotePlugin{"Skyrim.esm"};
+    std::uint32_t    groundNoteFormId{0x075DDB};  // FXGlowFlatRndBrt
+    float            groundNoteScale{0.5f};
+    std::string      deathMarkPlugin{"Skyrim.esm"};
+    std::uint32_t    deathMarkFormId{0x075DD9};  // FXGlowFlatRndDim
+    float            deathMarkScale{0.5f};
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{4096};
 

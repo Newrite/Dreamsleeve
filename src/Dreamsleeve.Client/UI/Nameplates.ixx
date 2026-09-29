@@ -174,8 +174,8 @@ namespace Nameplates
   struct Renderer
   {
     // Declare movie first: the managed GFx values must die before the movie.
-    RE::GPtr<RE::GFxMovieView>                          movie;
-    RE::GFxValue                                        layer;
+    RE::GPtr<RE::GFxMovieView>                        movie;
+    RE::GFxValue                                      layer;
     std::unordered_map<LabelKey, Entry, LabelKeyHash> entries;
 
     bool Bind(RE::GFxMovieView* current)
@@ -197,7 +197,14 @@ namespace Nameplates
       return layer.IsDisplayObject();
     }
 
-    bool MakeText(RE::GFxValue& parent, RE::GFxValue& out, const std::string& name, float size, double width, bool wrap, std::uint32_t color)
+    bool MakeText(
+      RE::GFxValue&      parent,
+      RE::GFxValue&      out,
+      const std::string& name,
+      float              size,
+      double             width,
+      bool               wrap,
+      std::uint32_t      color)
     {
       RE::GFxValue depth;
       if (!parent.Invoke("getNextHighestDepth", &depth) || !depth.IsNumber()) return false;
@@ -309,7 +316,7 @@ namespace Nameplates
     // measured text. Runs only when the content or the style changed.
     void LayoutBubble(BubbleClip& bubble, const std::string& content)
     {
-      const auto  maxHeight = BubbleMaxLines * bubble.style.fontSize * LineHeightFactor + 2 * TextGutter;
+      const auto maxHeight = BubbleMaxLines * bubble.style.fontSize * LineHeightFactor + 2 * TextGutter;
       using Dreamsleeve::Utils::Text::CodePoints;
       std::string text = CodePoints(content) > BubbleMaxChars ? TrimUtf8(content, BubbleMaxChars) : content;
       // Plain UTF-8 text, never HTML or ActionScript from the network.
@@ -329,13 +336,15 @@ namespace Nameplates
       // Shrink the field to the measured lines so centred text sits in the box,
       // not in the wide field it wrapped in; the extra pixel keeps the wrap.
       bubble.text.SetMember("_width", RE::GFxValue(bubble.width - 2 * BubblePadding + 2 * TextGutter + 1));
-      bubble.content         = content;
+      bubble.content = content;
 
       bubble.clip.Invoke("clear", nullptr);
       // Without a border the line is fully transparent; the outline path still
       // closes the fill.
       const RE::GFxValue line[]{
-          RE::GFxValue(1.0), RE::GFxValue(static_cast<double>(BubbleBorder)), RE::GFxValue(bubble.style.border ? BubbleBorderAlpha : 0.0)
+          RE::GFxValue(1.0),
+          RE::GFxValue(static_cast<double>(BubbleBorder)),
+          RE::GFxValue(bubble.style.border ? BubbleBorderAlpha : 0.0)
       };
       bubble.clip.Invoke("lineStyle", nullptr, line, 3);
       const RE::GFxValue fill[]{

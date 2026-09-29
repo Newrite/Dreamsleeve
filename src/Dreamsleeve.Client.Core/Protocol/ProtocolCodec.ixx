@@ -66,8 +66,8 @@ export namespace Dreamsleeve::Client::Wire
     PlayerUpdate  update;
   };
 
-  using ClientRequest =
-    std::variant<OpenSession, SendChat, UpdatePlayer, PostAnnouncement, PlaceGroundNote, ReportDeath, RemoveGroundMark, SetIdentityVisibility>;
+  using ClientRequest = std::
+    variant<OpenSession, SendChat, UpdatePlayer, PostAnnouncement, PlaceGroundNote, ReportDeath, RemoveGroundMark, SetIdentityVisibility>;
 
   // A channel of the session with its retained tail, ascending MessageId.
   struct ChannelOpened

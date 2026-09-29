@@ -260,7 +260,7 @@ namespace PrismaUI
     }
     if (type == "removeGroundMark")
     {
-      const auto markId = Bridge::ParseId(command.markId);
+      const auto                       markId  = Bridge::ParseId(command.markId);
       std::expected<void, std::string> removed = std::unexpected{"Некорректный идентификатор метки"};
       if (markId) removed = runtime.session.RemoveGroundMark(app.Exchange(), command.requestId, *markId);
       if (!removed) Send(Bridge::MarkResultEvent{.requestId = command.requestId, .error = removed.error()});
@@ -299,11 +299,11 @@ namespace PrismaUI
     {
       // A ready session asks the server; with no session only the choice for
       // the next one changes. While a session is being opened it waits.
-      auto&      chat    = runtime.ui.ui.chat;
-      const auto status  = app.Status();
-      const bool idle    = !status.authenticating &&
-                           (status.phase == Dream::SessionPhase::Disconnected || status.phase == Dream::SessionPhase::Faulted);
-      auto&      session = runtime.session;
+      auto&      chat   = runtime.ui.ui.chat;
+      const auto status = app.Status();
+      const bool idle =
+        !status.authenticating && (status.phase == Dream::SessionPhase::Disconnected || status.phase == Dream::SessionPhase::Faulted);
+      auto& session = runtime.session;
       if (session.Ready())
       {
         if (auto posted = session.SetIdentityVisibility(app.Exchange(), Bridge::HidingOf(command.hiding)); !posted)
@@ -323,12 +323,12 @@ namespace PrismaUI
     }
     if (type == "saveSettings")
     {
-      const bool names   = runtime.ui.ui.chat.nameMode != command.settings->nameMode ||
-                           runtime.ui.ui.chat.streamerMode != command.settings->streamerMode ||
-                           runtime.ui.ui.chat.textFilter != command.settings->textFilter;
+      const bool names = runtime.ui.ui.chat.nameMode != command.settings->nameMode ||
+                         runtime.ui.ui.chat.streamerMode != command.settings->streamerMode ||
+                         runtime.ui.ui.chat.textFilter != command.settings->textFilter;
       // "Hide my name" has its own command and changes only when the server agrees.
       command.settings->hideIdentity = runtime.ui.ui.chat.hideIdentity;
-      runtime.ui.ui.chat = *command.settings;
+      runtime.ui.ui.chat             = *command.settings;
       if (names)
       {
         runtime.session.Refresh();
