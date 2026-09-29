@@ -83,7 +83,7 @@ ClientApplication. Не вызывать его методы непосредс�
 | `forgetLogin` | Забыть сохранённый вход только локально; работает без сети |
 | `disconnect` | Закрыть сессию, сохранённый вход оставить |
 | `ignore` / `unignore` | playerId; host хранит список в `ui.toml` по адресу сервера и повторно проецирует снимок |
-| `nameSettings` | nameMode и streamerMode; host применяет и сохраняет сразу, затем шлёт refresh-снимок |
+| `displaySettings` | nameMode, streamerMode и textFilter; host применяет и сохраняет сразу, затем шлёт refresh-снимок |
 
 UI requestId относится к lifetime данного view. Host сопоставляет его с RequestId,
 который создаёт клиентское приложение; не подставляет его прямо в wire-пакет.
@@ -115,7 +115,9 @@ read-only каналы из отправки, но это не серверна�
 псевдоним (`alias`, `displayName`), `username` пуст, `character` отсутствует; UI до
 прихода повторной проекции показывает «Скрытое имя» (`state/names.ts`). Снимок с
 `refresh: true` — та же сессия после смены имён или игнора: pending-строки, фильтр
-и прокрутка сохраняются. Подробнее: [модерация и имена](../../docs/ModerationAndNamesRu.md).
+и прокрутка сохраняются. Текст помеченных сервером сообщений host уже маскирует или
+скрывает по `textFilter`; такие строки приходят с `filtered: true`. Правый клик по нику
+открывает меню `views/AuthorMenu.tsx` (профиль, игнор). Подробнее: [модерация и имена](../../docs/ModerationAndNamesRu.md).
 
 ## Темы и layouts
 

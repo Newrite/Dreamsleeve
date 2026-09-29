@@ -97,6 +97,7 @@ function message(v: unknown): boolean {
     v.text.length <= 16000 &&
     finite(v.time) &&
     Math.abs(v.time as number) <= 8640000000000000 &&
+    (v.filtered === undefined || typeof v.filtered === "boolean") &&
     (v.source === "system" || (v.source === "player" && player(v.author)))
   );
 }

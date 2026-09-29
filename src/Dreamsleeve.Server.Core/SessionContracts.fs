@@ -84,6 +84,8 @@ type ChatSubmission = {
     CharacterName: CharacterName voption
     /// Normalized projection used for the repeated-message check; never published.
     Fingerprint: string
+    /// Flag-tier ranges of Text, computed by the session outside the channel owner.
+    Flagged: TextSpan list
     /// Also available after membership disappears, so refusals settle the request.
     ReplyTo: ReliableAgentRef<ChatRoomEvent>
 }

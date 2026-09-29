@@ -40,6 +40,27 @@ let tests = testList "Server configuration" [
         for invalid in ["words = 'badword'\n"; "words = [1]\n"; "phrases = ['x']\n"; "words = ['x'\n"] do
             Expect.isError (Configuration.parseModeration invalid) $"invalid rules: {invalid}"
 
+    testCase "block and flag tiers load from sections; top-level keys stay the block tier" <| fun _ ->
+        let text = String.concat "\n" [
+            "words = ['legacyword']"
+            "[block]"
+            "words = ['blockword']"
+            "[flag]"
+            "words = ['flagword']"
+            "substrings = ['xflag']"
+            "exceptions = ['xflagok']"
+            "" ]
+        match Configuration.parseModeration text with
+        | Ok rules ->
+            Expect.isFalse (Dreamsleeve.Server.Domain.Moderation.allows rules "legacyword") "legacy block"
+            Expect.isFalse (Dreamsleeve.Server.Domain.Moderation.allows rules "blockword") "block section"
+            Expect.isTrue (Dreamsleeve.Server.Domain.Moderation.allows rules "flagword") "flag does not refuse"
+            Expect.equal (Dreamsleeve.Server.Domain.Moderation.flag rules "a flagword").Length 1 "flag marks"
+            Expect.isEmpty (Dreamsleeve.Server.Domain.Moderation.flag rules "xflagok") "flag exception"
+        | Error error -> failtest error
+        for invalid in ["[flag]\nphrases = ['x']\n"; "flag = 'x'\n"; "[other]\nwords = ['x']\n"] do
+            Expect.isError (Configuration.parseModeration invalid) $"invalid tiers: {invalid}"
+
     testCase "bundled moderation example parses and blocks its sample words" <| fun _ ->
         let root = DirectoryInfo(AppContext.BaseDirectory)
         let rec find (directory: DirectoryInfo) =
@@ -49,9 +70,23 @@ let tests = testList "Server configuration" [
             else find directory.Parent
         match Configuration.parseModeration (File.ReadAllText(find root)) with
         | Ok rules ->
-            Expect.isFalse (Dreamsleeve.Server.Domain.Moderation.allows rules "what the f.u.c.k") "sample word"
-            Expect.isTrue (Dreamsleeve.Server.Domain.Moderation.allows rules "Scunthorpe") "sample exception"
-            Expect.isTrue (Dreamsleeve.Server.Domain.Moderation.allows rules "Hello, Dragonborn") "ordinary text"
+            let allows = Dreamsleeve.Server.Domain.Moderation.allows rules
+            let flagged text = not (Dreamsleeve.Server.Domain.Moderation.flag rules text).IsEmpty
+            // Refused for everyone.
+            for text in ["k.y.s"; "just KILL YOURSELF"; "иди повесься"; "детское порно"] do
+                Expect.isFalse (allows text) $"block tier: {text}"
+            // Delivered but marked.
+            for text in ["n1gg3r"; "ты чурка"; "Sieg Heil!"; "14/88"; "join discord.gg/abc"; "1xbet promo";
+                         "скинь нюдсы"; "я знаю где ты живешь"; "купить мефедрон"; "проклятый хач"] do
+                Expect.isTrue (allows text) $"flag tier does not refuse: {text}"
+                Expect.isTrue (flagged text) $"flag tier marks: {text}"
+            // Ordinary game chat, idioms and look-alike words stay untouched.
+            for text in ["Hello, Dragonborn"; "Встретимся в Вайтране у Драконьего Предела"; "убью дракона и вернусь";
+                         "хачапури в таверне"; "жидкость для зелья"; "Нигер и Чад — страны Африки"; "a chink in the armor";
+                         "spic and span"; "niggardly pay"; "упорно качаю кузнечное дело"; "синдром дауна"; "Scunthorpe United";
+                         "Skooma is bad for you"; "I'll find you at the College of Winterhold"; "раздача зелий у храма"] do
+                Expect.isTrue (allows text) $"not refused: {text}"
+                Expect.isFalse (flagged text) $"not flagged: {text}"
         | Error error -> failtest error
 
     testCase "server display name loads from TOML and rejects invalid labels" <| fun _ ->

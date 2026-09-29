@@ -55,6 +55,8 @@ export interface ChatState {
   savedRevision: number;
   // Personal ignore list of the current server, named by the host.
   ignored: { id: string; name: string }[];
+  // Context menu of a message author, at viewport coordinates.
+  authorMenu: { playerId: string; name: string; x: number; y: number } | null;
 }
 export const visible = (message: Message, filter: string) =>
   filter === "all" || message.channelId === filter;
@@ -87,6 +89,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     revision: 0,
     savedRevision: 0,
     ignored: [],
+    authorMenu: null,
   }));
   let sequence = 0;
   const touch = () => store.setState({ activity: now(), faded: false });
@@ -113,6 +116,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
                   // A local switch may be newer than the host copy.
                   nameMode: state.settings.nameMode,
                   streamerMode: state.settings.streamerMode,
+                  textFilter: state.settings.textFilter,
                 })
               : state.settings,
           });
@@ -194,7 +198,12 @@ export function makeChat(send: Send, now = () => Date.now()) {
         store.setState({ ignored: event.players });
         break;
       case "hide":
-        store.setState({ visible: false, active: false, panel: null });
+        store.setState({
+          visible: false,
+          active: false,
+          panel: null,
+          authorMenu: null,
+        });
         // Visibility is authoritative even if the native listener is unavailable.
         // Native also releases Prisma focus when reacting to a Skyrim menu.
         if (state.active) send({ type: "close" });
@@ -208,7 +217,12 @@ export function makeChat(send: Send, now = () => Date.now()) {
         touch();
         break;
       case "deactivate":
-        store.setState({ active: false, panel: null, scrolled: false });
+        store.setState({
+          active: false,
+          panel: null,
+          scrolled: false,
+          authorMenu: null,
+        });
         touch();
         break;
       case "connection":
@@ -490,20 +504,22 @@ export function makeChat(send: Send, now = () => Date.now()) {
         revision: current.revision + 1,
         notice: "Настройки изменены. Нажмите «Сохранить настройки».",
       });
-      // Name settings apply to every surface at once, the game included.
+      // Names and the text filter apply to every surface at once, the game included.
       if (
         settings.nameMode !== current.settings.nameMode ||
-        settings.streamerMode !== current.settings.streamerMode
+        settings.streamerMode !== current.settings.streamerMode ||
+        settings.textFilter !== current.settings.textFilter
       ) {
         if (
           !send({
-            type: "nameSettings",
+            type: "displaySettings",
             nameMode: settings.nameMode,
             streamerMode: settings.streamerMode,
+            textFilter: settings.textFilter,
           })
         )
           store.setState({ notice: "Команда не принята приложением" });
-        else store.setState({ notice: "Отображение имён применено" });
+        else store.setState({ notice: "Отображение применено" });
       }
       touch();
     },
@@ -518,11 +534,21 @@ export function makeChat(send: Send, now = () => Date.now()) {
       if (!send({ type: "unignore", playerId }))
         store.setState({ notice: "Команда не принята приложением" });
     },
+    // Right click on an author: profile and ignore actions for that account.
+    openAuthorMenu(playerId: string, name: string, x: number, y: number) {
+      const s = store.getState();
+      if (!s.visible || !s.active || !playerId) return;
+      store.setState({ authorMenu: { playerId, name, x, y } });
+    },
+    closeAuthorMenu() {
+      if (store.getState().authorMenu) store.setState({ authorMenu: null });
+    },
     open(panel: Panel, playerId?: string) {
       if (!store.getState().visible) return;
       store.setState({
         panel,
         selectedPlayer: playerId ?? store.getState().selfId,
+        authorMenu: null,
       });
       touch();
     },

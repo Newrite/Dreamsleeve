@@ -848,4 +848,105 @@ TEST_CASE("Server refusals map to readable reasons")
   CHECK(Bridge::RejectionText(Code::NotChannelMember, "") == "Сервер отклонил сообщение");
 }
 
+TEST_CASE("Local filter shows, masks or hides server-flagged ranges")
+{
+  Domain::ChatMessage message{
+      5,
+      1,
+      {7, "seven", "Seven"},
+      "Ну ты хач, а?",
+      Domain::FromUnixMilliseconds(0)
+  };
+  message.flagged = {
+      Domain::TextSpan{10, 6}
+  };  // "хач": three two-byte letters after 10 bytes.
+  UiSettings settings;
+  CHECK(Bridge::ShownText(message, settings, false) == message.messageText);
+  settings.textFilter = "mask";
+  CHECK(Bridge::ShownText(message, settings, false) == "Ну ты ***, а?");
+  settings.textFilter = "hide";
+  CHECK_FALSE(Bridge::ShownText(message, settings, false));
+  CHECK(Bridge::ShownText(message, settings, true) == std::string{Bridge::HiddenOwnText});
+  message.flagged.clear();
+  CHECK(Bridge::ShownText(message, settings, false) == message.messageText);
+
+  CHECK(
+    Bridge::MaskFlagged(
+      "bad phrase here",
+      {
+          Domain::TextSpan{0, 10}
+  }) == "*** ****** here");
+  settings.textFilter = "loud";
+  CHECK(Dreamsleeve::Host::Normalize(settings).textFilter == "off");
+}
+
+TEST_CASE("Session applies the text filter to history, deltas and bubbles alike")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    OnlinePlayersReplaced{
+        {MakePlayer(1, "Alice"), MakePlayer(7, "Seven")}
+  }));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  auto flagged    = MakeMessage(10, 1, "join t.me/spam now");
+  flagged.flagged = {
+      Domain::TextSpan{5, 9}
+  };
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {flagged}}));
+
+  UiSettings mask;
+  mask.textFilter = "mask";
+  Session session;
+  session.PlayerNames().Configure("srv:1", {});
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), mask, frame);
+  Settle(session, *exchange, model, frame, mask);
+  REQUIRE(frame.snapshot);
+  auto masked = Parse(frame.events[0]);
+  CHECK(masked["messages"][0]["text"].get<std::string>() == "join ********* now");
+  CHECK(masked["messages"][0]["filtered"].get<bool>());
+  CHECK(frame.events[0].find("spam") == std::string::npos);
+
+  auto live    = MakeMessage(11, 1, "t.me/spam");
+  live.flagged = {
+      Domain::TextSpan{0, 9}
+  };
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {live}}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), mask, frame);
+  REQUIRE(frame.freshMessages.size() == 1);
+  CHECK(frame.freshMessages[0].messageText == "*********");
+
+  UiSettings hide;
+  hide.textFilter = "hide";
+  auto again      = MakeMessage(12, 1, "t.me/spam");
+  again.flagged   = {
+      Domain::TextSpan{0, 9}
+  };
+  auto own    = MakeMessage(13, 1, "t.me/mine");
+  own.author  = {1, "user1", "Alice"};
+  own.flagged = {
+      Domain::TextSpan{0, 9}
+  };
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ChatMessagesReceived{
+        1,
+        {again, own, MakeMessage(14, 1, "clean")}
+  }));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), hide, frame);
+  REQUIRE(frame.freshMessages.size() == 1);
+  CHECK(frame.freshMessages[0].messageText == "clean");
+  REQUIRE(frame.events.size() == 1);
+  auto delta = Parse(frame.events[0]);
+  REQUIRE(delta["messages"].get_array().size() == 2);
+  CHECK(delta["messages"][0]["text"].get<std::string>() == std::string{Bridge::HiddenOwnText});
+  CHECK(delta["messages"][1]["text"].get<std::string>() == "clean");
+  CHECK(frame.events[0].find("spam") == std::string::npos);
+}
+
 TEST_SUITE_END();

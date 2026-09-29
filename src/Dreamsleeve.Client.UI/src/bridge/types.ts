@@ -73,9 +73,15 @@ export interface Player {
   gameStartedAt?: number;
   actorValues?: ActorValue[];
 }
-export type Message = { id: Id; channelId: Id; text: string; time: number } & (
-  { source: "player"; author: Player } | { source: "system" }
-);
+// filtered: the host masked or replaced the text by the local filter of
+// server-flagged ranges; the original text never crossed the bridge.
+export type Message = {
+  id: Id;
+  channelId: Id;
+  text: string;
+  time: number;
+  filtered?: boolean;
+} & ({ source: "player"; author: Player } | { source: "system" });
 export interface Settings {
   showFireflyNames: boolean;
   fireflyNameOcclusion: boolean;
@@ -102,6 +108,7 @@ export interface Settings {
   fullColor: boolean;
   nameMode: "username" | "display" | "character";
   streamerMode: boolean;
+  textFilter: "off" | "mask" | "hide";
   locked: boolean;
   x: number;
   y: number;
@@ -126,9 +133,10 @@ export type Command =
   | { type: "unignore"; playerId: Id }
   // Applied and saved by the host at once; it re-projects every surface.
   | {
-      type: "nameSettings";
+      type: "displaySettings";
       nameMode: Settings["nameMode"];
       streamerMode: boolean;
+      textFilter: Settings["textFilter"];
     }
   | { type: "signInSaved" }
   | { type: "signOut" }

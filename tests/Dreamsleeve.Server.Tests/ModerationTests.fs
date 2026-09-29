@@ -62,6 +62,22 @@ let tests = testList "Moderation" [
         Expect.isTrue (Moderation.allows Moderation.empty "badword") "Disabled moderation allows text"
     }
 
+    test "flag tier marks UTF-8 byte ranges of the original text without refusing it" {
+        let flags =
+            Moderation.create { Words = []; Substrings = []; Exceptions = [] }
+            |> Moderation.withFlags { Words = ["badword"; "плохо"]; Substrings = ["zzz"]; Exceptions = ["zzzok"] }
+        Expect.isTrue (Moderation.allows flags "badword") "flag rules never refuse"
+        Expect.isTrue flags.HasFlags "flag tier present"
+        let text = "Ой, B\u200Ba\u0301dword и ПЛОХО!"
+        let spans = Moderation.flag flags text
+        let bytes = System.Text.Encoding.UTF8.GetBytes text
+        let cut (span: TextSpan) = System.Text.Encoding.UTF8.GetString(bytes, span.Start, span.Length)
+        Expect.equal (spans |> List.map cut) ["B\u200Ba\u0301dword"; "ПЛОХО"] "original text including invisible and combining characters"
+        Expect.equal (Moderation.flag flags "xzzzzx zzzok") [{ Start = 1; Length = 4 }] "stretched substring; exception kept"
+        Expect.equal (Moderation.flag flags "zzzbadword").Length 1 "overlapping and adjacent ranges merge once"
+        Expect.isEmpty (Moderation.flag rules "badword") "no flag tier, no ranges"
+    }
+
     test "public profiles hide failing stored names without changing identity" {
         let id = PlayerId.create 9UL |> Result.defaultWith (failwithf "%A")
         let stored = PlayerData.create id (Username.create 32 "ass" |> Result.defaultWith (failwithf "%A"))

@@ -242,7 +242,9 @@ private:
         for (std::size_t index = first; index < chat.messages.size(); ++index)
         {
           Remember(chat.messages[index]);
-          if (!Hidden(chat.messages[index])) event.messages.push_back(Bridge::ToUiMessage(chat.messages[index], names, settings));
+          if (Hidden(chat.messages[index])) continue;
+          if (auto shown = Bridge::ToShownMessage(chat.messages[index], names, settings, selfId))
+            event.messages.push_back(std::move(*shown));
         }
       }
       event.players    = PlayerList(settings);
@@ -295,8 +297,16 @@ private:
             Remember(message);
             // Fresh() runs first: it advances the bubble floor even for an
             // ignored author, so unignoring never replays old messages.
-            if (Fresh(message) && !Hidden(message)) frame.freshMessages.push_back(message);
-            if (!Hidden(message)) messages.messages.push_back(Bridge::ToUiMessage(message, names, settings));
+            if (Fresh(message) && !Hidden(message))
+              if (auto text = Bridge::ShownText(message, settings, false))
+              {
+                // Bubbles carry the filtered text: a hidden message never shows above a firefly.
+                auto bubble        = message;
+                bubble.messageText = std::move(*text);
+                frame.freshMessages.push_back(std::move(bubble));
+              }
+            if (Hidden(message)) continue;
+            if (auto shown = Bridge::ToShownMessage(message, names, settings, selfId)) messages.messages.push_back(std::move(*shown));
           }
       if (!messages.messages.empty()) Emit(frame, messages);
     }

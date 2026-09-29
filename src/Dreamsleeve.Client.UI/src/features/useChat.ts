@@ -34,7 +34,8 @@ export function useChat(chat: Chat) {
       if (!chat.store.getState().active || event.isComposing) return;
       if (controlKey(event) === "Escape") {
         event.preventDefault();
-        if (chat.store.getState().panel) chat.open(null);
+        if (chat.store.getState().authorMenu) chat.closeAuthorMenu();
+        else if (chat.store.getState().panel) chat.open(null);
         else chat.close();
       }
     }

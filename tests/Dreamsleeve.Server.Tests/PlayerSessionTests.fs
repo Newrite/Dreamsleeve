@@ -38,7 +38,9 @@ type private Fixture = {
     Host: Channel<SessionHostCommand>
 }
 
-let private rules = Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
+let private rules =
+    Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
+    |> Moderation.withFlags { Words = ["flagword"]; Substrings = []; Exceptions = [] }
 
 let private withModeratedPlayer moderation settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
     let queries = Channel.CreateUnbounded<SessionAuthenticationRequest>()
@@ -186,9 +188,11 @@ let tests = testList "PlayerSession" [
                 equal "text" rejection.Field
             | other -> failwithf "Expected text refusal: %A" other
             equal 0 fixture.Chat.Reader.Count
-            let! accepted = submitted fixture 3UL "badwordless text"
-            equal "badwordless text" (ChatMessageText.value accepted.Text)
-            equal (Moderation.normalize "badwordless text") accepted.Fingerprint
+            let! accepted = submitted fixture 3UL "badwordless flagword"
+            equal "badwordless flagword" (ChatMessageText.value accepted.Text)
+            equal (Moderation.normalize "badwordless flagword") accepted.Fingerprint
+            // Flag-tier words pass with marked byte ranges instead of a refusal.
+            equal [{ Start = 12; Length = 8 }] accepted.Flagged
         }))
 
     case "stored names failing current rules leave the session only as placeholders" (fun () ->

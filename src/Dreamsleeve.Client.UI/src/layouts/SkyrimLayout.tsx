@@ -7,6 +7,7 @@ import { useChat } from "../features/useChat";
 import { useFrame } from "../features/useFrame";
 import { Messages } from "../views/Messages";
 import { Panels } from "../views/Panels";
+import { AuthorMenu } from "../views/AuthorMenu";
 import styles from "../styles/Chat.module.css";
 export function SkyrimLayout({ chat }: { chat: Chat }) {
   const { state: s, input } = useChat(chat);
@@ -200,6 +201,7 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
           </>
         )}
       </section>
+      {s.active && s.authorMenu && <AuthorMenu chat={chat} state={s} />}
       {s.active && s.panel && <Panels chat={chat} state={s} />}
     </>
   );

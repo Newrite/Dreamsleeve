@@ -300,6 +300,7 @@ module PlayerSession =
                     Text = text
                     CharacterName = publicCharacterName state player
                     Fingerprint = Moderation.normalize (ChatMessageText.value text)
+                    Flagged = Moderation.flag state.Moderation (ChatMessageText.value text)
                     ReplyTo = address.Map PlayerSessionMessage.ChatEvent
                 }
                 if state.Chat.TrySend(context, ChatRoomCommand.Publish submission) then

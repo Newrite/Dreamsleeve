@@ -38,6 +38,7 @@ let private publish (room: Agent<ChatRoomCommand>) (subscriber: Subscription<Cha
         ConnectionId = subscriber.ConnectionId; RequestId = requestId
         Text = ChatMessageText.create 256 text |> ok; ReplyTo = subscriber.Events
         CharacterName = ValueNone; Fingerprint = Moderation.normalize text
+        Flagged = if text.StartsWith "flag" then [{ Start = 0; Length = 4 }] else []
     })
 let private accepted requestId = function
     | ChatRoomEvent.Accepted(actual, message) -> equal requestId actual; message
@@ -163,6 +164,7 @@ let tests = testList "ChatRoomAgent" [
         let! broadcast = receive bobEvents
         equal (ChatRoomEvent.Published first) broadcast
         equal a.Profile first.Author
+        equal [] first.Flagged
         equal 1UL (ChatMessageId.value first.MessageId)
         equal channelId first.ChannelId
         equal 0L (first.SentAt.Ticks % TimeSpan.TicksPerMillisecond)
@@ -181,6 +183,23 @@ let tests = testList "ChatRoomAgent" [
         let! retained = history room
         equal [first; second] retained.Messages
         check (not (aliceEvents.Reader.TryPeek() |> fst)) "Author received a second copy."
+        do! stop room
+    })
+
+    case "flagged ranges travel with the stored message and its broadcast" (fun () -> task {
+        let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
+        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = Agent.Start(AgentOptions.create "player", collect events)
+        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        let alice = subscription 1UL player
+        do! post room (ChatRoomCommand.Join alice)
+        let! _ = receive events
+        do! publish room alice 1UL "flag me"
+        let! published = receive events
+        let message = accepted 1UL published
+        equal [{ Start = 0; Length = 4 }] message.Flagged
+        let! retained = history room
+        equal [{ Start = 0; Length = 4 }] retained.Messages.Head.Flagged
         do! stop room
     })
 

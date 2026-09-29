@@ -331,3 +331,49 @@
 .window[data-active="false"][data-connected="false"] {
   display: none;
 }
+.message[data-filtered] .text {
+  color: var(--muted);
+  font-style: italic;
+}
+/* Author context menu: fixed to the viewport, above the chat window. */
+.menuLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.authorMenu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-width: 220px;
+  padding: 6px;
+  border: 1px solid #747365;
+  background: rgb(12 12 10 / 0.96);
+  color: #e8e2cf;
+  font:
+    14px "Segoe UI",
+    sans-serif;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+}
+.authorMenu strong {
+  padding: 4px 8px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-bottom: 1px solid #3a3a33;
+  margin-bottom: 4px;
+}
+.authorMenu button {
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.authorMenu button:hover,
+.authorMenu button:focus-visible {
+  background: rgb(255 255 255 / 0.1);
+  outline: none;
+}

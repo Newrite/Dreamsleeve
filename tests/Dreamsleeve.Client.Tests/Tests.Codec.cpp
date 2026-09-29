@@ -125,6 +125,43 @@ TEST_CASE("Chat messages keep the character snapshot and players the withheld-na
   CHECK_FALSE(player.characterName);
 }
 
+TEST_CASE("Flagged ranges decode only inside the text, ascending and on code point boundaries")
+{
+  const auto codec   = MakeCodec();
+  auto       packet  = Published();  // "Привет\nworld": Cyrillic letters take two bytes.
+  auto*      message = packet.mutable_chat_published()->mutable_message();
+  auto       add     = [&](std::uint32_t start, std::uint32_t length) {
+    auto* span = message->add_flagged();
+    span->set_start(start);
+    span->set_length(length);
+  };
+  add(0, 4);
+  add(13, 5);
+  auto decoded = codec.Decode(Bytes(packet), W::Channel::Chat);
+  REQUIRE(decoded);
+  const auto& flagged = std::get<ChatMessagesReceived>(*decoded).messages[0].flagged;
+  REQUIRE(flagged.size() == 2);
+  CHECK(flagged[1] == Domain::TextSpan{13, 5});
+
+  SUBCASE("past the end")
+  {
+    add(18, 1);
+  }
+  SUBCASE("overlapping")
+  {
+    add(16, 2);
+  }
+  SUBCASE("inside a code point")
+  {
+    message->mutable_flagged(0)->set_length(3);
+  }
+  SUBCASE("empty")
+  {
+    add(18, 0);
+  }
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Chat));
+}
+
 TEST_CASE("Welcome decoding returns ordinary player and chat data without applying model policy")
 {
   const auto codec  = MakeCodec();

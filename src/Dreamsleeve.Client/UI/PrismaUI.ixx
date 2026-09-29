@@ -250,12 +250,15 @@ namespace PrismaUI
       Send(session.IgnoredList(runtime.ui.ui.chat));
       return;
     }
-    if (type == "nameSettings")
+    if (type == "displaySettings")
     {
       // Applied and saved at once: every surface switches without reconnecting.
       auto& chat        = runtime.ui.ui.chat;
       chat.nameMode     = command.nameMode;
       chat.streamerMode = command.streamerMode;
+      chat.textFilter   = command.textFilter;
+      // Visible bubbles were admitted under the old filter.
+      runtime.bubbles.Clear();
       if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
       runtime.session.Refresh();
       Send(runtime.session.IgnoredList(chat));
@@ -263,8 +266,9 @@ namespace PrismaUI
     }
     if (type == "saveSettings")
     {
-      const bool names =
-        runtime.ui.ui.chat.nameMode != command.settings->nameMode || runtime.ui.ui.chat.streamerMode != command.settings->streamerMode;
+      const bool names   = runtime.ui.ui.chat.nameMode != command.settings->nameMode ||
+                           runtime.ui.ui.chat.streamerMode != command.settings->streamerMode ||
+                           runtime.ui.ui.chat.textFilter != command.settings->textFilter;
       runtime.ui.ui.chat = *command.settings;
       if (names)
       {

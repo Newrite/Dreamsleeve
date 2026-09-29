@@ -148,7 +148,9 @@ module ChatRoomAgent =
                 | Error _ -> context.Abort()
                 | Ok messageId ->
                     let now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
-                    let message = ChatMessage.create messageId state.Chat.ChannelId author.Profile request.CharacterName request.Text now
+                    let message =
+                        ChatMessage.create messageId state.Chat.ChannelId author.Profile request.CharacterName request.Text now
+                        |> ChatMessage.withFlagged request.Flagged
 
                     match Chat.append message state.Chat with
                     | Error _ -> context.Abort()

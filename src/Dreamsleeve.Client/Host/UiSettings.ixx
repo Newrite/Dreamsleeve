@@ -43,7 +43,9 @@ export namespace Dreamsleeve::Host
     // username | display | character. "account" from older files reads as username.
     std::string nameMode{"display"};
     // Local pseudonyms instead of every real name; not sent to the server.
-    bool        streamerMode{false};
+    bool streamerMode{false};
+    // Ranges the server flagged: off (show) | mask (stars) | hide (whole message).
+    std::string textFilter{"off"};
     bool        locked{true};
     double      x{0.025};
     double      y{0.42};
@@ -136,6 +138,7 @@ export namespace Dreamsleeve::Host
     Choose(value.font, {"serif", "sans"}, defaults.font);
     if (value.nameMode == "account") value.nameMode = "username";
     Choose(value.nameMode, {"username", "display", "character"}, defaults.nameMode);
+    Choose(value.textFilter, {"off", "mask", "hide"}, defaults.textFilter);
     Choose(value.activationKey, {"Enter", "F2"}, defaults.activationKey);
     Choose(value.theme, {"skyrim", "contrast"}, defaults.theme);
 

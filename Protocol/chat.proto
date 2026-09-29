@@ -18,6 +18,15 @@ message ChatMessage {
   // Published character name at the time of sending. Absent for messages sent
   // outside a character, with a withheld name, or by servers before this field.
   optional string character_name = 6;
+  // Ranges the server word list marks without refusing the message: UTF-8
+  // byte offsets into text, ascending and non-overlapping, on code point
+  // boundaries. Clients choose to show, mask or hide them.
+  repeated TextSpan flagged = 7;
+}
+
+message TextSpan {
+  uint32 start = 1;
+  uint32 length = 2;
 }
 
 message ChatPublished { ChatMessage message = 1; }

@@ -25,6 +25,7 @@ export const defaults: Settings = {
   fullColor: false,
   nameMode: "display",
   streamerMode: false,
+  textFilter: "off",
   locked: true,
   x: 0.025,
   y: 0.42,
@@ -73,6 +74,8 @@ export function settingsFrom(input: Partial<Settings>): Settings {
       (key === "onlineView" && ["cards", "list"].includes(String(value))) ||
       (key === "font" && ["serif", "sans"].includes(String(value))) ||
       (key === "theme" && ["skyrim", "contrast"].includes(String(value))) ||
+      (key === "textFilter" &&
+        ["off", "mask", "hide"].includes(String(value))) ||
       (key === "nameMode" &&
         ["username", "display", "character"].includes(String(value))) ||
       (key === "activationKey" && ["Enter", "F2"].includes(String(value)))

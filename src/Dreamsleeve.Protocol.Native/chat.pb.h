@@ -68,6 +68,10 @@ class SendChat;
 struct SendChatDefaultTypeInternal;
 extern SendChatDefaultTypeInternal _SendChat_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull SendChat_class_data_;
+class TextSpan;
+struct TextSpanDefaultTypeInternal;
+extern TextSpanDefaultTypeInternal _TextSpan_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull TextSpan_class_data_;
 }  // namespace Chat
 }  // namespace Protocol
 }  // namespace Dreamsleeve
@@ -83,6 +87,208 @@ namespace Chat {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class TextSpan final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.TextSpan) */ {
+ public:
+  inline TextSpan() : TextSpan(nullptr) {}
+  ~TextSpan() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TextSpan* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TextSpan));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR TextSpan(::google::protobuf::internal::ConstantInitialized);
+
+  inline TextSpan(const TextSpan& from) : TextSpan(nullptr, from) {}
+  inline TextSpan(TextSpan&& from) noexcept
+      : TextSpan(nullptr, ::std::move(from)) {}
+  inline TextSpan& operator=(const TextSpan& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TextSpan& operator=(TextSpan&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const TextSpan& default_instance() {
+    return *reinterpret_cast<const TextSpan*>(
+        &_TextSpan_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(TextSpan& a, TextSpan& b) { a.Swap(&b); }
+  inline void Swap(TextSpan* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TextSpan* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  TextSpan* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TextSpan>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TextSpan& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TextSpan& from) { TextSpan::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TextSpan* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.TextSpan"; }
+
+  explicit TextSpan(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TextSpan(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TextSpan& from);
+  TextSpan(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TextSpan&& from) noexcept
+      : TextSpan(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kStartFieldNumber = 1,
+    kLengthFieldNumber = 2,
+  };
+  // uint32 start = 1;
+  void clear_start() ;
+  ::uint32_t start() const;
+  void set_start(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_start() const;
+  void _internal_set_start(::uint32_t value);
+
+  public:
+  // uint32 length = 2;
+  void clear_length() ;
+  ::uint32_t length() const;
+  void set_length(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_length() const;
+  void _internal_set_length(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.TextSpan)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TextSpan& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t start_;
+    ::uint32_t length_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_chat_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull TextSpan_class_data_;
 // -------------------------------------------------------------------
 
 class SendChat final : public ::google::protobuf::Message
@@ -434,6 +640,7 @@ class ChatMessage final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
+    kFlaggedFieldNumber = 7,
     kTextFieldNumber = 4,
     kCharacterNameFieldNumber = 6,
     kAuthorFieldNumber = 3,
@@ -441,6 +648,23 @@ class ChatMessage final : public ::google::protobuf::Message
     kChannelIdFieldNumber = 2,
     kSentAtUnixMsFieldNumber = 5,
   };
+  // repeated .Dreamsleeve.Protocol.Chat.TextSpan flagged = 7;
+  int flagged_size() const;
+  private:
+  int _internal_flagged_size() const;
+
+  public:
+  void clear_flagged() ;
+  ::Dreamsleeve::Protocol::Chat::TextSpan* PROTOBUF_NONNULL mutable_flagged(int index);
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::TextSpan>* PROTOBUF_NONNULL mutable_flagged();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::TextSpan>& _internal_flagged() const;
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::TextSpan>* PROTOBUF_NONNULL _internal_mutable_flagged();
+  public:
+  const ::Dreamsleeve::Protocol::Chat::TextSpan& flagged(int index) const;
+  ::Dreamsleeve::Protocol::Chat::TextSpan* PROTOBUF_NONNULL add_flagged();
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::TextSpan>& flagged() const;
   // string text = 4;
   void clear_text() ;
   const ::std::string& text() const;
@@ -521,8 +745,8 @@ class ChatMessage final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
-                                   1, 64,
+  static const ::google::protobuf::internal::TcParseTable<3, 7,
+                                   2, 64,
                                    2>
       _table_;
 
@@ -543,6 +767,7 @@ class ChatMessage final : public ::google::protobuf::Message
         const ChatMessage& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::TextSpan > flagged_;
     ::google::protobuf::internal::ArenaStringPtr text_;
     ::google::protobuf::internal::ArenaStringPtr character_name_;
     ::Dreamsleeve::Protocol::Chat::PlayerProfile* PROTOBUF_NULLABLE author_;
@@ -613,7 +838,7 @@ class ChatPublished final : public ::google::protobuf::Message
     return *reinterpret_cast<const ChatPublished*>(
         &_ChatPublished_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(ChatPublished& a, ChatPublished& b) { a.Swap(&b); }
   inline void Swap(ChatPublished* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -867,7 +1092,7 @@ inline void ChatMessage::clear_message_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.message_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000010U);
 }
 inline ::uint64_t ChatMessage::message_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ChatMessage.message_id)
@@ -875,7 +1100,7 @@ inline ::uint64_t ChatMessage::message_id() const {
 }
 inline void ChatMessage::set_message_id(::uint64_t value) {
   _internal_set_message_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ChatMessage.message_id)
 }
 inline ::uint64_t ChatMessage::_internal_message_id() const {
@@ -892,7 +1117,7 @@ inline void ChatMessage::clear_channel_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.channel_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000020U);
 }
 inline ::uint64_t ChatMessage::channel_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ChatMessage.channel_id)
@@ -900,7 +1125,7 @@ inline ::uint64_t ChatMessage::channel_id() const {
 }
 inline void ChatMessage::set_channel_id(::uint64_t value) {
   _internal_set_channel_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ChatMessage.channel_id)
 }
 inline ::uint64_t ChatMessage::_internal_channel_id() const {
@@ -914,7 +1139,7 @@ inline void ChatMessage::_internal_set_channel_id(::uint64_t value) {
 
 // .Dreamsleeve.Protocol.Chat.PlayerProfile author = 3;
 inline bool ChatMessage::has_author() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.author_ != nullptr);
   return value;
 }
@@ -935,16 +1160,16 @@ inline void ChatMessage::unsafe_arena_set_allocated_author(
   }
   _impl_.author_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerProfile*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ChatMessage.author)
 }
 inline ::Dreamsleeve::Protocol::Chat::PlayerProfile* PROTOBUF_NULLABLE ChatMessage::release_author() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::Dreamsleeve::Protocol::Chat::PlayerProfile* released = _impl_.author_;
   _impl_.author_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -964,7 +1189,7 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerProfile* PROTOBUF_NULLABLE ChatMessa
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ChatMessage.author)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::Dreamsleeve::Protocol::Chat::PlayerProfile* temp = _impl_.author_;
   _impl_.author_ = nullptr;
   return temp;
@@ -979,7 +1204,7 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerProfile* PROTOBUF_NONNULL ChatMessag
 }
 inline ::Dreamsleeve::Protocol::Chat::PlayerProfile* PROTOBUF_NONNULL ChatMessage::mutable_author()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::Dreamsleeve::Protocol::Chat::PlayerProfile* _msg = _internal_mutable_author();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ChatMessage.author)
   return _msg;
@@ -996,9 +1221,9 @@ inline void ChatMessage::set_allocated_author(::Dreamsleeve::Protocol::Chat::Pla
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.author_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerProfile*>(value);
@@ -1010,7 +1235,7 @@ inline void ChatMessage::clear_text() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.text_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000001U);
+                  0x00000002U);
 }
 inline const ::std::string& ChatMessage::text() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1020,13 +1245,13 @@ inline const ::std::string& ChatMessage::text() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void ChatMessage::set_text(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.text_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ChatMessage.text)
 }
 inline ::std::string* PROTOBUF_NONNULL ChatMessage::mutable_text()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_text();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ChatMessage.text)
   return _s;
@@ -1046,10 +1271,10 @@ inline ::std::string* PROTOBUF_NONNULL ChatMessage::_internal_mutable_text() {
 inline ::std::string* PROTOBUF_NULLABLE ChatMessage::release_text() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ChatMessage.text)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   auto* released = _impl_.text_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.text_.Set("", GetArena());
@@ -1059,9 +1284,9 @@ inline ::std::string* PROTOBUF_NULLABLE ChatMessage::release_text() {
 inline void ChatMessage::set_allocated_text(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   _impl_.text_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.text_.IsDefault()) {
@@ -1075,7 +1300,7 @@ inline void ChatMessage::clear_sent_at_unix_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sent_at_unix_ms_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000040U);
 }
 inline ::int64_t ChatMessage::sent_at_unix_ms() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ChatMessage.sent_at_unix_ms)
@@ -1083,7 +1308,7 @@ inline ::int64_t ChatMessage::sent_at_unix_ms() const {
 }
 inline void ChatMessage::set_sent_at_unix_ms(::int64_t value) {
   _internal_set_sent_at_unix_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ChatMessage.sent_at_unix_ms)
 }
 inline ::int64_t ChatMessage::_internal_sent_at_unix_ms() const {
@@ -1097,14 +1322,14 @@ inline void ChatMessage::_internal_set_sent_at_unix_ms(::int64_t value) {
 
 // optional string character_name = 6;
 inline bool ChatMessage::has_character_name() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   return value;
 }
 inline void ChatMessage::clear_character_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.character_name_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000004U);
 }
 inline const ::std::string& ChatMessage::character_name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1114,13 +1339,13 @@ inline const ::std::string& ChatMessage::character_name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void ChatMessage::set_character_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.character_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ChatMessage.character_name)
 }
 inline ::std::string* PROTOBUF_NONNULL ChatMessage::mutable_character_name()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_character_name();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ChatMessage.character_name)
   return _s;
@@ -1140,10 +1365,10 @@ inline ::std::string* PROTOBUF_NONNULL ChatMessage::_internal_mutable_character_
 inline ::std::string* PROTOBUF_NULLABLE ChatMessage::release_character_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ChatMessage.character_name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.character_name_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.character_name_.Set("", GetArena());
@@ -1153,15 +1378,125 @@ inline ::std::string* PROTOBUF_NULLABLE ChatMessage::release_character_name() {
 inline void ChatMessage::set_allocated_character_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.character_name_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.character_name_.IsDefault()) {
     _impl_.character_name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ChatMessage.character_name)
+}
+
+// repeated .Dreamsleeve.Protocol.Chat.TextSpan flagged = 7;
+inline int ChatMessage::_internal_flagged_size() const {
+  return _internal_flagged().size();
+}
+inline int ChatMessage::flagged_size() const {
+  return _internal_flagged_size();
+}
+inline void ChatMessage::clear_flagged() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.flagged_.Clear();
+  ClearHasBitForRepeated(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::Dreamsleeve::Protocol::Chat::TextSpan* PROTOBUF_NONNULL ChatMessage::mutable_flagged(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ChatMessage.flagged)
+  return _internal_mutable_flagged()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::TextSpan>* PROTOBUF_NONNULL ChatMessage::mutable_flagged()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:Dreamsleeve.Protocol.Chat.ChatMessage.flagged)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_flagged();
+}
+inline const ::Dreamsleeve::Protocol::Chat::TextSpan& ChatMessage::flagged(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ChatMessage.flagged)
+  return _internal_flagged().Get(index);
+}
+inline ::Dreamsleeve::Protocol::Chat::TextSpan* PROTOBUF_NONNULL ChatMessage::add_flagged()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::Dreamsleeve::Protocol::Chat::TextSpan* _add =
+      _internal_mutable_flagged()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:Dreamsleeve.Protocol.Chat.ChatMessage.flagged)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::TextSpan>& ChatMessage::flagged() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:Dreamsleeve.Protocol.Chat.ChatMessage.flagged)
+  return _internal_flagged();
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::TextSpan>&
+ChatMessage::_internal_flagged() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.flagged_;
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::TextSpan>* PROTOBUF_NONNULL
+ChatMessage::_internal_mutable_flagged() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.flagged_;
+}
+
+// -------------------------------------------------------------------
+
+// TextSpan
+
+// uint32 start = 1;
+inline void TextSpan::clear_start() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::uint32_t TextSpan::start() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.TextSpan.start)
+  return _internal_start();
+}
+inline void TextSpan::set_start(::uint32_t value) {
+  _internal_set_start(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.TextSpan.start)
+}
+inline ::uint32_t TextSpan::_internal_start() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.start_;
+}
+inline void TextSpan::_internal_set_start(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_ = value;
+}
+
+// uint32 length = 2;
+inline void TextSpan::clear_length() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.length_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint32_t TextSpan::length() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.TextSpan.length)
+  return _internal_length();
+}
+inline void TextSpan::set_length(::uint32_t value) {
+  _internal_set_length(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.TextSpan.length)
+}
+inline ::uint32_t TextSpan::_internal_length() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.length_;
+}
+inline void TextSpan::_internal_set_length(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.length_ = value;
 }
 
 // -------------------------------------------------------------------

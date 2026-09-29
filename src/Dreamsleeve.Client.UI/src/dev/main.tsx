@@ -70,9 +70,29 @@ function project(p: Player, s: Settings, character = p.character): Player {
         : p.displayName;
   return { ...p, name, character };
 }
+// Stand-in for server flag ranges (UTF-16 here; the host works on UTF-8).
+const flags = new Map<string, [number, number][]>();
+function filterText(m: Message, s: Settings): Message | undefined {
+  const ranges = flags.get(m.id);
+  if (!ranges || s.textFilter === "off") return m;
+  const own = m.source === "player" && m.author.id === players[0].id;
+  if (s.textFilter === "hide")
+    return own
+      ? { ...m, text: "[скрыто фильтром]", filtered: true }
+      : undefined;
+  let text = m.text;
+  for (const [start, end] of ranges)
+    text =
+      text.slice(0, start) +
+      text.slice(start, end).replace(/\S/gu, "*") +
+      text.slice(end);
+  return { ...m, text, filtered: true };
+}
 function projectMessages(list: Message[], s: Settings) {
   return list
     .filter((m) => m.source === "system" || !ignored.has(m.author.id))
+    .map((m) => filterText(m, s))
+    .filter((m): m is Message => m !== undefined)
     .map((m) =>
       m.source === "system" ? m : { ...m, author: project(m.author, s) },
     );
@@ -86,7 +106,18 @@ function ignoredEvent(s = chat.store.getState().settings) {
     })),
   });
 }
-const history: Message[] = [...messages];
+const history: Message[] = [
+  ...messages,
+  {
+    id: "flagged-1",
+    channelId: "1",
+    source: "player",
+    author: players[2],
+    text: "Раздаю скины: t.me/freeskins",
+    time: Date.now() - 1000,
+  },
+];
+flags.set("flagged-1", [[14, 28]]);
 function snapshot(settings = chat.store.getState().settings, refresh = false) {
   chat.receive({
     type: "snapshot",
@@ -111,12 +142,13 @@ function command(c: Command) {
     }, 50);
     return true;
   }
-  if (c.type === "nameSettings") {
+  if (c.type === "displaySettings") {
     setTimeout(() => {
       const settings = {
         ...chat.store.getState().settings,
         nameMode: c.nameMode,
         streamerMode: c.streamerMode,
+        textFilter: c.textFilter,
       };
       ignoredEvent(settings);
       snapshot(settings, true);

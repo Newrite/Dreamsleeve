@@ -15,6 +15,8 @@ module internal ChatCodec =
                 Text = ChatMessageText.value value.MessageText,
                 SentAtUnixMs = Core.toUnixMilliseconds value.SentAt)
         value.CharacterName |> ValueOption.iter (fun name -> result.CharacterName <- CharacterName.value name)
+        for span in value.Flagged do
+            result.Flagged.Add(Dreamsleeve.Protocol.Chat.TextSpan(Start = uint32 span.Start, Length = uint32 span.Length))
         result
 
     let decodeCommand maxText (source: Dreamsleeve.Protocol.Chat.SendChat) =

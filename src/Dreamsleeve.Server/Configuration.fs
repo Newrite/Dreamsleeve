@@ -187,20 +187,48 @@ module Configuration =
             else Error $"Moderation rules: {name} must contain only strings."
         | true, _ -> Error $"Moderation rules: {name} must be an array of strings."
 
-    /// Parses the separate word-list file. Returns rules and an optional warning.
+    let private tierSource (table: TomlTable) scope =
+        let known = set ["words"; "substrings"; "exceptions"]
+        match table.Keys |> Seq.tryFind (fun key -> not (known.Contains key)) with
+        | Some key -> Error $"Unknown moderation setting: {scope}{key}"
+        | None ->
+            match stringList table "words", stringList table "substrings", stringList table "exceptions" with
+            | Ok words, Ok substrings, Ok exceptions -> Ok { Words = words; Substrings = substrings; Exceptions = exceptions }
+            | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+
+    let private section (table: TomlTable) name =
+        match table.TryGetValue name with
+        | false, _ -> Ok (TomlTable())
+        | true, (:? TomlTable as value) -> Ok value
+        | true, _ -> Error $"Moderation rules: [{name}] must be a table."
+
+    /// Parses the separate word-list file: [block] refuses, [flag] marks.
+    /// Top-level words/substrings/exceptions are the block tier of older files.
     let parseModeration (source: string) =
         let document = Tomlyn.Parsing.SyntaxParser.Parse(source, "moderation", true)
         if document.HasErrors then Error $"Invalid moderation TOML: {document.Diagnostics}"
         else
             let table = TomlSerializer.Deserialize<TomlTable>(source)
-            let known = set ["words"; "substrings"; "exceptions"]
-            match table.Keys |> Seq.tryFind (fun key -> not (known.Contains key)) with
+            let legacy = TomlTable()
+            let mutable unknown = None
+            for key in table.Keys do
+                match key with
+                | "block" | "flag" -> ()
+                | "words" | "substrings" | "exceptions" -> legacy.Add(key, table[key])
+                | other -> unknown <- Some other
+            match unknown with
             | Some key -> Error $"Unknown moderation setting: {key}"
             | None ->
-                match stringList table "words", stringList table "substrings", stringList table "exceptions" with
-                | Ok words, Ok substrings, Ok exceptions ->
-                    Ok (Moderation.create { Words = words; Substrings = substrings; Exceptions = exceptions })
-                | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+                let merge (first: ModerationSource) (second: ModerationSource) =
+                    { Words = first.Words @ second.Words; Substrings = first.Substrings @ second.Substrings
+                      Exceptions = first.Exceptions @ second.Exceptions }
+                let tiers =
+                    section table "block" |> Result.bind (fun block ->
+                    section table "flag" |> Result.bind (fun flag ->
+                    tierSource legacy "" |> Result.bind (fun top ->
+                    tierSource block "block." |> Result.bind (fun blocked ->
+                    tierSource flag "flag." |> Result.map (fun flagged -> merge top blocked, flagged)))))
+                tiers |> Result.map (fun (block, flag) -> Moderation.create block |> Moderation.withFlags flag)
 
     /// Disabled moderation uses empty rules. A missing file is a warning: the
     /// server runs with an empty list rather than refusing to start.
@@ -215,7 +243,7 @@ module Configuration =
                 else
                     parseModeration (File.ReadAllText file.FullName)
                     |> Result.map (fun rules ->
-                        rules, (if rules.IsEmpty then Some "Moderation rules contain no words or substrings." else None))
+                        rules, (if rules.IsEmpty && not rules.HasFlags then Some "Moderation rules contain no words or substrings." else None))
             with
             | :? TomlException as error -> Error $"Invalid moderation TOML: {error.Message}"
             | :? IOException as error -> Error $"Cannot read moderation rules: {error.Message}"

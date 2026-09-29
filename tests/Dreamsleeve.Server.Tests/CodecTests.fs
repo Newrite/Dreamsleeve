@@ -220,6 +220,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                         (ChatMessageText.create 2000 "hi" |> ok) DateTimeOffset.UnixEpoch
         let packet = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished named) |> ok |> parse
         Expect.equal packet.ChatPublished.Message.CharacterName "Lydia" "snapshot at sending"
+        let marked = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished(ChatMessage.withFlagged [{ Start = 1; Length = 2 }] named)) |> ok |> parse
+        Expect.equal marked.ChatPublished.Message.Flagged.Count 1 "flag ranges"
+        Expect.equal (marked.ChatPublished.Message.Flagged[0].Start, marked.ChatPublished.Message.Flagged[0].Length) (1u, 2u) "byte range"
         let withheld = { snapshot with CharacterName = ValueNone; CharacterNameWithheld = true }
         let player = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined withheld) |> ok |> parse
         Expect.isTrue player.PlayerJoined.Player.CharacterNameWithheld "withheld flag"

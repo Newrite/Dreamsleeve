@@ -152,6 +152,31 @@ export function SettingsPanel({
         </p>
       </fieldset>
       <fieldset className={styles.group}>
+        <legend>Помеченные сообщения</legend>
+        <label>
+          Слова, помеченные сервером
+          <select
+            aria-label="Помеченные сообщения"
+            value={s.textFilter}
+            onChange={(e) =>
+              chat.configure({
+                textFilter: e.target.value as Settings["textFilter"],
+              })
+            }
+          >
+            <option value="off">Показывать как есть</option>
+            <option value="mask">Заменять звёздочками</option>
+            <option value="hide">Скрывать сообщение целиком</option>
+          </select>
+        </label>
+        <p className={styles.muted}>
+          Сервер отмечает, но не запрещает слова из своего списка (например,
+          опасные для трансляций). Фильтр работает только у вас: в чате и в
+          сообщениях над светлячками. Ваше скрытое сообщение показывается
+          заглушкой. Применяется сразу.
+        </p>
+      </fieldset>
+      <fieldset className={styles.group}>
         <legend>Игнорируемые игроки</legend>
         {ignored.length ? (
           <ul className={styles.ignored} aria-label="Игнорируемые игроки">
@@ -166,8 +191,8 @@ export function SettingsPanel({
           <p className={styles.muted}>Список пуст.</p>
         )}
         <p className={styles.muted}>
-          Добавить игрока: «Игнорировать» в его профиле. Список хранится
-          локально для этого сервера.
+          Добавить игрока: правый клик по нику в чате или «Игнорировать» в
+          профиле. Список хранится локально для этого сервера.
         </p>
       </fieldset>
       <fieldset className={styles.group}>

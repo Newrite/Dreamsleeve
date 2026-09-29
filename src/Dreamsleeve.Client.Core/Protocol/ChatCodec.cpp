@@ -18,13 +18,32 @@ namespace Dreamsleeve::Client::Wire::Detail
     auto author = Profile(message.author());
     if (!author) return std::unexpected{author.error()};
 
+    // Ranges must lie inside the text, ascend without overlap and cut on code
+    // point boundaries, so a client can mask them without breaking UTF-8.
+    std::vector<Domain::TextSpan> flagged;
+    flagged.reserve(static_cast<std::size_t>(message.flagged_size()));
+    const auto&   text = message.text();
+    std::uint64_t floor{};
+    const auto    boundary = [&](std::uint64_t at) {
+      return at == text.size() || (static_cast<unsigned char>(text[at]) & 0xC0) != 0x80;
+    };
+    for (const auto& span : message.flagged())
+    {
+      const auto end = static_cast<std::uint64_t>(span.start()) + span.length();
+      if (span.length() == 0 || span.start() < floor || end > text.size() || !boundary(span.start()) || !boundary(end))
+        return Invalid("flagged");
+      flagged.push_back({span.start(), span.length()});
+      floor = end;
+    }
+
     return Domain::ChatMessage{
         message.message_id(),
         message.channel_id(),
         std::move(*author),
         message.text(),
         Domain::FromUnixMilliseconds(message.sent_at_unix_ms()),
-        message.has_character_name() ? std::optional{message.character_name()} : std::nullopt
+        message.has_character_name() ? std::optional{message.character_name()} : std::nullopt,
+        std::move(flagged)
     };
   }
 

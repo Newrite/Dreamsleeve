@@ -809,3 +809,66 @@ test("streamer mode hides real names everywhere and ignore hides history without
   await expect(list).toHaveCount(0);
   await expect(history).toContainText("Мира:");
 });
+
+test("right click on an author opens a menu with profile and ignore", async ({
+  page,
+}) => {
+  await page.goto("/demo.html");
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const history = page.locator('[data-part="messages"]');
+  await expect(history).toContainText("Мира:");
+  const author = page.getByRole("button", { name: "Мира:" }).first();
+  await author.click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "Действия: Мира" });
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  // Escape closed only the menu, the chat stays active.
+  await expect(page.locator('[data-part="chat"]')).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+
+  await author.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Открыть профиль" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Мира");
+  await page.getByRole("button", { name: "Закрыть панель" }).click();
+
+  await author.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Игнорировать" }).click();
+  await expect(history).not.toContainText("Мира:");
+
+  // Own name: the menu offers the profile only.
+  await page
+    .getByRole("button", { name: "Северный:" })
+    .first()
+    .click({ button: "right" });
+  const own = page.getByRole("menu", { name: "Действия: Северный" });
+  await expect(
+    own.getByRole("menuitem", { name: "Открыть профиль" }),
+  ).toBeVisible();
+  await expect(own.getByRole("menuitem", { name: "Игнорировать" })).toHaveCount(
+    0,
+  );
+  // A click outside closes the menu.
+  await page.mouse.click(5, 5);
+  await expect(own).toHaveCount(0);
+});
+
+test("server-flagged words are shown, masked or hidden by the local filter", async ({
+  page,
+}) => {
+  await page.goto("/demo.html");
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const history = page.locator('[data-part="messages"]');
+  await expect(history).toContainText("t.me/freeskins");
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByLabel("Помеченные сообщения").selectOption("mask");
+  await expect(history).toContainText("Раздаю скины: **************");
+  await expect(history).not.toContainText("t.me/freeskins");
+  await page.getByLabel("Помеченные сообщения").selectOption("hide");
+  await expect(history).not.toContainText("Раздаю скины");
+  await page.getByLabel("Помеченные сообщения").selectOption("off");
+  await expect(history).toContainText("t.me/freeskins");
+});

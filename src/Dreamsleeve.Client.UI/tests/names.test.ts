@@ -69,9 +69,10 @@ describe("names", () => {
     const { chat, send } = ready();
     chat.configure({ streamerMode: true });
     expect(send).toHaveBeenLastCalledWith({
-      type: "nameSettings",
+      type: "displaySettings",
       nameMode: "display",
       streamerMode: true,
+      textFilter: "off",
     });
     chat.receive({
       ...snapshot,
@@ -175,5 +176,59 @@ describe("bridge contract", () => {
         }),
       ),
     ).not.toThrow();
+  });
+});
+
+describe("author menu and text filter", () => {
+  it("opens only in the active chat, closes on deactivate and before a panel", () => {
+    const { chat } = ready();
+    chat.openAuthorMenu("7", "Лидия", 10, 20);
+    expect(chat.store.getState().authorMenu).toBeNull();
+    chat.receive({ type: "activate" });
+    chat.openAuthorMenu("7", "Лидия", 10, 20);
+    expect(chat.store.getState().authorMenu).toEqual({
+      playerId: "7",
+      name: "Лидия",
+      x: 10,
+      y: 20,
+    });
+    chat.open("profile", "7");
+    expect(chat.store.getState().authorMenu).toBeNull();
+    expect(chat.store.getState().selectedPlayer).toBe("7");
+    chat.openAuthorMenu("7", "Лидия", 10, 20);
+    chat.receive({ type: "deactivate" });
+    expect(chat.store.getState().authorMenu).toBeNull();
+  });
+
+  it("sends the text filter with the display settings and accepts filtered rows", () => {
+    const { chat, send } = ready();
+    chat.configure({ textFilter: "mask" });
+    expect(send).toHaveBeenLastCalledWith({
+      type: "displaySettings",
+      nameMode: "display",
+      streamerMode: false,
+      textFilter: "mask",
+    });
+    expect(settingsFrom({ textFilter: "stars" as never }).textFilter).toBe(
+      "off",
+    );
+    const event = parseHostEvent(
+      JSON.stringify({
+        type: "messages",
+        messages: [
+          { ...snapshot.messages[0], id: "12", text: "***", filtered: true },
+        ],
+      }),
+    );
+    chat.receive(event);
+    expect(chat.store.getState().messages.at(-1)?.filtered).toBe(true);
+    expect(() =>
+      parseHostEvent(
+        JSON.stringify({
+          type: "messages",
+          messages: [{ ...snapshot.messages[0], filtered: "yes" }],
+        }),
+      ),
+    ).toThrow();
   });
 });

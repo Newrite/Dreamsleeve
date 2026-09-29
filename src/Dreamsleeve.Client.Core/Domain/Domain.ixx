@@ -173,6 +173,15 @@ export namespace Domain
     bool operator==(const Player&) const = default;
   };
 
+  // UTF-8 byte range of a message text.
+  struct TextSpan
+  {
+    std::uint32_t start{};
+    std::uint32_t length{};
+
+    bool operator==(const TextSpan&) const = default;
+  };
+
   struct ChatMessage final
   {
     ChatMessageId   messageId{};
@@ -182,6 +191,8 @@ export namespace Domain
     MessageTime     sentAt{};
     // Published character name at sending; absent for old history and outside a character.
     std::optional<CharacterName> characterName{};
+    // Ranges the server marked without refusing the message; ascending, disjoint.
+    std::vector<TextSpan> flagged{};
 
     bool operator==(const ChatMessage&) const = default;
   };

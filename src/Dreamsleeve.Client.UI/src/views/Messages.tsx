@@ -58,6 +58,7 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
               }}
               data-channel={channel?.kind}
               data-source={m.source}
+              data-filtered={m.filtered || undefined}
             >
               {s.settings.timestamps && (
                 <time>
@@ -74,7 +75,28 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
                 <button
                   className={styles.author}
                   disabled={!s.active}
+                  aria-haspopup="menu"
                   onClick={() => chat.open("profile", m.author.id)}
+                  // Ultralight may not raise contextmenu: the right button opens it too.
+                  onMouseDown={(e) => {
+                    if (e.button !== 2) return;
+                    e.preventDefault();
+                    chat.openAuthorMenu(
+                      m.author.id,
+                      playerName(m.author, s.settings),
+                      e.clientX,
+                      e.clientY,
+                    );
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    chat.openAuthorMenu(
+                      m.author.id,
+                      playerName(m.author, s.settings),
+                      e.clientX,
+                      e.clientY,
+                    );
+                  }}
                 >
                   {playerName(m.author, s.settings)}:
                 </button>

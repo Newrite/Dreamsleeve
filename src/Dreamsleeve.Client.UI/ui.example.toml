@@ -27,6 +27,8 @@ fullColor = false
 nameMode = "display"
 # Local pseudonyms (aliases.toml) instead of every real name on every surface.
 streamerMode = false
+# Server-flagged ranges: off | mask (stars) | hide (whole message; own shown as a placeholder).
+textFilter = "off"
 locked = true
 x = 0.025
 y = 0.42

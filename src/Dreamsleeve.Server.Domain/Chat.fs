@@ -3,6 +3,10 @@ namespace Dreamsleeve.Server.Domain
 open System
 open System.Collections.Generic
 
+/// A range of message text in UTF-8 bytes, the unit of the wire string.
+[<Struct>]
+type TextSpan = { Start: int; Length: int }
+
 /// An immutable message with the author's profile at the time of sending.
 type ChatMessage =
     private {
@@ -12,6 +16,7 @@ type ChatMessage =
         characterName: CharacterName voption
         messageText: ChatMessageText
         sentAt: DateTimeOffset
+        flagged: TextSpan list
     }
 
     member this.MessageId = this.messageId
@@ -21,6 +26,9 @@ type ChatMessage =
     member this.CharacterName = this.characterName
     member this.MessageText = this.messageText
     member this.SentAt = this.sentAt
+    /// Ranges the server word list marks without refusing the message; ascending,
+    /// non-overlapping. Clients decide whether to show, mask or hide them.
+    member this.Flagged = this.flagged
 
 [<RequireQualifiedAccess>]
 module ChatMessage =
@@ -35,7 +43,11 @@ module ChatMessage =
             characterName = characterName
             messageText = messageText
             sentAt = sentAt.ToUniversalTime()
+            flagged = []
         }
+
+    /// Spans come from moderation of this exact text.
+    let withFlagged spans (message: ChatMessage) = { message with flagged = spans }
 
 /// A detached page of retained history, ordered by increasing message ID.
 type ChatHistoryPage = {

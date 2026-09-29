@@ -77,6 +77,8 @@ export namespace Dreamsleeve::Host::Bridge
     std::int64_t time{};
     std::string  source{"player"};
     UiPlayer     author;
+    // The text was masked or replaced by the local filter of flagged ranges.
+    bool filtered{};
   };
 
   struct SnapshotEvent
@@ -181,6 +183,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::string               playerId;
     std::string               nameMode;
     bool                      streamerMode{};
+    std::string               textFilter;
   };
 
   constexpr std::size_t MaxChatText     = 16000;
@@ -283,11 +286,14 @@ export namespace Dreamsleeve::Host::Bridge
       if (command.playerId.empty()) return std::unexpected{type + " requires playerId"};
       return command;
     }
-    if (type == "nameSettings")
+    if (type == "displaySettings")
     {
-      UiSettings names;
-      names.nameMode   = command.nameMode;
-      command.nameMode = Normalize(names).nameMode;
+      UiSettings display;
+      display.nameMode   = command.nameMode;
+      display.textFilter = command.textFilter;
+      display            = Normalize(display);
+      command.nameMode   = display.nameMode;
+      command.textFilter = display.textFilter;
       return command;
     }
     if (type == "close" || type == "signInSaved" || type == "signOut" || type == "forgetLogin" || type == "disconnect") return command;
@@ -550,6 +556,40 @@ export namespace Dreamsleeve::Host::Bridge
     return player;
   }
 
+  constexpr std::string_view HiddenOwnText = "[скрыто фильтром]";
+
+  // Each code point inside a flagged range becomes one star; whitespace stays so
+  // a masked phrase keeps its shape. Ranges were validated on code point bounds.
+  std::string MaskFlagged(std::string_view text, const std::vector<Domain::TextSpan>& spans)
+  {
+    std::string result;
+    result.reserve(text.size());
+    std::size_t at = 0;
+    for (const auto& span : spans)
+    {
+      result.append(text.substr(at, span.start - at));
+      for (std::size_t index = span.start; index < span.start + span.length; ++index)
+      {
+        const auto byte = static_cast<unsigned char>(text[index]);
+        if ((byte & 0xC0) == 0x80) continue;
+        result += byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r' ? static_cast<char>(byte) : '*';
+      }
+      at = span.start + span.length;
+    }
+    result.append(text.substr(at));
+    return result;
+  }
+
+  // What the local filter lets through: the text, a masked copy, or nothing.
+  // One's own hidden message stays as a placeholder so its pending row settles visibly.
+  std::optional<std::string> ShownText(const Domain::ChatMessage& message, const UiSettings& settings, bool own)
+  {
+    if (message.flagged.empty() || settings.textFilter == "off") return message.messageText;
+    if (settings.textFilter == "mask") return MaskFlagged(message.messageText, message.flagged);
+    if (own) return std::string{HiddenOwnText};
+    return std::nullopt;
+  }
+
   // The author is named from the snapshot taken at sending, never from the
   // character the player uses now.
   UiMessage ToUiMessage(const Domain::ChatMessage& message, Names& names, const UiSettings& settings)
@@ -560,6 +600,22 @@ export namespace Dreamsleeve::Host::Bridge
     result.text      = message.messageText;
     result.time      = Domain::ToUnixMilliseconds(message.sentAt);
     result.author    = ToUiAuthor(message.author, message.characterName, message.characterName.has_value(), names, settings);
+    return result;
+  }
+
+  // Chat projection with the local filter of server-flagged ranges applied.
+  std::optional<UiMessage> ToShownMessage(
+    const Domain::ChatMessage&      message,
+    Names&                          names,
+    const UiSettings&               settings,
+    std::optional<Domain::PlayerId> self)
+  {
+    const bool own  = self && message.author.playerId == *self;
+    auto       text = ShownText(message, settings, own);
+    if (!text) return std::nullopt;
+    auto result     = ToUiMessage(message, names, settings);
+    result.filtered = *text != message.messageText;
+    result.text     = std::move(*text);
     return result;
   }
 
