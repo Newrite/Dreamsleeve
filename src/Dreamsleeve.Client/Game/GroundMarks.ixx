@@ -106,10 +106,16 @@ namespace GroundMarks
   // One word for a death without a killer: drowning while swimming, a fall
   // otherwise. The author's client localizes the label; the server only checks
   // its length and dictionary.
+  // The label the server stores; readers see it as written, so it names what
+  // it holds: "Убийца: <name>" or "Причина смерти: <cause>". A console kill
+  // has no killer and no water either, so it reads as a fall.
+  constexpr std::string_view KillerPrefix = "Убийца: ";
+  constexpr std::string_view CausePrefix  = "Причина смерти: ";
+
   std::string CauseLabel(RE::PlayerCharacter* player)
   {
     auto* actorState = player->AsActorState();
-    return actorState && actorState->IsSwimming() ? "утопление" : "падение";
+    return std::string{CausePrefix} + (actorState && actorState->IsSwimming() ? "Утопление" : "Падение");
   }
 
   // Frame handler of the death notice. The first notice (dying) fixes the
@@ -126,11 +132,14 @@ namespace GroundMarks
     if (!placement) return;
     state.deathReported = true;
 
+    using Dreamsleeve::Utils::Text::CodePoints;
+    using Dreamsleeve::Utils::Text::Prefix;
     std::string label;
-    if (auto ref = killer.get()) label = Telemetry::RefName(ref.get()).value_or(std::string{});
+    if (auto ref = killer.get())
+      if (auto name = Telemetry::RefName(ref.get()))
+        // Untrusted text: the name is cut so the whole label fits the server limit.
+        label = std::string{KillerPrefix} + std::string{Prefix(*name, DeathLabelLimit - CodePoints(KillerPrefix))};
     if (label.empty()) label = CauseLabel(player);
-    // Untrusted text: bounded here, checked by the server.
-    label = std::string{Dreamsleeve::Utils::Text::Prefix(label, DeathLabelLimit)};
 
     if (auto sent = runtime.session.ReportDeath(runtime.app->Exchange(), label, *placement))
       logger::info("Death reported (dead={}) with label of {} bytes", dead, label.size());

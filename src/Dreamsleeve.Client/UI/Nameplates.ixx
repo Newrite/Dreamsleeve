@@ -214,6 +214,7 @@ namespace Nameplates
       out.SetMember("selectable", RE::GFxValue(false));
       out.SetMember("multiline", RE::GFxValue(wrap));
       out.SetMember("wordWrap", RE::GFxValue(wrap));
+      // Every text is centred: a name on its anchor, a bubble's lines inside the box.
       out.SetMember("autoSize", RE::GFxValue(wrap ? "left" : "center"));
       out.SetMember("embedFonts", RE::GFxValue(true));
       RE::GFxValue format;
@@ -221,7 +222,7 @@ namespace Nameplates
       format.SetMember("font", RE::GFxValue("$EverywhereFont"));
       format.SetMember("size", RE::GFxValue(static_cast<double>(size)));
       format.SetMember("color", RE::GFxValue(static_cast<double>(color & 0xFFFFFF)));
-      format.SetMember("align", RE::GFxValue(wrap ? "left" : "center"));
+      format.SetMember("align", RE::GFxValue("center"));
       out.Invoke("setNewTextFormat", nullptr, &format, 1);
       return true;
     }
@@ -325,6 +326,9 @@ namespace Nameplates
       const double textWidth = Number(bubble.text, "textWidth");
       bubble.width           = std::min(static_cast<double>(bubble.style.maxWidth), textWidth + 2 * BubblePadding + 2 * TextGutter);
       bubble.height          = textHeight + 2 * BubblePadding + 2 * TextGutter;
+      // Shrink the field to the measured lines so centred text sits in the box,
+      // not in the wide field it wrapped in; the extra pixel keeps the wrap.
+      bubble.text.SetMember("_width", RE::GFxValue(bubble.width - 2 * BubblePadding + 2 * TextGutter + 1));
       bubble.content         = content;
 
       bubble.clip.Invoke("clear", nullptr);
