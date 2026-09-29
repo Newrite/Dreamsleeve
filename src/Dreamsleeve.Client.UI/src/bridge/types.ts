@@ -94,6 +94,9 @@ export interface Settings {
   bubbleFontSize: number;
   bubbleMaxWidth: number;
   bubbleBackground: number;
+  combatHideFireflies: boolean;
+  combatHideNames: boolean;
+  combatHideBubbles: boolean;
   onlineView: "cards" | "list";
   fade: boolean;
   delay: number;

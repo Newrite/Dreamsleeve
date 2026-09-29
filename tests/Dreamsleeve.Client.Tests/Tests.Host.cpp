@@ -428,6 +428,9 @@ TEST_CASE("Older UI files keep bubble defaults and new bubble values are bounded
   CHECK(loaded->ui.chat.bubbleFontSize == defaults.bubbleFontSize);
   CHECK(loaded->ui.chat.bubbleMaxWidth == defaults.bubbleMaxWidth);
   CHECK(loaded->ui.chat.bubbleBackground == defaults.bubbleBackground);
+  CHECK_FALSE(loaded->ui.chat.combatHideFireflies);
+  CHECK_FALSE(loaded->ui.chat.combatHideNames);
+  CHECK_FALSE(loaded->ui.chat.combatHideBubbles);
   CHECK_FALSE(loaded->ui.chat.showFireflyNames);
 
   UiFile edited;
@@ -438,6 +441,10 @@ TEST_CASE("Older UI files keep bubble defaults and new bubble values are bounded
   edited.ui.chat.bubbleFontSize     = 20;
   edited.ui.chat.bubbleMaxWidth     = 400;
   edited.ui.chat.bubbleBackground   = 0.4;
+
+  edited.ui.chat.combatHideFireflies = true;
+  edited.ui.chat.combatHideNames     = true;
+  edited.ui.chat.combatHideBubbles   = true;
   REQUIRE(SaveUiFile(file.path, edited));
   auto saved = LoadUiFile(file.path);
   REQUIRE(saved);

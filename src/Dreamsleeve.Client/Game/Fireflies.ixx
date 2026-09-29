@@ -115,8 +115,14 @@ namespace Fireflies
     if (!runtime.app || !state.base) return;
 
     const auto& settings = runtime.app->Settings().client;
+    const auto& ui       = runtime.ui.ui.chat;
     auto*       player   = RE::PlayerCharacter::GetSingleton();
-    if (!settings.showFireflies || runtime.context != Runtime::GameContext::Playing || !Telemetry::PlayerReady() || !player)
+    // Combat hiding per surface. Hidden fireflies take names and bubbles with
+    // them, there is no other anchor; bubble timers keep running meanwhile.
+    const bool combat = player && player->IsInCombat();
+    if (
+      !settings.showFireflies || (combat && ui.combatHideFireflies) || runtime.context != Runtime::GameContext::Playing ||
+      !Telemetry::PlayerReady() || !player)
     {
       ClearAll();
       return;
@@ -131,7 +137,6 @@ namespace Fireflies
     const Domain::Position               origin{self.x, self.y, self.z};
     std::unordered_set<Domain::PlayerId> visible;
     Nameplates::Frame                    names;
-    const auto&                          ui = runtime.ui.ui.chat;
     names.style = {static_cast<float>(ui.bubbleFontSize), static_cast<float>(ui.bubbleMaxWidth), static_cast<float>(ui.bubbleBackground)};
     // Expired texts and those of players who left are dropped here, once per
     // frame; a message is never kept waiting for its author to appear.
@@ -171,8 +176,9 @@ namespace Fireflies
       // above which the bubble sits.
       Nameplates::Label label{.id = id, .nameSize = static_cast<float>(ui.fireflyNameFontSize)};
       // Same resolver as the web UI, so a pseudonym matches on both surfaces.
-      if (ui.showFireflyNames) label.name = runtime.session.PlayerNames().NameFor(id, remote.data, remote.characterName, ui);
-      if (ui.showBubbles)
+      if (ui.showFireflyNames && !(combat && ui.combatHideNames))
+        label.name = runtime.session.PlayerNames().NameFor(id, remote.data, remote.characterName, ui);
+      if (ui.showBubbles && !(combat && ui.combatHideBubbles))
         if (const auto active = runtime.bubbles.Find(id, now, ui))
         {
           label.bubble      = std::string{active->text};

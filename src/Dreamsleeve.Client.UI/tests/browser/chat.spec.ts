@@ -681,6 +681,31 @@ test("channel selector uses the active theme instead of native appearance", asyn
   }
 });
 
+test("combat preferences save and restore", async ({ page }) => {
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+    await page
+      .getByRole("button", { name: "Открыть меню Dreamsleeve" })
+      .click();
+    await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  };
+  const boxes = [
+    "Скрывать светлячки",
+    "Скрывать имена",
+    "Скрывать сообщения над игроками",
+  ];
+  await openSettings();
+  for (const name of boxes)
+    await expect(page.getByLabel(name, { exact: true })).not.toBeChecked();
+  for (const name of boxes)
+    await page.getByLabel(name, { exact: true }).check();
+  await page.getByRole("button", { name: "Сохранить настройки" }).click();
+  await page.reload();
+  await openSettings();
+  for (const name of boxes)
+    await expect(page.getByLabel(name, { exact: true })).toBeChecked();
+});
+
 test("firefly name preferences save and restore", async ({ page }) => {
   const openSettings = async () => {
     await page.getByRole("button", { name: "Открыть чат · Enter" }).click();

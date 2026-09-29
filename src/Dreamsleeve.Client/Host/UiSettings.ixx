@@ -53,6 +53,10 @@ export namespace Dreamsleeve::Host
     double      height{390.0};
     std::string activationKey{"Enter"};
     std::string theme{"skyrim"};
+    // Hidden while the player is in combat, each surface on its own.
+    bool combatHideFireflies{false};
+    bool combatHideNames{false};
+    bool combatHideBubbles{false};
 
     bool operator==(const UiSettings&) const = default;
   };

@@ -23,9 +23,14 @@ export interface PendingMessage {
   status: "sending" | "failed" | "unknown";
   error?: string;
   messageId?: string;
+  since?: number; // when the row became failed or unknown
 }
 export const sending = (state: ChatState) =>
   Object.values(state.pending).some((p) => p.status === "sending");
+// A request without a reply becomes "unknown" after this long; a failed or
+// unknown row leaves the passive HUD after the same time, while an active chat
+// keeps it until the player retries or dismisses.
+export const PENDING_TIMEOUT = 15000;
 export interface ChatState {
   channels: Channel[];
   messages: Message[];
@@ -241,7 +246,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
           const pending = Object.fromEntries(
             Object.entries(state.pending).map(([id, p]) => [
               id,
-              p.status === "sending" ? { ...p, status: "unknown" as const } : p,
+              p.status === "sending"
+                ? { ...p, status: "unknown" as const, since: now() }
+                : p,
             ]),
           );
           store.setState({ pending });
@@ -272,6 +279,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
             ...item,
             status: "failed",
             error: event.error,
+            since: now(),
           };
         } else if (state.messages.some((m) => m.id === event.messageId)) {
           delete pending[event.requestId];
@@ -345,6 +353,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
             time: now(),
             status: "failed",
             error: "Команда не принята приложением",
+            since: now(),
           },
         },
         drafts: { ...s.drafts, [s.target]: "" },
@@ -404,13 +413,21 @@ export function makeChat(send: Send, now = () => Date.now()) {
     store,
     expirePending() {
       const s = store.getState();
+      const at = now();
       const pending = Object.fromEntries(
-        Object.entries(s.pending).map(([id, p]) => [
-          id,
-          p.status === "sending" && now() - p.time >= 15000
-            ? { ...p, status: "unknown" as const }
-            : p,
-        ]),
+        Object.entries(s.pending)
+          .map(([id, p]): [string, PendingMessage] => [
+            id,
+            p.status === "sending" && at - p.time >= PENDING_TIMEOUT
+              ? { ...p, status: "unknown", since: at }
+              : p,
+          ])
+          .filter(
+            ([, p]) =>
+              s.active ||
+              p.status === "sending" ||
+              at - (p.since ?? p.time) < PENDING_TIMEOUT,
+          ),
       );
       store.setState({ pending });
     },

@@ -147,6 +147,24 @@ describe("settings", () => {
     });
     expect(settingsFrom({})).toEqual(defaults);
   });
+  it("combat hiding is off by default and accepts booleans only", () => {
+    expect(settingsFrom({ fontSize: 20 })).toMatchObject({
+      combatHideFireflies: false,
+      combatHideNames: false,
+      combatHideBubbles: false,
+    });
+    expect(
+      settingsFrom({
+        combatHideFireflies: true,
+        combatHideNames: "yes" as unknown as boolean,
+        combatHideBubbles: true,
+      }),
+    ).toMatchObject({
+      combatHideFireflies: true,
+      combatHideNames: false,
+      combatHideBubbles: true,
+    });
+  });
   it("keeps bubble defaults for settings saved before bubbles existed and clamps new values", () => {
     const old = settingsFrom({ fontSize: 20, showFireflyNames: false });
     expect(old.showBubbles).toBe(true);
@@ -240,6 +258,30 @@ it("keeps unknown delivery after timeout, accepts a late reply, and never retrie
   expect(send).toHaveBeenCalledTimes(2); // send + release focus
   chat.receive({ type: "sendResult", requestId: "1", messageId: "late" });
   chat.receive({ type: "messages", messages: [message("late")] });
+  expect(chat.store.getState().pending).toEqual({});
+});
+it("settled rows leave the passive HUD after the timeout but stay while the chat is active", () => {
+  let now = 0;
+  const send = vi.fn(() => true);
+  const chat = makeChat(send, () => now);
+  chat.receive(snapshot);
+  chat.setDraft("часто");
+  chat.submit();
+  now = 1000;
+  chat.receive({ type: "sendResult", requestId: "1", error: "Слишком часто" });
+  expect(chat.store.getState().pending["1"]).toMatchObject({
+    status: "failed",
+    since: 1000,
+  });
+  now = 15999;
+  chat.expirePending();
+  expect(chat.store.getState().pending["1"]).toBeDefined();
+  chat.store.setState({ active: true });
+  now = 40000;
+  chat.expirePending();
+  expect(chat.store.getState().pending["1"]).toBeDefined();
+  chat.store.setState({ active: false });
+  chat.expirePending();
   expect(chat.store.getState().pending).toEqual({});
 });
 it("a new identity cannot inherit pending rows, and snapshot reconciliation uses IDs", () => {

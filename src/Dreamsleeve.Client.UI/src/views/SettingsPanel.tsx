@@ -284,6 +284,30 @@ export function SettingsPanel({
           затухания окна чата. Только SE/AE.
         </p>
       </fieldset>
+      <fieldset className={styles.group}>
+        <legend>В бою</legend>
+        {(
+          [
+            ["combatHideFireflies", "Скрывать светлячки"],
+            ["combatHideNames", "Скрывать имена"],
+            ["combatHideBubbles", "Скрывать сообщения над игроками"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              checked={s[key]}
+              onChange={(e) => chat.configure({ [key]: e.target.checked })}
+            />
+          </label>
+        ))}
+        <p className={styles.muted}>
+          Пока ваш персонаж в бою. Без светлячка нет и имени с сообщением над
+          ним. Сообщения не теряются: они появятся после боя, если время показа
+          ещё не вышло. Применяется после сохранения.
+        </p>
+      </fieldset>
       <button className={styles.primary} onClick={chat.save}>
         Сохранить настройки
       </button>

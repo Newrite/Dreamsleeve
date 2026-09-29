@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { Chat, ChatState } from "../state/chat";
+import { PENDING_TIMEOUT, type Chat, type ChatState } from "../state/chat";
 import styles from "../styles/Chat.module.css";
 
 export function PendingMessages({
@@ -9,17 +9,23 @@ export function PendingMessages({
   chat: Chat;
   state: ChatState;
 }) {
+  // One timer for the nearest change: a request giving up, or a settled row
+  // leaving the passive HUD. While the chat is active settled rows stay.
   useEffect(() => {
     const deadlines = Object.values(s.pending)
-      .filter((p) => p.status === "sending")
-      .map((p) => p.time + 15000);
+      .filter((p) => p.status === "sending" || !s.active)
+      .map(
+        (p) =>
+          (p.status === "sending" ? p.time : (p.since ?? p.time)) +
+          PENDING_TIMEOUT,
+      );
     if (!deadlines.length) return;
     const timer = setTimeout(
       chat.expirePending,
       Math.max(0, Math.min(...deadlines) - Date.now()),
     );
     return () => clearTimeout(timer);
-  }, [chat, s.pending]);
+  }, [chat, s.pending, s.active]);
 
   return Object.entries(s.pending)
     .filter(([, p]) => s.filter === "all" || p.channelId === s.filter)
