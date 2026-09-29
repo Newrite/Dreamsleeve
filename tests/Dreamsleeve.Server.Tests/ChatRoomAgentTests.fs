@@ -52,9 +52,6 @@ let private announceAs (room: Agent<ChatRoomCommand>) (subscriber: Subscription<
 let private accepted requestId = function
     | ChatRoomEvent.Accepted(actual, message) -> equal requestId actual; message
     | other -> failwithf "Expected accepted publication: %A" other
-let private joinedSnapshot = function
-    | ChatRoomEvent.Joined snapshot -> snapshot
-    | other -> failwithf "Expected join snapshot: %A" other
 let private joined = function
     | ChatRoomEvent.Joined snapshot -> snapshot
     | other -> failwithf "Expected join snapshot: %A" other
@@ -410,8 +407,8 @@ let tests = testList "ChatRoomAgent" [
         let a, b = subscription 1UL alice, subscription 2UL bob
         do! post room (ChatRoomCommand.Join a)
         do! post room (ChatRoomCommand.Join b)
-        let! joined = receive aliceEvents
-        equal ChatChannelKind.System (joinedSnapshot joined).Kind
+        let! first = receive aliceEvents
+        equal ChatChannelKind.System (joined first).Kind
         let! _ = receive bobEvents
         do! post room (ChatRoomCommand.Announce { Text = ChatMessageText.create 256 "Рестарт" |> ok; Kind = AnnouncementKind.Admin })
         for events in [aliceEvents; bobEvents] do
@@ -428,19 +425,15 @@ let tests = testList "ChatRoomAgent" [
         equal (ValueSome a.Profile) message.Author
         equal (ValueSome AnnouncementSource.ThirdParty) (message.Announcement |> ValueOption.map _.Source)
         let! _ = receive bobEvents
-        // Chat is refused here: the system channel is read-only for players.
-        do! publish room a 3UL "chat"
-        let! refused = receive aliceEvents
-        match refused with
-        | ChatRoomEvent.Rejected(3UL, rejection) -> equal RequestRejectionCode.NotChannelMember rejection.Code
-        | other -> failwithf "Expected refusal: %A" other
         let! retained = history room
         equal 2 retained.Messages.Length
         check (hostEvents.Reader.Count = 0) "An announcement has no requester to answer."
         do! stop room
     })
 
-    case "a global channel refuses client announcements" (fun () -> task {
+    // Sessions route by channel kind, so an announcement reaching a global
+    // channel is a broken invariant: the owner stops instead of answering.
+    case "an announcement in a global channel stops its owner" (fun () -> task {
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
@@ -449,13 +442,8 @@ let tests = testList "ChatRoomAgent" [
         do! post room (ChatRoomCommand.Join alice)
         let! _ = receive events
         do! announceAs room alice 1UL "event"
-        let! refused = receive events
-        match refused with
-        | ChatRoomEvent.Rejected(1UL, rejection) -> equal RequestRejectionCode.NotChannelMember rejection.Code
-        | other -> failwithf "Expected refusal: %A" other
-        let! retained = history room
-        equal 0 retained.Messages.Length
-        do! stop room
+        let! _ = terminal room.Completion
+        check room.Completion.IsCanceled "A misrouted announcement was stored or answered."
     })
 
 ]

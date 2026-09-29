@@ -1,10 +1,12 @@
 import type { Announcement, Channel, Message, Player } from "../bridge/types";
+// The system channel, found by kind like in the game; the id is only data.
+export const SYSTEM_CHANNEL = "5";
 export const channels: Channel[] = [
   { id: "1", kind: "global", name: "Общий", writable: true },
   { id: "2", kind: "party", name: "Группа", writable: true },
   { id: "3", kind: "guild", name: "Гильдия", writable: true },
   { id: "4", kind: "whisper", name: "Личные", writable: true },
-  { id: "announcements", kind: "system", name: "Объявления", writable: false },
+  { id: SYSTEM_CHANNEL, kind: "system", name: "Объявления", writable: false },
 ];
 export const players: Player[] = [
   {
@@ -99,7 +101,7 @@ export const players: Player[] = [
 ];
 const lines = [
   [
-    "announcements",
+    SYSTEM_CHANNEL,
     "Добро пожаловать в Dreamsleeve. Пусть ваши дороги будут тёплыми, даже среди снегов.",
   ],
   ["1", "Кто-нибудь сейчас в Вайтране? Собираемся у ворот."],
@@ -108,7 +110,7 @@ const lines = [
   ["3", "Сегодня вечером собираемся у Высокого Хротгара."],
   ["1", "Здесь удивительно тихо без драконов."],
   [
-    "announcements",
+    SYSTEM_CHANNEL,
     "Напоминание: берегите своих спутников и уважайте других странников.",
   ],
 ];
@@ -117,7 +119,7 @@ export const messages: Message[] = lines.map(([channelId, text], i) => ({
   channelId,
   text,
   time: Date.now() - (lines.length - i) * 65000,
-  ...(channelId === "announcements"
+  ...(channelId === SYSTEM_CHANNEL
     ? {
         source: "system" as const,
         announcement: {
@@ -136,7 +138,7 @@ const announce = (
   author?: Player,
 ): Message => ({
   id,
-  channelId: "announcements",
+  channelId: SYSTEM_CHANNEL,
   source: "system",
   announcement,
   ...(author ? { author } : {}),
@@ -145,32 +147,32 @@ const announce = (
 });
 export const announcements: Message[] = [
   announce(
-    "a1",
+    "51",
     6.5,
     { origin: "server", kind: "event" },
     "Сегодня в 20:00 — турнир лучников у ворот Вайтрана.",
   ),
   announce(
-    "a2",
+    "52",
     5.5,
     { origin: "server", kind: "admin" },
     "Сервер перезапустится через 10 минут.",
   ),
   announce(
-    "a3",
+    "53",
     4.5,
     { origin: "server", kind: "periodic" },
     "Правила сервера — в меню ☰. Не забывайте сохраняться.",
   ),
   announce(
-    "a4",
+    "54",
     3.5,
     { origin: "trustedClient", kind: "announcement" },
     "Караван до Виндхельма выходит из Ривервуда.",
     players[2],
   ),
   announce(
-    "a5",
+    "55",
     2.5,
     { origin: "thirdParty", kind: "event", signature: "Carriage Tours" },
     "Карета до Солитьюда отправляется через 5 минут.",

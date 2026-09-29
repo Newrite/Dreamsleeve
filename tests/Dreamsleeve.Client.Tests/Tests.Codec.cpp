@@ -699,6 +699,12 @@ TEST_CASE("Announcements decode with unknown values kept, need an author unless 
   CHECK_FALSE(announced.Allows(Domain::ClientAnnouncementSource::ThirdParty));
   CHECK(announced.maxSignatureLength == 64);
 
+  // A server-wide kind appears once; a repeated one would also unbound the welcome.
+  auto* repeated = welcome.mutable_session_opened()->add_channels();
+  repeated->set_channel_id(3);
+  repeated->set_kind(P::CHAT_CHANNEL_KIND_GLOBAL);
+  CHECK_FALSE(codec.Decode(Bytes(welcome), W::Channel::Control));
+
   const W::ClientRequest request =
     PostAnnouncement{5, 2, "Пал", Domain::AnnouncementKind::Event, Domain::ClientAnnouncementSource::ThirdParty, "Мод"};
   CHECK(W::ProtocolCodec::RequestChannel(request) == W::Channel::Chat);
@@ -712,14 +718,6 @@ TEST_CASE("Announcements decode with unknown values kept, need an author unless 
   CHECK(wire.post_announcement().kind() == P::ANNOUNCEMENT_KIND_EVENT);
   CHECK(wire.post_announcement().source() == P::CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY);
   CHECK(wire.post_announcement().signature() == "Мод");
-  CHECK_FALSE(codec.Encode(
-    W::ClientRequest{
-        PostAnnouncement{6, 2, "", Domain::AnnouncementKind::Event}
-  }));
-  CHECK_FALSE(codec.Encode(
-    W::ClientRequest{
-        PostAnnouncement{7, 0, "text", Domain::AnnouncementKind::Event}
-  }));
 }
 
 TEST_SUITE_END();

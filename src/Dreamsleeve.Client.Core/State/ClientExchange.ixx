@@ -148,8 +148,6 @@ export namespace Dreamsleeve::Client
     bool              savedLogin{};
     std::string       savedUsername;
     std::uint32_t     authSequence{};  // Bumped per completion so an identical repeat is still observable.
-    // From the welcome of the current session; absent without a session.
-    std::optional<Domain::AnnouncementPolicy> announcements;
   };
 
   struct PasswordLogin
@@ -464,13 +462,6 @@ public:
         std::make_move_iterator(rejections.begin()),
         std::make_move_iterator(rejections.end()));
       return accepted;
-    }
-
-    // Owner only, with the welcome and on every session reset.
-    void PublishAnnouncementPolicy(std::optional<Domain::AnnouncementPolicy> policy)
-    {
-      std::lock_guard lock{mutex};
-      status.announcements = std::move(policy);
     }
 
     // Owner only; consumers observe phase through the same synchronized exchange.

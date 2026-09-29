@@ -143,14 +143,18 @@ PlayerSession подписывается на оба, открывается п�
   `ServerRuntimeMessage.Announce`). Полный mailbox канала отбрасывает объявление с
   предупреждением в логе, не останавливая runtime.
 - Клиентские: `PostAnnouncement{channel_id}` на Chat-канале ENet. Codec отклоняет
-  серверные виды, неизвестные значения, отсутствующую подпись `ThirdParty` и длину
-  (`ChatInput.AnnouncementText` = 500, `AnnouncementSignature` = 64); runtime отвечает
-  `INVALID_REQUEST` с полем `text`/`source`. PlayerSession проверяет, что канал системный
-  (иначе `CHANNEL_NOT_FOUND`), применяет `AnnouncementOptions.admit` (единая точка
+  серверные виды (правило домена `Announcement.clientMayRequest`), неизвестные значения,
+  отсутствующую подпись `ThirdParty` и длину (`AnnouncementText.create`,
+  `ChatInput.AnnouncementText` = 500, `AnnouncementSignature` = 64); runtime отвечает
+  `INVALID_REQUEST` с полем `text`/`source`. PlayerSession направляет запрос по виду
+  канала (не системный — `INVALID_REQUEST` с полем `channel_id`), применяет `AnnouncementOptions.admit` (единая точка
   будущих правил допуска источника; сейчас — `Enabled` источника, иначе
   `ANNOUNCEMENT_NOT_ALLOWED`), словарь к тексту и подписи и передаёт `ChatSubmission` с
   `Announcement` системному каналу; подтверждение — тем же `ChatAccepted`. `SendChat` в
-  системный канал получает `NOT_CHANNEL_MEMBER`.
+  системный канал получает `INVALID_REQUEST`. Владелец канала заново вид не проверяет:
+  это инвариант `Chat.append`, и нарушение останавливает владельца.
+- Лимиты истории и частоты системного канала проверяет `ChatRoomAgent.start`, расписание —
+  `AnnouncementOptions.resolve` при старте runtime; конфигурация их не дублирует.
 - Приветствие несёт каналы с видом и хвостом и `AnnouncementPolicy` (разрешённые
   источники и лимиты).
 - Имена `server` и `system` зарезервированы при регистрации (`Moderation.reservedUsername`).

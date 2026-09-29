@@ -16,8 +16,7 @@ import { defaults, settingsFrom } from "./settings";
 // Lines kept per channel: a busy channel never pushes another one out.
 export const HISTORY_LIMIT = 500;
 // Message IDs are sequential within a channel; a line is named by the pair.
-export const messageKey = (channelId: string, id: string) =>
-  `${channelId}:${id}`;
+const messageKey = (channelId: string, id: string) => `${channelId}:${id}`;
 export const keyOf = (m: Message) => messageKey(m.channelId, m.id);
 // The newest HISTORY_LIMIT lines of every channel, order kept.
 function retain(messages: Message[]) {
@@ -255,7 +254,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
             allowed(m, state.settings) &&
             (!state.active ||
               state.scrolled ||
-              !visible(m, state.filter, state.settings, state.channels))
+              !shows(m.channelId, state.filter, state.settings, state.channels))
           )
             unread[m.channelId] = Math.min(
               HISTORY_LIMIT,
@@ -384,7 +383,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
         });
         break;
       case "announcementResult": {
-        // Shown like a refused own line, expiring the same way.
+        // Shown like a refused own line, expiring the same way; like messages,
+        // only for a channel of the current view.
+        if (!state.channels.some((c) => c.id === event.channelId)) break;
         const pending = makeRoom(state.pending);
         if (Object.keys(pending).length >= PENDING_LIMIT) break;
         const at = now();

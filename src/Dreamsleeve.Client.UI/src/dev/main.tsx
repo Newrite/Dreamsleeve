@@ -13,7 +13,13 @@ import type {
 } from "../bridge/types";
 import { defaults, settingsFrom } from "../state/settings";
 import { App } from "../views/App";
-import { announcements, channels, messages, players } from "./fixture";
+import {
+  SYSTEM_CHANNEL,
+  announcements,
+  channels,
+  messages,
+  players,
+} from "./fixture";
 import "../styles/base.css";
 import "../themes/skyrim.css";
 import "./workshop.css";
@@ -304,7 +310,7 @@ const MOD = "Carriage Tours";
 function publish(system?: "server" | "thirdParty") {
   const message: Message = {
     id: String(nextId++),
-    channelId: system ? "announcements" : "1",
+    channelId: system ? SYSTEM_CHANNEL : "1",
     text:
       system === "server"
         ? "Объявление сервера: сегодня дороги открыты для всех странников."
@@ -386,7 +392,7 @@ function Workshop() {
           onClick={() =>
             chat.receive({
               type: "announcementResult",
-              channelId: "announcements",
+              channelId: SYSTEM_CHANNEL,
               source: MOD,
               text: "Карета до Рифтена отправляется через минуту.",
               error: "Слишком частые объявления",

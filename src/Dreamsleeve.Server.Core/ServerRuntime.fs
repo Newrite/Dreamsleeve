@@ -510,10 +510,9 @@ module ServerRuntime =
                 if int64 ordinary + int64 reserve > int64 Int32.MaxValue then "Mailbox capacity and control reserve overflow."
             match ServerConfig.validate config with Ok _ -> () | Error errors -> yield! errors
         ]
-        let scheduled = if isNull (box config.ChatInput) then Error [] else AnnouncementOptions.resolve config.ChatInput announcements
-        let errors = errors @ (match scheduled with Ok _ -> [] | Error failures -> failures)
-        match errors, ProtocolCodec.create config, scheduled with
-        | [], Ok codec, Ok entries ->
+        let scheduled = if errors.IsEmpty then AnnouncementOptions.resolve config.ChatInput announcements else Error errors
+        match scheduled, ProtocolCodec.create config with
+        | Ok entries, Ok codec ->
             let state = {
                 Table = SessionTable.create(); RouteScratch = Array.empty; Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
                 Moderation = moderation
@@ -526,4 +525,5 @@ module ServerRuntime =
             let agent = Agent.Start(agentOptions, handle options authenticator state, isControl = isControl)
             agent.TryPost ServerRuntimeMessage.Start |> ignore
             Ok agent
-        | errors, _, _ -> Error (if errors.IsEmpty then ["Cannot create runtime codec."] else errors)
+        | Error errors, _ -> Error errors
+        | Ok _, Error _ -> Error ["Cannot create runtime codec."]

@@ -26,11 +26,16 @@ namespace Dreamsleeve::Client::Wire::Detail
       result.players.push_back(std::move(*decoded));
     }
 
-    // Channel identity and kind rules are checked by the model on registration and merge.
+    // Server-wide kinds exist once each, which also bounds the welcome size.
+    // Channel identity and message rules are checked by the model on registration and merge.
+    bool global = false, system = false;
     for (const auto& channel : source.channels())
     {
       if (channel.channel_id() == 0) return Invalid("channel_id");
       if (channel.kind() != P::CHAT_CHANNEL_KIND_GLOBAL && channel.kind() != P::CHAT_CHANNEL_KIND_SYSTEM) return Invalid("kind");
+      auto& seen = channel.kind() == P::CHAT_CHANNEL_KIND_GLOBAL ? global : system;
+      if (seen) return Invalid("kind");
+      seen = true;
       if (static_cast<std::size_t>(channel.recent_messages_size()) > config.maxRecentMessages) return Invalid("initial_count");
 
       ChannelOpened opened{channel.channel_id(), static_cast<Domain::ChatChannelKind>(channel.kind())};

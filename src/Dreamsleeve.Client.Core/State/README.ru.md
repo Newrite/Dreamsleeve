@@ -201,9 +201,8 @@ PostAnnouncement (системный канал, текст, вид, заявл�
 пути SendChat: Chat-канал ENet, общий лимит ожидающих чат-запросов, `ChatConfirmation`
 при публикации, `ServerRejection` при отказе. Канал команды должен быть известен и
 подходящего вида: SendChat — `Global`, PostAnnouncement — `System`, иначе локальный
-`InvalidRequest`. Длину текста и подписи Core сверяет с `AnnouncementPolicy` из
-приветствия, допуск источника решает сервер. Политика текущей сессии публикуется в
-`ClientStatus::announcements` и сбрасывается при смене сессии.
+`InvalidRequest`. Разрешён ли источник и укладываются ли текст и подпись в лимиты, Core
+сверяет с `AnnouncementPolicy` из приветствия; отказ — локальный `InvalidRequest`.
 
 Канал знает свой вид (`RegisterChannel(id, capacity, kind)`, `ChatCacheState::kind`,
 `ChatCacheSnapshot::kind`). `ChatCache::Merge` отвергает объявление в не системном

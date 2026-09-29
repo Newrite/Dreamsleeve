@@ -976,7 +976,6 @@ test("announcement rows show origin and kind, and follow the placement setting",
   await expect(tournament).toHaveAttribute("data-kind", "event");
   await expect(tournament).toContainText("Сервер:");
   await expect(tournament).toContainText("Событие");
-  // A legacy system line without origin reads as a server announcement.
   await expect(
     rows.filter({ hasText: "Добро пожаловать в Dreamsleeve" }),
   ).toContainText("Сервер:");

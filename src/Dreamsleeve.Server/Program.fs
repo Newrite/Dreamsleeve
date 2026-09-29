@@ -49,7 +49,7 @@ let private waitForStop (chatInput: ChatInputLimits) (authentication: Agent<Auth
                     let parts = value.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)
                     if parts.Length = 2 && parts[0] = "announce" then
                         // An administrator notice for everyone online; it also enters the chat history.
-                        match AnnouncementOptions.serverText chatInput parts[1] with
+                        match Dreamsleeve.Server.Domain.ChatMessageText.create chatInput.MessageText parts[1] with
                         | Error _ -> printfn "Announcement text must have 1..%d characters without control characters." chatInput.MessageText
                         | Ok text ->
                             match runtime.TryPost(ServerRuntimeMessage.Announce { Text = text; Kind = Dreamsleeve.Server.Domain.AnnouncementKind.Admin }) with

@@ -357,6 +357,9 @@ describe("refused announcements of other mods", () => {
     chat.receive(refusal());
     chat.dismiss(Object.keys(chat.store.getState().pending)[0]);
     expect(chat.store.getState().pending).toEqual({});
+    // Like messages, a refusal of an unknown channel is not shown.
+    chat.receive({ ...refusal(), channelId: "404" } as HostEvent);
+    expect(chat.store.getState().pending).toEqual({});
   });
   it("keeps at most the limit, drops the oldest refusals first and never blocks sending", () => {
     let now = 0;

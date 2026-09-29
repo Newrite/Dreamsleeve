@@ -561,7 +561,7 @@ export namespace Dreamsleeve::Host::Bridge
   }
 
   // A mod label is already one checked line (by the server, or by the plugin
-  // API for a local refusal); the display keeps what parse.ts accepts.
+  // API for a local refusal); the UI and the log keep a bounded copy.
   constexpr std::size_t MaxLabelCodePoints = 64;
 
   std::string ModLabel(std::string_view value)
@@ -792,7 +792,6 @@ export namespace Dreamsleeve::Host::Bridge
         return "Сервер не принимает объявления от этого источника";
       case Code::InvalidRequest:
         if (message.starts_with("Message exceeds")) return "Сообщение слишком длинное";
-        if (message.starts_with("Announcement exceeds")) return "Объявление слишком длинное";
         break;
       default:
         break;

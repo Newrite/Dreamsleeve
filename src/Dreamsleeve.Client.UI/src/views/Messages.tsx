@@ -58,8 +58,8 @@ const MessageRow = memo(function MessageRow({
   channelName: string;
   channelKind: string | undefined;
   filtered: boolean;
-  origin: string; // announcement origin, empty for a player line
-  kind: string;
+  origin: Announcement["origin"] | undefined; // absent for a player line
+  kind: Announcement["kind"] | undefined;
   label: string;
   faded: boolean;
   idleOpacity: number;
@@ -79,8 +79,8 @@ const MessageRow = memo(function MessageRow({
       data-channel={channelKind}
       data-source={source}
       data-filtered={filtered || undefined}
-      data-origin={origin || undefined}
-      data-kind={kind || undefined}
+      data-origin={origin}
+      data-kind={kind}
     >
       {timestamps && (
         <time>
@@ -111,11 +111,9 @@ const MessageRow = memo(function MessageRow({
           {name}:
         </button>
       )}
-      {origin && (
+      {origin && kind && (
         <>
-          <span className={styles.kind}>
-            {kindLabels[kind as Announcement["kind"]]}
-          </span>{" "}
+          <span className={styles.kind}>{kindLabels[kind]}</span>{" "}
           <span className={styles.origin}>{label}:</span>
         </>
       )}
@@ -185,8 +183,8 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
               channelName={channel?.name ?? "Канал"}
               channelKind={channel?.kind}
               filtered={!!m.filtered}
-              origin={announcement?.origin ?? ""}
-              kind={announcement?.kind ?? ""}
+              origin={announcement?.origin}
+              kind={announcement?.kind}
               label={announcement ? originLabel(announcement, author) : ""}
               faded={faded(key)}
               idleOpacity={s.settings.idleOpacity}

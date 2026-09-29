@@ -69,7 +69,6 @@ public:
       opening     = Wire::OpenSession{*requestId, std::move(sessionTicket)};
       lastRequest = *requestId;
       serverName.clear();
-      exchange.PublishAnnouncementPolicy(std::nullopt);
       pendingChats.clear();
       pendingUpdates.clear();
       ResetMovement();
@@ -156,7 +155,6 @@ private:
     Result<void> Clear(SessionPhase value)
     {
       serverName.clear();
-      exchange.PublishAnnouncementPolicy(std::nullopt);
       pendingChats.clear();
       pendingUpdates.clear();
       ResetMovement();
@@ -266,7 +264,6 @@ private:
 
       serverName         = std::move(opened.serverName);
       announcementPolicy = std::move(opened.announcements);
-      exchange.PublishAnnouncementPolicy(announcementPolicy);
       phase = SessionPhase::Ready;
       for (const auto& message : earlyChat)
       {

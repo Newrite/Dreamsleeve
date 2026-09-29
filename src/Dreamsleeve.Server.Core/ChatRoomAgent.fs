@@ -85,8 +85,12 @@ module ChatRoomAgent =
             // Snapshot is admitted before any later publication from this owner.
             deliver state context subscription (ChatRoomEvent.Joined(Chat.snapshot state.Chat)) |> ignore
 
-    let private reject state context (request: ChatSubmission) message =
-        let rejection = { Code = RequestRejectionCode.NotChannelMember; Message = message; Field = "" }
+    let private reject state context (request: ChatSubmission) =
+        let rejection = {
+            Code = RequestRejectionCode.NotChannelMember
+            Message = "Player is not a member of this channel."
+            Field = ""
+        }
         respond state context request.ConnectionId request.ReplyTo
             (ChatRoomEvent.Rejected(request.RequestId, rejection))
 
@@ -159,9 +163,7 @@ module ChatRoomAgent =
 
     let private publish state context (request: ChatSubmission) =
         match state.Members.TryGetValue request.ConnectionId with
-        | false, _ -> reject state context request "Player is not a member of this channel."
-        | true, _ when request.Announcement.IsSome <> ChatChannelKind.carriesAnnouncements state.Chat.Kind ->
-            reject state context request "This channel does not accept this kind of message."
+        | false, _ -> reject state context request
         | true, author ->
             match admit state author.Profile.PlayerId request with
             | Error message ->
@@ -175,8 +177,8 @@ module ChatRoomAgent =
                     request.Announcement |> ValueOption.fold (fun message announcement -> ChatMessage.withAnnouncement announcement message) message
                 append state context create (ValueSome(struct (request.ConnectionId, request.RequestId)))
 
-    /// Only a system channel accepts it; anywhere else the append refuses and the
-    /// owner stops, as for any other broken invariant.
+    /// Only a system channel accepts it. The session routes by channel kind, so
+    /// a refused append here is a broken invariant and the owner stops.
     let private announce state context (announcement: ServerAnnouncement) =
         let create messageId sentAt =
             ChatMessage.serverAnnouncement messageId state.Chat.ChannelId announcement.Kind announcement.Text sentAt

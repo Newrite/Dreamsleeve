@@ -62,16 +62,9 @@ module internal ChatCodec =
         | Ok channel, Ok text -> Ok(ClientCommand.SendChat(channel, text))
         | Error error, _ | _, Error error -> Error(ProtocolCodecFailure.InvalidDomain error)
 
-    // The text reuses the chat factory; its errors are renamed so the runtime
-    // can tell an announcement refusal from a chat one.
-    let private announcementText maxText raw =
-        ChatMessageText.create maxText raw
-        |> Result.mapError (function
-            | DomainError.InvalidText(_, error) -> DomainError.InvalidText("AnnouncementText", error)
-            | other -> other)
-
-    /// Server-only kinds and unknown numbers are refused before any owner sees
-    /// the request. A third-party request must name itself; the label is kept as sent.
+    /// Kinds the domain keeps for the server and unknown numbers are refused
+    /// before any owner sees the request. A third-party request must name
+    /// itself; the label is kept as sent.
     let decodeAnnouncement (limits: ChatInputLimits) (request: Dreamsleeve.Protocol.Chat.PostAnnouncement) =
         let requested =
             match request.Source with
@@ -80,15 +73,19 @@ module internal ChatCodec =
             | WireClientSource.Unspecified -> Error(ProtocolCodecFailure.InvalidPayload "source")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "source")
         let wanted =
-            match request.Kind with
-            | WireKind.Announcement -> Ok AnnouncementKind.Announcement
-            | WireKind.Event -> Ok AnnouncementKind.Event
-            | WireKind.Admin | WireKind.Periodic | WireKind.Unspecified -> Error(ProtocolCodecFailure.InvalidPayload "kind")
-            | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "kind")
+            let kind =
+                match request.Kind with
+                | WireKind.Announcement -> Some AnnouncementKind.Announcement
+                | WireKind.Event -> Some AnnouncementKind.Event
+                | WireKind.Admin -> Some AnnouncementKind.Admin
+                | WireKind.Periodic -> Some AnnouncementKind.Periodic
+                | _ -> None
+            match kind with
+            | Some kind when Announcement.clientMayRequest kind -> Ok kind
+            | Some _ | None -> Error(ProtocolCodecFailure.InvalidPayload "kind")
         let signature origin =
             match origin, request.Signature with
             | ClientAnnouncementSource.TrustedClient, "" -> Ok ValueNone
-            | ClientAnnouncementSource.ThirdParty, "" -> Error(ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("AnnouncementSignature", TextError.Missing)))
             | _, raw ->
                 AnnouncementSignature.create limits.AnnouncementSignature raw
                 |> Result.map ValueSome
@@ -97,7 +94,7 @@ module internal ChatCodec =
         wanted |> Result.bind (fun announcementKind ->
         signature origin |> Result.bind (fun label ->
         ChatChannelId.create request.ChannelId |> Result.mapError ProtocolCodecFailure.InvalidDomain |> Result.bind (fun channelId ->
-        announcementText limits.AnnouncementText request.Text
+        AnnouncementText.create limits.AnnouncementText request.Text
         |> Result.mapError ProtocolCodecFailure.InvalidDomain
         |> Result.map (fun text ->
             ClientCommand.PostAnnouncement

@@ -138,9 +138,9 @@ Added/Removed из модели. Полная история не копируе
   клиента в системный канал. Его enum `ClientAnnouncementSource` не содержит значения
   сервера. Ответ как у SendChat: автор получает `ChatPublished` со своим `request_id`,
   при отказе — `RequestRejected` на Chat-канале ENet (`ANNOUNCEMENT_NOT_ALLOWED`,
-  `TEXT_NOT_ALLOWED`, `RATE_LIMITED`, `CHANNEL_NOT_FOUND` для не системного канала,
-  `INVALID_REQUEST` с полем `text`/`source`/`kind`). `SendChat` в системный канал
-  получает `NOT_CHANNEL_MEMBER`.
+  `TEXT_NOT_ALLOWED`, `RATE_LIMITED`, `INVALID_REQUEST`: не системный канал — с полем
+  `channel_id`, длина — с полем `text`/`source`, серверный вид — без поля). `SendChat` в
+  системный канал тоже получает `INVALID_REQUEST`.
 - `SessionOpened.announcements = 7` (`AnnouncementPolicy`: разрешённые клиентские
   источники, лимиты текста и подписи в скалярах Unicode) обязателен; клиент по нему
   проверяет длины до отправки.

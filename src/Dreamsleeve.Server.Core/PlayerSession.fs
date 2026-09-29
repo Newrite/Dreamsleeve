@@ -304,7 +304,7 @@ module PlayerSession =
             elif kind.IsNone then
                 rejectChat options request state context requestId RequestRejectionCode.ChannelNotFound "Channel does not exist."
             elif ChatChannelKind.carriesAnnouncements kind.Value then
-                rejectChat options request state context requestId RequestRejectionCode.NotChannelMember "The system channel is read-only."
+                rejectChat options request state context requestId RequestRejectionCode.InvalidRequest "The system channel is read-only."
             elif state.Pending.Count >= options.MaxPendingChat then
                 rejectChat options request state context requestId RequestRejectionCode.Overloaded "Too many pending chat requests."
             elif not (Moderation.allows state.Moderation (ChatMessageText.value text)) then
@@ -342,7 +342,7 @@ module PlayerSession =
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
             elif ChatChannelKind.tryOfChannelId announcement.ChannelId <> Some ChatChannelKind.System then
-                refuse RequestRejectionCode.ChannelNotFound "Announcements are published only in the system channel." "channel_id"
+                refuse RequestRejectionCode.InvalidRequest "Announcements are published only in the system channel." "channel_id"
             else
                 match AnnouncementOptions.admit state.Announcements announcement with
                 | Error rejection -> send options request state context (ServerResponse.ChatRejected(requestId, rejection))

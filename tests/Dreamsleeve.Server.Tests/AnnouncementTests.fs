@@ -181,7 +181,6 @@ let tests = testList "Announcements" [
         Expect.equal (kinds (AnnouncementSchedule.due 70000L schedule)) [AnnouncementKind.Periodic] "periodic continues"
         for invalid in [entry "Chat" 0 0; entry "Admin" -1 0; entry "Admin" 0 5; { entry "Admin" 0 0 with Text = " " }] do
             Expect.isError (AnnouncementOptions.resolve config.ChatInput { AnnouncementOptions.defaults with Scheduled = [invalid] }) $"invalid {invalid}"
-        Expect.isError (AnnouncementOptions.resolve config.ChatInput { AnnouncementOptions.defaults with RateBurst = 0 }) "rate limit"
 
     testCase "old configuration keeps every source; the section and schedule load from TOML" <| fun _ ->
         let settings = load "[Server]\nPort = 9000\n" |> ok
@@ -205,7 +204,7 @@ let tests = testList "Announcements" [
         Expect.equal loaded.Scheduled [
             { Text = "Добро пожаловать"; Kind = "Periodic"; DelaySeconds = 0; IntervalSeconds = 600 }
             { Text = "Рестарт в полночь"; Kind = "Announcement"; DelaySeconds = 0; IntervalSeconds = 0 } ] "table array with defaults"
-        for invalid in ["[Announcements]\nTypo = 1\n"; "[[Announcements.Scheduled]]\nText = 'x'\nKind = 'Chat'\n"
+        for invalid in ["[Announcements]\nTypo = 1\n"
                         "[[Announcements.Scheduled]]\nText = 'x'\nColor = 'red'\n"; "[Announcements]\nScheduled = 'x'\n"
                         "[Announcements.ThirdParty]\nEnabled = 'yes'\n"; "[Server.ChatInput]\nAnnouncementSignature = 129\n"] do
             Expect.isError (load invalid) $"invalid: {invalid}"

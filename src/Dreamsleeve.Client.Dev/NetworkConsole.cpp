@@ -179,9 +179,6 @@ namespace
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.status.phase) << '\n';
     if (!output.status.serverName.empty()) console << "server=" << output.status.serverName << '\n';
-    if (output.status.announcements)
-      console << "announcements sources=" << output.status.announcements->allowedSources.size()
-              << " text<=" << output.status.announcements->maxTextLength << '\n';
     if (output.status.authenticating)
       console << "auth=Pending\n";
     else

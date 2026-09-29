@@ -256,10 +256,10 @@ let tests = testList "PlayerSession" [
         withAnnouncements AnnouncementOptions.defaults (fun fixture -> task {
             let! _ = ready fixture
             do! post fixture.Player (PlayerSessionMessage.SendChat(2UL, systemId, ChatMessageText.create 2000 "hello" |> ok))
-            do! announcementRefused fixture 2UL RequestRejectionCode.NotChannelMember ""
+            do! announcementRefused fixture 2UL RequestRejectionCode.InvalidRequest ""
             let misrouted = { announcementRequest "Игрок пал" "DeathMod" with ChannelId = globalId }
             do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(3UL, misrouted))
-            do! announcementRefused fixture 3UL RequestRejectionCode.ChannelNotFound "channel_id"
+            do! announcementRefused fixture 3UL RequestRejectionCode.InvalidRequest "channel_id"
         }))
 
     case "word list refuses chat text before the channel sees it" (fun () ->

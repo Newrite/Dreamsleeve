@@ -79,25 +79,16 @@ module AnnouncementOptions =
         | "periodic" -> Some AnnouncementKind.Periodic
         | _ -> None
 
-    /// Server text uses the chat limit; it is authored by the administrator.
-    let serverText (limits: ChatInputLimits) raw =
-        ChatMessageText.create limits.MessageText raw
-
-    /// Validates the section and resolves the schedule once, before startup.
+    /// Resolves the schedule once, at runtime start. Server text has the chat
+    /// limit; the channel limits are checked by the channel owner itself.
     let resolve (limits: ChatInputLimits) options : Result<(ServerAnnouncement * ScheduledAnnouncement) list, string list> =
         if isNull (box options) || isNull (box options.TrustedClient) || isNull (box options.ThirdParty) || isNull (box options.Scheduled) then
             Error ["Announcements sections cannot be null."]
         else
-            let mutable errors = [
-                if options.HistoryCapacity < 1 then "Announcements.HistoryCapacity must be positive."
-                if options.RateBurst < 1 then "Announcements.RateBurst must be positive."
-                if options.RateRefillMs < 1 then "Announcements.RateRefillMs must be positive."
-                if options.DuplicateWindowMs < 0 then "Announcements.DuplicateWindowMs must be nonnegative."
-            ]
             let entries =
                 options.Scheduled |> List.mapi (fun index entry ->
                     let name = $"Announcements.Scheduled[{index}]"
-                    match serverText limits entry.Text, parseKind entry.Kind with
+                    match ChatMessageText.create limits.MessageText entry.Text, parseKind entry.Kind with
                     | Error _, _ -> Error $"{name}.Text must be nonempty text of at most {limits.MessageText} characters."
                     | _, None -> Error $"{name}.Kind must be Announcement, Event, Admin or Periodic."
                     | Ok _, Some _ when entry.DelaySeconds < 0 || entry.IntervalSeconds < 0 ->
@@ -105,10 +96,7 @@ module AnnouncementOptions =
                     | Ok _, Some _ when entry.IntervalSeconds > 0 && entry.IntervalSeconds < 10 ->
                         Error $"{name}.IntervalSeconds must be 0 (once) or at least 10."
                     | Ok text, Some kind -> Ok({ Text = text; Kind = kind }, entry))
-            for entry in entries do
-                match entry with
-                | Error error -> errors <- errors @ [error]
-                | Ok _ -> ()
+            let errors = entries |> List.choose (function Error error -> Some error | Ok _ -> None)
             if errors.IsEmpty then Ok(entries |> List.choose (function Ok entry -> Some entry | Error _ -> None))
             else Error errors
 

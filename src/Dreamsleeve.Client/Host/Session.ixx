@@ -136,7 +136,6 @@ public:
     {
       const auto system = ChannelOf(Domain::ChatChannelKind::System);
       if (!Ready() || !system) return Announcements::Result::NotConnected;
-      if (pendingAnnouncements.size() >= MaxPendingAnnouncements) return Announcements::Result::Busy;
       const auto requestId = exchange.NextRequestId();
       if (!requestId) return Announcements::Result::Failed;
 
@@ -146,14 +145,10 @@ public:
           Dreamsleeve::Client::
             PostAnnouncement{*requestId, *system, std::move(request.text), request.kind, request.source, std::move(request.signature)}
       });
+      if (posted == CommandPostResult::Closed) return Announcements::Result::NotConnected;
       if (posted != CommandPostResult::Queued) return Announcements::Result::Busy;
       pendingAnnouncements.emplace(*requestId, std::move(pending));
       return Announcements::Result::Queued;
-    }
-
-    std::size_t PendingAnnouncementCount() const noexcept
-    {
-      return pendingAnnouncements.size();
     }
 
     bool Ready() const noexcept
@@ -206,8 +201,6 @@ private:
       std::string   text;
       std::uint64_t generation{};
     };
-
-    static constexpr std::size_t MaxPendingAnnouncements = 32;
 
     template <class Event>
     void Emit(Frame& frame, const Event& event)
@@ -276,8 +269,7 @@ private:
       std::erase_if(pendingChats, [&](const auto& entry) { return entry.second.generation != generation; });
       std::erase_if(pendingAnnouncements, [&](const auto& entry) {
         if (entry.second.generation == generation) return false;
-        frame.announcementResults.push_back(
-          {entry.second.signature, entry.second.text, Announcements::Result::Failed, "Доставка неизвестна: сессия сменилась"});
+        Finish(frame, entry.second, Announcements::Result::Failed, "Доставка неизвестна: сессия сменилась");
         return true;
       });
       frame.playersChanged = false;
@@ -402,12 +394,9 @@ private:
       return Announcements::Result::Failed;
     }
 
-    // Settles a plugin API request; a refusal also becomes a failed UI row.
-    bool Settle(Frame& frame, std::uint64_t requestId, Announcements::Result result, std::string reason)
+    // Reports a plugin API request; a refusal also becomes a failed UI row.
+    void Finish(Frame& frame, PendingAnnouncement pending, Announcements::Result result, std::string reason)
     {
-      const auto found = pendingAnnouncements.find(requestId);
-      if (found == pendingAnnouncements.end()) return false;
-      auto& pending = found->second;
       if (result != Announcements::Result::Published)
         Emit(
           frame,
@@ -418,7 +407,15 @@ private:
               .error     = Bridge::ClipError(reason)
           });
       frame.announcementResults.push_back({std::move(pending.signature), std::move(pending.text), result, std::move(reason)});
+    }
+
+    bool Settle(Frame& frame, std::uint64_t requestId, Announcements::Result result, std::string reason)
+    {
+      const auto found = pendingAnnouncements.find(requestId);
+      if (found == pendingAnnouncements.end()) return false;
+      auto pending = std::move(found->second);
       pendingAnnouncements.erase(found);
+      Finish(frame, std::move(pending), result, std::move(reason));
       return true;
     }
 

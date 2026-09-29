@@ -169,7 +169,7 @@ module Configuration =
         if isNull (box config.Server) || isNull (box config.Runtime) || isNull (box config.Database) || isNull (box config.Authentication) || isNull (box config.Logging)
            || isNull (box config.Server.ChatInput) || isNull (box config.Server.PlayerInput) || isNull (box config.Runtime.Player)
            || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
-           || isNull (box config.Authentication.Service) || isNull (box config.Moderation) then
+           || isNull (box config.Authentication.Service) || isNull (box config.Moderation) || isNull (box config.Announcements) then
             Error "Configuration sections cannot be null."
         elif not (Single.IsFinite config.Runtime.Presence.VisibilityDistance) || config.Runtime.Presence.VisibilityDistance < 0.0f then
             Error "Presence.VisibilityDistance must be finite and non-negative."
@@ -177,9 +177,8 @@ module Configuration =
             Error "Runtime.MaxSessions cannot exceed Server.PeerLimit."
         elif config.Runtime.MaxSessions > config.Server.MaxInitialPlayers then
             Error "Server.MaxInitialPlayers must include every admitted session."
-        elif config.Runtime.Chat.HistoryCapacity > config.Server.MaxRecentMessages
-             || (not (isNull (box config.Announcements)) && config.Announcements.HistoryCapacity > config.Server.MaxRecentMessages) then
-            Error "Server.MaxRecentMessages must include the retained chat and announcement histories."
+        elif config.Runtime.Chat.HistoryCapacity > config.Server.MaxRecentMessages then
+            Error "Server.MaxRecentMessages must include the retained chat history."
         elif String.IsNullOrWhiteSpace config.Database.DatabasePath
              || config.Database.BusyTimeoutSeconds < 1 || config.Database.BusyTimeoutSeconds > 30 then
             Error "Database path must be nonempty and busy timeout 1..30 seconds."
@@ -191,8 +190,6 @@ module Configuration =
             Error "Moderation.RulesPath must be set when moderation is enabled."
         elif not (AuthService.validate config.Authentication.Service).IsEmpty then
             Error (String.concat " " (AuthService.validate config.Authentication.Service))
-        elif isNull (box config.Announcements) then
-            Error "Configuration sections cannot be null."
         else
             match Uri.TryCreate(config.Authentication.ListenUrl, UriKind.Absolute) with
             | false, _ -> Error "Authentication.ListenUrl must be an absolute HTTP(S) URL."
@@ -207,7 +204,6 @@ module Configuration =
             | true, _ ->
                 ServerLogging.validate config.Logging
                 |> Result.bind (fun () -> ServerConfig.validate config.Server |> Result.mapError (String.concat " "))
-                |> Result.bind (fun _ -> AnnouncementOptions.resolve config.Server.ChatInput config.Announcements |> Result.mapError (String.concat " "))
                 |> Result.map (fun _ -> config)
 
     [<Literal>]

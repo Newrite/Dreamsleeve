@@ -219,7 +219,6 @@ TEST_CASE("Plugin API announcements settle by request ID and refusals reach the 
 
   CHECK(fixture.session.PostAnnouncement(*fixture.exchange, Request("Игрок пал")) == Result::Queued);
   const auto published = fixture.TakeRequest();
-  CHECK(fixture.session.PendingAnnouncementCount() == 1);
   auto accepted   = MakeAnnouncement(20, Domain::AnnouncementSource::ThirdParty, Domain::AnnouncementKind::Event, "DeathMod");
   accepted.author = Domain::PlayerData{1, "user1", "Alice"};
   REQUIRE(fixture.model.Apply(fixture.model.Generation(), ChatMessagesReceived{SystemChannel, {accepted}}));
@@ -265,9 +264,10 @@ TEST_CASE("Plugin API announcements settle by request ID and refusals reach the 
   CHECK(fixture.frame.announcementResults[0].result == Result::Busy);
   CHECK(fixture.Events("announcementResult").size() == 1);
 
-  // A new session cannot answer the previous one: the request settles as unknown.
+  // A new session cannot answer the previous one: the request settles as unknown,
+  // once, with a UI row like any other refusal.
   CHECK(fixture.session.PostAnnouncement(*fixture.exchange, Request("Потеряно")) == Result::Queued);
-  fixture.TakeRequest();
+  const auto lost = fixture.TakeRequest();
   fixture.model.ResetSession();
   REQUIRE(fixture.model.RegisterChannel(GlobalChannel, 16));
   REQUIRE(fixture.model.RegisterChannel(SystemChannel, 16, Domain::ChatChannelKind::System));
@@ -275,7 +275,10 @@ TEST_CASE("Plugin API announcements settle by request ID and refusals reach the 
   fixture.Process();
   REQUIRE(fixture.frame.announcementResults.size() == 1);
   CHECK(fixture.frame.announcementResults[0].result == Result::Failed);
-  CHECK(fixture.session.PendingAnnouncementCount() == 0);
+  CHECK(fixture.Events("announcementResult").size() == 1);
+  REQUIRE(fixture.exchange->PublishCommandFailure({fixture.model.Generation(), lost, CommandFailureCode::Busy}));
+  fixture.Publish();
+  CHECK(fixture.frame.announcementResults.empty());
 
   Session offline;
   CHECK(offline.PostAnnouncement(*fixture.exchange, Request("x")) == Result::NotConnected);

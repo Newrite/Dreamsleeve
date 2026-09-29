@@ -218,7 +218,7 @@ SKSE-адаптер вызывает Apply/Sample из хука `Main::Update`; 
 | C++ Domain / State | Игроки, ограниченный ChatCache, модель, StateUpdate, очереди и ClientExchange для одного потребителя |
 | Client.Dev | Общий ClientApplication, --config/--connect, консольный ввод пароля и отдельное синтетическое демо |
 | Server | ENet runtime, HTTP auth, TOML-конфигурация, Serilog, PlayerSession, ChatRoomAgent, PresenceAgent и жизненный цикл |
-| Protobuf / codec | Protocol/*.proto v6: вход, полные PlayerInfo/история, чат, онлайн, телеметрия и отказы; C++ encode/decode и F# decode/encode реализованы |
+| Protobuf / codec | Protocol/*.proto v7: вход, полные PlayerInfo/история, чат и системный канал объявлений, онлайн, телеметрия и отказы; C++ encode/decode и F# decode/encode реализованы |
 | UI / Skyrim | Будущие адаптеры; в Core игровых зависимостей нет |
 | Persistence | SQLite accounts/profiles, Migrondi, SqlHydra; MemoryProfileStore только для изолированных тестов |
 
@@ -593,9 +593,8 @@ vitest defaults/типы, Playwright сохранение и восстанов�
 `RequestPluginAPI`, как у PrismaUI/TrueFlasksNG, callbacks итогов) и Papyrus
 `DreamsleeveClient` ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)); отказ виден в
 логе, строкой «Не отправлено» и как `APIResult`/callback/mod event. Каждое правило
-проверяется один раз: вход API — кодировка UTF-8 и однострочная подпись, Core — источник
-и длины по политике приветствия, сервер — остальное. Общие строковые функции клиента
-собраны в модуле `Dreamsleeve.Client.Utils` (`Utils::Text`).
+проверяется в одном слое (таблица в DreamsleeveModApiRu). Общие строковые функции
+клиента собраны в модуле `Dreamsleeve.Client.Utils` (`Utils::Text`).
 
 Проверки: 347 managed (Expecto; `dotnet test` завершается с кодом 0), 262 native
 (doctest), 53 vitest, 27 Playwright (Edge), `smoke_chat.py` — 27 проверок, из них 6 по

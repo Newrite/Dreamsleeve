@@ -18,9 +18,8 @@ export namespace ModApi
 
   namespace Api = Dreamsleeve::Host::Announcements;
 
-  constexpr std::string_view PapyrusClass    = "DreamsleeveClient";
-  constexpr std::string_view ResultModEvent  = "Dreamsleeve_AnnouncementResult";
-  constexpr std::size_t      MaxLoggedSource = 64;
+  constexpr std::string_view PapyrusClass   = "DreamsleeveClient";
+  constexpr std::string_view ResultModEvent = "Dreamsleeve_AnnouncementResult";
 
   static_assert(static_cast<std::uint32_t>(DreamsleeveAPI::APIResult::Queued) == static_cast<std::uint32_t>(Api::Result::Queued));
   static_assert(static_cast<std::uint32_t>(DreamsleeveAPI::APIResult::Rejected) == static_cast<std::uint32_t>(Api::Result::Rejected));
@@ -28,12 +27,6 @@ export namespace ModApi
 
   namespace Detail
   {
-
-    // A label that passed Post is one line; the log keeps a bounded copy.
-    std::string Loggable(std::string_view source)
-    {
-      return std::string{Dreamsleeve::Utils::Text::Prefix(source, MaxLoggedSource)};
-    }
 
     std::optional<Domain::AnnouncementKind> Kind(std::int32_t value)
     {
@@ -43,18 +36,18 @@ export namespace ModApi
     }
 
     // The one check of what a mod hands over: bytes become text only as
-    // well-formed UTF-8, and the label is one line. Lengths are Core's check
-    // against the server limits; words and blank text are the server's.
+    // well-formed UTF-8, and the label is one line. Emptiness and lengths are
+    // Core's check against the server policy; words and blank text the server's.
     Api::Result Post(std::string text, std::int32_t kind, std::string source)
     {
       using namespace Dreamsleeve::Utils::Text;
       const auto mapped = Kind(kind);
-      if (!mapped || text.empty() || !ValidUtf8(text) || source.empty() || !ValidUtf8(source) || HasControl(source))
+      if (!mapped || !ValidUtf8(text) || !ValidUtf8(source) || HasControl(source))
       {
         logger::warn("Announcement refused locally: invalid kind, text or source label");
         return Api::Result::Rejected;
       }
-      const auto label = Loggable(source);
+      const auto label = Dreamsleeve::Host::Bridge::ModLabel(source);
       const auto result =
         Runtime::RequestAnnouncement({std::move(text), *mapped, Domain::ClientAnnouncementSource::ThirdParty, std::move(source)});
       if (result == Api::Result::Queued)
@@ -160,7 +153,7 @@ export namespace ModApi
   // the lock, so a callback may register or remove callbacks.
   void Report(const Api::Outcome& outcome)
   {
-    const auto source = Detail::Loggable(outcome.signature);
+    const auto source = Dreamsleeve::Host::Bridge::ModLabel(outcome.signature);
     if (outcome.result == Api::Result::Published)
       logger::info("Announcement from {} published", source);
     else

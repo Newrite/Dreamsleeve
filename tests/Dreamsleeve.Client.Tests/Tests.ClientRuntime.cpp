@@ -1000,10 +1000,6 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
   fixture.Send(Welcome(fixture.Open()));
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
   const auto opened = fixture.Drain();
-  REQUIRE(opened.status.announcements);
-  CHECK(opened.status.announcements->Allows(Domain::ClientAnnouncementSource::ThirdParty));
-  CHECK_FALSE(opened.status.announcements->Allows(Domain::ClientAnnouncementSource::TrustedClient));
-  CHECK(opened.status.announcements->maxTextLength == 10);
   const auto& snapshot = std::get<ClientSnapshot>(opened.state.updates.front());
   REQUIRE(snapshot.chats.size() == 2);
   CHECK(std::ranges::count(snapshot.chats, Domain::ChatChannelKind::System, &ChatCacheSnapshot::kind) == 1);
@@ -1083,7 +1079,6 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
 
   REQUIRE(fixture.client->Disconnect());
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
-  CHECK_FALSE(fixture.Drain().status.announcements);
 }
 
 TEST_SUITE_END();

@@ -40,7 +40,6 @@ export function PendingMessages({
         className={styles.pendingMessage}
         data-part="pending-message"
         data-status={p.status}
-        data-external={p.external !== undefined || undefined}
       >
         <span className={styles.pendingText}>
           [{s.channels.find((c) => c.id === p.channelId)?.name ?? "Канал"}]{" "}

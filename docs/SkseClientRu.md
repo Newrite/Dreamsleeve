@@ -22,7 +22,7 @@
 | `UI/PrismaUI.ixx` | View, listener, доставка событий, focus/visibility |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
 | `API/ModApi.ixx`, `API/DreamsleeveAPI.h` | API для других модов: интерфейс `IVDreamsleeve1` через экспорт `RequestPluginAPI` из `ModApi.ixx` (как PrismaUI и TrueFlasksNG), Papyrus `DreamsleeveClient`, callbacks итогов объявлений ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)) |
-| `Host/Bridge.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI, TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры, проверка объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
+| `Host/Bridge.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI, TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры, типы запроса и итога объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
 
 `Runtime::Get()` хранит единственный экземпляр приложения; getter не перемещает
 владение (прежний вариант возвращал `std::move` статического `unique_ptr` и
@@ -98,7 +98,7 @@ patch-site остаётся у трамплина CommonLib (`skse_patch_safety`
 | `TESDeathEvent`, `TESActivateEvent` | могут приходить с AI/скриптовых потоков | `Runtime::Post` → кадр |
 | PrismaUI: DOM ready, JS listener, console | PrismaUI 1.5.1 оборачивает каждый callback в `SKSE::GetTaskInterface()->AddTask`, т.е. главный поток (проверено по `src/API/API.cpp` framework) | прямой вызов `Host::Session`/`ClientApplication` |
 | Рендер SKSE Menu Framework | вне игрового потока | читает `MenuSnapshot` под mutex, действия — `Runtime::Post` |
-| API модов (`IVDreamsleeve1`, Papyrus) | любой поток | `Runtime::RequestAnnouncement`: проверка по копии состояния сессии под mutex и ограниченная очередь (32); отправка в Core — в кадре |
+| API модов (`IVDreamsleeve1`, Papyrus) | любой поток | `Runtime::RequestAnnouncement`: очередь (32) под mutex, пока сессия готова; отправка в Core — в кадре |
 
 Очередь уведомлений ограничена 64 записями; переполнение сбрасывается флагом, по
 которому кадр пересчитывает видимость из текущего набора меню.
@@ -279,8 +279,8 @@ reliable-снятие позиции; после загрузки отправл
 системный — `system`, «Объявления», только чтение) и передаёт у объявлений
 `announcement: {origin, kind, signature?}`. У серверных объявлений нет автора, у
 клиентских — игрок, чей клиент их отправил. Неизвестные источник и вид показываются как
-`thirdParty` и `announcement`: неизвестное не получает доверия сервера. Подпись мода перед
-мостом очищается от управляющих символов и обрезается до 64.
+`thirdParty` и `announcement`: неизвестное не получает доверия сервера. Подпись мода уже
+проверена (сервером или входом API) и перед мостом только обрезается до 64 символов.
 
 - Облачка над светлячками следуют только общему каналу и игроку-автору (`Session::Fresh`).
 - `sendChat` UI принимается только для канала вида `global`.
@@ -306,13 +306,10 @@ reliable-снятие позиции; после загрузки отправл
 неизвестное значение `announcementChannels` заменяется на `all`.
 
 API для других модов (C++ `IVDreamsleeve1` и Papyrus `DreamsleeveClient`) описан в
-[DreamsleeveModApiRu.md](DreamsleeveModApiRu.md). Каждая проверка делается один раз:
-`ModApi` на входе принимает текст и подпись только корректным UTF-8 (подпись — одной
-строкой, `Utils::Text`), `Runtime` ставит запрос в очередь при готовой сессии, Core
-сверяет источник и длины с политикой из приветствия, сервер проверяет остальное. Кадр
-после Drain отдаёт запросы `Session::PostAnnouncement`, который берёт `RequestId` и
+[DreamsleeveModApiRu.md](DreamsleeveModApiRu.md), там же — какое правило проверяет
+какой слой. Кадр после Drain отдаёт запросы `Session::PostAnnouncement`, который берёт `RequestId` и
 хранит соответствие до ответа. Итог (подтверждение, отказ сервера, локальный отказ Core или
-смена сессии) уходит в `ModApi::Report`: строка лога, callbacks, зарегистрированные
+смена сессии) проходит через `Session::Finish` и уходит в `ModApi::Report`: строка лога, callbacks, зарегистрированные
 плагинами через `AddAnnouncementResultCallback`, и mod event `Dreamsleeve_AnnouncementResult`;
 отказ дополнительно показывается строкой «Не отправлено» в системном канале (событие
 моста `announcementResult` с его `channelId`). Новых хуков игры API не добавляет.
@@ -426,7 +423,7 @@ drawing API (`beginFill`/`lineStyle`) и TextField с `wordWrap` на `$Everywhe
 
 Источник текста — `Host::Session::Frame::freshMessages`: только `ChatMessagesAdded`
 из дельты Core (подтверждённая публикация сервера), не снимок. Начальная история
-`SessionOpened.recent_messages`, снимок при reconnect и при пересоздании view
+каналов из `SessionOpened.channels`, снимок при reconnect и при пересоздании view
 (`ResetView`) в облачка не попадают: снимок задаёт нижнюю границу `messageId`,
 дельта принимает только большие ID, поэтому повтор события или страница истории
 тоже отбрасываются. Фильтр каналов: облачка следуют каналу вида `global`; сообщения
@@ -478,7 +475,7 @@ fade окна чата), применяются кнопкой сохранен�
 чередом: сообщение, пришедшее в бою, покажется после боя, если время показа не вышло.
 
 Проверено без игры: `Client.Host` — фильтр свежих сообщений (история, повтор, другой
-канал, автор 0, self, reset view), таймеры/замена/fade/без fade/prune, TOML
+канал, объявление без автора, self, reset view), таймеры/замена/fade/без fade/prune, TOML
 совместимость и границы; vitest — defaults и clamp; Playwright — сохранение и
 восстановление настроек блока. Ручная проверка в Skyrim остаётся обязательной:
 появление один раз, замена, истечение с fade и без, длинный текст/кириллица/HTML-подобный

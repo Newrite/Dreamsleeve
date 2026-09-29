@@ -332,6 +332,13 @@ module ChatMessageText =
         |> Result.map UMX.tag
 
 [<RequireQualifiedAccess>]
+module AnnouncementText =
+    /// Chat text under the announcement limit; its errors name AnnouncementText.
+    let create maxLength raw : Result<ChatMessageText, DomainError> =
+        PrimitiveValidation.text "AnnouncementText" maxLength id true PrimitiveValidation.unrestricted raw
+        |> Result.map UMX.tag
+
+[<RequireQualifiedAccess>]
 module ChatChannelId =
     let value (id: ChatChannelId) : uint64 = UMX.untag id
 

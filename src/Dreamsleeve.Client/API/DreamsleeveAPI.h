@@ -22,8 +22,6 @@
 namespace DreamsleeveAPI
 {
 
-  constexpr const auto DreamsleevePluginName = "DreamsleeveClient";
-
   // Available interface versions. Versions are append-only: a released
   // interface keeps its methods, their order and their signatures.
   enum class InterfaceVersion : std::uint8_t
@@ -44,8 +42,8 @@ namespace DreamsleeveAPI
   {
     Queued       = 0,  // Accepted locally; the outcome follows in the result callback.
     Published    = 1,  // The server published the announcement.
-    NotConnected = 2,  // No ready session, or it ended before the server replied.
-    Rejected     = 3,  // Refused; the callback reason tells why (synchronously: not UTF-8, an empty or multiline label, an unknown kind).
+    NotConnected = 2,  // No ready session; the request was not sent.
+    Rejected     = 3,  // Refused; the callback reason tells why (synchronously: not UTF-8, a multiline label, an unknown kind).
     Busy         = 4,  // A local queue is full; try later.
     RateLimited  = 5,  // Too frequent or repeated; the server limit is per player account.
     Failed       = 6   // Delivery unknown: the session changed or the request could not be encoded.

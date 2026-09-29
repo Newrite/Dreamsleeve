@@ -94,7 +94,7 @@ namespace Plugin
       return false;
     }
 
-    // Papyrus natives of DreamsleeveClient; the C++ interface is exported by Main.cpp.
+    // Papyrus natives of DreamsleeveClient; the C++ interface is exported by ModApi.
     ModApi::Register();
     SKSEMenu::RegisterSKSEMenu();
 
