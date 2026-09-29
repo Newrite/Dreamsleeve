@@ -86,11 +86,14 @@ export function OnlineList({
                 <td>
                   <button
                     className={styles.name}
+                    data-pseudonymous={p.pseudonymous || undefined}
                     onClick={() => openProfile(p.id)}
                     title={
                       real
                         ? `${real.displayName} @${real.username} · ${characterLine(p, settings)}`
-                        : playerName(p, settings)
+                        : p.pseudonymous
+                          ? `${playerName(p, settings)} · имя скрыто игроком`
+                          : playerName(p, settings)
                     }
                   >
                     <strong>

@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { makeChat } from "../src/state/chat";
 import { defaults, settingsFrom } from "../src/state/settings";
-import { characterLine, HIDDEN_NAME, playerName } from "../src/state/names";
+import {
+  characterLine,
+  HIDDEN_NAME,
+  playerName,
+  realNames,
+} from "../src/state/names";
+import { identityStatus } from "../src/state/identity";
 import { parseHostEvent } from "../src/bridge/parse";
 import type { Command, HostEvent, Player } from "../src/bridge/types";
 
@@ -191,6 +197,7 @@ describe("author menu and text filter", () => {
       name: "Лидия",
       x: 10,
       y: 20,
+      pseudonymous: false,
     });
     chat.open("profile", "7");
     expect(chat.store.getState().authorMenu).toBeNull();
@@ -230,5 +237,145 @@ describe("author menu and text filter", () => {
         }),
       ),
     ).toThrow();
+  });
+});
+
+describe("hidden identity", () => {
+  const hidden: Player = {
+    id: "9",
+    name: "Страж 2",
+    inCharacter: false,
+    displayName: "Страж 2",
+    username: "",
+    pseudonymous: true,
+  };
+  it("shows a pseudonymous player by the server pseudonym and no real names", () => {
+    expect(playerName(hidden, defaults)).toBe("Страж 2");
+    expect(realNames(hidden, defaults)).toBeUndefined();
+    expect(characterLine(hidden, defaults)).toBe("Имя скрыто игроком");
+    expect(realNames(lydia, defaults)?.username).toBe("lydia");
+    expect(() =>
+      parseHostEvent(
+        JSON.stringify({
+          type: "players",
+          players: [{ ...hidden, username: "leak" }],
+        }),
+      ),
+    ).toThrow();
+    expect(() =>
+      parseHostEvent(
+        JSON.stringify({
+          type: "players",
+          players: [{ ...hidden, character: "Leak" }],
+        }),
+      ),
+    ).toThrow();
+    expect(
+      parseHostEvent(JSON.stringify({ type: "players", players: [hidden] })),
+    ).toEqual({ type: "players", players: [hidden] });
+  });
+
+  it("describes the choice without claiming a hidden name before the server answers", () => {
+    expect(
+      identityStatus({ mode: "everywhere", pending: true }, "connected"),
+    ).toBe("Ожидание сервера…");
+    expect(
+      identityStatus(
+        { mode: "everywhere", pending: false, pseudonym: "Страж 2" },
+        "connected",
+      ),
+    ).toBe("Другие видят вас как „Страж 2“");
+    expect(
+      identityStatus(
+        { mode: "exceptGroundMarks", pending: false, pseudonym: "Страж 2" },
+        "connected",
+      ),
+    ).toBe("Другие видят вас как „Страж 2“; в метках на земле — ваше имя");
+    expect(
+      identityStatus({ mode: "everywhere", pending: false }, "opening"),
+    ).toBe("Ожидание сервера…");
+    expect(
+      identityStatus(
+        { mode: "exceptGroundMarks", pending: false },
+        "disconnected",
+      ),
+    ).toBe("Имя будет скрыто при следующем входе на сервер");
+    expect(identityStatus({ mode: "off", pending: false }, "connected")).toBe(
+      "Другие игроки видят ваше имя",
+    );
+  });
+
+  it("sends the choice and keeps the saved one until the server answers", () => {
+    const { chat, send } = ready();
+    chat.receive({ type: "connection", connected: true, phase: "connected" });
+    chat.setHideIdentity("exceptGroundMarks");
+    expect(send).toHaveBeenLastCalledWith({
+      type: "setIdentityVisibility",
+      hiding: "exceptGroundMarks",
+    });
+    expect(chat.store.getState().identity).toMatchObject({
+      mode: "exceptGroundMarks",
+      pending: true,
+    });
+    expect(chat.store.getState().settings.hideIdentity).toBe("off");
+    // One switch at a time.
+    chat.setHideIdentity("off");
+    expect(send).toHaveBeenCalledTimes(1);
+    chat.receive(
+      parseHostEvent(
+        JSON.stringify({
+          type: "identity",
+          mode: "exceptGroundMarks",
+          pending: false,
+          pseudonym: "Страж 2",
+        }),
+      ),
+    );
+    expect(chat.store.getState().identity.pseudonym).toBe("Страж 2");
+    expect(chat.store.getState().settings.hideIdentity).toBe(
+      "exceptGroundMarks",
+    );
+    // Choosing the current mode sends nothing.
+    chat.setHideIdentity("exceptGroundMarks");
+    expect(send).toHaveBeenCalledTimes(1);
+    // A refusal returns the choice to the server's state with the reason.
+    chat.setHideIdentity("off");
+    chat.receive({
+      type: "identity",
+      mode: "exceptGroundMarks",
+      pending: false,
+      pseudonym: "Страж 2",
+      error: "Слишком часто",
+    });
+    expect(chat.store.getState().identity).toEqual({
+      mode: "exceptGroundMarks",
+      pending: false,
+      pseudonym: "Страж 2",
+      error: "Слишком часто",
+    });
+    for (const mode of ["sometimes", true])
+      expect(() =>
+        parseHostEvent(
+          JSON.stringify({ type: "identity", mode, pending: false }),
+        ),
+      ).toThrow();
+  });
+
+  it("without a session only the next choice changes, without waiting", () => {
+    const send = vi.fn((_command: Command) => true);
+    const chat = makeChat(send);
+    chat.setHideIdentity("everywhere");
+    expect(chat.store.getState().identity.pending).toBe(false);
+    expect(send).toHaveBeenCalledWith({
+      type: "setIdentityVisibility",
+      hiding: "everywhere",
+    });
+    expect(
+      settingsFrom({ hideIdentity: "exceptGroundMarks" }).hideIdentity,
+    ).toBe("exceptGroundMarks");
+    expect(
+      settingsFrom({ hideIdentity: "sometimes" as never }).hideIdentity,
+    ).toBe("off");
+    expect(defaults.hideIdentity).toBe("off");
   });
 });

@@ -21,6 +21,8 @@ module DomainUMX =
     [<Measure>]
     type characterName
     [<Measure>]
+    type pseudonym
+    [<Measure>]
     type chatMessageText
     [<Measure>]
     type chatChannelName
@@ -61,6 +63,9 @@ type PlayerId = uint64<playerId>
 type Username = string<username>
 type DisplayName = string<displayName>
 type CharacterName = string<characterName>
+/// A name from the server dictionary, shown to other players instead of the
+/// real names of a player who hides them; never derived from a real name.
+type Pseudonym = string<pseudonym>
 type ChatMessageId = uint64<chatMessageId>
 type ChatMessageText = string<chatMessageText>
 type ChatChannelId = uint64<chatChannelId>
@@ -327,6 +332,39 @@ module CharacterName =
     let create maxLength raw : Result<CharacterName, DomainError> =
         PrimitiveValidation.text "CharacterName" maxLength id false PrimitiveValidation.unrestricted raw
         |> Result.map UMX.tag
+
+[<RequireQualifiedAccess>]
+module Pseudonym =
+    /// UTF-8 bytes of one dictionary entry, the same bound as the client's aliases.toml.
+    [<Literal>]
+    let MaxEntryBytes = 48
+
+    /// A numbered pseudonym adds a space and the number to its entry.
+    [<Literal>]
+    let MaxBytes = 64
+
+    let value (name: Pseudonym) : string = UMX.untag name
+
+    let private plain limit (source: string) =
+        if source.StartsWith ' ' || source.EndsWith ' ' then ValueSome TextError.InvalidFormat
+        elif source.Contains '<' || source.Contains '>' then ValueSome TextError.InvalidCharacters
+        elif Encoding.UTF8.GetByteCount source > limit then ValueSome (TextError.TooLong limit)
+        else ValueNone
+
+    /// A dictionary entry: one line of plain text, 1..48 UTF-8 bytes, no
+    /// leading or trailing space, no control characters and no angle brackets.
+    /// Kept exactly as written; it is display text, never markup.
+    let create raw : Result<Pseudonym, DomainError> =
+        PrimitiveValidation.text "Pseudonym" MaxEntryBytes id false (plain MaxEntryBytes) raw |> Result.map UMX.tag
+
+    /// A pseudonym read back from storage, numbered or not: the same rules
+    /// with room for the number.
+    let restore raw : Result<Pseudonym, DomainError> =
+        PrimitiveValidation.text "Pseudonym" MaxBytes id false (plain MaxBytes) raw |> Result.map UMX.tag
+
+    /// "Страж 2": the short number that tells equal picks apart.
+    let numbered (number: int) (name: Pseudonym) : Pseudonym =
+        if number < 2 then name else UMX.tag $"{UMX.untag name} {number}"
 
 [<RequireQualifiedAccess>]
 module ChatMessageId =

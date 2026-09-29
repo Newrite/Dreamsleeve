@@ -74,6 +74,8 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
                 chat={chat}
                 settings={s.settings}
                 ignored={s.ignored}
+                identity={s.identity}
+                phase={s.connectionPhase}
               />
             </>
           )}

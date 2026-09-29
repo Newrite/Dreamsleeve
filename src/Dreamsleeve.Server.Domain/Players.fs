@@ -25,9 +25,58 @@ module PlayerData =
     let withUsername username (profile: PlayerData) =
         { profile with username = username }
 
+/// What other players see instead of the stored profile (DomainSpec §3.1):
+/// the profile after moderation placeholders, or a server pseudonym that
+/// replaces every real name. PlayerId is public either way and never changes.
+[<RequireQualifiedAccess>]
+type PublicIdentity =
+    | Profile of PlayerData
+    /// No username, display name or character name leaves with it.
+    | Pseudonymous of PlayerId * Pseudonym
+
+    member this.PlayerId =
+        match this with
+        | Profile profile -> profile.PlayerId
+        | Pseudonymous(playerId, _) -> playerId
+
+[<RequireQualifiedAccess>]
+module PublicIdentity =
+    let pseudonym (identity: PublicIdentity) =
+        match identity with
+        | PublicIdentity.Profile _ -> ValueNone
+        | PublicIdentity.Pseudonymous(_, name) -> ValueSome name
+
+    /// The pseudonym when there is one, else the profile itself.
+    let ofProfile (pseudonym: Pseudonym voption) (profile: PlayerData) =
+        match pseudonym with
+        | ValueSome name -> PublicIdentity.Pseudonymous(profile.PlayerId, name)
+        | ValueNone -> PublicIdentity.Profile profile
+
+/// Where other players see the pseudonym. Presence and chat always go together;
+/// ground marks either follow them or keep showing the real profile.
+[<RequireQualifiedAccess>]
+type HiddenIdentity =
+    | Shown
+    | Everywhere
+    | ExceptGroundMarks
+
+[<RequireQualifiedAccess>]
+module HiddenIdentity =
+    /// Presence and chat carry the pseudonym.
+    let isHidden hiding =
+        match hiding with
+        | HiddenIdentity.Shown -> false
+        | HiddenIdentity.Everywhere | HiddenIdentity.ExceptGroundMarks -> true
+
+    /// New ground marks carry the pseudonym too.
+    let coversGroundMarks hiding =
+        match hiding with
+        | HiddenIdentity.Everywhere -> true
+        | HiddenIdentity.Shown | HiddenIdentity.ExceptGroundMarks -> false
+
 /// A detached, immutable projection for other agents and outbound messages.
 type PlayerSnapshot = {
-    Data: PlayerData
+    Identity: PublicIdentity
     CharacterGeneration: uint64
     CharacterName: CharacterName voption
     /// The session withheld a character name that failed moderation;
@@ -181,7 +230,7 @@ module Player =
     /// Evaluate inside the owning agent. The resulting map shares no live
     /// dictionary and its values are immutable.
     let snapshot (player: Player) : PlayerSnapshot =
-        { Data = player.data
+        { Identity = PublicIdentity.Profile player.data
           CharacterGeneration = player.characterGeneration
           CharacterName = player.characterName
           CharacterNameWithheld = false
@@ -191,3 +240,13 @@ module Player =
           MovementSequence = player.movementSequence
           ViewRevision = 0UL
           ActorValues = actorValuesSnapshot player }
+
+[<RequireQualifiedAccess>]
+module PlayerSnapshot =
+    /// What others see while the player hides their names: the pseudonym
+    /// stands for the profile and no character name is published. Game
+    /// state, position and the PlayerId stay as they are.
+    let withPseudonym pseudonym (snapshot: PlayerSnapshot) =
+        { snapshot with
+            Identity = PublicIdentity.Pseudonymous(snapshot.Identity.PlayerId, pseudonym)
+            CharacterName = ValueNone }

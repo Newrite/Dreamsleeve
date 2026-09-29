@@ -18,6 +18,10 @@ namespace Dreamsleeve::Client::Wire::Detail
     SessionOpened result{requestId, source.self_player_id()};
     result.serverName    = source.server_name();
     result.announcements = Policy(source.announcements());
+    if (!P::HiddenIdentity_IsValid(source.hidden_identity()) || source.has_own_pseudonym() != (source.hidden_identity() != P::HIDDEN_IDENTITY_NONE))
+      return Invalid("hidden_identity");
+    if (source.has_own_pseudonym()) result.ownPseudonym = source.own_pseudonym();
+    result.hiding = static_cast<Domain::HiddenIdentity>(source.hidden_identity());
     for (const auto& player : source.players())
     {
       auto decoded = Player(config, player);
@@ -55,6 +59,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   void WriteSession(P::OpenSession& target, const OpenSession& value)
   {
     target.set_session_ticket(value.sessionTicket);
+    target.set_hidden_identity(static_cast<P::HiddenIdentity>(value.hiding));
   }
 
   bool ValidTicket(std::string_view ticket)

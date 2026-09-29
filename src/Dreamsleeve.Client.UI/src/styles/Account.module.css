@@ -56,6 +56,9 @@
 .status[data-failure="true"] {
   color: var(--error);
 }
+.error {
+  color: var(--error);
+}
 .muted {
   margin: 0;
   color: var(--muted);

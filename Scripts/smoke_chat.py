@@ -176,8 +176,12 @@ def smoke(args, log, directory: Path):
     secrets = [client_env["DREAMSLEEVE_PASSWORD"]]
     moderation = directory / "moderation.toml"
     moderation.write_text(tomli_w.dumps({"words": ["forbiddenword"], "exceptions": []}), encoding="utf-8")
-    config.write_text(tomli_w.dumps({
+    # One pseudonym makes the hidden player's name predictable.
+    pseudonyms = directory / "pseudonyms.toml"
+    pseudonyms.write_text(tomli_w.dumps({"version": 1, "names": ["Тень"]}), encoding="utf-8")
+    settings = {
         "Moderation": {"Enabled": True, "RulesPath": str(moderation)},
+        "Identity": {"AllowHiddenIdentity": True, "ToggleIntervalMs": 30000, "PseudonymsPath": str(pseudonyms)},
         "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
         "Authentication": {"ListenUrl": auth_url, "AllowInsecureLoopback": True, "AllowRegistration": True},
         "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},
@@ -191,7 +195,8 @@ def smoke(args, log, directory: Path):
         # a long death interval makes the second death refusal deterministic.
         "GroundMarks": {"MaxNotesPerPlayer": 2, "MaxPerIndexCell": 4, "DeathMinIntervalMs": 60000,
                         "RateBurst": 10, "DuplicateWindowMs": 0},
-    }), encoding="utf-8")
+    }
+    config.write_text(tomli_w.dumps(settings), encoding="utf-8")
 
     def stage(message: str):
         print("PASS " + message, flush=True)
@@ -204,12 +209,12 @@ def smoke(args, log, directory: Path):
         children.append(child)
         return child
 
-    def start_server(name: str):
-        server = start(name, ["dotnet", str(args.server), "--port", str(port), "--config", str(config)])
+    def start_server(name: str, path: Path = config):
+        server = start(name, ["dotnet", str(args.server), "--port", str(port), "--config", str(path)])
         server.wait_for(lambda lines: any(f"Listening on 127.0.0.1:{port}" in line for line in lines), args.timeout)
         return server
 
-    def start_client(name: str, username: str, display_name: str | None = None):
+    def start_client(name: str, username: str, display_name: str | None = None, hidden: str | None = None):
         if name == "alice":
             client_config = directory / "client settings.toml"
             client_config.write_text(tomli_w.dumps({"version": 1, "serverIp": "127.0.0.1", "serverPort": port,
@@ -219,6 +224,8 @@ def smoke(args, log, directory: Path):
             command = [str(args.client), "--connect", "127.0.0.1", str(port), username, "--auth-url", auth_url]
         if display_name is not None:
             command += ["--register", display_name]
+        if hidden:
+            command += [hidden]
         return start(name, command, client_env)
 
     def check_canceled_registration():
@@ -652,10 +659,118 @@ def smoke(args, log, directory: Path):
         mark_refused(bob, f"unmark {second_id}", 13)
         stage("only the author removes a mark; observers see the removal")
 
+        # Hidden names: the session opens hidden from the first packet; others see only the
+        # server pseudonym ("[1] Тень [pseudonymous]: ...", "mark ... author=Тень [pseudonymous] x=...").
+        real_names = ("Smoke Hidden", "smoke_hidden", "Secret Hero")
+        bob_start = bob.mark()
+        hidden = start_client("hidden", "smoke_hidden", "Smoke Hidden", hidden="--hide")
+        hidden.phase("Ready", args.timeout)
+        hidden.wait_for(lambda lines: "pseudonym=Тень" in lines, args.timeout, read=True)
+        hidden.wait_for(lambda lines: any(re.fullmatch(r"\d+: Smoke Hidden", line) for line in lines), args.timeout, read=True)
+        hidden_id = next(line.split(":", 1)[0] for line in hidden.output() if re.fullmatch(r"\d+: Smoke Hidden", line))
+        shown_as = wait_player(bob, hidden_id, lambda state: state["data"].get("pseudonymous"), args.timeout, bob_start)
+        check(shown_as["data"]["username"] == "" and shown_as["data"]["displayName"] == "Тень",
+              "The observer received something other than the pseudonym")
+        stage("a session opened hidden shows the pseudonym with an empty username online; its owner sees the real profile")
+
+        hidden_start, bob_start = hidden.mark(), bob.mark()
+        hidden.send("begin Secret Hero")
+        hidden.send("move " + json.dumps({"location": sample["location"]}))
+        wait_player(hidden, hidden_id, lambda state: state.get("characterName") == "Secret Hero" and state.get("location") is not None,
+                    args.timeout, hidden_start)
+        wait_player(bob, hidden_id, lambda state: state["characterGeneration"] >= 1 and state.get("location") is not None,
+                    args.timeout, bob_start)
+        hidden_message = f"smoke-hidden-{nonce}"
+        hidden.send("send " + hidden_message)
+        bob.wait_for(lambda lines: f"[1] Тень [pseudonymous]: {hidden_message}" in lines, args.timeout, bob_start, read=True)
+        hidden_note = f"smoke-hidden-note-{nonce}"
+        hidden.send("note " + hidden_note)
+        hidden_mark, _ = placed(hidden, hidden_start)
+        bob.wait_for(lambda lines: any(line.startswith(f"mark {hidden_mark} kind=1 author=Тень [pseudonymous] x=")
+                                       and line.endswith(f"character= text={hidden_note}") for line in lines),
+                     args.timeout, bob_start, read=True)
+        settle_reads(bob, args.timeout)
+        for name in real_names:
+            check(not any(name in line for line in bob.output(bob_start)), f"A real name reached the observer: {name}")
+        stage("while hidden the observer sees only the pseudonym in presence, the message and the mark")
+
+        hidden_start, bob_start = hidden.mark(), bob.mark()
+        hidden.send("hide off")
+        hidden.wait_for(lambda lines: any(re.fullmatch(r"request \d+ identity shown", line) for line in lines),
+                        args.timeout, hidden_start, read=True)
+        wait_player(bob, hidden_id, lambda state: not state["data"].get("pseudonymous")
+                    and state["data"]["displayName"] == "Smoke Hidden" and state.get("characterName") == "Secret Hero",
+                    args.timeout, bob_start)
+        late = start_client("late", "smoke_late", "Smoke Late")
+        late.phase("Ready", args.timeout)
+        late.wait_for(lambda lines: f"[1] Тень [pseudonymous]: {hidden_message}" in lines, args.timeout, read=True)
+        check(not any(hidden_message in line and "Smoke Hidden" in line for line in late.output()),
+              "History rewrote the author of a message sent while hidden")
+        stage("showing the names again reaches the observer; a message sent while hidden keeps its pseudonym in history")
+
+        mark_refused(hidden, "hide on", 10)
+        stage("a second switch within the interval is rate limited and changes nothing")
+        for child in (hidden, late):
+            child.send("quit")
+            child.process.wait(timeout=args.timeout)
+            check(child.process.returncode == 0, f"{child.name} exited unsuccessfully")
+        settle_reads(bob, args.timeout)
+
+        # Hidden everywhere except ground marks: presence and chat carry the pseudonym,
+        # the mark shows the real profile and character. Another index cell keeps room.
+        bob_start = bob.mark()
+        partial = start_client("partial", "smoke_partial", "Smoke Partial", hidden="--hide-except-marks")
+        partial.phase("Ready", args.timeout)
+        partial.wait_for(lambda lines: "pseudonym=Тень" in lines, args.timeout, read=True)
+        partial.wait_for(lambda lines: any(re.fullmatch(r"\d+: Smoke Partial", line) for line in lines), args.timeout, read=True)
+        partial_id = next(line.split(":", 1)[0] for line in partial.output() if re.fullmatch(r"\d+: Smoke Partial", line))
+        partial_start = partial.mark()
+        partial.send("begin Partial Hero")
+        nearby = copy.deepcopy(sample["location"])
+        nearby["position"]["X"] = -100
+        partial.send("move " + json.dumps({"location": nearby}))
+        wait_player(partial, partial_id, lambda state: state.get("location") is not None, args.timeout, partial_start)
+        wait_player(bob, partial_id, lambda state: state["data"].get("pseudonymous") and state["characterGeneration"] >= 1
+                    and not state.get("characterName"), args.timeout, bob_start)
+        partial_message = f"smoke-partial-{nonce}"
+        partial.send("send " + partial_message)
+        bob.wait_for(lambda lines: f"[1] Тень [pseudonymous]: {partial_message}" in lines, args.timeout, bob_start, read=True)
+        partial_note = f"smoke-partial-note-{nonce}"
+        partial.send("note " + partial_note)
+        partial_mark, _ = placed(partial, partial_start)
+        bob.wait_for(lambda lines: any(line.startswith(f"mark {partial_mark} kind=1 author=Smoke Partial x=")
+                                       and line.endswith(f"character=Partial Hero text={partial_note}") for line in lines),
+                     args.timeout, bob_start, read=True)
+        settle_reads(bob, args.timeout)
+        check(not any("Smoke Partial" in line and "mark " not in line for line in bob.output(bob_start)),
+              "The real name left the ground mark for presence or chat")
+        stage("hidden except marks: presence and chat show the pseudonym, the ground mark the real profile")
+        partial.send("quit")
+        partial.process.wait(timeout=args.timeout)
+        check(partial.process.returncode == 0, "partial exited unsuccessfully")
+        settle_reads(bob, args.timeout)
+
+        # The bounded state queue may replace an "offline" delta with a snapshot
+        # ("snapshot generation=G players=N" and "<id>: <name>" rows) that lacks the player.
+        def went_offline(player_id: str):
+            def gone(lines):
+                if f"offline {player_id}" in lines:
+                    return True
+                for index, line in enumerate(lines):
+                    if line.startswith("snapshot generation="):
+                        listed = lines[index + 1:]
+                        ends = next((at for at, row in enumerate(listed)
+                                     if not (re.fullmatch(r"\d+: .*", row) or row.startswith("player {"))), len(listed))
+                        rows = [row.split(":", 1)[0] for row in listed[:ends] if re.fullmatch(r"\d+: .*", row)]
+                        if player_id not in rows:
+                            return True
+                return False
+            return gone
+
         alice_start, bob_start = alice.mark(), bob.mark()
         alice.send("disconnect")
         alice.phase("Disconnected", args.timeout, alice_start)
-        bob.wait_for(lambda lines: f"offline {alice_id}" in lines, args.timeout, bob_start, read=True)
+        bob.wait_for(went_offline(alice_id), args.timeout, bob_start, read=True)
         stage("disconnect removed the player from the other client's online view")
 
         alice_start, bob_start = alice.mark(), bob.mark()
@@ -729,6 +844,12 @@ def smoke(args, log, directory: Path):
                   and mark_line.fullmatch(line).group(5) == "Marker" for line in bob.output(bob_start)),
               "The character name of a stored mark was lost across restart")
         stage("server restart preserved the remaining marks and a reconnected client receives them near its position")
+        # Its author shows the real names now, yet the mark placed while hidden keeps the pseudonym.
+        bob.wait_for(lambda lines: any(line.startswith(f"mark {hidden_mark} kind=1 author=Тень [pseudonymous] x=") for line in lines),
+                     args.timeout, bob_start, read=True)
+        check(not any(line.startswith(f"mark {hidden_mark} ") and "Smoke Hidden" in line for line in bob.output(bob_start)),
+              "A stored mark placed while hidden revealed its author after restart")
+        stage("a mark placed while hidden keeps its pseudonym across a server restart")
 
         alice_start, bob_start = alice.mark(), bob.mark()
         server.send("quit")
@@ -742,6 +863,21 @@ def smoke(args, log, directory: Path):
             check(child.process.returncode == 0, f"{child.name} exited unsuccessfully")
             check(not any("session=Faulted" in line or "Protocol error" in line for line in child.output()),
                   f"{child.name} observed a client protocol fault")
+
+        strict = directory / "server-strict.toml"
+        settings["Identity"]["AllowHiddenIdentity"] = False
+        strict.write_text(tomli_w.dumps(settings), encoding="utf-8")
+        server = start_server("server-strict", strict)
+        refused_client = start_client("refused-hidden", "smoke_refused", "Smoke Refused", hidden="--hide")
+        refused_client.wait_for(lambda lines: any("rejected (14)" in line for line in lines), args.timeout, read=True)
+        refused_client.phase("Disconnected", args.timeout)
+        check("session=Ready" not in refused_client.output(), "A refused hidden session became ready")
+        refused_client.send("quit")
+        refused_client.process.wait(timeout=args.timeout)
+        server.send("quit")
+        server.process.wait(timeout=args.timeout)
+        check(server.process.returncode == 0, "Strict server did not shut down successfully")
+        stage("a server that does not allow hidden names refuses such an opening with HIDDEN_IDENTITY_NOT_ALLOWED")
         for child in children:
             check(not any(secret in line for secret in secrets for line in child.output()),
                   f"{child.name} exposed an authentication secret in process output")

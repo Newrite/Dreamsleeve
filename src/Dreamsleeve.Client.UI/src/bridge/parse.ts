@@ -86,7 +86,10 @@ function player(v: unknown): boolean {
     (v.gameStartedAt === undefined ||
       (finite(v.gameStartedAt) &&
         Math.abs(v.gameStartedAt as number) <= 8640000000000000)) &&
-    (v.actorValues === undefined || list(v.actorValues, actorValue, 64))
+    (v.actorValues === undefined || list(v.actorValues, actorValue, 64)) &&
+    (v.pseudonymous === undefined || typeof v.pseudonymous === "boolean") &&
+    // The server sends no username or character of a pseudonymous player.
+    (!v.pseudonymous || (v.username === "" && v.character === undefined))
   );
 }
 function groundMark(v: unknown): boolean {
@@ -173,6 +176,13 @@ export function parseHostEvent(source: string): HostEvent {
         (v.removed === undefined || typeof v.removed === "boolean") &&
         (v.error === undefined || label(v.error)) &&
         (v.error === undefined) !== (v.markId === undefined && !v.removed);
+      break;
+    case "identity":
+      valid =
+        ["off", "everywhere", "exceptGroundMarks"].includes(String(v.mode)) &&
+        typeof v.pending === "boolean" &&
+        (v.pseudonym === undefined || label(v.pseudonym)) &&
+        (v.error === undefined || label(v.error));
       break;
     case "ignored":
       valid = list(

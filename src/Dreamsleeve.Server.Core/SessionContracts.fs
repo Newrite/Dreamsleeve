@@ -9,6 +9,8 @@ type SessionOpenRequest = {
     ConnectionId: Guid
     RequestId: uint64
     SessionTicket: string
+    /// Where others see a pseudonym, from the first packet about this player.
+    Hiding: HiddenIdentity
 }
 
 [<RequireQualifiedAccess>]
@@ -43,14 +45,20 @@ type ServerTransport = {
 
 [<RequireQualifiedAccess>]
 type IdentityAdmission =
-    | Reserved
+    /// The pseudonym the player is shown under, when the session asked to hide.
+    | Reserved of Pseudonym voption
     | AlreadyInUse
     | Closed
 
 /// Session-to-runtime boundary: transport output and route lifecycle, never chat execution.
 [<RequireQualifiedAccess>]
 type SessionHostCommand =
-    | Reserve of Guid * PlayerId * ReliableAgentRef<IdentityAdmission>
+    /// Reserves the PlayerId and the names the moderated profile is shown under,
+    /// with a new pseudonym when the names are hidden.
+    | Reserve of Guid * PlayerData * HiddenIdentity * ReliableAgentRef<IdentityAdmission>
+    /// Shows the reserved profile again or hides it; the pseudonym is new only
+    /// when the names were shown everywhere before.
+    | ChangeIdentity of Guid * HiddenIdentity * ReliableAgentRef<Pseudonym voption>
     | Activate of Guid * requestId: uint64 * SessionWelcome
     | Send of Guid * ServerResponse
     | Close of Guid * reason: string
@@ -79,6 +87,8 @@ type ChatRoomEvent =
 type ChatSubmission = {
     ConnectionId: Guid
     RequestId: uint64
+    /// The author's public identity at sending, decided by the session.
+    Author: PublicIdentity
     Text: ChatMessageText
     /// Published character name at sending, already moderated by the session.
     CharacterName: CharacterName voption
@@ -148,15 +158,23 @@ type GroundMarkSubmission = {
     Placement: GroundMarkPlacement
     /// Published character name at placement, already moderated by the session.
     CharacterName: CharacterName voption
+    /// The author's pseudonym at placement; the mark keeps it for its lifetime.
+    Pseudonym: Pseudonym voption
     /// Normalized projection of a note for the repeated-text check; never published.
     Fingerprint: string
     Flagged: TextSpan list
 }
 
+/// A stored mark with its author's current profile, already moderated.
+type StoredGroundMark = {
+    Mark: GroundMark
+    Author: PlayerData
+}
+
 /// Stored marks with their authors' current profiles, the storage high-water
 /// mark and the writer that keeps storage current; supplied at runtime start.
 type GroundMarkPersistence = {
-    Loaded: GroundMarkRecord list
+    Loaded: StoredGroundMark list
     /// One above the highest ID storage ever issued, so IDs never repeat across runs.
     NextId: uint64
     Writer: ReliableAgentRef<GroundMarkWrite>
@@ -280,6 +298,27 @@ type PlayerSessionOptions = {
     MaxBootstrapEvents: int
     MaxPendingOutput: int
 }
+
+/// [Identity]: whether players may hide their names behind a server pseudonym
+/// and how often one session may switch. Read at startup.
+type IdentityOptions = {
+    AllowHiddenIdentity: bool
+    /// A switch sooner than this after the previous one is refused; 0 disables the limit.
+    ToggleIntervalMs: int
+    /// Separate TOML with the pseudonym dictionary, next to moderation.toml.
+    PseudonymsPath: string
+}
+
+[<RequireQualifiedAccess>]
+module IdentityOptions =
+    let defaults = { AllowHiddenIdentity = true; ToggleIntervalMs = 30000; PseudonymsPath = "pseudonyms.toml" }
+
+    let validate options = [
+        if isNull (box options) then "Identity section cannot be null."
+        else
+            if options.ToggleIntervalMs < 0 then "Identity.ToggleIntervalMs must be non-negative."
+            if isNull options.PseudonymsPath then "Identity.PseudonymsPath cannot be null."
+    ]
 
 type ServerRuntimeOptions = {
     MaxSessions: int

@@ -198,11 +198,17 @@ module internal PlayerCodec =
                      Pose = { Position = position; Rotation = rotation; SampledAtUs = source.Pose.SampledAtUs } }
             | Error error, _ | _, Error error -> Error(ProtocolCodecFailure.InvalidDomain error)
 
-    let profile (value: PlayerData) =
-        Dreamsleeve.Protocol.Chat.PlayerProfile(
-            PlayerId = PlayerId.value value.PlayerId,
-            Username = Username.value value.Username,
-            DisplayName = DisplayName.value value.DisplayName)
+    /// A pseudonymous identity carries no username; the pseudonym stands in display_name.
+    let profile (value: PublicIdentity) =
+        match value with
+        | PublicIdentity.Profile data ->
+            Dreamsleeve.Protocol.Chat.PlayerProfile(
+                PlayerId = PlayerId.value data.PlayerId,
+                Username = Username.value data.Username,
+                DisplayName = DisplayName.value data.DisplayName)
+        | PublicIdentity.Pseudonymous(playerId, pseudonym) ->
+            Dreamsleeve.Protocol.Chat.PlayerProfile(
+                PlayerId = PlayerId.value playerId, DisplayName = Pseudonym.value pseudonym, Pseudonymous = true)
 
     let location (value: PlayerLocation) =
         let place = value.Location
@@ -291,7 +297,7 @@ module internal PlayerCodec =
 
     let player (value: PlayerSnapshot) =
         let result = Dreamsleeve.Protocol.Chat.PlayerInfo(
-            Profile = profile value.Data,
+            Profile = profile value.Identity,
             ViewRevision = value.ViewRevision, MovementSequence = value.MovementSequence, CharacterGeneration = value.CharacterGeneration,
             CharacterNameWithheld = value.CharacterNameWithheld,
             Details = details value.Details)

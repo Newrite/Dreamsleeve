@@ -1,0 +1,26 @@
+# Dreamsleeve server pseudonyms: the names other players see instead of the
+# real names of a player who turns on "hide my name from other players".
+# Path: [Identity] PseudonymsPath in server.toml (default "pseudonyms.toml"),
+# read only at startup.
+#
+# The server picks one name at random from this list for every session that
+# hides its names and again on every switch to hidden; it never derives a
+# pseudonym from a real name and never stores it between sessions. A name
+# already shown online (compared without case, after NFC), the player's own
+# names included, gets a short number: "Страж 2".
+#
+# Rules, the same as the client's aliases.toml: 1..48 bytes of UTF-8, no
+# leading or trailing spaces, no control characters, no < or >. Plain text,
+# never markup. Invalid and repeated entries are skipped with a warning; a
+# missing, broken or empty file falls back to the built-in list below. At most
+# 1024 names are used.
+#
+# Nameplates need a game font with these letters: on an install without
+# Cyrillic fonts use Latin names here.
+version = 1
+names = [
+  "Странник", "Следопыт", "Бард", "Изгнанник", "Наёмник", "Паломник",
+  "Охотник", "Кузнец", "Травник", "Мореход", "Караванщик", "Лучник",
+  "Страж", "Скиталец", "Отшельник", "Алхимик", "Чародей", "Воитель",
+  "Рудокоп", "Лесоруб", "Рыбак", "Менестрель", "Ловчий", "Книжник",
+]

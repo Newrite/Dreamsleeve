@@ -60,6 +60,37 @@ Activate(SessionOpened) → накопленные события → новые
 Runtime проверяет актуальность резерва и дедлайн, ставит SessionOpened первым
 и открывает вход обычных команд. До этого ENet Connected не означает Ready.
 
+### Скрытое имя
+
+`SessionOpenRequest.Hiding` (`HiddenIdentity`: `Shown` / `Everywhere` / `ExceptGroundMarks`)
+приходит из `OpenSession.hidden_identity`. Если
+`[Identity] AllowHiddenIdentity = false`, сессия отказывает с `HIDDEN_IDENTITY_NOT_ALLOWED` ещё
+до погашения билета. Иначе `SessionHostCommand.Reserve` несёт модерированный профиль и выбор:
+runtime в том же обработчике резервирует PlayerId и регистрирует имена в `PseudonymBook`
+(`SessionTable.Names`, `PseudonymBook.apply`) — показанный профиль или псевдоним — и отвечает
+`IdentityAdmission.Reserved(pseudonym)`. Книга освобождается вместе с резервом PlayerId.
+
+Единственная точка подмены — `publicSnapshot`/`publicIdentity`/`publicCharacterName` сессии:
+снимок и обновления присутствия, `ChatSubmission.Author` (чат и объявления) и
+`GroundMarkSubmission.Pseudonym` (только при `Everywhere`; при `ExceptGroundMarks` метка несёт
+настоящий профиль и имя персонажа) уже содержат псевдоним, поэтому ChatRoomAgent, PresenceAgent
+и GroundMarksAgent никогда не получают настоящих имён скрытого игрока. ChatRoomAgent берёт
+автора из заявки и закрывает соединение, если его PlayerId не совпадает с подпиской.
+GroundMarksAgent хранит у метки её псевдоним (`GroundMark.Pseudonym`, SQLite
+`author_pseudonym`) и собирает автора для wire через `GroundMark.authorIdentity`; словарь
+`Authors` содержит только настоящие модерированные профили. Свою запись сессия
+восстанавливает в приветствии и в `PlayerUpdated` (`ownView`), а `SessionWelcome.OwnPseudonym`
+сообщает владельцу его псевдоним; кодек отвергает приветствие с псевдонимной записью получателя.
+
+`SetIdentityVisibility(hiding)` в Active: совпадение с текущим вариантом подтверждается сразу;
+второе переключение, пока первое ждёт runtime, — `OVERLOADED`; чаще `ToggleIntervalMs` —
+`RATE_LIMITED`; иначе `SessionHostCommand.ChangeIdentity` → runtime выбирает новый псевдоним
+(при переходе из `Shown`), оставляет прежний (`Everywhere` ↔ `ExceptGroundMarks`) или снова
+показывает профиль → `IdentityChanged` → сессия меняет состояние, отправляет
+`PresenceCommand.Update` (два запасных слота исходящей очереди присутствия) и отвечает
+`IdentityVisibilityChanged`. Заявки, отправленные до ответа, уходят со старой личностью.
+Лимит частоты — на сессию: переподключение его сбрасывает, но и выдаёт новый псевдоним.
+
 Онлайн и история больше не образуют одну глобальную транзакцию. Каждый источник
 сохраняет собственный порядок; сообщение может прийти до PlayerJoined или после
 PlayerLeft. Оно содержит профиль автора и корректно отображается независимо от
@@ -267,17 +298,19 @@ Reset неответившего peer и завершает учёт соеди�
 dotnet run --project src/Dreamsleeve.Server -c Release
 dotnet run --project src/Dreamsleeve.Server -c Release -- --write-config server.toml
 dotnet run --project src/Dreamsleeve.Server -c Release -- --config server.toml --port 8778
-xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Player Name"
+xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Player Name"   # --hide: скрытое имя с первого пакета
 ```
 
 По умолчанию ENet слушает 127.0.0.1:8778, auth HTTP — 127.0.0.1:8779.
 Пароль вводится скрыто; после регистрации запускайте без --register. В сетевом Client.Dev доступны
-`send <text>`, `announce <trusted|third> <kind> <signature|-> <text>`, `read`, команды наблюдений персонажа,
+`send <text>`, `announce <trusted|third> <kind> <signature|-> <text>`, `hide <on|off>`, `read`, команды наблюдений персонажа,
 `disconnect`, `connect`, `quit`; сервер завершается по `quit` или Ctrl+C, `announce <текст>` в его консоли публикует
 объявление администратора. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
 
-TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging/Moderation/Announcements/GroundMarks.
-Горячей перезагрузки нет ни у `server.toml`, ни у `moderation.toml`: изменения, включая `[Announcements]`, действуют после перезапуска.
+TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging/Moderation/Identity/Announcements/GroundMarks.
+Горячей перезагрузки нет ни у `server.toml`, ни у `moderation.toml`, ни у `pseudonyms.toml`: изменения, включая `[Announcements]`, действуют после перезапуска.
+`[Identity]`: `AllowHiddenIdentity` (true), `ToggleIntervalMs` (30000, 0 — без лимита), `PseudonymsPath`
+(`pseudonyms.toml`; отсутствующий или повреждённый файл — встроенные 24 имени с предупреждением).
 Массивы таблиц поддержаны только для `[[Announcements.Scheduled]]`; каждая запись начинается со значений по умолчанию.
 Неуказанные параметры сохраняют значения по умолчанию; неизвестные поля отклоняются.
 `--port` имеет приоритет над файлом. ServerConfig проверяет согласованность transport

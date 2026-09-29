@@ -156,6 +156,20 @@ export const players: Player[] = [
       { key: "shoutRecovery", name: "Восстановление крика", value: 12.5 },
     ],
   },
+  // A player who hides their names: the server sends only its pseudonym.
+  {
+    id: "4",
+    name: "Страж 2",
+    inCharacter: false,
+    displayName: "Страж 2",
+    username: "",
+    pseudonymous: true,
+    level: 12,
+    location: "Ривервуд",
+    zone: "Скайрим",
+    race: "Имперец",
+    activity: "Исследование",
+  },
 ];
 const lines = [
   [

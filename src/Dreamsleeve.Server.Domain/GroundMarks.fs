@@ -67,11 +67,13 @@ module GroundMarkPlacement =
             origin.Location.LocationId = placement.LocationId && withinSquared radius origin.Position placement.Position
 
 /// Persistent server data, unlike chat and poses: survives restarts and the
-/// author's reloads. Names are not stored; the author's profile is looked up by ID.
+/// author's reloads. Real names are not stored; the author's profile is looked
+/// up by ID. A mark placed under a pseudonym keeps that pseudonym instead.
 type GroundMark = private {
     id: GroundMarkId
     author: PlayerId
     characterName: CharacterName voption
+    pseudonym: Pseudonym voption
     body: GroundMarkBody
     flagged: TextSpan list
     placement: GroundMarkPlacement
@@ -81,6 +83,9 @@ type GroundMark = private {
     member this.Author = this.author
     /// Published character name at placement, like ChatMessage.CharacterName; never updated later.
     member this.CharacterName = this.characterName
+    /// The author's pseudonym at placement, shown for this mark instead of the
+    /// profile for as long as the mark lives; never updated later.
+    member this.Pseudonym = this.pseudonym
     member this.Body = this.body
     member this.Kind = GroundMarkBody.kind this.body
     member this.Text = GroundMarkBody.text this.body
@@ -149,10 +154,18 @@ module GroundMark =
     /// Components have already passed their own domain validation. The server
     /// supplies the ID and the creation time; the author is the account.
     let create id author body placement (createdAt: DateTimeOffset) : GroundMark =
-        { id = id; author = author; characterName = ValueNone; body = body; flagged = []; placement = placement; createdAt = createdAt.ToUniversalTime() }
+        { id = id; author = author; characterName = ValueNone; pseudonym = ValueNone; body = body; flagged = []; placement = placement
+          createdAt = createdAt.ToUniversalTime() }
 
     /// The author's published character name at placement; a withheld name stays absent.
     let withCharacterName name (mark: GroundMark) = { mark with characterName = name }
+
+    /// The author was hidden at placement: this pseudonym stands for them here.
+    let withPseudonym pseudonym (mark: GroundMark) = { mark with pseudonym = pseudonym }
+
+    /// Who the mark shows as its author: its pseudonym, else the current profile.
+    let authorIdentity (profile: PlayerData) (mark: GroundMark) =
+        PublicIdentity.ofProfile mark.Pseudonym profile
 
     /// Spans come from moderation of this exact text.
     let withFlagged spans (mark: GroundMark) = { mark with flagged = spans }

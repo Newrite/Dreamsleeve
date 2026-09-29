@@ -10,6 +10,8 @@ type PlayerSessionMessage =
     | Begin
     | Authenticated of SessionAuthenticationReply
     | IdentityReplied of IdentityAdmission
+    /// The runtime switched this player's public identity for the request.
+    | IdentityChanged of requestId: uint64 * Pseudonym voption
     | ChatEvent of ChatRoomEvent
     | PresenceEvent of PresenceEvent
     | GroundMarkEvent of GroundMarkEvent
@@ -23,6 +25,7 @@ type PlayerSessionMessage =
     | ReportDeath of requestId: uint64 * DeathMarkText * GroundMarkPlacement
     | RemoveGroundMark of requestId: uint64 * GroundMarkId
     | Update of requestId: uint64 * PlayerUpdate
+    | SetIdentityVisibility of requestId: uint64 * HiddenIdentity
     | SampleMovement of MovementSample
     | Read of ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
     | Stop
@@ -55,7 +58,16 @@ module PlayerSession =
         mutable CloseSent: bool
         /// The current character name failed moderation and is not published.
         mutable CharacterWithheld: bool
+        /// Shown to others instead of every real name while the player hides them.
+        mutable Pseudonym: Pseudonym voption
+        /// Where the names are hidden; Pseudonym is present exactly when they are.
+        mutable Hiding: HiddenIdentity
+        /// The one identity switch waiting for the runtime, with the requested hiding.
+        mutable IdentityRequest: struct (uint64 * HiddenIdentity) voption
+        /// Environment.TickCount64 of the last accepted switch in this session.
+        mutable LastIdentitySwitch: int64 voption
         Moderation: ModerationRules
+        Identity: IdentityOptions
         Announcements: AnnouncementOptions
         GroundMarkRules: GroundMarkRules
         Pending: HashSet<uint64>
@@ -70,14 +82,47 @@ module PlayerSession =
     let private reliable (context: AgentContext<PlayerSessionMessage>) = context.Ref.TryReliable()
 
     // Every outbound projection of this player passes here: a withheld game
-    // name never reaches presence, bootstrap snapshots or chat messages.
+    // name never reaches presence, bootstrap snapshots or chat messages, and
+    // while the player hides their names only the pseudonym leaves this owner.
     let private publicSnapshot state player =
         let snapshot = Player.snapshot player
-        if state.CharacterWithheld then { snapshot with CharacterName = ValueNone; CharacterNameWithheld = true }
-        else snapshot
+        let moderated =
+            if state.CharacterWithheld then { snapshot with CharacterName = ValueNone; CharacterNameWithheld = true }
+            else snapshot
+        match state.Pseudonym with
+        | ValueSome name -> PlayerSnapshot.withPseudonym name moderated
+        | ValueNone -> moderated
 
     let private publicCharacterName state (player: Player) =
-        if state.CharacterWithheld then ValueNone else player.CharacterName
+        if state.CharacterWithheld || state.Pseudonym.IsSome then ValueNone else player.CharacterName
+
+    let private publicIdentity state (player: Player) =
+        PublicIdentity.ofProfile state.Pseudonym player.Data
+
+    // Ground marks may keep the real profile while presence and chat hide it.
+    let private markPseudonym state =
+        if HiddenIdentity.coversGroundMarks state.Hiding then state.Pseudonym else ValueNone
+
+    let private markCharacterName state (player: Player) =
+        if state.CharacterWithheld || (markPseudonym state).IsSome then ValueNone else player.CharacterName
+
+    // The player always sees their own real profile: presence carries the copy
+    // meant for others, so a pseudonymous entry about self is restored here,
+    // with the character name only while it still names the same character.
+    let private ownView state (player: Player) (snapshot: PlayerSnapshot) =
+        match snapshot.Identity with
+        | PublicIdentity.Pseudonymous(playerId, _) when playerId = player.Data.PlayerId ->
+            let sameCharacter = snapshot.CharacterGeneration = player.CharacterGeneration
+            { snapshot with
+                Identity = PublicIdentity.Profile player.Data
+                CharacterName = if sameCharacter && not state.CharacterWithheld then player.CharacterName else ValueNone }
+        | PublicIdentity.Pseudonymous _ | PublicIdentity.Profile _ -> snapshot
+
+    let private restoreOwn state snapshot =
+        match state.Phase with
+        | Opening opening -> ownView state opening.Player snapshot
+        | Active player -> ownView state player snapshot
+        | Starting | Resolving _ | Reserving _ | Closing -> snapshot
 
     let private completeIfDetached state (context: AgentContext<PlayerSessionMessage>) =
         match state.Phase with
@@ -154,8 +199,11 @@ module PlayerSession =
         reject options request state context request.RequestId code message
         close request state context message
 
-    let private beginResolve (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) =
+    let private beginResolve (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) =
         match state.Phase, reliable context with
+        | Starting, Some _ when HiddenIdentity.isHidden request.Hiding && not state.Identity.AllowHiddenIdentity ->
+            // Refused before the ticket is spent: the player may reconnect with names shown.
+            rejectOpening options request state context RequestRejectionCode.HiddenIdentityNotAllowed "The server does not let players hide their names."
         | Starting, Some address ->
             let operationId = Guid.NewGuid()
             state.Phase <- Resolving operationId
@@ -178,7 +226,7 @@ module PlayerSession =
                 let profile = Moderation.publicProfile state.Moderation stored
                 state.Phase <- Reserving(Player.create profile)
                 emit options request state context
-                    (SessionHostCommand.Reserve(request.ConnectionId, profile.PlayerId,
+                    (SessionHostCommand.Reserve(request.ConnectionId, profile, request.Hiding,
                         address.Map PlayerSessionMessage.IdentityReplied)) |> ignore
 
             | Error SessionAuthenticationError.InvalidTicket, _ ->
@@ -193,7 +241,10 @@ module PlayerSession =
         match state.Phase with
         | Reserving player ->
             match reply, reliable context with
-            | IdentityAdmission.Reserved, Some address ->
+            | IdentityAdmission.Reserved pseudonym, Some address ->
+                // Decided before anyone hears of this player: the first Joined already hides the names.
+                state.Pseudonym <- pseudonym
+                state.Hiding <- if pseudonym.IsSome then request.Hiding else HiddenIdentity.Shown
                 state.Phase <- Opening { Player = player; Chat = None; System = None; Online = None; Buffered = ResizeArray() }
                 let chat = {
                     ConnectionId = request.ConnectionId
@@ -219,7 +270,7 @@ module PlayerSession =
                     close request state context "Subscription admission failed."
             | IdentityAdmission.AlreadyInUse, _ ->
                 rejectOpening options request state context RequestRejectionCode.SessionAlreadyOpen "Player already has a session."
-            | IdentityAdmission.Closed, _ | IdentityAdmission.Reserved, None ->
+            | IdentityAdmission.Closed, _ | IdentityAdmission.Reserved _, None ->
                 stop request state context
         | Starting | Resolving _ | Opening _ | Active _ | Closing -> ()
 
@@ -234,6 +285,8 @@ module PlayerSession =
                     Players = online
                     Channels = [ channel chat; channel system ]
                     AnnouncementSources = AnnouncementOptions.allowedSources state.Announcements
+                    OwnPseudonym = state.Pseudonym
+                    Hiding = state.Hiding
                 }
                 if emit options request state context (SessionHostCommand.Activate(request.ConnectionId, request.RequestId, welcome)) then
                     state.Phase <- Active opening.Player
@@ -294,13 +347,13 @@ module PlayerSession =
         | PresenceEvent.Snapshot players ->
             match state.Phase with
             | Opening opening when opening.Online.IsNone ->
-                opening.Online <- Some players
+                opening.Online <- Some (players |> List.map (ownView state opening.Player))
                 activate options request state context
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected presence snapshot."
-        | PresenceEvent.Joined player -> publish options request state context (ServerResponse.PlayerJoined player)
-        | PresenceEvent.Updated player -> publish options request state context (ServerResponse.PlayerUpdated player)
+        | PresenceEvent.Joined player -> publish options request state context (ServerResponse.PlayerJoined(restoreOwn state player))
+        | PresenceEvent.Updated player -> publish options request state context (ServerResponse.PlayerUpdated(restoreOwn state player))
         | PresenceEvent.MetadataChanged(playerId, values, details) -> publish options request state context (ServerResponse.PlayerMetadataChanged(playerId, values, details))
         | PresenceEvent.VisibilityChanged change ->
             publish options request state context (ServerResponse.PlayerVisibilityChanged change)
@@ -355,7 +408,8 @@ module PlayerSession =
                     RequestId = requestId
                     Body = body
                     Placement = placement
-                    CharacterName = publicCharacterName state player
+                    CharacterName = markCharacterName state player
+                    Pseudonym = markPseudonym state
                     Fingerprint = Moderation.normalize text
                     Flagged = Moderation.flag state.Moderation text
                 }
@@ -403,6 +457,7 @@ module PlayerSession =
                 let submission = {
                     ConnectionId = request.ConnectionId
                     RequestId = requestId
+                    Author = publicIdentity state player
                     Text = text
                     CharacterName = publicCharacterName state player
                     Fingerprint = Moderation.normalize (ChatMessageText.value text)
@@ -445,6 +500,7 @@ module PlayerSession =
                         let submission = {
                             ConnectionId = request.ConnectionId
                             RequestId = requestId
+                            Author = publicIdentity state player
                             Text = announcement.Text
                             CharacterName = publicCharacterName state player
                             Fingerprint = Moderation.normalize text
@@ -508,6 +564,53 @@ module PlayerSession =
         | Starting | Resolving _ | Reserving _ | Opening _ ->
             reject options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
 
+    /// Only the choice comes from the client; the runtime picks the pseudonym.
+    /// Asking for the current state settles at once and is not a switch.
+    let private setIdentity (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId hiding =
+        let refuse code message =
+            send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "hidden" }))
+        match state.Phase, reliable context with
+        | Active _, Some address ->
+            let now = Environment.TickCount64
+            if requestId = 0UL || state.Pending.Contains requestId then
+                close request state context "Request ID is invalid or already pending."
+            elif HiddenIdentity.isHidden hiding && not state.Identity.AllowHiddenIdentity then
+                refuse RequestRejectionCode.HiddenIdentityNotAllowed "The server does not let players hide their names."
+            elif state.IdentityRequest.IsSome then
+                refuse RequestRejectionCode.Overloaded "An identity change is already pending."
+            elif hiding = state.Hiding then
+                send options request state context (ServerResponse.IdentityVisibilityChanged(requestId, state.Pseudonym, state.Hiding))
+            elif state.LastIdentitySwitch |> ValueOption.exists (fun last -> now - last < int64 state.Identity.ToggleIntervalMs) then
+                refuse RequestRejectionCode.RateLimited "Identity visibility was changed too recently."
+            else
+                let reply = address.Map(fun pseudonym -> PlayerSessionMessage.IdentityChanged(requestId, pseudonym))
+                if emit options request state context (SessionHostCommand.ChangeIdentity(request.ConnectionId, hiding, reply)) then
+                    state.Pending.Add requestId |> ignore
+                    state.IdentityRequest <- ValueSome(struct (requestId, hiding))
+                    state.LastIdentitySwitch <- ValueSome now
+        | Closing, _ -> ()
+        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+            refuse RequestRejectionCode.SessionNotReady "Session is not ready."
+
+    /// Messages and marks sent from now on carry the new identity; presence
+    /// spreads it like a rename. The presence outbox keeps two slots beyond
+    /// the update budget, so this send only fails when the owner is gone.
+    let private identityChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId pseudonym =
+        match state.Phase with
+        | Active player when (match state.IdentityRequest with ValueSome(struct (id, _)) -> id = requestId | ValueNone -> false)
+                             && state.Pending.Remove requestId ->
+            let struct (_, hiding) = state.IdentityRequest.Value
+            state.IdentityRequest <- ValueNone
+            state.Pseudonym <- pseudonym
+            state.Hiding <- if pseudonym.IsSome then hiding else HiddenIdentity.Shown
+            if state.Presence.TrySend(context, PresenceCommand.Update(request.ConnectionId, publicSnapshot state player)) then
+                send options request state context (ServerResponse.IdentityVisibilityChanged(requestId, pseudonym, state.Hiding))
+            else
+                close request state context "Presence admission failed."
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
+            close request state context "Unexpected identity change."
+
     let private sampleMovement (options: PlayerSessionOptions) (request: SessionOpenRequest) state context sample =
         match state.Phase with
         | Active player when state.Presence.Count < options.MaxPendingUpdates ->
@@ -522,9 +625,11 @@ module PlayerSession =
 
     let private handle (options: PlayerSessionOptions) maxActorValues (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) message = task {
         match message with
-        | PlayerSessionMessage.Begin -> beginResolve request state context
+        | PlayerSessionMessage.Begin -> beginResolve options request state context
         | PlayerSessionMessage.Authenticated reply -> authenticated options request state context reply
         | PlayerSessionMessage.IdentityReplied reply -> identityReply options request state context reply
+        | PlayerSessionMessage.IdentityChanged(requestId, pseudonym) -> identityChanged options request state context requestId pseudonym
+        | PlayerSessionMessage.SetIdentityVisibility(requestId, hiding) -> setIdentity options request state context requestId hiding
         | PlayerSessionMessage.ChatEvent event -> chatEvent options request state context event
         | PlayerSessionMessage.PresenceEvent event -> presenceEvent options request state context event
         | PlayerSessionMessage.GroundMarkEvent event -> groundMarkEvent options request state context event
@@ -564,7 +669,8 @@ module PlayerSession =
 
     let private isControl = function
         | PlayerSessionMessage.Begin | PlayerSessionMessage.Authenticated _
-        | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.ChatDetached _ | PlayerSessionMessage.SystemDetached _
+        | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.IdentityChanged _
+        | PlayerSessionMessage.ChatDetached _ | PlayerSessionMessage.SystemDetached _
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.Stop -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Placed _ | GroundMarkEvent.Removed _ | GroundMarkEvent.Rejected _) -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Changed _ | GroundMarkEvent.Own _) -> false
@@ -577,11 +683,13 @@ module PlayerSession =
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.VisibilityChanged _ | PresenceEvent.MetadataChanged _ | PresenceEvent.Left _)
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.PostAnnouncement _
         | PlayerSessionMessage.PlaceGroundNote _ | PlayerSessionMessage.ReportDeath _ | PlayerSessionMessage.RemoveGroundMark _
-        | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _
+        | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _ | PlayerSessionMessage.SetIdentityVisibility _
         | PlayerSessionMessage.Read _ -> false
 
     /// chat and system are the owners of the global and the system channel; marks owns the ground marks.
-    let start (options: PlayerSessionOptions) maxActorValues moderation announcements groundMarkRules authentication chat system presence marks host (request: SessionOpenRequest) =
+    /// identity says whether names may be hidden and how often the choice may change.
+    let start (options: PlayerSessionOptions) maxActorValues moderation announcements groundMarkRules (identity: IdentityOptions)
+              authentication chat system presence marks host (request: SessionOpenRequest) =
         let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
@@ -599,7 +707,12 @@ module PlayerSession =
                 GroundMarksAttached = false
                 CloseSent = false
                 CharacterWithheld = false
+                Pseudonym = ValueNone
+                Hiding = HiddenIdentity.Shown
+                IdentityRequest = ValueNone
+                LastIdentitySwitch = ValueNone
                 Moderation = moderation
+                Identity = identity
                 Announcements = announcements
                 GroundMarkRules = groundMarkRules
                 Pending = HashSet()

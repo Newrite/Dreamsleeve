@@ -2,10 +2,14 @@ syntax = "proto3";
 
 package Dreamsleeve.Protocol.Chat;
 
+// The public identity of a player. Where the player hides their names
+// (pseudonymous), username is empty, display_name is the server pseudonym and
+// no character name travels with it; player_id is the same either way.
 message PlayerProfile {
   uint64 player_id = 1;
   string username = 2;
   string display_name = 3;
+  bool pseudonymous = 4;
 }
 
 message FormKey {

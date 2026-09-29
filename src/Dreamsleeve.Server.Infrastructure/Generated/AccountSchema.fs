@@ -73,7 +73,8 @@ module main =
           y: double
           z: double
           heading: double
-          created_at: int64 }
+          created_at: int64
+          author_pseudonym: Option<string> }
 
         interface IWriteColumns with
             member this.WriteColumns =
@@ -88,7 +89,8 @@ module main =
                   { WriteColumn.Name = "y"; Value = box this.y; ProviderDbType = None }
                   { WriteColumn.Name = "z"; Value = box this.z; ProviderDbType = None }
                   { WriteColumn.Name = "heading"; Value = box this.heading; ProviderDbType = None }
-                  { WriteColumn.Name = "created_at"; Value = box this.created_at; ProviderDbType = None } ]
+                  { WriteColumn.Name = "created_at"; Value = box this.created_at; ProviderDbType = None }
+                  { WriteColumn.Name = "author_pseudonym"; Value = box this.author_pseudonym; ProviderDbType = None } ]
 
     let ground_marks = table<ground_marks>
 

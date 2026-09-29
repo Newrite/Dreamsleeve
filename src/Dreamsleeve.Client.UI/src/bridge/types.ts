@@ -51,6 +51,8 @@ export interface ActorValue {
 // `name` is the host-resolved label for the current name settings. In streamer
 // mode `alias` carries the local pseudonym and the real username, displayName
 // and character never arrive (displayName repeats the alias, username is empty).
+// `pseudonymous`: the player hides their names from everyone; the server sent
+// only its pseudonym (displayName), no username and no character.
 export interface Player {
   id: Id;
   name: string;
@@ -72,6 +74,7 @@ export interface Player {
   menu?: string;
   gameStartedAt?: number;
   actorValues?: ActorValue[];
+  pseudonymous?: boolean;
 }
 // The server assigns the origin. A third-party signature is declared by the
 // mod itself and does not raise trust; it is shown as received, as plain text.
@@ -167,6 +170,21 @@ export interface Settings {
   deathBorder: boolean;
   combatHideGroundMarks: boolean;
   combatHideGroundText: boolean;
+  // Where others see a server pseudonym instead of this player's names.
+  // Changed by setIdentityVisibility only; the host saves it once the server agrees.
+  hideIdentity: HideIdentity;
+}
+// off: the names are shown; everywhere: online, fireflies, chat and ground
+// marks; exceptGroundMarks: ground marks keep the real profile.
+export type HideIdentity = "off" | "everywhere" | "exceptGroundMarks";
+// "Hide my name from other players" as the host reports it: mode is the
+// choice (the requested one while pending), pending waits for the server,
+// pseudonym is what the others see now, error the last refusal.
+export interface IdentityState {
+  mode: HideIdentity;
+  pending: boolean;
+  pseudonym?: string;
+  error?: string;
 }
 // A ground mark for the lists: own marks (the server's complete list) and
 // marks the server shows nearby. `author` is the host-resolved name of a
@@ -212,7 +230,9 @@ export type Command =
   | { type: "disconnect" }
   // A note where the character stands; the host fills the placement.
   | { type: "placeGroundNote"; requestId: string; text: string }
-  | { type: "removeGroundMark"; requestId: string; markId: Id };
+  | { type: "removeGroundMark"; requestId: string; markId: Id }
+  // Outside a session only the choice for the next one changes.
+  | { type: "setIdentityVisibility"; hiding: HideIdentity };
 export type AuthEvent = { type: "auth"; phase: ConnectionPhase } & AuthState;
 export type HostEvent =
   | {
@@ -244,6 +264,7 @@ export type HostEvent =
       removed?: boolean;
       error?: string;
     }
+  | ({ type: "identity" } & IdentityState)
   // Personal ignore list of this server, already named for current settings.
   | { type: "ignored"; players: { id: Id; name: string }[] }
   | { type: "messages"; messages: Message[] }

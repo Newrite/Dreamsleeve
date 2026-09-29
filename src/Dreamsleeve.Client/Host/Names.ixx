@@ -214,6 +214,8 @@ public:
     }
 
     // The one name for a player on every surface under the current settings.
+    // A player who hides their names is known only by the server pseudonym, in
+    // every name mode; the local streamer mode still puts its own alias first.
     std::string NameFor(
       Domain::PlayerId                            id,
       const Domain::PlayerData&                   profile,
@@ -221,7 +223,16 @@ public:
       const UiSettings&                           settings)
     {
       if (settings.streamerMode) return Alias(id);
+      if (profile.pseudonymous) return profile.displayName;
       return ResolveName(ModeOf(settings.nameMode), profile, character);
+    }
+
+    // Native nameplates have no badge: the same name with the mark the web UI
+    // draws before a pseudonym, "~Страж 2". Any game font has the tilde.
+    static std::string PlateName(std::string name, const Domain::PlayerData& profile)
+    {
+      if (!profile.pseudonymous) return name;
+      return "~" + name;
     }
 
     bool Ignored(Domain::PlayerId id) const

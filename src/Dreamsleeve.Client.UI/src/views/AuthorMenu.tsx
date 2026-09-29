@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Chat, ChatState } from "../state/chat";
+import { HIDDEN_BY_PLAYER } from "../state/names";
 import styles from "../styles/Chat.module.css";
 const WIDTH = 220;
 const HEIGHT = 110;
@@ -45,6 +46,9 @@ export function AuthorMenu({
         style={{ left, top }}
       >
         <strong>{target.name}</strong>
+        {target.pseudonymous && (
+          <span className={styles.menuNote}>{HIDDEN_BY_PLAYER}</span>
+        )}
         <button
           role="menuitem"
           onClick={() => act(() => chat.open("profile", target.playerId))}

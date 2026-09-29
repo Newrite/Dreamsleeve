@@ -93,6 +93,10 @@ export namespace Dreamsleeve::Host
     bool        deathBorder{true};
     bool        combatHideGroundMarks{false};  // Statics and labels.
     bool        combatHideGroundText{false};   // Labels only.
+    // Where others see a server pseudonym instead of this player's names:
+    // off | everywhere | exceptGroundMarks. Sent when a session opens; the host
+    // alone writes it, after the server confirmed a switch.
+    std::string hideIdentity{"off"};
 
     bool operator==(const UiSettings&) const = default;
   };
@@ -198,6 +202,7 @@ export namespace Dreamsleeve::Host
     Choose(value.activationKey, {"Enter", "F2"}, defaults.activationKey);
     Choose(value.theme, {"skyrim", "contrast"}, defaults.theme);
     Choose(value.announcementChannels, {"tab", "all", "current"}, defaults.announcementChannels);
+    Choose(value.hideIdentity, {"off", "everywhere", "exceptGroundMarks"}, defaults.hideIdentity);
 
     value.fireflyNameFontSize = Clamp(value.fireflyNameFontSize, 8, 48, defaults.fireflyNameFontSize);
     value.fireflyNameOffset   = Clamp(value.fireflyNameOffset, 0, 512, defaults.fireflyNameOffset);

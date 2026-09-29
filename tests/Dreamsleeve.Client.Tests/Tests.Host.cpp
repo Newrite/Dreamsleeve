@@ -227,7 +227,8 @@ TEST_CASE("Session reports every authentication completion, even an identical re
   Session        session;
   Session::Frame frame;
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, frame);
-  REQUIRE(frame.events.size() == 2);
+  // Connection, authentication and the initial state of "hide my name".
+  REQUIRE(frame.events.size() == 3);
 
   for (int attempt = 0; attempt < 2; ++attempt)
   {
@@ -270,9 +271,10 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
 
   // Initial publication while disconnected: state is tracked, UI gets status only.
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, frame);
-  REQUIRE(frame.events.size() == 2);
+  REQUIRE(frame.events.size() == 3);
   CHECK(Type(frame.events[0]) == "connection");
   CHECK(Type(frame.events[1]) == "auth");
+  CHECK(Type(frame.events[2]) == "identity");
   CHECK_FALSE(session.Ready());
   CHECK(
     session.SendChat(*exchange, Bridge::UiCommand{.type = "sendChat", .requestId = "u1", .channelId = "1", .text = "x"}).has_value() ==
@@ -1222,6 +1224,183 @@ TEST_CASE("Bridge validates ground mark commands")
   CHECK(mark.location == "skyrim.esm:01A26F");
   CHECK(mark.z == 300);
   CHECK_FALSE(mark.author);
+}
+
+TEST_CASE("A pseudonymous profile is named by its pseudonym in every mode; streamer mode keeps its alias")
+{
+  Names names;
+  names.Configure("srv:1", {"Лис"});
+  const Domain::PlayerData hidden{9, "", "Страж 2", true};
+  for (std::string_view mode : {"username", "display", "character"})
+  {
+    UiSettings settings;
+    settings.nameMode = std::string{mode};
+    CHECK(names.NameFor(9, hidden, std::nullopt, settings) == "Страж 2");
+    CHECK(names.NameFor(9, hidden, std::string{"Leaked"}, settings) == "Страж 2");
+  }
+  const Domain::PlayerData unnamed{9, "", "", false};
+  UiSettings               character;
+  character.nameMode = "character";
+  CHECK(names.NameFor(9, unnamed, std::nullopt, character) == NeutralName);
+  UiSettings streamer;
+  streamer.streamerMode = true;
+  CHECK(names.NameFor(9, hidden, std::nullopt, streamer) == "Лис");
+  CHECK(Names::PlateName("Страж 2", hidden) == "~Страж 2");
+  CHECK(Names::PlateName("Alice", Domain::PlayerData{1, "alice", "Alice"}) == "Alice");
+}
+
+TEST_CASE("Pseudonymous players and authors reach the UI flagged and without real names")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  auto hidden          = MakePlayer(9, "Страж");
+  hidden.data          = {9, "", "Страж", true};
+  hidden.characterName = std::nullopt;
+  REQUIRE(model.Apply(
+    model.Generation(),
+    OnlinePlayersReplaced{
+        {MakePlayer(1, "Alice"), hidden}
+  }));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  auto message   = MakeMessage(10, 1, "from the shadows");
+  message.author = hidden.data;
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {message}}));
+
+  UiSettings username;
+  username.nameMode = "username";
+  Session session;
+  session.PlayerNames().Configure("srv:1", {});
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), username, frame);
+  Settle(session, *exchange, model, frame, username);
+  REQUIRE(frame.snapshot);
+  auto        snapshot = Parse(frame.events[0]);
+  const auto& author   = snapshot["messages"][0]["author"];
+  CHECK(author["name"].get<std::string>() == "Страж");
+  CHECK(author["pseudonymous"].get<bool>());
+  CHECK(author["username"].get<std::string>().empty());
+  CHECK_FALSE(author.contains("character"));
+  bool found = false;
+  for (auto& player : snapshot["players"].get_array())
+    if (player["id"].get<std::string>() == "9")
+    {
+      found = true;
+      CHECK(player["name"].get<std::string>() == "Страж");
+      CHECK(player["displayName"].get<std::string>() == "Страж");
+      CHECK(player["pseudonymous"].get<bool>());
+      CHECK_FALSE(player.contains("alias"));
+    }
+    else
+      CHECK_FALSE(player["pseudonymous"].get<bool>());
+  CHECK(found);
+  CHECK(frame.events[0].find("user9") == std::string::npos);
+}
+
+TEST_CASE("The hide-my-name switch waits for the server and keeps the preference until it answers")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(model.Generation(), OnlinePlayersReplaced{{MakePlayer(1, "Alice")}}));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  Session        session;
+  Session::Frame frame;
+  UiSettings     settings;
+  const auto     identityOf = [](const Session::Frame& value) {
+    std::optional<glz::generic> found;
+    for (const auto& event : value.events)
+      if (Type(event) == "identity") found = Parse(event);
+    return found;
+  };
+
+  using Domain::HiddenIdentity;
+  CHECK_FALSE(session.SetIdentityVisibility(*exchange, HiddenIdentity::Everywhere));
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  Settle(session, *exchange, model, frame, settings);
+  REQUIRE(session.Ready());
+
+  REQUIRE(session.SetIdentityVisibility(*exchange, HiddenIdentity::ExceptGroundMarks));
+  CHECK_FALSE(session.SetIdentityVisibility(*exchange, HiddenIdentity::None));
+  std::vector<QueuedClientCommand> commands;
+  exchange->TakeCommands(commands);
+  REQUIRE(commands.size() == 1);
+  const auto request = std::get<SetIdentityVisibility>(commands[0].command);
+  CHECK(request.hiding == HiddenIdentity::ExceptGroundMarks);
+  auto pending = session.Identity(Bridge::HidingOf(settings.hideIdentity));
+  CHECK(pending.pending);
+  CHECK(pending.mode == "exceptGroundMarks");
+  CHECK_FALSE(pending.pseudonym);
+
+  exchange->PublishIdentity("Страж", HiddenIdentity::ExceptGroundMarks);
+  REQUIRE(exchange->Publish(
+    model,
+    false,
+    SessionPhase::Ready,
+    "Tamriel",
+    std::nullopt,
+    std::nullopt,
+    IdentityConfirmation{model.Generation(), request.requestId, "Страж", HiddenIdentity::ExceptGroundMarks}));
+  ClientOutput output;
+  exchange->Drain(output);
+  frame = {};
+  session.Process(*exchange, output, settings, frame);
+  REQUIRE(frame.hideIdentity);
+  CHECK(*frame.hideIdentity == HiddenIdentity::ExceptGroundMarks);
+  auto settled = identityOf(frame);
+  REQUIRE(settled);
+  CHECK((*settled)["mode"].get<std::string>() == "exceptGroundMarks");
+  CHECK_FALSE((*settled)["pending"].get<bool>());
+  CHECK((*settled)["pseudonym"].get<std::string>() == "Страж");
+  settings.hideIdentity = "exceptGroundMarks";
+
+  // A refusal returns the choice to the server's state and names the reason.
+  REQUIRE(session.SetIdentityVisibility(*exchange, HiddenIdentity::None));
+  exchange->TakeCommands(commands);
+  const auto second = std::get<SetIdentityVisibility>(commands[0].command).requestId;
+  REQUIRE(model.Apply(model.Generation(), ServerRejection{second, RequestRejectionCode::RateLimited, "too soon", "hidden"}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  CHECK_FALSE(frame.hideIdentity);
+  auto refused = identityOf(frame);
+  REQUIRE(refused);
+  CHECK((*refused)["mode"].get<std::string>() == "exceptGroundMarks");
+  CHECK_FALSE((*refused)["pending"].get<bool>());
+  CHECK((*refused)["error"].get<std::string>().starts_with("Слишком часто"));
+
+  // An opening refused for hidden names stops automatic reconnects.
+  REQUIRE(model.Apply(model.Generation(), ServerRejection{77, RequestRejectionCode::HiddenIdentityNotAllowed, "", ""}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), settings, frame);
+  CHECK(frame.identityRefused);
+  auto disallowed = identityOf(frame);
+  REQUIRE(disallowed);
+  CHECK((*disallowed)["error"].get<std::string>() == "Сервер не разрешает скрывать имя");
+  CHECK_FALSE(disallowed->contains("pseudonym"));
+}
+
+TEST_CASE("The hide-my-name preference round-trips through ui.toml and defaults to shown")
+{
+  TempPath file;
+  UiFile   edited;
+  CHECK(edited.ui.chat.hideIdentity == "off");
+  edited.ui.chat.hideIdentity = "exceptGroundMarks";
+  REQUIRE(SaveUiFile(file.path, edited));
+  auto loaded = LoadUiFile(file.path);
+  REQUIRE(loaded);
+  CHECK(loaded->ui.chat.hideIdentity == "exceptGroundMarks");
+  {
+    std::ofstream output{file.path, std::ios::binary | std::ios::trunc};
+    output << "version = 1\n[ui.chat]\nstreamerMode = true\nhideIdentity = \"sometimes\"\n";
+  }
+  auto older = LoadUiFile(file.path);
+  REQUIRE(older);
+  CHECK(older->ui.chat.streamerMode);
+  CHECK(older->ui.chat.hideIdentity == "off");
+  const auto command = Bridge::ParseCommand(R"({"type":"setIdentityVisibility","hiding":"everywhere"})");
+  REQUIRE(command);
+  CHECK(Bridge::HidingOf(command->hiding) == Domain::HiddenIdentity::Everywhere);
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"setIdentityVisibility","hiding":"sometimes"})"));
 }
 
 TEST_SUITE_END();

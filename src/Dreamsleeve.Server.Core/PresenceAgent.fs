@@ -49,7 +49,7 @@ module PresenceAgent =
         match state.Members.TryGetValue connectionId with
         | false, _ -> None
         | true, memberState ->
-            let playerId = memberState.Latest.Data.PlayerId
+            let playerId = memberState.Latest.Identity.PlayerId
             state.Members.Remove connectionId |> ignore
             state.Players.Remove playerId |> ignore
             state.Dirty.Remove playerId |> ignore
@@ -83,7 +83,7 @@ module PresenceAgent =
     // Visibility is symmetric in space, but self always receives its own telemetry.
     // Radius is validated once at startup; double arithmetic avoids float overflow.
     let private visibleLocation state (observer: PlayerSnapshot) (source: PlayerSnapshot) =
-        if observer.Data.PlayerId = source.Data.PlayerId then source.Location
+        if observer.Identity.PlayerId = source.Identity.PlayerId then source.Location
         else
             match observer.Location, source.Location with
             | ValueSome origin, ValueSome target ->
@@ -104,7 +104,7 @@ module PresenceAgent =
         && view.ObserverContext = observer.Latest.MovementContext
 
     let private establishView observer source =
-        let playerId = source.Latest.Data.PlayerId
+        let playerId = source.Latest.Identity.PlayerId
         match observer.Views.TryGetValue playerId with
         | true, view when sameView observer source view -> view, false
         | true, _ | false, _ ->
@@ -129,11 +129,13 @@ module PresenceAgent =
     let private snapshot state observer =
         state.Members.Values
         |> Seq.map (project state observer)
-        |> Seq.sortBy _.Data.PlayerId
+        |> Seq.sortBy _.Identity.PlayerId
         |> List.ofSeq
 
+    // A switch between the profile and a pseudonym is a change of identity: it
+    // travels as PlayerUpdated, like a rename.
     let private identityEqual (previous: PlayerSnapshot) (latest: PlayerSnapshot) =
-        previous.Data = latest.Data && previous.CharacterName = latest.CharacterName
+        previous.Identity = latest.Identity && previous.CharacterName = latest.CharacterName
         && previous.CharacterNameWithheld = latest.CharacterNameWithheld
         && previous.CharacterGeneration = latest.CharacterGeneration
 
@@ -153,7 +155,7 @@ module PresenceAgent =
                 let details =
                     if source.Published.Details = source.Latest.Details then ValueNone
                     else ValueSome source.Latest.Details
-                deliverDelta state context observer (PresenceEvent.MetadataChanged(source.Latest.Data.PlayerId, values, details))
+                deliverDelta state context observer (PresenceEvent.MetadataChanged(source.Latest.Identity.PlayerId, values, details))
 
     let private publishMovement state context sendSamples observer =
         let candidates = state.Candidates
@@ -171,7 +173,7 @@ module PresenceAgent =
         for id in candidates do
             match state.Members.TryGetValue id with
             | true, source when state.Members.ContainsKey observer.ConnectionId ->
-                let playerId = source.Latest.Data.PlayerId
+                let playerId = source.Latest.Identity.PlayerId
                 match visibleLocation state observer.Latest source.Latest with
                 | ValueSome location ->
                     let view, changed = establishView observer source
@@ -213,7 +215,7 @@ module PresenceAgent =
         // A single agent turn freezes latest state for all observers. Dirty only
         // controls metadata; positions repeat even when every source has stopped.
         let members = state.Members.Values |> Seq.toArray
-        let changed = members |> Array.filter (fun memberState -> state.Dirty.Contains memberState.Latest.Data.PlayerId)
+        let changed = members |> Array.filter (fun memberState -> state.Dirty.Contains memberState.Latest.Identity.PlayerId)
         state.Dirty.Clear()
         let globalChanges =
             changed |> Array.filter (fun source ->
@@ -234,10 +236,10 @@ module PresenceAgent =
         let existedBefore = state.Members.ContainsKey subscription.ConnectionId
         let sameConnection =
             match state.Members.TryGetValue subscription.ConnectionId with
-            | true, memberState -> memberState.Latest.Data = subscription.Snapshot.Data
+            | true, memberState -> memberState.Latest.Identity.PlayerId = subscription.Snapshot.Identity.PlayerId
             | false, _ -> true
         let samePlayer =
-            match state.Players.TryGetValue subscription.Snapshot.Data.PlayerId with
+            match state.Players.TryGetValue subscription.Snapshot.Identity.PlayerId with
             | true, owner -> owner = subscription.ConnectionId
             | false, _ -> true
 
@@ -260,7 +262,7 @@ module PresenceAgent =
                         Views = Dictionary(); NextRevision = 0UL
                       }
                 state.Members[subscription.ConnectionId] <- memberState
-                state.Players[subscription.Snapshot.Data.PlayerId] <- subscription.ConnectionId
+                state.Players[subscription.Snapshot.Identity.PlayerId] <- subscription.ConnectionId
                 SpatialIndex.set memberState.ConnectionId memberState.Latest.Location state.LatestIndex
 
                 match deliver state context memberState (PresenceEvent.Snapshot(snapshot state memberState)) with
@@ -283,12 +285,12 @@ module PresenceAgent =
     let private update config state context connectionId (value: PlayerSnapshot) =
         match state.Members.TryGetValue connectionId with
         | false, _ -> ()
-        | true, memberState when memberState.Latest.Data <> value.Data ->
+        | true, memberState when memberState.Latest.Identity.PlayerId <> value.Identity.PlayerId ->
             notifyHost state context (SessionHostCommand.Close(connectionId, "presence_identity_conflict"))
         | true, memberState ->
             memberState.Latest <- value
             SpatialIndex.set connectionId value.Location state.LatestIndex
-            state.Dirty.Add value.Data.PlayerId |> ignore
+            state.Dirty.Add value.Identity.PlayerId |> ignore
             schedule config state context
 
     let private detach state (context: AgentContext<PresenceCommand>) (request: SessionDetach) =

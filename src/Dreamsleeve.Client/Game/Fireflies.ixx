@@ -137,7 +137,10 @@ namespace Fireflies
       };
       // Same resolver as the web UI, so a pseudonym matches on both surfaces.
       if (ui.showFireflyNames && !(combat && ui.combatHideNames))
-        label.name = runtime.session.PlayerNames().NameFor(id, remote.data, remote.characterName, ui);
+      {
+        auto name  = runtime.session.PlayerNames().NameFor(id, remote.data, remote.characterName, ui);
+        label.name = Dreamsleeve::Host::Names::PlateName(std::move(name), remote.data);
+      }
       if (ui.showBubbles && !(combat && ui.combatHideBubbles))
         if (const auto active = runtime.bubbles.Find(id, now, ui))
         {

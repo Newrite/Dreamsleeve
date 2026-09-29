@@ -65,6 +65,7 @@ export const defaults: Settings = {
   deathBorder: true,
   combatHideGroundMarks: false,
   combatHideGroundText: false,
+  hideIdentity: "off",
 };
 // "#RRGGBB" only, as the host parses it.
 export const isColor = (value: unknown) =>
@@ -139,7 +140,9 @@ export function settingsFrom(input: Partial<Settings>): Settings {
         ["username", "display", "character"].includes(String(value))) ||
       (key === "activationKey" && ["Enter", "F2"].includes(String(value))) ||
       (key === "announcementChannels" &&
-        ["tab", "all", "current"].includes(String(value)))
+        ["tab", "all", "current"].includes(String(value))) ||
+      (key === "hideIdentity" &&
+        ["off", "everywhere", "exceptGroundMarks"].includes(String(value)))
     )
       Object.assign(result, { [key]: value });
   }

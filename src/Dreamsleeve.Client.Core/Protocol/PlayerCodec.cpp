@@ -124,9 +124,10 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<Domain::PlayerData> Profile(const P::PlayerProfile& player)
   {
     if (player.player_id() == 0) return Invalid("player_id");
+    if (player.pseudonymous() && (!player.username().empty() || player.display_name().empty())) return Invalid("pseudonymous");
 
     // Strings have already been validated/canonicalized by the server.
-    return Domain::PlayerData{player.player_id(), player.username(), player.display_name()};
+    return Domain::PlayerData{player.player_id(), player.username(), player.display_name(), player.pseudonymous()};
   }
 
   Result<Domain::PlayerLocation> ReadLocation(const P::PlayerLocation& source)

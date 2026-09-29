@@ -34,10 +34,11 @@ type AnnouncementRequest = {
     Signature: AnnouncementSignature voption
 }
 
-/// A mark with the author's profile for the wire; the mark itself stores only the ID.
+/// A mark with its author's public identity for the wire: the pseudonym the
+/// mark was placed under, else the author's current profile.
 type GroundMarkRecord = {
     Mark: GroundMark
-    Author: PlayerData
+    Author: PublicIdentity
 }
 
 /// Reliable delta of one observer's visible marks; Clear starts a new baseline.
@@ -50,13 +51,14 @@ type GroundMarkView = {
 
 [<RequireQualifiedAccess>]
 type ClientCommand =
-    | OpenSession of sessionTicket: string
+    | OpenSession of sessionTicket: string * HiddenIdentity
     | SendChat of ChatChannelId * ChatMessageText
     | UpdatePlayer of PlayerUpdate
     | PostAnnouncement of AnnouncementRequest
     | PlaceGroundNote of GroundNoteText * GroundMarkPlacement
     | ReportDeath of DeathMarkText * GroundMarkPlacement
     | RemoveGroundMark of GroundMarkId
+    | SetIdentityVisibility of HiddenIdentity
 
 type ClientRequest = {
     RequestId: uint64
@@ -76,6 +78,10 @@ type SessionWelcome = {
     Channels: WelcomeChannel list
     /// Client announcement origins this server admits; limits come from ChatInput.
     AnnouncementSources: ClientAnnouncementSource list
+    /// What the other players see instead of this player's names, if hidden.
+    OwnPseudonym: Pseudonym voption
+    /// Where this player's names are hidden in the session.
+    Hiding: HiddenIdentity
 }
 
 type RequestRejectionCode = Dreamsleeve.Protocol.Chat.RequestRejectionCode
@@ -105,4 +111,6 @@ type ServerResponse =
     | GroundMarkRemoved of requestId: uint64 * GroundMarkId
     /// Full replacement of the player's own marks; no request ID.
     | OwnGroundMarks of GroundMarkRecord list
+    /// Settles SetIdentityVisibility: where the names are hidden now and the pseudonym others see there.
+    | IdentityVisibilityChanged of requestId: uint64 * Pseudonym voption * HiddenIdentity
 

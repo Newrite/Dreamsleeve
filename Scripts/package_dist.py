@@ -12,7 +12,8 @@ dist/Client (copy into Skyrim Data or install as a mod):
 
 dist/Server (framework-dependent `dotnet publish` of Dreamsleeve.Server, Release):
   Dreamsleeve.Server.dll and dependencies, db/migrations, server.example.toml, README.md,
-  moderation.example.toml and moderation.toml (word list, created only when absent)
+  moderation.example.toml and moderation.toml (word list, created only when absent),
+  pseudonyms.example.toml and pseudonyms.toml (hidden-name dictionary, created only when absent)
 
 The script never touches a game folder or a running server: installing is a copy,
 and an existing client.toml/ui.toml/server.toml must not be overwritten on update.
@@ -40,6 +41,7 @@ PRESERVED = (
     "Client/SKSE/Plugins/Dreamsleeve/aliases.toml",
     "Server/server.toml",
     "Server/moderation.toml",
+    "Server/pseudonyms.toml",
     "Server/data",
     "Server/logs",
 )
@@ -181,6 +183,12 @@ username/display name, сообщения и публикуемое имя пе�
 Антиспам (частота, всплеск, повторы) настраивается в `[Runtime.Chat]`. Это базовая
 защита, а не полная модерация. Изменения читаются только при запуске.
 
+Скрытое имя: `[Identity]` — разрешён ли игрокам режим «Скрывать моё имя от других
+игроков» (`AllowHiddenIdentity`), не чаще какого интервала его можно переключать
+(`ToggleIntervalMs`) и словарь псевдонимов `pseudonyms.toml` (формат — в
+`pseudonyms.example.toml`; без файла — 24 встроенных имени). Лог сервера и база
+хранят настоящие имена: псевдоним скрывает игрока только от других игроков.
+
 Объявления: `[Announcements]` — допуск объявлений клиентов (`TrustedClient`,
 `ThirdParty`, по умолчанию оба разрешены), их отдельный лимит частоты и расписание
 серверных объявлений `[[Announcements.Scheduled]]`. Разовое объявление администратора —
@@ -257,6 +265,8 @@ def main() -> int:
         shutil.copy2(SERVER / "moderation.example.toml", server / "moderation.example.toml")
         # Enabled by default: a fresh server starts with the example word list.
         shutil.copy2(SERVER / "moderation.example.toml", server / "moderation.toml")
+        shutil.copy2(SERVER / "pseudonyms.example.toml", server / "pseudonyms.example.toml")
+        shutil.copy2(SERVER / "pseudonyms.example.toml", server / "pseudonyms.toml")
         (server / "README.md").write_text(server_readme(), encoding="utf-8")
 
     for item in output.rglob("*"):

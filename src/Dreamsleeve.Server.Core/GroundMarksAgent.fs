@@ -26,7 +26,8 @@ module GroundMarksAgent =
         Options: GroundMarkOptions
         Rules: GroundMarkRules
         Marks: GroundMarkStorage
-        /// Profile snapshot per author with at least one mark, for the wire.
+        /// Current moderated profile per author with at least one mark, for the
+        /// wire; never a pseudonym: those stay with the marks placed under them.
         Authors: Dictionary<PlayerId, PlayerData>
         Index: SpatialIndex.State<GroundMarkId>
         Observers: Dictionary<Guid, Observer>
@@ -70,7 +71,7 @@ module GroundMarksAgent =
             notifyHost state context (SessionHostCommand.SlowConsumer observer.ConnectionId)
 
     let private record state (mark: GroundMark) : GroundMarkRecord =
-        { Mark = mark; Author = state.Authors[mark.Author] }
+        { Mark = mark; Author = GroundMark.authorIdentity state.Authors[mark.Author] mark }
 
     /// The author's complete set, wherever the marks stand; sent whenever it changes.
     let private announceOwn state context author =
@@ -221,6 +222,7 @@ module GroundMarksAgent =
                         GroundMark.create id author submission.Body submission.Placement now
                         |> GroundMark.withFlagged submission.Flagged
                         |> GroundMark.withCharacterName submission.CharacterName
+                        |> GroundMark.withPseudonym submission.Pseudonym
                     match GroundMarkStorage.add state.Rules mark state.Marks with
                     | Error _ -> context.Abort()
                     | Ok evicted ->
@@ -302,7 +304,7 @@ module GroundMarksAgent =
     /// loaded are the stored marks with their authors' current profiles; nextId
     /// is the storage high-water mark plus one, so IDs never repeat across runs.
     /// Expired marks among them are removed at the first expiry pass.
-    let start (options: GroundMarkOptions) (loaded: GroundMarkRecord list) (nextId: uint64)
+    let start (options: GroundMarkOptions) (loaded: StoredGroundMark list) (nextId: uint64)
               (writer: ReliableAgentRef<GroundMarkWrite>) (host: ReliableAgentRef<SessionHostCommand>) (logger: ILogger) =
         match GroundMarkOptions.validate options with
         | error :: _ -> Error error
@@ -324,7 +326,7 @@ module GroundMarksAgent =
                     Ticker = None
                 }
                 let mutable highest = 0UL
-                let duplicates = ResizeArray<GroundMarkRecord>()
+                let duplicates = ResizeArray<StoredGroundMark>()
                 for entry in loaded |> List.sortBy (fun entry -> entry.Mark.Id) do
                     match GroundMarkStorage.add rules entry.Mark state.Marks with
                     | Ok _ ->

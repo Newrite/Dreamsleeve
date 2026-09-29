@@ -37,6 +37,7 @@ const MessageRow = memo(function MessageRow({
   source,
   authorId,
   name,
+  pseudonymous,
   channelName,
   channelKind,
   filtered,
@@ -55,6 +56,7 @@ const MessageRow = memo(function MessageRow({
   source: Message["source"];
   authorId: string;
   name: string;
+  pseudonymous: boolean;
   channelName: string;
   channelKind: string | undefined;
   filtered: boolean;
@@ -79,6 +81,7 @@ const MessageRow = memo(function MessageRow({
       data-channel={channelKind}
       data-source={source}
       data-filtered={filtered || undefined}
+      data-pseudonymous={pseudonymous || undefined}
       data-origin={origin}
       data-kind={kind}
     >
@@ -96,16 +99,29 @@ const MessageRow = memo(function MessageRow({
           className={styles.author}
           disabled={!active}
           aria-haspopup="menu"
+          title={pseudonymous ? "Имя скрыто игроком" : undefined}
           onClick={() => chat.open("profile", authorId)}
           // Ultralight may not raise contextmenu: the right button opens it too.
           onMouseDown={(e) => {
             if (e.button !== 2) return;
             e.preventDefault();
-            chat.openAuthorMenu(authorId, name, e.clientX, e.clientY);
+            chat.openAuthorMenu(
+              authorId,
+              name,
+              e.clientX,
+              e.clientY,
+              pseudonymous,
+            );
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            chat.openAuthorMenu(authorId, name, e.clientX, e.clientY);
+            chat.openAuthorMenu(
+              authorId,
+              name,
+              e.clientX,
+              e.clientY,
+              pseudonymous,
+            );
           }}
         >
           {name}:
@@ -180,6 +196,7 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
               source={m.source}
               authorId={m.source === "player" ? m.author.id : ""}
               name={m.source === "player" ? author : ""}
+              pseudonymous={m.source === "player" && !!m.author.pseudonymous}
               channelName={channel?.name ?? "Канал"}
               channelKind={channel?.kind}
               filtered={!!m.filtered}

@@ -4,6 +4,7 @@
 #include "player.pb.h"
 #include "chat.pb.h"
 #include "ground.pb.h"
+#include "session.pb.h"
 
 import Dreamsleeve.Protocol;
 
@@ -30,7 +31,8 @@ static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::RateL
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::AnnouncementNotAllowed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GroundMarkAreaFull) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GroundMarkNotFound) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 14);
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::HiddenIdentityNotAllowed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 15);
 
 static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_UNKNOWN));
 static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Exploring) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_EXPLORING));
@@ -90,3 +92,8 @@ static_assert(static_cast<long long>(Protocol::Chat::GroundMarkKind::Unspecified
 static_assert(static_cast<long long>(Protocol::Chat::GroundMarkKind::Note) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GROUND_MARK_KIND_NOTE));
 static_assert(static_cast<long long>(Protocol::Chat::GroundMarkKind::Death) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GROUND_MARK_KIND_DEATH));
 static_assert(Dreamsleeve::Protocol::Chat::GroundMarkKind_ARRAYSIZE == 3);
+
+static_assert(static_cast<long long>(Protocol::Chat::HiddenIdentity::None) == static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_NONE));
+static_assert(static_cast<long long>(Protocol::Chat::HiddenIdentity::Everywhere) == static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_EVERYWHERE));
+static_assert(static_cast<long long>(Protocol::Chat::HiddenIdentity::ExceptGroundMarks) == static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS));
+static_assert(Dreamsleeve::Protocol::Chat::HiddenIdentity_ARRAYSIZE == 3);

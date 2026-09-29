@@ -295,11 +295,39 @@ namespace PrismaUI
       Send(runtime.session.IgnoredList(chat));
       return;
     }
+    if (type == "setIdentityVisibility")
+    {
+      // A ready session asks the server; with no session only the choice for
+      // the next one changes. While a session is being opened it waits.
+      auto&      chat    = runtime.ui.ui.chat;
+      const auto status  = app.Status();
+      const bool idle    = !status.authenticating &&
+                           (status.phase == Dream::SessionPhase::Disconnected || status.phase == Dream::SessionPhase::Faulted);
+      auto&      session = runtime.session;
+      if (session.Ready())
+      {
+        if (auto posted = session.SetIdentityVisibility(app.Exchange(), Bridge::HidingOf(command.hiding)); !posted)
+          session.SetIdentityError(posted.error());
+      }
+      else if (idle)
+      {
+        chat.hideIdentity = command.hiding;
+        app.Exchange().SetHideIdentity(Bridge::HidingOf(command.hiding));
+        if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
+        session.SetIdentityError({});
+      }
+      else
+        session.SetIdentityError("Дождитесь подключения к серверу");
+      Send(session.Identity(Bridge::HidingOf(chat.hideIdentity)));
+      return;
+    }
     if (type == "saveSettings")
     {
       const bool names   = runtime.ui.ui.chat.nameMode != command.settings->nameMode ||
                            runtime.ui.ui.chat.streamerMode != command.settings->streamerMode ||
                            runtime.ui.ui.chat.textFilter != command.settings->textFilter;
+      // "Hide my name" has its own command and changes only when the server agrees.
+      command.settings->hideIdentity = runtime.ui.ui.chat.hideIdentity;
       runtime.ui.ui.chat = *command.settings;
       if (names)
       {

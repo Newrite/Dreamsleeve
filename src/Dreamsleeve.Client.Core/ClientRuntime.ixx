@@ -66,15 +66,17 @@ public:
       if (!created) return Fail(created.error());
 
       transport   = std::move(*created);
-      opening     = Wire::OpenSession{*requestId, std::move(sessionTicket)};
+      opening     = Wire::OpenSession{*requestId, std::move(sessionTicket), exchange.HideIdentity()};
       lastRequest = *requestId;
       serverName.clear();
       pendingChats.clear();
       pendingUpdates.clear();
       pendingMarks.clear();
+      pendingIdentity.clear();
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
+      exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
       auto published = Publish();
       if (!published) return Fail(published.error());
 
@@ -159,9 +161,11 @@ private:
       pendingChats.clear();
       pendingUpdates.clear();
       pendingMarks.clear();
+      pendingIdentity.clear();
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
+      exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
       phase          = value;
       auto published = Publish(true);
       if (!published) SetPhase(SessionPhase::Faulted);
@@ -171,9 +175,10 @@ private:
     Result<void> Publish(
       bool                                  requestSnapshot  = false,
       std::optional<ChatConfirmation>       confirmation     = std::nullopt,
-      std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt)
+      std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt,
+      std::optional<IdentityConfirmation>   identity         = std::nullopt)
     {
-      if (!exchange.Publish(model, requestSnapshot, phase, serverName, confirmation, markConfirmation))
+      if (!exchange.Publish(model, requestSnapshot, phase, serverName, confirmation, markConfirmation, std::move(identity)))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
 
       return {};
@@ -269,6 +274,7 @@ private:
 
       serverName         = std::move(opened.serverName);
       announcementPolicy = std::move(opened.announcements);
+      exchange.PublishIdentity(std::move(opened.ownPseudonym), opened.hiding);
       phase = SessionPhase::Ready;
       for (const auto& message : earlyChat)
       {
@@ -297,7 +303,7 @@ private:
       if (phase != SessionPhase::Ready) return Unexpected("request_id");
       if (
         pendingChats.erase(rejection.requestId) == 0 && pendingUpdates.erase(rejection.requestId) == 0 &&
-        pendingMarks.erase(rejection.requestId) == 0)
+        pendingMarks.erase(rejection.requestId) == 0 && pendingIdentity.erase(rejection.requestId) == 0)
         return Unexpected("request_id");
 
       if (rejection.requestId == pendingLocation) ResetMovement();
@@ -352,6 +358,18 @@ private:
     {
       if (phase != SessionPhase::Ready || pendingMarks.erase(removed.requestId) == 0) return Unexpected("request_id");
       return Publish(false, std::nullopt, GroundMarkConfirmation{model.Generation(), removed.requestId, removed.markId, std::nullopt, true});
+    }
+
+    // The self entry keeps the real profile; the status carries what the others see.
+    Result<void> Receive(Wire::IdentityVisibilityChanged& changed)
+    {
+      if (phase != SessionPhase::Ready || pendingIdentity.erase(changed.requestId) == 0) return Unexpected("request_id");
+      exchange.PublishIdentity(changed.pseudonym, changed.hiding);
+      return Publish(
+        false,
+        std::nullopt,
+        std::nullopt,
+        IdentityConfirmation{model.Generation(), changed.requestId, std::move(changed.pseudonym), changed.hiding});
     }
 
     Result<void> Receive(GroundMarksChanged& value)
@@ -482,7 +500,9 @@ private:
     {
       if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
       if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
-      if (command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId))
+      if (
+        command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId) ||
+        pendingIdentity.contains(command.requestId))
         return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
 
       lastRequest = command.requestId;
@@ -512,6 +532,26 @@ private:
     Result<void> Process(std::uint64_t generation, RemoveGroundMark& command)
     {
       return SendMarkCommand(generation, command, command.markId != 0);
+    }
+
+    // One switch at a time; the server judges permission and frequency.
+    Result<void> Process(std::uint64_t generation, SetIdentityVisibility& command)
+    {
+      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
+      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
+      if (
+        command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId) ||
+        pendingMarks.contains(command.requestId))
+        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      lastRequest = command.requestId;
+      if (!pendingIdentity.empty()) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      auto packet = codec.Encode(command);
+      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
+      auto sent = transport->Send(std::move(*packet));
+      if (!sent) return Fail(sent.error());
+      pendingIdentity.insert(command.requestId);
+      return {};
     }
 
     template <class T>
@@ -623,7 +663,8 @@ private:
       const auto openingReply = phase == SessionPhase::Connecting || phase == SessionPhase::Opening ? 1u : 0u;
       exchange.TakeCommands(
         commands,
-        pendingChats.size() + pendingUpdates.size() + pendingMarks.size() + openingReply + model.PendingServerRejectionCount());
+        pendingChats.size() + pendingUpdates.size() + pendingMarks.size() + pendingIdentity.size() + openingReply +
+          model.PendingServerRejectionCount());
       Result<void> firstError;
 
       for (auto& queued : commands)
@@ -649,6 +690,7 @@ private:
     std::unordered_map<std::uint64_t, Domain::ChatChannelId> pendingChats;
     std::unordered_set<std::uint64_t>                        pendingUpdates;
     std::unordered_set<std::uint64_t>                        pendingMarks;
+    std::unordered_set<std::uint64_t>                        pendingIdentity;
     std::vector<QueuedClientCommand>                         commands;
     Clock::time_point                                        deadline{};
     Clock::time_point                                        nextPlayerSample{};

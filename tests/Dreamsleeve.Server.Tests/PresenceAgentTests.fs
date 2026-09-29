@@ -120,8 +120,13 @@ let private location x =
     PlayerLocation.create (Location.create form (LocationName.create 128 "Whiterun" |> ok))
         (Position.create x 2.0f 3.0f |> ok) Rotation.zero
 
+let private profileOf (snapshot: PlayerSnapshot) =
+    match snapshot.Identity with
+    | PublicIdentity.Profile profile -> profile
+    | PublicIdentity.Pseudonymous _ -> failwith "Expected a profile."
+
 let private character subscription =
-    Player.create subscription.Snapshot.Data |> Player.beginCharacter (CharacterName.create 128 "Nerevar" |> ok)
+    Player.create (profileOf subscription.Snapshot) |> Player.beginCharacter (CharacterName.create 128 "Nerevar" |> ok)
 
 let private withPositions settings aliceLocation bobLocation run =
     let initialize (alice, bob) =
@@ -177,7 +182,7 @@ let tests = testList "PresenceAgent" [
         equal (PresenceEvent.Joined b.Snapshot) joined
         do! post presence (PresenceCommand.Detach detach)
         let! left = receive bobEvents
-        equal (PresenceEvent.Left a.Snapshot.Data.PlayerId) left
+        equal (PresenceEvent.Left a.Snapshot.Identity.PlayerId) left
         let! ack = receive acknowledgments
         equal a.ConnectionId ack
         do! post presence (PresenceCommand.Detach detach)
@@ -237,7 +242,7 @@ let tests = testList "PresenceAgent" [
         equal (PresenceEvent.Joined n.Snapshot) joined
         let! leftFast = receive fastEvents
         let! leftNew = receive nextEvents
-        equal (PresenceEvent.Left s.Snapshot.Data.PlayerId) leftFast
+        equal (PresenceEvent.Left s.Snapshot.Identity.PlayerId) leftFast
         equal leftFast leftNew
         let! failure = receive hostEvents
         equal (SessionHostCommand.SlowConsumer s.ConnectionId) failure
@@ -290,7 +295,7 @@ let tests = testList "PresenceAgent" [
             do! post fixture.Presence (PresenceCommand.Detach { ConnectionId = fixture.Alice.ConnectionId; ReplyTo = fixture.Cleanup })
             let! _ = receive fixture.Acknowledgments
             let! departed = receive fixture.BobEvents
-            equal (PresenceEvent.Left latest.Data.PlayerId) departed
+            equal (PresenceEvent.Left latest.Identity.PlayerId) departed
 
             let replacement = { fixture.Alice with ConnectionId = Guid.NewGuid() }
             do! post fixture.Presence (PresenceCommand.Join replacement)
@@ -350,14 +355,14 @@ let tests = testList "PresenceAgent" [
             equal temporary (snapshot newcomer |> List.head)
             for events in [fixture.AliceEvents; fixture.BobEvents] do
                 let! published = receive events
-                equal (PresenceEvent.MetadataChanged(original.Data.PlayerId, ValueNone, ValueSome details)) published
+                equal (PresenceEvent.MetadataChanged(original.Identity.PlayerId, ValueNone, ValueSome details)) published
                 let! joined = receive events
                 equal (PresenceEvent.Joined fixture.Late.Snapshot) joined
 
             do! changed fixture original
-            do! flushBoth fixture (PresenceEvent.MetadataChanged(original.Data.PlayerId, ValueNone, ValueSome original.Details))
+            do! flushBoth fixture (PresenceEvent.MetadataChanged(original.Identity.PlayerId, ValueNone, ValueSome original.Details))
             let! restored = receive fixture.LateEvents
-            equal (PresenceEvent.MetadataChanged(original.Data.PlayerId, ValueNone, ValueSome original.Details)) restored
+            equal (PresenceEvent.MetadataChanged(original.Identity.PlayerId, ValueNone, ValueSome original.Details)) restored
         }))
 
     case "join flush removes a slow existing subscriber without resurrecting its stale snapshot" (fun () -> task {
@@ -381,7 +386,7 @@ let tests = testList "PresenceAgent" [
         let! updated = receive fastEvents
         let! left = receive fastEvents
         equal (PresenceEvent.Updated changed) updated
-        equal (PresenceEvent.Left s.Snapshot.Data.PlayerId) left
+        equal (PresenceEvent.Left s.Snapshot.Identity.PlayerId) left
         let! failure = receive hostEvents
         equal (SessionHostCommand.SlowConsumer s.ConnectionId) failure
         do! post presence (PresenceCommand.Join a)
@@ -413,19 +418,19 @@ let tests = testList "PresenceAgent" [
     case "leaving and reentering AOI uses reliable clear and a fresh baseline token" (fun () ->
         withPositions { config with VisibilityDistance = 10.0f } (ValueSome (location 0.0f)) (ValueSome (location 10.0f)) (fun fixture -> task {
             let! _, (_, initial) = flushViewsNow fixture
-            let original = initial |> List.find (fun value -> value.Data.PlayerId = fixture.Alice.Snapshot.Data.PlayerId)
+            let original = initial |> List.find (fun value -> value.Identity.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId)
             check original.Location.IsSome "Radius boundary is inclusive."
             let moved = { fixture.Alice.Snapshot with Location = ValueSome (location -1.0f); MovementSequence = 1UL }
             do! changed fixture moved
             let! _, (events, hiddenSnapshot) = flushViewsNow fixture
-            let clears = events |> List.choose (function PresenceEvent.VisibilityChanged value when value.PlayerId = original.Data.PlayerId -> Some value | _ -> None)
+            let clears = events |> List.choose (function PresenceEvent.VisibilityChanged value when value.PlayerId = original.Identity.PlayerId -> Some value | _ -> None)
             equal 1 clears.Length
             equal ValueNone clears.Head.Location
             check (clears.Head.ViewRevision > original.ViewRevision) "Clear advances the observer revision."
-            equal ValueNone (hiddenSnapshot |> List.find (fun value -> value.Data.PlayerId = original.Data.PlayerId)).Location
+            equal ValueNone (hiddenSnapshot |> List.find (fun value -> value.Identity.PlayerId = original.Identity.PlayerId)).Location
             do! changed fixture { moved with Location = original.Location; MovementSequence = 2UL }
             let! _, (restoredEvents, _) = flushViewsNow fixture
-            let restored = restoredEvents |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = original.Data.PlayerId -> Some value | _ -> None)
+            let restored = restoredEvents |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = original.Identity.PlayerId -> Some value | _ -> None)
             check (restored.ViewRevision > clears.Head.ViewRevision) "Reentry cannot accept stale packets from the previous view."
             equal original.Location restored.Location
             equal 2UL restored.Sequence
@@ -436,7 +441,7 @@ let tests = testList "PresenceAgent" [
             let observer = { fixture.Bob.Snapshot with Location = ValueSome (location 5.0f); MovementSequence = 1UL }
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, observer))
             let! _, (events, _) = flushViewsNow fixture
-            let baseline = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = fixture.Alice.Snapshot.Data.PlayerId -> Some value | _ -> None)
+            let baseline = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId -> Some value | _ -> None)
             equal fixture.Alice.Snapshot.Location baseline.Location
             let key = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 61u |> ok)
             let elsewhere = PlayerLocation.create (Location.create key (LocationName.create 128 "Elsewhere" |> ok)) Position.zero Rotation.zero
@@ -448,18 +453,18 @@ let tests = testList "PresenceAgent" [
     case "character reset and teleport renew reliable view even at identical coordinates" (fun () ->
         withPositions config (ValueSome (location 1.0f)) (ValueSome (location 2.0f)) (fun fixture -> task {
             let! _, (_, initial) = flushViewsNow fixture
-            let before = initial |> List.find (fun value -> value.Data.PlayerId = fixture.Alice.Snapshot.Data.PlayerId)
+            let before = initial |> List.find (fun value -> value.Identity.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId)
             let reset = { fixture.Alice.Snapshot with CharacterGeneration = fixture.Alice.Snapshot.CharacterGeneration + 1UL; MovementContext = 2UL }
             do! changed fixture reset
             let! _, (events, _) = flushViewsNow fixture
-            let baseline = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = before.Data.PlayerId -> Some value | _ -> None)
+            let baseline = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = before.Identity.PlayerId -> Some value | _ -> None)
             check (baseline.ViewRevision > before.ViewRevision) "Same coordinates do not preserve the old character's view."
             let metadata = events |> List.pick (function PresenceEvent.Updated value -> Some value | _ -> None)
             equal ValueNone metadata.Location
             equal 0UL metadata.ViewRevision
             do! changed fixture { reset with MovementContext = 3UL }
             let! _, (events, _) = flushViewsNow fixture
-            let teleport = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = before.Data.PlayerId -> Some value | _ -> None)
+            let teleport = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = before.Identity.PlayerId -> Some value | _ -> None)
             check (teleport.ViewRevision > baseline.ViewRevision) "Explicit discontinuity resets interpolation even in the same space."
         }))
 
@@ -471,7 +476,7 @@ let tests = testList "PresenceAgent" [
             let moving = { fixture.Bob.Snapshot with Location = ValueSome (location 8.0f); MovementSequence = 5UL }
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, moving))
             let! _, (events, _) = flushViewsNow fixture
-            let repaired = events |> List.pick (function PresenceEvent.Moved [|value|] when value.PlayerId = stopped.Data.PlayerId -> Some value | _ -> None)
+            let repaired = events |> List.pick (function PresenceEvent.Moved [|value|] when value.PlayerId = stopped.Identity.PlayerId -> Some value | _ -> None)
             equal 4UL repaired.Sequence
             equal (MovementPose.ofLocation stopped.Location.Value) repaired.Pose
         }))
@@ -491,7 +496,7 @@ let tests = testList "PresenceAgent" [
     case "reconnected source with the same player ID gets a fresh observer token" (fun () ->
         withPositions config (ValueSome (location 1.0f)) (ValueSome (location 2.0f)) (fun fixture -> task {
             let! _, (_, initial) = flushViewsNow fixture
-            let before = initial |> List.find (fun value -> value.Data.PlayerId = fixture.Alice.Snapshot.Data.PlayerId)
+            let before = initial |> List.find (fun value -> value.Identity.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId)
             do! post fixture.Presence (PresenceCommand.Detach { ConnectionId = fixture.Alice.ConnectionId; ReplyTo = fixture.Cleanup })
             let! _ = receive fixture.Acknowledgments
             let! _ = receive fixture.BobEvents
@@ -531,7 +536,7 @@ let tests = testList "PresenceAgent" [
         do! post presence (tick ())
         let! repeated = receive events
         match repeated with
-        | PresenceEvent.Moved [|value|] -> equal positioned.Data.PlayerId value.PlayerId
+        | PresenceEvent.Moved [|value|] -> equal positioned.Identity.PlayerId value.PlayerId
         | other -> failwithf "Membership and periodic delivery must survive: %A" other
         do! stop presence
         do! stop receiver
@@ -543,7 +548,7 @@ let tests = testList "PresenceAgent" [
                 let moved = { fixture.Alice.Snapshot with Location = ValueSome (location x) }
                 do! changed fixture moved
                 let! _, (_, players) = flushViewsNow fixture
-                let projected = players |> List.find (fun value -> value.Data.PlayerId = moved.Data.PlayerId)
+                let projected = players |> List.find (fun value -> value.Identity.PlayerId = moved.Identity.PlayerId)
                 let expected = PlayerLocation.isWithinRadius (WorldUnit.create 10.0f |> ok) fixture.Bob.Snapshot.Location.Value moved.Location.Value |> ok
                 equal expected projected.Location.IsSome
         }))
@@ -560,9 +565,9 @@ let tests = testList "PresenceAgent" [
             check (players |> List.forall (fun value -> value.Location.IsSome)) "Coincident peers are visible."
             do! changed fixture { fixture.Alice.Snapshot with Location = ValueSome (location 0.001f) }
             let! _, (events, players) = flushViewsNow fixture
-            let remote = players |> List.find (fun value -> value.Data.PlayerId = fixture.Alice.Snapshot.Data.PlayerId)
+            let remote = players |> List.find (fun value -> value.Identity.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId)
             equal ValueNone remote.Location
-            check (events |> List.exists (function PresenceEvent.VisibilityChanged value -> value.PlayerId = remote.Data.PlayerId && value.Location.IsNone | _ -> false)) "Departure is reliable even at radius zero."
+            check (events |> List.exists (function PresenceEvent.VisibilityChanged value -> value.PlayerId = remote.Identity.PlayerId && value.Location.IsNone | _ -> false)) "Departure is reliable even at radius zero."
         })
     })
 

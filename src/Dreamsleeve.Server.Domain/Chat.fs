@@ -85,13 +85,14 @@ module ChatChannelKind =
         | ChatChannelKind.System -> true
         | ChatChannelKind.Global -> false
 
-/// An immutable message with the author's profile at the time of sending.
+/// An immutable message with the author's public identity at the time of
+/// sending: the profile, or the pseudonym the author was shown under then.
 /// Only a server announcement has no author: the system is not a player.
 type ChatMessage =
     private {
         messageId: ChatMessageId
         channelId: ChatChannelId
-        author: PlayerData voption
+        author: PublicIdentity voption
         characterName: CharacterName voption
         messageText: ChatMessageText
         sentAt: DateTimeOffset
@@ -115,8 +116,8 @@ type ChatMessage =
 [<RequireQualifiedAccess>]
 module ChatMessage =
     /// Components have already passed their own domain validation.
-    /// The server supplies the ID and timestamp; the author's profile and
-    /// character name are snapshots taken at sending and are immutable.
+    /// The server supplies the ID and timestamp; the author's public identity
+    /// and character name are snapshots taken at sending and are immutable.
     let create messageId channelId author characterName messageText (sentAt: DateTimeOffset) =
         {
             messageId = messageId

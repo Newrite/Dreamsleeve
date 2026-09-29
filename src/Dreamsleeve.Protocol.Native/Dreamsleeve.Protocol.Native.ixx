@@ -36,6 +36,7 @@ export namespace Protocol::Chat
     AnnouncementNotAllowed = 11,
     GroundMarkAreaFull = 12,
     GroundMarkNotFound = 13,
+    HiddenIdentityNotAllowed = 14,
   };
 }
 
@@ -130,5 +131,15 @@ export namespace Protocol::Chat
     Unspecified = 0,
     Note = 1,
     Death = 2,
+  };
+}
+
+export namespace Protocol::Chat
+{
+  enum class HiddenIdentity : std::int32_t
+  {
+    None = 0,
+    Everywhere = 1,
+    ExceptGroundMarks = 2,
   };
 }

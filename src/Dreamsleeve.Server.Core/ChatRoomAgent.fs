@@ -117,8 +117,11 @@ module ChatRoomAgent =
                         | ValueSome _ | ValueNone -> ChatRoomEvent.Published message
                     deliver state context recipient event |> ignore
 
+    /// The session decides the author's public identity; it must be this member's.
     let private publish state context (request: ChatSubmission) =
         match state.Members.TryGetValue request.ConnectionId with
+        | true, author when author.Profile.PlayerId <> request.Author.PlayerId ->
+            notifyHost state context (SessionHostCommand.Close(request.ConnectionId, "chat_author_mismatch"))
         | false, _ -> reject state context request
         | true, author ->
             match admit state author.Profile.PlayerId request with
@@ -128,7 +131,7 @@ module ChatRoomAgent =
             | Ok () ->
                 let create messageId sentAt =
                     let message =
-                        ChatMessage.create messageId state.Chat.ChannelId author.Profile request.CharacterName request.Text sentAt
+                        ChatMessage.create messageId state.Chat.ChannelId request.Author request.CharacterName request.Text sentAt
                         |> ChatMessage.withFlagged request.Flagged
                     request.Announcement |> ValueOption.fold (fun message announcement -> ChatMessage.withAnnouncement announcement message) message
                 append state context create (ValueSome(struct (request.ConnectionId, request.RequestId)))

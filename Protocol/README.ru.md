@@ -1,13 +1,13 @@
-# Прикладной протокол сессии, версия 8
+# Прикладной протокол сессии, версия 10
 
 Схемы разделены по назначению:
 
 | Файл | Содержимое |
 |---|---|
-| [common.proto](common.proto) | PlayerProfile и FormKey |
+| [common.proto](common.proto) | PlayerProfile (публичная личность, в том числе псевдонимная) и FormKey |
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
-| [session.proto](session.proto) | OpenSession и начальный SessionOpened |
+| [session.proto](session.proto) | OpenSession и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged |
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
@@ -15,13 +15,13 @@
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–8 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 10 позволяет игроку скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–9 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 8. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 10. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -41,7 +41,7 @@ ENet может внутренне перейти к reliable; прикладн�
 Повторное открытие на том же соединении и SendChat до Ready должен отклонять
 серверный владелец. Codec не хранит состояние соединения и сам эти правила не применяет.
 
-OpenSession передаёт только session_ticket: одноразовый билет из HTTP login,
+OpenSession передаёт session_ticket и выбор hidden_identity: одноразовый билет из HTTP login,
 32 случайных байта в base64url без padding (43 символа). Старые номера полей 1/2
 и имена username/display_name зарезервированы; версии 1/2/3 несовместимы с версией 4.
 Имя, отображаемое имя и PlayerId берутся из профиля, связанного с билетом.
@@ -64,10 +64,10 @@ plain HTTP допустим только для явно разрешённой 
 
 | Направление | Payload | Содержание |
 |---|---|---|
-| Клиент → сервер | OpenSession | Одноразовый SessionTicket |
+| Клиент → сервер | OpenSession | Одноразовый SessionTicket и выбор hidden_identity |
 | Клиент → сервер | SendChat | ChannelId и текст, без авторства/времени/MessageId |
 | Клиент → сервер | PostAnnouncement | ChannelId системного канала, текст, вид (Announcement/Event), заявленный источник (TrustedClient/ThirdParty) и подпись; Chat-канал ENet |
-| Сервер → клиент | SessionOpened | SelfPlayerId, весь онлайн, каналы с видом и хвостом истории, политика объявлений |
+| Сервер → клиент | SessionOpened | SelfPlayerId, весь онлайн, каналы с видом и хвостом истории, политика объявлений, own_pseudonym и hidden_identity |
 | Сервер → клиент | ChatPublished | Одно принятое сообщение |
 | Сервер → клиент | RequestRejected | Общий RequestRejectionCode, объяснение, поле |
 | Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SetLocation / SetActorValues / LeaveGame / SetDetails |
@@ -81,6 +81,8 @@ plain HTTP допустим только для явно разрешённой 
 | Сервер → клиент | GroundMarkPlaced / GroundMarkRemoved | Подтверждение с RequestId: метка и id вытесненной / id удалённой |
 | Сервер → клиент | GroundMarksChanged | Reliable-дельта видимых меток: view_revision, added, removed_ids, clear |
 | Сервер → клиент | OwnGroundMarks | Полный список меток получателя, где бы они ни стояли: после открытия сессии и при каждом изменении набора; без RequestId |
+| Клиент → сервер | SetIdentityVisibility | Где скрыть свои имена от других игроков (HiddenIdentity); Control-канал |
+| Сервер → клиент | IdentityVisibilityChanged | Подтверждение с RequestId: применённый вариант и псевдоним, который теперь видят другие, или его отсутствие |
 
 RequestId — ненулевой uint64, назначаемый клиентским API до отправки. Клиент должен
 выдавать уникальные ID в течение жизни соединения; пропуски допустимы. Это не
@@ -91,7 +93,7 @@ ChatMessageId, не серверная последовательность и �
 
 В ClientPacket RequestId обязателен. В ServerPacket его наличие различается:
 
-- SessionOpened, PlayerUpdateAccepted, GroundMarkPlaced, GroundMarkRemoved и RequestRejected обязательно возвращают ID исходного запроса.
+- SessionOpened, PlayerUpdateAccepted, GroundMarkPlaced, GroundMarkRemoved, IdentityVisibilityChanged и RequestRejected обязательно возвращают ID исходного запроса.
 - ChatPublished содержит RequestId только в копии инициатору. Остальные получают
   то же принятое сообщение без RequestId. ID других клиентов не завершает свои запросы.
 - PlayerJoined/PlayerLeft/PlayerUpdated/PlayerVisibilityChanged/PlayerMetadataChanged/GroundMarksChanged не содержат RequestId. Явный ноль всегда ошибочен.
@@ -185,6 +187,43 @@ Control-канале ENet.
   многострочную подпись смерти и слишком длинный текст (`GroundNoteText.create`,
   `DeathMarkText.create`, лимиты `ChatInput.GroundNoteText` = 200,
   `ChatInput.DeathMarkText` = 64).
+
+## Скрытое имя
+
+Модель — публичная личность ([DomainSpecRu.MD §3.1](../docs/DomainSpecRu.MD)), реализация и
+ограничения — [ModerationAndNamesRu.md](../docs/ModerationAndNamesRu.md#скрытое-имя).
+
+- `PlayerProfile.pseudonymous = 4`: профиль игрока, скрывшего имена. `username` пуст,
+  `display_name` — серверный псевдоним, `player_id` — тот же открытый ID; имени персонажа
+  (`PlayerInfo.character_name`, `ChatMessage.character_name`, `GroundMark.character_name`)
+  при нём нет. `character_name_withheld` сохраняет прежний смысл (имя не прошло словарь) и
+  для псевдонима не используется. Клиент отвергает псевдонимный профиль с username или
+  пустым `display_name`. Так приходят все проекции скрытого игрока другим: bootstrap
+  `SessionOpened.players`, `PlayerJoined`/`PlayerUpdated`, автор `ChatMessage` (чат и
+  объявления клиента) и автор `GroundMark` (надписи, места смерти, `OwnGroundMarks`).
+- Свою запись игрок всегда получает с настоящим профилем (кодек сервера отвергает
+  приветствие, где запись получателя псевдонимна); свой псевдоним — в
+  `SessionOpened.own_pseudonym = 9` (optional, есть только при скрытом имени) и в ответе на
+  переключение.
+- `HiddenIdentity` (session.proto): `NONE = 0` — имена показаны; `EVERYWHERE = 1` —
+  присутствие (онлайн, надпись над светлячком), чат (сообщения и объявления клиента) и метки на
+  земле; `EXCEPT_GROUND_MARKS = 2` — присутствие и чат, новые метки несут настоящий профиль и
+  имя персонажа. Неизвестное значение — `INVALID_REQUEST` (сервер) или ошибка codec (клиент).
+- `OpenSession.hidden_identity = 4`: сессия открывается уже со скрытым именем, первый
+  `PlayerJoined` не несёт настоящего профиля. Сервер, запрещающий режим, отвечает на такое
+  открытие `RequestRejected` с `HIDDEN_IDENTITY_NOT_ALLOWED` до погашения билета.
+  `SessionOpened.hidden_identity = 10` — применённый вариант; `own_pseudonym` есть ровно тогда,
+  когда он не `NONE`.
+- `ClientPacket.set_identity_visibility = 17` (`SetIdentityVisibility{hidden}`, Control, RequestId):
+  ответ — `ServerPacket.identity_visibility_changed = 25` (`IdentityVisibilityChanged{optional
+  pseudonym, hidden}`) или `RequestRejected`: `RATE_LIMITED` (чаще `Identity.ToggleIntervalMs`,
+  состояние не меняется), `HIDDEN_IDENTITY_NOT_ALLOWED`, `OVERLOADED` (другое переключение ещё
+  ждёт ответа). Запрос текущего варианта подтверждается сразу и переключением не считается.
+  Новый псевдоним выдаётся только при переходе из `NONE`; смена `EVERYWHERE` ↔
+  `EXCEPT_GROUND_MARKS` сохраняет прежний.
+- Снимок автора в сообщении и метке фиксируется при создании: созданное при скрытом имени
+  навсегда остаётся с псевдонимом, в том числе в истории нового подключения и в метках после
+  перезапуска сервера.
 
 ## Игровое состояние
 
@@ -394,6 +433,7 @@ ProtocolError. Realtime не порождает коррелированные �
 | 11 | AnnouncementNotAllowed | Сервер не принимает объявления заявленного источника |
 | 12 | GroundMarkAreaFull | Ячейка пространственного индекса уже содержит предельное число меток |
 | 13 | GroundMarkNotFound | Нет такой метки этого автора |
+| 14 | HiddenIdentityNotAllowed | Сервер не разрешает скрывать имя (открытие со скрытым именем или переключение) |
 
 F# использует тип, сгенерированный protoc для .NET. Серверный encoder принимает
 только определённые ненулевые коды. C++ использует автоматически сгенерированное

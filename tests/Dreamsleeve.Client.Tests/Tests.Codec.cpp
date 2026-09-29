@@ -720,4 +720,75 @@ TEST_CASE("Announcements decode with unknown values kept, need an author unless 
   CHECK(wire.post_announcement().signature() == "Мод");
 }
 
+TEST_CASE("Pseudonymous profiles carry no username and the identity switch round-trips")
+{
+  const auto codec  = MakeCodec();
+  auto       packet = Published();
+  auto*      author = packet.mutable_chat_published()->mutable_message()->mutable_author();
+  author->clear_username();
+  author->set_display_name("Страж 2");
+  author->set_pseudonymous(true);
+  const auto decoded = codec.Decode(Bytes(packet), W::Channel::Chat);
+  REQUIRE(decoded);
+  const auto& message = std::get<ChatMessagesReceived>(*decoded).messages.front();
+  REQUIRE(message.author);
+  CHECK(message.author->pseudonymous);
+  CHECK(message.author->username.empty());
+  CHECK(message.author->displayName == "Страж 2");
+
+  author->set_username("leak");
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Chat));
+  author->clear_username();
+  author->clear_display_name();
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Chat));
+
+  const auto hidden = codec.Encode(W::OpenSession{3, std::string(43, 'A'), Domain::HiddenIdentity::Everywhere});
+  REQUIRE(hidden);
+  P::ClientPacket opening;
+  REQUIRE(opening.ParseFromArray(hidden->DataBytesView().data(), static_cast<int>(hidden->Size())));
+  CHECK(opening.open_session().hidden_identity() == P::HIDDEN_IDENTITY_EVERYWHERE);
+  const auto request = W::ClientRequest{SetIdentityVisibility{4, Domain::HiddenIdentity::ExceptGroundMarks}};
+  CHECK(W::ProtocolCodec::RequestChannel(request) == W::Channel::Control);
+  const auto encoded = codec.Encode(request);
+  REQUIRE(encoded);
+  P::ClientPacket sent;
+  REQUIRE(sent.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  CHECK(sent.request_id() == 4);
+  CHECK(sent.set_identity_visibility().hidden() == P::HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS);
+
+  P::ServerPacket changed;
+  changed.set_protocol_version(W::Version);
+  changed.set_request_id(4);
+  changed.mutable_identity_visibility_changed()->set_pseudonym("Страж");
+  changed.mutable_identity_visibility_changed()->set_hidden(P::HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS);
+  const auto settled = codec.Decode(Bytes(changed));
+  REQUIRE(settled);
+  const auto& value = std::get<W::IdentityVisibilityChanged>(*settled);
+  CHECK(value.requestId == 4);
+  CHECK(value.pseudonym == std::optional<std::string>{"Страж"});
+  CHECK(value.hiding == Domain::HiddenIdentity::ExceptGroundMarks);
+  // A pseudonym exactly when the names are hidden somewhere.
+  changed.mutable_identity_visibility_changed()->clear_pseudonym();
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  changed.mutable_identity_visibility_changed()->set_hidden(P::HIDDEN_IDENTITY_NONE);
+  CHECK_FALSE(std::get<W::IdentityVisibilityChanged>(*codec.Decode(Bytes(changed))).pseudonym);
+  changed.mutable_identity_visibility_changed()->set_hidden(static_cast<P::HiddenIdentity>(7));
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  changed.mutable_identity_visibility_changed()->set_hidden(P::HIDDEN_IDENTITY_EVERYWHERE);
+  changed.mutable_identity_visibility_changed()->set_pseudonym("");
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  changed.clear_request_id();
+  changed.mutable_identity_visibility_changed()->set_pseudonym("Страж");
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+
+  auto welcome = Welcome();
+  welcome.mutable_session_opened()->set_own_pseudonym("Страж");
+  CHECK_FALSE(codec.Decode(Bytes(welcome)));
+  welcome.mutable_session_opened()->set_hidden_identity(P::HIDDEN_IDENTITY_EVERYWHERE);
+  const auto opened = codec.Decode(Bytes(welcome));
+  REQUIRE(opened);
+  CHECK(std::get<W::SessionOpened>(*opened).ownPseudonym == std::optional<std::string>{"Страж"});
+  CHECK(std::get<W::SessionOpened>(*opened).hiding == Domain::HiddenIdentity::Everywhere);
+}
+
 TEST_SUITE_END();

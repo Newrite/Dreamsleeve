@@ -36,6 +36,7 @@ type ApplicationConfig = {
     Authentication: AuthenticationSettings
     Logging: LoggingSettings
     Moderation: ModerationSettings
+    Identity: IdentityOptions
     Announcements: AnnouncementOptions
     GroundMarks: GroundMarkOptions
 }
@@ -59,6 +60,7 @@ module Configuration =
         }
         Logging = ServerLogging.defaults
         Moderation = { Enabled = true; RulesPath = "moderation.toml" }
+        Identity = IdentityOptions.defaults
         Announcements = AnnouncementOptions.defaults
         GroundMarks = GroundMarkOptions.defaults
     }
@@ -172,10 +174,12 @@ module Configuration =
            || isNull (box config.Server.ChatInput) || isNull (box config.Server.PlayerInput) || isNull (box config.Runtime.Player)
            || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
            || isNull (box config.Authentication.Service) || isNull (box config.Moderation) || isNull (box config.Announcements)
-           || isNull (box config.GroundMarks) then
+           || isNull (box config.GroundMarks) || isNull (box config.Identity) then
             Error "Configuration sections cannot be null."
         elif not (GroundMarkOptions.validate config.GroundMarks).IsEmpty then
             Error (String.concat " " (GroundMarkOptions.validate config.GroundMarks))
+        elif not (IdentityOptions.validate config.Identity).IsEmpty then
+            Error (String.concat " " (IdentityOptions.validate config.Identity))
         elif not (Single.IsFinite config.Runtime.Presence.VisibilityDistance) || config.Runtime.Presence.VisibilityDistance < 0.0f then
             Error "Presence.VisibilityDistance must be finite and non-negative."
         elif config.Runtime.MaxSessions > config.Server.PeerLimit then
@@ -285,6 +289,49 @@ module Configuration =
             | :? IOException as error -> Error $"Cannot read moderation rules: {error.Message}"
             | :? UnauthorizedAccessException as error -> Error $"Cannot read moderation rules: {error.Message}"
             | :? ArgumentException as error -> Error $"Cannot read moderation rules: {error.Message}"
+
+    [<Literal>]
+    let private MaxPseudonymsBytes = 65536L
+
+    /// The pseudonym file: version = 1 and names = [...]. Entries that break the
+    /// rules of Pseudonym.create or repeat are skipped and counted.
+    let parsePseudonyms (source: string) =
+        let document = Tomlyn.Parsing.SyntaxParser.Parse(source, "pseudonyms", true)
+        if document.HasErrors then Error $"Invalid pseudonym TOML: {document.Diagnostics}"
+        else
+            let table = TomlSerializer.Deserialize<TomlTable>(source)
+            match table.Keys |> Seq.tryFind (fun key -> key <> "version" && key <> "names") with
+            | Some key -> Error $"Unknown pseudonym setting: {key}"
+            | None ->
+                match table.TryGetValue "version", table.TryGetValue "names" with
+                | (true, (:? int64 as version)), _ when version <> 1L -> Error "Unsupported pseudonym file version."
+                | (true, value), _ when not (value :? int64) -> Error "Pseudonym file version must be a number."
+                | _, (true, (:? TomlArray as values)) ->
+                    let names = values |> Seq.choose (function :? string as text -> Pseudonym.create text |> Result.toOption | _ -> None) |> List.ofSeq
+                    match PseudonymDictionary.create names with
+                    | ValueNone -> Error "Pseudonym file has no valid names."
+                    | ValueSome dictionary -> Ok (dictionary, values.Count - dictionary.Count)
+                | _, (true, _) -> Error "Pseudonym names must be an array of strings."
+                | _, (false, _) -> Error "Pseudonym file has no names."
+
+    /// Never stops the server: a missing, oversized, broken or empty file
+    /// falls back to the built-in list with a warning, like the client does.
+    let loadPseudonyms (options: IdentityOptions) : PseudonymDictionary * string option =
+        let fallback reason = PseudonymDictionary.builtIn, Some $"{reason}; using the {PseudonymDictionary.builtIn.Count} built-in pseudonyms."
+        try
+            let file = FileInfo options.PseudonymsPath
+            if String.IsNullOrWhiteSpace options.PseudonymsPath || not file.Exists then fallback $"Pseudonym file not found: {options.PseudonymsPath}"
+            elif file.Length > MaxPseudonymsBytes then fallback "Pseudonym file exceeds 64 KiB"
+            else
+                match parsePseudonyms (File.ReadAllText file.FullName) with
+                | Error error -> fallback error
+                | Ok (dictionary, 0) -> dictionary, None
+                | Ok (dictionary, skipped) -> dictionary, Some $"Pseudonym file: {skipped} invalid or repeated entries skipped."
+        with
+        | :? TomlException as error -> fallback $"Invalid pseudonym TOML: {error.Message}"
+        | :? IOException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
+        | :? UnauthorizedAccessException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
+        | :? ArgumentException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
 
     let rec private arguments configFile port (remainingArgs: string list) =
         match remainingArgs with

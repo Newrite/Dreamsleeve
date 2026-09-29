@@ -63,6 +63,7 @@ module ServerRuntime =
         Codec: ProtocolCodec
         MaxActorValues: int
         Moderation: ModerationRules
+        Identity: IdentityOptions
         Announcements: AnnouncementOptions
         GroundMarks: GroundMarkOptions
         GroundMarkRules: GroundMarkRules
@@ -79,6 +80,9 @@ module ServerRuntime =
     }
 
     let private now () = Environment.TickCount64
+
+    // A pseudonym is chosen at random, never from a name.
+    let private pick count = Random.Shared.Next count
 
     let private fail state (context: AgentContext<ServerRuntimeMessage>) (reason: string) =
         state.Logger.LogError("Server runtime failed: {Reason}", reason)
@@ -146,7 +150,7 @@ module ServerRuntime =
             | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
             | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
             | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-            | ServerResponse.OwnGroundMarks _ ->
+            | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ ->
                 ProtocolCodec.encodeServer state.Codec response |> Result.map List.singleton
         transmit options state context entry (ProtocolCodec.responseLane response) encoded
 
@@ -159,16 +163,28 @@ module ServerRuntime =
 
     let private host (options: ServerRuntimeOptions) state context command =
         match command with
-        | SessionHostCommand.Reserve(connectionId, playerId, reply) ->
+        | SessionHostCommand.Reserve(connectionId, profile, hiding, reply) ->
             let answer =
                 match SessionTable.find connectionId state.Table with
-                | Some entry when not state.Stopping -> SessionTable.reserve playerId entry state.Table
+                | Some entry when not state.Stopping -> SessionTable.reserve profile hiding pick entry state.Table
                 | Some _ | None -> IdentityAdmission.Closed
 
             match reply.TryPost answer with
             | AgentTryDeliveryResult.Posted -> ()
             | AgentTryDeliveryResult.Full | AgentTryDeliveryResult.Closed ->
                 SessionTable.find connectionId state.Table |> Option.iter (close options state context)
+
+        | SessionHostCommand.ChangeIdentity(connectionId, hiding, reply) ->
+            match SessionTable.find connectionId state.Table with
+            | Some entry ->
+                match SessionTable.changeIdentity hiding pick entry state.Table with
+                | Some pseudonym ->
+                    match reply.TryPost pseudonym with
+                    | AgentTryDeliveryResult.Posted -> ()
+                    | AgentTryDeliveryResult.Full | AgentTryDeliveryResult.Closed -> close options state context entry
+                // A session that is not ready cannot be told a new identity; it is closing already.
+                | None -> close options state context entry
+            | None -> ()
 
         | SessionHostCommand.Activate(connectionId, requestId, welcome) ->
             match SessionTable.find connectionId state.Table with
@@ -192,7 +208,7 @@ module ServerRuntime =
                 | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
                 | ServerResponse.ChatRejected _ | ServerResponse.PlayerVisibilityChanged _
                 | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-                | ServerResponse.OwnGroundMarks _ -> ()
+                | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ -> ()
             | Some _ | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->
@@ -202,11 +218,11 @@ module ServerRuntime =
             state.Logger.LogWarning("Slow consumer {ConnectionId}", connectionId)
             SessionTable.find connectionId state.Table |> Option.iter (close options state context)
 
-    let private openSession (options: ServerRuntimeOptions) maxActorValues (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket =
+    let private openSession (options: ServerRuntimeOptions) maxActorValues (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket hiding =
         match state.Sources, context.Ref.TryReliable() with
         | Some sources, Some self ->
-            let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket }
-            match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements state.GroundMarkRules (authenticator.Requests)
+            let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket; Hiding = hiding }
+            match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements state.GroundMarkRules state.Identity (authenticator.Requests)
                       (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                       (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) request with
             | Error reason -> fail state context reason
@@ -259,8 +275,8 @@ module ServerRuntime =
             | Ok request when ProtocolCodec.requestLane request <> lane -> close options state context entry
             | Ok request ->
                 match request.Command, entry.Phase with
-                | ClientCommand.OpenSession sessionTicket, SessionTable.Waiting ->
-                    openSession options state.MaxActorValues authenticator state context entry request.RequestId sessionTicket
+                | ClientCommand.OpenSession(sessionTicket, hiding), SessionTable.Waiting ->
+                    openSession options state.MaxActorValues authenticator state context entry request.RequestId sessionTicket hiding
                 | ClientCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
                 | ClientCommand.SendChat(channelId, text), SessionTable.Ready ->
@@ -275,9 +291,11 @@ module ServerRuntime =
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.ReportDeath(request.RequestId, label, placement))
                 | ClientCommand.RemoveGroundMark id, SessionTable.Ready ->
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.RemoveGroundMark(request.RequestId, id))
-                | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _), (SessionTable.Waiting | SessionTable.Opening) ->
+                | ClientCommand.SetIdentityVisibility hiding, SessionTable.Ready ->
+                    forward options state context entry lane request.RequestId (PlayerSessionMessage.SetIdentityVisibility(request.RequestId, hiding))
+                | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ | ClientCommand.SetIdentityVisibility _), (SessionTable.Waiting | SessionTable.Opening) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
-                | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _), SessionTable.Closing -> ()
+                | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ | ClientCommand.SetIdentityVisibility _), SessionTable.Closing -> ()
 
     let private disconnected options state context connectionId =
         match SessionTable.find connectionId state.Table with
@@ -514,9 +532,11 @@ module ServerRuntime =
 
     /// The caller owns authentication separately and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.
-    /// Moderation rules, announcements and ground mark options are fixed for the runtime lifetime, like the rest of config.
-    let start (options: ServerRuntimeOptions) config (moderation: ModerationRules) (announcements: AnnouncementOptions)
-              (groundMarks: GroundMarkOptions) (persistence: GroundMarkPersistence) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
+    /// Moderation rules, identity options with the pseudonym dictionary, announcements
+    /// and ground mark options are fixed for the runtime lifetime, like the rest of config.
+    let start (options: ServerRuntimeOptions) config (moderation: ModerationRules) (identity: IdentityOptions) (pseudonyms: PseudonymDictionary)
+              (announcements: AnnouncementOptions) (groundMarks: GroundMarkOptions) (persistence: GroundMarkPersistence)
+              (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let limits = [ options.MaxSessions; options.MailboxCapacity; options.ControlReserve; options.OpenTimeoutMs
                        options.ShutdownTimeoutMs; options.PollIntervalMs; options.Player.MailboxCapacity
                        options.Player.ControlReserve; options.Player.MaxPendingChat; options.Player.MaxPendingUpdates; options.Player.MaxBootstrapEvents
@@ -543,6 +563,7 @@ module ServerRuntime =
                 if int64 ordinary + int64 reserve > int64 Int32.MaxValue then "Mailbox capacity and control reserve overflow."
             match ServerConfig.validate config with Ok _ -> () | Error errors -> yield! errors
             yield! GroundMarkOptions.validate groundMarks
+            yield! IdentityOptions.validate identity
             if isNull (box persistence) || isNull (box persistence.Loaded) || isNull (box persistence.Writer) then "Ground mark persistence is missing."
         ]
         let scheduled = if errors.IsEmpty then AnnouncementOptions.resolve config.ChatInput announcements else Error errors
@@ -550,8 +571,9 @@ module ServerRuntime =
         match scheduled, ProtocolCodec.create config, rules with
         | Ok entries, Ok codec, Ok rules ->
             let state = {
-                Table = SessionTable.create(); RouteScratch = Array.empty; Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
+                Table = SessionTable.create pseudonyms; RouteScratch = Array.empty; Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
                 Moderation = moderation
+                Identity = identity
                 Announcements = announcements
                 GroundMarks = groundMarks; GroundMarkRules = rules; Persistence = persistence
                 Schedule = AnnouncementSchedule.create (now ()) entries

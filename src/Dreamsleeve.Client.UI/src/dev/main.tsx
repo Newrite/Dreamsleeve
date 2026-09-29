@@ -8,6 +8,7 @@ import type {
   Command,
   ConnectionPhase,
   Message,
+  HideIdentity,
   Player,
   Settings,
 } from "../bridge/types";
@@ -70,6 +71,8 @@ function project(p: Player, s: Settings, character = p.character): Player {
       character: undefined,
     };
   }
+  // A hidden player is known by the server pseudonym in every name mode.
+  if (p.pseudonymous) return { ...p, name: p.displayName };
   const name =
     s.nameMode === "username"
       ? p.username
@@ -77,6 +80,36 @@ function project(p: Player, s: Settings, character = p.character): Player {
         ? character
         : p.displayName;
   return { ...p, name, character };
+}
+// Stand-in for the server side of "hide my name": a pseudonym per switch,
+// a short wait for the answer, a refusal on demand. The choice is kept like
+// the host keeps it in ui.toml.
+const identity = {
+  mode: "off" as HideIdentity,
+  pseudonym: undefined as string | undefined,
+  allowed: true,
+  switches: 0,
+};
+try {
+  identity.mode = settingsFrom({
+    hideIdentity: (localStorage.getItem("dreamsleeve.ui.hideIdentity") ??
+      "off") as HideIdentity,
+  }).hideIdentity;
+} catch {
+  /* Local preview only. */
+}
+const pseudonymOf = () => `Страж ${3 + identity.switches}`;
+if (identity.mode !== "off") identity.pseudonym = pseudonymOf();
+function identityEvent(error?: string, pending = false, mode = identity.mode) {
+  chat.receive({
+    type: "identity",
+    mode,
+    pending,
+    ...(chat.store.getState().connected && identity.pseudonym
+      ? { pseudonym: identity.pseudonym }
+      : {}),
+    ...(error ? { error } : {}),
+  });
 }
 // Stand-in for server flag ranges (UTF-16 here; the host works on UTF-8).
 const flags = new Map<string, [number, number][]>();
@@ -121,6 +154,14 @@ const history: Message[] = [
     author: players[2],
     text: "Раздаю скины: t.me/freeskins",
     time: Date.now() - 1000,
+  },
+  {
+    id: "hidden-1",
+    channelId: "1",
+    source: "player",
+    author: players[3],
+    text: "Кто-то видел дракона над Ривервудом?",
+    time: Date.now() - 500,
   },
 ];
 flags.set("flagged-1", [[14, 28]]);
@@ -214,6 +255,32 @@ function command(c: Command) {
       });
       markEvents();
     }, 300);
+    return true;
+  }
+  if (c.type === "setIdentityVisibility") {
+    if (!chat.store.getState().connected) {
+      identity.mode = c.hiding;
+      identity.pseudonym = undefined;
+      localStorage.setItem("dreamsleeve.ui.hideIdentity", c.hiding);
+      setTimeout(() => identityEvent(), 0);
+      return true;
+    }
+    setTimeout(() => identityEvent(undefined, true, c.hiding), 0);
+    setTimeout(() => {
+      if (c.hiding !== "off" && !identity.allowed) {
+        identityEvent("Сервер не разрешает скрывать имя");
+        return;
+      }
+      // A new pseudonym only when the names were shown everywhere before.
+      if (identity.mode === "off" && c.hiding !== "off") {
+        identity.switches++;
+        identity.pseudonym = pseudonymOf();
+      }
+      if (c.hiding === "off") identity.pseudonym = undefined;
+      identity.mode = c.hiding;
+      localStorage.setItem("dreamsleeve.ui.hideIdentity", c.hiding);
+      identityEvent();
+    }, 400);
     return true;
   }
   if (c.type === "ignore" || c.type === "unignore") {
@@ -370,8 +437,9 @@ try {
 } catch {
   /* Local preview only. */
 }
-snapshot(settings);
+snapshot({ ...settings, hideIdentity: identity.mode });
 emitAuth({}, "connected");
+identityEvent();
 window.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
   if (
@@ -498,9 +566,18 @@ function Workshop() {
         </button>
         <button
           onClick={() => {
+            identity.allowed = !identity.allowed;
+            chat.receive({ type: "activate" });
+          }}
+        >
+          Сервер разрешает скрытое имя: переключить
+        </button>
+        <button
+          onClick={() => {
             const phase = connected ? "disconnected" : "connected";
             connection(phase);
             emitAuth({}, phase);
+            identityEvent();
           }}
         >
           {connected ? "Отключить" : "Подключить"}

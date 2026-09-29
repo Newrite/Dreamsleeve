@@ -35,7 +35,7 @@ let private subscription number (agent: Agent<ChatRoomEvent>) = {
 }
 let private publish (room: Agent<ChatRoomCommand>) (subscriber: Subscription<ChatRoomEvent>) requestId text =
     post room (ChatRoomCommand.Publish {
-        ConnectionId = subscriber.ConnectionId; RequestId = requestId
+        ConnectionId = subscriber.ConnectionId; RequestId = requestId; Author = PublicIdentity.Profile subscriber.Profile
         Text = ChatMessageText.create 256 text |> ok; ReplyTo = subscriber.Events
         CharacterName = ValueNone; Fingerprint = Moderation.normalize text
         Flagged = if text.StartsWith "flag" then [{ Start = 0; Length = 4 }] else []
@@ -43,7 +43,7 @@ let private publish (room: Agent<ChatRoomCommand>) (subscriber: Subscription<Cha
     })
 let private announceAs (room: Agent<ChatRoomCommand>) (subscriber: Subscription<ChatRoomEvent>) requestId text =
     post room (ChatRoomCommand.Publish {
-        ConnectionId = subscriber.ConnectionId; RequestId = requestId
+        ConnectionId = subscriber.ConnectionId; RequestId = requestId; Author = PublicIdentity.Profile subscriber.Profile
         Text = ChatMessageText.create 256 text |> ok; ReplyTo = subscriber.Events
         CharacterName = ValueNone; Fingerprint = Moderation.normalize text; Flagged = []
         Announcement = ValueSome(Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event ValueNone)
@@ -172,7 +172,7 @@ let tests = testList "ChatRoomAgent" [
         let first = accepted 7UL first
         let! broadcast = receive bobEvents
         equal (ChatRoomEvent.Published first) broadcast
-        equal (ValueSome a.Profile) first.Author
+        equal (ValueSome (PublicIdentity.Profile a.Profile)) first.Author
         equal [] first.Flagged
         equal 1UL (ChatMessageId.value first.MessageId)
         equal channelId first.ChannelId
@@ -289,7 +289,7 @@ let tests = testList "ChatRoomAgent" [
         match rejected with ChatRoomEvent.JoinFailed _ -> () | other -> failwithf "Expected join refusal: %A" other
         do! publish room original 1UL "still here"
         let! message = receive events
-        equal (ValueSome original.Profile) (accepted 1UL message).Author
+        equal (ValueSome (PublicIdentity.Profile original.Profile)) (accepted 1UL message).Author
         do! stop room
     })
 
@@ -422,7 +422,7 @@ let tests = testList "ChatRoomAgent" [
         do! announceAs room a 2UL "event"
         let! own = receive aliceEvents
         let message = accepted 2UL own
-        equal (ValueSome a.Profile) message.Author
+        equal (ValueSome (PublicIdentity.Profile a.Profile)) message.Author
         equal (ValueSome AnnouncementSource.ThirdParty) (message.Announcement |> ValueOption.map _.Source)
         let! _ = receive bobEvents
         let! retained = history room

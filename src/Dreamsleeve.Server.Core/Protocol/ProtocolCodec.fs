@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 9u
+    let Version = 10u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -38,6 +38,8 @@ module ProtocolCodec =
                 GroundMarkCodec.decodeDeath config packet.ReportDeath
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.RemoveGroundMark ->
                 GroundMarkCodec.decodeRemove packet.RemoveGroundMark
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.SetIdentityVisibility ->
+                SessionCodec.decodeHiding "hidden" packet.SetIdentityVisibility.Hidden |> Result.map ClientCommand.SetIdentityVisibility
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.None ->
                 Error(ProtocolCodecFailure.InvalidPayload "payload")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "payload")
@@ -70,7 +72,7 @@ module ProtocolCodec =
     let requestLane (request: ClientRequest) =
         match request.Command with
         | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _ -> DeliveryLane.Chat
-        | ClientCommand.OpenSession _ | ClientCommand.UpdatePlayer _
+        | ClientCommand.OpenSession _ | ClientCommand.UpdatePlayer _ | ClientCommand.SetIdentityVisibility _
         | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ -> DeliveryLane.Control
 
     let responseLane = function
@@ -80,7 +82,7 @@ module ProtocolCodec =
         | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
         | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
         | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-        | ServerResponse.OwnGroundMarks _ -> DeliveryLane.Control
+        | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ -> DeliveryLane.Control
 
     let decodeMovement (codec: ProtocolCodec) (bytes: byte array) =
         if isNull bytes || bytes.Length = 0 then fail None ProtocolCodecFailure.EmptyPacket
@@ -101,7 +103,8 @@ module ProtocolCodec =
         | ServerResponse.RequestRejected(requestId, _)
         | ServerResponse.ChatRejected(requestId, _)
         | ServerResponse.GroundMarkPlaced(requestId, _, _)
-        | ServerResponse.GroundMarkRemoved(requestId, _) -> Some requestId
+        | ServerResponse.GroundMarkRemoved(requestId, _)
+        | ServerResponse.IdentityVisibilityChanged(requestId, _, _) -> Some requestId
         | ServerResponse.ChatPublished _
         | ServerResponse.PlayerJoined _
         | ServerResponse.PlayerUpdated _
@@ -150,6 +153,7 @@ module ProtocolCodec =
             | ServerResponse.PlayerUpdated _
             | ServerResponse.PlayersMoved _
             | ServerResponse.PlayerUpdateAccepted _
+            | ServerResponse.IdentityVisibilityChanged _
             | ServerResponse.PlayerLeft _ -> None
 
     // Inputs are validated domain values. The owner decides IDs, times, recipient
@@ -188,6 +192,10 @@ module ProtocolCodec =
             | ServerResponse.GroundMarkPlaced(_, record, evicted) -> packet.GroundMarkPlaced <- GroundMarkCodec.placed record evicted
             | ServerResponse.GroundMarkRemoved(_, id) -> packet.GroundMarkRemoved <- GroundMarkCodec.removed id
             | ServerResponse.OwnGroundMarks records -> packet.OwnGroundMarks <- GroundMarkCodec.own records
+            | ServerResponse.IdentityVisibilityChanged(_, pseudonym, hiding) ->
+                let changed = Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged(Hidden = SessionCodec.hiding hiding)
+                pseudonym |> ValueOption.iter (fun name -> changed.Pseudonym <- Pseudonym.value name)
+                packet.IdentityVisibilityChanged <- changed
 
             | ServerResponse.RequestRejected(_, value)
             | ServerResponse.ChatRejected(_, value) ->
@@ -204,7 +212,7 @@ module ProtocolCodec =
                 | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
                 | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
                 | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-                | ServerResponse.OwnGroundMarks _ -> packet
+                | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ -> packet
 
             if encoded.CalculateSize() > config.MaxPacketBytes then fail requestId ProtocolCodecFailure.PacketTooLarge
             else Ok(encoded.ToByteArray())

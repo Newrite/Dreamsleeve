@@ -35,7 +35,7 @@ let private chat capacity =
     value
 
 let private message channel id author =
-    ChatMessage.create (messageId id) (channelId channel) author ValueNone
+    ChatMessage.create (messageId id) (channelId channel) (PublicIdentity.Profile author) ValueNone
         (ChatMessageText.create 2000 "Hello" |> ok) DateTimeOffset.UnixEpoch
 
 let private append id value =
@@ -437,13 +437,13 @@ let private chatTests =
         testCase "message timestamp is UTC and author remains the send-time profile" <| fun _ ->
             let author = profile 1UL "Original"
             let instant = DateTimeOffset(2026, 9, 26, 2, 0, 0, TimeSpan.FromHours 7.0)
-            let value = ChatMessage.create (messageId 1UL) (channelId 1UL) author ValueNone
+            let value = ChatMessage.create (messageId 1UL) (channelId 1UL) (PublicIdentity.Profile author) ValueNone
                             (ChatMessageText.create 128 "Hello" |> ok) instant
             let renamed = PlayerData.withDisplayName (displayName "Renamed") author
             Expect.equal value.SentAt.Offset TimeSpan.Zero "Wire-facing timestamp is canonical UTC"
             Expect.equal value.SentAt instant "The instant is preserved"
-            Expect.equal value.Author (ValueSome author) "Message keeps the immutable send-time author"
-            Expect.notEqual value.Author (ValueSome renamed) "Renaming profile does not rewrite message"
+            Expect.equal value.Author (ValueSome (PublicIdentity.Profile author)) "Message keeps the immutable send-time author"
+            Expect.notEqual value.Author (ValueSome (PublicIdentity.Profile renamed)) "Renaming profile does not rewrite message"
     ]
 
 let private movementTests = testList "Movement" [

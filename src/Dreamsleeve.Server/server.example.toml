@@ -125,6 +125,21 @@ Enabled = true
 # A missing file starts the server with an empty list and a warning.
 RulesPath = "moderation.toml"
 
+# "Hide my name from other players": while a player keeps it on, everyone else
+# sees a server pseudonym instead of their username, display name and character
+# name; the player still sees their own profile. PlayerId stays public. Read at
+# startup; a missing section keeps these defaults.
+[Identity]
+# false refuses the mode: opening a hidden session or switching gets
+# HIDDEN_IDENTITY_NOT_ALLOWED and the real profile is never sent in its place.
+AllowHiddenIdentity = true
+# A session may switch no sooner than this after its previous switch; sooner
+# gets RATE_LIMITED and nothing changes. 0 disables the limit.
+ToggleIntervalMs = 30000
+# Separate TOML (see pseudonyms.example.toml), relative to the working directory.
+# A missing or broken file uses the 24 built-in names with a warning.
+PseudonymsPath = "pseudonyms.toml"
+
 # System channel: server announcements and announcements requested by clients.
 # A channel of its own, read-only for chat. Read at startup, like the rest of
 # this file; there is no hot reload. A missing section keeps these defaults:

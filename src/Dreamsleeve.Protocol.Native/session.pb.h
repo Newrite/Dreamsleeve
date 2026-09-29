@@ -28,6 +28,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "chat.pb.h"
 #include "player.pb.h"
@@ -57,6 +58,12 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_sess
 namespace Dreamsleeve {
 namespace Protocol {
 namespace Chat {
+enum HiddenIdentity : int;
+extern const uint32_t HiddenIdentity_internal_data_[];
+class IdentityVisibilityChanged;
+struct IdentityVisibilityChangedDefaultTypeInternal;
+extern IdentityVisibilityChangedDefaultTypeInternal _IdentityVisibilityChanged_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull IdentityVisibilityChanged_class_data_;
 class OpenSession;
 struct OpenSessionDefaultTypeInternal;
 extern OpenSessionDefaultTypeInternal _OpenSession_default_instance_;
@@ -65,21 +72,255 @@ class SessionOpened;
 struct SessionOpenedDefaultTypeInternal;
 extern SessionOpenedDefaultTypeInternal _SessionOpened_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull SessionOpened_class_data_;
+class SetIdentityVisibility;
+struct SetIdentityVisibilityDefaultTypeInternal;
+extern SetIdentityVisibilityDefaultTypeInternal _SetIdentityVisibility_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SetIdentityVisibility_class_data_;
 }  // namespace Chat
 }  // namespace Protocol
 }  // namespace Dreamsleeve
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::Dreamsleeve::Protocol::Chat::HiddenIdentity_internal_data_>
+    internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Chat::HiddenIdentity>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace Dreamsleeve {
 namespace Protocol {
 namespace Chat {
+enum HiddenIdentity : int {
+  HIDDEN_IDENTITY_NONE = 0,
+  HIDDEN_IDENTITY_EVERYWHERE = 1,
+  HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS = 2,
+  HiddenIdentity_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  HiddenIdentity_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t HiddenIdentity_internal_data_[];
+inline constexpr HiddenIdentity HiddenIdentity_MIN =
+    static_cast<HiddenIdentity>(0);
+inline constexpr HiddenIdentity HiddenIdentity_MAX =
+    static_cast<HiddenIdentity>(2);
+inline bool HiddenIdentity_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int HiddenIdentity_ARRAYSIZE = 2 + 1;
+const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL HiddenIdentity_descriptor();
+template <typename T>
+const ::std::string& HiddenIdentity_Name(T value) {
+  static_assert(::std::is_same<T, HiddenIdentity>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to HiddenIdentity_Name().");
+  return HiddenIdentity_Name(static_cast<HiddenIdentity>(value));
+}
+template <>
+inline const ::std::string& HiddenIdentity_Name(HiddenIdentity value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<HiddenIdentity_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+inline bool HiddenIdentity_Parse(
+    ::absl::string_view name, HiddenIdentity* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<HiddenIdentity>(HiddenIdentity_descriptor(), name,
+                                           value);
+}
 
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class SetIdentityVisibility final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.SetIdentityVisibility) */ {
+ public:
+  inline SetIdentityVisibility() : SetIdentityVisibility(nullptr) {}
+  ~SetIdentityVisibility() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetIdentityVisibility* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetIdentityVisibility));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR SetIdentityVisibility(::google::protobuf::internal::ConstantInitialized);
+
+  inline SetIdentityVisibility(const SetIdentityVisibility& from) : SetIdentityVisibility(nullptr, from) {}
+  inline SetIdentityVisibility(SetIdentityVisibility&& from) noexcept
+      : SetIdentityVisibility(nullptr, ::std::move(from)) {}
+  inline SetIdentityVisibility& operator=(const SetIdentityVisibility& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetIdentityVisibility& operator=(SetIdentityVisibility&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const SetIdentityVisibility& default_instance() {
+    return *reinterpret_cast<const SetIdentityVisibility*>(
+        &_SetIdentityVisibility_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(SetIdentityVisibility& a, SetIdentityVisibility& b) { a.Swap(&b); }
+  inline void Swap(SetIdentityVisibility* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetIdentityVisibility* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SetIdentityVisibility* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetIdentityVisibility>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetIdentityVisibility& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetIdentityVisibility& from) { SetIdentityVisibility::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetIdentityVisibility* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.SetIdentityVisibility"; }
+
+  explicit SetIdentityVisibility(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetIdentityVisibility(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetIdentityVisibility& from);
+  SetIdentityVisibility(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetIdentityVisibility&& from) noexcept
+      : SetIdentityVisibility(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kHiddenFieldNumber = 1,
+  };
+  // .Dreamsleeve.Protocol.Chat.HiddenIdentity hidden = 1;
+  void clear_hidden() ;
+  ::Dreamsleeve::Protocol::Chat::HiddenIdentity hidden() const;
+  void set_hidden(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
+
+  private:
+  ::Dreamsleeve::Protocol::Chat::HiddenIdentity _internal_hidden() const;
+  void _internal_set_hidden(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SetIdentityVisibility)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetIdentityVisibility& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int hidden_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_session_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SetIdentityVisibility_class_data_;
 // -------------------------------------------------------------------
 
 class OpenSession final : public ::google::protobuf::Message
@@ -225,6 +466,7 @@ class OpenSession final : public ::google::protobuf::Message
   // accessors -------------------------------------------------------
   enum : int {
     kSessionTicketFieldNumber = 3,
+    kHiddenIdentityFieldNumber = 4,
   };
   // string session_ticket = 3;
   void clear_session_ticket() ;
@@ -241,11 +483,21 @@ class OpenSession final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_session_ticket();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.HiddenIdentity hidden_identity = 4;
+  void clear_hidden_identity() ;
+  ::Dreamsleeve::Protocol::Chat::HiddenIdentity hidden_identity() const;
+  void set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
+
+  private:
+  ::Dreamsleeve::Protocol::Chat::HiddenIdentity _internal_hidden_identity() const;
+  void _internal_set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.OpenSession)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 1,
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
                                    0, 60,
                                    2>
       _table_;
@@ -268,6 +520,7 @@ class OpenSession final : public ::google::protobuf::Message
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr session_ticket_;
+    int hidden_identity_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -275,6 +528,214 @@ class OpenSession final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull OpenSession_class_data_;
+// -------------------------------------------------------------------
+
+class IdentityVisibilityChanged final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged) */ {
+ public:
+  inline IdentityVisibilityChanged() : IdentityVisibilityChanged(nullptr) {}
+  ~IdentityVisibilityChanged() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(IdentityVisibilityChanged* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(IdentityVisibilityChanged));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR IdentityVisibilityChanged(::google::protobuf::internal::ConstantInitialized);
+
+  inline IdentityVisibilityChanged(const IdentityVisibilityChanged& from) : IdentityVisibilityChanged(nullptr, from) {}
+  inline IdentityVisibilityChanged(IdentityVisibilityChanged&& from) noexcept
+      : IdentityVisibilityChanged(nullptr, ::std::move(from)) {}
+  inline IdentityVisibilityChanged& operator=(const IdentityVisibilityChanged& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline IdentityVisibilityChanged& operator=(IdentityVisibilityChanged&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const IdentityVisibilityChanged& default_instance() {
+    return *reinterpret_cast<const IdentityVisibilityChanged*>(
+        &_IdentityVisibilityChanged_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(IdentityVisibilityChanged& a, IdentityVisibilityChanged& b) { a.Swap(&b); }
+  inline void Swap(IdentityVisibilityChanged* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(IdentityVisibilityChanged* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  IdentityVisibilityChanged* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<IdentityVisibilityChanged>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const IdentityVisibilityChanged& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const IdentityVisibilityChanged& from) { IdentityVisibilityChanged::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(IdentityVisibilityChanged* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged"; }
+
+  explicit IdentityVisibilityChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  IdentityVisibilityChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const IdentityVisibilityChanged& from);
+  IdentityVisibilityChanged(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, IdentityVisibilityChanged&& from) noexcept
+      : IdentityVisibilityChanged(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPseudonymFieldNumber = 1,
+    kHiddenFieldNumber = 2,
+  };
+  // optional string pseudonym = 1;
+  bool has_pseudonym() const;
+  void clear_pseudonym() ;
+  const ::std::string& pseudonym() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_pseudonym(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_pseudonym();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_pseudonym();
+  void set_allocated_pseudonym(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_pseudonym() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_pseudonym(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_pseudonym();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.HiddenIdentity hidden = 2;
+  void clear_hidden() ;
+  ::Dreamsleeve::Protocol::Chat::HiddenIdentity hidden() const;
+  void set_hidden(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
+
+  private:
+  ::Dreamsleeve::Protocol::Chat::HiddenIdentity _internal_hidden() const;
+  void _internal_set_hidden(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 69,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const IdentityVisibilityChanged& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr pseudonym_;
+    int hidden_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_session_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull IdentityVisibilityChanged_class_data_;
 // -------------------------------------------------------------------
 
 class SessionOpened final : public ::google::protobuf::Message
@@ -422,8 +883,10 @@ class SessionOpened final : public ::google::protobuf::Message
     kPlayersFieldNumber = 5,
     kChannelsFieldNumber = 8,
     kServerNameFieldNumber = 6,
+    kOwnPseudonymFieldNumber = 9,
     kAnnouncementsFieldNumber = 7,
     kSelfPlayerIdFieldNumber = 1,
+    kHiddenIdentityFieldNumber = 10,
   };
   // repeated .Dreamsleeve.Protocol.Chat.PlayerInfo players = 5;
   int players_size() const;
@@ -474,6 +937,22 @@ class SessionOpened final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_server_name();
 
   public:
+  // optional string own_pseudonym = 9;
+  bool has_own_pseudonym() const;
+  void clear_own_pseudonym() ;
+  const ::std::string& own_pseudonym() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_own_pseudonym(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_own_pseudonym();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_own_pseudonym();
+  void set_allocated_own_pseudonym(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_own_pseudonym() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_own_pseudonym(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_own_pseudonym();
+
+  public:
   // .Dreamsleeve.Protocol.Chat.AnnouncementPolicy announcements = 7;
   bool has_announcements() const;
   void clear_announcements() ;
@@ -499,12 +978,22 @@ class SessionOpened final : public ::google::protobuf::Message
   void _internal_set_self_player_id(::uint64_t value);
 
   public:
+  // .Dreamsleeve.Protocol.Chat.HiddenIdentity hidden_identity = 10;
+  void clear_hidden_identity() ;
+  ::Dreamsleeve::Protocol::Chat::HiddenIdentity hidden_identity() const;
+  void set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
+
+  private:
+  ::Dreamsleeve::Protocol::Chat::HiddenIdentity _internal_hidden_identity() const;
+  void _internal_set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SessionOpened)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 5,
-                                   3, 59,
+  static const ::google::protobuf::internal::TcParseTable<3, 7,
+                                   3, 72,
                                    2>
       _table_;
 
@@ -528,8 +1017,10 @@ class SessionOpened final : public ::google::protobuf::Message
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::PlayerInfo > players_;
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::ChatChannel > channels_;
     ::google::protobuf::internal::ArenaStringPtr server_name_;
+    ::google::protobuf::internal::ArenaStringPtr own_pseudonym_;
     ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE announcements_;
     ::uint64_t self_player_id_;
+    int hidden_identity_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -619,6 +1110,31 @@ inline void OpenSession::set_allocated_session_ticket(::std::string* PROTOBUF_NU
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.OpenSession.session_ticket)
 }
 
+// .Dreamsleeve.Protocol.Chat.HiddenIdentity hidden_identity = 4;
+inline void OpenSession::clear_hidden_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hidden_identity_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity OpenSession::hidden_identity() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.OpenSession.hidden_identity)
+  return _internal_hidden_identity();
+}
+inline void OpenSession::set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
+  _internal_set_hidden_identity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.OpenSession.hidden_identity)
+}
+inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity OpenSession::_internal_hidden_identity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::Dreamsleeve::Protocol::Chat::HiddenIdentity>(_impl_.hidden_identity_);
+}
+inline void OpenSession::_internal_set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hidden_identity_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // SessionOpened
@@ -693,7 +1209,7 @@ inline void SessionOpened::clear_self_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.self_player_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000020U);
 }
 inline ::uint64_t SessionOpened::self_player_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.self_player_id)
@@ -701,7 +1217,7 @@ inline ::uint64_t SessionOpened::self_player_id() const {
 }
 inline void SessionOpened::set_self_player_id(::uint64_t value) {
   _internal_set_self_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.self_player_id)
 }
 inline ::uint64_t SessionOpened::_internal_self_player_id() const {
@@ -765,7 +1281,7 @@ SessionOpened::_internal_mutable_players() {
 
 // .Dreamsleeve.Protocol.Chat.AnnouncementPolicy announcements = 7;
 inline bool SessionOpened::has_announcements() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
   PROTOBUF_ASSUME(!value || _impl_.announcements_ != nullptr);
   return value;
 }
@@ -786,16 +1302,16 @@ inline void SessionOpened::unsafe_arena_set_allocated_announcements(
   }
   _impl_.announcements_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
 }
 inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE SessionOpened::release_announcements() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* released = _impl_.announcements_;
   _impl_.announcements_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -815,7 +1331,7 @@ inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE Sess
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* temp = _impl_.announcements_;
   _impl_.announcements_ = nullptr;
   return temp;
@@ -830,7 +1346,7 @@ inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL Sessi
 }
 inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL SessionOpened::mutable_announcements()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* _msg = _internal_mutable_announcements();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
   return _msg;
@@ -847,9 +1363,9 @@ inline void SessionOpened::set_allocated_announcements(::Dreamsleeve::Protocol::
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
 
   _impl_.announcements_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy*>(value);
@@ -906,6 +1422,227 @@ SessionOpened::_internal_mutable_channels() {
   return &_impl_.channels_;
 }
 
+// optional string own_pseudonym = 9;
+inline bool SessionOpened::has_own_pseudonym() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  return value;
+}
+inline void SessionOpened::clear_own_pseudonym() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.own_pseudonym_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::std::string& SessionOpened::own_pseudonym() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.own_pseudonym)
+  return _internal_own_pseudonym();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SessionOpened::set_own_pseudonym(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.own_pseudonym_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.own_pseudonym)
+}
+inline ::std::string* PROTOBUF_NONNULL SessionOpened::mutable_own_pseudonym()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_own_pseudonym();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.own_pseudonym)
+  return _s;
+}
+inline const ::std::string& SessionOpened::_internal_own_pseudonym() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.own_pseudonym_.Get();
+}
+inline void SessionOpened::_internal_set_own_pseudonym(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.own_pseudonym_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SessionOpened::_internal_mutable_own_pseudonym() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.own_pseudonym_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SessionOpened::release_own_pseudonym() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionOpened.own_pseudonym)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.own_pseudonym_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.own_pseudonym_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SessionOpened::set_allocated_own_pseudonym(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.own_pseudonym_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.own_pseudonym_.IsDefault()) {
+    _impl_.own_pseudonym_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.own_pseudonym)
+}
+
+// .Dreamsleeve.Protocol.Chat.HiddenIdentity hidden_identity = 10;
+inline void SessionOpened::clear_hidden_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hidden_identity_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000040U);
+}
+inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::hidden_identity() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.hidden_identity)
+  return _internal_hidden_identity();
+}
+inline void SessionOpened::set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
+  _internal_set_hidden_identity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.hidden_identity)
+}
+inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::_internal_hidden_identity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::Dreamsleeve::Protocol::Chat::HiddenIdentity>(_impl_.hidden_identity_);
+}
+inline void SessionOpened::_internal_set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hidden_identity_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SetIdentityVisibility
+
+// .Dreamsleeve.Protocol.Chat.HiddenIdentity hidden = 1;
+inline void SetIdentityVisibility::clear_hidden() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hidden_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SetIdentityVisibility::hidden() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SetIdentityVisibility.hidden)
+  return _internal_hidden();
+}
+inline void SetIdentityVisibility::set_hidden(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
+  _internal_set_hidden(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SetIdentityVisibility.hidden)
+}
+inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SetIdentityVisibility::_internal_hidden() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::Dreamsleeve::Protocol::Chat::HiddenIdentity>(_impl_.hidden_);
+}
+inline void SetIdentityVisibility::_internal_set_hidden(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hidden_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// IdentityVisibilityChanged
+
+// optional string pseudonym = 1;
+inline bool IdentityVisibilityChanged::has_pseudonym() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  return value;
+}
+inline void IdentityVisibilityChanged::clear_pseudonym() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pseudonym_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& IdentityVisibilityChanged::pseudonym() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.pseudonym)
+  return _internal_pseudonym();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void IdentityVisibilityChanged::set_pseudonym(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.pseudonym_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.pseudonym)
+}
+inline ::std::string* PROTOBUF_NONNULL IdentityVisibilityChanged::mutable_pseudonym()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_pseudonym();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.pseudonym)
+  return _s;
+}
+inline const ::std::string& IdentityVisibilityChanged::_internal_pseudonym() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pseudonym_.Get();
+}
+inline void IdentityVisibilityChanged::_internal_set_pseudonym(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pseudonym_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL IdentityVisibilityChanged::_internal_mutable_pseudonym() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.pseudonym_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE IdentityVisibilityChanged::release_pseudonym() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.pseudonym)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.pseudonym_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.pseudonym_.Set("", GetArena());
+  }
+  return released;
+}
+inline void IdentityVisibilityChanged::set_allocated_pseudonym(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.pseudonym_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.pseudonym_.IsDefault()) {
+    _impl_.pseudonym_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.pseudonym)
+}
+
+// .Dreamsleeve.Protocol.Chat.HiddenIdentity hidden = 2;
+inline void IdentityVisibilityChanged::clear_hidden() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hidden_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity IdentityVisibilityChanged::hidden() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.hidden)
+  return _internal_hidden();
+}
+inline void IdentityVisibilityChanged::set_hidden(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
+  _internal_set_hidden(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.hidden)
+}
+inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity IdentityVisibilityChanged::_internal_hidden() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::Dreamsleeve::Protocol::Chat::HiddenIdentity>(_impl_.hidden_);
+}
+inline void IdentityVisibilityChanged::_internal_set_hidden(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hidden_ = value;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -915,6 +1652,19 @@ SessionOpened::_internal_mutable_channels() {
 }  // namespace Protocol
 }  // namespace Dreamsleeve
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::Dreamsleeve::Protocol::Chat::HiddenIdentity> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::Dreamsleeve::Protocol::Chat::HiddenIdentity>() {
+  return ::Dreamsleeve::Protocol::Chat::HiddenIdentity_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

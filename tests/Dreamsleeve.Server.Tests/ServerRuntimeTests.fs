@@ -89,7 +89,7 @@ let private post (agent: Agent<_>) command = task {
     equal AgentPostResult.Posted posted
 }
 
-let private withRuntimeUsing options createAuthentication run = task {
+let private withRuntimeNamed options identity pseudonyms createAuthentication run = task {
     let mutable ready = fun () -> false
     let input = ConcurrentQueue<ServerTransportEvent>()
     let output = Channel.CreateUnbounded<Guid * ServerPacket>()
@@ -127,7 +127,7 @@ let private withRuntimeUsing options createAuthentication run = task {
     }
     use authenticator = createAuthentication ()
     use writer = Agent.Start(AgentOptions.create "writer", discard)
-    use runtime = ServerRuntime.start options ServerConfig.defaults Dreamsleeve.Server.Domain.Moderation.empty AnnouncementOptions.defaults GroundMarkOptions.defaults (persistence writer) (authentication authenticator) transport NullLogger.Instance |> ok
+    use runtime = ServerRuntime.start options ServerConfig.defaults Dreamsleeve.Server.Domain.Moderation.empty identity pseudonyms AnnouncementOptions.defaults GroundMarkOptions.defaults (persistence writer) (authentication authenticator) transport NullLogger.Instance |> ok
     let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
@@ -137,6 +137,9 @@ let private withRuntimeUsing options createAuthentication run = task {
     finally
         runtime.Abort()
 }
+
+let private withRuntimeUsing options createAuthentication run =
+    withRuntimeNamed options IdentityOptions.defaults Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn createAuthentication run
 
 let private withRuntime options run =
     withRuntimeUsing options createAuthentication run
@@ -417,7 +420,7 @@ let tests = testList "ServerRuntime" [
         }
         let config = { ServerConfig.defaults with ServiceTimeoutMs = UInt32.MaxValue }
         use writer = Agent.Start(AgentOptions.create "writer", discard)
-        match ServerRuntime.start ServerRuntimeOptions.defaults config Dreamsleeve.Server.Domain.Moderation.empty AnnouncementOptions.defaults GroundMarkOptions.defaults (persistence writer) (authentication authenticator) transport NullLogger.Instance with
+        match ServerRuntime.start ServerRuntimeOptions.defaults config Dreamsleeve.Server.Domain.Moderation.empty IdentityOptions.defaults Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn AnnouncementOptions.defaults GroundMarkOptions.defaults (persistence writer) (authentication authenticator) transport NullLogger.Instance with
         | Error errors -> check (errors |> List.exists (fun error -> error.Contains "deadlines")) "Deadline validation missing."
         | Ok runtime -> runtime.Abort(); failwith "Invalid runtime started.")
 
@@ -506,6 +509,155 @@ let tests = testList "ServerRuntime" [
             let! initial = welcome fixture late
             let current = initial.Players |> Seq.find (fun value -> value.Profile.PlayerId = a.SelfPlayerId)
             check (isNull current.Location) "Unlocated late join must not receive remote coordinates."
+        })
+    }
+]
+
+// Accounts whose real names are easy to find in raw bytes.
+let private namedAuthentication (accounts: (string * string * string) list) () =
+    let identities =
+        accounts
+        |> List.mapi (fun index (name, username, display) ->
+            ticket name,
+            Dreamsleeve.Server.Domain.PlayerData.create
+                (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
+                (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
+                (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok))
+        |> Map.ofList
+    let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
+        OperationId = request.OperationId
+        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok profile | None -> Error SessionAuthenticationError.InvalidTicket)
+    }
+    Agent.Start(AgentOptions.create "named-authentication",
+        AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
+
+let private connectHidden fixture name =
+    let id = Guid.NewGuid()
+    fixture.Input.Enqueue(ServerTransportEvent.Connected id)
+    fixture.Input.Enqueue(incoming(id, packet 1UL (fun packet -> packet.OpenSession <- OpenSession(SessionTicket = ticket name, HiddenIdentity = HiddenIdentity.Everywhere))))
+    id
+
+let private dictionaryOf (names: string list) =
+    names |> List.map (fun name -> Dreamsleeve.Server.Domain.Pseudonym.create name |> ok)
+    |> Dreamsleeve.Server.Domain.PseudonymDictionary.create |> ValueOption.get
+
+let private placeNote requestId text x =
+    packet requestId (fun packet ->
+        packet.PlaceGroundNote <-
+            PlaceGroundNote(Text = text,
+                            Placement = GroundMarkPlacement(LocationId = FormKey(PluginName = "Skyrim.esm", LocalFormId = 60u),
+                                                            Position = Position(X = x, Y = 2.0f, Z = 3.0f))))
+
+let private switchIdentity requestId (hiding: HiddenIdentity) =
+    packet requestId (fun packet -> packet.SetIdentityVisibility <- SetIdentityVisibility(Hidden = hiding))
+
+let private contains (needle: string) (bytes: byte array) =
+    let pattern = Text.Encoding.UTF8.GetBytes needle
+    Seq.windowed pattern.Length bytes |> Seq.exists (fun window -> window = pattern)
+
+[<Tests>]
+let hiddenIdentityTests = testList "ServerRuntime hidden identity" [
+    testTask "no packet to another player carries a real name while the names are hidden" {
+        let accounts = [ "alice", "alice.real", "Алиса Настоящая"; "bob", "bob", "Bob"; "carol", "carol", "Carol" ]
+        let secrets = [ "alice.real"; "Алиса Настоящая"; "Секретная Героиня" ]
+        do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (namedAuthentication accounts) (fun fixture -> task {
+            let bob = connect fixture "bob"
+            let! _ = welcome fixture bob
+            fixture.Input.Enqueue(incoming(bob, beginCharacter 2UL "Bob's Hero"))
+            fixture.Input.Enqueue(incoming(bob, telemetry 3UL 0.f))
+            let alice = connectHidden fixture "alice"
+            let! opened = welcome fixture alice
+            equal "Страж" opened.OwnPseudonym
+            let self = opened.Players |> Seq.find (fun player -> player.Profile.PlayerId = opened.SelfPlayerId)
+            equal "Алиса Настоящая" self.Profile.DisplayName
+            check (not self.Profile.Pseudonymous) "The owner sees the real profile."
+            fixture.Input.Enqueue(incoming(alice, beginCharacter 2UL "Секретная Героиня"))
+            fixture.Input.Enqueue(incoming(alice, telemetry 3UL 1.f))
+            fixture.Input.Enqueue(incoming(alice, chat 4UL "hello from alice"))
+            fixture.Input.Enqueue(incoming(alice, placeNote 5UL "alice was here" 1.f))
+
+            // Everything bob receives until he has seen the message, the mark and
+            // the character of the hidden player is checked byte by byte.
+            let mutable message, mark, character = false, false, false
+            while not (message && mark && character) do
+                let! target, value = receive fixture.Output
+                if target = bob then
+                    let bytes = value.ToByteArray()
+                    for secret in secrets do
+                        check (not (contains secret bytes)) $"A packet to another player leaks {secret}: {value}"
+                    match value.PayloadCase with
+                    | ServerPacket.PayloadOneofCase.ChatPublished when value.ChatPublished.Message.Text = "hello from alice" ->
+                        let author = value.ChatPublished.Message.Author
+                        check author.Pseudonymous "The author is pseudonymous."
+                        equal "" author.Username
+                        equal "Страж" author.DisplayName
+                        check (not value.ChatPublished.Message.HasCharacterName) "No character snapshot."
+                        message <- true
+                    | ServerPacket.PayloadOneofCase.GroundMarksChanged ->
+                        for added in value.GroundMarksChanged.Added do
+                            if added.Text = "alice was here" then
+                                check added.Author.Pseudonymous "The mark author is pseudonymous."
+                                equal "Страж" added.Author.DisplayName
+                                check (not added.HasCharacterName) "No character snapshot on the mark."
+                                mark <- true
+                    | ServerPacket.PayloadOneofCase.PlayerUpdated when value.PlayerUpdated.Player.Profile.PlayerId = opened.SelfPlayerId ->
+                        let player = value.PlayerUpdated.Player
+                        if player.CharacterGeneration > 0UL then
+                            check player.Profile.Pseudonymous "Presence shows the pseudonym."
+                            check (not player.HasCharacterName) "No character name."
+                            character <- true
+                    | _ -> ()
+
+            // Showing the names again: later copies carry them, retained history does not change.
+            fixture.Input.Enqueue(incoming(alice, switchIdentity 6UL HiddenIdentity.None))
+            let! _, shown = nextWhere fixture (fun target value -> target = alice && value.PayloadCase = ServerPacket.PayloadOneofCase.IdentityVisibilityChanged)
+            equal 6UL shown.RequestId
+            check (not shown.IdentityVisibilityChanged.HasPseudonym) "No pseudonym while shown."
+            equal HiddenIdentity.None shown.IdentityVisibilityChanged.Hidden
+            let! _, updated = nextWhere fixture (fun target value ->
+                target = bob && value.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
+                && value.PlayerUpdated.Player.Profile.PlayerId = opened.SelfPlayerId)
+            equal "Алиса Настоящая" updated.PlayerUpdated.Player.Profile.DisplayName
+            equal "Секретная Героиня" updated.PlayerUpdated.Player.CharacterName
+            let carol = connect fixture "carol"
+            let! late = welcome fixture carol
+            let history = late.Channels |> Seq.collect _.RecentMessages |> Seq.find (fun value -> value.Text = "hello from alice")
+            check history.Author.Pseudonymous "A message sent while hidden keeps its pseudonym."
+            equal "Страж" history.Author.DisplayName
+
+            // A switch sooner than the interval is refused.
+            fixture.Input.Enqueue(incoming(alice, switchIdentity 7UL HiddenIdentity.Everywhere))
+            let! _, limited = nextWhere fixture (fun target value -> target = alice && value.HasRequestId && value.RequestId = 7UL)
+            equal RequestRejectionCode.RateLimited limited.RequestRejected.Code
+        })
+    }
+
+    testTask "each hidden session gets a pseudonym against the names online at that moment" {
+        let accounts = [ "alice", "alice", "Alice"; "bob", "bob", "страж" ]
+        do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (namedAuthentication accounts) (fun fixture -> task {
+            let bob = connect fixture "bob"
+            let! _ = welcome fixture bob
+            let first = connectHidden fixture "alice"
+            let! opened = welcome fixture first
+            equal "Страж 2" opened.OwnPseudonym
+            fixture.Input.Enqueue(ServerTransportEvent.Disconnected first)
+            fixture.Input.Enqueue(ServerTransportEvent.Disconnected bob)
+            do! empty fixture
+            let again = connectHidden fixture "alice"
+            let! reopened = welcome fixture again
+            equal "Страж" reopened.OwnPseudonym
+        })
+    }
+
+    testTask "a server that does not allow hidden names refuses such an opening" {
+        let refused = { IdentityOptions.defaults with AllowHiddenIdentity = false }
+        do! withRuntimeNamed ServerRuntimeOptions.defaults refused Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn createAuthentication (fun fixture -> task {
+            let alice = connectHidden fixture "alice"
+            let! _, value = nextWhere fixture (fun target _ -> target = alice)
+            equal ServerPacket.PayloadOneofCase.RequestRejected value.PayloadCase
+            equal RequestRejectionCode.HiddenIdentityNotAllowed value.RequestRejected.Code
+            let! closed = receive fixture.Closed
+            equal alice closed
         })
     }
 ]

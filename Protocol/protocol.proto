@@ -7,7 +7,8 @@ import "session.proto";
 import "player.proto";
 import "ground.proto";
 
-// Control/chat envelope. Version 9 sends a player's own marks after opening; version 8 adds marks on the ground; version 7 opens a session with a list of channels; version 6
+// Control/chat envelope. Version 10 lets a player hide their names behind a
+// server pseudonym; version 9 sends a player's own marks after opening; version 8 adds marks on the ground; version 7 opens a session with a list of channels; version 6
 // separated repeated realtime poses from reliable commands. Opens sessions
 // with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
 // requires reconnecting. Transport Connected alone is not application readiness.
@@ -22,6 +23,7 @@ message ClientPacket {
     PlaceGroundNote place_ground_note = 14; // Control lane.
     ReportDeath report_death = 15; // Control lane.
     RemoveGroundMark remove_ground_mark = 16; // Control lane.
+    SetIdentityVisibility set_identity_visibility = 17; // Control lane.
   }
 }
 
@@ -47,6 +49,7 @@ message ServerPacket {
     GroundMarkPlaced ground_mark_placed = 22; // Control lane, request_id required.
     GroundMarkRemoved ground_mark_removed = 23; // Control lane, request_id required.
     OwnGroundMarks own_ground_marks = 24; // Control lane, no request_id.
+    IdentityVisibilityChanged identity_visibility_changed = 25; // Control lane, request_id required.
   }
 }
 
@@ -70,6 +73,7 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED = 11; // The server does not accept this announcement source.
   REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL = 12; // The spatial cell already holds the configured number of marks.
   REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND = 13; // No such mark of this author.
+  REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED = 14; // The server does not let players hide their names.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

@@ -57,6 +57,10 @@
   width: 100%;
   text-align: left;
 }
+.name[data-pseudonymous] strong::before {
+  content: "~";
+  opacity: 0.75;
+}
 .name strong,
 .name small,
 .ellipsis {

@@ -51,6 +51,14 @@ export namespace Dreamsleeve::Client
     Domain::GroundMarkId markId{};
   };
 
+  // Hide or show this player's names for the others; the server picks the
+  // pseudonym. Settled by an IdentityConfirmation, a ServerRejection or a CommandFailure.
+  struct SetIdentityVisibility
+  {
+    std::uint64_t          requestId{};
+    Domain::HiddenIdentity hiding{Domain::HiddenIdentity::None};
+  };
+
   // Complete sampled values, not a patch. Only adjacent pending samples from
   // the same session can replace one another; transitions remain ordered.
   struct LocalMovement
@@ -96,6 +104,7 @@ export namespace Dreamsleeve::Client
     PlaceGroundNote,
     ReportDeath,
     RemoveGroundMark,
+    SetIdentityVisibility,
     LocalMovement,
     LocalLocation,
     LocalActorValues,
@@ -176,6 +185,16 @@ export namespace Dreamsleeve::Client
     bool                                removed{};
   };
 
+  // Settles SetIdentityVisibility: where the names are hidden now and the
+  // pseudonym the others see there.
+  struct IdentityConfirmation
+  {
+    std::uint64_t              generation{};
+    std::uint64_t              requestId{};
+    std::optional<std::string> pseudonym;
+    Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
+  };
+
   struct ClientStatus
   {
     SessionPhase      phase{SessionPhase::Disconnected};
@@ -188,6 +207,10 @@ export namespace Dreamsleeve::Client
     bool              savedLogin{};
     std::string       savedUsername;
     std::uint32_t     authSequence{};  // Bumped per completion so an identical repeat is still observable.
+    // The server pseudonym the others see for this session and where; absent
+    // while the names are shown or outside a session.
+    std::optional<std::string> pseudonym;
+    Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
   };
 
   struct PasswordLogin
@@ -237,6 +260,7 @@ export namespace Dreamsleeve::Client
     std::vector<CommandFailure>         commandFailures;
     std::vector<ChatConfirmation>       chatConfirmations;
     std::vector<GroundMarkConfirmation> groundMarkConfirmations;
+    std::vector<IdentityConfirmation>   identityConfirmations;
   };
 
   // One network owner and one application main thread (also the UI consumer).
@@ -379,6 +403,29 @@ public:
       });
     }
 
+    // Main thread. Read by the owner when it opens the next session; a running
+    // session changes only through SetIdentityVisibility.
+    void SetHideIdentity(Domain::HiddenIdentity hiding)
+    {
+      std::lock_guard lock{mutex};
+      hideIdentity = hiding;
+    }
+
+    Domain::HiddenIdentity HideIdentity() const
+    {
+      std::lock_guard lock{mutex};
+      return hideIdentity;
+    }
+
+    // Owner only: the pseudonym of the current session and where it is shown,
+    // as the server reported them.
+    void PublishIdentity(std::optional<std::string> pseudonym, Domain::HiddenIdentity hiding)
+    {
+      std::lock_guard lock{mutex};
+      status.pseudonym = std::move(pseudonym);
+      status.hiding    = hiding;
+    }
+
     // Shared by the network owner and its UI producer. Never reset on reconnect.
     std::optional<std::uint64_t> NextRequestId()
     {
@@ -478,10 +525,11 @@ public:
       std::optional<SessionPhase>           nextPhase        = std::nullopt,
       std::string_view                      serverName       = {},
       std::optional<ChatConfirmation>       confirmation     = std::nullopt,
-      std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt)
+      std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt,
+      std::optional<IdentityConfirmation>   identity         = std::nullopt)
     {
-      const bool accepted =
-        CanAcceptReplies(model.PendingServerRejectionCount() + (confirmation ? 1 : 0) + (markConfirmation ? 1 : 0));
+      const bool accepted = CanAcceptReplies(
+        model.PendingServerRejectionCount() + (confirmation ? 1 : 0) + (markConfirmation ? 1 : 0) + (identity ? 1 : 0));
       auto                             rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
       std::optional<ClientStateUpdate> update;
 
@@ -499,6 +547,7 @@ public:
       status.serverName = serverName;
       if (accepted && confirmation) pendingConfirmations.push_back(*confirmation);
       if (accepted && markConfirmation) pendingMarkConfirmations.push_back(*markConfirmation);
+      if (accepted && identity) pendingIdentityConfirmations.push_back(std::move(*identity));
       if (update && state->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired) state->Publish(model.Snapshot());
 
       pendingRejections.insert(
@@ -522,6 +571,7 @@ public:
       output.commandFailures.clear();
       output.chatConfirmations.clear();
       output.groundMarkConfirmations.clear();
+      output.identityConfirmations.clear();
 
       std::lock_guard lock{mutex};
       state->TakeAll(output.state);
@@ -529,6 +579,7 @@ public:
       pendingFailures.swap(output.commandFailures);
       pendingConfirmations.swap(output.chatConfirmations);
       pendingMarkConfirmations.swap(output.groundMarkConfirmations);
+      pendingIdentityConfirmations.swap(output.identityConfirmations);
       output.status = status;
     }
 
@@ -562,7 +613,8 @@ private:
     // Results waiting for Drain; every kind shares the one command budget.
     std::size_t Settled() const noexcept
     {
-      return pendingFailures.size() + pendingRejections.size() + pendingConfirmations.size() + pendingMarkConfirmations.size();
+      return pendingFailures.size() + pendingRejections.size() + pendingConfirmations.size() + pendingMarkConfirmations.size() +
+             pendingIdentityConfirmations.size();
     }
 
     mutable std::mutex                   mutex;
@@ -574,7 +626,9 @@ private:
     std::vector<CommandFailure>          pendingFailures;
     std::vector<ChatConfirmation>        pendingConfirmations;
     std::vector<GroundMarkConfirmation>  pendingMarkConfirmations;
+    std::vector<IdentityConfirmation>    pendingIdentityConfirmations;
     ClientStatus                         status;
+    Domain::HiddenIdentity               hideIdentity{Domain::HiddenIdentity::None};
     std::optional<AuthenticationRequest> pendingAuthentication;
     bool                                 disconnectRequested{};
     bool                                 authenticationCanceled{};

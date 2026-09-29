@@ -47,7 +47,9 @@ export function PlayerDetails({
           {p.level ?? "—"}
         </span>
         <div>
-          <h3>{playerName(p, settings)}</h3>
+          <h3 data-pseudonymous={p.pseudonymous || undefined}>
+            {playerName(p, settings)}
+          </h3>
           <span>
             {real ? `${real.displayName} · @${real.username} · ` : ""}
             {characterLine(p, settings)}

@@ -147,6 +147,10 @@
   margin: 0;
   font-size: 22px;
 }
+.identity h3[data-pseudonymous]::before {
+  content: "~";
+  opacity: 0.75;
+}
 .identity span:not(.level) {
   font-size: 13px;
   color: var(--muted);

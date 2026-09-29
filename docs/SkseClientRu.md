@@ -151,6 +151,24 @@ View `Data/PrismaUI/views/Dreamsleeve/index.html` создаётся на kDataL
 обрезается до 512 байт по границе UTF-8, потому что `parse.ts` отвергает более длинные события.
 `saveSettings` пишет `ui.toml` атомарно (временный файл + rename) и отвечает `settingsResult`.
 
+Скрытое имя ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#скрытое-имя)). `hideIdentity`
+из `ui.toml` передаётся в `ClientExchange::SetHideIdentity` при запуске и после каждого
+подтверждённого переключения (`off` / `everywhere` / `exceptGroundMarks` ↔
+`Domain::HiddenIdentity` через `Bridge::HidingOf`/`HidingName`); ClientRuntime кладёт его в
+`OpenSession.hidden_identity` при открытии сессии. Команда UI `setIdentityVisibility{hiding}` в
+Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIdentityVisibility{requestId, hiding}`
+(одна за раз); результат — `IdentityConfirmation` (вариант и псевдоним) или отказ. Только
+подтверждение меняет `hideIdentity` и сохраняет `ui.toml` (`Session::Frame::hideIdentity`,
+`Logic::Drain`); в `saveSettings` значение этого поля host заменяет своим. Без сессии UI
+меняет только выбор для следующего входа; пока сессия открывается, переключение
+отклоняется. `ClientStatus::pseudonym` — текущий псевдоним (из `SessionOpened.own_pseudonym` и
+подтверждений; `ClientStatus::hiding` — применённый вариант); host шлёт UI событие `identity`
+(`mode`, `pending`, `pseudonym`, `error`) при каждом изменении. Отказ открытия с
+`HIDDEN_IDENTITY_NOT_ALLOWED` (`Frame::identityRefused`) останавливает автоматические
+переподключения: игрок выключает режим и входит сам. Профили `pseudonymous` приходят в
+проекции UI без username и персонажа (`UiPlayer.pseudonymous`); `NameFor` называет их
+псевдонимом в любом режиме имени.
+
 Видимость: `visible = !hideUi && !menuBlocked && domReady`, `menuBlocked` пересчитывается
 по всему набору открытых меню (список `HidingMenus` в `PrismaUI.ixx`: загрузка, главное
 меню, инвентарь, контейнер, торговля, крафт, магия, карта, журнал, навыки, tween,
@@ -258,7 +276,7 @@ reliable-снятие позиции; после загрузки отправл
 | Файл | Кто пишет | Содержимое |
 |---|---|---|
 | `Data/SKSE/Plugins/Dreamsleeve/client.toml` | пользователь (при отсутствии плагин создаёт минимальный файл) | сервер, auth URL, интервалы, радиус, формы светлячка и меток — формат `LoadClientSettings` |
-| `Data/SKSE/Plugins/Dreamsleeve/ui.toml` | плагин, атомарно | `[ui] hideUi`, `[ui.chat]` — положение, размер, оформление, клавиша активации, имена и облачки над светлячками (в том числе цвета и рамка), высота светлячка, метки на земле, `nameMode`/`streamerMode`; `[[names.aliases]]` и `[[names.ignored]]` — псевдонимы и игнор по адресу сервера (до 1 MiB) |
+| `Data/SKSE/Plugins/Dreamsleeve/ui.toml` | плагин, атомарно | `[ui] hideUi`, `[ui.chat]` — положение, размер, оформление, клавиша активации, имена и облачки над светлячками (в том числе цвета и рамка), высота светлячка, метки на земле, `nameMode`/`streamerMode`, `hideIdentity` (скрытое имя: `off`/`everywhere`/`exceptGroundMarks`; пишет только host после подтверждения сервера); `[[names.aliases]]` и `[[names.ignored]]` — псевдонимы и игнор по адресу сервера (до 1 MiB) |
 | `Data/SKSE/Plugins/Dreamsleeve/aliases.toml` | пользователь (поставляется в dist) | словарь псевдонимов режима стримера; при ошибке — встроенный список |
 
 Разделение выбрано, чтобы запись настроек UI никогда не переписывала пользовательский
@@ -363,7 +381,8 @@ FormID сам по себе не исключает запись в сохран
 `UI/Nameplates.ixx` создаёт собственный MovieClip в существующем HUD и динамические
 TextField, без SWF, PrismaUI и отдельной зависимости. Показывается имя из
 `Host::Names::NameFor` — то же, что в UI (режим имени или псевдоним стримера,
-см. [ModerationAndNamesRu.md](ModerationAndNamesRu.md)); текст передаётся как обычный UTF-8, не HTML. Подпись — только текст без подложки,
+см. [ModerationAndNamesRu.md](ModerationAndNamesRu.md)); игрок со скрытым именем получает
+префикс `~` (`Names::PlateName`, «~Страж 2»), как знак перед именем в веб-UI; текст передаётся как обычный UTF-8, не HTML. Подпись — только текст без подложки,
 с чёрной обводкой `flash.filters.GlowFilter` (blur 3, strength 12) на embedded-шрифте
 `$EverywhereFont`; если класс фильтра в Scaleform недоступен, в лог пишется предупреждение
 и имя рисуется без обводки. Класс в SE 1.5.97 есть. Падение в аллокаторе Scaleform (`GHeap`)

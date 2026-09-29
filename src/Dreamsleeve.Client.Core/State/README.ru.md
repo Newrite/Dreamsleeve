@@ -252,6 +252,20 @@ exchange нельзя. Измерения движения со временем
 MovementView хранит их историю со сбросами на границах сессии/персонажа/
 пространства. Схлопнутые изменения последнего состояния для этой истории не годятся.
 
+## Скрытое имя
+
+`ClientExchange::SetHideIdentity(Domain::HiddenIdentity)` (главный поток: `None`, `Everywhere`,
+`ExceptGroundMarks`) задаёт выбор, который владелец читает при открытии следующей сессии
+(`OpenSession.hidden_identity`); идущую сессию меняет только
+`SetIdentityVisibility{requestId, hiding}` — по пути команд меток: Control-канал ENet, свой
+набор ожидания, одна команда за раз (вторая — `CommandFailure::Busy`). Итог —
+`IdentityConfirmation{generation, requestId, pseudonym, hiding}` в
+`ClientOutput.identityConfirmations`, `ServerRejection` или `CommandFailure`; бюджет
+результатов общий. `ClientStatus::pseudonym` и `ClientStatus::hiding` — псевдоним текущей
+сессии, который видят другие, и где (из `SessionOpened` и подтверждений; очищаются при
+завершении сессии). Модель не меняется: своя запись всегда приходит с настоящим профилем, а
+`Domain::PlayerData::pseudonymous` отмечает чужие псевдонимные профили (username пуст).
+
 ## Метки на земле
 
 `PlaceGroundNote{requestId, text, placement}`, `ReportDeath{requestId, label, placement}` и

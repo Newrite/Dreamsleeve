@@ -31,6 +31,11 @@ public:
       bool                             playersChanged{};
       // The set of marks the game draws changed in this Process call.
       bool visibleMarksChanged{};
+      // The server confirmed a switch of "hide my name": the preference to keep.
+      std::optional<Domain::HiddenIdentity> hideIdentity;
+      // The server refused to open a session with hidden names; reconnecting
+      // with the same preference would be refused again.
+      bool identityRefused{};
     };
 
     using Players = std::unordered_map<Domain::PlayerId, Domain::Player>;
@@ -52,24 +57,81 @@ public:
           Complete(frame, confirmation.requestId, Bridge::Id(confirmation.messageId), {});
       for (const auto& confirmation : output.groundMarkConfirmations)
         SettleMark(frame, confirmation);
+      for (const auto& confirmation : output.identityConfirmations)
+        SettleIdentity(frame, confirmation);
       for (const auto& event : output.rejections)
       {
         auto reason = Bridge::RejectionText(event.rejection.code, event.rejection.message);
-        if (!Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason) && !FailMark(frame, event.rejection.requestId, reason))
-          Complete(frame, event.rejection.requestId, {}, std::move(reason));
+        if (
+          Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason) || FailMark(frame, event.rejection.requestId, reason) ||
+          FailIdentity(event.rejection.requestId, reason))
+          continue;
+        if (event.rejection.code == Dreamsleeve::Client::RequestRejectionCode::HiddenIdentityNotAllowed)
+        {
+          // Only an opening carries the flag without a pending switch.
+          identityError         = Bridge::ClipError(reason);
+          frame.identityRefused = true;
+          continue;
+        }
+        Complete(frame, event.rejection.requestId, {}, std::move(reason));
       }
       for (const auto& failure : output.commandFailures)
       {
         std::string reason{Bridge::FailureText(failure.code)};
-        if (!Settle(frame, failure.requestId, ResultOf(failure.code), reason) && !FailMark(frame, failure.requestId, reason))
+        if (
+          !Settle(frame, failure.requestId, ResultOf(failure.code), reason) && !FailMark(frame, failure.requestId, reason) &&
+          !FailIdentity(failure.requestId, reason))
           Complete(frame, failure.requestId, {}, std::move(reason));
       }
+      pseudonym = output.status.pseudonym;
       if (ownMarksChanged && !frame.snapshot) Emit(frame, Bridge::GroundMarksEvent{.marks = OwnMarkList(settings)});
       ownMarksChanged = false;
       if (frame.visibleMarksChanged && !frame.snapshot && Ready()) Emit(frame, Bridge::NearbyMarksEvent{.marks = NearbyMarkList(settings)});
 
       PublishStatus(output.status, settings, frame);
+      if (auto identity = Identity(frame.hideIdentity.value_or(Bridge::HidingOf(settings.hideIdentity))); identity != lastIdentity)
+      {
+        Emit(frame, identity);
+        lastIdentity = std::move(identity);
+      }
       RequestSnapshotIfNeeded(exchange, frame);
+    }
+
+    // "Hide my name from other players" as the UI shows it: the preference, or
+    // the requested value while the server has not answered; the pseudonym
+    // only for a ready session.
+    Bridge::IdentityEvent Identity(Domain::HiddenIdentity preference) const
+    {
+      Bridge::IdentityEvent event;
+      event.pending = !pendingIdentity.empty();
+      event.mode    = std::string{Bridge::HidingName(event.pending ? pendingIdentity.begin()->second.hiding : preference)};
+      if (Ready()) event.pseudonym = pseudonym;
+      event.error = identityError;
+      return event;
+    }
+
+    // A ready session asks the server; the preference changes only once the
+    // server confirms (Frame::hideIdentity). One switch at a time.
+    std::expected<void, std::string> SetIdentityVisibility(ClientExchange& exchange, Domain::HiddenIdentity hiding)
+    {
+      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
+      if (!pendingIdentity.empty()) return std::unexpected{"Ожидание ответа сервера"};
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
+      const auto posted = exchange.Post({
+          generation,
+          Dreamsleeve::Client::SetIdentityVisibility{*requestId, hiding}
+      });
+      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
+      identityError.reset();
+      pendingIdentity.emplace(*requestId, PendingIdentity{hiding, generation});
+      return {};
+    }
+
+    // A refusal the UI shows under the switch, e.g. from a local check.
+    void SetIdentityError(std::string error)
+    {
+      identityError = Bridge::ClipError(error);
     }
 
     // Marks the server currently shows this player, as Core projects them.
@@ -146,6 +208,7 @@ public:
       // Death reports have no UI correlation and settle silently either way.
       std::erase_if(pendingMarks, [](const auto& entry) { return entry.second.request != MarkRequest::Death; });
       lastStatus.reset();
+      lastIdentity.reset();
     }
 
     // Names or the ignore list changed: the same session is projected again.
@@ -291,6 +354,27 @@ private:
       MarkRequest   request{};
       std::uint64_t generation{};
     };
+
+    struct PendingIdentity
+    {
+      Domain::HiddenIdentity hiding{Domain::HiddenIdentity::None};
+      std::uint64_t          generation{};
+    };
+
+    void SettleIdentity(Frame& frame, const IdentityConfirmation& confirmation)
+    {
+      if (pendingIdentity.erase(confirmation.requestId) == 0) return;
+      identityError.reset();
+      frame.hideIdentity = confirmation.hiding;
+    }
+
+    // The switch returns to the server's state; the reason stays under it.
+    bool FailIdentity(std::uint64_t requestId, const std::string& reason)
+    {
+      if (pendingIdentity.erase(requestId) == 0) return false;
+      identityError = Bridge::ClipError(reason);
+      return true;
+    }
 
     std::vector<Bridge::UiGroundMark> OwnMarkList(const UiSettings& settings) const
     {
@@ -439,6 +523,7 @@ private:
       // A new generation cannot complete requests of the previous session.
       std::erase_if(pendingChats, [&](const auto& entry) { return entry.second.generation != generation; });
       std::erase_if(pendingMarks, [&](const auto& entry) { return entry.second.generation != generation; });
+      std::erase_if(pendingIdentity, [&](const auto& entry) { return entry.second.generation != generation; });
       std::erase_if(pendingAnnouncements, [&](const auto& entry) {
         if (entry.second.generation == generation) return false;
         Finish(frame, entry.second, Announcements::Result::Failed, "Доставка неизвестна: сессия сменилась");
@@ -660,6 +745,10 @@ private:
     std::unordered_map<std::uint64_t, PendingChat> pendingChats;
     std::unordered_map<std::uint64_t, PendingMark> pendingMarks;
     std::unordered_map<std::uint64_t, PendingAnnouncement> pendingAnnouncements;
+    std::unordered_map<std::uint64_t, PendingIdentity>     pendingIdentity;
+    std::optional<std::string>                             pseudonym;
+    std::optional<std::string>                             identityError;
+    std::optional<Bridge::IdentityEvent>                   lastIdentity;
     std::optional<ClientStatus>                    lastStatus;
     bool                                           needsSnapshot{true};
     bool                                           snapshotRequested{};

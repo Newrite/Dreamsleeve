@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 9;
+  inline constexpr std::uint32_t Version = 10;
 
   enum class ErrorCode
   {
@@ -34,6 +34,8 @@ export namespace Dreamsleeve::Client::Wire
   {
     std::uint64_t requestId{};
     std::string   sessionTicket;
+    // Where others see a server pseudonym, from the first packet.
+    Domain::HiddenIdentity hiding{Domain::HiddenIdentity::None};
   };
 
   enum class Channel : std::uint8_t
@@ -64,7 +66,8 @@ export namespace Dreamsleeve::Client::Wire
     PlayerUpdate  update;
   };
 
-  using ClientRequest = std::variant<OpenSession, SendChat, UpdatePlayer, PostAnnouncement, PlaceGroundNote, ReportDeath, RemoveGroundMark>;
+  using ClientRequest =
+    std::variant<OpenSession, SendChat, UpdatePlayer, PostAnnouncement, PlaceGroundNote, ReportDeath, RemoveGroundMark, SetIdentityVisibility>;
 
   // A channel of the session with its retained tail, ascending MessageId.
   struct ChannelOpened
@@ -82,6 +85,10 @@ export namespace Dreamsleeve::Client::Wire
     std::vector<ChannelOpened>  channels;
     std::string                 serverName;
     Domain::AnnouncementPolicy  announcements;
+    // What the others see while this player's names are hidden; the self entry
+    // in players keeps the real profile.
+    std::optional<std::string> ownPseudonym;
+    Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
   };
 
   struct ChatAccepted
@@ -115,6 +122,15 @@ export namespace Dreamsleeve::Client::Wire
     Domain::GroundMarkId markId;
   };
 
+  // Settles SetIdentityVisibility: where the names are hidden now and the
+  // pseudonym the others see there; present exactly when hidden anywhere.
+  struct IdentityVisibilityChanged
+  {
+    std::uint64_t              requestId;
+    std::optional<std::string> pseudonym;
+    Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
+  };
+
   // Replies carry required correlation; notifications have no request ID.
   // Own and broadcast chat both apply the same ChatMessagesReceived update.
   using ServerResponse = std::variant<
@@ -131,7 +147,8 @@ export namespace Dreamsleeve::Client::Wire
     GroundMarksChanged,
     GroundMarkPlaced,
     GroundMarkRemoved,
-    OwnGroundMarksReplaced>;
+    OwnGroundMarksReplaced,
+    IdentityVisibilityChanged>;
 
   // One immutable configuration per network owner. Validate once at startup.
   class ProtocolCodec

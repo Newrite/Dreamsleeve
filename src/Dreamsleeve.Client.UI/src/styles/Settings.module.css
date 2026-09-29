@@ -92,6 +92,18 @@
   grid-column: 1 / -1;
   margin: 0;
 }
+.identity {
+  color: var(--accent);
+  font-size: 0.9em;
+}
+.identity[data-pending="true"] {
+  color: var(--muted);
+  font-style: italic;
+}
+.error {
+  color: var(--error);
+  font-size: 0.9em;
+}
 
 .ignored {
   margin: 0;

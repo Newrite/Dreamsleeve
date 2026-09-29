@@ -225,6 +225,7 @@ class PlayerProfile final : public ::google::protobuf::Message
     kUsernameFieldNumber = 2,
     kDisplayNameFieldNumber = 3,
     kPlayerIdFieldNumber = 1,
+    kPseudonymousFieldNumber = 4,
   };
   // string username = 2;
   void clear_username() ;
@@ -266,11 +267,21 @@ class PlayerProfile final : public ::google::protobuf::Message
   void _internal_set_player_id(::uint64_t value);
 
   public:
+  // bool pseudonymous = 4;
+  void clear_pseudonymous() ;
+  bool pseudonymous() const;
+  void set_pseudonymous(bool value);
+
+  private:
+  bool _internal_pseudonymous() const;
+  void _internal_set_pseudonymous(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayerProfile)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
                                    0, 68,
                                    2>
       _table_;
@@ -295,6 +306,7 @@ class PlayerProfile final : public ::google::protobuf::Message
     ::google::protobuf::internal::ArenaStringPtr username_;
     ::google::protobuf::internal::ArenaStringPtr display_name_;
     ::uint64_t player_id_;
+    bool pseudonymous_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -679,6 +691,31 @@ inline void PlayerProfile::set_allocated_display_name(::std::string* PROTOBUF_NU
     _impl_.display_name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerProfile.display_name)
+}
+
+// bool pseudonymous = 4;
+inline void PlayerProfile::clear_pseudonymous() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pseudonymous_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline bool PlayerProfile::pseudonymous() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerProfile.pseudonymous)
+  return _internal_pseudonymous();
+}
+inline void PlayerProfile::set_pseudonymous(bool value) {
+  _internal_set_pseudonymous(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerProfile.pseudonymous)
+}
+inline bool PlayerProfile::_internal_pseudonymous() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pseudonymous_;
+}
+inline void PlayerProfile::_internal_set_pseudonymous(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pseudonymous_ = value;
 }
 
 // -------------------------------------------------------------------

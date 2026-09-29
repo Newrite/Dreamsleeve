@@ -67,7 +67,7 @@ type private Fixture = {
     Acknowledgments: Channel<Guid>
 }
 
-let private withMarksUsing settings (loaded: GroundMarkRecord list) nextId run = task {
+let private withMarksUsing settings (loaded: StoredGroundMark list) nextId run = task {
     let writes, hostEvents, aliceEvents, bobEvents, acknowledgments =
         Channel.CreateUnbounded<GroundMarkWrite>(), Channel.CreateUnbounded<SessionHostCommand>(),
         Channel.CreateUnbounded<GroundMarkEvent>(), Channel.CreateUnbounded<GroundMarkEvent>(), Channel.CreateUnbounded<Guid>()
@@ -95,7 +95,8 @@ let private observe fixture (observer: Observer) generation location =
 let private submit fixture (observer: Observer) requestId body place =
     post fixture.Marks (GroundMarkCommand.Place {
         ConnectionId = observer.Subscription.ConnectionId; RequestId = requestId; Body = body; Placement = place
-        CharacterName = ValueSome (CharacterName.create 128 "Nerevar" |> ok); Fingerprint = Moderation.normalize (GroundMarkBody.text body); Flagged = [] })
+        CharacterName = ValueSome (CharacterName.create 128 "Nerevar" |> ok); Pseudonym = ValueNone
+        Fingerprint = Moderation.normalize (GroundMarkBody.text body); Flagged = [] })
 
 let private placed requestId = function
     | GroundMarkEvent.Placed(actual, record, evicted) ->
@@ -143,7 +144,7 @@ let private settled fixture (observer: Observer) = task {
     return count
 }
 
-let private stored id author kind x (createdAt: DateTimeOffset) : GroundMarkRecord =
+let private stored id author kind x (createdAt: DateTimeOffset) : StoredGroundMark =
     let body =
         match kind with
         | GroundMarkKind.Note -> note $"stored {id}"
@@ -160,7 +161,7 @@ let private agentTests = testList "GroundMarksAgent" [
             // Join sends everything of the author, including the far death mark, ascending by ID.
             let! joined = receive fixture.Alice.Events
             equal [1UL; 2UL] (ids (own joined))
-            equal (profile 1UL) (own joined).Head.Author
+            equal (PublicIdentity.Profile (profile 1UL)) (own joined).Head.Author
             let! others = receive fixture.Bob.Events
             equal [] (ids (own others))
             // A placement under the note quota evicts the older note: the list follows the confirmation.
@@ -196,7 +197,7 @@ let private agentTests = testList "GroundMarksAgent" [
             let! confirmation = next fixture.Alice
             let record, evicted = placed 7UL confirmation
             equal "praise the sun" record.Mark.Text
-            equal (profile 1UL) record.Author
+            equal (PublicIdentity.Profile (profile 1UL)) record.Author
             equal (ValueSome "Nerevar") (record.Mark.CharacterName |> ValueOption.map CharacterName.value)
             equal ValueNone evicted
             let! own = next fixture.Alice
@@ -365,7 +366,7 @@ let private agentTests = testList "GroundMarksAgent" [
             do! observe fixture fixture.Alice 1UL (located whiterun 0.0f)
             let! baseline = next fixture.Alice
             equal [9UL] (ids (changed baseline).Added)
-            equal (profile 2UL) (changed baseline).Added.Head.Author
+            equal (PublicIdentity.Profile (profile 2UL)) (changed baseline).Added.Head.Author
             do! submit fixture fixture.Alice 1UL (note "new") (placement whiterun 0.0f)
             let! confirmation = next fixture.Alice
             let record, _ = placed 1UL confirmation
@@ -431,7 +432,7 @@ let private client requestId (fill: Dreamsleeve.Protocol.Chat.ClientPacket -> un
 let private record id x : GroundMarkRecord =
     { Mark = GroundMark.create (markId id) (pid 7UL) (note "hi\nthere") (placement whiterun x) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
              |> GroundMark.withFlagged [ { Start = 0; Length = 2 } ]
-      Author = profile 7UL }
+      Author = PublicIdentity.Profile (profile 7UL) }
 
 let private codecTests = testList "GroundMarkCodec" [
     testCase "placement commands decode through the domain factories with their limits" <| fun _ ->
@@ -489,11 +490,11 @@ let private codecTests = testList "GroundMarkCodec" [
         equal DeliveryLane.Control (ProtocolCodec.responseLane (ServerResponse.OwnGroundMarks []))
         Expect.isOk (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [])) "an empty own list encodes"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; record 4UL 1.0f ])) "duplicate id"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; { record 5UL 1.0f with Author = profile 8UL } ])) "author mismatch"
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; { record 5UL 1.0f with Author = PublicIdentity.Profile (profile 8UL) } ])) "author mismatch"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with ViewRevision = 0UL })) "revision required"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with Added = []; Removed = []; Clear = false })) "empty delta"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with Added = [ record 1UL 1.0f; record 1UL 2.0f ]; Clear = false })) "duplicate id"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkPlaced(1UL, { record 1UL 1.0f with Author = profile 8UL }, ValueNone))) "author mismatch"
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkPlaced(1UL, { record 1UL 1.0f with Author = PublicIdentity.Profile (profile 8UL) }, ValueNone))) "author mismatch"
 ]
 
 let private withFile (text: string) action =
@@ -583,18 +584,46 @@ let private register (database: Database) name =
     SqliteAccountStore.create database.Config (Username.create 32 name |> ok) (DisplayName.create 64 $"Display {name}" |> ok) "hash" token |> ok
 
 let private storeTests = testList "SQLite ground marks" [
-    testCase "a fresh database and a version two database both reach schema three" (fun () ->
+    testCase "a fresh database and a version two database both reach schema four" (fun () ->
         use fresh = new Database()
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 3L (fresh.Scalar "PRAGMA user_version")
+        equal 4L (fresh.Scalar "PRAGMA user_version")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks")
-        // Back to version two: the mark table and its migration marker are gone.
-        fresh.Execute "DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_marks%'; PRAGMA user_version = 2"
+        // Back to version two: the mark table and both of its migration markers are gone.
+        fresh.Execute "DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_mark%'; PRAGMA user_version = 2"
         Expect.throws (fun () -> fresh.Scalar "SELECT count(*) FROM ground_marks" |> ignore) "table is gone"
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 3L (fresh.Scalar "PRAGMA user_version")
-        equal 3L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
+        equal 4L (fresh.Scalar "PRAGMA user_version")
+        equal 4L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks"))
+
+    testCase "a version three database keeps its marks and gains the pseudonym column" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let alice = register database "alice"
+        let mark = GroundMark.create (markId 1UL) alice.PlayerId (note "before") (placement whiterun 1.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
+        SqliteGroundMarkStore.insert database.Config mark token |> ok
+        database.Execute "ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; PRAGMA user_version = 3"
+        SqliteAccountStore.initialize database.Config |> ok
+        equal 4L (database.Scalar "PRAGMA user_version")
+        let loaded = SqliteGroundMarkStore.loadAll database.Config token |> ok
+        equal [ValueNone] (loaded.Marks |> List.map (fun entry -> entry.Mark.Pseudonym))
+        equal "Display alice" (DisplayName.value loaded.Marks.Head.Author.DisplayName))
+
+    testCase "a mark placed under a pseudonym keeps it across a restart" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let alice = register database "alice"
+        let pseudonym = Pseudonym.create "Страж" |> ok |> Pseudonym.numbered 12
+        let mark =
+            GroundMark.create (markId 1UL) alice.PlayerId (note "hidden") (placement whiterun 1.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
+            |> GroundMark.withPseudonym (ValueSome pseudonym)
+        SqliteGroundMarkStore.insert database.Config mark token |> ok
+        SqliteAccountStore.initialize database.Config |> ok
+        let loaded = (SqliteGroundMarkStore.loadAll database.Config token |> ok).Marks.Head
+        equal (ValueSome "Страж 12") (loaded.Mark.Pseudonym |> ValueOption.map Pseudonym.value)
+        // The wire shows the pseudonym, never the joined real profile.
+        equal (PublicIdentity.Pseudonymous(alice.PlayerId, pseudonym)) (GroundMark.authorIdentity loaded.Author loaded.Mark))
 
     testCase "marks round-trip with the author's profile, survive restart and follow account deletion" (fun () ->
         use database = new Database()

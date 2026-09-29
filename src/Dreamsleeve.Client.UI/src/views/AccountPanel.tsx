@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { Chat, ChatState } from "../state/chat";
 import { accountActions, authStatus } from "../state/auth";
 import { connectionLabels } from "../state/connection";
+import { identityStatus } from "../state/identity";
 import styles from "../styles/Account.module.css";
 export function AccountPanel({
   chat,
@@ -41,6 +42,16 @@ export function AccountPanel({
             ? `Сохранённый вход: ${(!s.settings.streamerMode && s.auth.savedUsername) || "есть"}`
             : "Нет сохранённого входа"}
         </span>
+        {s.identity.mode !== "off" && (
+          <span aria-label="Скрытое имя" data-part="account-identity">
+            {identityStatus(s.identity, s.connectionPhase)}
+          </span>
+        )}
+        {s.identity.error && (
+          <span className={styles.error} role="alert">
+            {s.identity.error}
+          </span>
+        )}
       </p>
       <form
         className={styles.form}

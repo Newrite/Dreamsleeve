@@ -311,6 +311,8 @@ export namespace Runtime
 
     state.movement = std::move(*movement);
     state.app      = std::move(*app);
+    // The first session already opens with the saved "hide my name" choice.
+    state.app->Exchange().SetHideIdentity(Host::Bridge::HidingOf(state.ui.ui.chat.hideIdentity));
     logger::info(
       "Client application started; server {}:{}",
       settings->client.serverAddress.ToIpString().value_or("?"),

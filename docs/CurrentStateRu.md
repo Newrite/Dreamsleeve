@@ -218,9 +218,9 @@ SKSE-адаптер вызывает Apply/Sample из хука `Main::Update`; 
 | C++ Domain / State | Игроки, ограниченный ChatCache, модель, StateUpdate, очереди и ClientExchange для одного потребителя |
 | Client.Dev | Общий ClientApplication, --config/--connect, консольный ввод пароля и отдельное синтетическое демо |
 | Server | ENet runtime, HTTP auth, TOML-конфигурация, Serilog, PlayerSession, ChatRoomAgent, PresenceAgent и жизненный цикл |
-| Protobuf / codec | Protocol/*.proto v9: вход, полные PlayerInfo/история, чат и системный канал объявлений, онлайн, телеметрия, метки на земле и отказы; C++ encode/decode и F# decode/encode реализованы |
+| Protobuf / codec | Protocol/*.proto v10: вход, полные PlayerInfo/история, чат и системный канал объявлений, онлайн, телеметрия, метки на земле, скрытое имя и отказы; C++ encode/decode и F# decode/encode реализованы |
 | UI / Skyrim | Будущие адаптеры; в Core игровых зависимостей нет |
-| Persistence | SQLite accounts/profiles и ground_marks (схема 3), Migrondi, SqlHydra; MemoryProfileStore только для изолированных тестов |
+| Persistence | SQLite accounts/profiles и ground_marks (схема 4: псевдоним метки), Migrondi, SqlHydra; MemoryProfileStore только для изолированных тестов |
 
 Первый прикладной контракт описан в [Protocol/README](../Protocol/README.ru.md).
 Сессия привязана к ENet-соединению, повторное подключение получает новый bootstrap.
@@ -695,3 +695,49 @@ SKSE-плагин и веб-UI меток ([SkseClientRu.md](SkseClientRu.md#м�
 30 Playwright в Edge (вкладка с двумя списками), `smoke_chat.py` — стадия «после
 перезапуска автор получает полный список, включая далёкие метки», DLL/Dev собираются,
 `package_dist.py --skip-build`. В Skyrim не проверялось.
+
+## Скрытое имя: серверный режим стримера (30.09.2026)
+
+Второй режим рядом с локальным: игрок включает «Скрывать моё имя от других игроков», и все
+остальные видят вместо его имени пользователя, отображаемого имени и имени персонажа
+псевдоним из серверного словаря. Локальный `streamerMode` («Скрывать чужие имена (только у
+меня)») не менялся; оба переключателя независимы. Подробности —
+[ModerationAndNamesRu.md](ModerationAndNamesRu.md#скрытое-имя).
+
+- Домен: **публичная личность** ([DomainSpecRu.MD §3.1](DomainSpecRu.MD)) — `PublicIdentity =
+  Profile | Pseudonymous`, PlayerId открыт всегда; `PlayerSnapshot.Identity` (было `Data`) и
+  `ChatMessage.Author` имеют этот тип, `GroundMark.Pseudonym` — псевдоним на момент размещения.
+  `Pseudonyms.fs`: `Pseudonym` (правила записей клиентского `aliases.toml`), `PseudonymDictionary`
+  (встроенные 24 имени), `PseudonymBook` (случайный выбор, номера при совпадении с именами онлайн
+  и своими, без хранения между сессиями).
+- Режим — один выбор из трёх: «Нет», «Везде, включая метки на земле», «Везде, кроме меток на
+  земле» (`HiddenIdentity = Shown | Everywhere | ExceptGroundMarks`); онлайн, светлячок и чат
+  скрываются всегда вместе, отдельно — только метки.
+- Протокол **v10** (несовместим с v9): `PlayerProfile.pseudonymous`, enum `HiddenIdentity`,
+  `OpenSession.hidden_identity`, `SessionOpened.own_pseudonym`/`hidden_identity`,
+  `SetIdentityVisibility` / `IdentityVisibilityChanged`, код `HIDDEN_IDENTITY_NOT_ALLOWED = 14`.
+- Сервер: одна точка подмены в `PlayerSession` (снимок присутствия, автор чата и объявлений,
+  псевдоним метки); себе — настоящий профиль. Книга имён живёт в `SessionTable` рядом с резервом
+  PlayerId. `[Identity]` — `AllowHiddenIdentity`, `ToggleIntervalMs` (30000, `RATE_LIMITED`),
+  `PseudonymsPath` (`pseudonyms.toml`; без файла — встроенный список). SQLite схема 4:
+  `ground_marks.author_pseudonym` — метка не раскрывает автора и после перезапуска.
+- Клиент: `PlayerData.pseudonymous`, команда `SetIdentityVisibility`, `IdentityConfirmation`,
+  `ClientStatus::pseudonym`/`hiding`, выбор открытия `ClientExchange::SetHideIdentity`; host:
+  `hideIdentity = off|everywhere|exceptGroundMarks` в `[ui.chat]` (пишет только host после подтверждения), `NameFor` называет псевдонимный профиль
+  псевдонимом при любом `nameMode`, префикс `~` на надписях, событие `identity` для UI, остановка
+  автопереподключения после отказа сервера. Client.Dev: `--hide`, `--hide-except-marks`, `hide on|except-marks|off`.
+- UI: блок «Режим стримера» с флажком и выбором из трёх вариантов, «Ожидание сервера…» и «Другие видят вас как
+  „Страж 2“» в настройках и «Аккаунте», отказ под переключателем, пометка `~` псевдонимного игрока
+  в чате, онлайне и профиле, «имя скрыто игроком» в меню автора. Заместитель локального режима
+  переименован из «Скрытое имя» в «Псевдоним…», чтобы не смешивать режимы.
+
+Проверки: 400 managed (Expecto; `dotnet test` завершается с кодом 0; новые: домен, сессия,
+runtime с байтовой проверкой пакетов другому игроку и повторным открытием, кодеки, SQLite
+поверх схемы 3, конфигурация и пример, вариант «кроме меток»), 281 native (doctest; `NameFor`, проекция в UI без
+настоящих имён, `ui.toml`, корреляция и отказы, кодек, ClientRuntime), 63 vitest, `npm run build`,
+32 Playwright в Edge, `smoke_chat.py` — 43 проверки (новые: скрытая сессия и псевдоним в онлайне,
+сообщении и метке, выключение и история, `RATE_LIMITED`, «кроме меток» — настоящий профиль на
+метке, метка после перезапуска, сервер с `AllowHiddenIdentity = false`), `smoke_saved_auth.py` — 4; DLL (SE/AE/VR) и Client.Dev собираются,
+`package_dist.py --skip-build` кладёт `pseudonyms.example.toml` и `pseudonyms.toml` в `dist/Server`.
+В Skyrim не проверялось: переключатель в Ultralight, префикс на надписях, поведение при
+переподключении в игре.

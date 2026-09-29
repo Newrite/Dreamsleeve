@@ -1,6 +1,7 @@
 import type { Chat } from "../state/chat";
-import type { Settings } from "../bridge/types";
+import type { ConnectionPhase, IdentityState, Settings } from "../bridge/types";
 import { defaults, isColor } from "../state/settings";
+import { identityStatus } from "../state/identity";
 import { Select } from "./Select";
 import { useEffect, useState } from "react";
 import styles from "../styles/Settings.module.css";
@@ -66,10 +67,14 @@ export function SettingsPanel({
   chat,
   settings: s,
   ignored,
+  identity,
+  phase,
 }: {
   chat: Chat;
   settings: Settings;
   ignored: { id: string; name: string }[];
+  identity: IdentityState;
+  phase: ConnectionPhase;
 }) {
   return (
     <div className={styles.settings}>
@@ -180,21 +185,65 @@ export function SettingsPanel({
             onChange={(nameMode) => chat.configure({ nameMode })}
           />
         </label>
+        <p className={styles.muted}>
+          Одно имя везде: чат, онлайн, профиль, надписи и сообщения над
+          светлячками. Без имени персонажа показывается отображаемое имя.
+          Применяется сразу.
+        </p>
+      </fieldset>
+      <fieldset className={styles.group}>
+        <legend>Режим стримера</legend>
         <label>
-          <span>Режим стримера</span>
+          <span>Скрывать чужие имена (только у меня)</span>
           <input
             type="checkbox"
-            aria-label="Режим стримера"
+            aria-label="Скрывать чужие имена (только у меня)"
             checked={s.streamerMode}
             onChange={(e) => chat.configure({ streamerMode: e.target.checked })}
           />
         </label>
+        <label className={styles.choice}>
+          Скрывать моё имя от других игроков
+          <Select
+            label="Скрывать моё имя от других игроков"
+            value={identity.mode}
+            disabled={identity.pending}
+            options={[
+              { value: "off", label: "Нет" },
+              { value: "everywhere", label: "Везде, включая метки на земле" },
+              {
+                value: "exceptGroundMarks",
+                label: "Везде, кроме меток на земле",
+              },
+            ]}
+            onChange={(hiding) => chat.setHideIdentity(hiding)}
+          />
+        </label>
+        <p
+          className={styles.identity}
+          role="status"
+          aria-label="Скрытое имя"
+          data-pending={identity.pending}
+        >
+          {identityStatus(identity, phase)}
+        </p>
+        {identity.error && (
+          <p className={styles.error} role="alert">
+            {identity.error}
+          </p>
+        )}
         <p className={styles.muted}>
-          Одно имя везде: чат, онлайн, профиль, надписи и сообщения над
-          светлячками. Без имени персонажа показывается отображаемое имя. Режим
-          стримера заменяет все имена локальными псевдонимами (они не уходят на
-          сервер), но не скрывает имена, написанные в тексте сообщений.
-          Применяется сразу.
+          «Скрывать чужие имена» заменяет на вашем экране все имена локальными
+          псевдонимами; на сервер это не уходит и не скрывает имена, написанные
+          в тексте сообщений. «Скрывать моё имя» просит сервер показывать другим
+          игрокам вместо вашего имени пользователя, отображаемого имени и имени
+          персонажа псевдоним сервера — в онлайне, над светлячком и в чате, а по
+          выбору и в метках на земле; вы по-прежнему видите своё имя. Сообщения,
+          объявления и метки, оставленные под псевдонимом, навсегда остаются под
+          ним, оставленные раньше — под настоящим именем. ID аккаунта виден
+          всегда: псевдонимы одного игрока можно сопоставить между входами, а
+          если метки остаются под вашим именем, по ним можно узнать, кто стоит
+          за псевдонимом.
         </p>
       </fieldset>
       <fieldset className={styles.group}>

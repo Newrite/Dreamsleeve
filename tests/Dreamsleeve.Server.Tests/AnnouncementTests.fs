@@ -37,7 +37,8 @@ let private request (result: Result<ClientRequest, ProtocolCodecError>) =
     match (ok result).Command with
     | ClientCommand.PostAnnouncement value -> value
     | ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _
-    | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ -> failtest "Expected announcement"
+    | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
+    | ClientCommand.SetIdentityVisibility _ -> failtest "Expected announcement"
 
 let private withFile (text: string) action =
     let path = Path.Combine(Path.GetTempPath(), sprintf "dreamsleeve-announcements-%O.toml" (Guid.NewGuid()))
@@ -79,12 +80,12 @@ let tests = testList "Announcements" [
         let globalChat = Chat.create ChatChannelKind.Global 4 |> ok
         Chat.join profile.PlayerId globalChat |> ignore
         let announcement =
-            ChatMessage.create (ChatMessageId.create 1UL |> ok) globalId profile ValueNone (text "event") DateTimeOffset.UnixEpoch
+            ChatMessage.create (ChatMessageId.create 1UL |> ok) globalId (PublicIdentity.Profile profile) ValueNone (text "event") DateTimeOffset.UnixEpoch
             |> ChatMessage.withAnnouncement (Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event ValueNone)
         Expect.equal (Chat.append announcement globalChat) (Error DomainError.ChannelMismatch) "no announcements in a global channel"
         let systemChat = Chat.create ChatChannelKind.System 4 |> ok
         Chat.join profile.PlayerId systemChat |> ignore
-        let chat = ChatMessage.create (ChatMessageId.create 1UL |> ok) systemId profile ValueNone (text "chat") DateTimeOffset.UnixEpoch
+        let chat = ChatMessage.create (ChatMessageId.create 1UL |> ok) systemId (PublicIdentity.Profile profile) ValueNone (text "chat") DateTimeOffset.UnixEpoch
         Expect.equal (Chat.append chat systemChat) (Error DomainError.ChannelMismatch) "no chat in the system channel"
 
     testCase "server announcements have no author and need no membership; client ones do" <| fun _ ->
@@ -93,7 +94,7 @@ let tests = testList "Announcements" [
         Expect.equal server.Author ValueNone "the system is not a player"
         Chat.append server chat |> ok
         let client =
-            ChatMessage.create (ChatMessageId.create 2UL |> ok) channel profile ValueNone (text "event") DateTimeOffset.UnixEpoch
+            ChatMessage.create (ChatMessageId.create 2UL |> ok) channel (PublicIdentity.Profile profile) ValueNone (text "event") DateTimeOffset.UnixEpoch
             |> ChatMessage.withAnnouncement (Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event ValueNone)
         Expect.equal (Chat.append client chat) (Error(DomainError.NotChatMember profile.PlayerId)) "client origin is a member action"
         Chat.join profile.PlayerId chat |> ignore
@@ -129,7 +130,7 @@ let tests = testList "Announcements" [
 
     testCase "announcements travel on ChatMessage and the welcome announces the policy" <| fun _ ->
         let message =
-            ChatMessage.create (ChatMessageId.create 3UL |> ok) channel profile ValueNone (text "event") DateTimeOffset.UnixEpoch
+            ChatMessage.create (ChatMessageId.create 3UL |> ok) channel (PublicIdentity.Profile profile) ValueNone (text "event") DateTimeOffset.UnixEpoch
             |> ChatMessage.withAnnouncement (Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event
                                                  (ValueSome(AnnouncementSignature.create 64 "DeathMod" |> ok)))
         let wire = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
@@ -147,6 +148,8 @@ let tests = testList "Announcements" [
             SelfPlayerId = pid 7UL; Players = [Player.create profile |> Player.snapshot]
             Channels = [ { ChannelId = channel; Kind = ChatChannelKind.System; Messages = [server] } ]
             AnnouncementSources = [ClientAnnouncementSource.TrustedClient]
+            OwnPseudonym = ValueNone
+            Hiding = HiddenIdentity.Shown
         }
         let opened = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         let policy = opened.SessionOpened.Announcements

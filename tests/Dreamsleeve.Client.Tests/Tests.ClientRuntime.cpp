@@ -1178,4 +1178,67 @@ TEST_CASE("Ground mark commands settle by request ID on the control lane and vis
   REQUIRE(fixture.errors.size() == 1);
 }
 
+TEST_CASE("Hidden identity opens from the first packet and a switch settles with the pseudonym")
+{
+  Fixture fixture;
+  fixture.exchange->SetHideIdentity(Domain::HiddenIdentity::ExceptGroundMarks);
+  auto welcome = Welcome(fixture.Open());
+  CHECK(fixture.requests.back().open_session().hidden_identity() == P::HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS);
+  welcome.mutable_session_opened()->set_own_pseudonym("Страж");
+  welcome.mutable_session_opened()->set_hidden_identity(P::HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS);
+  fixture.Send(welcome);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  const auto opened = fixture.Drain();
+  REQUIRE(opened.status.pseudonym);
+  CHECK(*opened.status.pseudonym == "Страж");
+  CHECK(opened.status.hiding == Domain::HiddenIdentity::ExceptGroundMarks);
+  const auto generation = std::get<ClientSnapshot>(opened.state.updates.front()).generation;
+
+  const auto confirmations = [&] {
+    ClientOutput found;
+    fixture.Until([&] {
+      if (!found.identityConfirmations.empty() || !found.rejections.empty()) return true;
+      fixture.exchange->Drain(found);
+      return !found.identityConfirmations.empty() || !found.rejections.empty();
+    });
+    return found;
+  };
+
+  // Showing the names again: the status forgets the pseudonym with the confirmation.
+  const auto showId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(fixture.exchange->Post({generation, SetIdentityVisibility{showId, Domain::HiddenIdentity::None}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  CHECK(fixture.requests.back().has_set_identity_visibility());
+  CHECK(fixture.requests.back().set_identity_visibility().hidden() == P::HIDDEN_IDENTITY_NONE);
+  P::ServerPacket shown;
+  shown.set_protocol_version(Wire::Version);
+  shown.set_request_id(showId);
+  shown.mutable_identity_visibility_changed();
+  fixture.Send(shown);
+  const auto settled = confirmations();
+  REQUIRE(settled.identityConfirmations.size() == 1);
+  CHECK(settled.identityConfirmations[0].requestId == showId);
+  CHECK_FALSE(settled.identityConfirmations[0].pseudonym);
+  CHECK(settled.identityConfirmations[0].hiding == Domain::HiddenIdentity::None);
+  CHECK_FALSE(settled.status.pseudonym);
+  CHECK(settled.status.hiding == Domain::HiddenIdentity::None);
+
+  // A refusal settles the switch without a fault; the session stays usable.
+  const auto hideId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(fixture.exchange->Post({generation, SetIdentityVisibility{hideId, Domain::HiddenIdentity::Everywhere}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+  auto limited = Rejection(hideId);
+  limited.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_RATE_LIMITED);
+  fixture.Send(limited);
+  const auto refused = confirmations();
+  REQUIRE(refused.rejections.size() == 1);
+  CHECK(refused.rejections[0].rejection.code == RequestRejectionCode::RateLimited);
+  CHECK(fixture.client->Phase() == SessionPhase::Ready);
+
+  // An unknown settlement is a protocol fault, and a new session starts without a pseudonym.
+  fixture.Send(shown);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
+  CHECK_FALSE(fixture.Drain().status.pseudonym);
+}
+
 TEST_SUITE_END();

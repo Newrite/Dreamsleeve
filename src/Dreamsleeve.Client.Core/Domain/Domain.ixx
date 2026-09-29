@@ -147,11 +147,14 @@ export namespace Domain
     bool                            operator==(const PlayerDetails&) const = default;
   };
 
+  // A pseudonymous profile is what others see of a player who hides their
+  // names: username empty, displayName the server pseudonym, no character name.
   struct PlayerData final
   {
     PlayerId    playerId{};
     Username    username{};
     DisplayName displayName{};
+    bool        pseudonymous{};
 
     bool operator==(const PlayerData&) const = default;
   };
@@ -234,6 +237,10 @@ export namespace Domain
 
   using GroundMarkId   = std::uint64_t;
   using GroundMarkKind = ::Protocol::Chat::GroundMarkKind;
+
+  // Where the others see this player's server pseudonym: nowhere, everywhere,
+  // or in presence and chat while ground marks keep the real profile.
+  using HiddenIdentity = ::Protocol::Chat::HiddenIdentity;
 
   // Where a mark stands: the space, the point and the author's heading (Z
   // angle, radians) so the visual can face the way the author looked.

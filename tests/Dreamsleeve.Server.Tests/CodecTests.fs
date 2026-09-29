@@ -29,7 +29,7 @@ let private channel = ChatChannelId.create 1UL |> ok
 let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
 let private snapshot = Player.create profile |> Player.snapshot
 let private message =
-    ChatMessage.create (ChatMessageId.create UInt64.MaxValue |> ok) channel profile ValueNone
+    ChatMessage.create (ChatMessageId.create UInt64.MaxValue |> ok) channel (PublicIdentity.Profile profile) ValueNone
         (ChatMessageText.create 2000 "Привет\nworld" |> ok) (DateTimeOffset.FromUnixTimeMilliseconds(-1L))
 let private parseMovement bytes = Dreamsleeve.Protocol.Chat.ServerMovementPacket.Parser.ParseFrom(bytes: byte array)
 let private parse bytes = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes: byte array)
@@ -45,6 +45,8 @@ let private welcomeWith messages = {
     Players = [snapshot]
     Channels = [ { ChannelId = channel; Kind = ChatChannelKind.Global; Messages = messages }; systemChannel ]
     AnnouncementSources = [ClientAnnouncementSource.ThirdParty]
+    OwnPseudonym = ValueNone
+    Hiding = HiddenIdentity.Shown
 }
 let private welcome = welcomeWith [message]
 
@@ -76,7 +78,8 @@ let private playerUpdate result =
     match (result |> ok).Command with
     | ClientCommand.UpdatePlayer value -> value
     | ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _
-    | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ -> failtest "Expected player update"
+    | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
+    | ClientCommand.SetIdentityVisibility _ -> failtest "Expected player update"
 
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
@@ -156,9 +159,12 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let result = decode packet |> ok
         Expect.equal result.RequestId 42UL "request correlation"
         match result.Command with
-        | ClientCommand.OpenSession actual -> Expect.equal actual ticket "credential preserved exactly"
+        | ClientCommand.OpenSession(actual, hidden) ->
+            Expect.equal actual ticket "credential preserved exactly"
+            Expect.equal hidden HiddenIdentity.Shown "names are shown unless the client asks otherwise"
         | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _
-        | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ -> failtest "Wrong command"
+        | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
+        | ClientCommand.SetIdentityVisibility _ -> failtest "Wrong command"
 
         for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
             packet.OpenSession.SessionTicket <- invalid
@@ -220,7 +226,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let plain = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok |> parse
         Expect.isFalse plain.ChatPublished.Message.HasCharacterName "no snapshot outside a character"
         let lydia = CharacterName.create 128 "Lydia" |> ok
-        let named = ChatMessage.create (ChatMessageId.create 5UL |> ok) channel profile (ValueSome lydia)
+        let named = ChatMessage.create (ChatMessageId.create 5UL |> ok) channel (PublicIdentity.Profile profile) (ValueSome lydia)
                         (ChatMessageText.create 2000 "hi" |> ok) DateTimeOffset.UnixEpoch
         let packet = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished named) |> ok |> parse
         Expect.equal packet.ChatPublished.Message.CharacterName "Lydia" "snapshot at sending"
@@ -584,4 +590,54 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         for response in [ServerResponse.PlayerJoined snapshot; ServerResponse.PlayerUpdateAccepted 1UL; ServerResponse.RequestRejected(1UL, rejection)] do
             Expect.equal (ProtocolCodec.responseLane response) DeliveryLane.Control "Lifecycle and command replies."
         Expect.equal (ProtocolCodec.responseLane (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone]))) DeliveryLane.Realtime "Movement envelope is independent."
+    testCase "a pseudonymous identity leaves with no username or character and a flag" <| fun _ ->
+        let pseudonym = Pseudonym.create "Страж" |> ok |> Pseudonym.numbered 2
+        let character = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Lydia" |> ok)
+        let hidden = PlayerSnapshot.withPseudonym pseudonym (Player.snapshot character)
+        let joined = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined hidden) |> ok
+        let player = (parse joined).PlayerJoined.Player
+        Expect.isTrue player.Profile.Pseudonymous "flagged"
+        Expect.equal player.Profile.Username "" "no username"
+        Expect.equal player.Profile.DisplayName "Страж 2" "pseudonym as display name"
+        Expect.equal player.Profile.PlayerId 7UL "public PlayerId"
+        Expect.isFalse player.HasCharacterName "no character name"
+        for secret in [ "player"; "Игрок"; "Lydia" ] do
+            let bytes = Text.Encoding.UTF8.GetBytes secret
+            Expect.isFalse (Seq.windowed bytes.Length joined |> Seq.exists (fun window -> window = bytes)) $"no {secret} in the packet"
+        let shown = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined snapshot) |> ok |> parse
+        Expect.isFalse shown.PlayerJoined.Player.Profile.Pseudonymous "a shown profile is not flagged"
+
+    testCase "hidden identity travels in OpenSession, SetIdentityVisibility and its settlement" <| fun _ ->
+        let opening = Dreamsleeve.Protocol.Chat.ClientPacket(
+            ProtocolVersion = ProtocolCodec.Version, RequestId = 3UL,
+            OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(SessionTicket = String('a', 43),
+                                                                HiddenIdentity = Dreamsleeve.Protocol.Chat.HiddenIdentity.ExceptGroundMarks))
+        match (decode opening |> ok).Command with
+        | ClientCommand.OpenSession(_, hidden) -> Expect.equal hidden HiddenIdentity.ExceptGroundMarks "hidden from the first packet"
+        | other -> failtestf "%A" other
+        opening.OpenSession.HiddenIdentity <- enum<Dreamsleeve.Protocol.Chat.HiddenIdentity> 7
+        Expect.equal (decode opening |> error).Failure (ProtocolCodecFailure.InvalidPayload "hidden_identity") "unknown choice refused"
+        let switch = Dreamsleeve.Protocol.Chat.ClientPacket(
+            ProtocolVersion = ProtocolCodec.Version, RequestId = 4UL,
+            SetIdentityVisibility = Dreamsleeve.Protocol.Chat.SetIdentityVisibility(Hidden = Dreamsleeve.Protocol.Chat.HiddenIdentity.Everywhere))
+        let request = decode switch |> ok
+        Expect.equal request.Command (ClientCommand.SetIdentityVisibility HiddenIdentity.Everywhere) "switch command"
+        Expect.equal (ProtocolCodec.requestLane request) DeliveryLane.Control "control lane"
+        let pseudonym = Pseudonym.create "Страж" |> ok
+        let settled =
+            ProtocolCodec.encodeServer codec (ServerResponse.IdentityVisibilityChanged(4UL, ValueSome pseudonym, HiddenIdentity.ExceptGroundMarks))
+            |> ok |> parse
+        Expect.equal settled.RequestId 4UL "correlated"
+        Expect.equal settled.IdentityVisibilityChanged.Pseudonym "Страж" "pseudonym for the owner"
+        Expect.equal settled.IdentityVisibilityChanged.Hidden Dreamsleeve.Protocol.Chat.HiddenIdentity.ExceptGroundMarks "the applied choice"
+        let shown = ProtocolCodec.encodeServer codec (ServerResponse.IdentityVisibilityChanged(5UL, ValueNone, HiddenIdentity.Shown)) |> ok |> parse
+        Expect.isFalse shown.IdentityVisibilityChanged.HasPseudonym "absent while shown"
+        let welcomed =
+            ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, { welcome with OwnPseudonym = ValueSome pseudonym; Hiding = HiddenIdentity.Everywhere }))
+            |> ok |> parse
+        Expect.equal welcomed.SessionOpened.HiddenIdentity Dreamsleeve.Protocol.Chat.HiddenIdentity.Everywhere "the owner learns where it is hidden"
+        let selfHidden = { welcome with Players = [ PlayerSnapshot.withPseudonym pseudonym snapshot ] }
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, selfHidden))) "the self entry keeps the real profile"
+        Expect.equal welcomed.SessionOpened.OwnPseudonym "Страж" "the owner learns its pseudonym at opening"
+        Expect.isFalse (parse (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok)).SessionOpened.HasOwnPseudonym "absent when shown"
 ]

@@ -304,6 +304,11 @@
 .window[data-active="false"][data-connected="false"] {
   display: none;
 }
+/* The player hides their names from everyone: a pseudonym, marked like on nameplates. */
+.message[data-pseudonymous] .author::before {
+  content: "~";
+  opacity: 0.75;
+}
 .message[data-filtered] .text {
   color: var(--muted);
   font-style: italic;
@@ -336,6 +341,12 @@
   white-space: nowrap;
   border-bottom: 1px solid #3a3a33;
   margin-bottom: 4px;
+}
+.authorMenu .menuNote {
+  padding: 0 8px 6px;
+  color: #a8a28f;
+  font-size: 12px;
+  font-style: italic;
 }
 .authorMenu button {
   padding: 6px 8px;

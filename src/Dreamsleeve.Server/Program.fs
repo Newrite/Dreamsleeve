@@ -93,10 +93,11 @@ let private stopRuntime settings (logger: ILogger) (runtime: Agent<ServerRuntime
         do! runtime.Completion
 }
 
-let private serve settings moderation marks authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
+let private serve settings moderation pseudonyms marks authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
     let web = AuthenticationHttp.build settings moderation authentication log
     try
-        match ServerRuntime.start settings.Runtime settings.Server moderation settings.Announcements settings.GroundMarks marks (AuthService.authenticator authentication) transport logger with
+        match ServerRuntime.start settings.Runtime settings.Server moderation settings.Identity pseudonyms settings.Announcements settings.GroundMarks marks
+                  (AuthService.authenticator authentication) transport logger with
         | Error errors ->
             logger.LogError("Runtime configuration failed: {Errors}", String.concat " " errors)
             return 1
@@ -146,7 +147,8 @@ let private serve settings moderation marks authentication transport (logger: IL
 // Marks are moderated with the current word list when loaded: a text that the
 // list now refuses stays in storage but is not handed to the owner, so nobody
 // receives it until the list allows it again; flags are recomputed, and every
-// author profile leaves through the same public projection as in chat.
+// author profile leaves through the same public projection as in chat. A mark
+// placed under a pseudonym keeps it; the real profile is joined only for the owner.
 let private loadGroundMarks settings moderation (logger: ILogger) = task {
     let! loaded = Task.Run(fun () -> SqliteGroundMarkStore.loadAll settings.Database CancellationToken.None)
     match loaded with
@@ -157,7 +159,7 @@ let private loadGroundMarks settings moderation (logger: ILogger) = task {
         let records =
             kept |> List.map (fun record ->
                 { Mark = Dreamsleeve.Server.Domain.GroundMark.withFlagged (Dreamsleeve.Server.Domain.Moderation.flag moderation record.Mark.Text) record.Mark
-                  Author = Dreamsleeve.Server.Domain.Moderation.publicProfile moderation record.Author })
+                  Author = Dreamsleeve.Server.Domain.Moderation.publicProfile moderation record.Author } : StoredGroundMark)
         if not blocked.IsEmpty then
             logger.LogWarning("Withholding {Count} stored ground marks that the current word list refuses", blocked.Length)
         return Ok (records, stored.NextId)
@@ -189,6 +191,10 @@ let private run settings = task {
     | Ok (moderation, warning) ->
     warning |> Option.iter (fun text -> logger.LogWarning("{Warning}", text))
     logger.LogInformation("Moderation word list: {State}", if settings.Moderation.Enabled then "enabled" else "disabled")
+    let pseudonyms, pseudonymWarning = Configuration.loadPseudonyms settings.Identity
+    pseudonymWarning |> Option.iter (fun text -> logger.LogWarning("{Warning}", text))
+    logger.LogInformation("Hidden identity: {State}, {Count} pseudonyms, switch interval {Interval} ms",
+                          (if settings.Identity.AllowHiddenIdentity then "allowed" else "not allowed"), pseudonyms.Count, settings.Identity.ToggleIntervalMs)
     logger.LogInformation("Client announcements: trusted client {TrustedClient}, third party {ThirdParty}; scheduled: {Scheduled}",
                           settings.Announcements.TrustedClient.Enabled, settings.Announcements.ThirdParty.Enabled, settings.Announcements.Scheduled.Length)
     try
@@ -222,7 +228,7 @@ let private run settings = task {
                                     logger.LogError("ENet startup failed: {Failure}", error)
                                     return 1
                                 | Ok transport ->
-                                    try return! serve settings moderation marks authentication transport logger log
+                                    try return! serve settings moderation pseudonyms marks authentication transport logger log
                                     finally transport.Dispose()
                             finally
                                 // The runtime has stopped: queued writes finish before the process exits.

@@ -58,7 +58,10 @@ namespace
     if (message.announcement)
       output << "announcement source=" << static_cast<int>(message.announcement->source)
              << " kind=" << static_cast<int>(message.announcement->kind) << " signature=" << message.announcement->signature << ' ';
-    output << (message.author ? message.author->displayName : std::string{"<system>"}) << ": " << message.messageText << '\n';
+    output << (message.author ? message.author->displayName : std::string{"<system>"});
+    // A hidden author is shown by the server pseudonym only; the marker lets scripts tell.
+    if (message.author && message.author->pseudonymous) output << " [pseudonymous]";
+    output << ": " << message.messageText << '\n';
   }
 
   std::optional<Domain::AnnouncementKind> AnnouncementKindNamed(std::string_view name)
@@ -98,15 +101,22 @@ namespace
     if (json) output << "player " << *json << '\n';
   }
 
-  // "mark <id> kind=<1|2> author=<name> x=<x> character=<name> text=<text>": one line per visible mark.
+  // "mark <id> kind=<1|2> author=<name>[ [pseudonymous]] x=<x> character=<name> text=<text>": one line per visible mark.
   void PrintMark(std::ostream& output, const Domain::GroundMark& mark)
   {
     output << "mark " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " author=" << mark.author.displayName
-           << " x=" << mark.placement.position.X << " character=" << mark.characterName.value_or("") << " text=" << mark.text << '\n';
+           << (mark.author.pseudonymous ? " [pseudonymous]" : "") << " x=" << mark.placement.position.X
+           << " character=" << mark.characterName.value_or("") << " text=" << mark.text << '\n';
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | read | pose <id> | watch <id> <ms> | quit\n";
+
+  // "everywhere" / "except-marks": where the others see the pseudonym.
+  std::string_view HidingName(Domain::HiddenIdentity hiding)
+  {
+    return hiding == Domain::HiddenIdentity::ExceptGroundMarks ? "except-marks" : "everywhere";
+  }
 
   // "own-marks <n>" then "own <id> kind=<1|2> text=<text>" per mark: the server's
   // complete list of this player's marks, wherever they stand.
@@ -240,12 +250,13 @@ namespace
     movement.Apply(output.state);
     if (
       !verbose && output.state.updates.empty() && output.rejections.empty() && output.commandFailures.empty() &&
-      output.groundMarkConfirmations.empty())
+      output.groundMarkConfirmations.empty() && output.identityConfirmations.empty())
       return;
 
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.status.phase) << '\n';
     if (!output.status.serverName.empty()) console << "server=" << output.status.serverName << '\n';
+    if (output.status.pseudonym) console << "pseudonym=" << *output.status.pseudonym << '\n';
     if (output.status.authenticating)
       console << "auth=Pending\n";
     else
@@ -311,6 +322,11 @@ namespace
       console << '\n';
     }
 
+    for (const auto& confirmation : output.identityConfirmations)
+      console << "request " << confirmation.requestId << " identity "
+              << (confirmation.pseudonym ? "hidden as " + *confirmation.pseudonym + " " + std::string{HidingName(confirmation.hiding)} : "shown")
+              << '\n';
+
     for (const auto& event : output.rejections)
       console << "request " << event.rejection.requestId << " rejected (" << static_cast<int>(event.rejection.code)
               << "): " << event.rejection.message << '\n';
@@ -365,6 +381,7 @@ int RunNetworkConsole(int argc, char* argv[])
   const int                            optionStart = usernameIndex + (hasUsername ? 1 : 0);
   bool                                 remember    = false;
   bool                                 saved       = !hasUsername;
+  auto                                 hiding      = Domain::HiddenIdentity::None;
   std::optional<std::filesystem::path> configPath;
   if (fromFile) configPath = argv[2];
   std::optional<std::string> authUrl;
@@ -380,6 +397,11 @@ int RunNetworkConsole(int argc, char* argv[])
     if (option == "--saved")
     {
       saved = true;
+      continue;
+    }
+    if (option == "--hide" || option == "--hide-except-marks")
+    {
+      hiding = option == "--hide" ? Domain::HiddenIdentity::Everywhere : Domain::HiddenIdentity::ExceptGroundMarks;
       continue;
     }
     if (index + 1 >= argc) return 2;
@@ -451,6 +473,8 @@ int RunNetworkConsole(int argc, char* argv[])
     return 1;
   }
   auto& exchange = (*application)->Exchange();
+  // Others see a server pseudonym from the very first packet of the session.
+  exchange.SetHideIdentity(hiding);
   if (auto started = saved ? (*application)->ConnectSaved() : (*application)->Connect(credentials, registerName, remember); !started)
   {
     std::cerr << started.error() << '\n';
@@ -514,6 +538,24 @@ int RunNetworkConsole(int argc, char* argv[])
     {
       Print(exchange, generation, channel, **movement);
       PostMarkCommand(line, exchange, generation);
+    }
+    else if (line == "hide on" || line == "hide except-marks" || line == "hide off")
+    {
+      Print(exchange, generation, channel, **movement);
+      const auto requestId = exchange.NextRequestId();
+      const auto requested = line == "hide on"             ? Domain::HiddenIdentity::Everywhere
+                           : line == "hide except-marks" ? Domain::HiddenIdentity::ExceptGroundMarks
+                                                           : Domain::HiddenIdentity::None;
+      if (!requestId)
+        std::cout << "Request IDs exhausted\n";
+      else if (exchange.Post({generation, SetIdentityVisibility{*requestId, requested}}) == CommandPostResult::Queued)
+      {
+        // The next session opens the same way.
+        exchange.SetHideIdentity(requested);
+        std::cout << "request " << *requestId << " queued\n";
+      }
+      else
+        std::cout << "Command queue is full or closed\n";
     }
     else if (line == "marks")
     {

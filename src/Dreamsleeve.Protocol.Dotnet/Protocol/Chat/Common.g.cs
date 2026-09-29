@@ -24,14 +24,15 @@ namespace Dreamsleeve.Protocol.Chat {
     static CommonReflection() {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
-            "Cgxjb21tb24ucHJvdG8SGURyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQiSgoN",
+            "Cgxjb21tb24ucHJvdG8SGURyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQiYAoN",
             "UGxheWVyUHJvZmlsZRIRCglwbGF5ZXJfaWQYASABKAQSEAoIdXNlcm5hbWUY",
-            "AiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJIjUKB0Zvcm1LZXkSEwoLcGx1",
-            "Z2luX25hbWUYASABKAkSFQoNbG9jYWxfZm9ybV9pZBgCIAEoDWIGcHJvdG8z"));
+            "AiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEhQKDHBzZXVkb255bW91cxgE",
+            "IAEoCCI1CgdGb3JtS2V5EhMKC3BsdWdpbl9uYW1lGAEgASgJEhUKDWxvY2Fs",
+            "X2Zvcm1faWQYAiABKA1iBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerProfile), global::Dreamsleeve.Protocol.Chat.PlayerProfile.Parser, new[]{ "PlayerId", "Username", "DisplayName" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerProfile), global::Dreamsleeve.Protocol.Chat.PlayerProfile.Parser, new[]{ "PlayerId", "Username", "DisplayName", "Pseudonymous" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.FormKey), global::Dreamsleeve.Protocol.Chat.FormKey.Parser, new[]{ "PluginName", "LocalFormId" }, null, null, null, null)
           }));
     }
@@ -39,6 +40,11 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
   #region Messages
+  /// <summary>
+  /// The public identity of a player. Where the player hides their names
+  /// (pseudonymous), username is empty, display_name is the server pseudonym and
+  /// no character name travels with it; player_id is the same either way.
+  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class PlayerProfile : pb::IMessage<PlayerProfile>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -77,6 +83,7 @@ namespace Dreamsleeve.Protocol.Chat {
       playerId_ = other.playerId_;
       username_ = other.username_;
       displayName_ = other.displayName_;
+      pseudonymous_ = other.pseudonymous_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -122,6 +129,18 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "pseudonymous" field.</summary>
+    public const int PseudonymousFieldNumber = 4;
+    private bool pseudonymous_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Pseudonymous {
+      get { return pseudonymous_; }
+      set {
+        pseudonymous_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -140,6 +159,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (PlayerId != other.PlayerId) return false;
       if (Username != other.Username) return false;
       if (DisplayName != other.DisplayName) return false;
+      if (Pseudonymous != other.Pseudonymous) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -150,6 +170,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
       if (Username.Length != 0) hash ^= Username.GetHashCode();
       if (DisplayName.Length != 0) hash ^= DisplayName.GetHashCode();
+      if (Pseudonymous != false) hash ^= Pseudonymous.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -180,6 +201,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(26);
         output.WriteString(DisplayName);
       }
+      if (Pseudonymous != false) {
+        output.WriteRawTag(32);
+        output.WriteBool(Pseudonymous);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -202,6 +227,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(26);
         output.WriteString(DisplayName);
       }
+      if (Pseudonymous != false) {
+        output.WriteRawTag(32);
+        output.WriteBool(Pseudonymous);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -220,6 +249,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (DisplayName.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(DisplayName);
+      }
+      if (Pseudonymous != false) {
+        size += 1 + 1;
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -241,6 +273,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (other.DisplayName.Length != 0) {
         DisplayName = other.DisplayName;
+      }
+      if (other.Pseudonymous != false) {
+        Pseudonymous = other.Pseudonymous;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -273,6 +308,10 @@ namespace Dreamsleeve.Protocol.Chat {
             DisplayName = input.ReadString();
             break;
           }
+          case 32: {
+            Pseudonymous = input.ReadBool();
+            break;
+          }
         }
       }
     #endif
@@ -302,6 +341,10 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 26: {
             DisplayName = input.ReadString();
+            break;
+          }
+          case 32: {
+            Pseudonymous = input.ReadBool();
             break;
           }
         }

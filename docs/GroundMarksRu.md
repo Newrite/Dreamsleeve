@@ -82,9 +82,13 @@
 Свои метки автор видит через ту же дельту, что остальные; `GroundMarkPlaced` только
 завершает запрос и сообщает id вытесненной метки.
 
-Хранение: таблица `ground_marks` (миграция `1790640000000_ground_marks.sql`, схема 3,
+Хранение: таблица `ground_marks` (миграция `1790640000000_ground_marks.sql`, схема 3;
+`1790726400000_ground_mark_pseudonym.sql`, схема 4, добавляет `author_pseudonym`;
 проверка в `verifySchema`), `author_id REFERENCES profiles ON DELETE CASCADE`,
-`character_name` nullable. `SqliteGroundMarkStore` работает через SqlHydra
+`character_name` и `author_pseudonym` nullable. Метка, оставленная при скрытом имени автора,
+хранит его псевдоним того момента и показывает его вместо профиля всё время жизни, в
+том числе после перезапуска; остальные метки показывают текущий профиль автора
+([скрытое имя](ModerationAndNamesRu.md#скрытое-имя)). `SqliteGroundMarkStore` работает через SqlHydra
 (`Generated/AccountSchema.fs` перегенерирован с `main/ground_marks`) на общем
 `SqliteAccountStore.withContext`; сырой SQL остался только для `sqlite_sequence`.
 `loadAll` читает все метки с профилями авторов и high-water mark (`NextId`);

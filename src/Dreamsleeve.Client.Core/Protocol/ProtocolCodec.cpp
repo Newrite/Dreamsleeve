@@ -65,6 +65,12 @@ namespace Dreamsleeve::Client::Wire
         packet.set_request_id(value.requestId);
         packet.mutable_remove_ground_mark()->set_mark_id(value.markId);
       }
+
+      void operator()(const SetIdentityVisibility& value) const
+      {
+        packet.set_request_id(value.requestId);
+        packet.mutable_set_identity_visibility()->set_hidden(static_cast<P::HiddenIdentity>(value.hiding));
+      }
     };
 
   }
@@ -254,6 +260,18 @@ namespace Dreamsleeve::Client::Wire
         auto result = ReadOwnMarks(packet.own_ground_marks());
         if (!result) return std::unexpected{result.error()};
         return std::move(*result);
+      }
+      case P::ServerPacket::kIdentityVisibilityChanged: {
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        const auto& changed = packet.identity_visibility_changed();
+        if (changed.has_pseudonym() && changed.pseudonym().empty()) return Invalid("pseudonym");
+        // A pseudonym exactly when the names are hidden somewhere.
+        if (!P::HiddenIdentity_IsValid(changed.hidden()) || changed.has_pseudonym() != (changed.hidden() != P::HIDDEN_IDENTITY_NONE))
+          return Invalid("hidden");
+        return IdentityVisibilityChanged{
+            packet.request_id(),
+            changed.has_pseudonym() ? std::optional{changed.pseudonym()} : std::nullopt,
+            static_cast<Domain::HiddenIdentity>(changed.hidden())};
       }
       case P::ServerPacket::PAYLOAD_NOT_SET:
         return Invalid("payload");

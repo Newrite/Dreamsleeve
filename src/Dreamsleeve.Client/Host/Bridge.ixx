@@ -37,7 +37,9 @@ export namespace Dreamsleeve::Host::Bridge
 
   // name is the one resolved label for every surface. In streamer mode the
   // real username/displayName/character never cross the bridge: displayName
-  // and alias carry the local pseudonym, the others stay empty.
+  // and alias carry the local pseudonym, the others stay empty. A player who
+  // hides their names (pseudonymous) arrives from the server with the server
+  // pseudonym only; the UI marks such a player.
   struct UiPlayer
   {
     std::string                              id;
@@ -60,6 +62,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<std::string>               menu;
     std::optional<std::int64_t>              gameStartedAt;
     std::optional<std::vector<UiActorValue>> actorValues;
+    bool                                     pseudonymous{};
   };
 
   struct UiChannel
@@ -226,6 +229,21 @@ export namespace Dreamsleeve::Host::Bridge
     std::string type;
   };
 
+  // "Hide my name from other players": mode is the choice (off | everywhere |
+  // exceptGroundMarks; the requested one while pending), pending waits for the
+  // server, pseudonym is what the others see now, error the last refusal (the
+  // choice is back to the server's state).
+  struct IdentityEvent
+  {
+    std::string                type{"identity"};
+    std::string                mode{"off"};
+    bool                       pending{};
+    std::optional<std::string> pseudonym;
+    std::optional<std::string> error;
+
+    bool operator==(const IdentityEvent&) const = default;
+  };
+
   // Sent when a page is (re)created so window position and options apply
   // before any snapshot; a snapshot repeats them.
   struct SettingsEvent
@@ -252,7 +270,23 @@ export namespace Dreamsleeve::Host::Bridge
     bool                      streamerMode{};
     std::string               textFilter;
     std::string               markId;
+    std::string               hiding;
   };
+
+  // The ui.toml and bridge names of the choice; anything else is "off".
+  Domain::HiddenIdentity HidingOf(std::string_view name)
+  {
+    if (name == "everywhere") return Domain::HiddenIdentity::Everywhere;
+    if (name == "exceptGroundMarks") return Domain::HiddenIdentity::ExceptGroundMarks;
+    return Domain::HiddenIdentity::None;
+  }
+
+  std::string_view HidingName(Domain::HiddenIdentity value)
+  {
+    if (value == Domain::HiddenIdentity::Everywhere) return "everywhere";
+    if (value == Domain::HiddenIdentity::ExceptGroundMarks) return "exceptGroundMarks";
+    return "off";
+  }
 
   constexpr std::size_t MaxChatText     = 16000;
   constexpr std::size_t MaxSnapshotRows = 500;
@@ -344,6 +378,11 @@ export namespace Dreamsleeve::Host::Bridge
     return Detail::Write(event);
   }
 
+  Encoded Encode(const IdentityEvent& event)
+  {
+    return Detail::Write(event);
+  }
+
   std::expected<UiCommand, std::string> ParseCommand(std::string_view json)
   {
     if (json.size() > 1 << 20) return std::unexpected{"UI command exceeds limit"};
@@ -393,6 +432,12 @@ export namespace Dreamsleeve::Host::Bridge
       display            = Normalize(display);
       command.nameMode   = display.nameMode;
       command.textFilter = display.textFilter;
+      return command;
+    }
+    if (type == "setIdentityVisibility")
+    {
+      if (command.hiding != "off" && command.hiding != "everywhere" && command.hiding != "exceptGroundMarks")
+        return std::unexpected{"setIdentityVisibility requires hiding off, everywhere or exceptGroundMarks"};
       return command;
     }
     if (type == "close" || type == "signInSaved" || type == "signOut" || type == "forgetLogin" || type == "disconnect") return command;
@@ -593,12 +638,13 @@ export namespace Dreamsleeve::Host::Bridge
     const UiSettings&                           settings)
   {
     UiPlayer player;
-    player.id          = Id(data.playerId);
-    player.name        = names.NameFor(data.playerId, data, character, settings);
-    player.inCharacter = inCharacter;
-    if (settings.streamerMode)
+    player.id           = Id(data.playerId);
+    player.name         = names.NameFor(data.playerId, data, character, settings);
+    player.inCharacter  = inCharacter;
+    player.pseudonymous = data.pseudonymous;
+    if (settings.streamerMode || data.pseudonymous)
     {
-      player.alias       = player.name;
+      if (settings.streamerMode) player.alias = player.name;
       player.displayName = player.name;
       return player;
     }
@@ -895,6 +941,8 @@ export namespace Dreamsleeve::Host::Bridge
         return "Здесь уже слишком много меток";
       case Code::GroundMarkNotFound:
         return "Метка не найдена или уже удалена";
+      case Code::HiddenIdentityNotAllowed:
+        return "Сервер не разрешает скрывать имя";
       case Code::InvalidRequest:
         if (message.starts_with("Message exceeds")) return "Сообщение слишком длинное";
         if (message.starts_with("Note exceeds")) return "Текст метки слишком длинный";

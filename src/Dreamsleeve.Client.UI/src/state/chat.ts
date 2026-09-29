@@ -6,7 +6,9 @@ import type {
   ConnectionPhase,
   Channel,
   GroundMark,
+  HideIdentity,
   HostEvent,
+  IdentityState,
   Message,
   Player,
   Send,
@@ -99,7 +101,15 @@ export interface ChatState {
   // Personal ignore list of the current server, named by the host.
   ignored: { id: string; name: string }[];
   // Context menu of a message author, at viewport coordinates.
-  authorMenu: { playerId: string; name: string; x: number; y: number } | null;
+  authorMenu: {
+    playerId: string;
+    name: string;
+    x: number;
+    y: number;
+    pseudonymous?: boolean;
+  } | null;
+  // "Hide my name from other players", as the host reports it.
+  identity: IdentityState;
   // Ground marks: whether the session can place them, the server's list of
   // the player's own marks and the marks it shows nearby.
   groundMarksSupported: boolean;
@@ -177,6 +187,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     savedRevision: 0,
     ignored: [],
     authorMenu: null,
+    identity: { mode: "off", pending: false },
     groundMarksSupported: false,
     groundMarks: [],
     nearbyMarks: [],
@@ -335,6 +346,17 @@ export function makeChat(send: Send, now = () => Date.now()) {
           notice: event.evictedId
             ? `Метка оставлена; самая старая (№${event.evictedId}) убрана по квоте`
             : "Метка оставлена",
+        });
+        break;
+      }
+      case "identity": {
+        const { type: _, ...identity } = event;
+        store.setState({
+          identity,
+          // The saved choice follows the server's answer, never the request.
+          settings: identity.pending
+            ? state.settings
+            : { ...state.settings, hideIdentity: identity.mode },
         });
         break;
       }
@@ -765,6 +787,23 @@ export function makeChat(send: Send, now = () => Date.now()) {
       }
       touch();
     },
+    // The server decides in a session; until it answers the UI waits and says so.
+    setHideIdentity(hiding: HideIdentity) {
+      const s = store.getState();
+      if (s.identity.pending || hiding === s.identity.mode) return;
+      store.setState({
+        identity: {
+          mode: hiding,
+          pending: s.connected,
+          pseudonym: s.identity.pseudonym,
+        },
+      });
+      if (!send({ type: "setIdentityVisibility", hiding }))
+        store.setState({
+          identity: { ...s.identity, error: "Команда не принята приложением" },
+        });
+      touch();
+    },
     // A personal filter by account ID; the host keeps and saves the list.
     ignore(playerId: string) {
       const s = store.getState();
@@ -777,10 +816,16 @@ export function makeChat(send: Send, now = () => Date.now()) {
         store.setState({ notice: "Команда не принята приложением" });
     },
     // Right click on an author: profile and ignore actions for that account.
-    openAuthorMenu(playerId: string, name: string, x: number, y: number) {
+    openAuthorMenu(
+      playerId: string,
+      name: string,
+      x: number,
+      y: number,
+      pseudonymous = false,
+    ) {
       const s = store.getState();
       if (!s.visible || !s.active || !playerId) return;
-      store.setState({ authorMenu: { playerId, name, x, y } });
+      store.setState({ authorMenu: { playerId, name, x, y, pseudonymous } });
     },
     closeAuthorMenu() {
       if (store.getState().authorMenu) store.setState({ authorMenu: null });

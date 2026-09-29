@@ -45,7 +45,7 @@ let private rules =
     Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
     |> Moderation.withFlags { Words = ["flagword"]; Substrings = []; Exceptions = [] }
 
-let private withConfiguredPlayer moderation announcements settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
+let private withIdentityPlayer moderation announcements identity hideIdentity settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
     let queries = Channel.CreateUnbounded<SessionAuthenticationRequest>()
     let chatCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let systemCommands = Channel.CreateUnbounded<ChatRoomCommand>()
@@ -62,8 +62,9 @@ let private withConfiguredPlayer moderation announcements settings (createPresen
         ConnectionId = Guid.NewGuid()
         RequestId = 1UL
         SessionTicket = String('a', 43)
+        Hiding = hideIdentity
     }
-    use player = PlayerSession.start settings 64 moderation announcements (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok)
+    use player = PlayerSession.start settings 64 moderation announcements (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok) identity
                      (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
     let fixture = { Request = request; Player = player; Authentication = queries;
@@ -85,6 +86,9 @@ let private withConfiguredPlayer moderation announcements settings (createPresen
     do! awaitUnit host.Completion
 }
 
+let private withConfiguredPlayer moderation announcements settings createPresence run =
+    withIdentityPlayer moderation announcements IdentityOptions.defaults HiddenIdentity.Shown settings createPresence run
+
 let private withModeratedPlayer moderation settings createPresence run =
     withConfiguredPlayer moderation AnnouncementOptions.defaults settings createPresence run
 
@@ -105,9 +109,10 @@ let private resolve fixture = task {
     do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok profile }
     let! command = receive fixture.Host
     match command with
-    | SessionHostCommand.Reserve(connectionId, playerId, reply) ->
+    | SessionHostCommand.Reserve(connectionId, reserved, hidden, reply) ->
         equal fixture.Request.ConnectionId connectionId
-        equal profile.PlayerId playerId
+        equal profile reserved
+        equal fixture.Request.Hiding hidden
         return profile, reply
     | other -> return failwithf "Expected Reserve: %A" other
 }
@@ -121,9 +126,9 @@ let private snapshot (profile: PlayerData) = {
 }
 
 // The system channel answers at once with an empty history; tests drive the global one.
-let private joins fixture = task {
+let private joinsAs pseudonym fixture = task {
     let! profile, reply = resolve fixture
-    do! deliver reply IdentityAdmission.Reserved
+    do! deliver reply (IdentityAdmission.Reserved pseudonym)
     let! chatCommand = receive fixture.Chat
     let! systemCommand = receive fixture.System
     let! presenceCommand = receive fixture.Presence
@@ -134,6 +139,8 @@ let private joins fixture = task {
         return profile, chat, presence
     | other -> return failwithf "Expected subscriptions: %A" other
 }
+
+let private joins fixture = joinsAs ValueNone fixture
 
 let private ready fixture = task {
     let! profile, chat, presence = joins fixture
@@ -173,7 +180,7 @@ let private rejectUpdate fixture requestId command = task {
 }
 
 let private publication profile id =
-    ChatMessage.create (ChatMessageId.create id |> ok) globalId profile ValueNone
+    ChatMessage.create (ChatMessageId.create id |> ok) globalId (PublicIdentity.Profile profile) ValueNone
         (ChatMessageText.create 2000 $"message {id}" |> ok) DateTimeOffset.UnixEpoch
 
 let private finish fixture = task {
@@ -228,7 +235,210 @@ let private announcementRefused fixture requestId code field = task {
     equal 0 fixture.System.Reader.Count
 }
 
-let tests = testList "PlayerSession" [
+// Chat stays pending in these tests; the budget holds all of it.
+let private withIdentity identity hide run =
+    withIdentityPlayer Moderation.empty AnnouncementOptions.defaults identity hide { options with MaxPendingChat = 8 }
+        (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
+
+let private strazh = Pseudonym.create "Страж" |> ok
+
+// Presence answers with the copy the session handed it, as the real owner would.
+let private readyAs pseudonym fixture = task {
+    let! profile, chat, presence = joinsAs pseudonym fixture
+    do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
+    do! deliver presence.Events (PresenceEvent.Snapshot [presence.Snapshot])
+    let! command = receive fixture.Host
+    match command with
+    | SessionHostCommand.Activate(_, _, welcome) -> return profile, chat, presence, welcome
+    | other -> return failwithf "Expected Activate: %A" other
+}
+
+let private nextMarkPlacement fixture = task {
+    let mutable found = None
+    while found.IsNone do
+        let! command = receive fixture.Marks
+        match command with
+        | GroundMarkCommand.Place submission -> found <- Some submission
+        | _ -> ()
+    return found.Value
+}
+
+let private switchIdentity fixture requestId hidden = task {
+    do! post fixture.Player (PlayerSessionMessage.SetIdentityVisibility(requestId, hidden))
+    let! command = receive fixture.Host
+    match command with
+    | SessionHostCommand.ChangeIdentity(connectionId, requested, reply) ->
+        equal fixture.Request.ConnectionId connectionId
+        equal hidden requested
+        return reply
+    | other -> return failwithf "Expected ChangeIdentity: %A" other
+}
+
+let private identityRefused fixture requestId code = task {
+    let! command = receive fixture.Host
+    match command with
+    | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, rejection)) ->
+        equal requestId id
+        equal code rejection.Code
+    | other -> failwithf "Expected identity refusal: %A" other
+}
+
+let private identityTests = [
+    case "a hidden session sends only its pseudonym to others and keeps its own real profile" (fun () ->
+        withIdentity IdentityOptions.defaults HiddenIdentity.Everywhere (fun fixture -> task {
+            let! profile, _, presence, welcome = readyAs (ValueSome strazh) fixture
+            equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) presence.Snapshot.Identity
+            equal (ValueSome strazh) welcome.OwnPseudonym
+            let self = welcome.Players |> List.find (fun player -> player.Identity.PlayerId = profile.PlayerId)
+            equal (PublicIdentity.Profile profile) self.Identity
+
+            let name = CharacterName.create 128 "Indoril" |> ok
+            let! started = applyUpdate fixture 2UL (PlayerUpdate.BeginCharacter name)
+            equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) started.Identity
+            equal ValueNone started.CharacterName
+            let! read = read fixture.Player
+            equal ValueNone (ok read).CharacterName
+
+            // The owner hears about itself through the copy meant for others.
+            do! deliver presence.Events (PresenceEvent.Updated started)
+            let! own = receive fixture.Host
+            match own with
+            | SessionHostCommand.Send(_, ServerResponse.PlayerUpdated value) ->
+                equal (PublicIdentity.Profile profile) value.Identity
+                equal (ValueSome name) value.CharacterName
+            | other -> failwithf "Expected own update: %A" other
+            // Another player's pseudonym passes unchanged.
+            let other = PlayerSnapshot.withPseudonym strazh (playerSnapshot (PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "other" |> ok) (DisplayName.create 64 "Other" |> ok)))
+            do! deliver presence.Events (PresenceEvent.Joined other)
+            let! joined = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerJoined other)) joined
+
+            let! message = submitted fixture 3UL "hello"
+            equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) message.Author
+            equal ValueNone message.CharacterName
+
+            let location =
+                PlayerLocation.create (Location.create (FormKey.create (PluginName.create 64 "Skyrim.esm" |> ok) (LocalFormId.create 60u |> ok))
+                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero Rotation.zero
+            let! _ = applyUpdate fixture 4UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
+            let placement = GroundMarkPlacement.create location.Location.LocationId Position.zero (Radian.create 0.0f |> ok)
+            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(5UL, GroundNoteText.create 200 "note" |> ok, placement))
+            let! mark = nextMarkPlacement fixture
+            equal (ValueSome strazh) mark.Pseudonym
+            equal ValueNone mark.CharacterName
+        }))
+
+    case "switching is settled by the runtime's pseudonym, limited in frequency and idempotent" (fun () ->
+        withIdentity { IdentityOptions.defaults with ToggleIntervalMs = 60000 } HiddenIdentity.Shown (fun fixture -> task {
+            let! profile, _, _ = ready fixture
+            let! shown = submitted fixture 2UL "before"
+            equal (PublicIdentity.Profile profile) shown.Author
+            let! reply = switchIdentity fixture 3UL HiddenIdentity.Everywhere
+            // Until the runtime answers, messages still carry the real profile.
+            let! pending = submitted fixture 4UL "while pending"
+            equal (PublicIdentity.Profile profile) pending.Author
+            do! deliver reply (ValueSome strazh)
+            let! spread = receive fixture.Presence
+            match spread with
+            | PresenceCommand.Update(_, value) -> equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) value.Identity
+            | other -> failwithf "Expected presence update: %A" other
+            let! settled = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.IdentityVisibilityChanged(3UL, ValueSome strazh, HiddenIdentity.Everywhere))) settled
+            let! hidden = submitted fixture 5UL "after"
+            equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) hidden.Author
+
+            // Asking for the current state is not a switch.
+            do! post fixture.Player (PlayerSessionMessage.SetIdentityVisibility(6UL, HiddenIdentity.Everywhere))
+            let! same = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.IdentityVisibilityChanged(6UL, ValueSome strazh, HiddenIdentity.Everywhere))) same
+            // A real switch this soon is refused and nothing changes.
+            do! post fixture.Player (PlayerSessionMessage.SetIdentityVisibility(7UL, HiddenIdentity.Shown))
+            do! identityRefused fixture 7UL RequestRejectionCode.RateLimited
+            equal 0 fixture.Presence.Reader.Count
+            let! still = submitted fixture 8UL "still hidden"
+            equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) still.Author
+        }))
+
+    case "showing again restores the real profile for later messages" (fun () ->
+        withIdentity { IdentityOptions.defaults with ToggleIntervalMs = 0 } HiddenIdentity.Everywhere (fun fixture -> task {
+            let! profile, _, _, _ = readyAs (ValueSome strazh) fixture
+            let! reply = switchIdentity fixture 2UL HiddenIdentity.Shown
+            do! deliver reply ValueNone
+            let! spread = receive fixture.Presence
+            match spread with
+            | PresenceCommand.Update(_, value) -> equal (PublicIdentity.Profile profile) value.Identity
+            | other -> failwithf "Expected presence update: %A" other
+            let! settled = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.IdentityVisibilityChanged(2UL, ValueNone, HiddenIdentity.Shown))) settled
+            let! shown = submitted fixture 3UL "shown"
+            equal (PublicIdentity.Profile profile) shown.Author
+            let! again = switchIdentity fixture 4UL HiddenIdentity.Everywhere
+            do! deliver again (ValueSome (Pseudonym.numbered 2 strazh))
+            let! _ = receive fixture.Presence
+            let! _ = receive fixture.Host
+            let! renamed = submitted fixture 5UL "hidden again"
+            equal (PublicIdentity.Pseudonymous(profile.PlayerId, Pseudonym.numbered 2 strazh)) renamed.Author
+        }))
+
+    case "hidden everywhere except marks: presence and chat carry the pseudonym, new marks the real profile" (fun () ->
+        withIdentity { IdentityOptions.defaults with ToggleIntervalMs = 0 } HiddenIdentity.ExceptGroundMarks (fun fixture -> task {
+            let! profile, _, presence, welcome = readyAs (ValueSome strazh) fixture
+            equal HiddenIdentity.ExceptGroundMarks welcome.Hiding
+            equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) presence.Snapshot.Identity
+            let name = CharacterName.create 128 "Indoril" |> ok
+            let! started = applyUpdate fixture 2UL (PlayerUpdate.BeginCharacter name)
+            equal ValueNone started.CharacterName
+            let! message = submitted fixture 3UL "hello"
+            equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) message.Author
+            equal ValueNone message.CharacterName
+            let location =
+                PlayerLocation.create (Location.create (FormKey.create (PluginName.create 64 "Skyrim.esm" |> ok) (LocalFormId.create 60u |> ok))
+                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero Rotation.zero
+            let! _ = applyUpdate fixture 4UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
+            let placement = GroundMarkPlacement.create location.Location.LocationId Position.zero (Radian.create 0.0f |> ok)
+            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(5UL, GroundNoteText.create 200 "note" |> ok, placement))
+            let! mark = nextMarkPlacement fixture
+            equal ValueNone mark.Pseudonym
+            equal (ValueSome name) mark.CharacterName
+            // Extending the hiding to marks keeps the pseudonym the runtime returns.
+            let! reply = switchIdentity fixture 6UL HiddenIdentity.Everywhere
+            do! deliver reply (ValueSome strazh)
+            let! _ = receive fixture.Presence
+            let! settled = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.IdentityVisibilityChanged(6UL, ValueSome strazh, HiddenIdentity.Everywhere))) settled
+            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(7UL, GroundNoteText.create 200 "later" |> ok, placement))
+            let! hidden = nextMarkPlacement fixture
+            equal (ValueSome strazh) hidden.Pseudonym
+            equal ValueNone hidden.CharacterName
+        }))
+
+    case "a server that refuses hidden names rejects the opening before the ticket and every switch" (fun () -> task {
+        let refused = { IdentityOptions.defaults with AllowHiddenIdentity = false }
+        do! withIdentity refused HiddenIdentity.Everywhere (fun fixture -> task {
+            let! rejected = receive fixture.Host
+            match rejected with
+            | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, rejection)) ->
+                equal fixture.Request.RequestId id
+                equal RequestRejectionCode.HiddenIdentityNotAllowed rejection.Code
+            | other -> failwithf "Expected refusal: %A" other
+            let! closed = receive fixture.Host
+            match closed with
+            | SessionHostCommand.Close _ -> ()
+            | other -> failwithf "Expected close: %A" other
+            equal 0 fixture.Authentication.Reader.Count
+        })
+        do! withIdentity refused HiddenIdentity.Shown (fun fixture -> task {
+            let! _ = ready fixture
+            do! post fixture.Player (PlayerSessionMessage.SetIdentityVisibility(2UL, HiddenIdentity.Everywhere))
+            do! identityRefused fixture 2UL RequestRejectionCode.HiddenIdentityNotAllowed
+            do! post fixture.Player (PlayerSessionMessage.SetIdentityVisibility(3UL, HiddenIdentity.Shown))
+            let! shown = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.IdentityVisibilityChanged(3UL, ValueNone, HiddenIdentity.Shown))) shown
+        })
+    })
+]
+
+let tests = testList "PlayerSession" ([
     case "a disabled announcement source is refused before the channel; the welcome lists admitted sources" (fun () ->
         let announcements = { AnnouncementOptions.defaults with ThirdParty = { Enabled = false } }
         withAnnouncements announcements (fun fixture -> task {
@@ -302,14 +512,18 @@ let tests = testList "PlayerSession" [
             let! reserve = receive fixture.Host
             let reply =
                 match reserve with
-                | SessionHostCommand.Reserve(_, playerId, reply) -> equal stored.PlayerId playerId; reply
+                | SessionHostCommand.Reserve(_, reserved, _, reply) -> equal stored.PlayerId reserved.PlayerId; reply
                 | other -> failwithf "Expected Reserve: %A" other
-            do! deliver reply IdentityAdmission.Reserved
+            do! deliver reply (IdentityAdmission.Reserved ValueNone)
             let! chatCommand = receive fixture.Chat
             let! presenceCommand = receive fixture.Presence
             match chatCommand, presenceCommand with
             | ChatRoomCommand.Join chat, PresenceCommand.Join presence ->
-                for profile in [chat.Profile; presence.Snapshot.Data] do
+                let shown =
+                    match presence.Snapshot.Identity with
+                    | PublicIdentity.Profile profile -> profile
+                    | PublicIdentity.Pseudonymous _ -> failwith "Expected a profile."
+                for profile in [chat.Profile; shown] do
                     equal stored.PlayerId profile.PlayerId
                     equal "hidden.42" (Username.value profile.Username)
                     equal "Player 42" (DisplayName.value profile.DisplayName)
@@ -407,7 +621,7 @@ let tests = testList "PlayerSession" [
             let! accepted = receive fixture.Host
             equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.ChatAccepted(4UL, message))) accepted
             let! state = read fixture.Player
-            equal profile (ok state).Data
+            equal (PublicIdentity.Profile profile) (ok state).Identity
         }))
 
     case "stop before snapshots detaches in the source command order and waits for both acknowledgements" (fun () ->
@@ -488,7 +702,7 @@ let tests = testList "PlayerSession" [
                 match change with
                 | PresenceCommand.Update(connectionId, current) ->
                     equal fixture.Request.ConnectionId connectionId
-                    equal profile current.Data
+                    equal (PublicIdentity.Profile profile) current.Identity
                 | other -> failwithf "Expected presence update: %A" other
             }
 
@@ -497,7 +711,7 @@ let tests = testList "PlayerSession" [
             do! update (PlayerUpdate.SetActorValues(Map.ofList [(key, health 80.0f)]))
             let! first = read fixture.Player
             let first = ok first
-            equal profile first.Data
+            equal (PublicIdentity.Profile profile) first.Identity
             equal (ValueSome name) first.CharacterName
             equal (ValueSome location) first.Location
 
@@ -629,11 +843,11 @@ let tests = testList "PlayerSession" [
         use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
         let request = {
             ConnectionId = Guid.NewGuid(); RequestId = 1UL
-            SessionTicket = String('b', 43)
+            SessionTicket = String('b', 43); Hiding = HiddenIdentity.Shown
         }
         use marks = Agent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
         use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok)
-                         (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+                         IdentityOptions.defaults (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
@@ -659,7 +873,7 @@ let tests = testList "PlayerSession" [
             equal 1 populated.ActorValues.Count
             let! cleared = applyUpdate fixture 8UL (PlayerUpdate.SetActorValues( Map.empty))
             equal Map.empty cleared.ActorValues
-            equal profile cleared.Data
+            equal (PublicIdentity.Profile profile) cleared.Identity
             equal 0 fixture.Host.Reader.Count
             // Only the source's publication updates the author's outbound state.
             do! deliver presence.Events (PresenceEvent.Updated cleared)
@@ -740,4 +954,4 @@ let tests = testList "PlayerSession" [
         })
     })
 
-]
+] @ identityTests)

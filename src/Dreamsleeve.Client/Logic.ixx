@@ -199,6 +199,19 @@ namespace Logic
     runtime.session.Process(runtime.app->Exchange(), state.output, runtime.ui.ui.chat, frame);
     for (const auto& note : frame.notes)
       logger::warn("{}", note);
+    // The server confirmed a switch of "hide my name": the next session opens so too.
+    if (frame.hideIdentity && *frame.hideIdentity != Dreamsleeve::Host::Bridge::HidingOf(runtime.ui.ui.chat.hideIdentity))
+    {
+      runtime.ui.ui.chat.hideIdentity = std::string{Dreamsleeve::Host::Bridge::HidingName(*frame.hideIdentity)};
+      runtime.app->Exchange().SetHideIdentity(*frame.hideIdentity);
+      if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
+    }
+    // Reconnecting would be refused again until the player turns the choice off.
+    if (frame.identityRefused)
+    {
+      runtime.manualDisconnect = true;
+      logger::warn("The server does not allow hidden names; automatic reconnect stopped");
+    }
     PrismaUI::Dispatch(frame.events);
     // New pseudonyms are batched: at most one ui.toml write per interval.
     if (now >= state.nextNamesSave && runtime.session.PlayerNames().TakeDirty())

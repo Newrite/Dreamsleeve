@@ -220,4 +220,55 @@ let tests = testList "Server configuration" [
             | other -> failwithf "%A" other)
         withFile "[Runtime.Presence]\nVisibilityDistance = -1\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "Invalid distance rejected before startup.")
+    testCase "identity settings load from TOML with defaults and are validated" <| fun _ ->
+        let defaults = Configuration.defaults.Identity
+        Expect.isTrue defaults.AllowHiddenIdentity "allowed by default"
+        Expect.equal defaults.ToggleIntervalMs 30000 "30 s between switches"
+        Expect.equal defaults.PseudonymsPath "pseudonyms.toml" "next to moderation.toml"
+        withFile "[Identity]\nAllowHiddenIdentity = false\nToggleIntervalMs = 0\n" (fun path ->
+            match Configuration.parse [|"--config"; path|] with
+            | Ok (LaunchCommand.Run config) ->
+                Expect.isFalse config.Identity.AllowHiddenIdentity "switched off"
+                Expect.equal config.Identity.ToggleIntervalMs 0 "no limit"
+                Expect.equal config.Identity.PseudonymsPath "pseudonyms.toml" "default path kept"
+            | other -> failtestf "%A" other)
+        for invalid in [ "[Identity]\nToggleIntervalMs = -1\n"; "[Identity]\nAllowHiddenIdentity = 1\n"; "[Identity]\nPseudonyms = 'x'\n" ] do
+            withFile invalid (fun path -> Expect.isError (Configuration.parse [|"--config"; path|]) $"refused: {invalid}")
+
+    testCase "the pseudonym file skips invalid entries and never stops the server" <| fun _ ->
+        match Configuration.parsePseudonyms "version = 1\nnames = ['Бард', ' Страж', 'бард', '<b>x</b>', 7, 'Рыбак']\n" with
+        | Ok (dictionary, skipped) ->
+            Expect.equal (dictionary.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард"; "Рыбак" ] "valid, first spelling"
+            Expect.equal skipped 4 "invalid and repeated entries counted"
+        | Error error -> failtest error
+        for invalid in [ "names = []\n"; "names = [' ']\n"; "version = 2\nnames = ['Бард']\n"; "names = 'Бард'\n"; "other = 1\nnames = ['Бард']\n"; "names = ['Бард'\n" ] do
+            Expect.isError (Configuration.parsePseudonyms invalid) $"refused: {invalid}"
+        let builtIn = Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn
+        let missing, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") }
+        Expect.equal missing.Names builtIn.Names "missing file uses the built-in list"
+        Expect.isSome warning "with a warning"
+        withFile "names = ['Бард'\n" (fun path ->
+            let broken, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+            Expect.equal broken.Names builtIn.Names "broken file uses the built-in list"
+            Expect.isSome warning "with a warning")
+        withFile "version = 1\nnames = ['Бард']\n" (fun path ->
+            let loaded, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+            Expect.equal (loaded.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард" ] "file replaces the list"
+            Expect.isNone warning "no warning")
+
+    testCase "bundled pseudonym example equals the built-in list" <| fun _ ->
+        let rec find (directory: DirectoryInfo) =
+            let candidate = Path.Combine(directory.FullName, "src", "Dreamsleeve.Server", "pseudonyms.example.toml")
+            if File.Exists candidate then candidate
+            elif isNull directory.Parent then failtest "pseudonyms.example.toml not found"
+            else find directory.Parent
+        let path = find (DirectoryInfo AppContext.BaseDirectory)
+        match Configuration.parsePseudonyms (File.ReadAllText path) with
+        | Ok (dictionary, 0) -> Expect.equal dictionary.Names Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn.Names "same 24 names"
+        | other -> failtestf "%A" other
+        let example = File.ReadAllText(Path.Combine(Path.GetDirectoryName path, "server.example.toml"))
+        withFile example (fun serverPath ->
+            match Configuration.parse [|"--config"; serverPath|] with
+            | Ok (LaunchCommand.Run config) -> Expect.equal config.Identity Configuration.defaults.Identity "example documents the defaults"
+            | other -> failtestf "%A" other)
 ]

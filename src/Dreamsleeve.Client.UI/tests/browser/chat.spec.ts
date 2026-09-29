@@ -804,7 +804,7 @@ test("streamer mode hides real names everywhere and ignore hides history without
   await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
   await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByLabel("Режим стримера").check();
+  await page.getByLabel("Скрывать чужие имена (только у меня)").check();
   await page.getByRole("button", { name: "Онлайн", exact: true }).click();
   const workspace = page.locator('[data-part="workspace"]');
   const history = page.locator('[data-part="messages"]');
@@ -826,7 +826,7 @@ test("streamer mode hides real names everywhere and ignore hides history without
   await page.getByPlaceholder("Имя, персонаж или место…").fill("");
 
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByLabel("Режим стримера").uncheck();
+  await page.getByLabel("Скрывать чужие имена (только у меня)").uncheck();
   await expect(history).toContainText("Мира:");
   await page.getByRole("button", { name: "Закрыть панель" }).click();
 
@@ -842,9 +842,9 @@ test("streamer mode hides real names everywhere and ignore hides history without
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
   const list = page.getByLabel("Игнорируемые игроки");
   await expect(list).toContainText("Мира");
-  await page.getByLabel("Режим стримера").check();
+  await page.getByLabel("Скрывать чужие имена (только у меня)").check();
   await expect(list).not.toContainText("Мира");
-  await page.getByLabel("Режим стримера").uncheck();
+  await page.getByLabel("Скрывать чужие имена (только у меня)").uncheck();
   await list.getByRole("button", { name: "Убрать" }).click();
   await expect(list).toHaveCount(0);
   await expect(history).toContainText("Мира:");
@@ -1168,4 +1168,110 @@ test("my marks lists own marks and removes one", async ({ page }) => {
   ).toContainText("Метка удалена");
   await expect(list.getByRole("listitem")).toHaveCount(1);
   await expect(list).not.toContainText("Морозный тролль");
+});
+
+test("hide my name waits for the server, shows the pseudonym, survives reload and a refusal", async ({
+  page,
+}) => {
+  await page.evaluate(() =>
+    localStorage.removeItem("dreamsleeve.ui.hideIdentity"),
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  const hide = page.getByRole("combobox", {
+    name: "Скрывать моё имя от других игроков",
+  });
+  const choose = async (option: string) => {
+    await hide.click();
+    await page.getByRole("option", { name: option }).click();
+  };
+  const status = page.getByRole("status", { name: "Скрытое имя" });
+  await expect(status).toHaveText("Другие игроки видят ваше имя");
+  await expect(hide).toHaveAttribute("data-value", "off");
+  // Independent of the local switch, which stays off.
+  await expect(
+    page.getByLabel("Скрывать чужие имена (только у меня)"),
+  ).not.toBeChecked();
+  await choose("Везде, включая метки на земле");
+  await expect(status).toHaveText("Ожидание сервера…");
+  await expect(hide).toBeDisabled();
+  await expect(status).toHaveText("Другие видят вас как „Страж 4“");
+  await expect(hide).toHaveAttribute("data-value", "everywhere");
+  await expect(
+    page.getByLabel("Скрывать чужие имена (только у меня)"),
+  ).not.toBeChecked();
+  // Marks back under the real name: the same pseudonym elsewhere.
+  await choose("Везде, кроме меток на земле");
+  await expect(status).toHaveText(
+    "Другие видят вас как „Страж 4“; в метках на земле — ваше имя",
+  );
+  await page.getByRole("button", { name: "Аккаунт", exact: true }).click();
+  await expect(page.locator('[data-part="account-identity"]')).toHaveText(
+    "Другие видят вас как „Страж 4“; в метках на земле — ваше имя",
+  );
+
+  // The choice is kept for the next session, which gets a new pseudonym.
+  await page.reload();
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await expect(hide).toHaveAttribute("data-value", "exceptGroundMarks");
+  await expect(status).toHaveText(
+    "Другие видят вас как „Страж 3“; в метках на земле — ваше имя",
+  );
+
+  // A server that does not allow hidden names refuses; nothing changes.
+  await choose("Нет");
+  await expect(status).toHaveText("Другие игроки видят ваше имя");
+  // The workshop control sits under the open workspace.
+  await page
+    .getByRole("button", { name: "Сервер разрешает скрытое имя: переключить" })
+    .dispatchEvent("click");
+  await choose("Везде, включая метки на земле");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Сервер не разрешает скрывать имя",
+  );
+  await expect(hide).toHaveAttribute("data-value", "off");
+  await expect(status).toHaveText("Другие игроки видят ваше имя");
+});
+
+test("a player who hides their name is marked in chat, online and the author menu", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const row = page
+    .locator('[data-part="message"][data-pseudonymous]')
+    .filter({ hasText: "Кто-то видел дракона" });
+  await expect(row).toHaveCount(1);
+  await expect(row.getByRole("button", { name: "Страж 2:" })).toHaveAttribute(
+    "title",
+    "Имя скрыто игроком",
+  );
+  await expect(
+    page.locator('[data-part="message"][data-pseudonymous]'),
+  ).toHaveCount(1);
+  await row
+    .getByRole("button", { name: "Страж 2:" })
+    .click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "Действия: Страж 2" });
+  await expect(menu).toContainText("имя скрыто игроком");
+  // Ignore works by account ID as for anyone.
+  await expect(
+    menu.getByRole("menuitem", { name: "Игнорировать" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu", { name: "Действия: Мира" })).toHaveCount(
+    0,
+  );
+
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Список", exact: true }).click();
+  const hidden = page.getByRole("table").locator("button[data-pseudonymous]");
+  await expect(hidden).toHaveCount(1);
+  await expect(hidden).toContainText("Страж 2");
+  await expect(hidden).toContainText("Имя скрыто игроком");
+  await page.getByRole("button", { name: "Карточки", exact: true }).click();
+  await expect(page.locator("h3[data-pseudonymous]")).toHaveText("Страж 2");
 });

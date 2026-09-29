@@ -5,12 +5,23 @@ package Dreamsleeve.Protocol.Chat;
 import "chat.proto";
 import "player.proto";
 
+// Where other players see the server pseudonym instead of the sender's names.
+// Presence (online list, name above the firefly) and chat (messages, client
+// announcements) always go together; ground marks may keep the real profile.
+enum HiddenIdentity {
+  HIDDEN_IDENTITY_NONE = 0; // The names are shown everywhere.
+  HIDDEN_IDENTITY_EVERYWHERE = 1; // Presence, chat and ground marks.
+  HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS = 2; // Presence and chat; marks show the real profile.
+}
+
 // Opaque single-use credential: 32 random bytes encoded as unpadded base64url.
 // Identity comes from the authenticated ticket; do not send player-supplied names.
 message OpenSession {
   reserved 1, 2;
   reserved "username", "display_name";
   string session_ticket = 3;
+  // Other players see a server pseudonym there from the very first packet.
+  HiddenIdentity hidden_identity = 4;
 }
 
 message SessionOpened {
@@ -23,4 +34,23 @@ message SessionOpened {
   AnnouncementPolicy announcements = 7;
   // Every channel of the session: one GLOBAL and one SYSTEM in version 7.
   repeated ChatChannel channels = 8;
+  // The receiver's own pseudonym while their names are hidden anywhere; the
+  // self entry in players always keeps the real profile.
+  optional string own_pseudonym = 9;
+  // Where the receiver's names are hidden in this session.
+  HiddenIdentity hidden_identity = 10;
+}
+
+// Choose where the sender's names are hidden from other players. Control lane;
+// settled by IdentityVisibilityChanged or RequestRejected (RATE_LIMITED,
+// HIDDEN_IDENTITY_NOT_ALLOWED).
+message SetIdentityVisibility {
+  HiddenIdentity hidden = 1;
+}
+
+// Settles SetIdentityVisibility: where the names are hidden now and the
+// pseudonym others see there, absent when they are shown everywhere.
+message IdentityVisibilityChanged {
+  optional string pseudonym = 1;
+  HiddenIdentity hidden = 2;
 }

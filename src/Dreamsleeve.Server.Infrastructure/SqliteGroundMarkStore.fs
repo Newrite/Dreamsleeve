@@ -11,7 +11,7 @@ open Dreamsleeve.Server.Infrastructure.AccountSchema
 
 /// Every stored mark with its author's current profile, plus the next ID to issue.
 type LoadedGroundMarks = {
-    Marks: GroundMarkRecord list
+    Marks: StoredGroundMark list
     /// One above the highest ID storage ever issued (sqlite_sequence), so a
     /// deleted top mark cannot lend its ID to a new one after a restart.
     NextId: uint64
@@ -31,7 +31,7 @@ module SqliteGroundMarkStore =
 
     // Stored rows were validated when written; limits here only guard against a
     // damaged file, so they are the widest the domain accepts.
-    let private toRecord (mark: main.ground_marks) (profile: main.profiles) (account: main.accounts) : Result<GroundMarkRecord, AccountStoreError> =
+    let private toRecord (mark: main.ground_marks) (profile: main.profiles) (account: main.accounts) : Result<StoredGroundMark, AccountStoreError> =
         if mark.id <= 0L || mark.author_id <= 0L || mark.local_form_id <= 0L || mark.local_form_id > int64 UInt32.MaxValue then
             invalidData "A stored ground mark has an identifier outside its range."
         else
@@ -44,6 +44,13 @@ module SqliteGroundMarkStore =
                 match mark.character_name with
                 | None -> Ok ValueNone
                 | Some name -> CharacterName.create Int32.MaxValue name |> Result.map ValueSome
+            let pseudonym =
+                match mark.author_pseudonym with
+                | None -> Ok ValueNone
+                | Some name -> Pseudonym.restore name |> Result.map ValueSome
+            match pseudonym with
+            | Error _ -> invalidData "A stored ground mark has an invalid author pseudonym."
+            | Ok pseudonym ->
             match GroundMarkId.create (uint64 mark.id), PlayerId.create (uint64 mark.author_id), body, characterName,
                   PluginName.create Int32.MaxValue mark.plugin_name, LocalFormId.create (uint32 mark.local_form_id),
                   Position.create (float32 mark.x) (float32 mark.y) (float32 mark.z), Radian.create (float32 mark.heading),
@@ -60,6 +67,7 @@ module SqliteGroundMarkStore =
                     Ok { Mark =
                             GroundMark.create markId author body placement createdAt
                             |> GroundMark.withCharacterName characterName
+                            |> GroundMark.withPseudonym pseudonym
                          Author = PlayerData.create author username displayName }
             | _ -> invalidData "A stored ground mark or its author profile is invalid."
 
@@ -114,6 +122,7 @@ module SqliteGroundMarkStore =
                     z = float (WorldUnit.value mark.Placement.Position.Z)
                     heading = float (Radian.value mark.Placement.Heading)
                     created_at = Core.toUnixMilliseconds mark.CreatedAt
+                    author_pseudonym = mark.Pseudonym |> ValueOption.map Pseudonym.value |> ValueOption.toOption
                 }
                 let query = insert {
                     for stored in main.ground_marks do
