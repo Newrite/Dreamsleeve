@@ -100,9 +100,11 @@ export interface ChatState {
   ignored: { id: string; name: string }[];
   // Context menu of a message author, at viewport coordinates.
   authorMenu: { playerId: string; name: string; x: number; y: number } | null;
-  // Ground marks: whether the session can place them, and the own marks known.
+  // Ground marks: whether the session can place them, the server's list of
+  // the player's own marks and the marks it shows nearby.
   groundMarksSupported: boolean;
   groundMarks: GroundMark[];
+  nearbyMarks: GroundMark[];
 }
 export const announcementOf = (m: Message) =>
   m.source === "system" ? m.announcement : undefined;
@@ -177,6 +179,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     authorMenu: null,
     groundMarksSupported: false,
     groundMarks: [],
+    nearbyMarks: [],
   }));
   let sequence = 0;
   let refusals = 0;
@@ -202,6 +205,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
             players: event.players,
             groundMarksSupported: event.groundMarksSupported ?? false,
             groundMarks: event.groundMarks ?? state.groundMarks,
+            nearbyMarks: event.nearbyMarks ?? state.nearbyMarks,
             settings: event.settings
               ? settingsFrom({
                   ...event.settings,
@@ -227,6 +231,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
           connectionPhase: "connected",
           groundMarksSupported: event.groundMarksSupported ?? false,
           groundMarks: event.groundMarks ?? [],
+          nearbyMarks: event.nearbyMarks ?? [],
           pending:
             state.selfId === event.selfId &&
             state.serverName === event.serverName
@@ -295,6 +300,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
         break;
       case "groundMarks":
         store.setState({ groundMarks: event.marks });
+        break;
+      case "nearbyMarks":
+        store.setState({ nearbyMarks: event.marks });
         break;
       case "markResult": {
         const removed = removals.get(event.requestId);

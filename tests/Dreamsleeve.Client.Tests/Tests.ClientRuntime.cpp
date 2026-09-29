@@ -374,7 +374,7 @@ TEST_CASE("Invalid session responses never publish partially initialized state")
   }
   SUBCASE("unknown version")
   {
-    packet.set_protocol_version(9);
+    packet.set_protocol_version(Wire::Version + 1);
   }
   fixture.Send(packet);
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });

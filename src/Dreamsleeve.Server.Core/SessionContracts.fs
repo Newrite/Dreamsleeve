@@ -136,6 +136,8 @@ type GroundMarkEvent =
     | Placed of requestId: uint64 * GroundMarkRecord * evicted: GroundMarkId voption
     | Removed of requestId: uint64 * GroundMarkId
     | Rejected of requestId: uint64 * RequestRejection
+    /// Every mark of the observer, wherever it stands: after Join and on each change of that set.
+    | Own of GroundMarkRecord list
 
 /// A validated placement request; the session has already checked the word
 /// list, computed the flags and verified the position against the player's own.

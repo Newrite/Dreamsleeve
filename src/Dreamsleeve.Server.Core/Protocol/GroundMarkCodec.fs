@@ -78,6 +78,18 @@ module internal GroundMarkCodec =
     let removed (id: GroundMarkId) =
         Dreamsleeve.Protocol.Chat.GroundMarkRemoved(MarkId = GroundMarkId.value id)
 
+    let own (records: GroundMarkRecord list) =
+        let result = Dreamsleeve.Protocol.Chat.OwnGroundMarks()
+        result.Marks.AddRange(records |> Seq.map mark)
+        result
+
+    /// One author for the whole list, each ID once.
+    let validOwn (records: GroundMarkRecord list) =
+        let ids = records |> List.map (fun record -> record.Mark.Id)
+        (records |> List.forall (fun record -> record.Author.PlayerId = record.Mark.Author))
+        && (records |> List.map (fun record -> record.Mark.Author) |> List.distinct |> List.length <= 1)
+        && Set.count (Set.ofList ids) = ids.Length
+
     /// The record's author must be the mark's author; a view mentions each ID once.
     let validView (view: GroundMarkView) =
         let ids = view.Added |> List.map (fun record -> record.Mark.Id)

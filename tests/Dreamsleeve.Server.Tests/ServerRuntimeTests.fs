@@ -227,6 +227,10 @@ let tests = testList "ServerRuntime" [
             let alice = connect fixture "alice"
             do! post fixture.Runtime (tick ())
             let! _ = welcome fixture alice
+            // Protocol v9: the (empty) own mark list follows the welcome on the control lane.
+            let! _, own = nextWhere fixture (fun target packet -> target = alice)
+            equal ServerPacket.PayloadOneofCase.OwnGroundMarks own.PayloadCase
+            equal 0 own.OwnGroundMarks.Marks.Count
             let pid = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
             let point = Dreamsleeve.Server.Domain.Position.create 2.f 0.f 0.f |> ok
             let change: Dreamsleeve.Server.Domain.MovementChange = {

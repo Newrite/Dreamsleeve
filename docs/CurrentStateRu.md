@@ -218,7 +218,7 @@ SKSE-адаптер вызывает Apply/Sample из хука `Main::Update`; 
 | C++ Domain / State | Игроки, ограниченный ChatCache, модель, StateUpdate, очереди и ClientExchange для одного потребителя |
 | Client.Dev | Общий ClientApplication, --config/--connect, консольный ввод пароля и отдельное синтетическое демо |
 | Server | ENet runtime, HTTP auth, TOML-конфигурация, Serilog, PlayerSession, ChatRoomAgent, PresenceAgent и жизненный цикл |
-| Protobuf / codec | Protocol/*.proto v8: вход, полные PlayerInfo/история, чат и системный канал объявлений, онлайн, телеметрия, метки на земле и отказы; C++ encode/decode и F# decode/encode реализованы |
+| Protobuf / codec | Protocol/*.proto v9: вход, полные PlayerInfo/история, чат и системный канал объявлений, онлайн, телеметрия, метки на земле и отказы; C++ encode/decode и F# decode/encode реализованы |
 | UI / Skyrim | Будущие адаптеры; в Core игровых зависимостей нет |
 | Persistence | SQLite accounts/profiles и ground_marks (схема 3), Migrondi, SqlHydra; MemoryProfileStore только для изолированных тестов |
 
@@ -675,3 +675,23 @@ SKSE-плагин и веб-UI меток ([SkseClientRu.md](SkseClientRu.md#м�
 (настройки меток и облачков, «Оставить здесь» с отказом и повтором, «Мои метки» с
 удалением), DLL SE/AE/VR собирается, `package_dist.py --skip-build`. В Skyrim не проверялось:
 статики, снап, дальности, смерть, VR.
+
+## Метки на земле, часть 3: список своих меток и вкладка «Метки» (29.09.2026)
+
+Протокол **v9**: `OwnGroundMarks` (`ServerPacket.own_ground_marks = 24`) — полный список
+меток получателя, где бы они ни стояли; агент шлёт его при `Join` и после каждого
+размещения, вытеснения, удаления и истечения (`GroundMarkStorage.ofAuthor`,
+`GroundMarkEvent.Own`). Клиентское ядро хранит список в `GroundMarkStore.own`
+(`OwnGroundMarksReplaced`, `ClientStateDelta.ownGroundMarks`, снимок), отвергая чужого
+автора и повтор id; `Client.Dev` печатает `own-marks <n>` / `own <id> …`. Host больше не
+собирает свои метки из видимых дельт: `Session::OwnMarks()` — это список сервера,
+`VisibleMarks()` проецируется в UI событием `nearbyMarks` с именем автора. Панель «Метки»
+показывает «Мои метки» (удаление) и «Метки рядом» с видом, текстом, персонажем, временем,
+пространством и координатами: метки в текущем пространстве читаются, не подходя к ним.
+Серверные квоты хранения и клиентские настройки показа остаются разными понятиями.
+
+Проверки: Expecto 373 (новые: список при join/размещении/удалении/истечении, кодек
+`OwnGroundMarks`), 275 native (кодек и модель списка, проекция host), 59 vitest,
+30 Playwright в Edge (вкладка с двумя списками), `smoke_chat.py` — стадия «после
+перезапуска автор получает полный список, включая далёкие метки», DLL/Dev собираются,
+`package_dist.py --skip-build`. В Skyrim не проверялось.

@@ -995,6 +995,7 @@ class ServerPacket final : public ::google::protobuf::Message
     kGroundMarksChanged = 21,
     kGroundMarkPlaced = 22,
     kGroundMarkRemoved = 23,
+    kOwnGroundMarks = 24,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 1;
@@ -1098,6 +1099,7 @@ class ServerPacket final : public ::google::protobuf::Message
     kGroundMarksChangedFieldNumber = 21,
     kGroundMarkPlacedFieldNumber = 22,
     kGroundMarkRemovedFieldNumber = 23,
+    kOwnGroundMarksFieldNumber = 24,
   };
   // optional uint64 request_id = 2;
   bool has_request_id() const;
@@ -1348,6 +1350,25 @@ class ServerPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::GroundMarkRemoved* PROTOBUF_NONNULL _internal_mutable_ground_mark_removed();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.OwnGroundMarks own_ground_marks = 24;
+  bool has_own_ground_marks() const;
+  private:
+  bool _internal_has_own_ground_marks() const;
+
+  public:
+  void clear_own_ground_marks() ;
+  const ::Dreamsleeve::Protocol::Chat::OwnGroundMarks& own_ground_marks() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NULLABLE release_own_ground_marks();
+  ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NONNULL mutable_own_ground_marks();
+  void set_allocated_own_ground_marks(::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_own_ground_marks(::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NULLABLE unsafe_arena_release_own_ground_marks();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::OwnGroundMarks& _internal_own_ground_marks() const;
+  ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NONNULL _internal_mutable_own_ground_marks();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ServerPacket)
@@ -1365,11 +1386,12 @@ class ServerPacket final : public ::google::protobuf::Message
   void set_has_ground_marks_changed();
   void set_has_ground_mark_placed();
   void set_has_ground_mark_removed();
+  void set_has_own_ground_marks();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 14,
-                                   12, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 15,
+                                   13, 0,
                                    2>
       _table_;
 
@@ -1407,6 +1429,7 @@ class ServerPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE ground_marks_changed_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE ground_mark_placed_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE ground_mark_removed_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE own_ground_marks_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3293,6 +3316,77 @@ inline ::Dreamsleeve::Protocol::Chat::GroundMarkRemoved* PROTOBUF_NONNULL Server
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::GroundMarkRemoved* _msg = _internal_mutable_ground_mark_removed();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.ground_mark_removed)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.OwnGroundMarks own_ground_marks = 24;
+inline bool ServerPacket::has_own_ground_marks() const {
+  return payload_case() == kOwnGroundMarks;
+}
+inline bool ServerPacket::_internal_has_own_ground_marks() const {
+  return payload_case() == kOwnGroundMarks;
+}
+inline void ServerPacket::set_has_own_ground_marks() {
+  _impl_._oneof_case_[0] = kOwnGroundMarks;
+}
+inline ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NULLABLE ServerPacket::release_own_ground_marks() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.own_ground_marks)
+  if (payload_case() == kOwnGroundMarks) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::OwnGroundMarks*>(_impl_.payload_.own_ground_marks_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.own_ground_marks_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::OwnGroundMarks& ServerPacket::_internal_own_ground_marks() const {
+  return payload_case() == kOwnGroundMarks ? static_cast<const ::Dreamsleeve::Protocol::Chat::OwnGroundMarks&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::OwnGroundMarks*>(_impl_.payload_.own_ground_marks_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::OwnGroundMarks&>(::Dreamsleeve::Protocol::Chat::_OwnGroundMarks_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::OwnGroundMarks& ServerPacket::own_ground_marks() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.own_ground_marks)
+  return _internal_own_ground_marks();
+}
+inline ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_own_ground_marks() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.own_ground_marks)
+  if (payload_case() == kOwnGroundMarks) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::OwnGroundMarks*>(_impl_.payload_.own_ground_marks_);
+    _impl_.payload_.own_ground_marks_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_own_ground_marks(
+    ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_own_ground_marks();
+    _impl_.payload_.own_ground_marks_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.own_ground_marks)
+}
+inline ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NONNULL ServerPacket::_internal_mutable_own_ground_marks() {
+  if (payload_case() != kOwnGroundMarks) {
+    clear_payload();
+    set_has_own_ground_marks();
+    _impl_.payload_.own_ground_marks_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::OwnGroundMarks>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::OwnGroundMarks*>(_impl_.payload_.own_ground_marks_);
+}
+inline ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NONNULL ServerPacket::mutable_own_ground_marks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::OwnGroundMarks* _msg = _internal_mutable_own_ground_marks();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.own_ground_marks)
   return _msg;
 }
 

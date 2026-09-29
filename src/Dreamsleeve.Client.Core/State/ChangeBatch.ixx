@@ -87,11 +87,13 @@ export namespace Dreamsleeve::Client
     std::vector<MovementObservation> movement;
     // Ordered like chatContent: applying them in sequence reproduces the visible marks.
     std::vector<GroundMarkChange> groundMarks;
+    // The player's own list was replaced; resolve the current value on the owner.
+    bool ownGroundMarksReplaced{};
 
     bool Empty() const noexcept
     {
       return !requiresSnapshot && !selfPlayerChanged && !playersReplaced && players.empty() && chats.empty() && resetChats.empty() &&
-             chatContent.empty() && movement.empty() && groundMarks.empty();
+             chatContent.empty() && movement.empty() && groundMarks.empty() && !ownGroundMarksReplaced;
     }
 
     // Keep allocated top-level storage for the next owner iteration. Nested
@@ -109,6 +111,7 @@ export namespace Dreamsleeve::Client
       chatContent.clear();
       movement.clear();
       groundMarks.clear();
+      ownGroundMarksReplaced = false;
     }
   };
 

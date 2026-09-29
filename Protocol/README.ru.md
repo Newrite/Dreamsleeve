@@ -8,14 +8,14 @@
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
 | [session.proto](session.proto) | OpenSession и начальный SessionOpened |
-| [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved |
+| [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
 
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–7 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–8 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
@@ -80,6 +80,7 @@ plain HTTP допустим только для явно разрешённой 
 | Клиент → сервер | PlaceGroundNote / ReportDeath / RemoveGroundMark | Надпись или место смерти с положением (FormKey, позиция, курс) либо id своей метки; Control-канал |
 | Сервер → клиент | GroundMarkPlaced / GroundMarkRemoved | Подтверждение с RequestId: метка и id вытесненной / id удалённой |
 | Сервер → клиент | GroundMarksChanged | Reliable-дельта видимых меток: view_revision, added, removed_ids, clear |
+| Сервер → клиент | OwnGroundMarks | Полный список меток получателя, где бы они ни стояли: после открытия сессии и при каждом изменении набора; без RequestId |
 
 RequestId — ненулевой uint64, назначаемый клиентским API до отправки. Клиент должен
 выдавать уникальные ID в течение жизни соединения; пропуски допустимы. Это не
@@ -172,6 +173,11 @@ Control-канале ENet.
   сессии; повтор или откат — ошибка протокола на клиенте (дельты reliable и
   упорядочены). `clear = true` начинает новый baseline (смена пространства, поколения
   персонажа или потеря позиции); дельта без `clear` и без изменений недопустима.
+- `ServerPacket.own_ground_marks = 24` — `OwnGroundMarks{marks}` без RequestId: все метки
+  получателя обоих видов, где бы они ни стояли, по возрастанию id. Приходит сразу после
+  подписки на метки (после `SessionOpened`) и заново при размещении, вытеснении, удалении
+  или истечении любой из них. Замена целиком, не дельта; не зависит от видимого набора.
+  Клиент отвергает список с чужим автором или повтором id.
 - Коды: `GROUND_MARK_AREA_FULL` (12) — ячейка индекса полна; `GROUND_MARK_NOT_FOUND`
   (13) — нет такой своей метки; `RATE_LIMITED` — частота надписей или смертей;
   `TEXT_NOT_ALLOWED` — словарь (поле `text`); `INVALID_REQUEST` — длина (`text`) или

@@ -168,13 +168,22 @@ export interface Settings {
   combatHideGroundMarks: boolean;
   combatHideGroundText: boolean;
 }
-// One of the player's own ground marks the host knows in this session.
+// A ground mark for the lists: own marks (the server's complete list) and
+// marks the server shows nearby. `author` is the host-resolved name of a
+// nearby mark, `character` the snapshot at placement (absent in streamer
+// mode), `location` the WRLD/CELL key and x/y/z the position in game units.
 export type GroundMarkKind = "note" | "death";
 export interface GroundMark {
   id: Id;
   kind: GroundMarkKind;
   text: string;
   time: number;
+  author?: string;
+  character?: string;
+  location: string;
+  x: number;
+  y: number;
+  z: number;
 }
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
@@ -216,12 +225,16 @@ export type HostEvent =
       settings?: Partial<Settings>;
       // Same session projected again (names or ignore list changed).
       refresh?: boolean;
-      // The session can place marks; the own marks the host knows so far.
+      // The session can place marks; the player's own marks as the server
+      // lists them, and the marks it shows nearby.
       groundMarksSupported?: boolean;
       groundMarks?: GroundMark[];
+      nearbyMarks?: GroundMark[];
     }
-  // The own marks changed: placed, removed, evicted or met again.
+  // The server replaced the own list: placed, evicted, removed or expired.
   | { type: "groundMarks"; marks: GroundMark[] }
+  // The marks shown near the player changed.
+  | { type: "nearbyMarks"; marks: GroundMark[] }
   // Outcome of placeGroundNote (markId, evictedId) or removeGroundMark (removed).
   | {
       type: "markResult";

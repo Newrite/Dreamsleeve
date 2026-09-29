@@ -72,3 +72,9 @@ message GroundMarkPlaced {
 
 // Acceptance of RemoveGroundMark; request_id is in the envelope.
 message GroundMarkRemoved { uint64 mark_id = 1; }
+
+// Every mark of the receiving player wherever it stands: sent once after the
+// session opened and again whenever that set changes (placed, evicted,
+// removed, expired). A full replacement, never a delta; independent of the
+// visible set, which follows the player's position.
+message OwnGroundMarks { repeated GroundMark marks = 1; }

@@ -18,11 +18,20 @@ export namespace Dreamsleeve::Client
     bool                              clear{};
   };
 
+  // Every mark of this player wherever it stands, as the server last listed
+  // them: a full replacement, independent of the visible set.
+  struct OwnGroundMarksReplaced
+  {
+    std::vector<Domain::GroundMark> marks;
+  };
+
   struct GroundMarkStoreSnapshot
   {
     std::uint64_t viewRevision{};
     // Ascending mark ID.
     std::vector<Domain::GroundMark> marks;
+    // The player's own marks, ascending mark ID.
+    std::vector<Domain::GroundMark> own;
   };
 
   // Marks visible from the player's position, as the server projects them. The
@@ -91,10 +100,23 @@ public:
       return changes;
     }
 
+    // The server's complete list of the player's own marks replaces the previous one.
+    void ReplaceOwn(std::vector<Domain::GroundMark> marks)
+    {
+      std::ranges::sort(marks, {}, &Domain::GroundMark::markId);
+      own = std::move(marks);
+    }
+
+    const std::vector<Domain::GroundMark>& Own() const noexcept
+    {
+      return own;
+    }
+
     // A session boundary: nothing is visible and the next delta starts over.
     void Clear() noexcept
     {
       marks.clear();
+      own.clear();
       viewRevision = 0;
     }
 
@@ -104,12 +126,14 @@ public:
       result.marks.reserve(marks.size());
       for (const auto& [id, mark] : marks)
         result.marks.push_back(mark);
+      result.own = own;
       return result;
     }
 
 private:
 
     std::map<Domain::GroundMarkId, Domain::GroundMark> marks;
+    std::vector<Domain::GroundMark>                    own;
     std::uint64_t                                      viewRevision{};
   };
 

@@ -319,4 +319,54 @@ TEST_CASE("Mark responses decode with their correlation rules and validate the m
   CHECK(std::get<W::GroundMarkRemoved>(*removal).markId == 4);
   removed.mutable_ground_mark_removed()->set_mark_id(0);
   CHECK_FALSE(codec.Decode(Bytes(removed)));
+
+  // The own list: no correlation, one author, unique ids; empty is a valid replacement.
+  P::ServerPacket own;
+  own.set_protocol_version(W::Version);
+  WriteMark(*own.mutable_own_ground_marks()->add_marks(), 21);
+  WriteMark(*own.mutable_own_ground_marks()->add_marks(), 22, P::GROUND_MARK_KIND_DEATH);
+  auto listed = codec.Decode(Bytes(own));
+  REQUIRE(listed);
+  CHECK(Ids(std::get<OwnGroundMarksReplaced>(*listed).marks) == std::vector<Domain::GroundMarkId>{21, 22});
+  own.set_request_id(3);
+  CHECK_FALSE(codec.Decode(Bytes(own)));
+  own.clear_request_id();
+  own.mutable_own_ground_marks()->mutable_marks(1)->set_mark_id(21);
+  CHECK_FALSE(codec.Decode(Bytes(own)));
+  own.mutable_own_ground_marks()->mutable_marks(1)->set_mark_id(22);
+  own.mutable_own_ground_marks()->mutable_marks(1)->mutable_author()->set_player_id(8);
+  CHECK_FALSE(codec.Decode(Bytes(own)));
+  P::ServerPacket none;
+  none.set_protocol_version(W::Version);
+  none.mutable_own_ground_marks();
+  auto cleared = codec.Decode(Bytes(none));
+  REQUIRE(cleared);
+  CHECK(std::get<OwnGroundMarksReplaced>(*cleared).marks.empty());
+}
+
+TEST_CASE("The own list replaces the previous one, travels whole in the delta and clears with the session")
+{
+  ClientModel model;
+  ChangeBatch scratch;
+  REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{Mark(5), Mark(2)}}));
+  auto update = TakeStateUpdate(model, scratch);
+  REQUIRE(update);
+  const auto& delta = std::get<ClientStateDelta>(*update);
+  REQUIRE(delta.ownGroundMarks);
+  CHECK(Ids(*delta.ownGroundMarks) == std::vector<Domain::GroundMarkId>{2, 5});
+  CHECK(delta.groundMarks.empty());
+  CHECK_FALSE(TakeStateUpdate(model, scratch));
+
+  REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{Mark(7)}}));
+  REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{}}));
+  auto emptied = TakeStateUpdate(model, scratch);
+  REQUIRE(emptied);
+  REQUIRE(std::get<ClientStateDelta>(*emptied).ownGroundMarks);
+  CHECK(std::get<ClientStateDelta>(*emptied).ownGroundMarks->empty());
+
+  REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{Mark(9)}}));
+  CHECK(Ids(model.Snapshot().groundMarks.own) == std::vector<Domain::GroundMarkId>{9});
+  CHECK(Ids(model.OwnGroundMarks()) == std::vector<Domain::GroundMarkId>{9});
+  model.ResetSession();
+  CHECK(model.Snapshot().groundMarks.own.empty());
 }

@@ -1045,7 +1045,7 @@ namespace
 
 }
 
-TEST_CASE("Session projects visible marks for the game and own marks for the UI")
+TEST_CASE("Session projects visible marks for the game and the server's own list for the UI")
 {
   auto        exchange = MakeExchange();
   ClientModel model;
@@ -1055,6 +1055,11 @@ TEST_CASE("Session projects visible marks for the game and own marks for the UI"
     model.Generation(),
     GroundMarksChanged{
         1, {MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"), MakeMark(11, 7, Domain::GroundMarkKind::Death, "Bear")}, {}, true}));
+  // The server lists every own mark, the far one included.
+  auto far = MakeMark(9, 1, Domain::GroundMarkKind::Death, "Dragon");
+  far.placement.locationId = {"skyrim.esm", 0x16BB4};
+  far.characterName        = "Nerevar";
+  REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"), far}}));
   Session        session;
   Session::Frame frame;
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
@@ -1062,51 +1067,68 @@ TEST_CASE("Session projects visible marks for the game and own marks for the UI"
   REQUIRE(frame.snapshot);
   CHECK(frame.visibleMarksChanged);
   CHECK(session.VisibleMarks().size() == 2);
-  REQUIRE(session.OwnMarks().size() == 1);
-  CHECK(session.OwnMarks().contains(10));
+  REQUIRE(session.OwnMarks().size() == 2);
+  CHECK(session.OwnMarks().contains(9));
   auto snapshot = Parse(frame.events[0]);
   CHECK(snapshot["groundMarksSupported"].get<bool>());
-  REQUIRE(snapshot["groundMarks"].size() == 1);
-  CHECK(snapshot["groundMarks"][0]["id"].get<std::string>() == "10");
-  CHECK(snapshot["groundMarks"][0]["kind"].get<std::string>() == "note");
-  CHECK(snapshot["groundMarks"][0]["text"].get<std::string>() == "mine");
+  REQUIRE(snapshot["groundMarks"].size() == 2);
+  CHECK(snapshot["groundMarks"][0]["id"].get<std::string>() == "9");
+  CHECK(snapshot["groundMarks"][0]["kind"].get<std::string>() == "death");
+  CHECK(snapshot["groundMarks"][0]["location"].get<std::string>() == "skyrim.esm:016BB4");
+  CHECK(snapshot["groundMarks"][0]["character"].get<std::string>() == "Nerevar");
+  CHECK(snapshot["groundMarks"][1]["text"].get<std::string>() == "mine");
+  REQUIRE(snapshot["nearbyMarks"].size() == 2);
+  CHECK(snapshot["nearbyMarks"][1]["id"].get<std::string>() == "11");
+  CHECK(snapshot["nearbyMarks"][1]["author"].get<std::string>() == "Player7");
+  CHECK(snapshot["nearbyMarks"][1]["text"].get<std::string>() == "Bear");
+  CHECK(snapshot["nearbyMarks"][1]["x"].get<double>() == 100);
 
-  // A space change clears the visible set but not the own marks met so far;
-  // a new own mark arrives through the ordinary delta and updates the UI list.
-  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{2, {MakeMark(12, 1, Domain::GroundMarkKind::Death, "Wolf")}, {}, true}));
+  // A visible delta changes the nearby list only; the own list waits for the server.
+  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{2, {MakeMark(12, 7, Domain::GroundMarkKind::Death, "Wolf")}, {11}, false}));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
   CHECK(frame.visibleMarksChanged);
-  CHECK(session.VisibleMarks().size() == 1);
+  CHECK(session.VisibleMarks().size() == 2);
   CHECK(session.VisibleMarks().contains(12));
   CHECK(session.OwnMarks().size() == 2);
   REQUIRE(frame.events.size() == 1);
-  CHECK(Type(frame.events[0]) == "groundMarks");
+  CHECK(Type(frame.events[0]) == "nearbyMarks");
   CHECK(Parse(frame.events[0])["marks"].size() == 2);
 
-  // Someone else's marks never reach the own list, and removals leave both sets.
-  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{3, {MakeMark(13, 7, Domain::GroundMarkKind::Note, "theirs")}, {12}, false}));
+  // The server's replacement is the only source of the own list.
+  REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{far}}));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
-  CHECK(session.VisibleMarks().size() == 1);
-  CHECK(session.VisibleMarks().contains(13));
   CHECK(session.OwnMarks().size() == 1);
-  CHECK_FALSE(session.OwnMarks().contains(12));
+  CHECK_FALSE(session.OwnMarks().contains(10));
   REQUIRE(frame.events.size() == 1);
   CHECK(Type(frame.events[0]) == "groundMarks");
+  CHECK(Parse(frame.events[0])["marks"].size() == 1);
 
-  // Own hidden text shows the placeholder in the list, like a hidden own message.
-  auto flagged    = MakeMark(14, 1, Domain::GroundMarkKind::Note, "bad word");
+  // Ignored authors leave the nearby list; a hidden foreign text is empty and a hidden own text a placeholder.
+  auto flagged    = MakeMark(14, 7, Domain::GroundMarkKind::Note, "bad word");
   flagged.flagged = {{0, 3}};
-  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{4, {flagged}, {}, false}));
+  auto ownFlagged    = MakeMark(15, 1, Domain::GroundMarkKind::Note, "bad word");
+  ownFlagged.flagged = {{0, 3}};
+  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{3, {flagged, ownFlagged}, {}, false}));
   UiSettings hide;
   hide.textFilter = "hide";
   frame           = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), hide, frame);
   REQUIRE(frame.events.size() == 1);
-  auto marks = Parse(frame.events[0])["marks"];
-  REQUIRE(marks.size() == 2);
-  CHECK(marks[1]["text"].get<std::string>() == "[скрыто фильтром]");
+  auto nearby = Parse(frame.events[0])["marks"];
+  REQUIRE(nearby.size() == 4);
+  CHECK(nearby[2]["text"].get<std::string>().empty());
+  CHECK(nearby[3]["text"].get<std::string>() == "[скрыто фильтром]");
+  session.PlayerNames().Configure("s", {});
+  REQUIRE(session.Ignore(7));
+  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{4, {}, {14}, false}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  auto filtered = Parse(frame.events[0])["marks"];
+  REQUIRE(filtered.size() == 2);
+  CHECK(filtered[0]["id"].get<std::string>() == "10");
+  CHECK(filtered[1]["id"].get<std::string>() == "15");
 }
 
 TEST_CASE("Session correlates note, removal and death requests with their outcomes")
@@ -1192,11 +1214,14 @@ TEST_CASE("Bridge validates ground mark commands")
   REQUIRE(removal);
   CHECK(Bridge::ParseId(removal->markId) == 18446744073709551615ull);
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"removeGroundMark","requestId":"6"})"));
-  auto mark = Bridge::ToUiGroundMark(MakeMark(3, 1, Domain::GroundMarkKind::Death, "Wolf"), UiSettings{});
+  auto mark = Bridge::ToUiGroundMark(MakeMark(3, 1, Domain::GroundMarkKind::Death, "Wolf"), UiSettings{}, true);
   CHECK(mark.id == "3");
   CHECK(mark.kind == "death");
   CHECK(mark.text == "Wolf");
   CHECK(mark.time == 1700000000000);
+  CHECK(mark.location == "skyrim.esm:01A26F");
+  CHECK(mark.z == 300);
+  CHECK_FALSE(mark.author);
 }
 
 TEST_SUITE_END();

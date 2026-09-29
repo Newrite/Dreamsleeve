@@ -131,6 +131,7 @@ export namespace Dreamsleeve::Client
     ChatMessagesReceived,
     ChatHistoryReceived,
     GroundMarksChanged,
+    OwnGroundMarksReplaced,
     ServerRejection>;
 
   struct ClientSnapshot
@@ -320,6 +321,11 @@ public:
       return groundMarks.Snapshot();
     }
 
+    std::vector<GroundMark> OwnGroundMarks() const
+    {
+      return groundMarks.Own();
+    }
+
     std::optional<ChatCacheSnapshot> FindChat(ChatChannelId channelId) const
     {
       const auto found = chats.find(channelId);
@@ -399,7 +405,8 @@ private:
         std::is_same_v<Update, PlayerProfileUpdated> || std::is_same_v<Update, PlayerMetadataUpdated> ||
         std::is_same_v<Update, PlayerCharacterRenamed> || std::is_same_v<Update, PlayerActorValuesUpdated> ||
         std::is_same_v<Update, ChatMessagesReceived> || std::is_same_v<Update, ChatHistoryReceived> ||
-        std::is_same_v<Update, GroundMarksChanged> || std::is_same_v<Update, ServerRejection>)
+        std::is_same_v<Update, GroundMarksChanged> || std::is_same_v<Update, OwnGroundMarksReplaced> ||
+        std::is_same_v<Update, ServerRejection>)
       {
         // No new motion, or a complete online replacement already supersedes it.
       }
@@ -536,7 +543,8 @@ private:
       }
       else if constexpr (
         !std::is_same_v<Update, ChatMessagesReceived> && !std::is_same_v<Update, ChatHistoryReceived> &&
-        !std::is_same_v<Update, GroundMarksChanged> && !std::is_same_v<Update, ServerRejection>)
+        !std::is_same_v<Update, GroundMarksChanged> && !std::is_same_v<Update, OwnGroundMarksReplaced> &&
+        !std::is_same_v<Update, ServerRejection>)
       {
         MarkPlayer(update.playerId);
       }
@@ -652,6 +660,14 @@ private:
       }
 
       RecordGroundMarks(std::move(*result));
+      return {};
+    }
+
+    // The complete own list from the server: a replacement, resolved at drain.
+    Domain::OperationResult ApplyOne(const OwnGroundMarksReplaced& update)
+    {
+      groundMarks.ReplaceOwn(update.marks);
+      if (!pendingChanges.requiresSnapshot) pendingChanges.ownGroundMarksReplaced = true;
       return {};
     }
 

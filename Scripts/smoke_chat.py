@@ -693,6 +693,31 @@ def smoke(args, log, directory: Path):
         message_once(alice, bob, f"smoke-persisted-{nonce}", args.timeout)
         stage("server restart retained SQLite identities and fresh login tickets reopen working sessions")
 
+        # "own-marks <n>" then "own <id> kind=<k> text=<t>": the server's complete list of the
+        # player's marks arrives right after the session opened, before any position is sent.
+        def own_marks(child: Child, start: int):
+            # The snapshot taken before the list arrives prints "own-marks 0"; the newest
+            # complete list counts, and only a non-empty one satisfies the wait.
+            def listed(lines):
+                for index in range(len(lines) - 1, -1, -1):
+                    match = re.fullmatch(r"own-marks (\d+)", lines[index])
+                    if match:
+                        count = int(match.group(1))
+                        rows = lines[index + 1:index + 1 + count]
+                        if len(rows) == count and all(row.startswith("own ") for row in rows):
+                            return [re.fullmatch(r"own (\d+) kind=(\d) text=(.*)", row).groups() for row in rows]
+                        return False
+                return False
+            return listed(child.wait_for(listed, args.timeout, start, read=True))
+
+        own = own_marks(alice, alice_start)
+        check(sorted(row[0] for row in own) == sorted([second_id, death_id]),
+              f"Own list after restart must hold {second_id} and {death_id}, got {[row[0] for row in own]}")
+        check(any(row[0] == death_id and row[1] == "2" and row[2] == "Alduin" for row in own), "Own death mark lost its label")
+        own_bob = own_marks(bob, bob_start)
+        check([row[0] for row in own_bob] == [bob_mark_id], f"Bob's own list must hold only {bob_mark_id}, got {own_bob}")
+        stage("after a restart every own mark is listed to its author on connect, with far marks included")
+
         bob_start = bob.mark()
         bob.send("begin Observer")
         bob.send("move " + json.dumps({"location": observer_sample["location"]}))

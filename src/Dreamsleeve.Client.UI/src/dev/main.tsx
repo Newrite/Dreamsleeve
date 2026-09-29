@@ -19,6 +19,7 @@ import {
   channels,
   groundMarks,
   messages,
+  nearbyMarks,
   players,
 } from "./fixture";
 import "../styles/base.css";
@@ -123,9 +124,14 @@ const history: Message[] = [
   },
 ];
 flags.set("flagged-1", [[14, 28]]);
-// Stand-in for the host's own-marks list: placed here or met nearby.
+// Stand-in for the server's own list and the host's nearby projection.
 const marks = [...groundMarks];
+const nearby = [...nearbyMarks];
 let nextMarkId = 400;
+function markEvents() {
+  chat.receive({ type: "groundMarks", marks: [...marks] });
+  chat.receive({ type: "nearbyMarks", marks: [...nearby] });
+}
 function snapshot(settings = chat.store.getState().settings, refresh = false) {
   chat.receive({
     type: "snapshot",
@@ -138,6 +144,7 @@ function snapshot(settings = chat.store.getState().settings, refresh = false) {
     refresh,
     groundMarksSupported: true,
     groundMarks: marks,
+    nearbyMarks: nearby,
   });
 }
 function command(c: Command) {
@@ -159,14 +166,30 @@ function command(c: Command) {
       const evicted = notes.length >= 2 ? notes[0] : undefined;
       if (evicted) marks.splice(marks.indexOf(evicted), 1);
       const markId = String(nextMarkId++);
-      marks.push({ id: markId, kind: "note", text: c.text, time: Date.now() });
+      const placed = {
+        id: markId,
+        kind: "note" as const,
+        text: c.text,
+        time: Date.now(),
+        character: "Довакин",
+        location: "skyrim.esm:01A26F",
+        x: 1240,
+        y: -880,
+        z: 512,
+      };
+      marks.push(placed);
+      if (evicted) {
+        const index = nearby.findIndex((m) => m.id === evicted.id);
+        if (index >= 0) nearby.splice(index, 1);
+      }
+      nearby.push({ ...placed, author: players[0].name });
       chat.receive({
         type: "markResult",
         requestId: c.requestId,
         markId,
         ...(evicted ? { evictedId: evicted.id } : {}),
       });
-      chat.receive({ type: "groundMarks", marks: [...marks] });
+      markEvents();
     }, 300);
     return true;
   }
@@ -182,12 +205,14 @@ function command(c: Command) {
         return;
       }
       marks.splice(index, 1);
+      const shown = nearby.findIndex((m) => m.id === c.markId);
+      if (shown >= 0) nearby.splice(shown, 1);
       chat.receive({
         type: "markResult",
         requestId: c.requestId,
         removed: true,
       });
-      chat.receive({ type: "groundMarks", marks: [...marks] });
+      markEvents();
     }, 300);
     return true;
   }

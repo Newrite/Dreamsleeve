@@ -116,12 +116,31 @@ let private rejected requestId code = function
 let private ids (records: GroundMarkRecord list) = records |> List.map (fun record -> GroundMarkId.value record.Mark.Id)
 let private removedIds (view: GroundMarkView) = view.Removed |> List.map GroundMarkId.value
 
-// A repeated Join is a FIFO barrier: whatever the owner sent before it is already queued.
+// The author's own list travels beside the visible deltas; most cases look past it.
+let rec private next (observer: Observer) = task {
+    let! event = receive observer.Events
+    match event with
+    | GroundMarkEvent.Own _ -> return! next observer
+    | other -> return other
+}
+
+let private own = function
+    | GroundMarkEvent.Own records -> records
+    | other -> failwithf "Expected own list: %A" other
+
+// A repeated Join is a FIFO barrier: whatever the owner sent before it is already
+// queued. Counts everything but own lists (the Join itself sends one).
 let private settled fixture (observer: Observer) = task {
     do! post fixture.Marks (GroundMarkCommand.Join observer.Subscription)
     do! post fixture.Marks (GroundMarkCommand.Detach { ConnectionId = Guid.NewGuid(); ReplyTo = fixture.Cleanup })
     let! _ = receive fixture.Acknowledgments
-    return observer.Events.Reader.Count
+    let mutable count = 0
+    let mutable event = Unchecked.defaultof<GroundMarkEvent>
+    while observer.Events.Reader.TryRead(&event) do
+        match event with
+        | GroundMarkEvent.Own _ -> ()
+        | _ -> count <- count + 1
+    return count
 }
 
 let private stored id author kind x (createdAt: DateTimeOffset) : GroundMarkRecord =
@@ -132,19 +151,56 @@ let private stored id author kind x (createdAt: DateTimeOffset) : GroundMarkReco
     { Mark = GroundMark.create (markId id) (pid author) body (placement whiterun x) createdAt; Author = profile author }
 
 let private agentTests = testList "GroundMarksAgent" [
+    case "the own list is sent on join and again after placing, evicting, removing and expiring" (fun () ->
+        let settings = { options with MaxNotesPerPlayer = 1 }
+        // The death mark outlives the first expiry pass by two seconds.
+        let dying = DateTimeOffset.UtcNow.AddDays(-7.0).AddSeconds(2.0)
+        let loaded = [ stored 1UL 1UL GroundMarkKind.Note 0.0f DateTimeOffset.UtcNow; stored 2UL 1UL GroundMarkKind.Death 9000.0f dying ]
+        withMarksUsing settings loaded 3UL (fun fixture -> task {
+            // Join sends everything of the author, including the far death mark, ascending by ID.
+            let! joined = receive fixture.Alice.Events
+            equal [1UL; 2UL] (ids (own joined))
+            equal (profile 1UL) (own joined).Head.Author
+            let! others = receive fixture.Bob.Events
+            equal [] (ids (own others))
+            // A placement under the note quota evicts the older note: the list follows the confirmation.
+            do! observe fixture fixture.Alice 1UL (located whiterun 0.0f)
+            let! _ = next fixture.Alice
+            do! submit fixture fixture.Alice 5UL (note "newer") (placement whiterun 10.0f)
+            let! confirmation = next fixture.Alice
+            let _, evicted = placed 5UL confirmation
+            equal (ValueSome 1UL) (evicted |> ValueOption.map GroundMarkId.value)
+            let! replaced = receive fixture.Alice.Events
+            equal [2UL; 3UL] (ids (own replaced))
+            let! _ = next fixture.Alice
+            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 6UL, markId 3UL))
+            let! _ = next fixture.Alice
+            let! removed = receive fixture.Alice.Events
+            equal [2UL] (ids (own removed))
+            let! _ = next fixture.Alice
+            // Expiry of a far mark reaches the author only through the own list.
+            do! Task.Delay 2500
+            let now = System.Diagnostics.Stopwatch.GetTimestamp()
+            do! post fixture.Marks (GroundMarkCommand.Expire { DueTimestamp = now; QueuedTimestamp = now })
+            let! expired = receive fixture.Alice.Events
+            equal [] (ids (own expired))
+            let! count = settled fixture fixture.Bob
+            equal 0 count
+        }))
+
     case "a placed mark is confirmed to the author and delivered to observers in range only" (fun () ->
         withMarks (fun fixture -> task {
             do! observe fixture fixture.Alice 1UL (located whiterun 0.0f)
             do! observe fixture fixture.Bob 1UL (located whiterun 50.0f)
             do! submit fixture fixture.Alice 7UL (note "praise the sun") (placement whiterun 10.0f)
-            let! confirmation = receive fixture.Alice.Events
+            let! confirmation = next fixture.Alice
             let record, evicted = placed 7UL confirmation
             equal "praise the sun" record.Mark.Text
             equal (profile 1UL) record.Author
             equal (ValueSome "Nerevar") (record.Mark.CharacterName |> ValueOption.map CharacterName.value)
             equal ValueNone evicted
-            let! own = receive fixture.Alice.Events
-            let! seen = receive fixture.Bob.Events
+            let! own = next fixture.Alice
+            let! seen = next fixture.Bob
             equal [1UL] (ids (changed own).Added)
             equal [1UL] (ids (changed seen).Added)
             check (not (changed own).Clear) "A single placement is a delta, not a baseline."
@@ -155,10 +211,10 @@ let private agentTests = testList "GroundMarksAgent" [
 
             // Out of range and in another space see nothing; an observer without a position sees nothing.
             do! observe fixture fixture.Bob 1UL (located whiterun 500.0f)
-            let! gone = receive fixture.Bob.Events
+            let! gone = next fixture.Bob
             equal [1UL] (removedIds (changed gone))
             do! submit fixture fixture.Alice 8UL (note "far") (placement riften 10.0f)
-            let! _ = receive fixture.Alice.Events
+            let! _ = next fixture.Alice
             let! count = settled fixture fixture.Bob
             equal 0 count
         }))
@@ -167,16 +223,16 @@ let private agentTests = testList "GroundMarksAgent" [
         withMarks (fun fixture -> task {
             do! observe fixture fixture.Alice 1UL (located whiterun 0.0f)
             do! submit fixture fixture.Alice 1UL (note "west") (placement whiterun 0.0f)
-            let! _ = receive fixture.Alice.Events
-            let! _ = receive fixture.Alice.Events
+            let! _ = next fixture.Alice
+            let! _ = next fixture.Alice
             do! submit fixture fixture.Alice 2UL (note "east") (placement whiterun 300.0f)
-            let! _ = receive fixture.Alice.Events
+            let! _ = next fixture.Alice
             do! observe fixture fixture.Bob 1UL (located whiterun 0.0f)
-            let! first = receive fixture.Bob.Events
+            let! first = next fixture.Bob
             equal [1UL] (ids (changed first).Added)
             check (changed first).Clear "The first position establishes a baseline."
             do! observe fixture fixture.Bob 1UL (located whiterun 250.0f)
-            let! moved = receive fixture.Bob.Events
+            let! moved = next fixture.Bob
             equal [2UL] (ids (changed moved).Added)
             equal [1UL] (removedIds (changed moved))
             check (not (changed moved).Clear) "A cell change is a delta."
@@ -184,15 +240,15 @@ let private agentTests = testList "GroundMarksAgent" [
             // Same cell again: nothing new.
             do! observe fixture fixture.Bob 1UL (located whiterun 260.0f)
             do! observe fixture fixture.Bob 1UL (located riften 260.0f)
-            let! elsewhere = receive fixture.Bob.Events
+            let! elsewhere = next fixture.Bob
             check (changed elsewhere).Clear "Another space clears the view."
             equal [] (ids (changed elsewhere).Added)
             do! observe fixture fixture.Bob 2UL (located whiterun 250.0f)
-            let! reborn = receive fixture.Bob.Events
+            let! reborn = next fixture.Bob
             check (changed reborn).Clear "A new character generation starts a new baseline."
             equal [2UL] (ids (changed reborn).Added)
             do! observe fixture fixture.Bob 2UL ValueNone
-            let! lost = receive fixture.Bob.Events
+            let! lost = next fixture.Bob
             check (changed lost).Clear "Losing the position clears the view."
             let! count = settled fixture fixture.Bob
             equal 0 count
@@ -203,21 +259,21 @@ let private agentTests = testList "GroundMarksAgent" [
             do! observe fixture fixture.Alice 1UL (located whiterun 0.0f)
             do! observe fixture fixture.Bob 1UL (located whiterun 0.0f)
             do! submit fixture fixture.Alice 1UL (death "Alduin") (placement whiterun 0.0f)
-            let! _ = receive fixture.Alice.Events
-            let! _ = receive fixture.Alice.Events
-            let! _ = receive fixture.Bob.Events
+            let! _ = next fixture.Alice
+            let! _ = next fixture.Alice
+            let! _ = next fixture.Bob
             let! _ = receive fixture.Writes
             do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Bob.Subscription.ConnectionId, 5UL, markId 1UL))
-            let! refused = receive fixture.Bob.Events
+            let! refused = next fixture.Bob
             rejected 5UL RequestRejectionCode.GroundMarkNotFound refused
             do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 6UL, markId 9UL))
-            let! unknown = receive fixture.Alice.Events
+            let! unknown = next fixture.Alice
             rejected 6UL RequestRejectionCode.GroundMarkNotFound unknown
             do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 7UL, markId 1UL))
-            let! removed = receive fixture.Alice.Events
+            let! removed = next fixture.Alice
             equal (GroundMarkEvent.Removed(7UL, markId 1UL)) removed
-            let! own = receive fixture.Alice.Events
-            let! seen = receive fixture.Bob.Events
+            let! own = next fixture.Alice
+            let! seen = next fixture.Bob
             equal [1UL] (removedIds (changed own))
             equal [1UL] (removedIds (changed seen))
             let! write = receive fixture.Writes
@@ -229,20 +285,20 @@ let private agentTests = testList "GroundMarksAgent" [
             do! observe fixture fixture.Bob 1UL (located whiterun 0.0f)
             for request in 1UL .. 2UL do
                 do! submit fixture fixture.Alice request (note $"note {request}") (placement whiterun 0.0f)
-                let! _ = receive fixture.Alice.Events
-                let! _ = receive fixture.Bob.Events
+                let! _ = next fixture.Alice
+                let! _ = next fixture.Bob
                 let! _ = receive fixture.Writes
                 ()
             do! submit fixture fixture.Alice 3UL (death "fall") (placement whiterun 0.0f)
-            let! _ = receive fixture.Alice.Events
-            let! _ = receive fixture.Bob.Events
+            let! _ = next fixture.Alice
+            let! _ = next fixture.Bob
             let! _ = receive fixture.Writes
             do! submit fixture fixture.Alice 4UL (note "note 3") (placement whiterun 0.0f)
-            let! confirmation = receive fixture.Alice.Events
+            let! confirmation = next fixture.Alice
             let record, evicted = placed 4UL confirmation
             equal 4UL (GroundMarkId.value record.Mark.Id)
             equal (ValueSome (markId 1UL)) evicted
-            let! seen = receive fixture.Bob.Events
+            let! seen = next fixture.Bob
             equal [4UL] (ids (changed seen).Added)
             equal [1UL] (removedIds (changed seen))
             let! first = receive fixture.Writes
@@ -260,42 +316,42 @@ let private agentTests = testList "GroundMarksAgent" [
         withMarks (fun fixture -> task {
             for request in 1UL .. 2UL do
                 do! submit fixture fixture.Alice request (note $"a{request}") (placement whiterun (float32 request))
-                let! _ = receive fixture.Alice.Events
+                let! _ = next fixture.Alice
                 let! _ = receive fixture.Writes
                 ()
             do! submit fixture fixture.Bob 3UL (note "b1") (placement whiterun 3.0f)
-            let! _ = receive fixture.Bob.Events
+            let! _ = next fixture.Bob
             let! _ = receive fixture.Writes
             do! submit fixture fixture.Bob 4UL (note "b2") (placement whiterun 4.0f)
-            let! refused = receive fixture.Bob.Events
+            let! refused = next fixture.Bob
             rejected 4UL RequestRejectionCode.GroundMarkAreaFull refused
             // Alice is at her quota: her own eviction frees room in the same cell.
             do! submit fixture fixture.Alice 5UL (note "a3") (placement whiterun 5.0f)
-            let! confirmation = receive fixture.Alice.Events
+            let! confirmation = next fixture.Alice
             let _, evicted = placed 5UL confirmation
             equal (ValueSome (markId 1UL)) evicted
             // The next cell is free.
             do! submit fixture fixture.Bob 6UL (note "b3") (placement whiterun 150.0f)
-            let! accepted = receive fixture.Bob.Events
+            let! accepted = next fixture.Bob
             placed 6UL accepted |> ignore
         }))
 
     case "notes are rate limited per account and deaths keep a minimum interval" (fun () ->
         withMarksUsing { options with RateBurst = 1; RateRefillMs = 60000; DuplicateWindowMs = 60000; DeathMinIntervalMs = 60000 } [] 1UL (fun fixture -> task {
             do! submit fixture fixture.Alice 1UL (note "first") (placement whiterun 0.0f)
-            let! _ = receive fixture.Alice.Events
+            let! _ = next fixture.Alice
             do! submit fixture fixture.Alice 2UL (note "second") (placement whiterun 0.0f)
-            let! refused = receive fixture.Alice.Events
+            let! refused = next fixture.Alice
             rejected 2UL RequestRejectionCode.RateLimited refused
             do! submit fixture fixture.Bob 3UL (note "first") (placement whiterun 0.0f)
-            let! other = receive fixture.Bob.Events
+            let! other = next fixture.Bob
             placed 3UL other |> ignore
             do! submit fixture fixture.Alice 4UL (death "") (placement whiterun 0.0f)
-            let! deathAccepted = receive fixture.Alice.Events
+            let! deathAccepted = next fixture.Alice
             let record, _ = placed 4UL deathAccepted
             equal "" record.Mark.Text
             do! submit fixture fixture.Alice 5UL (death "again") (placement whiterun 0.0f)
-            let! tooSoon = receive fixture.Alice.Events
+            let! tooSoon = next fixture.Alice
             rejected 5UL RequestRejectionCode.RateLimited tooSoon
         }))
 
@@ -307,11 +363,11 @@ let private agentTests = testList "GroundMarksAgent" [
             let! write = receive fixture.Writes
             equal (GroundMarkWrite.Delete [markId 5UL]) write
             do! observe fixture fixture.Alice 1UL (located whiterun 0.0f)
-            let! baseline = receive fixture.Alice.Events
+            let! baseline = next fixture.Alice
             equal [9UL] (ids (changed baseline).Added)
             equal (profile 2UL) (changed baseline).Added.Head.Author
             do! submit fixture fixture.Alice 1UL (note "new") (placement whiterun 0.0f)
-            let! confirmation = receive fixture.Alice.Events
+            let! confirmation = next fixture.Alice
             let record, _ = placed 1UL confirmation
             equal 12UL (GroundMarkId.value record.Mark.Id)
         }))
@@ -320,7 +376,7 @@ let private agentTests = testList "GroundMarksAgent" [
         let loaded = [ stored 3UL 1UL GroundMarkKind.Note 0.0f (DateTimeOffset.UtcNow - TimeSpan.FromDays 29.9) ]
         withMarksUsing { options with NoteTtlDays = 30 } loaded 4UL (fun fixture -> task {
             do! observe fixture fixture.Bob 1UL (located whiterun 0.0f)
-            let! baseline = receive fixture.Bob.Events
+            let! baseline = next fixture.Bob
             equal [3UL] (ids (changed baseline).Added)
             // Nothing expired yet.
             let now = System.Diagnostics.Stopwatch.GetTimestamp()
@@ -351,11 +407,11 @@ let private agentTests = testList "GroundMarksAgent" [
             let! ack = receive fixture.Acknowledgments
             equal fixture.Bob.Subscription.ConnectionId ack
             do! submit fixture fixture.Alice 1UL (note "quiet") (placement whiterun 0.0f)
-            let! _ = receive fixture.Alice.Events
+            let! _ = next fixture.Alice
             let replacement = { fixture.Bob.Subscription with ConnectionId = Guid.NewGuid() }
             do! post fixture.Marks (GroundMarkCommand.Join replacement)
             do! post fixture.Marks (GroundMarkCommand.Observe(replacement.ConnectionId, 1UL, located whiterun 0.0f))
-            let! baseline = receive fixture.Bob.Events
+            let! baseline = next fixture.Bob
             equal [1UL] (ids (changed baseline).Added)
             equal 0 fixture.Host.Reader.Count
         }))
@@ -427,6 +483,13 @@ let private codecTests = testList "GroundMarkCodec" [
         equal 13UL removed.RequestId
         equal 4UL removed.GroundMarkRemoved.MarkId
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkRemoved(0UL, markId 4UL))) "correlation required"
+        let ownList = ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; record 5UL 1.0f ]) |> ok |> parse
+        equal 0UL ownList.RequestId
+        equal [4UL; 5UL] (ownList.OwnGroundMarks.Marks |> Seq.map _.MarkId |> List.ofSeq)
+        equal DeliveryLane.Control (ProtocolCodec.responseLane (ServerResponse.OwnGroundMarks []))
+        Expect.isOk (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [])) "an empty own list encodes"
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; record 4UL 1.0f ])) "duplicate id"
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; { record 5UL 1.0f with Author = profile 8UL } ])) "author mismatch"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with ViewRevision = 0UL })) "revision required"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with Added = []; Removed = []; Clear = false })) "empty delta"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with Added = [ record 1UL 1.0f; record 1UL 2.0f ]; Clear = false })) "duplicate id"

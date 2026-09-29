@@ -38,6 +38,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   void                       WriteDeath(P::ReportDeath&, const ReportDeath&);
   Result<Domain::GroundMark> Mark(const P::GroundMark&);
   Result<GroundMarksChanged> ReadMarksChanged(const P::GroundMarksChanged&);
+  Result<OwnGroundMarksReplaced> ReadOwnMarks(const P::OwnGroundMarks&);
 
   void                  WriteSession(P::OpenSession&, const OpenSession&);
   bool                  ValidTicket(std::string_view);

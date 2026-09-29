@@ -252,3 +252,12 @@ module GroundMarkStorage =
     /// Detached, ascending by ID.
     let snapshot (storage: GroundMarkStorage) =
         storage.marks.Values |> Seq.sortBy _.Id |> List.ofSeq
+
+    /// Every mark of one author, both kinds, ascending by ID.
+    let ofAuthor author (storage: GroundMarkStorage) =
+        [ GroundMarkKind.Note; GroundMarkKind.Death ]
+        |> List.collect (fun kind ->
+            match storage.byAuthor.TryGetValue(struct (author, kind)) with
+            | true, ids -> ids |> Seq.choose (fun id -> tryFind id storage |> ValueOption.toOption) |> List.ofSeq
+            | false, _ -> [])
+        |> List.sortBy _.Id

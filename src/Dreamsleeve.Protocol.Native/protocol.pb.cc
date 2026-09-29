@@ -220,7 +220,7 @@ const ::uint32_t
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._oneof_case_[0]),
-        19, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.protocol_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
@@ -236,8 +236,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         1,
         0,
+        ~0u,
         ~0u,
         ~0u,
         ~0u,
@@ -280,10 +282,10 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::ClientPacket)},
         {23, sizeof(::Dreamsleeve::Protocol::Chat::ServerPacket)},
-        {56, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
-        {57, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
-        {66, sizeof(::Dreamsleeve::Protocol::Chat::ClientMovementPacket)},
-        {73, sizeof(::Dreamsleeve::Protocol::Chat::ServerMovementPacket)},
+        {58, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
+        {59, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
+        {68, sizeof(::Dreamsleeve::Protocol::Chat::ClientMovementPacket)},
+        {75, sizeof(::Dreamsleeve::Protocol::Chat::ServerMovementPacket)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_ClientPacket_default_instance_._instance,
@@ -311,7 +313,7 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     ".Dreamsleeve.Protocol.Chat.ReportDeathH\000"
     "\022I\n\022remove_ground_mark\030\020 \001(\0132+.Dreamslee"
     "ve.Protocol.Chat.RemoveGroundMarkH\000B\t\n\007p"
-    "ayload\"\200\010\n\014ServerPacket\022\030\n\020protocol_vers"
+    "ayload\"\307\010\n\014ServerPacket\022\030\n\020protocol_vers"
     "ion\030\001 \001(\r\022\027\n\nrequest_id\030\002 \001(\004H\001\210\001\001\022B\n\016se"
     "ssion_opened\030\n \001(\0132(.Dreamsleeve.Protoco"
     "l.Chat.SessionOpenedH\000\022B\n\016chat_published"
@@ -335,34 +337,36 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "(\0132+.Dreamsleeve.Protocol.Chat.GroundMar"
     "kPlacedH\000\022K\n\023ground_mark_removed\030\027 \001(\0132,"
     ".Dreamsleeve.Protocol.Chat.GroundMarkRem"
-    "ovedH\000B\t\n\007payloadB\r\n\013_request_idJ\004\010\021\020\022J\004"
-    "\010\023\020\024R\014player_movedR\rplayers_moved\"\026\n\024Pla"
-    "yerUpdateAccepted\"p\n\017RequestRejected\022=\n\004"
-    "code\030\001 \001(\0162/.Dreamsleeve.Protocol.Chat.R"
-    "equestRejectionCode\022\017\n\007message\030\002 \001(\t\022\r\n\005"
-    "field\030\003 \001(\t\"k\n\024ClientMovementPacket\022\030\n\020p"
-    "rotocol_version\030\001 \001(\r\0229\n\006sample\030\002 \001(\0132)."
-    "Dreamsleeve.Protocol.Chat.MovementSample"
-    "\"l\n\024ServerMovementPacket\022\030\n\020protocol_ver"
-    "sion\030\001 \001(\r\022:\n\tmovements\030\002 \001(\0132\'.Dreamsle"
-    "eve.Protocol.Chat.PlayersMoved*\231\005\n\024Reque"
-    "stRejectionCode\022&\n\"REQUEST_REJECTION_COD"
-    "E_UNSPECIFIED\020\000\022*\n&REQUEST_REJECTION_COD"
-    "E_INVALID_REQUEST\020\001\022,\n(REQUEST_REJECTION"
-    "_CODE_SESSION_NOT_READY\020\002\022/\n+REQUEST_REJ"
-    "ECTION_CODE_SESSION_ALREADY_OPEN\020\003\022)\n%RE"
-    "QUEST_REJECTION_CODE_USERNAME_TAKEN\020\004\022,\n"
-    "(REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUN"
-    "D\020\005\022-\n)REQUEST_REJECTION_CODE_NOT_CHANNE"
-    "L_MEMBER\020\006\022%\n!REQUEST_REJECTION_CODE_OVE"
-    "RLOADED\020\007\0220\n,REQUEST_REJECTION_CODE_AUTH"
-    "ENTICATION_FAILED\020\010\022+\n\'REQUEST_REJECTION"
-    "_CODE_TEXT_NOT_ALLOWED\020\t\022\'\n#REQUEST_REJE"
-    "CTION_CODE_RATE_LIMITED\020\n\0223\n/REQUEST_REJ"
-    "ECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED\020\013\0220"
-    "\n,REQUEST_REJECTION_CODE_GROUND_MARK_ARE"
-    "A_FULL\020\014\0220\n,REQUEST_REJECTION_CODE_GROUN"
-    "D_MARK_NOT_FOUND\020\rb\006proto3"
+    "ovedH\000\022E\n\020own_ground_marks\030\030 \001(\0132).Dream"
+    "sleeve.Protocol.Chat.OwnGroundMarksH\000B\t\n"
+    "\007payloadB\r\n\013_request_idJ\004\010\021\020\022J\004\010\023\020\024R\014pla"
+    "yer_movedR\rplayers_moved\"\026\n\024PlayerUpdate"
+    "Accepted\"p\n\017RequestRejected\022=\n\004code\030\001 \001("
+    "\0162/.Dreamsleeve.Protocol.Chat.RequestRej"
+    "ectionCode\022\017\n\007message\030\002 \001(\t\022\r\n\005field\030\003 \001"
+    "(\t\"k\n\024ClientMovementPacket\022\030\n\020protocol_v"
+    "ersion\030\001 \001(\r\0229\n\006sample\030\002 \001(\0132).Dreamslee"
+    "ve.Protocol.Chat.MovementSample\"l\n\024Serve"
+    "rMovementPacket\022\030\n\020protocol_version\030\001 \001("
+    "\r\022:\n\tmovements\030\002 \001(\0132\'.Dreamsleeve.Proto"
+    "col.Chat.PlayersMoved*\231\005\n\024RequestRejecti"
+    "onCode\022&\n\"REQUEST_REJECTION_CODE_UNSPECI"
+    "FIED\020\000\022*\n&REQUEST_REJECTION_CODE_INVALID"
+    "_REQUEST\020\001\022,\n(REQUEST_REJECTION_CODE_SES"
+    "SION_NOT_READY\020\002\022/\n+REQUEST_REJECTION_CO"
+    "DE_SESSION_ALREADY_OPEN\020\003\022)\n%REQUEST_REJ"
+    "ECTION_CODE_USERNAME_TAKEN\020\004\022,\n(REQUEST_"
+    "REJECTION_CODE_CHANNEL_NOT_FOUND\020\005\022-\n)RE"
+    "QUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER\020"
+    "\006\022%\n!REQUEST_REJECTION_CODE_OVERLOADED\020\007"
+    "\0220\n,REQUEST_REJECTION_CODE_AUTHENTICATIO"
+    "N_FAILED\020\010\022+\n\'REQUEST_REJECTION_CODE_TEX"
+    "T_NOT_ALLOWED\020\t\022\'\n#REQUEST_REJECTION_COD"
+    "E_RATE_LIMITED\020\n\0223\n/REQUEST_REJECTION_CO"
+    "DE_ANNOUNCEMENT_NOT_ALLOWED\020\013\0220\n,REQUEST"
+    "_REJECTION_CODE_GROUND_MARK_AREA_FULL\020\014\022"
+    "0\n,REQUEST_REJECTION_CODE_GROUND_MARK_NO"
+    "T_FOUND\020\rb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_protocol_2eproto_deps[4] = {
@@ -375,7 +379,7 @@ static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    2706,
+    2777,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -1448,6 +1452,30 @@ void ServerPacket::clear_ground_mark_removed() {
     clear_has_payload();
   }
 }
+void ServerPacket::set_allocated_own_ground_marks(::Dreamsleeve::Protocol::Chat::OwnGroundMarks* PROTOBUF_NULLABLE own_ground_marks) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_payload();
+  if (own_ground_marks) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(own_ground_marks)->GetArena();
+    if (message_arena != submessage_arena) {
+      own_ground_marks = ::google::protobuf::internal::GetOwnedMessage(message_arena, own_ground_marks, submessage_arena);
+    }
+    set_has_own_ground_marks();
+    _impl_.payload_.own_ground_marks_ = own_ground_marks;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.own_ground_marks)
+}
+void ServerPacket::clear_own_ground_marks() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (payload_case() == kOwnGroundMarks) {
+    if (GetArena() == nullptr) {
+      delete _impl_.payload_.own_ground_marks_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.own_ground_marks_);
+    }
+    clear_has_payload();
+  }
+}
 ServerPacket::ServerPacket(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ServerPacket_class_data_.base()) {
@@ -1524,6 +1552,9 @@ ServerPacket::ServerPacket(
         break;
       case kGroundMarkRemoved:
         _impl_.payload_.ground_mark_removed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.ground_mark_removed_);
+        break;
+      case kOwnGroundMarks:
+        _impl_.payload_.own_ground_marks_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.own_ground_marks_);
         break;
   }
 
@@ -1662,6 +1693,14 @@ void ServerPacket::clear_payload() {
       }
       break;
     }
+    case kOwnGroundMarks: {
+      if (GetArena() == nullptr) {
+        delete _impl_.payload_.own_ground_marks_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.own_ground_marks_);
+      }
+      break;
+    }
     case PAYLOAD_NOT_SET: {
       break;
     }
@@ -1713,17 +1752,17 @@ ServerPacket::GetClassData() const {
   return ServerPacket_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 14, 12, 0, 2>
+const ::_pbi::TcParseTable<1, 15, 13, 0, 2>
 ServerPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_._has_bits_),
     0, // no _extensions_
-    23, 8,  // max_field_number, fast_idx_mask
+    24, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4286906876,  // skipmap
+    4278518268,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    14,  // num_field_entries
-    12,  // num_aux_entries
+    15,  // num_field_entries
+    13,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ServerPacket_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1771,6 +1810,8 @@ ServerPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.ground_mark_placed_), _Internal::kOneofCaseOffset + 0, 10, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.GroundMarkRemoved ground_mark_removed = 23;
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.ground_mark_removed_), _Internal::kOneofCaseOffset + 0, 11, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.OwnGroundMarks own_ground_marks = 24;
+    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.own_ground_marks_), _Internal::kOneofCaseOffset + 0, 12, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SessionOpened>()},
@@ -1785,6 +1826,7 @@ ServerPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GroundMarksChanged>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GroundMarkPlaced>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GroundMarkRemoved>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::OwnGroundMarks>()},
   }},
   {{
   }},
@@ -1915,6 +1957,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
           stream);
       break;
     }
+    case kOwnGroundMarks: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          24, *this_._impl_.payload_.own_ground_marks_, this_._impl_.payload_.own_ground_marks_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -2028,6 +2076,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
     case kGroundMarkRemoved: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.ground_mark_removed_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Chat.OwnGroundMarks own_ground_marks = 24;
+    case kOwnGroundMarks: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.own_ground_marks_);
       break;
     }
     case PAYLOAD_NOT_SET: {
@@ -2169,6 +2223,14 @@ void ServerPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.payload_.ground_mark_removed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.ground_mark_removed_);
         } else {
           _this->_impl_.payload_.ground_mark_removed_->MergeFrom(*from._impl_.payload_.ground_mark_removed_);
+        }
+        break;
+      }
+      case kOwnGroundMarks: {
+        if (oneof_needs_init) {
+          _this->_impl_.payload_.own_ground_marks_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.own_ground_marks_);
+        } else {
+          _this->_impl_.payload_.own_ground_marks_->MergeFrom(*from._impl_.payload_.own_ground_marks_);
         }
         break;
       }

@@ -119,19 +119,39 @@ describe("native bridge", () => {
 });
 describe("ground mark events", () => {
   it("accepts own marks and results, rejects wrong kinds and ambiguous results", () => {
+    const place = { location: "skyrim.esm:01A26F", x: 1.5, y: -2, z: 0 };
     const marks = {
       type: "groundMarks",
-      marks: [{ id: "18446744073709551615", kind: "death", text: "", time: 0 }],
+      marks: [
+        {
+          id: "18446744073709551615",
+          kind: "death",
+          text: "",
+          time: 0,
+          character: "Довакин",
+          ...place,
+        },
+      ],
     };
     expect(parseHostEvent(JSON.stringify(marks))).toEqual(marks);
-    expect(() =>
-      parseHostEvent(
-        JSON.stringify({
-          type: "groundMarks",
-          marks: [{ id: "1", kind: "sign", text: "", time: 0 }],
-        }),
-      ),
-    ).toThrow();
+    const nearby = {
+      type: "nearbyMarks",
+      marks: [
+        { id: "2", kind: "note", text: "x", time: 1, author: "Мира", ...place },
+      ],
+    };
+    expect(parseHostEvent(JSON.stringify(nearby))).toEqual(nearby);
+    for (const broken of [
+      { id: "1", kind: "sign", text: "", time: 0, ...place },
+      { id: "1", kind: "note", text: "", time: 0 },
+      { id: "1", kind: "note", text: "", time: 0, ...place, x: "1" },
+      { id: "1", kind: "note", text: "", time: 0, ...place, author: 5 },
+    ])
+      expect(() =>
+        parseHostEvent(
+          JSON.stringify({ type: "groundMarks", marks: [broken] }),
+        ),
+      ).toThrow();
     for (const result of [
       { type: "markResult", requestId: "1", markId: "5" },
       { type: "markResult", requestId: "1", markId: "5", evictedId: "4" },
@@ -154,7 +174,8 @@ describe("ground mark events", () => {
       players: [],
       messages: [],
       groundMarksSupported: true,
-      groundMarks: [{ id: "2", kind: "note", text: "x", time: 1 }],
+      groundMarks: [{ id: "2", kind: "note", text: "x", time: 1, ...place }],
+      nearbyMarks: [{ id: "3", kind: "note", text: "y", time: 1, ...place }],
     };
     expect(parseHostEvent(JSON.stringify(snapshot))).toEqual(snapshot);
     expect(() =>

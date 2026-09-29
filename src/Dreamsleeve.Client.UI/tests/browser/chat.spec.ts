@@ -1153,6 +1153,14 @@ test("my marks lists own marks and removes one", async ({ page }) => {
   await expect(list.getByRole("listitem")).toHaveCount(2);
   await expect(list).toContainText("Место смерти");
   await expect(list).toContainText("Морозный тролль");
+  // The far death mark is listed with its place, without walking up to it.
+  await expect(list).toContainText("skyrim.esm:016BB4 · 20140, 3300, 610");
+  const nearby = page.getByLabel("Метки рядом");
+  await expect(nearby.getByRole("listitem")).toHaveCount(3);
+  await expect(nearby).toContainText("Мира");
+  await expect(nearby).toContainText("Эйра");
+  await expect(nearby).toContainText("Сундук за водопадом");
+  await expect(nearby.locator("img")).toHaveCount(0);
   await page.screenshot({ path: "test-results/my-marks.png" });
   await page.getByRole("button", { name: "Удалить метку 302" }).click();
   await expect(

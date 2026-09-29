@@ -48,9 +48,11 @@ namespace Dreamsleeve.Protocol.Chat {
             "KAQSDQoFY2xlYXIYBCABKAgiWwoQR3JvdW5kTWFya1BsYWNlZBIzCgRtYXJr",
             "GAEgASgLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Hcm91bmRNYXJr",
             "EhIKCmV2aWN0ZWRfaWQYAiABKAQiJAoRR3JvdW5kTWFya1JlbW92ZWQSDwoH",
-            "bWFya19pZBgBIAEoBCppCg5Hcm91bmRNYXJrS2luZBIgChxHUk9VTkRfTUFS",
-            "S19LSU5EX1VOU1BFQ0lGSUVEEAASGQoVR1JPVU5EX01BUktfS0lORF9OT1RF",
-            "EAESGgoWR1JPVU5EX01BUktfS0lORF9ERUFUSBACYgZwcm90bzM="));
+            "bWFya19pZBgBIAEoBCJGCg5Pd25Hcm91bmRNYXJrcxI0CgVtYXJrcxgBIAMo",
+            "CzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3JvdW5kTWFyayppCg5H",
+            "cm91bmRNYXJrS2luZBIgChxHUk9VTkRfTUFSS19LSU5EX1VOU1BFQ0lGSUVE",
+            "EAASGQoVR1JPVU5EX01BUktfS0lORF9OT1RFEAESGgoWR1JPVU5EX01BUktf",
+            "S0lORF9ERUFUSBACYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkKind), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -61,7 +63,8 @@ namespace Dreamsleeve.Protocol.Chat {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RemoveGroundMark), global::Dreamsleeve.Protocol.Chat.RemoveGroundMark.Parser, new[]{ "MarkId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarksChanged), global::Dreamsleeve.Protocol.Chat.GroundMarksChanged.Parser, new[]{ "ViewRevision", "Added", "RemovedIds", "Clear" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkPlaced), global::Dreamsleeve.Protocol.Chat.GroundMarkPlaced.Parser, new[]{ "Mark", "EvictedId" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkRemoved), global::Dreamsleeve.Protocol.Chat.GroundMarkRemoved.Parser, new[]{ "MarkId" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkRemoved), global::Dreamsleeve.Protocol.Chat.GroundMarkRemoved.Parser, new[]{ "MarkId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.OwnGroundMarks), global::Dreamsleeve.Protocol.Chat.OwnGroundMarks.Parser, new[]{ "Marks" }, null, null, null, null)
           }));
     }
     #endregion
@@ -2309,6 +2312,199 @@ namespace Dreamsleeve.Protocol.Chat {
             break;
           case 8: {
             MarkId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Every mark of the receiving player wherever it stands: sent once after the
+  /// session opened and again whenever that set changes (placed, evicted,
+  /// removed, expired). A full replacement, never a delta; independent of the
+  /// visible set, which follows the player's position.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class OwnGroundMarks : pb::IMessage<OwnGroundMarks>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<OwnGroundMarks> _parser = new pb::MessageParser<OwnGroundMarks>(() => new OwnGroundMarks());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<OwnGroundMarks> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[8]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public OwnGroundMarks() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public OwnGroundMarks(OwnGroundMarks other) : this() {
+      marks_ = other.marks_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public OwnGroundMarks Clone() {
+      return new OwnGroundMarks(this);
+    }
+
+    /// <summary>Field number for the "marks" field.</summary>
+    public const int MarksFieldNumber = 1;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.GroundMark> _repeated_marks_codec
+        = pb::FieldCodec.ForMessage(10, global::Dreamsleeve.Protocol.Chat.GroundMark.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GroundMark> marks_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GroundMark>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GroundMark> Marks {
+      get { return marks_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as OwnGroundMarks);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(OwnGroundMarks other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if(!marks_.Equals(other.marks_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      hash ^= marks_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      marks_.WriteTo(output, _repeated_marks_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      marks_.WriteTo(ref output, _repeated_marks_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      size += marks_.CalculateSize(_repeated_marks_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(OwnGroundMarks other) {
+      if (other == null) {
+        return;
+      }
+      marks_.Add(other.marks_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            marks_.AddEntriesFrom(input, _repeated_marks_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            marks_.AddEntriesFrom(ref input, _repeated_marks_codec);
             break;
           }
         }

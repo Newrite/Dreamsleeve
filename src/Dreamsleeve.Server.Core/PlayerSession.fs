@@ -322,6 +322,7 @@ module PlayerSession =
                 close request state context "Unexpected ground mark reply."
         match event with
         | GroundMarkEvent.Changed view -> publish options request state context (ServerResponse.GroundMarksChanged view)
+        | GroundMarkEvent.Own records -> publish options request state context (ServerResponse.OwnGroundMarks records)
         | GroundMarkEvent.Placed(requestId, record, evicted) -> settle requestId (ServerResponse.GroundMarkPlaced(requestId, record, evicted))
         | GroundMarkEvent.Removed(requestId, id) -> settle requestId (ServerResponse.GroundMarkRemoved(requestId, id))
         | GroundMarkEvent.Rejected(requestId, rejection) -> settle requestId (ServerResponse.RequestRejected(requestId, rejection))
@@ -566,7 +567,7 @@ module PlayerSession =
         | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.ChatDetached _ | PlayerSessionMessage.SystemDetached _
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.Stop -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Placed _ | GroundMarkEvent.Removed _ | GroundMarkEvent.Rejected _) -> true
-        | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Changed _) -> false
+        | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Changed _ | GroundMarkEvent.Own _) -> false
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Joined _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.JoinFailed _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Accepted _)

@@ -32,7 +32,9 @@ export namespace Dreamsleeve::Client
     std::vector<MovementObservation> movement;
     // Ordered transitions of the visible ground marks; a clear starts over.
     std::vector<GroundMarkChange> groundMarks;
-    MovementClock::time_point     observedAt{};
+    // Present when the server replaced the player's own list; the complete list.
+    std::optional<std::vector<Domain::GroundMark>> ownGroundMarks;
+    MovementClock::time_point                      observedAt{};
   };
 
   using ClientStateUpdate = std::variant<ClientSnapshot, ClientStateDelta>;
@@ -80,6 +82,7 @@ export namespace Dreamsleeve::Client
     delta.chatContent = std::move(scratch.chatContent);
     delta.movement    = std::move(scratch.movement);
     delta.groundMarks = std::move(scratch.groundMarks);
+    if (scratch.ownGroundMarksReplaced) delta.ownGroundMarks = model.OwnGroundMarks();
 
     return ClientStateUpdate{std::move(delta)};
   }

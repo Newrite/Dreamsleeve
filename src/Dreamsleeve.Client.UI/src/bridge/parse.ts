@@ -97,7 +97,13 @@ function groundMark(v: unknown): boolean {
     text(v.text) &&
     v.text.length <= 16000 &&
     finite(v.time) &&
-    Math.abs(v.time as number) <= 8640000000000000
+    Math.abs(v.time as number) <= 8640000000000000 &&
+    (v.author === undefined || label(v.author)) &&
+    (v.character === undefined || label(v.character)) &&
+    label(v.location) &&
+    finite(v.x) &&
+    finite(v.y) &&
+    finite(v.z)
   );
 }
 function channel(v: unknown): boolean {
@@ -150,10 +156,14 @@ export function parseHostEvent(source: string): HostEvent {
         (v.refresh === undefined || typeof v.refresh === "boolean") &&
         (v.groundMarksSupported === undefined ||
           typeof v.groundMarksSupported === "boolean") &&
-        (v.groundMarks === undefined || list(v.groundMarks, groundMark, 256));
+        (v.groundMarks === undefined || list(v.groundMarks, groundMark, 256)) &&
+        (v.nearbyMarks === undefined || list(v.nearbyMarks, groundMark, 4096));
       break;
     case "groundMarks":
       valid = list(v.marks, groundMark, 256);
+      break;
+    case "nearbyMarks":
+      valid = list(v.marks, groundMark, 4096);
       break;
     case "markResult":
       valid =

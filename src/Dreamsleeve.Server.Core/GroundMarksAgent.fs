@@ -72,6 +72,17 @@ module GroundMarksAgent =
     let private record state (mark: GroundMark) : GroundMarkRecord =
         { Mark = mark; Author = state.Authors[mark.Author] }
 
+    /// The author's complete set, wherever the marks stand; sent whenever it changes.
+    let private announceOwn state context author =
+        match state.Players.TryGetValue author with
+        | false, _ -> ()
+        | true, connectionId ->
+            match state.Observers.TryGetValue connectionId with
+            | false, _ -> ()
+            | true, observer ->
+                let own = GroundMarkStorage.ofAuthor author state.Marks |> List.map (record state)
+                deliver state context observer (GroundMarkEvent.Own own)
+
     let private nextRevision (observer: Observer) =
         observer.Revision <- observer.Revision + 1UL
         observer.Revision
@@ -128,6 +139,8 @@ module GroundMarksAgent =
             state.Players[subscription.Profile.PlayerId] <- subscription.ConnectionId
             if state.Authors.ContainsKey subscription.Profile.PlayerId then
                 state.Authors[subscription.Profile.PlayerId] <- subscription.Profile
+            // The player learns every own mark at once, even those far from here.
+            announceOwn state context subscription.Profile.PlayerId
 
     let private observe state context connectionId generation (location: PlayerLocation voption) =
         match state.Observers.TryGetValue connectionId with
@@ -220,6 +233,7 @@ module GroundMarksAgent =
                         persist state context (GroundMarkWrite.Insert mark)
                         let evictedId = evicted |> ValueOption.map _.Id
                         deliver state context observer (GroundMarkEvent.Placed(submission.RequestId, record state mark, evictedId))
+                        announceOwn state context author
                         // The author learns about the visible set through the same delta as everyone.
                         let observers = state.Observers.Values |> Seq.toArray
                         for recipient in observers do
@@ -241,6 +255,7 @@ module GroundMarksAgent =
                 forget state mark
                 persist state context (GroundMarkWrite.Delete [id])
                 deliver state context observer (GroundMarkEvent.Removed(requestId, id))
+                announceOwn state context mark.Author
                 announceRemoved state context [id]
             | ValueSome _ | ValueNone ->
                 reject state context observer requestId RequestRejectionCode.GroundMarkNotFound "No such mark of yours." "mark_id"
@@ -254,6 +269,8 @@ module GroundMarksAgent =
             persist state context (GroundMarkWrite.Delete ids)
             state.Logger.LogInformation("Removed {Count} expired ground marks", ids.Length)
             announceRemoved state context ids
+            for author in expired |> List.map _.Author |> List.distinct do
+                announceOwn state context author
 
     let private detach state (context: AgentContext<GroundMarkCommand>) (request: SessionDetach) =
         remove state request.ConnectionId

@@ -103,4 +103,6 @@ type ServerResponse =
     | GroundMarksChanged of GroundMarkView
     | GroundMarkPlaced of requestId: uint64 * GroundMarkRecord * evicted: GroundMarkId voption
     | GroundMarkRemoved of requestId: uint64 * GroundMarkId
+    /// Full replacement of the player's own marks; no request ID.
+    | OwnGroundMarks of GroundMarkRecord list
 

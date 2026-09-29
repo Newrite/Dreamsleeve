@@ -108,6 +108,15 @@ namespace
   constexpr std::string_view Commands =
     "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | read | pose <id> | watch <id> <ms> | quit\n";
 
+  // "own-marks <n>" then "own <id> kind=<1|2> text=<text>" per mark: the server's
+  // complete list of this player's marks, wherever they stand.
+  void PrintOwnMarks(std::ostream& output, const std::vector<Domain::GroundMark>& marks)
+  {
+    output << "own-marks " << marks.size() << '\n';
+    for (const auto& mark : marks)
+      output << "own " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " text=" << mark.text << '\n';
+  }
+
   // The last position sent by move/location; marks are placed where the player stands.
   std::optional<Domain::PlayerLocation> lastLocation;
 
@@ -265,6 +274,7 @@ namespace
         console << "marks " << snapshot->groundMarks.marks.size() << " revision=" << snapshot->groundMarks.viewRevision << '\n';
         for (const auto& mark : snapshot->groundMarks.marks)
           PrintMark(console, mark);
+        PrintOwnMarks(console, snapshot->groundMarks.own);
       }
       else
       {
@@ -290,6 +300,7 @@ namespace
             for (const auto& mark : added->marks)
               PrintMark(console, mark);
         }
+        if (delta.ownGroundMarks) PrintOwnMarks(console, *delta.ownGroundMarks);
       }
     }
 

@@ -359,6 +359,14 @@ private:
       return Apply(value);
     }
 
+    // The server lists only the receiver's marks; any other author is a protocol fault.
+    Result<void> Receive(OwnGroundMarksReplaced& value)
+    {
+      for (const auto& mark : value.marks)
+        if (mark.author.playerId != model.SelfPlayerId()) return Unexpected("author");
+      return Apply(value);
+    }
+
     Result<void> Receive(PlayerLocationUpdated& value)
     {
       return Apply(value);

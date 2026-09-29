@@ -66,6 +66,7 @@ public:
       }
       if (ownMarksChanged && !frame.snapshot) Emit(frame, Bridge::GroundMarksEvent{.marks = OwnMarkList(settings)});
       ownMarksChanged = false;
+      if (frame.visibleMarksChanged && !frame.snapshot && Ready()) Emit(frame, Bridge::NearbyMarksEvent{.marks = NearbyMarkList(settings)});
 
       PublishStatus(output.status, settings, frame);
       RequestSnapshotIfNeeded(exchange, frame);
@@ -77,9 +78,8 @@ public:
       return visibleMarks;
     }
 
-    // The player's own marks this session has seen: placed here, or delivered
-    // while nearby. The server keeps no separate list of own marks, so a mark
-    // placed in an earlier session far from here is unknown until met again.
+    // Every mark of the player wherever it stands, as the server last listed
+    // them (protocol v9): placed here or in earlier sessions, far or near.
     const Marks& OwnMarks() const noexcept
     {
       return ownMarks;
@@ -297,24 +297,33 @@ private:
       std::vector<Bridge::UiGroundMark> list;
       list.reserve(ownMarks.size());
       for (const auto& [id, mark] : ownMarks)
-        list.push_back(Bridge::ToUiGroundMark(mark, settings));
+        list.push_back(Bridge::ToUiGroundMark(mark, settings, true));
       return list;
     }
 
-    void SeeMark(const Domain::GroundMark& mark)
+    // Marks the server shows here, named like every other surface; marks of
+    // ignored players are left out, as the game leaves them undrawn.
+    std::vector<Bridge::UiGroundMark> NearbyMarkList(const UiSettings& settings)
     {
-      visibleMarks.insert_or_assign(mark.markId, mark);
-      if (selfId && mark.author.playerId == *selfId)
+      std::vector<Bridge::UiGroundMark> list;
+      list.reserve(visibleMarks.size());
+      for (const auto& [id, mark] : visibleMarks)
       {
-        ownMarks.insert_or_assign(mark.markId, mark);
-        ownMarksChanged = true;
+        const bool own = selfId && mark.author.playerId == *selfId;
+        if (!own && names.Ignored(mark.author.playerId)) continue;
+        auto entry   = Bridge::ToUiGroundMark(mark, settings, own);
+        entry.author = names.NameFor(mark.author.playerId, mark.author, mark.characterName, settings);
+        list.push_back(std::move(entry));
       }
+      return list;
     }
 
-    void ForgetMark(Domain::GroundMarkId id)
+    void ReplaceOwn(const std::vector<Domain::GroundMark>& marks)
     {
-      visibleMarks.erase(id);
-      if (ownMarks.erase(id) != 0) ownMarksChanged = true;
+      ownMarks.clear();
+      for (const auto& mark : marks)
+        ownMarks.insert_or_assign(mark.markId, mark);
+      ownMarksChanged = true;
     }
 
     void SettleMark(Frame& frame, const GroundMarkConfirmation& confirmation)
@@ -323,8 +332,6 @@ private:
       if (found == pendingMarks.end()) return;
       auto pending = std::move(found->second);
       pendingMarks.erase(found);
-      if (confirmation.removed) ForgetMark(confirmation.markId);
-      if (confirmation.evictedId) ForgetMark(*confirmation.evictedId);
       if (pending.request == MarkRequest::Death)
       {
         frame.notes.push_back(std::format("Death mark {} placed", confirmation.markId));
@@ -422,11 +429,10 @@ private:
 
       // Marks of another generation are gone with it; a refresh of the same
       // session keeps the own marks met earlier and re-reads the visible set.
-      if (generation != marksGeneration) ownMarks.clear();
-      marksGeneration = generation;
       visibleMarks.clear();
       for (const auto& mark : snapshot.groundMarks.marks)
-        SeeMark(mark);
+        visibleMarks.insert_or_assign(mark.markId, mark);
+      ReplaceOwn(snapshot.groundMarks.own);
       ownMarksChanged           = false;
       frame.visibleMarksChanged = true;
 
@@ -469,6 +475,7 @@ private:
       event.settings             = settings;
       event.groundMarksSupported = true;  // Protocol v8: every Ready session carries marks.
       event.groundMarks          = OwnMarkList(settings);
+      event.nearbyMarks          = NearbyMarkList(settings);
       Emit(frame, event);
 
       frame.snapshot = true;
@@ -516,11 +523,12 @@ private:
           visibleMarks.clear();
         else if (const auto* removed = std::get_if<GroundMarksRemoved>(&change))
           for (const auto id : removed->markIds)
-            ForgetMark(id);
+            visibleMarks.erase(id);
         else if (const auto* added = std::get_if<GroundMarksAdded>(&change))
           for (const auto& mark : added->marks)
-            SeeMark(mark);
+            visibleMarks.insert_or_assign(mark.markId, mark);
       }
+      if (delta.ownGroundMarks) ReplaceOwn(*delta.ownGroundMarks);
 
       Bridge::MessagesEvent messages;
       for (const auto& change : delta.chatContent)
@@ -649,7 +657,6 @@ private:
     Marks                                          visibleMarks;
     Marks                                          ownMarks;
     bool                                           ownMarksChanged{};
-    std::uint64_t                                  marksGeneration{};
     std::unordered_map<std::uint64_t, PendingChat> pendingChats;
     std::unordered_map<std::uint64_t, PendingMark> pendingMarks;
     std::unordered_map<std::uint64_t, PendingAnnouncement> pendingAnnouncements;

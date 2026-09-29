@@ -249,6 +249,12 @@ namespace Dreamsleeve::Client::Wire
         if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
         if (packet.ground_mark_removed().mark_id() == 0) return Invalid("mark_id");
         return GroundMarkRemoved{packet.request_id(), packet.ground_mark_removed().mark_id()};
+      case P::ServerPacket::kOwnGroundMarks: {
+        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        auto result = ReadOwnMarks(packet.own_ground_marks());
+        if (!result) return std::unexpected{result.error()};
+        return std::move(*result);
+      }
       case P::ServerPacket::PAYLOAD_NOT_SET:
         return Invalid("payload");
       default:

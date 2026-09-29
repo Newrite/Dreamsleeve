@@ -145,7 +145,8 @@ module ServerRuntime =
             | ServerResponse.ChatRejected _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
             | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
             | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
-            | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _ ->
+            | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
+            | ServerResponse.OwnGroundMarks _ ->
                 ProtocolCodec.encodeServer state.Codec response |> Result.map List.singleton
         transmit options state context entry (ProtocolCodec.responseLane response) encoded
 
@@ -190,7 +191,8 @@ module ServerRuntime =
                 | ServerResponse.PlayerJoined _ | ServerResponse.PlayerUpdated _ | ServerResponse.PlayersMoved _ | ServerResponse.PlayerMetadataChanged _
                 | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
                 | ServerResponse.ChatRejected _ | ServerResponse.PlayerVisibilityChanged _
-                | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _ -> ()
+                | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
+                | ServerResponse.OwnGroundMarks _ -> ()
             | Some _ | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->

@@ -70,11 +70,29 @@
 }
 .marks li {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
-  gap: 10px;
+  grid-template-columns: auto 1fr auto;
+  gap: 6px 10px;
   align-items: center;
   padding: 4px 0;
   border-bottom: 1px solid var(--border);
+}
+.markMeta {
+  grid-column: 1 / 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.markMeta b {
+  color: var(--accent);
+  font-weight: normal;
+}
+.markMeta i {
+  font-style: normal;
+}
+.markMeta small {
+  font-size: inherit;
 }
 .marks li[data-kind="death"] .markKind {
   color: var(--error);
@@ -88,8 +106,6 @@
   overflow-wrap: anywhere;
 }
 .marks time {
-  color: var(--muted);
-  font-size: 0.85em;
   white-space: nowrap;
 }
 .marks button {

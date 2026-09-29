@@ -92,14 +92,20 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<UiAnnouncement> announcement;
   };
 
-  // One of the player's own ground marks known to this session: kind is
-  // "note" or "death"; the text is already filtered like chat.
+  // A ground mark for the UI lists: kind is "note" or "death"; the text is
+  // already filtered like chat. author is the host-resolved name (nearby
+  // marks only), character the snapshot at placement; location is the WRLD or
+  // CELL key "plugin:formid" with the position in game units.
   struct UiGroundMark
   {
-    std::string  id;
-    std::string  kind;
-    std::string  text;
-    std::int64_t time{};
+    std::string                id;
+    std::string                kind;
+    std::string                text;
+    std::int64_t               time{};
+    std::optional<std::string> author;
+    std::optional<std::string> character;
+    std::string                location;
+    double                     x{}, y{}, z{};
   };
 
   struct SnapshotEvent
@@ -114,9 +120,18 @@ export namespace Dreamsleeve::Host::Bridge
     // Same session re-projected (names or ignore list changed): the UI keeps
     // its pending rows, filters and scroll instead of treating it as new.
     bool refresh{};
-    // The session speaks a protocol with ground marks; the own marks it knows.
+    // The session speaks a protocol with ground marks; the own marks the
+    // server listed and the marks it shows nearby.
     bool                      groundMarksSupported{};
     std::vector<UiGroundMark> groundMarks;
+    std::vector<UiGroundMark> nearbyMarks;
+  };
+
+  // The marks the server shows near the player changed.
+  struct NearbyMarksEvent
+  {
+    std::string               type{"nearbyMarks"};
+    std::vector<UiGroundMark> marks;
   };
 
   // The own marks changed: placed, removed, evicted or seen again.
@@ -320,6 +335,11 @@ export namespace Dreamsleeve::Host::Bridge
   }
 
   Encoded Encode(const MarkResultEvent& event)
+  {
+    return Detail::Write(event);
+  }
+
+  Encoded Encode(const NearbyMarksEvent& event)
   {
     return Detail::Write(event);
   }
@@ -710,14 +730,20 @@ export namespace Dreamsleeve::Host::Bridge
     return kind == Domain::GroundMarkKind::Death ? "death" : "note";
   }
 
-  // An own mark for the UI list; a hidden own text shows the placeholder.
-  UiGroundMark ToUiGroundMark(const Domain::GroundMark& mark, const UiSettings& settings)
+  // A mark for the UI lists; a hidden own text shows the placeholder, a
+  // hidden foreign text is left empty. Streamer mode drops the character snapshot.
+  UiGroundMark ToUiGroundMark(const Domain::GroundMark& mark, const UiSettings& settings, bool own)
   {
     UiGroundMark result;
-    result.id   = Id(mark.markId);
-    result.kind = std::string{MarkKindName(mark.kind)};
-    result.text = FilterText(mark.text, mark.flagged, settings, true).value_or(std::string{HiddenOwnText});
-    result.time = Domain::ToUnixMilliseconds(mark.createdAt);
+    result.id       = Id(mark.markId);
+    result.kind     = std::string{MarkKindName(mark.kind)};
+    result.text     = FilterText(mark.text, mark.flagged, settings, own).value_or(own ? std::string{HiddenOwnText} : std::string{});
+    result.time     = Domain::ToUnixMilliseconds(mark.createdAt);
+    result.location = std::format("{}:{:06X}", mark.placement.locationId.pluginName, mark.placement.locationId.localFormId);
+    result.x        = mark.placement.position.X;
+    result.y        = mark.placement.position.Y;
+    result.z        = mark.placement.position.Z;
+    if (!settings.streamerMode) result.character = mark.characterName;
     return result;
   }
 

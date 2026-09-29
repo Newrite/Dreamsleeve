@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 8u
+    let Version = 9u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -79,7 +79,8 @@ module ProtocolCodec =
         | ServerResponse.SessionOpened _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
         | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
         | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
-        | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _ -> DeliveryLane.Control
+        | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
+        | ServerResponse.OwnGroundMarks _ -> DeliveryLane.Control
 
     let decodeMovement (codec: ProtocolCodec) (bytes: byte array) =
         if isNull bytes || bytes.Length = 0 then fail None ProtocolCodecFailure.EmptyPacket
@@ -108,6 +109,7 @@ module ProtocolCodec =
         | ServerResponse.PlayerVisibilityChanged _
         | ServerResponse.PlayersMoved _
         | ServerResponse.GroundMarksChanged _
+        | ServerResponse.OwnGroundMarks _
         | ServerResponse.PlayerLeft _ -> None
 
     let private validateResponse config response =
@@ -140,6 +142,8 @@ module ProtocolCodec =
             | ServerResponse.GroundMarkPlaced(_, record, _) ->
                 if record.Author.PlayerId = record.Mark.Author then None else Some(ProtocolCodecFailure.InvalidPayload "ground_mark_placed")
             | ServerResponse.GroundMarkRemoved _ -> None
+            | ServerResponse.OwnGroundMarks records ->
+                if GroundMarkCodec.validOwn records then None else Some(ProtocolCodecFailure.InvalidPayload "own_ground_marks")
             | ServerResponse.ChatAccepted _
             | ServerResponse.ChatPublished _
             | ServerResponse.PlayerJoined _
@@ -183,6 +187,7 @@ module ProtocolCodec =
             | ServerResponse.GroundMarksChanged view -> packet.GroundMarksChanged <- GroundMarkCodec.changed view
             | ServerResponse.GroundMarkPlaced(_, record, evicted) -> packet.GroundMarkPlaced <- GroundMarkCodec.placed record evicted
             | ServerResponse.GroundMarkRemoved(_, id) -> packet.GroundMarkRemoved <- GroundMarkCodec.removed id
+            | ServerResponse.OwnGroundMarks records -> packet.OwnGroundMarks <- GroundMarkCodec.own records
 
             | ServerResponse.RequestRejected(_, value)
             | ServerResponse.ChatRejected(_, value) ->
@@ -198,7 +203,8 @@ module ProtocolCodec =
                 | ServerResponse.ChatRejected _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
                 | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
                 | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
-                | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _ -> packet
+                | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
+                | ServerResponse.OwnGroundMarks _ -> packet
 
             if encoded.CalculateSize() > config.MaxPacketBytes then fail requestId ProtocolCodecFailure.PacketTooLarge
             else Ok(encoded.ToByteArray())

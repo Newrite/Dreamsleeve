@@ -1,6 +1,6 @@
 # Метки на земле
 
-Реализовано 29 сентября 2026 года (часть 1: домен, протокол v8, сервер, ядро клиента и
+Реализовано 29 сентября 2026 года (часть 1: домен, протокол v8 (v9 с частью 3), сервер, ядро клиента и
 `Client.Dev`); часть 2 — SKSE-плагин и веб-UI, см. [SkseClientRu.md](SkseClientRu.md#метки-на-земле). Доменная модель —
 [DomainSpecRu.MD §4.9](DomainSpecRu.MD); здесь — устройство реализации, конфигурация,
 границы проверок и открытые вопросы.
@@ -64,6 +64,11 @@
 | `Expire` | тикер `ExpiryCheckIntervalMs` и первый шаг после старта | удаляет истёкшие, пишет `Delete`, шлёт дельты |
 | `Detach` | PlayerSession при остановке | снимает наблюдателя и подтверждает |
 
+Свои метки (часть 3, протокол v9): при `Join` и после каждого изменения набора автора
+(размещение, вытеснение, удаление, истечение) агент шлёт `GroundMarkEvent.Own` — полный
+список `GroundMarkStorage.ofAuthor`, где бы метки ни стояли. Это отдельная от видимого
+набора проекция: сервер знает квоты и хранение, клиент сам решает, что и как рисовать.
+
 Порядок проверок при размещении: в `PlayerSession` — `RequestId`, лимит ожидающих
 запросов (общий с чатом, `Runtime.Player.MaxPendingChat`), положение
 (`GroundMarkPlacement.isNear` с последним известным `Player.Location`: неизвестное
@@ -98,14 +103,16 @@ Runtime владеет агентом как остальными источни
 `Join` — нарушение инварианта, закрывается как у присутствия
 (`ground_marks_identity_conflict`).
 
-## Протокол v8
+## Протокол v9
 
 `Protocol/ground.proto`: `GroundMarkKind`, `GroundMarkPlacement`, `GroundMark`,
 `PlaceGroundNote`, `ReportDeath`, `RemoveGroundMark`, `GroundMarksChanged`,
-`GroundMarkPlaced`, `GroundMarkRemoved`; в `protocol.proto` — элементы oneof 14–16 и
-21–23 и коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_NOT_FOUND = 13`. Все команды и
-дельты — Control-канал ENet; подтверждения несут `request_id` в оболочке. Версия 8
-несовместима с 7: клиент и сервер обновляются вместе. Подробнее —
+`GroundMarkPlaced`, `GroundMarkRemoved`, `OwnGroundMarks`; в `protocol.proto` — элементы
+oneof 14–16 и 21–24 и коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_NOT_FOUND = 13`. Все
+команды и дельты — Control-канал ENet; подтверждения несут `request_id` в оболочке.
+`OwnGroundMarks` (24) — полный список меток получателя без `request_id`, после открытия
+сессии и при каждом изменении набора. Версия 9 несовместима с 8: клиент и сервер
+обновляются вместе. Подробнее —
 [Protocol/README](../Protocol/README.ru.md).
 
 ## Конфигурация
@@ -123,8 +130,9 @@ Runtime владеет агентом как остальными источни
   (с `RequestId`, как `SendChat`); результат — `GroundMarkConfirmation`
   (`ClientOutput.groundMarkConfirmations`: id метки, id вытесненной, признак удаления),
   `ServerRejection` или `CommandFailure`; общий ограниченный бюджет результатов.
-- `GroundMarkStore` (видимые метки, `viewRevision`), обновление модели
-  `GroundMarksChanged`; `ChangeBatch.groundMarks` / `ClientStateDelta.groundMarks` —
+- `GroundMarkStore` (видимые метки, `viewRevision`, и список своих меток `own` из
+  `OwnGroundMarksReplaced` — замена целиком, `ClientStateDelta.ownGroundMarks`,
+  `ClientSnapshot.groundMarks.own`), обновление модели `GroundMarksChanged`; `ChangeBatch.groundMarks` / `ClientStateDelta.groundMarks` —
   упорядоченные переходы `Cleared / Removed / Added`; `ClientSnapshot.groundMarks`.
   Повтор или откат `viewRevision` — ошибка протокола (`InvalidCursor`), как и у
   чата, а не дубликат; сброс сессии очищает хранилище.
@@ -133,7 +141,8 @@ Runtime владеет агентом как остальными источни
 - `Client.Dev`: `note <текст>`, `death <подпись>`, `unmark <id>`, `marks`; метка ставится в
   последнюю отправленную позицию (`move`/`location`). Вывод: `mark <id> kind=<1|2>
   author=<имя> x=<x> text=<текст>`, `mark-removed <id>`, `marks-cleared`,
-  `request <n> placed mark <id>[ evicted <id>]`, `request <n> removed mark <id>`.
+  `request <n> placed mark <id>[ evicted <id>]`, `request <n> removed mark <id>`,
+  `own-marks <n>` и `own <id> kind=<1|2> text=<текст>` при каждой замене своего списка.
 
 Метки не попадают в `ChatCache`, `freshMessages` и облачка.
 
@@ -156,6 +165,7 @@ round-trip с профилем, каскад удаления аккаунта, 
 
 | Вопрос | Решение |
 |---|---|
+| Полный список своих меток (часть 3) | Сервер шлёт `OwnGroundMarks` при `Join` и при каждом изменении набора автора: БД знает все метки игрока, клиенту не нужно их собирать из видимых дельт; серверные квоты и клиентские настройки показа — разные понятия |
 | Как отдать имя офлайн-автора | Профиль (username, display name) — по `PlayerId` из `profiles`/`accounts`, на wire снимком через `publicProfile`; имя персонажа хранится в метке снимком на момент размещения, как у сообщения |
 | Метка, текст которой новый словарь запрещает | Остаётся в БД, но не загружается и никому не отправляется (предупреждение в логе); квоту автора в этот запуск не занимает; флаги остальных пересчитываются |
 | Ошибка записи в SQLite | Логируется, память остаётся авторитетной; переполнение очереди записи останавливает владельца |

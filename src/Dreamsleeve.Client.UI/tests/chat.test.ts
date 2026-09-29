@@ -562,7 +562,31 @@ describe("ground marks", () => {
   const marked: HostEvent = {
     ...snapshot,
     groundMarksSupported: true,
-    groundMarks: [{ id: "10", kind: "note", text: "mine", time: 0 }],
+    groundMarks: [
+      {
+        id: "10",
+        kind: "note",
+        text: "mine",
+        time: 0,
+        location: "skyrim.esm:01A26F",
+        x: 1,
+        y: 2,
+        z: 3,
+      },
+    ],
+    nearbyMarks: [
+      {
+        id: "11",
+        kind: "death",
+        text: "Bear",
+        time: 0,
+        author: "Мира",
+        location: "skyrim.esm:01A26F",
+        x: 1,
+        y: 2,
+        z: 3,
+      },
+    ],
   };
   it("keeps bubble style, firefly height and ground mark defaults; colours are validated", () => {
     const old = settingsFrom({ fontSize: 20 });
@@ -615,6 +639,9 @@ describe("ground marks", () => {
     chat.receive(marked);
     expect(chat.store.getState().groundMarksSupported).toBe(true);
     expect(chat.store.getState().groundMarks).toHaveLength(1);
+    expect(chat.store.getState().nearbyMarks[0].author).toBe("Мира");
+    chat.receive({ type: "nearbyMarks", marks: [] });
+    expect(chat.store.getState().nearbyMarks).toEqual([]);
     chat.setDraft("Здесь тролль");
     chat.placeNote();
     expect(
@@ -640,7 +667,18 @@ describe("ground marks", () => {
     expect(chat.store.getState().notice).toContain("№10");
     chat.receive({
       type: "groundMarks",
-      marks: [{ id: "11", kind: "note", text: "Здесь тролль", time: 1 }],
+      marks: [
+        {
+          id: "11",
+          kind: "note",
+          text: "Здесь тролль",
+          time: 1,
+          location: "skyrim.esm:01A26F",
+          x: 1,
+          y: 2,
+          z: 3,
+        },
+      ],
     });
     expect(chat.store.getState().groundMarks[0].id).toBe("11");
   });
@@ -699,5 +737,6 @@ describe("ground marks", () => {
     chat.receive(snapshot);
     expect(chat.store.getState().groundMarksSupported).toBe(false);
     expect(chat.store.getState().groundMarks).toEqual([]);
+    expect(chat.store.getState().nearbyMarks).toEqual([]);
   });
 });

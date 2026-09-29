@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 8;
+  inline constexpr std::uint32_t Version = 9;
 
   enum class ErrorCode
   {
@@ -130,7 +130,8 @@ export namespace Dreamsleeve::Client::Wire
     PlayerUpdateAccepted,
     GroundMarksChanged,
     GroundMarkPlaced,
-    GroundMarkRemoved>;
+    GroundMarkRemoved,
+    OwnGroundMarksReplaced>;
 
   // One immutable configuration per network owner. Validate once at startup.
   class ProtocolCodec

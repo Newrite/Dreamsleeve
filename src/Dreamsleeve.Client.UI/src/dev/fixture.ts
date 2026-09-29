@@ -5,19 +5,56 @@ import type {
   Message,
   Player,
 } from "../bridge/types";
-// Demo marks of the signed-in player: one note and one death place.
+// Demo marks of the signed-in player: a note here, a death place far away.
 export const groundMarks: GroundMark[] = [
   {
     id: "301",
     kind: "note",
     text: "Осторожно: за поворотом тролль",
     time: Date.now() - 45 * 60000,
+    character: "Довакин",
+    location: "skyrim.esm:01A26F",
+    x: 1240,
+    y: -880,
+    z: 512,
   },
   {
     id: "302",
     kind: "death",
     text: "Морозный тролль",
     time: Date.now() - 12 * 60000,
+    character: "Довакин",
+    location: "skyrim.esm:016BB4",
+    x: 20140,
+    y: 3300,
+    z: 610,
+  },
+];
+// Marks the server shows around the player: others' and the own note.
+export const nearbyMarks: GroundMark[] = [
+  groundMarks[0],
+  {
+    id: "310",
+    kind: "death",
+    text: "Медведь",
+    time: Date.now() - 5 * 60000,
+    author: "Мира",
+    character: "Эйра",
+    location: "skyrim.esm:01A26F",
+    x: 1300,
+    y: -720,
+    z: 514,
+  },
+  {
+    id: "311",
+    kind: "note",
+    text: "Сундук за водопадом",
+    time: Date.now() - 90 * 60000,
+    author: "Седобородый",
+    location: "skyrim.esm:01A26F",
+    x: 980,
+    y: -1020,
+    z: 498,
   },
 ];
 // The system channel, found by kind like in the game; the id is only data.

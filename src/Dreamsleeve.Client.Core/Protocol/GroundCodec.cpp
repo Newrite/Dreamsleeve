@@ -99,4 +99,21 @@ namespace Dreamsleeve::Client::Wire::Detail
     return result;
   }
 
+  // One author for the whole list and each ID once; the runtime checks the author is self.
+  Result<OwnGroundMarksReplaced> ReadOwnMarks(const P::OwnGroundMarks& source)
+  {
+    OwnGroundMarksReplaced result;
+    result.marks.reserve(static_cast<std::size_t>(source.marks_size()));
+    std::set<Domain::GroundMarkId> ids;
+    for (const auto& value : source.marks())
+    {
+      auto mark = Mark(value);
+      if (!mark) return std::unexpected{mark.error()};
+      if (!ids.insert(mark->markId).second) return Invalid("mark_id");
+      if (!result.marks.empty() && result.marks.front().author.playerId != mark->author.playerId) return Invalid("author");
+      result.marks.push_back(std::move(*mark));
+    }
+    return result;
+  }
+
 }
