@@ -11,6 +11,10 @@ type ChatInputLimits = {
     AnnouncementText: int
     /// Self-declared mod label of a client announcement, Unicode scalar values.
     AnnouncementSignature: int
+    /// A note written on the ground, Unicode scalar values; the chat text rules apply.
+    GroundNoteText: int
+    /// Death mark label (killer or cause), one line, Unicode scalar values; may be empty.
+    DeathMarkText: int
 }
 
 type PlayerInputLimits = {
@@ -87,7 +91,8 @@ module ServerConfig =
             MaxOutgoingBytes = 32 * 1024 * 1024
             MaxInitialPlayers = 4096
             MaxRecentMessages = 512
-            ChatInput = { Username = 32; DisplayName = 64; MessageText = 2000; AnnouncementText = 500; AnnouncementSignature = 64 }
+            ChatInput = { Username = 32; DisplayName = 64; MessageText = 2000; AnnouncementText = 500; AnnouncementSignature = 64
+                          GroundNoteText = 200; DeathMarkText = 64 }
             PlayerInput = {
                 CharacterName = 128; PluginName = 260; LocationName = 256
                 ActorValueKey = 128; ActorValueName = 128; MaxActorValues = 64
@@ -113,6 +118,9 @@ module ServerConfig =
             if config.ChatInput.AnnouncementText < 1 then "ChatInput.AnnouncementText must be positive."
             if config.ChatInput.AnnouncementSignature < 1 || config.ChatInput.AnnouncementSignature > 128 then
                 "ChatInput.AnnouncementSignature must be between 1 and 128."
+            if config.ChatInput.GroundNoteText < 1 then "ChatInput.GroundNoteText must be positive."
+            if config.ChatInput.DeathMarkText < 1 || config.ChatInput.DeathMarkText > 128 then
+                "ChatInput.DeathMarkText must be between 1 and 128."
             if config.PlayerInput.CharacterName < 1 then "PlayerInput.CharacterName must be positive."
             if config.PlayerInput.PluginName < 1 then "PlayerInput.PluginName must be positive."
             if config.PlayerInput.LocationName < 1 then "PlayerInput.LocationName must be positive."

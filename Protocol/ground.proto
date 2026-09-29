@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package Dreamsleeve.Protocol.Chat;
+
+import "common.proto";
+import "chat.proto";
+import "player.proto";
+
+// Marks on the ground: persistent server data shown to players nearby, like
+// poses. Not a chat stream: never in channel history, never above fireflies.
+enum GroundMarkKind {
+  GROUND_MARK_KIND_UNSPECIFIED = 0;
+  GROUND_MARK_KIND_NOTE = 1; // Written by the player on purpose.
+  GROUND_MARK_KIND_DEATH = 2; // Left by the client where the character died.
+}
+
+// The space, the point and the author's heading (Z angle, radians) so a
+// client can turn the visual the way the author looked.
+message GroundMarkPlacement {
+  FormKey location_id = 1; // WRLD or CELL, like PlayerLocation.location.location_id.
+  Position position = 2;
+  float heading = 3;
+}
+
+message GroundMark {
+  uint64 mark_id = 1; // Server-issued, monotonic, never zero.
+  // Profile of the author at the time of sending, possibly offline now;
+  // names are never stored in the mark itself.
+  PlayerProfile author = 2;
+  GroundMarkKind kind = 3;
+  string text = 4; // Note text or the death label; empty only for a death.
+  repeated TextSpan flagged = 5; // Like ChatMessage.flagged.
+  GroundMarkPlacement placement = 6;
+  int64 created_at_unix_ms = 7;
+  // Published character name of the author at placement, like ChatMessage.character_name;
+  // absent outside a character or when the name was withheld.
+  optional string character_name = 8;
+}
+
+// Control lane, settled with GroundMarkPlaced or RequestRejected.
+message PlaceGroundNote {
+  string text = 1;
+  GroundMarkPlacement placement = 2;
+}
+
+// Control lane. The label is the killer's name or one word of cause as the
+// client saw it; the server checks length and word list only.
+message ReportDeath {
+  string label = 1;
+  GroundMarkPlacement placement = 2;
+}
+
+// Control lane; only the author's own mark. Settled with GroundMarkRemoved.
+message RemoveGroundMark { uint64 mark_id = 1; }
+
+// Reliable delta of one observer's visible marks. clear starts a new
+// baseline (a space or session change, or a lost position); view_revision
+// increases with every message of one session.
+message GroundMarksChanged {
+  uint64 view_revision = 1;
+  repeated GroundMark added = 2;
+  repeated uint64 removed_ids = 3;
+  bool clear = 4;
+}
+
+// Acceptance of PlaceGroundNote or ReportDeath; request_id is in the envelope.
+// evicted_id names the author's oldest mark of the same kind that gave way, or zero.
+message GroundMarkPlaced {
+  GroundMark mark = 1;
+  uint64 evicted_id = 2;
+}
+
+// Acceptance of RemoveGroundMark; request_id is in the envelope.
+message GroundMarkRemoved { uint64 mark_id = 1; }

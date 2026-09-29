@@ -36,7 +36,8 @@ module SqliteAccountStore =
     let private invalidData message =
         Error(AccountStoreError.Failed(InvalidDataException message))
 
-    let private withContext config (token: CancellationToken) action =
+    /// Shared by the account and ground mark stores: one connection and query context per unit of work.
+    let internal withContext config (token: CancellationToken) action =
         if token.IsCancellationRequested then
             Error AccountStoreError.Canceled
         else

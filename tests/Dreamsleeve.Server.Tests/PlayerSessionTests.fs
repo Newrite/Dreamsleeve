@@ -37,6 +37,7 @@ type private Fixture = {
     Chat: Channel<ChatRoomCommand>
     System: Channel<ChatRoomCommand>
     Presence: Channel<PresenceCommand>
+    Marks: Channel<GroundMarkCommand>
     Host: Channel<SessionHostCommand>
 }
 
@@ -49,22 +50,24 @@ let private withConfiguredPlayer moderation announcements settings (createPresen
     let chatCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let systemCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
+    let markCommands = Channel.CreateUnbounded<GroundMarkCommand>()
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
     use authentication = Agent.Start(AgentOptions.create "authentication", collect queries)
     use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
     use system = Agent.Start(AgentOptions.create "system", collect systemCommands)
     use presence = createPresence presenceCommands
+    use marks = Agent.Start(AgentOptions.create "marks", collect markCommands)
     use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
     let request = {
         ConnectionId = Guid.NewGuid()
         RequestId = 1UL
         SessionTicket = String('a', 43)
     }
-    use player = PlayerSession.start settings 64 moderation announcements
+    use player = PlayerSession.start settings 64 moderation announcements (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok)
                      (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
-                     (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
+                     (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
     let fixture = { Request = request; Player = player; Authentication = queries;
-                    Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Host = hostCommands }
+                    Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Host = hostCommands }
     do! run fixture
     if not player.Completion.IsCompleted then player.Abort()
     let! _ = terminal player.Completion
@@ -72,11 +75,13 @@ let private withConfiguredPlayer moderation announcements settings (createPresen
     chat.Complete() |> ignore
     system.Complete() |> ignore
     presence.Complete() |> ignore
+    marks.Complete() |> ignore
     host.Complete() |> ignore
     do! awaitUnit authentication.Completion
     do! awaitUnit chat.Completion
     do! awaitUnit system.Completion
     do! awaitUnit presence.Completion
+    do! awaitUnit marks.Completion
     do! awaitUnit host.Completion
 }
 
@@ -122,8 +127,9 @@ let private joins fixture = task {
     let! chatCommand = receive fixture.Chat
     let! systemCommand = receive fixture.System
     let! presenceCommand = receive fixture.Presence
-    match chatCommand, systemCommand, presenceCommand with
-    | ChatRoomCommand.Join chat, ChatRoomCommand.Join system, PresenceCommand.Join presence ->
+    let! markCommand = receive fixture.Marks
+    match chatCommand, systemCommand, presenceCommand, markCommand with
+    | ChatRoomCommand.Join chat, ChatRoomCommand.Join system, PresenceCommand.Join presence, GroundMarkCommand.Join _ ->
         do! deliver system.Events (ChatRoomEvent.Joined { snapshot profile with ChannelId = systemId; Kind = ChatChannelKind.System })
         return profile, chat, presence
     | other -> return failwithf "Expected subscriptions: %A" other
@@ -174,12 +180,19 @@ let private finish fixture = task {
     let! chatCommand = receive fixture.Chat
     let! systemCommand = receive fixture.System
     let! presenceCommand = receive fixture.Presence
-    match chatCommand, systemCommand, presenceCommand with
-    | ChatRoomCommand.Detach chat, ChatRoomCommand.Detach system, PresenceCommand.Detach presence ->
+    // Position updates reach the mark owner before the detach; only the detach matters here.
+    let mutable markCommand = GroundMarkCommand.Expire { DueTimestamp = 0L; QueuedTimestamp = 0L }
+    while (match markCommand with GroundMarkCommand.Detach _ -> false | _ -> true) do
+        let! next = receive fixture.Marks
+        markCommand <- next
+    match chatCommand, systemCommand, presenceCommand, markCommand with
+    | ChatRoomCommand.Detach chat, ChatRoomCommand.Detach system, PresenceCommand.Detach presence, GroundMarkCommand.Detach marks ->
         do! deliver chat.ReplyTo fixture.Request.ConnectionId
         do! deliver system.ReplyTo fixture.Request.ConnectionId
         check (not fixture.Player.Completion.IsCompleted) "Session skipped presence cleanup."
         do! deliver presence.ReplyTo fixture.Request.ConnectionId
+        check (not fixture.Player.Completion.IsCompleted) "Session skipped ground mark cleanup."
+        do! deliver marks.ReplyTo fixture.Request.ConnectionId
         do! awaitUnit fixture.Player.Completion
     | other -> failwithf "Expected detach: %A" other
 }
@@ -618,9 +631,10 @@ let tests = testList "PlayerSession" [
             ConnectionId = Guid.NewGuid(); RequestId = 1UL
             SessionTicket = String('b', 43)
         }
-        use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults
+        use marks = Agent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
+        use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok)
                          (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
-                         (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
+                         (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
         equal 0 chatCommands.Reader.Count

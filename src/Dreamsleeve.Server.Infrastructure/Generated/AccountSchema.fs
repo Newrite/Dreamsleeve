@@ -61,6 +61,37 @@ module main =
 
     let auth_tokens = table<auth_tokens>
 
+    type ground_marks =
+        { id: int64
+          author_id: int64
+          character_name: Option<string>
+          kind: int64
+          text: string
+          plugin_name: string
+          local_form_id: int64
+          x: double
+          y: double
+          z: double
+          heading: double
+          created_at: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "id"; Value = box this.id; ProviderDbType = None }
+                  { WriteColumn.Name = "author_id"; Value = box this.author_id; ProviderDbType = None }
+                  { WriteColumn.Name = "character_name"; Value = box this.character_name; ProviderDbType = None }
+                  { WriteColumn.Name = "kind"; Value = box this.kind; ProviderDbType = None }
+                  { WriteColumn.Name = "text"; Value = box this.text; ProviderDbType = None }
+                  { WriteColumn.Name = "plugin_name"; Value = box this.plugin_name; ProviderDbType = None }
+                  { WriteColumn.Name = "local_form_id"; Value = box this.local_form_id; ProviderDbType = None }
+                  { WriteColumn.Name = "x"; Value = box this.x; ProviderDbType = None }
+                  { WriteColumn.Name = "y"; Value = box this.y; ProviderDbType = None }
+                  { WriteColumn.Name = "z"; Value = box this.z; ProviderDbType = None }
+                  { WriteColumn.Name = "heading"; Value = box this.heading; ProviderDbType = None }
+                  { WriteColumn.Name = "created_at"; Value = box this.created_at; ProviderDbType = None } ]
+
+    let ground_marks = table<ground_marks>
+
     type profiles =
         { player_id: int64
           account_id: int64

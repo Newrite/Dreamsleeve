@@ -34,12 +34,29 @@ type AnnouncementRequest = {
     Signature: AnnouncementSignature voption
 }
 
+/// A mark with the author's profile for the wire; the mark itself stores only the ID.
+type GroundMarkRecord = {
+    Mark: GroundMark
+    Author: PlayerData
+}
+
+/// Reliable delta of one observer's visible marks; Clear starts a new baseline.
+type GroundMarkView = {
+    ViewRevision: uint64
+    Added: GroundMarkRecord list
+    Removed: GroundMarkId list
+    Clear: bool
+}
+
 [<RequireQualifiedAccess>]
 type ClientCommand =
     | OpenSession of sessionTicket: string
     | SendChat of ChatChannelId * ChatMessageText
     | UpdatePlayer of PlayerUpdate
     | PostAnnouncement of AnnouncementRequest
+    | PlaceGroundNote of GroundNoteText * GroundMarkPlacement
+    | ReportDeath of DeathMarkText * GroundMarkPlacement
+    | RemoveGroundMark of GroundMarkId
 
 type ClientRequest = {
     RequestId: uint64
@@ -83,4 +100,7 @@ type ServerResponse =
     | PlayerVisibilityChanged of VisibilityChange
     | PlayerMetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | PlayerUpdateAccepted of requestId: uint64
+    | GroundMarksChanged of GroundMarkView
+    | GroundMarkPlaced of requestId: uint64 * GroundMarkRecord * evicted: GroundMarkId voption
+    | GroundMarkRemoved of requestId: uint64 * GroundMarkId
 

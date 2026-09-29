@@ -124,6 +124,52 @@ type PresenceSubscription = {
     Events: ReliableAgentRef<PresenceEvent>
 }
 
+/// Persistence of marks, executed off the owner by a bounded writer.
+[<RequireQualifiedAccess>]
+type GroundMarkWrite =
+    | Insert of GroundMark
+    | Delete of GroundMarkId list
+
+[<RequireQualifiedAccess>]
+type GroundMarkEvent =
+    | Changed of GroundMarkView
+    | Placed of requestId: uint64 * GroundMarkRecord * evicted: GroundMarkId voption
+    | Removed of requestId: uint64 * GroundMarkId
+    | Rejected of requestId: uint64 * RequestRejection
+
+/// A validated placement request; the session has already checked the word
+/// list, computed the flags and verified the position against the player's own.
+type GroundMarkSubmission = {
+    ConnectionId: Guid
+    RequestId: uint64
+    Body: GroundMarkBody
+    Placement: GroundMarkPlacement
+    /// Published character name at placement, already moderated by the session.
+    CharacterName: CharacterName voption
+    /// Normalized projection of a note for the repeated-text check; never published.
+    Fingerprint: string
+    Flagged: TextSpan list
+}
+
+/// Stored marks with their authors' current profiles, the storage high-water
+/// mark and the writer that keeps storage current; supplied at runtime start.
+type GroundMarkPersistence = {
+    Loaded: GroundMarkRecord list
+    /// One above the highest ID storage ever issued, so IDs never repeat across runs.
+    NextId: uint64
+    Writer: ReliableAgentRef<GroundMarkWrite>
+}
+
+[<RequireQualifiedAccess>]
+type GroundMarkCommand =
+    | Join of Subscription<GroundMarkEvent>
+    /// The observer's latest position and character generation; visibility follows it.
+    | Observe of connectionId: Guid * characterGeneration: uint64 * PlayerLocation voption
+    | Place of GroundMarkSubmission
+    | Remove of connectionId: Guid * requestId: uint64 * GroundMarkId
+    | Expire of AgentTick
+    | Detach of SessionDetach
+
 [<RequireQualifiedAccess>]
 type PresenceCommand =
     | Join of PresenceSubscription
@@ -152,6 +198,78 @@ type PresenceOptions = {
     VisibilityDistance: float32
 }
 
+/// [GroundMarks]: the mark owner, its quotas, lifetimes, density, rate limits
+/// and delivery radius. Read at startup like the rest of the configuration.
+type GroundMarkOptions = {
+    MailboxCapacity: int
+    ControlReserve: int
+    MaxControlDeliveries: int
+    /// Pending persistence writes before the owner treats storage as broken.
+    MaxPendingWrites: int
+    /// Delivery radius in world units; a client cannot draw farther than this.
+    VisibilityDistance: float32
+    MaxNotesPerPlayer: int
+    MaxDeathMarksPerPlayer: int
+    /// Days a note lives; 0 keeps it forever.
+    NoteTtlDays: int
+    /// Days a death mark lives; 0 keeps it forever.
+    DeathMarkTtlDays: int
+    /// Marks one spatial index cell may hold; more is refused, nothing is evicted.
+    MaxPerIndexCell: int
+    /// Note placements an account may make at once; then one per RateRefillMs.
+    RateBurst: int
+    RateRefillMs: int
+    /// The same normalized note text is refused within this window; 0 disables it.
+    DuplicateWindowMs: int
+    /// Deaths reported closer together than this are refused.
+    DeathMinIntervalMs: int
+    /// A placement farther than this from the player's last known position is refused; 0 disables it.
+    MaxPlacementDistance: float32
+    /// How often expired marks are collected.
+    ExpiryCheckIntervalMs: int
+}
+
+[<RequireQualifiedAccess>]
+module GroundMarkOptions =
+    let defaults = {
+        MailboxCapacity = 256; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 256
+        VisibilityDistance = 8192.0f
+        MaxNotesPerPlayer = 5; MaxDeathMarksPerPlayer = 10
+        NoteTtlDays = 30; DeathMarkTtlDays = 7
+        MaxPerIndexCell = 64
+        RateBurst = 3; RateRefillMs = 20000; DuplicateWindowMs = 300000
+        DeathMinIntervalMs = 5000
+        MaxPlacementDistance = 2048.0f
+        ExpiryCheckIntervalMs = 60000
+    }
+
+    /// The domain rules of these options; errors name the offending key.
+    let rules options =
+        GroundMarkRules.create options.MaxNotesPerPlayer options.MaxDeathMarksPerPlayer options.NoteTtlDays
+            options.DeathMarkTtlDays options.VisibilityDistance options.MaxPlacementDistance
+
+    let validate options = [
+        if isNull (box options) then "GroundMarks section cannot be null."
+        else
+            if options.MailboxCapacity < 1 || options.ControlReserve < 1 || options.MaxControlDeliveries < 1 || options.MaxPendingWrites < 1 then
+                "GroundMarks queue capacities must be positive."
+            if int64 options.MailboxCapacity + int64 options.ControlReserve > int64 Int32.MaxValue then
+                "GroundMarks mailbox capacity and control reserve overflow."
+            if not (Single.IsFinite options.VisibilityDistance) || options.VisibilityDistance < 0.0f then
+                "GroundMarks.VisibilityDistance must be finite and non-negative."
+            if not (Single.IsFinite options.MaxPlacementDistance) || options.MaxPlacementDistance < 0.0f then
+                "GroundMarks.MaxPlacementDistance must be finite and non-negative."
+            if options.MaxNotesPerPlayer < 1 || options.MaxDeathMarksPerPlayer < 1 then
+                "GroundMarks.MaxNotesPerPlayer and MaxDeathMarksPerPlayer must be positive."
+            if options.NoteTtlDays < 0 || options.DeathMarkTtlDays < 0 then
+                "GroundMarks lifetimes must be non-negative days; 0 means no expiry."
+            if options.MaxPerIndexCell < 1 then "GroundMarks.MaxPerIndexCell must be positive."
+            if options.RateBurst < 1 || options.RateRefillMs < 1 || options.DuplicateWindowMs < 0 then
+                "GroundMarks note rate limits must be positive; DuplicateWindowMs non-negative."
+            if options.DeathMinIntervalMs < 0 then "GroundMarks.DeathMinIntervalMs must be non-negative."
+            if options.ExpiryCheckIntervalMs < 1000 then "GroundMarks.ExpiryCheckIntervalMs must be at least 1000."
+    ]
+
 type PlayerSessionOptions = {
     MailboxCapacity: int
     ControlReserve: int
@@ -178,7 +296,7 @@ module ServerRuntimeOptions =
     let defaults = {
         MaxSessions = 32
         MailboxCapacity = 256
-        ControlReserve = 128
+        ControlReserve = 160
         OpenTimeoutMs = 10000
         ShutdownTimeoutMs = 1500
         PollIntervalMs = 1

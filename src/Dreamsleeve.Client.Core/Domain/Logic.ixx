@@ -145,6 +145,17 @@ export namespace Domain::Spatial
     return DistanceSquared(left.position, right.position) <= wideRadius * wideRadius;
   }
 
+  // A mark is drawn only in the observer's own space and within the client's
+  // draw radius, boundary included. The server already limits delivery.
+  Result<bool> IsMarkWithinRadius(WorldUnit radius, const PlayerLocation& observer, const GroundMarkPlacement& placement)
+  {
+    if (radius < 0.0f) return Detail::Failure(ErrorCode::InvalidRadius, "radius");
+    if (observer.location.locationId != placement.locationId) return false;
+
+    const double wideRadius = static_cast<double>(radius);
+    return DistanceSquared(observer.position, placement.position) <= wideRadius * wideRadius;
+  }
+
 }
 
 export namespace Domain::Normalize

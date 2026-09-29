@@ -5,6 +5,7 @@ import std;
 export import Dreamsleeve.Client.ChatCache;
 export import Dreamsleeve.Client.Changes;
 export import Dreamsleeve.Client.PlayerStore;
+export import Dreamsleeve.Client.GroundMarkStore;
 export import Dreamsleeve.Protocol;
 
 export namespace Dreamsleeve::Client
@@ -129,6 +130,7 @@ export namespace Dreamsleeve::Client
     PlayerActorValuesUpdated,
     ChatMessagesReceived,
     ChatHistoryReceived,
+    GroundMarksChanged,
     ServerRejection>;
 
   struct ClientSnapshot
@@ -138,6 +140,7 @@ export namespace Dreamsleeve::Client
     std::optional<PlayerId>        selfPlayerId;
     std::vector<Player>            players;
     std::vector<ChatCacheSnapshot> chats;
+    GroundMarkStoreSnapshot        groundMarks;
     MovementClock::time_point      observedAt{};
   };
 
@@ -260,6 +263,7 @@ public:
     void ClearOnlineState()
     {
       players.Clear();
+      groundMarks.Clear();
       selfPlayerId.reset();
 
       for (auto& [channelId, cache] : chats)
@@ -278,6 +282,7 @@ public:
     {
       players.Clear();
       chats.clear();
+      groundMarks.Clear();
       selfPlayerId.reset();
 
       ++generation;
@@ -303,6 +308,16 @@ public:
     std::vector<Player> SnapshotPlayers() const
     {
       return players.Snapshot();
+    }
+
+    std::optional<GroundMark> FindGroundMark(GroundMarkId id) const
+    {
+      return groundMarks.Find(id);
+    }
+
+    GroundMarkStoreSnapshot SnapshotGroundMarks() const
+    {
+      return groundMarks.Snapshot();
     }
 
     std::optional<ChatCacheSnapshot> FindChat(ChatChannelId channelId) const
@@ -354,7 +369,8 @@ public:
     {
       ClientSnapshot
         result{.generation = generation, .revision = revision, .selfPlayerId = selfPlayerId, .players = players.Snapshot(), .chats = {}};
-      result.observedAt = MovementClock::now();
+      result.groundMarks = groundMarks.Snapshot();
+      result.observedAt  = MovementClock::now();
       result.chats.reserve(chats.size());
       for (const auto& [channelId, cache] : chats)
       {
@@ -383,7 +399,7 @@ private:
         std::is_same_v<Update, PlayerProfileUpdated> || std::is_same_v<Update, PlayerMetadataUpdated> ||
         std::is_same_v<Update, PlayerCharacterRenamed> || std::is_same_v<Update, PlayerActorValuesUpdated> ||
         std::is_same_v<Update, ChatMessagesReceived> || std::is_same_v<Update, ChatHistoryReceived> ||
-        std::is_same_v<Update, ServerRejection>)
+        std::is_same_v<Update, GroundMarksChanged> || std::is_same_v<Update, ServerRejection>)
       {
         // No new motion, or a complete online replacement already supersedes it.
       }
@@ -480,6 +496,18 @@ private:
       AppendChatContent(channelId, std::move(result.addedMessages));
     }
 
+    void RecordGroundMarks(std::vector<GroundMarkChange> changes)
+    {
+      if (pendingChanges.requiresSnapshot) return;
+
+      // A clear supersedes everything not yet taken; the recipient starts over.
+      if (!changes.empty() && std::holds_alternative<GroundMarksCleared>(changes.front())) pendingChanges.groundMarks.clear();
+      pendingChanges.groundMarks.insert(
+        pendingChanges.groundMarks.end(),
+        std::make_move_iterator(changes.begin()),
+        std::make_move_iterator(changes.end()));
+    }
+
     void ForgetChatContent(ChatChannelId channelId)
     {
       std::erase_if(pendingChanges.chatContent, [channelId](const ChatContentChange& change) {
@@ -508,7 +536,7 @@ private:
       }
       else if constexpr (
         !std::is_same_v<Update, ChatMessagesReceived> && !std::is_same_v<Update, ChatHistoryReceived> &&
-        !std::is_same_v<Update, ServerRejection>)
+        !std::is_same_v<Update, GroundMarksChanged> && !std::is_same_v<Update, ServerRejection>)
       {
         MarkPlayer(update.playerId);
       }
@@ -615,6 +643,18 @@ private:
       return {};
     }
 
+    Domain::OperationResult ApplyOne(const GroundMarksChanged& update)
+    {
+      auto result = groundMarks.Apply(update);
+      if (!result)
+      {
+        return std::unexpected(std::move(result.error()));
+      }
+
+      RecordGroundMarks(std::move(*result));
+      return {};
+    }
+
     Domain::OperationResult ApplyOne(const ServerRejection& update)
     {
       serverRejections.push_back(ServerRejectionEvent{generation, update});
@@ -627,6 +667,7 @@ private:
     std::size_t                        maxMovementObservations;
     PlayerStore                        players;
     std::map<ChatChannelId, ChatCache> chats;
+    GroundMarkStore                    groundMarks;
     std::vector<ServerRejectionEvent>  serverRejections;
     std::optional<PlayerId>            selfPlayerId;
     ChangeBatch                        pendingChanges;

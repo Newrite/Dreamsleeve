@@ -71,6 +71,7 @@ public:
       serverName.clear();
       pendingChats.clear();
       pendingUpdates.clear();
+      pendingMarks.clear();
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
@@ -157,6 +158,7 @@ private:
       serverName.clear();
       pendingChats.clear();
       pendingUpdates.clear();
+      pendingMarks.clear();
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
@@ -166,9 +168,12 @@ private:
       return published;
     }
 
-    Result<void> Publish(bool requestSnapshot = false, std::optional<ChatConfirmation> confirmation = std::nullopt)
+    Result<void> Publish(
+      bool                                  requestSnapshot  = false,
+      std::optional<ChatConfirmation>       confirmation     = std::nullopt,
+      std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt)
     {
-      if (!exchange.Publish(model, requestSnapshot, phase, serverName, confirmation))
+      if (!exchange.Publish(model, requestSnapshot, phase, serverName, confirmation, markConfirmation))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
 
       return {};
@@ -290,7 +295,10 @@ private:
       }
 
       if (phase != SessionPhase::Ready) return Unexpected("request_id");
-      if (pendingChats.erase(rejection.requestId) == 0 && pendingUpdates.erase(rejection.requestId) == 0) return Unexpected("request_id");
+      if (
+        pendingChats.erase(rejection.requestId) == 0 && pendingUpdates.erase(rejection.requestId) == 0 &&
+        pendingMarks.erase(rejection.requestId) == 0)
+        return Unexpected("request_id");
 
       if (rejection.requestId == pendingLocation) ResetMovement();
       return Apply(rejection);
@@ -327,6 +335,26 @@ private:
     }
 
     Result<void> Receive(PlayerMetadataUpdated& value)
+    {
+      return Apply(value);
+    }
+
+    // Correlation settles the command; the visible set changes only through
+    // the ordinary delta, so the author sees the mark the way everyone does.
+    Result<void> Receive(Wire::GroundMarkPlaced& placed)
+    {
+      if (phase != SessionPhase::Ready || pendingMarks.erase(placed.requestId) == 0) return Unexpected("request_id");
+      if (placed.mark.author.playerId != model.SelfPlayerId()) return Unexpected("author");
+      return Publish(false, std::nullopt, GroundMarkConfirmation{model.Generation(), placed.requestId, placed.mark.markId, placed.evictedId, false});
+    }
+
+    Result<void> Receive(Wire::GroundMarkRemoved& removed)
+    {
+      if (phase != SessionPhase::Ready || pendingMarks.erase(removed.requestId) == 0) return Unexpected("request_id");
+      return Publish(false, std::nullopt, GroundMarkConfirmation{model.Generation(), removed.requestId, removed.markId, std::nullopt, true});
+    }
+
+    Result<void> Receive(GroundMarksChanged& value)
     {
       return Apply(value);
     }
@@ -439,6 +467,45 @@ private:
       return Publish(true);
     }
 
+    // Marks travel on the control lane with their own pending set; the server
+    // judges position, words, quotas and frequency. Locally only the shape.
+    template <class Command>
+    Result<void> SendMarkCommand(std::uint64_t generation, Command& command, bool valid)
+    {
+      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
+      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
+      if (command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId))
+        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+
+      lastRequest = command.requestId;
+      if (!valid) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      if (pendingMarks.size() >= config.maxPendingChatRequests) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      auto packet = codec.Encode(command);
+      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
+
+      auto sent = transport->Send(std::move(*packet));
+      if (!sent) return Fail(sent.error());
+
+      pendingMarks.insert(command.requestId);
+      return {};
+    }
+
+    Result<void> Process(std::uint64_t generation, PlaceGroundNote& command)
+    {
+      return SendMarkCommand(generation, command, !command.text.empty() && Utils::Text::ValidUtf8(command.text));
+    }
+
+    Result<void> Process(std::uint64_t generation, ReportDeath& command)
+    {
+      return SendMarkCommand(generation, command, Utils::Text::ValidUtf8(command.label) && !Utils::Text::HasControl(command.label));
+    }
+
+    Result<void> Process(std::uint64_t generation, RemoveGroundMark& command)
+    {
+      return SendMarkCommand(generation, command, command.markId != 0);
+    }
+
     template <class T>
     Result<void> SendPlayerUpdate(std::uint64_t generation, T& command, bool locationTransition = false)
     {
@@ -546,7 +613,9 @@ private:
     Result<void> ProcessCommands()
     {
       const auto openingReply = phase == SessionPhase::Connecting || phase == SessionPhase::Opening ? 1u : 0u;
-      exchange.TakeCommands(commands, pendingChats.size() + pendingUpdates.size() + openingReply + model.PendingServerRejectionCount());
+      exchange.TakeCommands(
+        commands,
+        pendingChats.size() + pendingUpdates.size() + pendingMarks.size() + openingReply + model.PendingServerRejectionCount());
       Result<void> firstError;
 
       for (auto& queued : commands)
@@ -571,6 +640,7 @@ private:
     std::uint64_t                                            lastRequest{};
     std::unordered_map<std::uint64_t, Domain::ChatChannelId> pendingChats;
     std::unordered_set<std::uint64_t>                        pendingUpdates;
+    std::unordered_set<std::uint64_t>                        pendingMarks;
     std::vector<QueuedClientCommand>                         commands;
     Clock::time_point                                        deadline{};
     Clock::time_point                                        nextPlayerSample{};

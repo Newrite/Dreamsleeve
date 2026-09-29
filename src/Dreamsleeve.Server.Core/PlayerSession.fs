@@ -12,11 +12,16 @@ type PlayerSessionMessage =
     | IdentityReplied of IdentityAdmission
     | ChatEvent of ChatRoomEvent
     | PresenceEvent of PresenceEvent
+    | GroundMarkEvent of GroundMarkEvent
     | ChatDetached of Guid
     | SystemDetached of Guid
     | PresenceDetached of Guid
+    | GroundMarksDetached of Guid
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
     | PostAnnouncement of requestId: uint64 * AnnouncementRequest
+    | PlaceGroundNote of requestId: uint64 * GroundNoteText * GroundMarkPlacement
+    | ReportDeath of requestId: uint64 * DeathMarkText * GroundMarkPlacement
+    | RemoveGroundMark of requestId: uint64 * GroundMarkId
     | Update of requestId: uint64 * PlayerUpdate
     | SampleMovement of MovementSample
     | Read of ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
@@ -46,16 +51,19 @@ module PlayerSession =
         mutable ChatAttached: bool
         mutable SystemAttached: bool
         mutable PresenceAttached: bool
+        mutable GroundMarksAttached: bool
         mutable CloseSent: bool
         /// The current character name failed moderation and is not published.
         mutable CharacterWithheld: bool
         Moderation: ModerationRules
         Announcements: AnnouncementOptions
+        GroundMarkRules: GroundMarkRules
         Pending: HashSet<uint64>
         Authentication: AgentOutbox<SessionAuthenticationRequest>
         Chat: AgentOutbox<ChatRoomCommand>
         System: AgentOutbox<ChatRoomCommand>
         Presence: AgentOutbox<PresenceCommand>
+        GroundMarks: AgentOutbox<GroundMarkCommand>
         Host: AgentOutbox<SessionHostCommand>
     }
 
@@ -73,7 +81,8 @@ module PlayerSession =
 
     let private completeIfDetached state (context: AgentContext<PlayerSessionMessage>) =
         match state.Phase with
-        | Closing when not state.ChatAttached && not state.SystemAttached && not state.PresenceAttached -> context.Complete() |> ignore
+        | Closing when not state.ChatAttached && not state.SystemAttached && not state.PresenceAttached && not state.GroundMarksAttached ->
+            context.Complete() |> ignore
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
     let private stop (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) =
@@ -102,6 +111,10 @@ module PlayerSession =
                 if state.PresenceAttached then
                     let command = PresenceCommand.Detach(detach (address.Map PlayerSessionMessage.PresenceDetached))
                     if not (state.Presence.TrySend(context, command)) then context.Abort()
+
+                if state.GroundMarksAttached then
+                    let command = GroundMarkCommand.Detach(detach (address.Map PlayerSessionMessage.GroundMarksDetached))
+                    if not (state.GroundMarks.TrySend(context, command)) then context.Abort()
 
                 completeIfDetached state context
 
@@ -187,6 +200,11 @@ module PlayerSession =
                     Profile = player.Data
                     Events = address.Map PlayerSessionMessage.ChatEvent
                 }
+                let marks = {
+                    ConnectionId = request.ConnectionId
+                    Profile = player.Data
+                    Events = address.Map PlayerSessionMessage.GroundMarkEvent
+                }
                 let presence = {
                     ConnectionId = request.ConnectionId
                     Snapshot = publicSnapshot state player
@@ -195,8 +213,9 @@ module PlayerSession =
                 state.ChatAttached <- state.Chat.TrySend(context, ChatRoomCommand.Join chat)
                 state.SystemAttached <- state.System.TrySend(context, ChatRoomCommand.Join chat)
                 state.PresenceAttached <- state.Presence.TrySend(context, PresenceCommand.Join presence)
+                state.GroundMarksAttached <- state.GroundMarks.TrySend(context, GroundMarkCommand.Join marks)
 
-                if not state.ChatAttached || not state.SystemAttached || not state.PresenceAttached then
+                if not state.ChatAttached || not state.SystemAttached || not state.PresenceAttached || not state.GroundMarksAttached then
                     close request state context "Subscription admission failed."
             | IdentityAdmission.AlreadyInUse, _ ->
                 rejectOpening options request state context RequestRejectionCode.SessionAlreadyOpen "Player already has a session."
@@ -293,6 +312,74 @@ module PlayerSession =
                 state.Host.TrySend(context, SessionHostCommand.Send(request.ConnectionId, ServerResponse.PlayersMoved movements)) |> ignore
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
         | PresenceEvent.Left playerId -> publish options request state context (ServerResponse.PlayerLeft playerId)
+
+    let private groundMarkEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
+        let settle requestId response =
+            match state.Phase with
+            | Active _ when state.Pending.Remove requestId -> send options request state context response
+            | Closing -> ()
+            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
+                close request state context "Unexpected ground mark reply."
+        match event with
+        | GroundMarkEvent.Changed view -> publish options request state context (ServerResponse.GroundMarksChanged view)
+        | GroundMarkEvent.Placed(requestId, record, evicted) -> settle requestId (ServerResponse.GroundMarkPlaced(requestId, record, evicted))
+        | GroundMarkEvent.Removed(requestId, id) -> settle requestId (ServerResponse.GroundMarkRemoved(requestId, id))
+        | GroundMarkEvent.Rejected(requestId, rejection) -> settle requestId (ServerResponse.RequestRejected(requestId, rejection))
+
+    // Visibility of marks follows the player's own position; a lost update is
+    // repaired by the next one, since the owner compares with what it last saw.
+    let private observeMarks (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (player: Player) =
+        if state.GroundMarks.Count < options.MaxPendingUpdates then
+            state.GroundMarks.TrySend(context, GroundMarkCommand.Observe(request.ConnectionId, player.CharacterGeneration, player.Location)) |> ignore
+
+    /// Position rule (soft), word list and flags here; quotas, frequency,
+    /// density and the ID belong to the mark owner, which also answers.
+    let private placeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (body: GroundMarkBody) placement =
+        let refuse code message field =
+            send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = field }))
+        match state.Phase with
+        | Active player ->
+            let text = GroundMarkBody.text body
+            if requestId = 0UL || state.Pending.Contains requestId then
+                close request state context "Request ID is invalid or already pending."
+            elif state.Pending.Count >= options.MaxPendingChat then
+                refuse RequestRejectionCode.Overloaded "Too many pending requests." ""
+            elif not (GroundMarkPlacement.isNear state.GroundMarkRules.MaxPlacementDistance player.Location placement) then
+                refuse RequestRejectionCode.InvalidRequest "The mark is not where the player is." "placement"
+            elif not (Moderation.allows state.Moderation text) then
+                refuse RequestRejectionCode.TextNotAllowed "Mark contains words that are not allowed." "text"
+            else
+                let submission = {
+                    ConnectionId = request.ConnectionId
+                    RequestId = requestId
+                    Body = body
+                    Placement = placement
+                    CharacterName = publicCharacterName state player
+                    Fingerprint = Moderation.normalize text
+                    Flagged = Moderation.flag state.Moderation text
+                }
+                if state.GroundMarks.TrySend(context, GroundMarkCommand.Place submission) then
+                    state.Pending.Add requestId |> ignore
+                else
+                    refuse RequestRejectionCode.Overloaded "Ground mark admission is full." ""
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
+            refuse RequestRejectionCode.SessionNotReady "Session is not ready." ""
+
+    let private removeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId id =
+        match state.Phase with
+        | Active _ ->
+            if requestId = 0UL || state.Pending.Contains requestId then
+                close request state context "Request ID is invalid or already pending."
+            elif state.Pending.Count >= options.MaxPendingChat then
+                reject options request state context requestId RequestRejectionCode.Overloaded "Too many pending requests."
+            elif state.GroundMarks.TrySend(context, GroundMarkCommand.Remove(request.ConnectionId, requestId, id)) then
+                state.Pending.Add requestId |> ignore
+            else
+                reject options request state context requestId RequestRejectionCode.Overloaded "Ground mark admission is full."
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
+            reject options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
 
     let private sendChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId channelId text =
         match state.Phase, reliable context with
@@ -406,6 +493,10 @@ module PlayerSession =
                 let change = PresenceCommand.Update(request.ConnectionId, publicSnapshot state updated)
                 if state.Presence.TrySend(context, change) then
                     state.Phase <- Active updated
+                    match command with
+                    | PlayerUpdate.BeginCharacter _ | PlayerUpdate.LeaveGame | PlayerUpdate.SetLocation _ ->
+                        observeMarks options request state context updated
+                    | PlayerUpdate.RenameCharacter _ | PlayerUpdate.SetActorValues _ | PlayerUpdate.SetDetails _ -> ()
                     // This settles the request only. Author and observers apply the
                     // same coalesced presence update to their local models later.
                     send options request state context (ServerResponse.PlayerUpdateAccepted requestId)
@@ -424,6 +515,7 @@ module PlayerSession =
                 let change = PresenceCommand.Update(request.ConnectionId, publicSnapshot state updated)
                 if state.Presence.TrySend(context, change) then
                     state.Phase <- Active updated
+                    observeMarks options request state context updated
             | ValueNone -> ()
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
@@ -434,6 +526,7 @@ module PlayerSession =
         | PlayerSessionMessage.IdentityReplied reply -> identityReply options request state context reply
         | PlayerSessionMessage.ChatEvent event -> chatEvent options request state context event
         | PlayerSessionMessage.PresenceEvent event -> presenceEvent options request state context event
+        | PlayerSessionMessage.GroundMarkEvent event -> groundMarkEvent options request state context event
         | PlayerSessionMessage.ChatDetached connectionId ->
             if connectionId = request.ConnectionId then state.ChatAttached <- false
             completeIfDetached state context
@@ -443,10 +536,19 @@ module PlayerSession =
         | PlayerSessionMessage.PresenceDetached connectionId ->
             if connectionId = request.ConnectionId then state.PresenceAttached <- false
             completeIfDetached state context
+        | PlayerSessionMessage.GroundMarksDetached connectionId ->
+            if connectionId = request.ConnectionId then state.GroundMarksAttached <- false
+            completeIfDetached state context
         | PlayerSessionMessage.SendChat(requestId, channelId, text) ->
             sendChat options request state context requestId channelId text
         | PlayerSessionMessage.PostAnnouncement(requestId, announcement) ->
             postAnnouncement options request state context requestId announcement
+        | PlayerSessionMessage.PlaceGroundNote(requestId, text, placement) ->
+            placeMark options request state context requestId (GroundMarkBody.Note text) placement
+        | PlayerSessionMessage.ReportDeath(requestId, label, placement) ->
+            placeMark options request state context requestId (GroundMarkBody.Death label) placement
+        | PlayerSessionMessage.RemoveGroundMark(requestId, id) ->
+            removeMark options request state context requestId id
         | PlayerSessionMessage.Update(requestId, command) ->
             update options maxActorValues request state context requestId command
         | PlayerSessionMessage.SampleMovement sample ->
@@ -462,7 +564,9 @@ module PlayerSession =
     let private isControl = function
         | PlayerSessionMessage.Begin | PlayerSessionMessage.Authenticated _
         | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.ChatDetached _ | PlayerSessionMessage.SystemDetached _
-        | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.Stop -> true
+        | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.Stop -> true
+        | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Placed _ | GroundMarkEvent.Removed _ | GroundMarkEvent.Rejected _) -> true
+        | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Changed _) -> false
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Joined _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.JoinFailed _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Accepted _)
@@ -471,11 +575,12 @@ module PlayerSession =
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Published _)
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.VisibilityChanged _ | PresenceEvent.MetadataChanged _ | PresenceEvent.Left _)
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.PostAnnouncement _
+        | PlayerSessionMessage.PlaceGroundNote _ | PlayerSessionMessage.ReportDeath _ | PlayerSessionMessage.RemoveGroundMark _
         | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _
         | PlayerSessionMessage.Read _ -> false
 
-    /// chat and system are the owners of the global and the system channel.
-    let start (options: PlayerSessionOptions) maxActorValues moderation announcements authentication chat system presence host (request: SessionOpenRequest) =
+    /// chat and system are the owners of the global and the system channel; marks owns the ground marks.
+    let start (options: PlayerSessionOptions) maxActorValues moderation announcements groundMarkRules authentication chat system presence marks host (request: SessionOpenRequest) =
         let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
@@ -490,15 +595,18 @@ module PlayerSession =
                 ChatAttached = false
                 SystemAttached = false
                 PresenceAttached = false
+                GroundMarksAttached = false
                 CloseSent = false
                 CharacterWithheld = false
                 Moderation = moderation
                 Announcements = announcements
+                GroundMarkRules = groundMarkRules
                 Pending = HashSet()
                 Authentication = AgentOutbox(1, authentication)
                 Chat = AgentOutbox(options.MaxPendingChat + 2, chat)
                 System = AgentOutbox(options.MaxPendingChat + 2, system)
                 Presence = AgentOutbox(options.MaxPendingUpdates + 2, presence)
+                GroundMarks = AgentOutbox(options.MaxPendingUpdates + options.MaxPendingChat + 2, marks)
                 Host = AgentOutbox(options.MaxPendingOutput + 2, host)
             }
             let settings = {

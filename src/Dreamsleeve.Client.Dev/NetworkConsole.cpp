@@ -98,8 +98,18 @@ namespace
     if (json) output << "player " << *json << '\n';
   }
 
+  // "mark <id> kind=<1|2> author=<name> x=<x> character=<name> text=<text>": one line per visible mark.
+  void PrintMark(std::ostream& output, const Domain::GroundMark& mark)
+  {
+    output << "mark " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " author=" << mark.author.displayName
+           << " x=" << mark.placement.position.X << " character=" << mark.characterName.value_or("") << " text=" << mark.text << '\n';
+  }
+
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | read | pose <id> | watch <id> <ms> | quit\n";
+
+  // The last position sent by move/location; marks are placed where the player stands.
+  std::optional<Domain::PlayerLocation> lastLocation;
 
   bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
@@ -114,6 +124,7 @@ namespace
       command = GameExited{};
     else if (line == "clear-location")
     {
+      lastLocation.reset();
       command = LocalLocation{};
     }
     else if (line.starts_with("move "))
@@ -124,7 +135,8 @@ namespace
         std::cout << "Invalid movement JSON\n";
         return true;
       }
-      command = std::move(sample);
+      lastLocation = sample.location;
+      command      = std::move(sample);
     }
     else if (line.starts_with("location "))
     {
@@ -134,7 +146,8 @@ namespace
         std::cout << "Invalid location JSON\n";
         return true;
       }
-      command = std::move(transition);
+      lastLocation = transition.location;
+      command      = std::move(transition);
     }
     else if (line.starts_with("values "))
     {
@@ -169,12 +182,57 @@ namespace
     return true;
   }
 
+  // note <text> | death <label> | unmark <id>: placed at the last sent position.
+  bool PostMarkCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
+  {
+    const auto requestId = exchange.NextRequestId();
+    if (!requestId)
+    {
+      std::cout << "Request IDs exhausted\n";
+      return true;
+    }
+    ClientCommand command;
+    if (line.starts_with("unmark "))
+    {
+      Domain::GroundMarkId id{};
+      const std::string_view raw{line};
+      const auto             parsed = std::from_chars(raw.data() + 7, raw.data() + raw.size(), id);
+      if (parsed.ec != std::errc{} || id == 0)
+      {
+        std::cout << "Invalid mark id\n";
+        return true;
+      }
+      command = RemoveGroundMark{*requestId, id};
+    }
+    else
+    {
+      if (!lastLocation)
+      {
+        std::cout << "No position: send move or location first\n";
+        return true;
+      }
+      const Domain::GroundMarkPlacement placement{lastLocation->location.locationId, lastLocation->position, lastLocation->rotation.Z};
+      if (line.starts_with("note "))
+        command = PlaceGroundNote{*requestId, line.substr(5), placement};
+      else
+        command = ReportDeath{*requestId, line.size() > 6 ? line.substr(6) : std::string{}, placement};
+    }
+    if (exchange.Post({generation, std::move(command)}) == CommandPostResult::Queued)
+      std::cout << "request " << *requestId << " queued\n";
+    else
+      std::cout << "Command queue is full or closed\n";
+    return true;
+  }
+
   void Print(ClientExchange& exchange, std::uint64_t& generation, Channels& channel, MovementView& movement, bool verbose = true)
   {
     ClientOutput output;
     exchange.Drain(output);
     movement.Apply(output.state);
-    if (!verbose && output.state.updates.empty() && output.rejections.empty() && output.commandFailures.empty()) return;
+    if (
+      !verbose && output.state.updates.empty() && output.rejections.empty() && output.commandFailures.empty() &&
+      output.groundMarkConfirmations.empty())
+      return;
 
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.status.phase) << '\n';
@@ -204,6 +262,9 @@ namespace
         for (const auto& chat : snapshot->chats)
           for (const auto& message : chat.messages)
             PrintMessage(console, message);
+        console << "marks " << snapshot->groundMarks.marks.size() << " revision=" << snapshot->groundMarks.viewRevision << '\n';
+        for (const auto& mark : snapshot->groundMarks.marks)
+          PrintMark(console, mark);
       }
       else
       {
@@ -219,7 +280,24 @@ namespace
           if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
             for (const auto& message : added->messages)
               PrintMessage(console, message);
+        for (const auto& change : delta.groundMarks)
+        {
+          if (std::holds_alternative<GroundMarksCleared>(change)) console << "marks-cleared\n";
+          if (const auto* removed = std::get_if<GroundMarksRemoved>(&change))
+            for (const auto id : removed->markIds)
+              console << "mark-removed " << id << '\n';
+          if (const auto* added = std::get_if<GroundMarksAdded>(&change))
+            for (const auto& mark : added->marks)
+              PrintMark(console, mark);
+        }
       }
+    }
+
+    for (const auto& confirmation : output.groundMarkConfirmations)
+    {
+      console << "request " << confirmation.requestId << (confirmation.removed ? " removed mark " : " placed mark ") << confirmation.markId;
+      if (confirmation.evictedId) console << " evicted " << *confirmation.evictedId;
+      console << '\n';
     }
 
     for (const auto& event : output.rejections)
@@ -420,6 +498,16 @@ int RunNetworkConsole(int argc, char* argv[])
         else
           std::cout << "Command queue is full or closed\n";
       }
+    }
+    else if (line.starts_with("note ") || line.starts_with("death") || line.starts_with("unmark "))
+    {
+      Print(exchange, generation, channel, **movement);
+      PostMarkCommand(line, exchange, generation);
+    }
+    else if (line == "marks")
+    {
+      exchange.Post({generation, RequestSnapshot{}});
+      Print(exchange, generation, channel, **movement);
     }
     else if (line.starts_with("announce "))
     {

@@ -13,6 +13,7 @@ ServerRuntime, PlayerSession для каждого соединения, ChatRoo
 | PlayerSession | Domain.Player, вход, начальные снимки, квота собственных RequestId, порядок исходящих сообщений |
 | ChatRoomAgent | Членство конкретных соединений, авторство, ID/время сообщения, история и адресная рассылка |
 | PresenceAgent | Онлайн, последние полные снимки игроков, объединение изменений и периодическая репликация |
+| GroundMarksAgent | Все метки на земле, их пространственный индекс, видимые наборы наблюдателей, квоты, частота, срок жизни и запись в хранилище |
 | AuthService | Допуск account-операций и одноразовые билеты; bounded workers выполняют SQLite и проверку паролей |
 | EnetTransport | Адаптер yENet на отдельном TransportOwner, bounded handoff с runtime |
 
@@ -159,6 +160,39 @@ PlayerSession подписывается на оба, открывается п�
   источники и лимиты).
 - Имена `server` и `system` зарезервированы при регистрации (`Moderation.reservedUsername`).
 
+### Метки на земле
+
+`GroundMarksAgent` — один владелец меток ([DomainSpecRu.MD §4.9](../../docs/DomainSpecRu.MD),
+[GroundMarksRu.md](../../docs/GroundMarksRu.md)): `GroundMarkStorage`, индекс
+`SpatialIndex<GroundMarkId>` (ячейка — `GroundMarks.VisibilityDistance`), снимки профилей
+авторов и на каждого наблюдателя — набор видимых id и `ViewRevision`. PlayerSession
+подписывается при входе (`Join`), при `SetLocation`/`BeginCharacter`/`LeaveGame` и каждом
+принятом sample сообщает положение (`Observe`; потеря сообщения допустима — владелец
+сравнивает с последним известным состоянием), отписывается при остановке (`Detach`).
+Runtime после завершения сессии шлёт `Detach` и меткам; `SessionTable` ждёт
+`GroundMarksDetached`, как `PresenceDetached`, поэтому `Runtime.ControlReserve` ≥
+`4 * MaxSessions + 4`. Второе соединение живого аккаунта закрывается
+(`ground_marks_identity_conflict`).
+
+Размещение: `PlayerSession` проверяет RequestId и лимит ожидающих (общий с чатом),
+положение (`GroundMarkPlacement.isNear`, `INVALID_REQUEST`/`placement`) и словарь
+(`TEXT_NOT_ALLOWED`, флаги), затем `GroundMarkCommand.Place`; владелец — частоту
+(`RateLimit` для надписей, интервал для смертей → `RATE_LIMITED`), плотность ячейки
+(`GROUND_MARK_AREA_FULL`), квоту с вытеснением, выдаёт id, пишет `Insert`/`Delete` и
+отвечает `Placed` (id вытесненной); наблюдатели, включая автора, получают дельту.
+`Remove` — только своя метка (`GROUND_MARK_NOT_FOUND`). Дельты (`Changed`):
+при смене ячейки — добавлены/удалены, при смене пространства/поколения или потере
+позиции — `clear` и baseline; пустой baseline не отправляется. Истёкшие метки снимает
+тикер `ExpiryCheckIntervalMs` и первый шаг после старта.
+
+Хранение: `SqliteGroundMarkStore` (Infrastructure, SqlHydra на общем контексте с аккаунтами) — `loadAll` при старте (метки с
+профилями авторов, снимком имени персонажа и high-water mark id), `startWriter` — последовательный агент
+`GroundMarkWrite`; владелец отдаёт записи через `AgentOutbox(MaxPendingWrites)`,
+переполнение останавливает его. Ошибка отдельной записи логируется. Запуск: Program
+загружает метки, не передаёт владельцу запрещённые словарём (в БД они остаются), пересчитывает флаги и передаёт
+`GroundMarkPersistence` в `ServerRuntime.start`; писатель завершается после runtime.
+Общий модуль `RateLimit` обслуживает и каналы чата, и надписи.
+
 ## Очереди и перегрузка
 
 AgentMailbox.boundedWithControl задаёт общий FIFO и предел обычных сообщений.
@@ -242,7 +276,7 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Pla
 `disconnect`, `connect`, `quit`; сервер завершается по `quit` или Ctrl+C, `announce <текст>` в его консоли публикует
 объявление администратора. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
 
-TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging/Moderation/Announcements.
+TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging/Moderation/Announcements/GroundMarks.
 Горячей перезагрузки нет ни у `server.toml`, ни у `moderation.toml`: изменения, включая `[Announcements]`, действуют после перезапуска.
 Массивы таблиц поддержаны только для `[[Announcements.Scheduled]]`; каждая запись начинается со значений по умолчанию.
 Неуказанные параметры сохраняют значения по умолчанию; неизвестные поля отклоняются.

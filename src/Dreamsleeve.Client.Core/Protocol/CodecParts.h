@@ -30,6 +30,14 @@ namespace Dreamsleeve::Client::Wire::Detail
   void                        WriteAnnouncement(P::PostAnnouncement&, const PostAnnouncement&);
   Result<Domain::ChatMessage> Message(const P::ChatMessage&);
   Domain::AnnouncementPolicy  Policy(const P::AnnouncementPolicy&);
+  // Ranges inside the text, ascending, disjoint, on code point boundaries.
+  Result<std::vector<Domain::TextSpan>> ReadFlagged(const std::string&, const google::protobuf::RepeatedPtrField<P::TextSpan>&);
+
+  bool                       ValidPlacement(const Domain::GroundMarkPlacement&);
+  void                       WriteNote(P::PlaceGroundNote&, const PlaceGroundNote&);
+  void                       WriteDeath(P::ReportDeath&, const ReportDeath&);
+  Result<Domain::GroundMark> Mark(const P::GroundMark&);
+  Result<GroundMarksChanged> ReadMarksChanged(const P::GroundMarksChanged&);
 
   void                  WriteSession(P::OpenSession&, const OpenSession&);
   bool                  ValidTicket(std::string_view);

@@ -47,6 +47,24 @@ namespace Dreamsleeve::Client::Wire
         packet.set_request_id(value.requestId);
         WriteAnnouncement(*packet.mutable_post_announcement(), value);
       }
+
+      void operator()(const PlaceGroundNote& value) const
+      {
+        packet.set_request_id(value.requestId);
+        WriteNote(*packet.mutable_place_ground_note(), value);
+      }
+
+      void operator()(const ReportDeath& value) const
+      {
+        packet.set_request_id(value.requestId);
+        WriteDeath(*packet.mutable_report_death(), value);
+      }
+
+      void operator()(const RemoveGroundMark& value) const
+      {
+        packet.set_request_id(value.requestId);
+        packet.mutable_remove_ground_mark()->set_mark_id(value.markId);
+      }
     };
 
   }
@@ -71,6 +89,10 @@ namespace Dreamsleeve::Client::Wire
     }
 
     if (packet.has_send_chat() && packet.send_chat().channel_id() == 0) return Invalid("channel_id");
+    if (const auto* note = std::get_if<PlaceGroundNote>(&request); note && (note->text.empty() || !ValidPlacement(note->placement)))
+      return Invalid("place_ground_note");
+    if (const auto* death = std::get_if<ReportDeath>(&request); death && !ValidPlacement(death->placement)) return Invalid("report_death");
+    if (packet.has_remove_ground_mark() && packet.remove_ground_mark().mark_id() == 0) return Invalid("mark_id");
 
     if (
       packet.has_update_player() && packet.update_player().has_set_actor_values() &&
@@ -210,6 +232,23 @@ namespace Dreamsleeve::Client::Wire
         if (packet.player_left().player_id() == 0) return Invalid("player_id");
 
         return PlayerRemoved{packet.player_left().player_id()};
+      case P::ServerPacket::kGroundMarksChanged: {
+        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        auto result = ReadMarksChanged(packet.ground_marks_changed());
+        if (!result) return std::unexpected{result.error()};
+        return std::move(*result);
+      }
+      case P::ServerPacket::kGroundMarkPlaced: {
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        auto mark = Mark(packet.ground_mark_placed().mark());
+        if (!mark) return std::unexpected{mark.error()};
+        const auto evicted = packet.ground_mark_placed().evicted_id();
+        return GroundMarkPlaced{packet.request_id(), std::move(*mark), evicted == 0 ? std::nullopt : std::optional{evicted}};
+      }
+      case P::ServerPacket::kGroundMarkRemoved:
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        if (packet.ground_mark_removed().mark_id() == 0) return Invalid("mark_id");
+        return GroundMarkRemoved{packet.request_id(), packet.ground_mark_removed().mark_id()};
       case P::ServerPacket::PAYLOAD_NOT_SET:
         return Invalid("payload");
       default:

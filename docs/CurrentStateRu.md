@@ -218,9 +218,9 @@ SKSE-адаптер вызывает Apply/Sample из хука `Main::Update`; 
 | C++ Domain / State | Игроки, ограниченный ChatCache, модель, StateUpdate, очереди и ClientExchange для одного потребителя |
 | Client.Dev | Общий ClientApplication, --config/--connect, консольный ввод пароля и отдельное синтетическое демо |
 | Server | ENet runtime, HTTP auth, TOML-конфигурация, Serilog, PlayerSession, ChatRoomAgent, PresenceAgent и жизненный цикл |
-| Protobuf / codec | Protocol/*.proto v7: вход, полные PlayerInfo/история, чат и системный канал объявлений, онлайн, телеметрия и отказы; C++ encode/decode и F# decode/encode реализованы |
+| Protobuf / codec | Protocol/*.proto v8: вход, полные PlayerInfo/история, чат и системный канал объявлений, онлайн, телеметрия, метки на земле и отказы; C++ encode/decode и F# decode/encode реализованы |
 | UI / Skyrim | Будущие адаптеры; в Core игровых зависимостей нет |
-| Persistence | SQLite accounts/profiles, Migrondi, SqlHydra; MemoryProfileStore только для изолированных тестов |
+| Persistence | SQLite accounts/profiles и ground_marks (схема 3), Migrondi, SqlHydra; MemoryProfileStore только для изолированных тестов |
 
 Первый прикладной контракт описан в [Protocol/README](../Protocol/README.ru.md).
 Сессия привязана к ENet-соединению, повторное подключение получает новый bootstrap.
@@ -603,3 +603,40 @@ vitest defaults/типы, Playwright сохранение и восстанов�
 DLL (SE/AE/VR), Client.Dev, production build UI и `DreamsleeveClient.pex` собираются.
 В Skyrim не проверялись: получение интерфейса другим плагином, mod event в Papyrus,
 кириллица в строках Papyrus, вид вкладки и строк в Ultralight.
+
+## Метки на земле, часть 1 (29.09.2026)
+
+Доменная модель ([DomainSpecRu.MD §4.9](DomainSpecRu.MD)), протокол **v8** (несовместим с
+v7), сервер и ядро клиента для надписей (`Note`) и мест смерти (`Death`); SKSE-плагин и
+веб-UI — следующая задача. Подробности и принятые решения — [GroundMarksRu.md](GroundMarksRu.md).
+
+- Домен: `GroundMarks.fs` — `GroundMarkBody`, `GroundMarkPlacement` (мягкая проверка
+  положения, видимость), `GroundMarkRules`, `GroundMark`, `GroundMarkStorage` с квотой и
+  вытеснением самой старой метки того же автора и вида; `GroundNoteText` (правила чата, 200)
+  и `DeathMarkText` (одна строка, может быть пустой, 64) в `[Server.ChatInput]`.
+- Сервер: `GroundMarksAgent` — один владелец меток, `SpatialIndex<GroundMarkId>`, набор
+  видимых id и `ViewRevision` на наблюдателя, reliable-дельты «добавлены/удалены» при смене
+  ячейки, `clear` + baseline при смене пространства/поколения/потере позиции, квоты, TTL,
+  плотность `MaxPerIndexCell`, частота (`RateLimit` — общий модуль с чатом, `DeathMinIntervalMs`).
+  Метка хранит снимок имени персонажа при размещении, как сообщение; профиль автора — по
+  `PlayerId`. SQLite: таблица `ground_marks` (миграция 3, каскад от `profiles`),
+  `SqliteGroundMarkStore` на SqlHydra (схема перегенерирована; загрузка при старте с профилями
+  авторов и high-water mark id, последовательный писатель). Runtime-очистка сессии ждёт и
+  отписку от меток, поэтому `Runtime.ControlReserve` ≥ `4 * MaxSessions + 4` (умолчание 160).
+  Секция `[GroundMarks]` в `server.example.toml`; старый `server.toml` получает умолчания.
+- Протокол: `ground.proto`; `PlaceGroundNote`/`ReportDeath`/`RemoveGroundMark` (Control),
+  `GroundMarksChanged{view_revision, added, removed_ids, clear}`, `GroundMarkPlaced{mark,
+  evicted_id}`, `GroundMarkRemoved`; коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_NOT_FOUND = 13`.
+- Клиент: команды в `ClientExchange`, `GroundMarkConfirmation`, `GroundMarkStore` и
+  `GroundMarksChanged` в модели, упорядоченные переходы `ClientStateDelta.groundMarks`,
+  `Protocol/GroundCodec.cpp`, `Client.Dev`: `note`, `death`, `unmark`, `marks`. Метки не
+  попадают в `ChatCache`, `freshMessages` и облачка.
+
+Проверки: 372 managed (Expecto; 8 доменных и 17 новых: агент, кодек, конфигурация, SQLite
+с нуля и поверх версии 2, писатель), 269 native (doctest; хранилище, модель, обмен, кодек и
+сценарий ClientRuntime через ENet), `smoke_chat.py` — 35 проверок, из них 8 по меткам
+(надпись у соседа и невидимость вдали, `marks-cleared` при смене WRLD/CELL, метка смерти и
+`RATE_LIMITED`, вытеснение по квоте с id, `GROUND_MARK_AREA_FULL`, `TEXT_NOT_ALLOWED`,
+удаление своей и отказ чужой, сохранение после перезапуска сервера). DLL (SE/AE/VR) и
+Client.Dev собираются, `package_dist.py --skip-build` пересобирает dist. В Skyrim не
+проверялось ничего: отображения меток ещё нет.

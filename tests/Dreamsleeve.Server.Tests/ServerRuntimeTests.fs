@@ -51,6 +51,11 @@ let private authentication (agent: Agent<SessionAuthenticationRequest>) : Sessio
     Requests = agent.Ref.TryReliable().Value
     Completion = agent.Completion
 }
+
+// Storage is a controlled dependency here: writes are collected, nothing is loaded.
+let private persistence (writer: Agent<GroundMarkWrite>) : GroundMarkPersistence =
+    { Loaded = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value }
+let private discard (_: AgentContext<GroundMarkWrite>) (_: GroundMarkWrite) = task { () }
 let private chat requestId text = packet requestId (fun packet -> packet.SendChat <- SendChat(ChannelId = 1UL, Text = text))
 
 let private beginCharacter requestId name =
@@ -121,7 +126,8 @@ let private withRuntimeUsing options createAuthentication run = task {
         Dispose = ignore
     }
     use authenticator = createAuthentication ()
-    use runtime = ServerRuntime.start options ServerConfig.defaults Dreamsleeve.Server.Domain.Moderation.empty AnnouncementOptions.defaults (authentication authenticator) transport NullLogger.Instance |> ok
+    use writer = Agent.Start(AgentOptions.create "writer", discard)
+    use runtime = ServerRuntime.start options ServerConfig.defaults Dreamsleeve.Server.Domain.Moderation.empty AnnouncementOptions.defaults GroundMarkOptions.defaults (persistence writer) (authentication authenticator) transport NullLogger.Instance |> ok
     let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
@@ -406,7 +412,8 @@ let tests = testList "ServerRuntime" [
             Close = ignore; Reset = ignore; Dispose = ignore
         }
         let config = { ServerConfig.defaults with ServiceTimeoutMs = UInt32.MaxValue }
-        match ServerRuntime.start ServerRuntimeOptions.defaults config Dreamsleeve.Server.Domain.Moderation.empty AnnouncementOptions.defaults (authentication authenticator) transport NullLogger.Instance with
+        use writer = Agent.Start(AgentOptions.create "writer", discard)
+        match ServerRuntime.start ServerRuntimeOptions.defaults config Dreamsleeve.Server.Domain.Moderation.empty AnnouncementOptions.defaults GroundMarkOptions.defaults (persistence writer) (authentication authenticator) transport NullLogger.Instance with
         | Error errors -> check (errors |> List.exists (fun error -> error.Contains "deadlines")) "Deadline validation missing."
         | Ok runtime -> runtime.Abort(); failwith "Invalid runtime started.")
 

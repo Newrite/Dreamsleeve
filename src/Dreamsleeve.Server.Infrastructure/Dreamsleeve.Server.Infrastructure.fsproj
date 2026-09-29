@@ -9,6 +9,7 @@
     </Compile>
     <Compile Include="SqliteDatabase.fs" />
     <Compile Include="SqliteAccountStore.fs" />
+    <Compile Include="SqliteGroundMarkStore.fs" />
     <Compile Include="AuthService.fs" />
     <Compile Include="TransportOwner.fs" />
     <Compile Include="EnetTransport.fs" />

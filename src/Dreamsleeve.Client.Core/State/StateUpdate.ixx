@@ -30,7 +30,9 @@ export namespace Dreamsleeve::Client
     std::vector<ChatStateChange>     chats;
     std::vector<ChatContentChange>   chatContent;
     std::vector<MovementObservation> movement;
-    MovementClock::time_point        observedAt{};
+    // Ordered transitions of the visible ground marks; a clear starts over.
+    std::vector<GroundMarkChange> groundMarks;
+    MovementClock::time_point     observedAt{};
   };
 
   using ClientStateUpdate = std::variant<ClientSnapshot, ClientStateDelta>;
@@ -77,6 +79,7 @@ export namespace Dreamsleeve::Client
 
     delta.chatContent = std::move(scratch.chatContent);
     delta.movement    = std::move(scratch.movement);
+    delta.groundMarks = std::move(scratch.groundMarks);
 
     return ClientStateUpdate{std::move(delta)};
   }

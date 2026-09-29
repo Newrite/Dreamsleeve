@@ -34,7 +34,7 @@ module PresenceAgent =
         Dirty: HashSet<PlayerId>
         Candidates: HashSet<Guid>
         Movements: ResizeArray<MovementChange>
-        LatestIndex: SpatialIndex.State
+        LatestIndex: SpatialIndex.State<Guid>
         mutable Ticker: AgentTicker option
         mutable LastFlush: int64
         VisibilityDistanceSquared: double

@@ -9,25 +9,15 @@ open Dreamsleeve.Server.Domain
 /// The channel kind decides what may be published (see ChatChannelKind).
 [<RequireQualifiedAccess>]
 module ChatRoomAgent =
-    [<Literal>]
-    let private MaxRecentPerSender = 8
-
-    /// Admission of one account, kept across reconnects and pruned once idle.
-    type private Sender = {
-        mutable Tokens: float
-        mutable Updated: int64
-        Recent: Queue<struct (string * int64)>
-    }
-
     type private State = {
         Chat: Chat
         Members: Dictionary<Guid, Subscription<ChatRoomEvent>>
         Players: Dictionary<PlayerId, Guid>
-        Senders: Dictionary<PlayerId, Sender>
+        /// Admission per account, kept across reconnects and pruned once idle.
+        Senders: RateLimit.State
         Options: ChatRoomOptions
         Host: AgentOutbox<SessionHostCommand>
         mutable NextMessageId: uint64
-        mutable NextPrune: int64
     }
 
     let private isControl = function
@@ -94,47 +84,13 @@ module ChatRoomAgent =
         respond state context request.ConnectionId request.ReplyTo
             (ChatRoomEvent.Rejected(request.RequestId, rejection))
 
-    let private refill (options: ChatRoomOptions) now (sender: Sender) =
-        let elapsed = float (now - sender.Updated) / float options.RateRefillMs
-        sender.Tokens <- min (float options.RateBurst) (sender.Tokens + elapsed)
-        sender.Updated <- now
-        while sender.Recent.Count > 0
-              && (let struct (_, sentAt) = sender.Recent.Peek() in now - sentAt >= int64 options.DuplicateWindowMs) do
-            sender.Recent.Dequeue() |> ignore
-
-    // Entries of accounts that became idle are dropped; state stays bounded by
-    // recent senders, not by everyone who ever wrote in this channel.
-    let private prune state now =
-        if now >= state.NextPrune then
-            let idle = max (int64 state.Options.RateBurst * int64 state.Options.RateRefillMs) (int64 state.Options.DuplicateWindowMs)
-            let expired = state.Senders |> Seq.filter (fun entry -> now - entry.Value.Updated >= idle) |> Seq.map _.Key |> Seq.toArray
-            for playerId in expired do state.Senders.Remove playerId |> ignore
-            state.NextPrune <- now + max 1000L idle
-
     /// Rate and repetition are judged per stable account, so reconnecting
     /// does not reset them. Refused attempts consume nothing.
     let private admit state playerId (request: ChatSubmission) =
-        let now = Environment.TickCount64
-        prune state now
-        let sender =
-            match state.Senders.TryGetValue playerId with
-            | true, sender -> sender
-            | false, _ ->
-                let sender = { Tokens = float state.Options.RateBurst; Updated = now; Recent = Queue() }
-                state.Senders[playerId] <- sender
-                sender
-        refill state.Options now sender
-        let repeated =
-            state.Options.DuplicateWindowMs > 0
-            && sender.Recent |> Seq.exists (fun struct (fingerprint, _) -> fingerprint = request.Fingerprint)
-        if repeated then Error "The same message was sent too recently."
-        elif sender.Tokens < 1.0 then Error "Too many messages. Wait a moment."
-        else
-            sender.Tokens <- sender.Tokens - 1.0
-            if state.Options.DuplicateWindowMs > 0 then
-                if sender.Recent.Count >= MaxRecentPerSender then sender.Recent.Dequeue() |> ignore
-                sender.Recent.Enqueue(struct (request.Fingerprint, now))
-            Ok ()
+        match RateLimit.admit state.Senders Environment.TickCount64 playerId request.Fingerprint with
+        | Ok () -> Ok ()
+        | Error RateLimit.Refusal.Repeated -> Error "The same message was sent too recently."
+        | Error RateLimit.Refusal.Exhausted -> Error "Too many messages. Wait a moment."
 
     /// Assigns the next ID and time, stores and relays. The requesting
     /// connection, when there is one, receives the correlated acceptance.
@@ -224,11 +180,10 @@ module ChatRoomAgent =
                     Chat = chat
                     Members = Dictionary()
                     Players = Dictionary()
-                    Senders = Dictionary()
+                    Senders = RateLimit.create { Burst = config.RateBurst; RefillMs = config.RateRefillMs; DuplicateWindowMs = config.DuplicateWindowMs }
                     Options = config
                     Host = AgentOutbox(config.MaxControlDeliveries, host)
                     NextMessageId = 1UL
-                    NextPrune = 0L
                 }
                 let options = {
                     AgentOptions.create $"chat-room-{ChatChannelId.value (ChatChannelKind.channelId kind)}" with

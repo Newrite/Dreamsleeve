@@ -187,6 +187,10 @@ def smoke(args, log, directory: Path):
             "TrustedClient": {"Enabled": False}, "ThirdParty": {"Enabled": True},
             "Scheduled": [{"Text": f"smoke-welcome-{nonce}", "Kind": "Announcement", "DelaySeconds": 0, "IntervalSeconds": 0}],
         },
+        # Two notes per player and four marks per cell make eviction and density observable;
+        # a long death interval makes the second death refusal deterministic.
+        "GroundMarks": {"MaxNotesPerPlayer": 2, "MaxPerIndexCell": 4, "DeathMinIntervalMs": 60000,
+                        "RateBurst": 10, "DuplicateWindowMs": 0},
     }), encoding="utf-8")
 
     def stage(message: str):
@@ -519,6 +523,135 @@ def smoke(args, log, directory: Path):
         message_once(alice, bob, f"smoke-after-announcements-{nonce}", args.timeout)
         stage("the announcement rate limit refused the third one while chat stayed available")
 
+        # Marks on the ground: "mark <id> kind=<1|2> author=<name> x=<x> text=<text>", "mark-removed <id>",
+        # "marks-cleared", "request <n> placed mark <id>[ evicted <id>]", "request <n> removed mark <id>".
+        mark_line = re.compile(r"mark (\d+) kind=(\d) author=(.+?) x=(\S+) character=(.*?) text=(.*)")
+        placed_line = re.compile(r"request \d+ placed mark (\d+)(?: evicted (\d+))?")
+
+        def placed(child: Child, start: int):
+            lines = child.wait_for(lambda lines: any(placed_line.fullmatch(line) for line in lines), args.timeout, start, read=True)
+            match = next(placed_line.fullmatch(line) for line in lines if placed_line.fullmatch(line))
+            return match.group(1), match.group(2)
+
+        def saw_mark(child: Child, mark_id: str, start: int, text=None, kind="1"):
+            def found(lines):
+                for line in lines:
+                    match = mark_line.fullmatch(line)
+                    if match and match.group(1) == mark_id and match.group(2) == kind and (text is None or match.group(6) == text):
+                        return True
+                return False
+            child.wait_for(found, args.timeout, start, read=True)
+
+        # The bounded state queue may replace deltas with a snapshot ("marks N revision=R" and
+        # its mark lines), so absence is also proven by a snapshot that lacks the mark.
+        def snapshot_blocks(lines: list[str]):
+            blocks, current = [], None
+            for line in lines:
+                if line.startswith("marks "):
+                    current = []
+                    blocks.append(current)
+                elif current is not None and line.startswith("session="):
+                    current = None
+                elif current is not None and mark_line.fullmatch(line):
+                    current.append(line)
+            return blocks
+
+        def mark_gone(child: Child, mark_id: str, start: int):
+            def gone(lines):
+                if f"mark-removed {mark_id}" in lines:
+                    return True
+                return any(all(not line.startswith(f"mark {mark_id} ") for line in block) for block in snapshot_blocks(lines))
+            child.wait_for(gone, args.timeout, start, read=True)
+
+        def marks_cleared(child: Child, start: int):
+            child.wait_for(lambda lines: "marks-cleared" in lines or any(line.startswith("marks 0 ") for line in lines),
+                           args.timeout, start, read=True)
+
+        def mark_refused(child: Child, command: str, code: int):
+            start = child.mark()
+            child.send(command)
+            child.wait_for(lambda lines: any(f"rejected ({code})" in line for line in lines), args.timeout, start, read=True)
+
+        alice_start = alice.mark()
+        alice.send("begin Marker")
+        alice.send("move " + json.dumps({"location": sample["location"]}))
+        wait_player(alice, alice_id, lambda state: state.get("location") is not None and state["location"]["position"]["X"] == 42,
+                    args.timeout, alice_start)
+        note1 = f"smoke-note-1-{nonce}"
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("note " + note1)
+        first_id, evicted = placed(alice, alice_start)
+        check(evicted is None, "The first note evicted something")
+        saw_mark(alice, first_id, alice_start, note1)
+        saw_mark(bob, first_id, bob_start, note1)
+        check(any(mark_line.fullmatch(line) and mark_line.fullmatch(line).group(3) == "Smoke Alice"
+                  and mark_line.fullmatch(line).group(5) == "Marker" for line in bob.output(bob_start)),
+              "The observer did not receive the author's profile and character name with the mark")
+        stage("a note is confirmed to its author and appears with the author's name and character for a nearby client")
+
+        bob_start = bob.mark()
+        observer_sample["location"]["position"]["X"] = 20000
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
+        mark_gone(bob, first_id, bob_start)
+        note2 = f"smoke-note-2-{nonce}"
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("note " + note2)
+        second_id, _ = placed(alice, alice_start)
+        saw_mark(alice, second_id, alice_start, note2)
+        settle_reads(bob, args.timeout)
+        check(not any(note2 in line for line in bob.output(bob_start)), "A far observer received a new mark")
+        stage("leaving the radius removes marks and a far observer does not receive new ones")
+
+        bob_start = bob.mark()
+        observer_sample["location"]["position"]["X"] = 0
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
+        saw_mark(bob, first_id, bob_start)
+        saw_mark(bob, second_id, bob_start)
+        bob_start = bob.mark()
+        observer_sample["location"]["location"]["locationId"]["localFormId"] = 292
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
+        marks_cleared(bob, bob_start)
+        bob_start = bob.mark()
+        observer_sample["location"]["location"]["locationId"]["localFormId"] = 291
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
+        saw_mark(bob, first_id, bob_start)
+        saw_mark(bob, second_id, bob_start)
+        stage("another WRLD/CELL clears visible marks and returning restores them as a new baseline")
+
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("death Alduin")
+        death_id, _ = placed(alice, alice_start)
+        saw_mark(alice, death_id, alice_start, "Alduin", kind="2")
+        saw_mark(bob, death_id, bob_start, "Alduin", kind="2")
+        mark_refused(alice, "death again", 10)
+        stage("a death mark carries its label to author and observer; a second death too soon is rate limited")
+
+        note3 = f"smoke-note-3-{nonce}"
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send("note " + note3)
+        third_id, evicted = placed(alice, alice_start)
+        check(evicted == first_id, f"Expected eviction of {first_id}, got {evicted}")
+        mark_gone(bob, first_id, bob_start)
+        saw_mark(bob, third_id, bob_start, note3)
+        stage("the note quota evicts the author's oldest note and reports its id to the author")
+
+        bob_note = f"smoke-bob-note-{nonce}"
+        bob_start, alice_start = bob.mark(), alice.mark()
+        bob.send("note " + bob_note)
+        bob_mark_id, _ = placed(bob, bob_start)
+        saw_mark(alice, bob_mark_id, alice_start, bob_note)
+        mark_refused(bob, f"note smoke-overflow-{nonce}", 12)
+        mark_refused(alice, f"note you forbiddenword {nonce}", 9)
+        stage("a full index cell refuses new marks without evicting others; the word list refuses a note")
+
+        alice_start, bob_start = alice.mark(), bob.mark()
+        alice.send(f"unmark {third_id}")
+        alice.wait_for(lambda lines: any(re.fullmatch(rf"request \d+ removed mark {third_id}", line) for line in lines),
+                       args.timeout, alice_start, read=True)
+        mark_gone(bob, third_id, bob_start)
+        mark_refused(bob, f"unmark {second_id}", 13)
+        stage("only the author removes a mark; observers see the removal")
+
         alice_start, bob_start = alice.mark(), bob.mark()
         alice.send("disconnect")
         alice.phase("Disconnected", args.timeout, alice_start)
@@ -559,6 +692,18 @@ def smoke(args, log, directory: Path):
         check(f"{alice_id}: Smoke Alice" in bob.output(bob_start), "Restart changed Alice's stored identity")
         message_once(alice, bob, f"smoke-persisted-{nonce}", args.timeout)
         stage("server restart retained SQLite identities and fresh login tickets reopen working sessions")
+
+        bob_start = bob.mark()
+        bob.send("begin Observer")
+        bob.send("move " + json.dumps({"location": observer_sample["location"]}))
+        for mark_id in (second_id, death_id, bob_mark_id):
+            saw_mark(bob, mark_id, bob_start, kind="2" if mark_id == death_id else "1")
+        settle_reads(bob, args.timeout)
+        check(not any(f"mark {third_id} " in line for line in bob.output(bob_start)), "A removed mark came back after restart")
+        check(any(mark_line.fullmatch(line) and mark_line.fullmatch(line).group(1) == second_id
+                  and mark_line.fullmatch(line).group(5) == "Marker" for line in bob.output(bob_start)),
+              "The character name of a stored mark was lost across restart")
+        stage("server restart preserved the remaining marks and a reconnected client receives them near its position")
 
         alice_start, bob_start = alice.mark(), bob.mark()
         server.send("quit")

@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 7
+# Прикладной протокол сессии, версия 8
 
 Схемы разделены по назначению:
 
@@ -8,19 +8,20 @@
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
 | [session.proto](session.proto) | OpenSession и начальный SessionOpened |
+| [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
 
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–6 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–7 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 7. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 8. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -76,6 +77,9 @@ plain HTTP допустим только для явно разрешённой 
 | Клиент → сервер | ClientMovementPacket.sample | context_revision, sequence, pose без RequestId |
 | Сервер → клиент | ServerMovementPacket.movements | PlayerMoved: player_id, view_revision, sequence, pose |
 | Сервер → клиент | PlayerUpdateAccepted | ACK команды UpdatePlayer |
+| Клиент → сервер | PlaceGroundNote / ReportDeath / RemoveGroundMark | Надпись или место смерти с положением (FormKey, позиция, курс) либо id своей метки; Control-канал |
+| Сервер → клиент | GroundMarkPlaced / GroundMarkRemoved | Подтверждение с RequestId: метка и id вытесненной / id удалённой |
+| Сервер → клиент | GroundMarksChanged | Reliable-дельта видимых меток: view_revision, added, removed_ids, clear |
 
 RequestId — ненулевой uint64, назначаемый клиентским API до отправки. Клиент должен
 выдавать уникальные ID в течение жизни соединения; пропуски допустимы. Это не
@@ -86,10 +90,10 @@ ChatMessageId, не серверная последовательность и �
 
 В ClientPacket RequestId обязателен. В ServerPacket его наличие различается:
 
-- SessionOpened, PlayerUpdateAccepted и RequestRejected обязательно возвращают ID исходного запроса.
+- SessionOpened, PlayerUpdateAccepted, GroundMarkPlaced, GroundMarkRemoved и RequestRejected обязательно возвращают ID исходного запроса.
 - ChatPublished содержит RequestId только в копии инициатору. Остальные получают
   то же принятое сообщение без RequestId. ID других клиентов не завершает свои запросы.
-- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerVisibilityChanged/PlayerMetadataChanged не содержат RequestId. Явный ноль всегда ошибочен.
+- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerVisibilityChanged/PlayerMetadataChanged/GroundMarksChanged не содержат RequestId. Явный ноль всегда ошибочен.
 
 Realtime-оболочки вообще не имеют RequestId: samples не занимают pending,
 не требуют PlayerUpdateAccepted, retry или коррелированного отказа.
@@ -146,6 +150,35 @@ Added/Removed из модели. Полная история не копируе
   проверяет длины до отправки.
 - Неизвестные значения source/kind клиент принимает без ошибки codec; host показывает
   их с наименьшим доверием.
+
+## Метки на земле
+
+Модель — [DomainSpecRu.MD §4.9](../docs/DomainSpecRu.MD), реализация —
+[GroundMarksRu.md](../docs/GroundMarksRu.md). Всё в [ground.proto](ground.proto) и
+Control-канале ENet.
+
+- `GroundMark{mark_id, author, kind, text, flagged, placement, created_at_unix_ms,
+  character_name}`: `author` — снимок `PlayerProfile` (имя и у офлайн-автора),
+  `character_name` — optional снимок имени персонажа при размещении, `kind` —
+  `GROUND_MARK_KIND_NOTE` (1) / `DEATH` (2), `text` пуст только у смерти, `flagged` — как у
+  сообщения, `placement` — `FormKey` пространства, `Position` и `heading` (угол Z, радианы).
+- `ClientPacket.place_ground_note = 14`, `report_death = 15`, `remove_ground_mark = 16` —
+  команды с RequestId. Ответ — `ServerPacket.ground_mark_placed = 22`
+  (`GroundMark` и `evicted_id`, 0 — ничего не вытеснено), `ground_mark_removed = 23`
+  (`mark_id`) либо `RequestRejected`. Сама метка в модель автора попадает только через
+  дельту, как у остальных.
+- `ServerPacket.ground_marks_changed = 21` — `GroundMarksChanged{view_revision, added,
+  removed_ids, clear}` без RequestId. `view_revision` растёт с каждым сообщением одной
+  сессии; повтор или откат — ошибка протокола на клиенте (дельты reliable и
+  упорядочены). `clear = true` начинает новый baseline (смена пространства, поколения
+  персонажа или потеря позиции); дельта без `clear` и без изменений недопустима.
+- Коды: `GROUND_MARK_AREA_FULL` (12) — ячейка индекса полна; `GROUND_MARK_NOT_FOUND`
+  (13) — нет такой своей метки; `RATE_LIMITED` — частота надписей или смертей;
+  `TEXT_NOT_ALLOWED` — словарь (поле `text`); `INVALID_REQUEST` — длина (`text`) или
+  положение (`placement`). Codec отклоняет нулевой id, неконечные координаты,
+  многострочную подпись смерти и слишком длинный текст (`GroundNoteText.create`,
+  `DeathMarkText.create`, лимиты `ChatInput.GroundNoteText` = 200,
+  `ChatInput.DeathMarkText` = 64).
 
 ## Игровое состояние
 
@@ -353,6 +386,8 @@ ProtocolError. Realtime не порождает коррелированные �
 | 9 | TextNotAllowed | Текст или подпись не прошли серверный словарь |
 | 10 | RateLimited | Слишком часто или повтор; лимиты чата и объявлений раздельные |
 | 11 | AnnouncementNotAllowed | Сервер не принимает объявления заявленного источника |
+| 12 | GroundMarkAreaFull | Ячейка пространственного индекса уже содержит предельное число меток |
+| 13 | GroundMarkNotFound | Нет такой метки этого автора |
 
 F# использует тип, сгенерированный protoc для .NET. Серверный encoder принимает
 только определённые ненулевые коды. C++ использует автоматически сгенерированное
@@ -411,7 +446,7 @@ python Scripts/run_tests.py
 3.33.2. Сгенерированные .pb.h/.pb.cc/.g.cs хранятся в Protocol.Native/Protocol.Dotnet
 и не редактируются вручную. Этот же скрипт извлекает DisconnectReason и
 RequestRejectionCode, ActivityKind и LockDifficulty из вывода protoc в Dreamsleeve.Protocol.Native.ixx и генерирует
-ProtocolContract.cpp со static_assert для всех значений (также AnnouncementSource, AnnouncementKind, ClientAnnouncementSource). Оба файла также generated;
+ProtocolContract.cpp со static_assert для всех значений (также AnnouncementSource, AnnouncementKind, ClientAnnouncementSource, GroundMarkKind). Оба файла также generated;
 ручного списка числовых кодов на стороне клиента нет. Неожиданный формат enum
 в выводе protoc останавливает генерацию с ошибкой.
 Кодеки используются C++ ClientRuntime/Client.Dev и F# ServerRuntime по настоящему ENet.

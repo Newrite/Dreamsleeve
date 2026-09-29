@@ -35,6 +35,10 @@ MessageText = 2000
 AnnouncementText = 500
 # Self-declared label of the mod posting an announcement, 1..128.
 AnnouncementSignature = 64
+# A note written on the ground (Unicode scalar values); the chat text rules apply.
+GroundNoteText = 200
+# Death mark label (killer or cause), one line, 1..128; the client may leave it empty.
+DeathMarkText = 64
 
 [Server.PlayerInput]
 CharacterName = 128
@@ -49,7 +53,8 @@ ActivityKey = 64
 [Runtime]
 MaxSessions = 32
 MailboxCapacity = 256
-ControlReserve = 128
+# At least 4 * MaxSessions + 4: one cleanup acknowledgement per source (chat, system, presence, ground marks) per session.
+ControlReserve = 160
 OpenTimeoutMs = 10000
 ShutdownTimeoutMs = 1500
 PollIntervalMs = 1
@@ -150,3 +155,36 @@ Enabled = true
 # Kind = "Periodic"
 # DelaySeconds = 60
 # IntervalSeconds = 1800
+
+# Marks on the ground: notes players leave and places where characters died.
+# Persistent in SQLite (schema 3); shown to players nearby like poses. Read at
+# startup; a missing section keeps these defaults.
+[GroundMarks]
+MailboxCapacity = 256
+ControlReserve = 64
+MaxControlDeliveries = 128
+# Queued storage writes before the owner treats the database as broken and stops.
+MaxPendingWrites = 256
+# Delivery radius in world units, same space (WRLD/CELL) only. A client cannot
+# draw marks farther than this; by default equal to Runtime.Presence.VisibilityDistance.
+VisibilityDistance = 8192
+# Per account and kind; a new mark beyond the quota evicts the author's oldest of that kind.
+MaxNotesPerPlayer = 5
+MaxDeathMarksPerPlayer = 10
+# Lifetimes in days; 0 keeps the kind forever. Expired marks are removed lazily.
+NoteTtlDays = 30
+DeathMarkTtlDays = 7
+# Marks one spatial index cell (VisibilityDistance on a side) may hold; more is
+# refused with GROUND_MARK_AREA_FULL, nothing of other players is evicted.
+MaxPerIndexCell = 64
+# Notes per stable account: up to RateBurst at once, then one per RateRefillMs;
+# the same normalized text is refused again within DuplicateWindowMs (0 disables).
+RateBurst = 3
+RateRefillMs = 20000
+DuplicateWindowMs = 300000
+# Deaths reported closer together than this are refused with RATE_LIMITED.
+DeathMinIntervalMs = 5000
+# A placement farther than this from the player's last known position is refused; 0 disables.
+MaxPlacementDistance = 2048
+# How often expired marks are collected (milliseconds, at least 1000).
+ExpiryCheckIntervalMs = 60000

@@ -1081,4 +1081,101 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
 }
 
+TEST_CASE("Ground mark commands settle by request ID on the control lane and visible deltas feed the model")
+{
+  Fixture                           fixture;
+  const auto                        generation = Ready(fixture);
+  const Domain::GroundMarkPlacement placement{{"skyrim.esm", 0x1A26F}, {1, 2, 3}, 0.5f};
+  const auto                        noteId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(fixture.exchange->Post({generation, PlaceGroundNote{noteId, "praise", placement}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  CHECK(fixture.requests.back().has_place_ground_note());
+  CHECK(fixture.requests.back().request_id() == noteId);
+  CHECK(fixture.requests.back().place_ground_note().placement().position().z() == 3);
+
+  const auto writeMark = [](P::GroundMark& mark, std::uint64_t id) {
+    mark.set_mark_id(id);
+    mark.mutable_author()->set_player_id(7);
+    mark.mutable_author()->set_username("user");
+    mark.mutable_author()->set_display_name("Player");
+    mark.set_kind(P::GROUND_MARK_KIND_NOTE);
+    mark.set_text("praise");
+    mark.mutable_placement()->mutable_location_id()->set_plugin_name("skyrim.esm");
+    mark.mutable_placement()->mutable_location_id()->set_local_form_id(0x1A26F);
+    mark.set_created_at_unix_ms(123);
+  };
+  // Until evaluates its predicate once more after success, so the drained result is kept.
+  const auto confirmations = [&] {
+    ClientOutput found;
+    fixture.Until([&] {
+      if (!found.groundMarkConfirmations.empty() || !found.rejections.empty()) return true;
+      fixture.exchange->Drain(found);
+      return !found.groundMarkConfirmations.empty() || !found.rejections.empty();
+    });
+    return found;
+  };
+
+  // The confirmation settles the request; the mark reaches the model only through the delta.
+  P::ServerPacket placed;
+  placed.set_protocol_version(Wire::Version);
+  placed.set_request_id(noteId);
+  writeMark(*placed.mutable_ground_mark_placed()->mutable_mark(), 9);
+  placed.mutable_ground_mark_placed()->set_evicted_id(2);
+  fixture.Send(placed);
+  const auto confirmed = confirmations();
+  REQUIRE(confirmed.groundMarkConfirmations.size() == 1);
+  CHECK(confirmed.groundMarkConfirmations[0].requestId == noteId);
+  CHECK(confirmed.groundMarkConfirmations[0].markId == 9);
+  CHECK(confirmed.groundMarkConfirmations[0].evictedId == 2);
+  CHECK(confirmed.groundMarkConfirmations[0].generation == generation);
+  CHECK(confirmed.state.updates.empty());
+
+  P::ServerPacket changed;
+  changed.set_protocol_version(Wire::Version);
+  changed.mutable_ground_marks_changed()->set_view_revision(1);
+  changed.mutable_ground_marks_changed()->set_clear(true);
+  writeMark(*changed.mutable_ground_marks_changed()->add_added(), 9);
+  fixture.Send(changed);
+  const auto visible = fixture.ReceiveOutput();
+  REQUIRE(visible.state.updates.size() == 1);
+  const auto& delta = std::get<ClientStateDelta>(visible.state.updates.front());
+  REQUIRE(delta.groundMarks.size() == 2);
+  CHECK(std::holds_alternative<GroundMarksCleared>(delta.groundMarks[0]));
+  CHECK(std::get<GroundMarksAdded>(delta.groundMarks[1]).marks[0].markId == 9);
+  CHECK(delta.chatContent.empty());
+
+  const auto removeId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(fixture.exchange->Post({generation, RemoveGroundMark{removeId, 9}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+  CHECK(fixture.requests.back().remove_ground_mark().mark_id() == 9);
+  P::ServerPacket removed;
+  removed.set_protocol_version(Wire::Version);
+  removed.set_request_id(removeId);
+  removed.mutable_ground_mark_removed()->set_mark_id(9);
+  fixture.Send(removed);
+  const auto settled = confirmations();
+  REQUIRE(settled.groundMarkConfirmations.size() == 1);
+  CHECK(settled.groundMarkConfirmations[0].removed);
+  CHECK(settled.groundMarkConfirmations[0].markId == 9);
+
+  // A refusal on the control lane settles a death report without a fault.
+  const auto deathId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(fixture.exchange->Post({generation, ReportDeath{deathId, "", placement}}) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 4; });
+  CHECK(fixture.requests.back().has_report_death());
+  auto rejection = Rejection(deathId);
+  rejection.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL);
+  fixture.Send(rejection);
+  const auto refused = confirmations();
+  REQUIRE(refused.rejections.size() == 1);
+  CHECK(refused.rejections[0].rejection.code == RequestRejectionCode::GroundMarkAreaFull);
+  CHECK(fixture.client->Phase() == SessionPhase::Ready);
+  CHECK(fixture.errors.empty());
+
+  // A repeated revision is a protocol fault: deltas are reliable and ordered.
+  fixture.Send(changed);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
+  REQUIRE(fixture.errors.size() == 1);
+}
+
 TEST_SUITE_END();

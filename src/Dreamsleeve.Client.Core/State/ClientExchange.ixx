@@ -26,6 +26,31 @@ export namespace Dreamsleeve::Client
     std::string                      signature;  // Required for ThirdParty.
   };
 
+  // A note where the player stands. Settled like SendChat: a
+  // GroundMarkConfirmation, a ServerRejection or a CommandFailure.
+  struct PlaceGroundNote
+  {
+    std::uint64_t               requestId{};
+    std::string                 text;
+    Domain::GroundMarkPlacement placement;
+  };
+
+  // The place the character died, with the killer's name or a cause; the
+  // label may be empty. The client decides when a death is one.
+  struct ReportDeath
+  {
+    std::uint64_t               requestId{};
+    std::string                 label;
+    Domain::GroundMarkPlacement placement;
+  };
+
+  // Only the author's own mark.
+  struct RemoveGroundMark
+  {
+    std::uint64_t        requestId{};
+    Domain::GroundMarkId markId{};
+  };
+
   // Complete sampled values, not a patch. Only adjacent pending samples from
   // the same session can replace one another; transitions remain ordered.
   struct LocalMovement
@@ -68,6 +93,9 @@ export namespace Dreamsleeve::Client
   using ClientCommand = std::variant<
     SendChat,
     PostAnnouncement,
+    PlaceGroundNote,
+    ReportDeath,
+    RemoveGroundMark,
     LocalMovement,
     LocalLocation,
     LocalActorValues,
@@ -136,6 +164,18 @@ export namespace Dreamsleeve::Client
     Domain::ChatMessageId messageId{};
   };
 
+  // Settles PlaceGroundNote, ReportDeath or RemoveGroundMark. The visible set
+  // itself changes through the ordinary GroundMarksChanged delta.
+  struct GroundMarkConfirmation
+  {
+    std::uint64_t                       generation{};
+    std::uint64_t                       requestId{};
+    Domain::GroundMarkId                markId{};
+    // The author's oldest mark of the same kind that gave way to this one.
+    std::optional<Domain::GroundMarkId> evictedId;
+    bool                                removed{};
+  };
+
   struct ClientStatus
   {
     SessionPhase      phase{SessionPhase::Disconnected};
@@ -194,8 +234,9 @@ export namespace Dreamsleeve::Client
     ClientStatus     status;
     // Not reconstructible from a snapshot. Original generation is retained.
     std::vector<ServerRejectionEvent> rejections;
-    std::vector<CommandFailure>       commandFailures;
-    std::vector<ChatConfirmation>     chatConfirmations;
+    std::vector<CommandFailure>         commandFailures;
+    std::vector<ChatConfirmation>       chatConfirmations;
+    std::vector<GroundMarkConfirmation> groundMarkConfirmations;
   };
 
   // One network owner and one application main thread (also the UI consumer).
@@ -394,7 +435,7 @@ public:
       std::lock_guard lock{mutex};
       // Every taken command may fail locally or produce a server rejection.
       // Existing requests retain their result slots until a reply arrives.
-      const auto free      = maxCommands - pendingFailures.size() - pendingRejections.size() - pendingConfirmations.size();
+      const auto free      = maxCommands - Settled();
       const auto available = pendingReplies >= free ? 0 : free - pendingReplies;
       auto       count     = std::min(commands.size(), available);
       if (count == commands.size())
@@ -413,14 +454,14 @@ public:
     bool CanAcceptReplies(std::size_t count = 1)
     {
       std::lock_guard lock{mutex};
-      return count <= maxCommands - pendingFailures.size() - pendingRejections.size() - pendingConfirmations.size();
+      return count <= maxCommands - Settled();
     }
 
     // Owner only, once per command obtained in the latest TakeCommands batch.
     bool PublishCommandFailure(CommandFailure failure)
     {
       std::lock_guard lock{mutex};
-      if (pendingFailures.size() + pendingRejections.size() + pendingConfirmations.size() >= maxCommands) return false;
+      if (Settled() >= maxCommands) return false;
 
       pendingFailures.push_back(failure);
       return true;
@@ -432,13 +473,15 @@ public:
     // still publish so terminal failure can clear the UI. Only this owner adds
     // results; a concurrent Drain can only free room between check and insertion.
     [[nodiscard]] bool Publish(
-      ClientModel&                    model,
-      bool                            requestSnapshot = false,
-      std::optional<SessionPhase>     nextPhase       = std::nullopt,
-      std::string_view                serverName      = {},
-      std::optional<ChatConfirmation> confirmation    = std::nullopt)
+      ClientModel&                          model,
+      bool                                  requestSnapshot  = false,
+      std::optional<SessionPhase>           nextPhase        = std::nullopt,
+      std::string_view                      serverName       = {},
+      std::optional<ChatConfirmation>       confirmation     = std::nullopt,
+      std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt)
     {
-      const bool                       accepted   = CanAcceptReplies(model.PendingServerRejectionCount() + (confirmation ? 1 : 0));
+      const bool accepted =
+        CanAcceptReplies(model.PendingServerRejectionCount() + (confirmation ? 1 : 0) + (markConfirmation ? 1 : 0));
       auto                             rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
       std::optional<ClientStateUpdate> update;
 
@@ -455,6 +498,7 @@ public:
       if (nextPhase) status.phase = *nextPhase;
       status.serverName = serverName;
       if (accepted && confirmation) pendingConfirmations.push_back(*confirmation);
+      if (accepted && markConfirmation) pendingMarkConfirmations.push_back(*markConfirmation);
       if (update && state->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired) state->Publish(model.Snapshot());
 
       pendingRejections.insert(
@@ -477,12 +521,14 @@ public:
       output.rejections.clear();
       output.commandFailures.clear();
       output.chatConfirmations.clear();
+      output.groundMarkConfirmations.clear();
 
       std::lock_guard lock{mutex};
       state->TakeAll(output.state);
       pendingRejections.swap(output.rejections);
       pendingFailures.swap(output.commandFailures);
       pendingConfirmations.swap(output.chatConfirmations);
+      pendingMarkConfirmations.swap(output.groundMarkConfirmations);
       output.status = status;
     }
 
@@ -513,6 +559,12 @@ private:
 
     ClientExchange(std::size_t capacity, StateUpdateQueue::Ptr queue) : maxCommands{capacity}, state{std::move(queue)} {}
 
+    // Results waiting for Drain; every kind shares the one command budget.
+    std::size_t Settled() const noexcept
+    {
+      return pendingFailures.size() + pendingRejections.size() + pendingConfirmations.size() + pendingMarkConfirmations.size();
+    }
+
     mutable std::mutex                   mutex;
     std::condition_variable              wake;
     const std::size_t                    maxCommands;
@@ -521,6 +573,7 @@ private:
     std::uint64_t                        nextRequestId{1};
     std::vector<CommandFailure>          pendingFailures;
     std::vector<ChatConfirmation>        pendingConfirmations;
+    std::vector<GroundMarkConfirmation>  pendingMarkConfirmations;
     ClientStatus                         status;
     std::optional<AuthenticationRequest> pendingAuthentication;
     bool                                 disconnectRequested{};

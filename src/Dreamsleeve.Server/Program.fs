@@ -93,10 +93,10 @@ let private stopRuntime settings (logger: ILogger) (runtime: Agent<ServerRuntime
         do! runtime.Completion
 }
 
-let private serve settings moderation authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
+let private serve settings moderation marks authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
     let web = AuthenticationHttp.build settings moderation authentication log
     try
-        match ServerRuntime.start settings.Runtime settings.Server moderation settings.Announcements (AuthService.authenticator authentication) transport logger with
+        match ServerRuntime.start settings.Runtime settings.Server moderation settings.Announcements settings.GroundMarks marks (AuthService.authenticator authentication) transport logger with
         | Error errors ->
             logger.LogError("Runtime configuration failed: {Errors}", String.concat " " errors)
             return 1
@@ -143,6 +143,31 @@ let private serve settings moderation authentication transport (logger: ILogger)
         web.DisposeAsync().AsTask().GetAwaiter().GetResult()
 }
 
+// Marks are moderated with the current word list when loaded: a text that the
+// list now refuses stays in storage but is not handed to the owner, so nobody
+// receives it until the list allows it again; flags are recomputed, and every
+// author profile leaves through the same public projection as in chat.
+let private loadGroundMarks settings moderation (logger: ILogger) = task {
+    let! loaded = Task.Run(fun () -> SqliteGroundMarkStore.loadAll settings.Database CancellationToken.None)
+    match loaded with
+    | Error error -> return Error (sprintf "%A" error)
+    | Ok stored ->
+        let blocked, kept =
+            stored.Marks |> List.partition (fun record -> not (Dreamsleeve.Server.Domain.Moderation.allows moderation record.Mark.Text))
+        let records =
+            kept |> List.map (fun record ->
+                { Mark = Dreamsleeve.Server.Domain.GroundMark.withFlagged (Dreamsleeve.Server.Domain.Moderation.flag moderation record.Mark.Text) record.Mark
+                  Author = Dreamsleeve.Server.Domain.Moderation.publicProfile moderation record.Author })
+        if not blocked.IsEmpty then
+            logger.LogWarning("Withholding {Count} stored ground marks that the current word list refuses", blocked.Length)
+        return Ok (records, stored.NextId)
+}
+
+let private stopWriter (writer: Agent<GroundMarkWrite>) = task {
+    writer.Complete() |> ignore
+    do! writer.Completion
+}
+
 let private stopAuthentication (authentication: Agent<AuthMessage>) = task {
     if not authentication.Completion.IsCompleted then
         let! admitted = authentication.PostAsync AuthMessage.Stop
@@ -183,13 +208,25 @@ let private run settings = task {
             | Ok authentication ->
                 let! result = task {
                     try
-                        match EnetTransport.create settings.Server with
-                        | Error error ->
-                            logger.LogError("ENet startup failed: {Failure}", error)
+                        let! loaded = loadGroundMarks settings moderation logger
+                        match loaded, SqliteGroundMarkStore.startWriter settings.Database logger settings.GroundMarks.MaxPendingWrites with
+                        | Error error, _ | _, Error error ->
+                            logger.LogError("Ground mark storage failed: {Failure}", error)
                             return 1
-                        | Ok transport ->
-                            try return! serve settings moderation authentication transport logger log
-                            finally transport.Dispose()
+                        | Ok (records, nextId), Ok writer ->
+                            logger.LogInformation("Ground marks loaded: {Count}, next id {NextId}", records.Length, nextId)
+                            let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref.TryReliable().Value }
+                            try
+                                match EnetTransport.create settings.Server with
+                                | Error error ->
+                                    logger.LogError("ENet startup failed: {Failure}", error)
+                                    return 1
+                                | Ok transport ->
+                                    try return! serve settings moderation marks authentication transport logger log
+                                    finally transport.Dispose()
+                            finally
+                                // The runtime has stopped: queued writes finish before the process exits.
+                                stopWriter writer |> fun work -> work.GetAwaiter().GetResult()
                     with error ->
                         logger.LogError(error, "Server startup failed")
                         return 1

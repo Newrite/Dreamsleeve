@@ -37,6 +37,7 @@ type ApplicationConfig = {
     Logging: LoggingSettings
     Moderation: ModerationSettings
     Announcements: AnnouncementOptions
+    GroundMarks: GroundMarkOptions
 }
 
 [<RequireQualifiedAccess>]
@@ -59,6 +60,7 @@ module Configuration =
         Logging = ServerLogging.defaults
         Moderation = { Enabled = true; RulesPath = "moderation.toml" }
         Announcements = AnnouncementOptions.defaults
+        GroundMarks = GroundMarkOptions.defaults
     }
 
     // Each [[table array]] entry starts from these defaults, like a section does.
@@ -169,8 +171,11 @@ module Configuration =
         if isNull (box config.Server) || isNull (box config.Runtime) || isNull (box config.Database) || isNull (box config.Authentication) || isNull (box config.Logging)
            || isNull (box config.Server.ChatInput) || isNull (box config.Server.PlayerInput) || isNull (box config.Runtime.Player)
            || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
-           || isNull (box config.Authentication.Service) || isNull (box config.Moderation) || isNull (box config.Announcements) then
+           || isNull (box config.Authentication.Service) || isNull (box config.Moderation) || isNull (box config.Announcements)
+           || isNull (box config.GroundMarks) then
             Error "Configuration sections cannot be null."
+        elif not (GroundMarkOptions.validate config.GroundMarks).IsEmpty then
+            Error (String.concat " " (GroundMarkOptions.validate config.GroundMarks))
         elif not (Single.IsFinite config.Runtime.Presence.VisibilityDistance) || config.Runtime.Presence.VisibilityDistance < 0.0f then
             Error "Presence.VisibilityDistance must be finite and non-negative."
         elif config.Runtime.MaxSessions > config.Server.PeerLimit then

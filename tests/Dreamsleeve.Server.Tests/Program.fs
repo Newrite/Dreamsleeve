@@ -6,6 +6,7 @@ open Expecto
 let main argv =
     testList "Tests" [
         DomainTests.tests
+        GroundMarkDomainTests.tests
         ModerationTests.tests
         PlayerDetailsTests.tests
         AgentTests.tests
@@ -27,6 +28,7 @@ let main argv =
         TransportOwnerTests.tests
         ConfigurationTests.tests
         AnnouncementTests.tests
+        GroundMarkTests.tests
         AuthenticationHttpTests.tests
     ]
     |> runTestsWithCLIArgs [] argv

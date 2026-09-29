@@ -42,6 +42,12 @@ module DomainUMX =
     type pluginName
     [<Measure>]
     type localFormId
+    [<Measure>]
+    type groundMarkId
+    [<Measure>]
+    type groundNoteText
+    [<Measure>]
+    type deathMarkText
 
 type PluginName = string<pluginName>
 type LocalFormId = uint32<localFormId>
@@ -60,6 +66,12 @@ type ChatMessageText = string<chatMessageText>
 type ChatChannelId = uint64<chatChannelId>
 type ChatChannelName = string<chatChannelName>
 type AnnouncementSignature = string<announcementSignature>
+/// Server-issued, monotonic, never zero; survives restarts through storage.
+type GroundMarkId = uint64<groundMarkId>
+/// A note a player wrote on the ground; the chat text pipeline applies.
+type GroundNoteText = string<groundNoteText>
+/// The killer's name or one word of cause, as the author's client saw it.
+type DeathMarkText = string<deathMarkText>
 
 [<RequireQualifiedAccess>]
 type TextError =
@@ -82,6 +94,7 @@ type DomainError =
     | ChannelMismatch
     | NotChatMember of PlayerId
     | MessageOutOfOrder of lastAccepted: ChatMessageId * received: ChatMessageId
+    | DuplicateGroundMark of GroundMarkId
 
 module internal PrimitiveValidation =
     let invalidControl multiline (rune: Rune) =
@@ -361,3 +374,29 @@ module AnnouncementSignature =
     let create maxLength raw : Result<AnnouncementSignature, DomainError> =
         PrimitiveValidation.text "AnnouncementSignature" maxLength id false PrimitiveValidation.unrestricted raw
         |> Result.map UMX.tag
+
+[<RequireQualifiedAccess>]
+module GroundMarkId =
+    let value (id: GroundMarkId) : uint64 = UMX.untag id
+
+    let create raw : Result<GroundMarkId, DomainError> =
+        PrimitiveValidation.identifier "GroundMarkId" raw |> Result.map UMX.tag
+
+[<RequireQualifiedAccess>]
+module GroundNoteText =
+    let value (text: GroundNoteText) : string = UMX.untag text
+
+    /// Same rules as chat text: original text kept, line breaks and tabs
+    /// allowed, other controls and blank text refused.
+    let create maxLength raw : Result<GroundNoteText, DomainError> =
+        PrimitiveValidation.text "GroundNoteText" maxLength id true PrimitiveValidation.unrestricted raw
+        |> Result.map UMX.tag
+
+[<RequireQualifiedAccess>]
+module DeathMarkText =
+    let value (text: DeathMarkText) : string = UMX.untag text
+
+    /// Untrusted client text under mod control: one line without control
+    /// characters, kept as sent. Empty is allowed: a death without a killer.
+    let create maxLength raw : Result<DeathMarkText, DomainError> =
+        PrimitiveValidation.label "DeathMarkText" maxLength raw |> Result.map UMX.tag

@@ -34,6 +34,23 @@ export namespace Dreamsleeve::Client
 
   using ChatContentChange = std::variant<ChatMessagesRemoved, ChatMessagesAdded>;
 
+  // Exact transitions of the visible ground marks, in order: a clear starts a
+  // new baseline, removals and additions follow.
+  struct GroundMarksCleared final
+  {};
+
+  struct GroundMarksRemoved final
+  {
+    std::vector<Domain::GroundMarkId> markIds{};
+  };
+
+  struct GroundMarksAdded final
+  {
+    std::vector<Domain::GroundMark> marks{};
+  };
+
+  using GroundMarkChange = std::variant<GroundMarksCleared, GroundMarksRemoved, GroundMarksAdded>;
+
   // Owner-local changes. Player IDs and chat metadata IDs are invalidations: resolve
   // their current value on the model owner before crossing threads. Chat content
   // is different: it is already an owning ordered delta and must be forwarded in
@@ -68,11 +85,13 @@ export namespace Dreamsleeve::Client
     // applying them in sequence reproduces the native chat cache contents.
     std::vector<ChatContentChange>   chatContent;
     std::vector<MovementObservation> movement;
+    // Ordered like chatContent: applying them in sequence reproduces the visible marks.
+    std::vector<GroundMarkChange> groundMarks;
 
     bool Empty() const noexcept
     {
       return !requiresSnapshot && !selfPlayerChanged && !playersReplaced && players.empty() && chats.empty() && resetChats.empty() &&
-             chatContent.empty() && movement.empty();
+             chatContent.empty() && movement.empty() && groundMarks.empty();
     }
 
     // Keep allocated top-level storage for the next owner iteration. Nested
@@ -89,6 +108,7 @@ export namespace Dreamsleeve::Client
       resetChats.clear();
       chatContent.clear();
       movement.clear();
+      groundMarks.clear();
     }
   };
 

@@ -232,4 +232,37 @@ export namespace Domain
     bool operator==(const ChatMessage&) const = default;
   };
 
+  using GroundMarkId   = std::uint64_t;
+  using GroundMarkKind = ::Protocol::Chat::GroundMarkKind;
+
+  // Where a mark stands: the space, the point and the author's heading (Z
+  // angle, radians) so the visual can face the way the author looked.
+  struct GroundMarkPlacement
+  {
+    LocationId locationId{};
+    Position   position{};
+    Radian     heading{};
+
+    bool operator==(const GroundMarkPlacement&) const = default;
+  };
+
+  // Persistent server data shown near the player: a note a player left or the
+  // place a character died. Not a chat message: never in history or bubbles.
+  struct GroundMark final
+  {
+    GroundMarkId   markId{};
+    // Author profile at the time of sending; the mark itself stores only the ID.
+    PlayerData     author{};
+    GroundMarkKind kind{GroundMarkKind::Note};
+    // Note text, or the death label: the killer's name or one word of cause, possibly empty.
+    std::string           text{};
+    std::vector<TextSpan> flagged{};
+    GroundMarkPlacement   placement{};
+    MessageTime           createdAt{};
+    // Published character name at placement; absent outside a character or when withheld.
+    std::optional<CharacterName> characterName{};
+
+    bool operator==(const GroundMark&) const = default;
+  };
+
 }

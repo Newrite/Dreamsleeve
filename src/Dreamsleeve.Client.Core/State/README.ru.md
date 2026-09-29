@@ -194,7 +194,7 @@ Post возвращает Queued, Replaced, Full или Closed. Queued не оз
 Игровые объекты и указатели на них не передаются: адаптер снимает значения и
 преобразует их в доменные типы, кодирование/отправка выполняются сетевым владельцем.
 
-Команды: SendChat, PostAnnouncement, LocalMovement, LocalLocation, LocalActorValues, CharacterStarted,
+Команды: SendChat, PostAnnouncement, PlaceGroundNote, ReportDeath, RemoveGroundMark, LocalMovement, LocalLocation, LocalActorValues, CharacterStarted,
 CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot.
 
 PostAnnouncement (системный канал, текст, вид, заявленный источник, подпись) идёт по
@@ -251,6 +251,27 @@ TakeCommands возвращает false, когда закрытая входн�
 exchange нельзя. Измерения движения со временем приёма добавлены в ClientStateDelta.movement;
 MovementView хранит их историю со сбросами на границах сессии/персонажа/
 пространства. Схлопнутые изменения последнего состояния для этой истории не годятся.
+
+## Метки на земле
+
+`PlaceGroundNote{requestId, text, placement}`, `ReportDeath{requestId, label, placement}` и
+`RemoveGroundMark{requestId, markId}` идут по пути SendChat, но по Control-каналу ENet и с
+собственным набором ожидающих запросов в ClientRuntime (бюджет `maxPendingChatRequests`).
+Локально проверяются только форма (непустая надпись, корректный UTF-8, подпись без
+управляющих, конечное положение, ненулевой id); положение, слова, квоты и частоту судит
+сервер. Результат — `GroundMarkConfirmation` (`ClientOutput.groundMarkConfirmations`:
+id метки, id вытесненной, признак удаления), `ServerRejection` или `CommandFailure`; все
+делят один ограниченный бюджет результатов.
+
+Видимые метки живут в `GroundMarkStore` модели (`ClientSnapshot.groundMarks` с
+`viewRevision`). Обновление `GroundMarksChanged{viewRevision, added, removedIds, clear}`
+применяется только с растущим `viewRevision`, иначе `InvalidCursor` — дельты reliable и
+упорядочены, повтор означает ошибку протокола. `ChangeBatch.groundMarks` и
+`ClientStateDelta.groundMarks` несут упорядоченные переходы `GroundMarksCleared` /
+`GroundMarksRemoved` / `GroundMarksAdded`; `clear` отбрасывает ещё не вычитанные
+переходы, получатель начинает заново. `ClearOnlineState`/`ResetSession` очищают
+хранилище. Собственная метка попадает в модель той же дельтой, что у других; метки не
+попадают в `ChatCache`, `freshMessages` и облачка.
 
 ## Проверка в Client.Dev
 

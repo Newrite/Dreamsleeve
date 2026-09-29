@@ -14,7 +14,7 @@ type SqliteAccountStoreConfig = {
 [<RequireQualifiedAccess>]
 module internal SqliteDatabase =
     [<Literal>]
-    let SchemaVersion = 2L
+    let SchemaVersion = 3L
 
     [<Literal>]
     let ApplicationId = 1146309718L
@@ -54,6 +54,9 @@ module internal SqliteDatabase =
             reader.Close()
             command.CommandText <- "SELECT t.token_hash, t.account_id, t.kind, t.expires_at, i.provider, i.subject, i.account_id FROM auth_tokens t LEFT JOIN account_identities i ON i.account_id=t.account_id LIMIT 0"
             use credentials = command.ExecuteReader()
+            credentials.Close()
+            command.CommandText <- "SELECT m.id, m.author_id, m.kind, m.text, m.plugin_name, m.local_form_id, m.x, m.y, m.z, m.heading, m.created_at FROM ground_marks m JOIN profiles p ON p.player_id = m.author_id LIMIT 0"
+            use marks = command.ExecuteReader()
             Ok ()
 
     /// Called before listeners start. SQLite and Migrondi execute synchronously;

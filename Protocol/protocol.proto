@@ -5,8 +5,9 @@ package Dreamsleeve.Protocol.Chat;
 import "chat.proto";
 import "session.proto";
 import "player.proto";
+import "ground.proto";
 
-// Control/chat envelope. Version 7 opens a session with a list of channels; version 6
+// Control/chat envelope. Version 8 adds marks on the ground; version 7 opens a session with a list of channels; version 6
 // separated repeated realtime poses from reliable commands. Opens sessions
 // with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
 // requires reconnecting. Transport Connected alone is not application readiness.
@@ -18,6 +19,9 @@ message ClientPacket {
     SendChat send_chat = 11;
     UpdatePlayer update_player = 12;
     PostAnnouncement post_announcement = 13; // Chat lane, like SendChat.
+    PlaceGroundNote place_ground_note = 14; // Control lane.
+    ReportDeath report_death = 15; // Control lane.
+    RemoveGroundMark remove_ground_mark = 16; // Control lane.
   }
 }
 
@@ -39,6 +43,9 @@ message ServerPacket {
     PlayerUpdateAccepted player_update_accepted = 16;
     PlayerVisibilityChanged player_visibility_changed = 20;
     PlayerMetadataChanged player_metadata_changed = 18;
+    GroundMarksChanged ground_marks_changed = 21; // Control lane, no request_id.
+    GroundMarkPlaced ground_mark_placed = 22; // Control lane, request_id required.
+    GroundMarkRemoved ground_mark_removed = 23; // Control lane, request_id required.
   }
 }
 
@@ -60,6 +67,8 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_TEXT_NOT_ALLOWED = 9; // Text matched the server word list.
   REQUEST_REJECTION_CODE_RATE_LIMITED = 10; // Too frequent or repeated; retry later.
   REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED = 11; // The server does not accept this announcement source.
+  REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL = 12; // The spatial cell already holds the configured number of marks.
+  REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND = 13; // No such mark of this author.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.
