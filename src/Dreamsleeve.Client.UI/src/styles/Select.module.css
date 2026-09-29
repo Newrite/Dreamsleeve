@@ -1,0 +1,85 @@
+.select {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+.select > button[role="combobox"] {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: rgb(var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.select > button[role="combobox"]:hover,
+.select > button[role="combobox"][aria-expanded="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.select > button[role="combobox"]:disabled {
+  color: var(--muted);
+  border-color: var(--border);
+  cursor: default;
+}
+.value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chevron {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+/* Composer variant: no box of its own, the picker cell around it draws one. */
+.plain > button[role="combobox"] {
+  width: 100%;
+  padding: 5px 10px;
+  background: transparent;
+  border: 0;
+  font-size: 0.85em;
+}
+.plain > button[role="combobox"]:hover,
+.plain > button[role="combobox"][aria-expanded="true"] {
+  color: var(--accent);
+}
+.list {
+  position: fixed;
+  z-index: 60;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  width: max-content;
+  max-width: min(360px, 100vw - 16px);
+  max-height: 260px;
+  overflow-y: auto;
+  color: var(--ink);
+  background: rgba(var(--surface), 0.98);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+}
+.list li {
+  padding: 6px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.list li[aria-selected="true"] {
+  color: var(--accent);
+}
+.list li[data-active] {
+  background: #ffffff18;
+  color: var(--accent);
+}

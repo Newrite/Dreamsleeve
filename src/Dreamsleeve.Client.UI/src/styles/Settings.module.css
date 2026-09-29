@@ -12,6 +12,13 @@
 .settings input {
   accent-color: var(--accent);
 }
+/* Rows with a drop-down: a long caption pushes the control onto its own line. */
+.settings .choice {
+  flex-wrap: wrap;
+}
+.choice > div {
+  flex: 1 1 12em;
+}
 .settings .range {
   display: block;
 }

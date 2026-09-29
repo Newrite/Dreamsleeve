@@ -8,6 +8,7 @@ import { useFrame } from "../features/useFrame";
 import { Messages } from "../views/Messages";
 import { Panels } from "../views/Panels";
 import { AuthorMenu } from "../views/AuthorMenu";
+import { Select } from "../views/Select";
 import styles from "../styles/Chat.module.css";
 export function SkyrimLayout({ chat }: { chat: Chat }) {
   const { state: s, input } = useChat(chat);
@@ -15,6 +16,7 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
   const settings = s.settings;
   const bounds = frame(settings, viewport.width, viewport.height);
   const faded = s.faded && settings.fade && !s.active && s.connected;
+  const writable = s.channels.filter((c) => c.writable);
   const style = {
     ...bounds,
     "--chat-font-size": `${settings.fontSize * settings.scale}px`,
@@ -115,24 +117,17 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
           <>
             <form className={styles.composer} onSubmit={submit}>
               <div className={styles.channelPicker}>
-                <select
-                  aria-label="Канал отправки"
+                <Select
+                  label="Канал отправки"
+                  variant="plain"
                   value={s.target}
-                  onChange={(e) =>
-                    chat.store.setState({ target: e.target.value })
+                  options={
+                    writable.length
+                      ? writable.map((c) => ({ value: c.id, label: c.name }))
+                      : [{ value: "", label: "Нет каналов" }]
                   }
-                >
-                  {!s.channels.some((c) => c.writable) && (
-                    <option value="">Нет каналов</option>
-                  )}
-                  {s.channels
-                    .filter((c) => c.writable)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
+                  onChange={(target) => chat.store.setState({ target })}
+                />
               </div>
               <input
                 ref={input}

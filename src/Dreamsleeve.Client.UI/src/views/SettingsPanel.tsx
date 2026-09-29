@@ -1,6 +1,7 @@
 import type { Chat } from "../state/chat";
 import type { Settings } from "../bridge/types";
 import { defaults } from "../state/settings";
+import { Select } from "./Select";
 import styles from "../styles/Settings.module.css";
 const ranges = [
   ["delay", "Тишина до затухания, с", 0, 60, 1],
@@ -60,43 +61,41 @@ export function SettingsPanel({
           />
         </label>
       ))}
-      <label>
+      <label className={styles.choice}>
         Шрифт
-        <select
+        <Select
+          label="Шрифт"
           value={s.font}
-          onChange={(e) =>
-            chat.configure({ font: e.target.value as Settings["font"] })
-          }
-        >
-          <option value="serif">Книжный</option>
-          <option value="sans">Без засечек</option>
-        </select>
+          options={[
+            { value: "serif", label: "Книжный" },
+            { value: "sans", label: "Без засечек" },
+          ]}
+          onChange={(font) => chat.configure({ font })}
+        />
       </label>
-      <label>
+      <label className={styles.choice}>
         Тема
-        <select
+        <Select
+          label="Тема"
           value={s.theme}
-          onChange={(e) =>
-            chat.configure({ theme: e.target.value as Settings["theme"] })
-          }
-        >
-          <option value="skyrim">Skyrim</option>
-          <option value="contrast">Контрастная</option>
-        </select>
+          options={[
+            { value: "skyrim", label: "Skyrim" },
+            { value: "contrast", label: "Контрастная" },
+          ]}
+          onChange={(theme) => chat.configure({ theme })}
+        />
       </label>
-      <label>
+      <label className={styles.choice}>
         Открыть чат
-        <select
+        <Select
+          label="Открыть чат"
           value={s.activationKey}
-          onChange={(e) =>
-            chat.configure({
-              activationKey: e.target.value as Settings["activationKey"],
-            })
-          }
-        >
-          <option>Enter</option>
-          <option>F2</option>
-        </select>
+          options={[
+            { value: "Enter", label: "Enter" },
+            { value: "F2", label: "F2" },
+          ]}
+          onChange={(activationKey) => chat.configure({ activationKey })}
+        />
       </label>
       <p className={styles.muted}>
         Открепите окно, чтобы перемещать его за заголовок и изменять размер за
@@ -117,22 +116,19 @@ export function SettingsPanel({
       </button>
       <fieldset className={styles.group}>
         <legend>Отображение имён</legend>
-        <label>
+        <label className={styles.choice}>
           Показывать
-          <select
-            aria-label="Отображаемое имя"
+          <Select
+            label="Отображаемое имя"
             value={s.nameMode}
             disabled={s.streamerMode}
-            onChange={(e) =>
-              chat.configure({
-                nameMode: e.target.value as Settings["nameMode"],
-              })
-            }
-          >
-            <option value="username">Имя пользователя</option>
-            <option value="display">Отображаемое имя</option>
-            <option value="character">Имя персонажа</option>
-          </select>
+            options={[
+              { value: "username", label: "Имя пользователя" },
+              { value: "display", label: "Отображаемое имя" },
+              { value: "character", label: "Имя персонажа" },
+            ]}
+            onChange={(nameMode) => chat.configure({ nameMode })}
+          />
         </label>
         <label>
           <span>Режим стримера</span>
@@ -153,21 +149,18 @@ export function SettingsPanel({
       </fieldset>
       <fieldset className={styles.group}>
         <legend>Помеченные сообщения</legend>
-        <label>
+        <label className={styles.choice}>
           Слова, помеченные сервером
-          <select
-            aria-label="Помеченные сообщения"
+          <Select
+            label="Помеченные сообщения"
             value={s.textFilter}
-            onChange={(e) =>
-              chat.configure({
-                textFilter: e.target.value as Settings["textFilter"],
-              })
-            }
-          >
-            <option value="off">Показывать как есть</option>
-            <option value="mask">Заменять звёздочками</option>
-            <option value="hide">Скрывать сообщение целиком</option>
-          </select>
+            options={[
+              { value: "off", label: "Показывать как есть" },
+              { value: "mask", label: "Заменять звёздочками" },
+              { value: "hide", label: "Скрывать сообщение целиком" },
+            ]}
+            onChange={(textFilter) => chat.configure({ textFilter })}
+          />
         </label>
         <p className={styles.muted}>
           Сервер отмечает, но не запрещает слова из своего списка (например,

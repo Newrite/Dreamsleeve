@@ -22,12 +22,22 @@ test("publication, announcements, settings, and saved configuration", async ({
     "Проверка публикации",
   );
   await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("combobox", { name: "Канал отправки" }).click();
   await expect(
-    page.getByLabel("Канал отправки").locator("option"),
-  ).not.toContainText(["Объявления"]);
+    page.getByRole("listbox", { name: "Канал отправки" }),
+  ).not.toContainText("Объявления");
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("Чат Dreamsleeve")).toHaveAttribute(
+    "data-active",
+    "true",
+  );
   await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByLabel("Отображаемое имя").selectOption("username");
+  await page.getByRole("combobox", { name: "Отображаемое имя" }).click();
+  await page.getByRole("option", { name: "Имя пользователя" }).click();
+  await expect(
+    page.getByRole("combobox", { name: "Отображаемое имя" }),
+  ).toHaveAttribute("data-value", "username");
   await page.getByRole("button", { name: "Сохранить настройки" }).click();
   await page.getByRole("button", { name: "Закрыть панель" }).click();
   await expect(page.locator('[data-part="messages"]')).toContainText(
@@ -661,11 +671,12 @@ test("channel selector uses the active theme instead of native appearance", asyn
     );
     await page.reload();
     await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
-    const select = page.getByLabel("Канал отправки");
-    await expect(select).toHaveCSS("appearance", "none");
+    const select = page.getByRole("combobox", { name: "Канал отправки" });
     await expect(select).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await select.selectOption({ label: "Общий" });
-    await expect(select).toHaveValue("1");
+    await select.click();
+    await page.getByRole("option", { name: "Общий" }).click();
+    await expect(select).toHaveAttribute("data-value", "1");
+    await expect(select).toHaveText("Общий");
     await page.screenshot({ path: `test-results/channel-${theme}.png` });
   }
 });
@@ -864,11 +875,17 @@ test("server-flagged words are shown, masked or hidden by the local filter", asy
   await expect(history).toContainText("t.me/freeskins");
   await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByLabel("Помеченные сообщения").selectOption("mask");
+  const filter = page.getByRole("combobox", { name: "Помеченные сообщения" });
+  await filter.click();
+  await page.getByRole("option", { name: "Заменять звёздочками" }).click();
   await expect(history).toContainText("Раздаю скины: **************");
   await expect(history).not.toContainText("t.me/freeskins");
-  await page.getByLabel("Помеченные сообщения").selectOption("hide");
+  await filter.click();
+  await page
+    .getByRole("option", { name: "Скрывать сообщение целиком" })
+    .click();
   await expect(history).not.toContainText("Раздаю скины");
-  await page.getByLabel("Помеченные сообщения").selectOption("off");
+  await filter.click();
+  await page.getByRole("option", { name: "Показывать как есть" }).click();
   await expect(history).toContainText("t.me/freeskins");
 });

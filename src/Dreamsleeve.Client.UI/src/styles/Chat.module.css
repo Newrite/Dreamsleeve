@@ -140,7 +140,6 @@
   border: 1px solid var(--border);
   min-height: 36px;
 }
-.window select,
 .window input:not([type="checkbox"]):not([type="range"]) {
   color: var(--ink);
   background: #0c1214;
@@ -156,35 +155,9 @@
   border-right: 1px solid var(--border);
   background: rgb(var(--surface));
 }
-.channelPicker::after {
-  content: "";
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  border-right: 1px solid var(--accent);
-  border-bottom: 1px solid var(--accent);
-  transform: translateY(-75%) rotate(45deg);
-  pointer-events: none;
-}
-.window .composer select {
-  -webkit-appearance: none;
-  appearance: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  padding: 5px 28px 5px 10px;
-  width: 100%;
-  cursor: pointer;
-  font-size: 0.85em;
-}
-.composer select option {
-  background: rgb(var(--surface));
-  color: var(--ink);
-}
-.channelPicker:hover select {
-  color: var(--accent);
+.channelPicker > div {
+  flex: 1;
+  min-width: 0;
 }
 .composer input {
   flex: 1;

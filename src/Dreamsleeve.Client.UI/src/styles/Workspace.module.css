@@ -29,8 +29,7 @@
 .workspace button:hover {
   background: #ffffff12;
 }
-.workspace input,
-.workspace select {
+.workspace input {
   background: #1e2226;
   color: var(--ink);
   border: 1px solid #565d64;

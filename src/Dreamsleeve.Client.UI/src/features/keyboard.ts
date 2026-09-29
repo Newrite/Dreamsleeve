@@ -4,8 +4,23 @@ export function controlKey(
 ) {
   if (event.key && event.key !== "Unidentified") return event.key;
   if (event.code === "NumpadEnter") return "Enter";
-  if (["Enter", "Escape", "Tab"].includes(event.code)) return event.code;
-  return ({ 13: "Enter", 27: "Escape", 9: "Tab" } as Record<number, string>)[
-    event.keyCode
-  ];
+  if (event.code === "Space") return " ";
+  if (
+    ["Enter", "Escape", "Tab", "ArrowUp", "ArrowDown", "Home", "End"].includes(
+      event.code,
+    )
+  )
+    return event.code;
+  return (
+    {
+      9: "Tab",
+      13: "Enter",
+      27: "Escape",
+      32: " ",
+      35: "End",
+      36: "Home",
+      38: "ArrowUp",
+      40: "ArrowDown",
+    } as Record<number, string>
+  )[event.keyCode];
 }
