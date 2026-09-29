@@ -9,6 +9,7 @@ import Dreamsleeve.Runtime;
 import Dreamsleeve.PrismaUI;
 import Dreamsleeve.Game.Telemetry;
 import Dreamsleeve.Game.Fireflies;
+import Dreamsleeve.Game.GroundMarks;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
 import Dreamsleeve.Host.Bridge;
@@ -64,6 +65,8 @@ namespace Logic
       logger::info("Character context ended");
     }
     Fireflies::ClearAll();
+    GroundMarks::EndContext();
+    Nameplates::Publish({});
     Nameplates::Release();
     runtime.context = next;
   }
@@ -94,6 +97,8 @@ namespace Logic
         break;
       case Runtime::NoticeKind::PlayerDeath:
         Telemetry::NoteDeath();
+        // The killer handle is resolved here, in the frame; the sink only copied it.
+        GroundMarks::NoteDeath(notice.handle, notice.flag);
         break;
       case Runtime::NoticeKind::PlayerActivated:
         Telemetry::NoteActivated(notice.formId);
@@ -225,6 +230,18 @@ namespace Logic
         runtime.bubbles.Post(message.author->playerId, message.messageText, now);
   }
 
+  // Fireflies and ground marks share one HUD frame: labels of both go into it
+  // and a pause or hidden HUD drops them together.
+  void PublishNameplates(Clock::time_point now)
+  {
+    Nameplates::Frame names;
+    Fireflies::Tick(now, names);
+    GroundMarks::Tick(now, names);
+    auto* menus = RE::UI::GetSingleton();
+    if (!menus || menus->GameIsPaused() || !menus->menuSystemVisible) names.labels.clear();
+    Nameplates::Publish(std::move(names));
+  }
+
   void PublishMenuSnapshot()
   {
     auto&                 runtime = Runtime::Get();
@@ -237,6 +254,7 @@ namespace Logic
     snapshot.activationKey  = runtime.ui.ui.chat.activationKey;
     snapshot.online         = runtime.session.OnlinePlayers().size();
     snapshot.fireflies      = Fireflies::Count();
+    snapshot.groundMarks    = GroundMarks::Count();
     snapshot.savedLogin     = status.savedLogin;
     snapshot.authenticating = status.authenticating;
     snapshot.hideUi         = runtime.ui.ui.hideUi;
@@ -263,7 +281,7 @@ namespace Logic
     SessionPolicy(now);
     ProbeContext(now);
     Telemetry::Tick(now);
-    Fireflies::Tick(now);
+    PublishNameplates(now);
     PrismaUI::OnFrame(now);
     PublishMenuSnapshot();
   }

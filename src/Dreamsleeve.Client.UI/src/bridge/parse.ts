@@ -89,6 +89,17 @@ function player(v: unknown): boolean {
     (v.actorValues === undefined || list(v.actorValues, actorValue, 64))
   );
 }
+function groundMark(v: unknown): boolean {
+  return (
+    object(v) &&
+    id(v.id) &&
+    ["note", "death"].includes(String(v.kind)) &&
+    text(v.text) &&
+    v.text.length <= 16000 &&
+    finite(v.time) &&
+    Math.abs(v.time as number) <= 8640000000000000
+  );
+}
 function channel(v: unknown): boolean {
   return (
     object(v) &&
@@ -136,7 +147,22 @@ export function parseHostEvent(source: string): HostEvent {
         text(v.serverName) &&
         v.serverName.length <= 512 &&
         (v.settings === undefined || object(v.settings)) &&
-        (v.refresh === undefined || typeof v.refresh === "boolean");
+        (v.refresh === undefined || typeof v.refresh === "boolean") &&
+        (v.groundMarksSupported === undefined ||
+          typeof v.groundMarksSupported === "boolean") &&
+        (v.groundMarks === undefined || list(v.groundMarks, groundMark, 256));
+      break;
+    case "groundMarks":
+      valid = list(v.marks, groundMark, 256);
+      break;
+    case "markResult":
+      valid =
+        id(v.requestId) &&
+        (v.markId === undefined || id(v.markId)) &&
+        (v.evictedId === undefined || id(v.evictedId)) &&
+        (v.removed === undefined || typeof v.removed === "boolean") &&
+        (v.error === undefined || label(v.error)) &&
+        (v.error === undefined) !== (v.markId === undefined && !v.removed);
       break;
     case "ignored":
       valid = list(

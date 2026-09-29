@@ -640,3 +640,38 @@ v7), сервер и ядро клиента для надписей (`Note`) и
 удаление своей и отказ чужой, сохранение после перезапуска сервера). DLL (SE/AE/VR) и
 Client.Dev собираются, `package_dist.py --skip-build` пересобирает dist. В Skyrim не
 проверялось ничего: отображения меток ещё нет.
+
+## Метки на земле, часть 2 (29.09.2026)
+
+SKSE-плагин и веб-UI меток ([SkseClientRu.md](SkseClientRu.md#метки-на-земле)); домен,
+протокол и сервер части 1 не менялись.
+
+- Стиль облачков перенесён в настройки: `BubbleStyle` получил рамку и цвет текста,
+  константы `Nameplates` стали ключами `bubbleBorder`, `bubbleTextColor`, `fireflyNameColor`
+  (`#RRGGBB`); стиль и цвет имени — свойства записи `Label`, ключ записи `LabelKey {kind, id}`.
+- Общий модуль `Game/PlacedReferences.ixx` (временные placed reference, `Set<Key>` по
+  `ObjectRefHandle`, резолв в кадре) и `Game/Raycast.ixx` (видимость и пол); светлячки на нём
+  без изменения поведения, высота — `fireflyHeightOffset` в `[ui.chat]`.
+- Смерть: sink копирует `dead` и handle убийцы, кадр (`GroundMarks::NoteDeath`) один раз на
+  смерть отправляет `ReportDeath` с подписью убийцы или «утопление»/«падение» (до 64 скаляров);
+  повтор после `IsDead() == false`.
+- Отрисовка: `Game/GroundMarks.ixx` — ближайшие `maxVisibleNotes`/`maxVisibleDeaths` из
+  `Host::Session::VisibleMarks()` в пределах `groundDrawDistance`, статики
+  `FXGlowFlatRndBrt`/`FXGlowFlatRndDim` (Skyrim.esm, без коллизии; формы и масштаб в
+  `client.toml`) со снапом на пол одним лучом, поворот по курсу метки; имя и текст через
+  `Nameplates` с дальностями `groundNameDistance`/`groundTextDistance` и гистерезисом 10 %,
+  тот же `textFilter` (`Bridge::FilterText` общий для чата, облачков и меток), метки
+  игнорируемых не рисуются, у смерти текст и имя красные; `combatHideGroundMarks`,
+  `combatHideGroundText`, `showGroundNotes`, `showDeathMarks`. Пауза/меню и VR — как у имён.
+- Веб-UI: «Оставить здесь» (`placeGroundNote`, строка ожидания с «Не оставлено: …»,
+  `GROUND_MARK_AREA_FULL` → «Здесь уже слишком много меток»), панель «Метки» (`groundMarks`,
+  `removeGroundMark`, `markResult`), блоки настроек «Метки на земле» и дополненные «Сообщения
+  над игроками»/«Имена над светлячками»/«В бою»; `Host::Session` ведёт видимые и свои метки и
+  коррелирует запросы; демо-метки только в `src/dev`.
+
+Проверки: 274 native (doctest; новые: `ui.toml` с цветами и границами, проекция видимых и
+своих меток, корреляция надписи/удаления/смерти, разбор команд, формы меток в `client.toml`),
+59 vitest, `npm run build` (tsc, бандл без демо-данных), 30 Playwright-сценариев в Edge
+(настройки меток и облачков, «Оставить здесь» с отказом и повтором, «Мои метки» с
+удалением), DLL SE/AE/VR собирается, `package_dist.py --skip-build`. В Skyrim не проверялось:
+статики, снап, дальности, смерть, VR.

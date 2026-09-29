@@ -114,6 +114,32 @@ TEST_CASE("Firefly name settings have safe defaults and reject invalid rendering
     CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad));
 }
 
+TEST_CASE("Ground mark base forms default to vanilla flat glows and reject invalid values")
+{
+  SettingsFixture fixture;
+  auto            defaults = fixture.Load("");
+  REQUIRE(defaults);
+  CHECK(defaults->client.groundNotePlugin == "Skyrim.esm");
+  CHECK(defaults->client.groundNoteFormId == 0x075DDB);
+  CHECK(defaults->client.groundNoteScale == doctest::Approx(0.5f));
+  CHECK(defaults->client.deathMarkPlugin == "Skyrim.esm");
+  CHECK(defaults->client.deathMarkFormId == 0x075DD9);
+  CHECK(defaults->client.deathMarkScale == doctest::Approx(0.5f));
+  auto custom = fixture.Load(
+    "[client]\ngroundNotePlugin = \"Marks.esl\"\ngroundNoteFormId = 0x801\ngroundNoteScale = 1.25\ndeathMarkPlugin = \"Marks.esl\"\ndeathMarkFormId = 0x802\ndeathMarkScale = 2\n");
+  REQUIRE(custom);
+  CHECK(custom->client.groundNotePlugin == "Marks.esl");
+  CHECK(custom->client.groundNoteFormId == 0x801);
+  CHECK(custom->client.groundNoteScale == doctest::Approx(1.25f));
+  CHECK(custom->client.deathMarkPlugin == "Marks.esl");
+  CHECK(custom->client.deathMarkFormId == 0x802);
+  CHECK(custom->client.deathMarkScale == doctest::Approx(2.0f));
+  for (auto bad : {"groundNoteScale = 0", "groundNoteScale = 10.1", "groundNoteFormId = 0", "groundNoteFormId = 0xFE000ABC",
+                   "groundNotePlugin = ''", "groundNotePlugin = 'dir/Marks.esp'", "deathMarkScale = nan", "deathMarkFormId = -1",
+                   "deathMarkPlugin = 'a:b'"})
+    CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad + "\n"));
+}
+
 TEST_CASE("Keyboard capture is on by default and can be switched off")
 {
   SettingsFixture fixture;

@@ -32,6 +32,21 @@
 .range output {
   color: var(--accent);
 }
+/* "#RRGGBB" text with a swatch; an invalid draft is marked, not applied. */
+.settings .color input {
+  width: 6.5em;
+  font-family: monospace;
+  text-transform: uppercase;
+}
+.settings .color input[data-valid="false"] {
+  border: 1px solid var(--error);
+}
+.swatch {
+  width: 1.2em;
+  height: 1.2em;
+  border: 1px solid var(--border);
+  margin-left: auto;
+}
 .primary {
   border: 1px solid var(--border);
   color: var(--accent);

@@ -54,6 +54,13 @@ export namespace Dreamsleeve::Client
     float            fireflyNameOffset{35.0f};
     // Withhold keyboard events from the game and other SKSE mods while the chat is open.
     bool             captureKeyboard{true};
+    // Ground mark visuals: STAT base forms without collision (plugin-local IDs).
+    std::string   groundNotePlugin{"Skyrim.esm"};
+    std::uint32_t groundNoteFormId{0x075DDB};  // FXGlowFlatRndBrt
+    float         groundNoteScale{0.5f};
+    std::string   deathMarkPlugin{"Skyrim.esm"};
+    std::uint32_t deathMarkFormId{0x075DD9};  // FXGlowFlatRndDim
+    float         deathMarkScale{0.5f};
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{4096};
 
@@ -75,6 +82,12 @@ export namespace Dreamsleeve::Client
       if (!std::isfinite(fireflyScale) || fireflyScale < 0.01f || fireflyScale > 10.0f) return "fireflyScale";
       if (!std::isfinite(fireflyNameFontSize) || fireflyNameFontSize < 8 || fireflyNameFontSize > 48) return "fireflyNameFontSize";
       if (!std::isfinite(fireflyNameOffset) || fireflyNameOffset < 0 || fireflyNameOffset > 512) return "fireflyNameOffset";
+      if (groundNotePlugin.empty() || groundNotePlugin.find_first_of("/\\:\0", 0, 4) != std::string::npos) return "groundNotePlugin";
+      if (groundNoteFormId == 0 || groundNoteFormId > 0xFFFFFF) return "groundNoteFormId";
+      if (!std::isfinite(groundNoteScale) || groundNoteScale < 0.01f || groundNoteScale > 10.0f) return "groundNoteScale";
+      if (deathMarkPlugin.empty() || deathMarkPlugin.find_first_of("/\\:\0", 0, 4) != std::string::npos) return "deathMarkPlugin";
+      if (deathMarkFormId == 0 || deathMarkFormId > 0xFFFFFF) return "deathMarkFormId";
+      if (!std::isfinite(deathMarkScale) || deathMarkScale < 0.01f || deathMarkScale > 10.0f) return "deathMarkScale";
       if (!movement.Valid()) return "movement";
       if (maxPendingMovementSamples == 0) return "maxPendingMovementSamples";
       if (!std::isfinite(visibilityDistance) || visibilityDistance < 0) return "visibilityDistance";

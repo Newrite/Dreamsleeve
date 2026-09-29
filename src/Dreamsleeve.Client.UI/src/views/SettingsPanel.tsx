@@ -1,8 +1,58 @@
 import type { Chat } from "../state/chat";
 import type { Settings } from "../bridge/types";
-import { defaults } from "../state/settings";
+import { defaults, isColor } from "../state/settings";
 import { Select } from "./Select";
+import { useEffect, useState } from "react";
 import styles from "../styles/Settings.module.css";
+// A "#RRGGBB" text field with a swatch: an incomplete value is kept while
+// typing and applied only once it is a valid colour.
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  return (
+    <label className={styles.color}>
+      <span>{label}</span>
+      <span
+        className={styles.swatch}
+        aria-hidden="true"
+        style={{ background: isColor(text) ? text : value }}
+      />
+      <input
+        type="text"
+        aria-label={label}
+        maxLength={7}
+        spellCheck={false}
+        value={text}
+        data-valid={isColor(text)}
+        onChange={(e) => {
+          const next = e.target.value.trim();
+          setText(next);
+          if (isColor(next) && next.toUpperCase() !== value.toUpperCase())
+            onChange(next.toUpperCase());
+        }}
+        onBlur={() => {
+          if (!isColor(text)) setText(value);
+        }}
+      />
+    </label>
+  );
+}
+// Counts of nearby marks: a fixed ladder plus the saved value if it is not on it.
+function countOptions(current: number) {
+  const ladder = [4, 8, 16, 32, 64];
+  const values = ladder.includes(current)
+    ? ladder
+    : [...ladder, current].sort((a, b) => a - b);
+  return values.map((n) => ({ value: String(n), label: String(n) }));
+}
 const ranges = [
   ["delay", "Тишина до затухания, с", 0, 60, 1],
   ["duration", "Длительность fade, с", 0, 5, 0.1],
@@ -246,10 +296,16 @@ export function SettingsPanel({
             />
           </label>
         ))}
+        <ColorField
+          label="Цвет имени"
+          value={s.fireflyNameColor}
+          onChange={(fireflyNameColor) => chat.configure({ fireflyNameColor })}
+        />
         {(
           [
             ["fireflyNameFontSize", "Размер шрифта имени", 8, 48],
             ["fireflyNameOffset", "Высота имени над светлячком", 0, 512],
+            ["fireflyHeightOffset", "Высота светлячка над землёй", 0, 512],
           ] as const
         ).map(([key, label, min, max]) => (
           <label key={key} className={styles.range}>
@@ -281,6 +337,7 @@ export function SettingsPanel({
           [
             ["showBubbles", "Показывать сообщения"],
             ["bubbleFade", "Плавно скрывать сообщение"],
+            ["bubbleBorder", "Рамка сообщения"],
           ] as const
         ).map(([key, label]) => (
           <label key={key}>
@@ -319,10 +376,112 @@ export function SettingsPanel({
             />
           </label>
         ))}
+        <ColorField
+          label="Цвет текста сообщения"
+          value={s.bubbleTextColor}
+          onChange={(bubbleTextColor) => chat.configure({ bubbleTextColor })}
+        />
         <p className={styles.muted}>
           Последнее сообщение общего канала показывается над светлячком автора;
           новое сообщение заменяет предыдущее. Не зависит от показа имён и
-          затухания окна чата. Только SE/AE.
+          затухания окна чата. Без фона и рамки — непрозрачность 0 и рамка
+          выключена. Только SE/AE.
+        </p>
+      </fieldset>
+      <fieldset className={styles.group}>
+        <legend>Метки на земле</legend>
+        {(
+          [
+            ["showGroundNotes", "Показывать надписи"],
+            ["showDeathMarks", "Показывать места смерти"],
+            ["groundBorder", "Рамка надписи"],
+            ["deathBorder", "Рамка места смерти"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              checked={s[key]}
+              onChange={(e) => chat.configure({ [key]: e.target.checked })}
+            />
+          </label>
+        ))}
+        <label className={styles.choice}>
+          Надписей рядом
+          <Select
+            label="Надписей рядом"
+            value={String(s.maxVisibleNotes)}
+            options={countOptions(s.maxVisibleNotes)}
+            onChange={(value) =>
+              chat.configure({ maxVisibleNotes: Number(value) })
+            }
+          />
+        </label>
+        <label className={styles.choice}>
+          Мест смерти рядом
+          <Select
+            label="Мест смерти рядом"
+            value={String(s.maxVisibleDeaths)}
+            options={countOptions(s.maxVisibleDeaths)}
+            onChange={(value) =>
+              chat.configure({ maxVisibleDeaths: Number(value) })
+            }
+          />
+        </label>
+        {(
+          [
+            ["groundDrawDistance", "Дальность прорисовки", 0, 16384, 128],
+            ["groundNameDistance", "Дальность имени автора", 50, 4096, 10],
+            ["groundTextDistance", "Дальность текста", 50, 4096, 10],
+            ["groundNoteOffset", "Высота надписи над полом", -64, 256, 1],
+            ["deathMarkOffset", "Высота места смерти над полом", -64, 256, 1],
+            ["groundFontSize", "Размер шрифта метки", 8, 48, 1],
+            [
+              "groundMaxWidth",
+              "Максимальная ширина текста метки",
+              120,
+              800,
+              10,
+            ],
+            ["groundBackground", "Непрозрачность фона надписи", 0, 1, 0.05],
+            ["deathBackground", "Непрозрачность фона места смерти", 0, 1, 0.05],
+          ] as const
+        ).map(([key, label, min, max, step]) => (
+          <label key={key} className={styles.range}>
+            <span>
+              {label}
+              <output>{s[key].toFixed(step < 1 ? 2 : 0)}</output>
+            </span>
+            <input
+              type="range"
+              aria-label={label}
+              min={min}
+              max={max}
+              step={step}
+              value={s[key]}
+              onChange={(e) =>
+                chat.configure({ [key]: Number(e.target.value) })
+              }
+            />
+          </label>
+        ))}
+        <ColorField
+          label="Цвет текста надписи"
+          value={s.groundTextColor}
+          onChange={(groundTextColor) => chat.configure({ groundTextColor })}
+        />
+        <ColorField
+          label="Цвет текста места смерти"
+          value={s.deathTextColor}
+          onChange={(deathTextColor) => chat.configure({ deathTextColor })}
+        />
+        <p className={styles.muted}>
+          Надписи других игроков и места смерти рядом с вами: статик на земле,
+          имя автора и текст над ним. Дальности — в игровых единицах; имя и
+          текст скрываются чуть дальше, чем появляются, чтобы не мигать на
+          границе. Метки игнорируемых игроков не показываются. Применяется после
+          сохранения. Только SE/AE.
         </p>
       </fieldset>
       <fieldset className={styles.group}>
@@ -332,6 +491,8 @@ export function SettingsPanel({
             ["combatHideFireflies", "Скрывать светлячки"],
             ["combatHideNames", "Скрывать имена"],
             ["combatHideBubbles", "Скрывать сообщения над игроками"],
+            ["combatHideGroundMarks", "Скрывать метки"],
+            ["combatHideGroundText", "Скрывать текст меток"],
           ] as const
         ).map(([key, label]) => (
           <label key={key}>

@@ -13,11 +13,14 @@
 | `Main.cpp` | Только экспорт `SKSEPlugin_Load`; заголовки CommonLib не включает (см. ниже) |
 | `Plugin.ixx` | `SKSE::Init`, listener сообщений SKSE, порядок инициализации |
 | `Runtime.ixx` | Единственный владелец `ClientApplication`, `MovementView`, `Host::Session`, `ui.toml`; ограниченная очередь уведомлений (64) с других потоков; снимок для страницы SKSE Menu |
-| `Logic.ixx` | Кадр: уведомления → Drain (события UI, свежие сообщения → облачки) → политика сессии → готовность мира → телеметрия → светлячки → focus |
+| `Logic.ixx` | Кадр: уведомления → Drain (события UI, свежие сообщения → облачки) → политика сессии → готовность мира → телеметрия → один HUD-кадр надписей (светлячки + метки) → focus |
 | `Hooks.ixx` | Все патчи игры: ID Address Library, смещения callsite, проверка байтов и thunks для `Main::Update`, `HUDMenu::AdvanceMovie` (имена над светлячками) и рассылки `InputEvent` (захват клавиатуры) |
-| `Events.ixx` | Sinks: меню, ввод, `TESDeathEvent`, `TESActivateEvent`; только `Runtime::Post` |
+| `Events.ixx` | Sinks: меню, ввод, `TESDeathEvent` (флаг `dead` и handle убийцы, без резолва), `TESActivateEvent`; только `Runtime::Post` |
 | `Game/Telemetry.ixx` | Персонаж, пространство, позиция, activity, place, actor values |
+| `Game/PlacedReferences.ixx` | Временные placed reference плагина: резолв STAT, `Spawn` (`SetTemporary`, масштаб, поворот), проверка присоединённости ячейки, удаление, набор `Set<Key>` по ключу |
+| `Game/Raycast.ixx` | Один havok pick по слою line-of-sight: видимость (`Clear`) и пол под точкой (`GroundBelow`) |
 | `Game/Fireflies.ixx` | Placed reference на каждого видимого игрока из `MovementView` |
+| `Game/GroundMarks.ixx` | Метки на земле: отбор ближайших из снимка Core, статики со снапом на пол, подписи, отправка `ReportDeath` один раз на смерть |
 | `Game/Input.ixx` | Состояние захвата клавиатуры и фильтрация цепочки `InputEvent` до всех sinks; адресов не содержит |
 | `UI/PrismaUI.ixx` | View, listener, доставка событий, focus/visibility |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
@@ -95,7 +98,7 @@ patch-site остаётся у трамплина CommonLib (`skse_patch_safety`
 | Сообщения SKSE | поток отправителя (на практике главный) | `Runtime::Post` → кадр |
 | `MenuOpenCloseEvent`, `InputEvent` | главный (UI/input) | `Runtime::Post` → кадр |
 | Хук рассылки `InputEvent` (`PollInputDevices`) | главный, внутри `Main::Update` | фильтрация цепочки на месте; состояние фильтра под mutex |
-| `TESDeathEvent`, `TESActivateEvent` | могут приходить с AI/скриптовых потоков | `Runtime::Post` → кадр |
+| `TESDeathEvent`, `TESActivateEvent` | могут приходить с AI/скриптовых потоков | `Runtime::Post` → кадр; в уведомление смерти кладутся только `dead` и `ObjectRefHandle` убийцы, `handle.get()` и имя — в кадре |
 | PrismaUI: DOM ready, JS listener, console | PrismaUI 1.5.1 оборачивает каждый callback в `SKSE::GetTaskInterface()->AddTask`, т.е. главный поток (проверено по `src/API/API.cpp` framework) | прямой вызов `Host::Session`/`ClientApplication` |
 | Рендер SKSE Menu Framework | вне игрового потока | читает `MenuSnapshot` под mutex, действия — `Runtime::Post` |
 | API модов (`IVDreamsleeve1`, Papyrus) | любой поток | `Runtime::RequestAnnouncement`: очередь (32) под mutex, пока сессия готова; отправка в Core — в кадре |
@@ -230,16 +233,20 @@ CELL/WRLD), ближайший видимый map marker персистентн�
 
 `Fireflies.ixx`: для каждого игрока из проекции онлайна, кроме себя, в том же WRLD/CELL и в радиусе
 `client.visibilityDistance`, `MovementView::Sample(id, now)` даёт позу; создаётся одна placed reference
-`FXGlowFillRoundXBrt` (Skyrim.esm 0x02EB0F) через `TESDataHandler::CreateReferenceAtLocation`
-и каждый кадр перемещается `SetPosition` + `Update3DPosition(true)` (+110 по Z, scale 0.25).
+`FXGlowFillRoundXBrt` (Skyrim.esm 0x02EB0F) через общий модуль `Game/PlacedReferences.ixx`
+(`TESDataHandler::CreateReferenceAtLocation`, `SetTemporary`, масштаб) и каждый кадр перемещается
+`SetPosition` + `Update3DPosition(true)` (выше позы на `fireflyHeightOffset` из `[ui.chat]`,
+по умолчанию 110, диапазон 0..512; scale 0.25). Между кадрами ссылки хранятся только как
+`RE::ObjectRefHandle` в `PlacedReferences::Set<PlayerId>`; резолв `handle.get()` — в кадре,
+владение — `RE::NiPointer` на время вызова. Тот же модуль используют метки на земле.
 Первый вызов меняет координаты REFR, второй переносит их в загруженную 3D-модель;
 интерполяция уже выполнена в `MovementView`. В SE 1.5.97 проверено в IDA:
 `SetPosition` — ID 19363 / RVA 0x296910, `Update3DPosition` — vtable slot 0x3F / RVA 0x286130.
 Используются методы CommonLib, адреса не зашиты в плагин.
 `SetPosition` не меняет parent cell: ссылка остаётся в ячейке, где создана. В экстерьере ключ
 пространства — WRLD, поэтому при удалении от ячейки спавна она отсоединяется, 3D выгружается,
-а handle остаётся валидным. `Tick` проверяет `GetParentCell()->IsAttached()` и пересоздаёт
-ссылку в текущей ячейке игрока.
+а handle остаётся валидным. `PlacedReferences::Set::Resolve` проверяет `GetParentCell()->IsAttached()` и удаляет
+отсоединённую ссылку, чтобы `Tick` пересоздал её в текущей ячейке игрока.
 При временной неготовности мира (включая LoadingMenu) телеметрия один раз отправляет
 reliable-снятие позиции; после загрузки отправляет новую границу локации. Игрок ушёл/потерял видимость/сменил
 пространство — `Disable` + `SetDelete`. Смена собственного пространства, загрузка, главное меню,
@@ -250,8 +257,8 @@ reliable-снятие позиции; после загрузки отправл
 
 | Файл | Кто пишет | Содержимое |
 |---|---|---|
-| `Data/SKSE/Plugins/Dreamsleeve/client.toml` | пользователь (при отсутствии плагин создаёт минимальный файл) | сервер, auth URL, интервалы, радиус, светлячки — формат `LoadClientSettings` |
-| `Data/SKSE/Plugins/Dreamsleeve/ui.toml` | плагин, атомарно | `[ui] hideUi`, `[ui.chat]` — положение, размер, оформление, клавиша активации, имена и облачки над светлячками, `nameMode`/`streamerMode`; `[[names.aliases]]` и `[[names.ignored]]` — псевдонимы и игнор по адресу сервера (до 1 MiB) |
+| `Data/SKSE/Plugins/Dreamsleeve/client.toml` | пользователь (при отсутствии плагин создаёт минимальный файл) | сервер, auth URL, интервалы, радиус, формы светлячка и меток — формат `LoadClientSettings` |
+| `Data/SKSE/Plugins/Dreamsleeve/ui.toml` | плагин, атомарно | `[ui] hideUi`, `[ui.chat]` — положение, размер, оформление, клавиша активации, имена и облачки над светлячками (в том числе цвета и рамка), высота светлячка, метки на земле, `nameMode`/`streamerMode`; `[[names.aliases]]` и `[[names.ignored]]` — псевдонимы и игнор по адресу сервера (до 1 MiB) |
 | `Data/SKSE/Plugins/Dreamsleeve/aliases.toml` | пользователь (поставляется в dist) | словарь псевдонимов режима стримера; при ошибке — встроенный список |
 
 Разделение выбрано, чтобы запись настроек UI никогда не переписывала пользовательский
@@ -371,9 +378,16 @@ PlayerId, текст и размеры обновляются при измен�
 `Nameplates::Shutdown()` (quitGame) снимают TextField и MovieClip и отпускают movie, пока UI
 жив; после Shutdown хук `AdvanceMovie` ничего не рисует.
 
+Запись слоя ключуется `LabelKey {kind, id}` (игрок, надпись, место смерти), имена
+GFx-объектов строятся из ключа (`name_player_<id>`, `bubble_note_<id>`), поэтому игрок и
+метка с одинаковым числовым id не делят TextField. Стиль облачка и цвет имени —
+свойства записи (`Label.style`, `Label.nameColor`), а не кадра: смена стиля пересоздаёт
+только затронутые объекты. Цвет имени над светлячком — `fireflyNameColor` (`#RRGGBB`,
+по умолчанию `#EEECE5`).
+
 На основном потоке используется та же интерполированная поза, что перемещает
-светлячок. После проверки дистанции и проекции выполняется один `TES::Pick`
-от камеры до опорной точки подписи с `COL_LAYER::kLineOfSight` и группой коллизии
+светлячок. После проверки дистанции и проекции выполняется один `Raycast::Clear`
+(`TES::Pick`) от камеры до опорной точки подписи с `COL_LAYER::kLineOfSight` и группой коллизии
 игрока. Это проверка игровой коллизии, а не depth buffer: прозрачные и модовые
 меши следуют своим collision-данным. Штатный `Actor::HasLineOfSight` здесь не
 используется: у игрока он проверяет frustum и до трёх высот габаритов цели.
@@ -447,9 +461,13 @@ generation сессии (`Logic::Drain`) очищают всё. Сообщени
 закреплена. Текст — обычный UTF-8 (`SetText`, не HTML). Ширина ограничена
 `bubbleMaxWidth`, число строк — 6: текст режется по code point до 320 символов, затем по
 измеренной `textHeight` с многоточием; длинные слова переносит сам `wordWrap`. Фон —
-тёмная заливка с непрозрачностью `bubbleBackground` и рамкой 1 px, текст непрозрачный;
-fade применяется к `_alpha` всего клипа. Раскладка пересчитывается при смене текста или
-стиля (шрифт, ширина, фон), каждый кадр обновляются только позиция и alpha.
+тёмная заливка с непрозрачностью `bubbleBackground`, рамка 1 px включается `bubbleBorder`,
+цвет текста — `bubbleTextColor`; «без фона вообще» — `bubbleBackground = 0` и рамка
+выключена. Текст непрозрачный; fade применяется к `_alpha` всего клипа. Раскладка
+пересчитывается при смене текста или стиля (шрифт, ширина, фон, рамка, цвет), каждый кадр
+обновляются только позиция и alpha. Прежние константы `Nameplates` (рамка `0x9C9A90` на
+55 %, заливка `0x0A0A0C`, текст `0xEEECE5`) стали полями `BubbleStyle`; заливка и цвет
+рамки остаются константами.
 
 Настройки → «Сообщения над игроками» (`ui.toml`, `[ui.chat]`, независимы от имён и
 fade окна чата), применяются кнопкой сохранения без перезапуска:
@@ -463,12 +481,14 @@ fade окна чата), применяются кнопкой сохранен�
 | `bubbleFontSize` (HUD) | 16 | 8..48 |
 | `bubbleMaxWidth` (HUD) | 320 | 120..800 |
 | `bubbleBackground` | 0.65 | 0..1 |
+| `bubbleBorder` | true | |
+| `bubbleTextColor` | `#EEECE5` | `#RRGGBB`; иная строка → умолчание |
 
 Старый `ui.toml` без этих ключей получает значения по умолчанию (проверено тестом).
 В `client.toml` начальных значений для облачков нет.
 
 Настройки → «В бою» (`[ui.chat]`): `combatHideFireflies`, `combatHideNames`,
-`combatHideBubbles`, по умолчанию `false`. Пока `PlayerCharacter::IsInCombat()`,
+`combatHideBubbles`, `combatHideGroundMarks`, `combatHideGroundText`, по умолчанию `false`. Пока `PlayerCharacter::IsInCombat()`,
 `Fireflies::Tick` соответственно не держит светлячков (`ClearAll`, как при
 `showFireflies = false`), не заполняет имя или облачко в `Label`. Скрытие светлячков
 убирает и имена с облачками: другого якоря у них нет. Таймеры облачков идут своим
@@ -481,3 +501,133 @@ fade окна чата), применяются кнопкой сохранен�
 появление один раз, замена, истечение с fade и без, длинный текст/кириллица/HTML-подобный
 текст, ник на месте при росте облачка, включённые/выключенные имена, уход игрока,
 дисконнект, временная невидимость, сохранение настроек и старый `ui.toml`.
+
+## Метки на земле
+
+Игровая часть [меток](GroundMarksRu.md) (часть 2, 29.09.2026): статики в мире, подписи над
+ними, отправка смерти и веб-UI. Домен, протокол v8, сервер и ядро клиента — часть 1.
+
+### Источник и отбор
+
+Источник — снимок видимых меток Core: `Host::Session` собирает `ClientSnapshot.groundMarks` и
+упорядоченные переходы `ClientStateDelta.groundMarks` (`Cleared / Removed / Added`) в
+`VisibleMarks()`; сервер уже отфильтровал их по пространству и радиусу. Отдельно ведётся
+`OwnMarks()` — метки автора, встреченные в этой сессии (размещённые здесь или доставленные
+рядом): `clear` при смене пространства их не трогает, новое поколение сессии — очищает.
+Полного списка своих меток сервер не отдаёт: метка, оставленная в прошлой сессии далеко
+отсюда, в «Моих метках» появится, когда игрок снова окажется рядом.
+
+`GroundMarks::Tick` в кадре: пространство игрока (`Telemetry::SpaceKey`) должно совпасть с
+`LocationId` метки; метки игнорируемых игроков не рисуются; из остальных берутся ближайшие
+`maxVisibleNotes` надписей и `maxVisibleDeaths` мест смерти в пределах `groundDrawDistance`.
+Лишние ссылки удаляются набором `visible`, как у светлячков. Смена пространства, загрузка,
+главное меню и выключенные переключатели удаляют все ссылки; пересоздание лениво.
+
+### Статики
+
+Одна временная placed reference на метку через `Game/PlacedReferences.ixx`
+(`SetTemporary` сразу после создания, поэтому в сохранение они не попадают; удаление —
+`SetAppCulled` / `Disable` / `SetDelete`). Форма вида — `[client]` в `client.toml`:
+
+```toml
+groundNotePlugin = "Skyrim.esm"
+groundNoteFormId = 0x075DDB   # FXGlowFlatRndBrt
+groundNoteScale = 0.5
+deathMarkPlugin = "Skyrim.esm"
+deathMarkFormId = 0x075DD9    # FXGlowFlatRndDim
+deathMarkScale = 0.5
+```
+
+Выбор форм: нужны ванильные STAT из `Skyrim.esm` без коллизии, чтобы метка не мешала
+движению и бою. Семейство `FXGlowFlatRnd*` (`meshes\Effects\Ambient\FXGlowFlatRnd*.nif`) —
+плоские светящиеся диски с блоками `BSFadeNode / BSTriShape / BSEffectShaderProperty /
+NiAlphaProperty / BSXFlags`, без `bhk*`-коллизии (проверено по данным load order через
+housecarl); это та же семья, что светлячок `FXGlowFillRound*`, только плоская. Надпись —
+яркий диск (`Brt`), место смерти — тусклый (`Dim`); красная подпись различает виды.
+Рассматривались `HighPolyNote*` (`Clutter\Books\Note01\Note01.nif`, бумажная записка): тоже
+без коллизии, но со скином и `BSBehaviorGraphExtraData`; без проверки в игре поведение
+такого STAT как placed reference неизвестно, поэтому отклонено. Форма резолвится в
+`kDataLoaded`; отсутствие или иной тип отключает соответствующий вид с ошибкой в логе, без
+скрытого fallback. Собственный esp/esl — по тем же правилам, что у светлячка.
+
+Снап на пол: при создании ссылки один `Raycast::GroundBelow` от точки метки +64 до −512;
+`z` = точка попадания + `groundNoteOffset` / `deathMarkOffset` (по умолчанию 5, −64..256),
+без попадания — `z` метки. Один луч на спавн, не на кадр; ссылки не двигаются. Поворот —
+курс из метки (`heading` как угол Z).
+
+### Подписи
+
+Через `Nameplates` с ключами `LabelKey {Note|Death, id}`: имя автора — тот же резолвер
+`PlayerNames().NameFor` (режим имени, стример), текст — `Bridge::FilterText` (тот же фильтр
+помеченных диапазонов, что у строк чата и облачков; чужой скрытый текст не показывается).
+Имя видно в пределах `groundNameDistance` (600), текст — `groundTextDistance` (150), оба с
+гистерезисом 10 %: показанный элемент прячется на 10 % дальше, чем появляется. Окклюзия —
+общая `fireflyNameOcclusion`. Якорь подписи — точка ссылки +24. Стиль надписи:
+`groundFontSize`, `groundMaxWidth`, `groundBackground`, `groundBorder`, `groundTextColor`;
+у места смерти текст и имя автора красные (`deathTextColor`, `#D9534F`), фон и рамка —
+`deathBackground`, `deathBorder`. Пауза, скрытый HUD и меню снимают подписи вместе с
+именами (общий кадр в `Logic::PublishNameplates`); VR — статики есть, подписей нет.
+
+### Смерть
+
+`DeathEventHandler` кладёт в уведомление `dead` и `ObjectRefHandle` убийцы, ничего не
+резолвя: событие может прийти не из главного потока. В кадре `GroundMarks::NoteDeath` по
+первому уведомлению (`dead=false`) фиксирует положение и курс игрока и подпись:
+`handle.get()` → имя как у цели боя (`Telemetry::RefName`); без убийцы — «утопление», если
+персонаж плывёт, иначе «падение» (подпись локализуется на стороне автора; сервер проверяет
+только длину и словарь). Подпись — недоверенный текст: обрезается до 64 скаляров (умолчание
+`ChatInput.DeathMarkText`; протокол v8 лимит не сообщает). `ReportDeath` уходит один раз на
+смерть: повтор возможен после того, как `IsDead()` снова вернул false (воскрешение,
+загрузка, новая игра сбрасывают флаг вместе с контекстом). Второе уведомление (`dead=true`)
+без первого тоже создаёт метку. Без Ready-сессии смерть не отправляется (запись в логе).
+
+### Веб-UI
+
+Кнопка «Оставить здесь» рядом с «Отправить» посылает черновик командой `placeGroundNote`;
+host берёт положение из `GroundMarks::CurrentPlacement()` и коррелирует ответ в
+`markResult` (id метки, id вытесненной, ошибка) — строка ожидания «[Метка] Вы: …» с «Не
+оставлено: …», `GROUND_MARK_AREA_FULL` → «Здесь уже слишком много меток». Кнопка недоступна
+без соединения, без `snapshot.groundMarksSupported` и при пустом черновике. Панель «Метки»
+показывает `OwnMarks()` (событие `groundMarks`) с кнопкой удаления (`removeGroundMark`).
+Все ключи меток и облачков — в `ui.toml` `[ui.chat]`, блоки «Метки на земле», «Сообщения
+над игроками», «Имена над светлячками», «В бою»; старый `ui.toml` получает умолчания.
+
+### Настройки `[ui.chat]`
+
+| Ключ | По умолчанию | Диапазон |
+|---|---|---|
+| `showGroundNotes`, `showDeathMarks` | true | |
+| `maxVisibleNotes`, `maxVisibleDeaths` | 16 | 1..64 |
+| `groundDrawDistance` | 4096 | 0..16384 |
+| `groundNoteOffset`, `deathMarkOffset` | 5 | −64..256 |
+| `groundNameDistance` | 600 | 50..4096 |
+| `groundTextDistance` | 150 | 50..4096 |
+| `groundFontSize` | 16 | 8..48 |
+| `groundMaxWidth` | 320 | 120..800 |
+| `groundBackground`, `deathBackground` | 0.65 | 0..1 |
+| `groundBorder`, `deathBorder` | true | |
+| `groundTextColor` | `#EEECE5` | `#RRGGBB` |
+| `deathTextColor` | `#D9534F` | `#RRGGBB` |
+| `combatHideGroundMarks`, `combatHideGroundText` | false | |
+| `fireflyHeightOffset` | 110 | 0..512 |
+| `fireflyNameColor` | `#EEECE5` | `#RRGGBB` |
+
+### Проверки и границы
+
+Без игры: `Client.Host` — `ui.toml` (умолчания, round-trip, цвета, границы), проекция
+видимых и своих меток, корреляция надписи/удаления/смерти с `markResult` и заметками лога,
+разбор команд; `Client.Application` — формы меток в `client.toml`; vitest — умолчания и
+границы, `placeNote`/`removeMark`, разбор событий; Playwright — настройки меток и облачков,
+«Оставить здесь» с отказом и повтором, «Мои метки» с удалением. В Skyrim не проверялось:
+статики и их вид/масштаб, снап на пол, дальности и гистерезис, отправка смерти (убийца,
+утопление, падение, повтор после воскрешения), окклюзия, VR.
+
+### Открытые вопросы части 2
+
+| Вопрос | Решение |
+|---|---|
+| Сервер не сообщает поддержку меток и лимит `DeathMarkText` | Поддержка = Ready-сессия протокола v8 (`groundMarksSupported = true` в снимке, поле оставлено для будущего host); лимит подписи — константа 64 в `GroundMarks.ixx` |
+| Список своих меток | Только встреченные в сессии (`OwnMarks`); полного списка в протоколе нет |
+| Вид меток | Плоские glow-диски без коллизии; бумажная записка отклонена без игровой проверки |
+| Размер имени над меткой | `groundFontSize` (общий с текстом), не `fireflyNameFontSize` |
+| Шаг 1 отдельно | Правки стиля облачков (`BubbleStyle`, `bubbleBorder`/`bubbleTextColor`/`fireflyNameColor`, блок настроек, тесты) не зависят от остального и выделяются в отдельный коммит по файлам `Nameplates.ixx`, `UiSettings.ixx`, `types.ts`, `settings.ts`, `SettingsPanel.tsx` |

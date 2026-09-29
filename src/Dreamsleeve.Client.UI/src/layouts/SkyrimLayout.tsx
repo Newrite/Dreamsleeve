@@ -164,6 +164,20 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
               >
                 ↵
               </button>
+              <button
+                type="button"
+                aria-label="Оставить здесь"
+                title="Оставить текст меткой на земле, где стоит персонаж"
+                disabled={
+                  !s.connected ||
+                  !s.groundMarksSupported ||
+                  !(s.drafts[s.target] ?? "").trim() ||
+                  Object.values(s.pending).some((p) => p.status === "sending")
+                }
+                onClick={chat.placeNote}
+              >
+                ⌖
+              </button>
             </form>
             <footer className={styles.footer}>
               <button onClick={() => chat.open("online")}>

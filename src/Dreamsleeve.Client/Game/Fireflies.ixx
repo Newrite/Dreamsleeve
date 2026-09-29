@@ -7,6 +7,7 @@ export module Dreamsleeve.Game.Fireflies;
 import std;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.Game.Telemetry;
+import Dreamsleeve.Game.PlacedReferences;
 import Dreamsleeve.UI.Nameplates;
 
 // Presence of other players as a glowing placed reference per visible player.
@@ -19,13 +20,11 @@ namespace Fireflies
   namespace Dream = Dreamsleeve::Client;
   using Clock     = std::chrono::steady_clock;
 
-  constexpr float HeightOffset = 110.0f;  // Roughly head height above the pose origin.
-
   struct State
   {
-    RE::TESBoundObject*                                       base{};
-    std::unordered_map<Domain::PlayerId, RE::ObjectRefHandle> refs;
-    std::optional<Domain::FormKey>                            space;
+    RE::TESBoundObject*                     base{};
+    PlacedReferences::Set<Domain::PlayerId> refs{"firefly"};
+    std::optional<Domain::FormKey>          space;
   };
 
   State& Get()
@@ -34,81 +33,43 @@ namespace Fireflies
     return state;
   }
 
-  void Remove(RE::ObjectRefHandle handle)
-  {
-    if (auto ref = handle.get())
-    {
-      logger::info("Removing firefly reference {:08X}", ref->GetFormID());
-      // Hide immediately even if engine detachment is deferred.
-      if (auto* node = ref->Get3D()) node->SetAppCulled(true);
-      ref->Disable();
-      ref->SetDelete(true);
-    }
-  }
-
-  // SetPosition never re-parents a reference: it stays in the cell it was
-  // created in. Once that cell detaches its 3D unloads while the handle stays
-  // valid, so the glow has to be recreated in the player's current cell.
-  bool CellAttached(RE::TESObjectREFR& ref)
-  {
-    auto* cell = ref.GetParentCell();
-    return cell && cell->IsAttached();
-  }
-
   export void ClearAll()
   {
     auto& state = Get();
-    for (auto& [id, handle] : state.refs)
-      Remove(handle);
-    state.refs.clear();
+    state.refs.Clear();
     state.space.reset();
     Runtime::Get().bubbles.Clear();
-    Nameplates::Publish({});
   }
 
   // kDataLoaded: the base form is resolved once; a missing form disables fireflies.
   export void ResolveForms()
   {
     auto&       state   = Get();
-    auto*       data    = RE::TESDataHandler::GetSingleton();
     const auto& runtime = Runtime::Get();
     if (!runtime.app) return;
     const auto& config = runtime.app->Settings().client;
-    state.base         = data ? data->LookupForm<RE::TESObjectSTAT>(config.fireflyFormId, config.fireflyPlugin) : nullptr;
-    if (!state.base) logger::error("Firefly STAT {:X} in {} not found; fireflies disabled", config.fireflyFormId, config.fireflyPlugin);
-  }
-
-  std::optional<RE::ObjectRefHandle> Spawn(RE::PlayerCharacter* player, const RE::NiPoint3& position)
-  {
-    auto* data = RE::TESDataHandler::GetSingleton();
-    auto* cell = player->GetParentCell();
-    if (!data || !cell) return std::nullopt;
-    auto* world  = cell->IsExteriorCell() ? player->GetWorldspace() : nullptr;
-    auto  handle = data->CreateReferenceAtLocation(
-      Get().base,
-      position,
-      RE::NiPoint3{},
-      cell,
-      world,
-      nullptr,
-      nullptr,
-      RE::ObjectRefHandle{},
-      false,
-      true);
-    auto ref = handle.get();
-    if (!ref) return std::nullopt;
-    // Dynamic FormID alone does not exclude a reference from saved changes.
-    ref->SetTemporary();
-    ref->SetScale(Runtime::Get().app->Settings().client.fireflyScale);
-    return handle;
+    state.base         = PlacedReferences::ResolveStatic("firefly", config.fireflyPlugin, config.fireflyFormId);
   }
 
   export std::size_t Count()
   {
-    return Get().refs.size();
+    return Get().refs.Count();
   }
 
-  export void Tick(Clock::time_point now)
+  // The bubble look of players, from the live UI settings.
+  export Nameplates::BubbleStyle BubbleStyle(const Dreamsleeve::Host::UiSettings& ui)
+  {
+    return {
+        static_cast<float>(ui.bubbleFontSize),
+        static_cast<float>(ui.bubbleMaxWidth),
+        static_cast<float>(ui.bubbleBackground),
+        ui.bubbleBorder,
+        Dreamsleeve::Host::ParseColor(ui.bubbleTextColor).value_or(Nameplates::DefaultTextColor)
+    };
+  }
+
+  // Adds the labels of visible players to the frame the caller publishes.
+  export void Tick(Clock::time_point now, Nameplates::Frame& names)
   {
     auto& runtime = Runtime::Get();
     auto& state   = Get();
@@ -135,9 +96,10 @@ namespace Fireflies
 
     const auto                           self = player->GetPosition();
     const Domain::Position               origin{self.x, self.y, self.z};
+    const float                          height    = static_cast<float>(ui.fireflyHeightOffset);
+    const auto                           style     = BubbleStyle(ui);
+    const auto                           nameColor = Dreamsleeve::Host::ParseColor(ui.fireflyNameColor).value_or(Nameplates::DefaultTextColor);
     std::unordered_set<Domain::PlayerId> visible;
-    Nameplates::Frame                    names;
-    names.style = {static_cast<float>(ui.bubbleFontSize), static_cast<float>(ui.bubbleMaxWidth), static_cast<float>(ui.bubbleBackground)};
     // Expired texts and those of players who left are dropped here, once per
     // frame; a message is never kept waiting for its author to appear.
     runtime.bubbles.Prune(now, ui, [&](Domain::PlayerId id) { return runtime.session.OnlinePlayers().contains(id); });
@@ -148,20 +110,13 @@ namespace Fireflies
       if (!pose || pose->location.locationId != *space) continue;
       if (Domain::Spatial::Distance(origin, pose->position) > settings.visibilityDistance) continue;
 
-      const RE::NiPoint3 position{pose->position.X, pose->position.Y, pose->position.Z + HeightOffset};
-      auto               found = state.refs.find(id);
-      auto               ref   = found == state.refs.end() ? RE::NiPointer<RE::TESObjectREFR>{} : found->second.get();
-      if (ref && !CellAttached(*ref))
-      {
-        Remove(found->second);
-        ref.reset();
-      }
+      const RE::NiPoint3 position{pose->position.X, pose->position.Y, pose->position.Z + height};
+      auto               ref = state.refs.Resolve(id);
       if (!ref)
       {
-        auto spawned = Spawn(player, position);
+        auto spawned = PlacedReferences::Spawn("firefly", state.base, position, RE::NiPoint3{}, settings.fireflyScale);
         if (!spawned) continue;
-        state.refs[id] = *spawned;
-        if (auto created = spawned->get()) logger::info("Spawned firefly player {} reference {:08X}", id, created->GetFormID());
+        state.refs.Keep(id, *spawned);
       }
       else
       {
@@ -174,7 +129,12 @@ namespace Fireflies
       // Name and bubble share one anchor, projection and occlusion pick. The
       // name size is passed even when names are hidden: it fixes the baseline
       // above which the bubble sits.
-      Nameplates::Label label{.id = id, .nameSize = static_cast<float>(ui.fireflyNameFontSize)};
+      Nameplates::Label label{
+          .key = {Nameplates::LabelKind::Player, id},
+          .nameSize = static_cast<float>(ui.fireflyNameFontSize),
+          .nameColor = nameColor,
+          .style = style
+      };
       // Same resolver as the web UI, so a pseudonym matches on both surfaces.
       if (ui.showFireflyNames && !(combat && ui.combatHideNames))
         label.name = runtime.session.PlayerNames().NameFor(id, remote.data, remote.characterName, ui);
@@ -189,15 +149,7 @@ namespace Fireflies
       Nameplates::Add(names, std::move(label), anchor, ui.fireflyNameOcclusion);
     }
 
-    auto* menus = RE::UI::GetSingleton();
-    if (!menus || menus->GameIsPaused() || !menus->menuSystemVisible) names.labels.clear();
-    Nameplates::Publish(std::move(names));
-
-    std::erase_if(state.refs, [&](auto& entry) {
-      if (visible.contains(entry.first)) return false;
-      Remove(entry.second);
-      return true;
-    });
+    state.refs.Retain(visible);
   }
 
 }

@@ -103,10 +103,16 @@ namespace Events
       }
     }
 
-    // May fire twice per death (dying, then dead) and from non-main threads.
+    // May fire twice per death (dying, then dead) and from non-main threads:
+    // only handles are taken here, the frame resolves the killer.
     auto ProcessEvent(const RE::TESDeathEvent* event, RE::BSTEventSource<RE::TESDeathEvent>*) -> RE::BSEventNotifyControl override
     {
-      if (event && IsPlayer(event->actorDying.get())) Runtime::Post({Runtime::NoticeKind::PlayerDeath, event->dead});
+      if (event && IsPlayer(event->actorDying.get()))
+      {
+        Runtime::Notice notice{Runtime::NoticeKind::PlayerDeath, event->dead};
+        if (auto* killer = event->actorKiller.get()) notice.handle = killer->GetHandle();
+        Runtime::Post(notice);
+      }
       return RE::BSEventNotifyControl::kContinue;
     }
   };

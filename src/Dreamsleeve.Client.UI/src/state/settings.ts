@@ -42,8 +42,54 @@ export const defaults: Settings = {
   announcementsThirdParty: true,
   announcementsEvents: true,
   announcementsPeriodic: true,
+  bubbleBorder: true,
+  bubbleTextColor: "#EEECE5",
+  fireflyNameColor: "#EEECE5",
+  fireflyHeightOffset: 110,
+  showGroundNotes: true,
+  showDeathMarks: true,
+  maxVisibleNotes: 16,
+  maxVisibleDeaths: 16,
+  groundDrawDistance: 4096,
+  groundNoteOffset: 5,
+  deathMarkOffset: 5,
+  groundNameDistance: 600,
+  groundTextDistance: 150,
+  groundFontSize: 16,
+  groundMaxWidth: 320,
+  groundBackground: 0.65,
+  groundBorder: true,
+  groundTextColor: "#EEECE5",
+  deathTextColor: "#D9534F",
+  deathBackground: 0.65,
+  deathBorder: true,
+  combatHideGroundMarks: false,
+  combatHideGroundText: false,
 };
+// "#RRGGBB" only, as the host parses it.
+export const isColor = (value: unknown) =>
+  typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+const colors: (keyof Settings)[] = [
+  "bubbleTextColor",
+  "fireflyNameColor",
+  "groundTextColor",
+  "deathTextColor",
+];
+// Whole numbers of marks; the host floors them the same way.
+const integers: (keyof Settings)[] = ["maxVisibleNotes", "maxVisibleDeaths"];
 const bounds: Partial<Record<keyof Settings, [number, number]>> = {
+  fireflyHeightOffset: [0, 512],
+  maxVisibleNotes: [1, 64],
+  maxVisibleDeaths: [1, 64],
+  groundDrawDistance: [0, 16384],
+  groundNoteOffset: [-64, 256],
+  deathMarkOffset: [-64, 256],
+  groundNameDistance: [50, 4096],
+  groundTextDistance: [50, 4096],
+  groundFontSize: [8, 48],
+  groundMaxWidth: [120, 800],
+  groundBackground: [0, 1],
+  deathBackground: [0, 1],
   fireflyNameFontSize: [8, 48],
   fireflyNameOffset: [0, 512],
   bubbleDuration: [1, 60],
@@ -73,13 +119,17 @@ export function settingsFrom(input: Partial<Settings>): Settings {
     if (typeof value !== typeof defaults[key]) continue;
     if (typeof value === "number") {
       const range = bounds[key];
-      if (range && Number.isFinite(value))
+      if (range && Number.isFinite(value)) {
+        const clamped = Math.min(range[1], Math.max(range[0], value));
         Object.assign(result, {
-          [key]: Math.min(range[1], Math.max(range[0], value)),
+          [key]: integers.includes(key) ? Math.floor(clamped) : clamped,
         });
+      }
     } else if (typeof value === "boolean")
       Object.assign(result, { [key]: value });
-    else if (
+    else if (colors.includes(key)) {
+      if (isColor(value)) Object.assign(result, { [key]: value });
+    } else if (
       (key === "onlineView" && ["cards", "list"].includes(String(value))) ||
       (key === "font" && ["serif", "sans"].includes(String(value))) ||
       (key === "theme" && ["skyrim", "contrast"].includes(String(value))) ||

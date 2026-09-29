@@ -70,6 +70,18 @@ struct glz::meta<Dreamsleeve::Client::Configuration>
     &T::captureKeyboard,
     "fireflyScale",
     &T::fireflyScale,
+    "groundNotePlugin",
+    &T::groundNotePlugin,
+    "groundNoteFormId",
+    &T::groundNoteFormId,
+    "groundNoteScale",
+    &T::groundNoteScale,
+    "deathMarkPlugin",
+    &T::deathMarkPlugin,
+    "deathMarkFormId",
+    &T::deathMarkFormId,
+    "deathMarkScale",
+    &T::deathMarkScale,
     "maxPendingMovementSamples",
     &T::maxPendingMovementSamples);
 };

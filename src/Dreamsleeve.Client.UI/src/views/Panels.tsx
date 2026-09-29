@@ -9,11 +9,13 @@ import { SettingsPanel } from "./SettingsPanel";
 import { OnlinePanel } from "./OnlinePanel";
 import { PlayerDetails } from "./PlayerDetails";
 import { AccountPanel } from "./AccountPanel";
+import { MarksPanel } from "./MarksPanel";
 import { useDialog } from "../features/useDialog";
 import styles from "../styles/Workspace.module.css";
 const tabs: { id: Exclude<Panel, null>; label: string }[] = [
   { id: "online", label: "Онлайн" },
   { id: "profile", label: "Профиль" },
+  { id: "marks", label: "Метки" },
   { id: "stats", label: "Статистика" },
   { id: "settings", label: "Настройки" },
   { id: "account", label: "Аккаунт" },
@@ -101,6 +103,7 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
               </div>
             )}
           {s.panel === "account" && <AccountPanel chat={chat} state={s} />}
+          {s.panel === "marks" && <MarksPanel chat={chat} state={s} />}
           {s.panel === "stats" && (
             <>
               <h3>Состояние клиента</h3>

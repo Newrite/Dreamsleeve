@@ -43,11 +43,13 @@ export namespace Runtime
     Disconnect        // SKSE menu: close the session and stop reconnecting.
   };
 
+  // A handle is a value: the sink never resolves it, the frame does.
   struct Notice
   {
-    NoticeKind    kind{};
-    bool          flag{};
-    std::uint32_t formId{};
+    NoticeKind          kind{};
+    bool                flag{};
+    std::uint32_t       formId{};
+    RE::ObjectRefHandle handle{};  // PlayerDeath: the killer, if any.
   };
 
   enum class GameContext
@@ -67,6 +69,7 @@ export namespace Runtime
     std::string activationKey{"Enter"};
     std::size_t online{};
     std::size_t fireflies{};
+    std::size_t groundMarks{};
     bool        savedLogin{};
     bool        authenticating{};
     bool        hideUi{};
@@ -254,7 +257,7 @@ export namespace Runtime
     std::ofstream output{path, std::ios::binary};
     if (!output) return std::unexpected{"Cannot write " + path.string()};
     output
-      << "# Dreamsleeve client. Omitted settings keep defaults; keys are case-sensitive.\n" "version = 1\n" "serverIp = \"127.0.0.1\"\n" "serverPort = 8778\n" "authUrl = \"http://127.0.0.1:8779\"\n" "\n" "[client]\n" "visibilityDistance = 8192\n" "showFireflies = true\n" "fireflyPlugin = \"Skyrim.esm\"\n" "fireflyFormId = 0x02EB0F\n" "fireflyScale = 0.25\n" "showFireflyNames = true\n" "fireflyNameOcclusion = true\n" "fireflyNameFontSize = 18\n" "fireflyNameOffset = 35\n" "captureKeyboard = true\n";
+      << "# Dreamsleeve client. Omitted settings keep defaults; keys are case-sensitive.\n" "version = 1\n" "serverIp = \"127.0.0.1\"\n" "serverPort = 8778\n" "authUrl = \"http://127.0.0.1:8779\"\n" "\n" "[client]\n" "visibilityDistance = 8192\n" "showFireflies = true\n" "fireflyPlugin = \"Skyrim.esm\"\n" "fireflyFormId = 0x02EB0F\n" "fireflyScale = 0.25\n" "showFireflyNames = true\n" "fireflyNameOcclusion = true\n" "fireflyNameFontSize = 18\n" "fireflyNameOffset = 35\n" "captureKeyboard = true\n" "groundNotePlugin = \"Skyrim.esm\"\n" "groundNoteFormId = 0x075DDB\n" "groundNoteScale = 0.5\n" "deathMarkPlugin = \"Skyrim.esm\"\n" "deathMarkFormId = 0x075DD9\n" "deathMarkScale = 0.5\n";
     return {};
   }
 

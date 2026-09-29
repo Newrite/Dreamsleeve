@@ -761,7 +761,9 @@ test("chat bubble preferences save and restore independently of names", async ({
   await page
     .getByRole("slider", { name: "Размер шрифта сообщения" })
     .fill("20");
-  await page.getByRole("slider", { name: "Максимальная ширина" }).fill("400");
+  await page
+    .getByRole("slider", { name: "Максимальная ширина", exact: true })
+    .fill("400");
   await page
     .getByRole("slider", { name: "Непрозрачность фона сообщения" })
     .fill("0.4");
@@ -784,7 +786,7 @@ test("chat bubble preferences save and restore independently of names", async ({
     page.getByRole("slider", { name: "Размер шрифта сообщения" }),
   ).toHaveValue("20");
   await expect(
-    page.getByRole("slider", { name: "Максимальная ширина" }),
+    page.getByRole("slider", { name: "Максимальная ширина", exact: true }),
   ).toHaveValue("400");
   await expect(
     page.getByRole("slider", { name: "Непрозрачность фона сообщения" }),
@@ -1032,4 +1034,130 @@ test("a refused announcement of another mod can be dismissed but not retried", a
   ).toHaveCount(0);
   await row.getByRole("button", { name: "Убрать статус сообщения" }).click();
   await expect(row).toHaveCount(0);
+});
+
+test("bubble style and ground mark preferences save and restore", async ({
+  page,
+}) => {
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+    await page
+      .getByRole("button", { name: "Открыть меню Dreamsleeve" })
+      .click();
+    await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  };
+  await openSettings();
+  await expect(
+    page.getByLabel("Рамка сообщения", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByLabel("Цвет текста сообщения", { exact: true }),
+  ).toHaveValue("#EEECE5");
+  await page.getByLabel("Рамка сообщения", { exact: true }).uncheck();
+  await page
+    .getByLabel("Цвет текста сообщения", { exact: true })
+    .fill("#ff8800");
+  await page
+    .getByLabel("Цвет текста места смерти", { exact: true })
+    .fill("zzz");
+  await page.getByLabel("Показывать надписи", { exact: true }).uncheck();
+  await page.getByLabel("Скрывать метки", { exact: true }).check();
+  await page.getByRole("combobox", { name: "Надписей рядом" }).click();
+  await page.getByRole("option", { name: "32" }).click();
+  await page.getByRole("slider", { name: "Дальность текста" }).fill("300");
+  await page
+    .getByRole("slider", { name: "Высота светлячка над землёй" })
+    .fill("90");
+  await page.getByRole("button", { name: "Сохранить настройки" }).click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toContainText("сохранены");
+  await page
+    .getByRole("group", { name: "Метки на земле" })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/ground-mark-settings.png" });
+  await page.reload();
+  await openSettings();
+  await expect(
+    page.getByLabel("Рамка сообщения", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByLabel("Цвет текста сообщения", { exact: true }),
+  ).toHaveValue("#FF8800");
+  // An invalid colour never replaces the saved one.
+  await expect(
+    page.getByLabel("Цвет текста места смерти", { exact: true }),
+  ).toHaveValue("#D9534F");
+  await expect(
+    page.getByLabel("Показывать надписи", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByLabel("Скрывать метки", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("combobox", { name: "Надписей рядом" }),
+  ).toHaveAttribute("data-value", "32");
+  await expect(
+    page.getByRole("slider", { name: "Дальность текста" }),
+  ).toHaveValue("300");
+  await expect(
+    page.getByRole("slider", { name: "Высота светлячка над землёй" }),
+  ).toHaveValue("90");
+});
+
+test("leave here places the draft as a ground note and shows a refusal", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const input = page.getByRole("textbox", { name: "Сообщение" });
+  const leave = page.getByRole("button", { name: "Оставить здесь" });
+  await expect(leave).toBeDisabled();
+  await input.fill("Осторожно, тролль");
+  await expect(leave).toBeEnabled();
+  await leave.click();
+  const row = page.locator('[data-part="pending-message"]');
+  await expect(row).toHaveAttribute("data-kind", "note");
+  await expect(row).toContainText("[Метка] Вы: Осторожно, тролль");
+  await expect(row).toHaveCount(0);
+  await expect(page.locator('[data-part="messages"]')).not.toContainText(
+    "Осторожно, тролль",
+  );
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await expect(input).toHaveValue("");
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Метки", exact: true }).click();
+  await expect(page.getByLabel("Мои метки")).toContainText("Осторожно, тролль");
+  await page.getByRole("button", { name: "Закрыть панель" }).click();
+  await page.keyboard.press("Escape");
+
+  await page
+    .getByRole("button", { name: "Отклонить следующую отправку" })
+    .click();
+  await input.fill("Ещё одна");
+  await leave.click();
+  await expect(page.getByRole("status")).toContainText(
+    "Не оставлено: Здесь уже слишком много меток",
+  );
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await expect(row).toHaveAttribute("data-status", "failed");
+  await page.screenshot({ path: "test-results/ground-note-refused.png" });
+  await page.getByRole("button", { name: "Повторить", exact: true }).click();
+  await expect(row).toHaveCount(0);
+});
+
+test("my marks lists own marks and removes one", async ({ page }) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Метки", exact: true }).click();
+  const list = page.getByLabel("Мои метки");
+  await expect(list.getByRole("listitem")).toHaveCount(2);
+  await expect(list).toContainText("Место смерти");
+  await expect(list).toContainText("Морозный тролль");
+  await page.screenshot({ path: "test-results/my-marks.png" });
+  await page.getByRole("button", { name: "Удалить метку 302" }).click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toContainText("Метка удалена");
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+  await expect(list).not.toContainText("Морозный тролль");
 });

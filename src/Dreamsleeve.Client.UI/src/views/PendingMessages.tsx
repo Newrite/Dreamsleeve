@@ -33,23 +33,35 @@ export function PendingMessages({
   }, [chat, s.pending, s.active]);
 
   return Object.entries(s.pending)
-    .filter(([, p]) => shows(p.channelId, s.filter, s.settings, s.channels))
+    .filter(
+      ([, p]) =>
+        p.kind === "note" ||
+        shows(p.channelId, s.filter, s.settings, s.channels),
+    )
     .map(([id, p]) => (
       <div
         key={id}
         className={styles.pendingMessage}
         data-part="pending-message"
         data-status={p.status}
+        data-kind={p.kind}
       >
         <span className={styles.pendingText}>
-          [{s.channels.find((c) => c.id === p.channelId)?.name ?? "Канал"}]{" "}
-          {p.external === undefined ? "Вы" : p.external || "Мод"}: {p.text}
+          [
+          {p.kind === "note"
+            ? "Метка"
+            : (s.channels.find((c) => c.id === p.channelId)?.name ?? "Канал")}
+          ] {p.external === undefined ? "Вы" : p.external || "Мод"}: {p.text}
         </span>
         <small role="status">
           {p.status === "sending"
-            ? " · Отправляется…"
+            ? p.kind === "note"
+              ? " · Оставляется…"
+              : " · Отправляется…"
             : p.status === "failed"
-              ? ` · Не отправлено: ${p.error}`
+              ? p.kind === "note"
+                ? ` · Не оставлено: ${p.error}`
+                : ` · Не отправлено: ${p.error}`
               : " · Доставка неизвестна"}
         </small>
         {s.active && p.status === "failed" && p.external === undefined && (

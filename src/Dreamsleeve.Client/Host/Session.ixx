@@ -29,9 +29,12 @@ public:
       std::vector<Announcements::Outcome> announcementResults;
       bool                             snapshot{};
       bool                             playersChanged{};
+      // The set of marks the game draws changed in this Process call.
+      bool visibleMarksChanged{};
     };
 
     using Players = std::unordered_map<Domain::PlayerId, Domain::Player>;
+    using Marks   = std::map<Domain::GroundMarkId, Domain::GroundMark>;
 
     // One call per Drain. Posts RequestSnapshot itself when a view or a missed
     // delta requires a fresh full state.
@@ -47,18 +50,89 @@ public:
       for (const auto& confirmation : output.chatConfirmations)
         if (!Settle(frame, confirmation.requestId, Announcements::Result::Published, {}))
           Complete(frame, confirmation.requestId, Bridge::Id(confirmation.messageId), {});
+      for (const auto& confirmation : output.groundMarkConfirmations)
+        SettleMark(frame, confirmation);
       for (const auto& event : output.rejections)
       {
         auto reason = Bridge::RejectionText(event.rejection.code, event.rejection.message);
-        if (!Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason))
+        if (!Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason) && !FailMark(frame, event.rejection.requestId, reason))
           Complete(frame, event.rejection.requestId, {}, std::move(reason));
       }
       for (const auto& failure : output.commandFailures)
-        if (!Settle(frame, failure.requestId, ResultOf(failure.code), std::string{Bridge::FailureText(failure.code)}))
-          Complete(frame, failure.requestId, {}, std::string{Bridge::FailureText(failure.code)});
+      {
+        std::string reason{Bridge::FailureText(failure.code)};
+        if (!Settle(frame, failure.requestId, ResultOf(failure.code), reason) && !FailMark(frame, failure.requestId, reason))
+          Complete(frame, failure.requestId, {}, std::move(reason));
+      }
+      if (ownMarksChanged && !frame.snapshot) Emit(frame, Bridge::GroundMarksEvent{.marks = OwnMarkList(settings)});
+      ownMarksChanged = false;
 
       PublishStatus(output.status, settings, frame);
       RequestSnapshotIfNeeded(exchange, frame);
+    }
+
+    // Marks the server currently shows this player, as Core projects them.
+    const Marks& VisibleMarks() const noexcept
+    {
+      return visibleMarks;
+    }
+
+    // The player's own marks this session has seen: placed here, or delivered
+    // while nearby. The server keeps no separate list of own marks, so a mark
+    // placed in an earlier session far from here is unknown until met again.
+    const Marks& OwnMarks() const noexcept
+    {
+      return ownMarks;
+    }
+
+    // A note where the player stands, requested by the web UI.
+    std::expected<void, std::string>
+      PlaceGroundNote(ClientExchange& exchange, std::string uiRequestId, std::string text, const Domain::GroundMarkPlacement& placement)
+    {
+      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
+      const auto posted = exchange.Post({
+          generation,
+          Dreamsleeve::Client::PlaceGroundNote{*requestId, std::move(text), placement}
+      });
+      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
+      pendingMarks.emplace(*requestId, PendingMark{std::move(uiRequestId), MarkRequest::Note, generation});
+      return {};
+    }
+
+    // The place the character died, reported by the game once per death.
+    std::expected<void, std::string> ReportDeath(ClientExchange& exchange, std::string label, const Domain::GroundMarkPlacement& placement)
+    {
+      if (!Ready()) return std::unexpected{"session not ready"};
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return std::unexpected{"request ids exhausted"};
+      const auto posted = exchange.Post({
+          generation,
+          Dreamsleeve::Client::ReportDeath{*requestId, std::move(label), placement}
+      });
+      if (posted != CommandPostResult::Queued) return std::unexpected{"command queue full"};
+      pendingMarks.emplace(*requestId, PendingMark{{}, MarkRequest::Death, generation});
+      return {};
+    }
+
+    std::expected<void, std::string> RemoveGroundMark(ClientExchange& exchange, std::string uiRequestId, Domain::GroundMarkId markId)
+    {
+      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
+      const auto posted = exchange.Post({
+          generation,
+          Dreamsleeve::Client::RemoveGroundMark{*requestId, markId}
+      });
+      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
+      pendingMarks.emplace(*requestId, PendingMark{std::move(uiRequestId), MarkRequest::Remove, generation});
+      return {};
+    }
+
+    std::size_t PendingMarkCount() const noexcept
+    {
+      return pendingMarks.size();
     }
 
     // The next Process must deliver a full snapshot; old correlations are dropped
@@ -69,6 +143,8 @@ public:
       snapshotRequested = false;
       refreshing        = false;
       pendingChats.clear();
+      // Death reports have no UI correlation and settle silently either way.
+      std::erase_if(pendingMarks, [](const auto& entry) { return entry.second.request != MarkRequest::Death; });
       lastStatus.reset();
     }
 
@@ -202,6 +278,85 @@ private:
       std::uint64_t generation{};
     };
 
+    enum class MarkRequest
+    {
+      Note,
+      Death,
+      Remove
+    };
+
+    struct PendingMark
+    {
+      std::string   uiRequestId;  // Empty for a death report.
+      MarkRequest   request{};
+      std::uint64_t generation{};
+    };
+
+    std::vector<Bridge::UiGroundMark> OwnMarkList(const UiSettings& settings) const
+    {
+      std::vector<Bridge::UiGroundMark> list;
+      list.reserve(ownMarks.size());
+      for (const auto& [id, mark] : ownMarks)
+        list.push_back(Bridge::ToUiGroundMark(mark, settings));
+      return list;
+    }
+
+    void SeeMark(const Domain::GroundMark& mark)
+    {
+      visibleMarks.insert_or_assign(mark.markId, mark);
+      if (selfId && mark.author.playerId == *selfId)
+      {
+        ownMarks.insert_or_assign(mark.markId, mark);
+        ownMarksChanged = true;
+      }
+    }
+
+    void ForgetMark(Domain::GroundMarkId id)
+    {
+      visibleMarks.erase(id);
+      if (ownMarks.erase(id) != 0) ownMarksChanged = true;
+    }
+
+    void SettleMark(Frame& frame, const GroundMarkConfirmation& confirmation)
+    {
+      const auto found = pendingMarks.find(confirmation.requestId);
+      if (found == pendingMarks.end()) return;
+      auto pending = std::move(found->second);
+      pendingMarks.erase(found);
+      if (confirmation.removed) ForgetMark(confirmation.markId);
+      if (confirmation.evictedId) ForgetMark(*confirmation.evictedId);
+      if (pending.request == MarkRequest::Death)
+      {
+        frame.notes.push_back(std::format("Death mark {} placed", confirmation.markId));
+        return;
+      }
+      Bridge::MarkResultEvent event;
+      event.requestId = std::move(pending.uiRequestId);
+      if (confirmation.removed)
+        event.removed = true;
+      else
+      {
+        event.markId = Bridge::Id(confirmation.markId);
+        if (confirmation.evictedId) event.evictedId = Bridge::Id(*confirmation.evictedId);
+      }
+      Emit(frame, event);
+    }
+
+    bool FailMark(Frame& frame, std::uint64_t requestId, std::string reason)
+    {
+      const auto found = pendingMarks.find(requestId);
+      if (found == pendingMarks.end()) return false;
+      auto pending = std::move(found->second);
+      pendingMarks.erase(found);
+      if (pending.request == MarkRequest::Death)
+      {
+        frame.notes.push_back("Death mark refused: " + reason);
+        return true;
+      }
+      Emit(frame, Bridge::MarkResultEvent{.requestId = std::move(pending.uiRequestId), .error = Bridge::ClipError(reason)});
+      return true;
+    }
+
     template <class Event>
     void Emit(Frame& frame, const Event& event)
     {
@@ -265,8 +420,19 @@ private:
         if (globalChannel && chat.channelId == *globalChannel && !chat.messages.empty())
           bubbleFloor = std::max(bubbleFloor, chat.messages.back().messageId);
 
+      // Marks of another generation are gone with it; a refresh of the same
+      // session keeps the own marks met earlier and re-reads the visible set.
+      if (generation != marksGeneration) ownMarks.clear();
+      marksGeneration = generation;
+      visibleMarks.clear();
+      for (const auto& mark : snapshot.groundMarks.marks)
+        SeeMark(mark);
+      ownMarksChanged           = false;
+      frame.visibleMarksChanged = true;
+
       // A new generation cannot complete requests of the previous session.
       std::erase_if(pendingChats, [&](const auto& entry) { return entry.second.generation != generation; });
+      std::erase_if(pendingMarks, [&](const auto& entry) { return entry.second.generation != generation; });
       std::erase_if(pendingAnnouncements, [&](const auto& entry) {
         if (entry.second.generation == generation) return false;
         Finish(frame, entry.second, Announcements::Result::Failed, "Доставка неизвестна: сессия сменилась");
@@ -296,11 +462,13 @@ private:
             event.messages.push_back(std::move(*shown));
         }
       }
-      event.players    = PlayerList(settings);
-      event.refresh    = refresh;
-      event.selfId     = selfId ? Bridge::Id(*selfId) : "0";
-      event.serverName = serverName;
-      event.settings   = settings;
+      event.players              = PlayerList(settings);
+      event.refresh              = refresh;
+      event.selfId               = selfId ? Bridge::Id(*selfId) : "0";
+      event.serverName           = serverName;
+      event.settings             = settings;
+      event.groundMarksSupported = true;  // Protocol v8: every Ready session carries marks.
+      event.groundMarks          = OwnMarkList(settings);
       Emit(frame, event);
 
       frame.snapshot = true;
@@ -338,6 +506,20 @@ private:
           channels.insert_or_assign(change.channelId, change.state->kind);
         else
           channels.erase(change.channelId);
+      }
+      // Ordered transitions of the visible set. A clear (space change) keeps
+      // the own marks: they still exist, only out of sight.
+      for (const auto& change : delta.groundMarks)
+      {
+        frame.visibleMarksChanged = true;
+        if (std::holds_alternative<GroundMarksCleared>(change))
+          visibleMarks.clear();
+        else if (const auto* removed = std::get_if<GroundMarksRemoved>(&change))
+          for (const auto id : removed->markIds)
+            ForgetMark(id);
+        else if (const auto* added = std::get_if<GroundMarksAdded>(&change))
+          for (const auto& mark : added->marks)
+            SeeMark(mark);
       }
 
       Bridge::MessagesEvent messages;
@@ -464,7 +646,12 @@ private:
     std::optional<Domain::ChatChannelId>           globalChannel;
     Domain::ChatMessageId                          bubbleFloor{};
     Players                                        players;
+    Marks                                          visibleMarks;
+    Marks                                          ownMarks;
+    bool                                           ownMarksChanged{};
+    std::uint64_t                                  marksGeneration{};
     std::unordered_map<std::uint64_t, PendingChat> pendingChats;
+    std::unordered_map<std::uint64_t, PendingMark> pendingMarks;
     std::unordered_map<std::uint64_t, PendingAnnouncement> pendingAnnouncements;
     std::optional<ClientStatus>                    lastStatus;
     bool                                           needsSnapshot{true};

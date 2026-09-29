@@ -5,6 +5,7 @@ import type {
   Command,
   ConnectionPhase,
   Channel,
+  GroundMark,
   HostEvent,
   Message,
   Player,
@@ -36,7 +37,7 @@ const chronological = (messages: Message[]) =>
 const confirmedKey = (p: PendingMessage) =>
   p.messageId === undefined ? undefined : messageKey(p.channelId, p.messageId);
 export type Panel =
-  "online" | "profile" | "stats" | "settings" | "account" | null;
+  "online" | "profile" | "stats" | "settings" | "account" | "marks" | null;
 export interface PendingMessage {
   channelId: string;
   text: string;
@@ -47,6 +48,9 @@ export interface PendingMessage {
   since?: number; // when the row became failed or unknown
   // Refused announcement of another mod: the mod label; never retried here.
   external?: string;
+  // A ground note left where the character stands, not a chat line: it
+  // settles by markResult and is shown whatever channel is selected.
+  kind?: "note";
 }
 export const sending = (state: ChatState) =>
   Object.values(state.pending).some((p) => p.status === "sending");
@@ -96,6 +100,9 @@ export interface ChatState {
   ignored: { id: string; name: string }[];
   // Context menu of a message author, at viewport coordinates.
   authorMenu: { playerId: string; name: string; x: number; y: number } | null;
+  // Ground marks: whether the session can place them, and the own marks known.
+  groundMarksSupported: boolean;
+  groundMarks: GroundMark[];
 }
 export const announcementOf = (m: Message) =>
   m.source === "system" ? m.announcement : undefined;
@@ -168,9 +175,13 @@ export function makeChat(send: Send, now = () => Date.now()) {
     savedRevision: 0,
     ignored: [],
     authorMenu: null,
+    groundMarksSupported: false,
+    groundMarks: [],
   }));
   let sequence = 0;
   let refusals = 0;
+  // Removal requests in flight: request id -> mark id, for the result notice.
+  const removals = new Map<string, string>();
   const touch = () => store.setState({ activity: now(), faded: false });
   function receive(event: HostEvent) {
     const state = store.getState();
@@ -189,6 +200,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
             messages,
             receivedAt,
             players: event.players,
+            groundMarksSupported: event.groundMarksSupported ?? false,
+            groundMarks: event.groundMarks ?? state.groundMarks,
             settings: event.settings
               ? settingsFrom({
                   ...event.settings,
@@ -212,6 +225,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
           initialized: true,
           connected: true,
           connectionPhase: "connected",
+          groundMarksSupported: event.groundMarksSupported ?? false,
+          groundMarks: event.groundMarks ?? [],
           pending:
             state.selfId === event.selfId &&
             state.serverName === event.serverName
@@ -278,6 +293,43 @@ export function makeChat(send: Send, now = () => Date.now()) {
       case "players":
         store.setState({ players: event.players });
         break;
+      case "groundMarks":
+        store.setState({ groundMarks: event.marks });
+        break;
+      case "markResult": {
+        const removed = removals.get(event.requestId);
+        if (removed !== undefined) {
+          removals.delete(event.requestId);
+          store.setState({
+            notice:
+              event.error !== undefined
+                ? `Метка не удалена: ${event.error}`
+                : "Метка удалена",
+          });
+          break;
+        }
+        const item = state.pending[event.requestId];
+        if (!item || item.kind !== "note") break;
+        const pending = { ...state.pending };
+        if (event.error !== undefined) {
+          pending[event.requestId] = {
+            ...item,
+            status: "failed",
+            error: event.error,
+            since: now(),
+          };
+          store.setState({ pending });
+          break;
+        }
+        delete pending[event.requestId];
+        store.setState({
+          pending,
+          notice: event.evictedId
+            ? `Метка оставлена; самая старая (№${event.evictedId}) убрана по квоте`
+            : "Метка оставлена",
+        });
+        break;
+      }
       case "ignored":
         store.setState({ ignored: event.players });
         break;
@@ -409,6 +461,51 @@ export function makeChat(send: Send, now = () => Date.now()) {
       return;
     }
     receive({ type: "deactivate" });
+  }
+  // The current draft goes to the ground where the character stands instead
+  // of the chat. Same limits, same pending row, same single request at a time.
+  function placeNote() {
+    const s = store.getState();
+    if (!s.visible || sending(s)) return;
+    const text = s.drafts[s.target] ?? "";
+    if (!text.trim() || !s.connected || !s.groundMarksSupported) return;
+    const room = makeRoom(s.pending);
+    if (Object.keys(room).length >= PENDING_LIMIT) {
+      store.setState({
+        notice: "Удалите старые неподтверждённые сообщения перед отправкой.",
+      });
+      return;
+    }
+    const requestId = String(++sequence);
+    const row: PendingMessage = {
+      channelId: s.target,
+      text,
+      time: now(),
+      status: "sending",
+      kind: "note",
+    };
+    store.setState({
+      scrolled: false,
+      pending: { ...room, [requestId]: row },
+      notice: "",
+    });
+    if (!send({ type: "placeGroundNote", requestId, text })) {
+      store.setState({
+        pending: {
+          ...room,
+          [requestId]: {
+            ...row,
+            status: "failed",
+            error: "Команда не принята приложением",
+            since: now(),
+          },
+        },
+        drafts: { ...s.drafts, [s.target]: "" },
+      });
+      return;
+    }
+    store.setState({ drafts: { ...s.drafts, [s.target]: "" } });
+    close();
   }
   function submit() {
     const s = store.getState();
@@ -565,7 +662,23 @@ export function makeChat(send: Send, now = () => Date.now()) {
         target: item.channelId,
         drafts: { ...s.drafts, [item.channelId]: item.text },
       });
-      submit();
+      if (item.kind === "note") placeNote();
+      else submit();
+    },
+    placeNote,
+    // Only the author's own marks can be removed; the result is a notice.
+    removeMark(markId: string) {
+      const s = store.getState();
+      if (!s.connected || !s.groundMarksSupported || !markId) return;
+      if ([...removals.values()].includes(markId)) return;
+      const requestId = String(++sequence);
+      removals.set(requestId, markId);
+      if (!send({ type: "removeGroundMark", requestId, markId })) {
+        removals.delete(requestId);
+        store.setState({ notice: "Команда не принята приложением" });
+        return;
+      }
+      store.setState({ notice: "Удаление метки…" });
     },
     receive,
     touch,

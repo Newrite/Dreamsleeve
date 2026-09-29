@@ -92,6 +92,16 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<UiAnnouncement> announcement;
   };
 
+  // One of the player's own ground marks known to this session: kind is
+  // "note" or "death"; the text is already filtered like chat.
+  struct UiGroundMark
+  {
+    std::string  id;
+    std::string  kind;
+    std::string  text;
+    std::int64_t time{};
+  };
+
   struct SnapshotEvent
   {
     std::string               type{"snapshot"};
@@ -104,6 +114,27 @@ export namespace Dreamsleeve::Host::Bridge
     // Same session re-projected (names or ignore list changed): the UI keeps
     // its pending rows, filters and scroll instead of treating it as new.
     bool refresh{};
+    // The session speaks a protocol with ground marks; the own marks it knows.
+    bool                      groundMarksSupported{};
+    std::vector<UiGroundMark> groundMarks;
+  };
+
+  // The own marks changed: placed, removed, evicted or seen again.
+  struct GroundMarksEvent
+  {
+    std::string               type{"groundMarks"};
+    std::vector<UiGroundMark> marks;
+  };
+
+  // Outcome of placeGroundNote or removeGroundMark; not a delta of the visible set.
+  struct MarkResultEvent
+  {
+    std::string                type{"markResult"};
+    std::string                requestId;
+    std::optional<std::string> markId;
+    std::optional<std::string> evictedId;
+    std::optional<bool>        removed;
+    std::optional<std::string> error;
   };
 
   struct MessagesEvent
@@ -205,6 +236,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::string               nameMode;
     bool                      streamerMode{};
     std::string               textFilter;
+    std::string               markId;
   };
 
   constexpr std::size_t MaxChatText     = 16000;
@@ -282,6 +314,16 @@ export namespace Dreamsleeve::Host::Bridge
     return Detail::Write(event);
   }
 
+  Encoded Encode(const GroundMarksEvent& event)
+  {
+    return Detail::Write(event);
+  }
+
+  Encoded Encode(const MarkResultEvent& event)
+  {
+    return Detail::Write(event);
+  }
+
   std::expected<UiCommand, std::string> ParseCommand(std::string_view json)
   {
     if (json.size() > 1 << 20) return std::unexpected{"UI command exceeds limit"};
@@ -310,6 +352,17 @@ export namespace Dreamsleeve::Host::Bridge
     if (type == "ignore" || type == "unignore")
     {
       if (command.playerId.empty()) return std::unexpected{type + " requires playerId"};
+      return command;
+    }
+    if (type == "placeGroundNote")
+    {
+      if (command.requestId.empty()) return std::unexpected{"placeGroundNote requires requestId"};
+      if (command.text.empty() || command.text.size() > MaxChatText) return std::unexpected{"placeGroundNote text is empty or too long"};
+      return command;
+    }
+    if (type == "removeGroundMark")
+    {
+      if (command.requestId.empty() || command.markId.empty()) return std::unexpected{"removeGroundMark requires requestId and markId"};
       return command;
     }
     if (type == "displaySettings")
@@ -637,13 +690,35 @@ export namespace Dreamsleeve::Host::Bridge
   }
 
   // What the local filter lets through: the text, a masked copy, or nothing.
-  // One's own hidden message stays as a placeholder so its pending row settles visibly.
-  std::optional<std::string> ShownText(const Domain::ChatMessage& message, const UiSettings& settings, bool own)
+  // One's own hidden text stays as a placeholder so its pending row settles
+  // visibly. The one rule for chat lines, bubbles and ground marks.
+  std::optional<std::string> FilterText(const std::string& text, const std::vector<Domain::TextSpan>& flagged, const UiSettings& settings, bool own)
   {
-    if (message.flagged.empty() || settings.textFilter == "off") return message.messageText;
-    if (settings.textFilter == "mask") return MaskFlagged(message.messageText, message.flagged);
+    if (flagged.empty() || settings.textFilter == "off") return text;
+    if (settings.textFilter == "mask") return MaskFlagged(text, flagged);
     if (own) return std::string{HiddenOwnText};
     return std::nullopt;
+  }
+
+  std::optional<std::string> ShownText(const Domain::ChatMessage& message, const UiSettings& settings, bool own)
+  {
+    return FilterText(message.messageText, message.flagged, settings, own);
+  }
+
+  std::string_view MarkKindName(Domain::GroundMarkKind kind)
+  {
+    return kind == Domain::GroundMarkKind::Death ? "death" : "note";
+  }
+
+  // An own mark for the UI list; a hidden own text shows the placeholder.
+  UiGroundMark ToUiGroundMark(const Domain::GroundMark& mark, const UiSettings& settings)
+  {
+    UiGroundMark result;
+    result.id   = Id(mark.markId);
+    result.kind = std::string{MarkKindName(mark.kind)};
+    result.text = FilterText(mark.text, mark.flagged, settings, true).value_or(std::string{HiddenOwnText});
+    result.time = Domain::ToUnixMilliseconds(mark.createdAt);
+    return result;
   }
 
   // The author is named from the snapshot taken at sending, never from the
@@ -790,8 +865,14 @@ export namespace Dreamsleeve::Host::Bridge
         return "Слишком часто или повтор того же сообщения. Подождите немного";
       case Code::AnnouncementNotAllowed:
         return "Сервер не принимает объявления от этого источника";
+      case Code::GroundMarkAreaFull:
+        return "Здесь уже слишком много меток";
+      case Code::GroundMarkNotFound:
+        return "Метка не найдена или уже удалена";
       case Code::InvalidRequest:
         if (message.starts_with("Message exceeds")) return "Сообщение слишком длинное";
+        if (message.starts_with("Note exceeds")) return "Текст метки слишком длинный";
+        if (message.starts_with("The mark is not where")) return "Метку нельзя оставить здесь";
         break;
       default:
         break;

@@ -65,9 +65,47 @@ export namespace Dreamsleeve::Host
     bool announcementsThirdParty{true};
     bool announcementsEvents{true};
     bool announcementsPeriodic{true};
+    // Bubble look above fireflies: the fill opacity is bubbleBackground; a
+    // border and the text colour ("#RRGGBB") are separate, so "no box at all"
+    // is background 0 with the border off.
+    bool        bubbleBorder{true};
+    std::string bubbleTextColor{"#EEECE5"};
+    std::string fireflyNameColor{"#EEECE5"};
+    // Height of the glow above the pose origin, game units.
+    double fireflyHeightOffset{110};
+    // Ground marks: notes and death places near the player (see docs/GroundMarksRu.md).
+    bool        showGroundNotes{true};
+    bool        showDeathMarks{true};
+    double      maxVisibleNotes{16};
+    double      maxVisibleDeaths{16};
+    double      groundDrawDistance{4096};  // Game units; the server delivers within its own radius.
+    double      groundNoteOffset{5};       // Above the ground hit, game units.
+    double      deathMarkOffset{5};
+    double      groundNameDistance{600};   // Author name visible within, with 10% hysteresis.
+    double      groundTextDistance{150};   // Text visible within, with 10% hysteresis.
+    double      groundFontSize{16};
+    double      groundMaxWidth{320};
+    double      groundBackground{0.65};
+    bool        groundBorder{true};
+    std::string groundTextColor{"#EEECE5"};
+    std::string deathTextColor{"#D9534F"};
+    double      deathBackground{0.65};
+    bool        deathBorder{true};
+    bool        combatHideGroundMarks{false};  // Statics and labels.
+    bool        combatHideGroundText{false};   // Labels only.
 
     bool operator==(const UiSettings&) const = default;
   };
+
+  // "#RRGGBB" to 0xRRGGBB; anything else is absent.
+  std::optional<std::uint32_t> ParseColor(std::string_view text)
+  {
+    if (text.size() != 7 || text.front() != '#') return std::nullopt;
+    std::uint32_t value{};
+    const auto    parsed = std::from_chars(text.data() + 1, text.data() + text.size(), value, 16);
+    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) return std::nullopt;
+    return value;
+  }
 
   // Host-owned records, never round-tripped through the web UI. IDs are
   // decimal strings scoped by the server address: an account ID is unique
@@ -137,6 +175,11 @@ export namespace Dreamsleeve::Host
       value = fallback;
     }
 
+    void Color(std::string& value, std::string_view fallback)
+    {
+      if (!ParseColor(value)) value = fallback;
+    }
+
   }
 
   // Same bounds as state/settings.ts; hand-edited files fall back per field.
@@ -144,6 +187,7 @@ export namespace Dreamsleeve::Host
   {
     using UiSettingsDetail::Choose;
     using UiSettingsDetail::Clamp;
+    using UiSettingsDetail::Color;
     const UiSettings defaults{};
 
     Choose(value.onlineView, {"cards", "list"}, defaults.onlineView);
@@ -173,6 +217,23 @@ export namespace Dreamsleeve::Host
     value.y                   = Clamp(value.y, 0, 1, defaults.y);
     value.width               = Clamp(value.width, 320, 1600, defaults.width);
     value.height              = Clamp(value.height, 220, 1200, defaults.height);
+
+    Color(value.bubbleTextColor, defaults.bubbleTextColor);
+    Color(value.fireflyNameColor, defaults.fireflyNameColor);
+    Color(value.groundTextColor, defaults.groundTextColor);
+    Color(value.deathTextColor, defaults.deathTextColor);
+    value.fireflyHeightOffset = Clamp(value.fireflyHeightOffset, 0, 512, defaults.fireflyHeightOffset);
+    value.maxVisibleNotes     = std::floor(Clamp(value.maxVisibleNotes, 1, 64, defaults.maxVisibleNotes));
+    value.maxVisibleDeaths    = std::floor(Clamp(value.maxVisibleDeaths, 1, 64, defaults.maxVisibleDeaths));
+    value.groundDrawDistance  = Clamp(value.groundDrawDistance, 0, 16384, defaults.groundDrawDistance);
+    value.groundNoteOffset    = Clamp(value.groundNoteOffset, -64, 256, defaults.groundNoteOffset);
+    value.deathMarkOffset     = Clamp(value.deathMarkOffset, -64, 256, defaults.deathMarkOffset);
+    value.groundNameDistance  = Clamp(value.groundNameDistance, 50, 4096, defaults.groundNameDistance);
+    value.groundTextDistance  = Clamp(value.groundTextDistance, 50, 4096, defaults.groundTextDistance);
+    value.groundFontSize      = Clamp(value.groundFontSize, 8, 48, defaults.groundFontSize);
+    value.groundMaxWidth      = Clamp(value.groundMaxWidth, 120, 800, defaults.groundMaxWidth);
+    value.groundBackground    = Clamp(value.groundBackground, 0, 1, defaults.groundBackground);
+    value.deathBackground     = Clamp(value.deathBackground, 0, 1, defaults.deathBackground);
     return value;
   }
 

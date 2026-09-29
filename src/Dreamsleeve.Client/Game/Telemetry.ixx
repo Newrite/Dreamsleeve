@@ -206,7 +206,9 @@ namespace Telemetry
     return topics->lastSpeaker.get();
   }
 
-  std::optional<std::string> RefName(RE::TESObjectREFR* ref)
+  // The display name of a reference as the combat target is named; shared
+  // with the death label of ground marks.
+  export std::optional<std::string> RefName(RE::TESObjectREFR* ref)
   {
     if (!ref) return std::nullopt;
     auto name = Utf8(ref->GetName());

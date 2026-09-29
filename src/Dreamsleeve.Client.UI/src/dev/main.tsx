@@ -17,6 +17,7 @@ import {
   SYSTEM_CHANNEL,
   announcements,
   channels,
+  groundMarks,
   messages,
   players,
 } from "./fixture";
@@ -122,6 +123,9 @@ const history: Message[] = [
   },
 ];
 flags.set("flagged-1", [[14, 28]]);
+// Stand-in for the host's own-marks list: placed here or met nearby.
+const marks = [...groundMarks];
+let nextMarkId = 400;
 function snapshot(settings = chat.store.getState().settings, refresh = false) {
   chat.receive({
     type: "snapshot",
@@ -132,10 +136,61 @@ function snapshot(settings = chat.store.getState().settings, refresh = false) {
     selfId: players[0].id,
     settings,
     refresh,
+    groundMarksSupported: true,
+    groundMarks: marks,
   });
 }
 function command(c: Command) {
   if (c.type === "close") return true;
+  if (c.type === "placeGroundNote") {
+    const rejected = rejectNext;
+    rejectNext = false;
+    setTimeout(() => {
+      if (rejected) {
+        chat.receive({
+          type: "markResult",
+          requestId: c.requestId,
+          error: "Здесь уже слишком много меток",
+        });
+        return;
+      }
+      // Two notes per player on the stand: the oldest gives way.
+      const notes = marks.filter((m) => m.kind === "note");
+      const evicted = notes.length >= 2 ? notes[0] : undefined;
+      if (evicted) marks.splice(marks.indexOf(evicted), 1);
+      const markId = String(nextMarkId++);
+      marks.push({ id: markId, kind: "note", text: c.text, time: Date.now() });
+      chat.receive({
+        type: "markResult",
+        requestId: c.requestId,
+        markId,
+        ...(evicted ? { evictedId: evicted.id } : {}),
+      });
+      chat.receive({ type: "groundMarks", marks: [...marks] });
+    }, 300);
+    return true;
+  }
+  if (c.type === "removeGroundMark") {
+    setTimeout(() => {
+      const index = marks.findIndex((m) => m.id === c.markId);
+      if (index < 0) {
+        chat.receive({
+          type: "markResult",
+          requestId: c.requestId,
+          error: "Метка не найдена или уже удалена",
+        });
+        return;
+      }
+      marks.splice(index, 1);
+      chat.receive({
+        type: "markResult",
+        requestId: c.requestId,
+        removed: true,
+      });
+      chat.receive({ type: "groundMarks", marks: [...marks] });
+    }, 300);
+    return true;
+  }
   if (c.type === "ignore" || c.type === "unignore") {
     const known = players.find((p) => p.id === c.playerId);
     if (c.type === "ignore") ignored.set(c.playerId, known?.displayName ?? "");

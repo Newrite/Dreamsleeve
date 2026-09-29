@@ -43,6 +43,32 @@ announcementsTrustedClient = true
 announcementsThirdParty = true
 announcementsEvents = true
 announcementsPeriodic = true
+# Bubble look: the fill opacity is bubbleBackground; border and text colour ("#RRGGBB")
+# are separate, so "no box at all" is bubbleBackground = 0 and bubbleBorder = false.
+bubbleBorder = true
+bubbleTextColor = "#EEECE5"
+fireflyNameColor = "#EEECE5"
+fireflyHeightOffset = 110 # Glow height above the pose origin, game units 0..512
+# Ground marks (docs/GroundMarksRu.md): kinds, counts, distances and the label look.
+showGroundNotes = true
+showDeathMarks = true
+maxVisibleNotes = 16 # 1..64 nearest
+maxVisibleDeaths = 16
+groundDrawDistance = 4096 # game units, 0..16384
+groundNoteOffset = 5 # above the floor hit, -64..256
+deathMarkOffset = 5
+groundNameDistance = 600 # author name visible within, 50..4096 (10% hysteresis)
+groundTextDistance = 150 # text visible within, 50..4096
+groundFontSize = 16
+groundMaxWidth = 320
+groundBackground = 0.65
+groundBorder = true
+groundTextColor = "#EEECE5"
+deathTextColor = "#D9534F" # death label and author name
+deathBackground = 0.65
+deathBorder = true
+combatHideGroundMarks = false # statics and labels
+combatHideGroundText = false # labels only
 
 # Written by the plugin, never sent to the server. IDs are scoped by the
 # server address "ip:port": an account ID is unique only within its server.

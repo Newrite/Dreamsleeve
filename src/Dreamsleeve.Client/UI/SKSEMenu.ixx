@@ -31,6 +31,7 @@ namespace SKSEMenu
     ImGui::Text("Сервер: %s", snapshot.serverName.empty() ? "-" : snapshot.serverName.c_str());
     ImGui::Text("Игроков онлайн: %zu", snapshot.online);
     ImGui::Text("Светлячков рядом: %zu", snapshot.fireflies);
+    ImGui::Text("Меток рядом: %zu", snapshot.groundMarks);
     if (snapshot.savedLogin)
       ImGui::Text("Сохранённый вход: %s", snapshot.savedUsername.c_str());
     else

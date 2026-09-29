@@ -64,6 +64,13 @@ fireflyNameOcclusion = true # Hide names behind collision geometry
 fireflyNameFontSize = 18 # HUD units, 8..48
 fireflyNameOffset = 35 # Height above the firefly, 0..512 game units
 captureKeyboard = true # Keep keyboard events from the game and other SKSE mods while the chat is open
+# Ground marks: STAT base forms without collision, plugin-local IDs (flat vanilla glow discs).
+groundNotePlugin = "Skyrim.esm"
+groundNoteFormId = 0x075DDB
+groundNoteScale = 0.5 # 0.01..10.0
+deathMarkPlugin = "Skyrim.esm"
+deathMarkFormId = 0x075DD9
+deathMarkScale = 0.5 # 0.01..10.0
 """
 
 

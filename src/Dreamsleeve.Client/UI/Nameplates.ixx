@@ -7,39 +7,71 @@ export module Dreamsleeve.UI.Nameplates;
 import std;
 import Dreamsleeve.Client.Domain;
 import Dreamsleeve.Client.Utils;
+import Dreamsleeve.Game.Raycast;
 
-// A small Scaleform HUD layer: a name and, optionally, one chat bubble above
-// each visible firefly. Game objects are read only on the main thread; the HUD
-// callback consumes copied strings and screen coordinates and owns all GFx values.
+// A small Scaleform HUD layer: a name and, optionally, one text bubble above
+// each anchor (a firefly, a ground mark). Game objects are read only on the
+// main thread; the HUD callback consumes copied strings and screen coordinates
+// and owns all GFx values.
 namespace Nameplates
 {
 
-  // Bubble look shared by every label of a frame; a change rebuilds the bubbles.
+  export constexpr std::uint32_t DefaultTextColor = 0xEEECE5;
+
+  // Bubble look of one label; a change rebuilds that bubble.
   export struct BubbleStyle
   {
-    float fontSize{16};
-    float maxWidth{320};  // HUD units, including padding.
-    float background{0.65f};
+    float         fontSize{16};
+    float         maxWidth{320};  // HUD units, including padding.
+    float         background{0.65f};
+    bool          border{true};
+    std::uint32_t textColor{DefaultTextColor};
 
     bool operator==(const BubbleStyle&) const = default;
+  };
+
+  // What a label stands for; the GFx object names derive from it, so a player
+  // and a mark with the same numeric ID never share a text field.
+  export enum class LabelKind : std::uint8_t
+  {
+    Player,
+    Note,
+    Death
+  };
+
+  export struct LabelKey
+  {
+    LabelKind     kind{LabelKind::Player};
+    std::uint64_t id{};
+
+    bool operator==(const LabelKey&) const = default;
+  };
+
+  struct LabelKeyHash
+  {
+    std::size_t operator()(const LabelKey& key) const noexcept
+    {
+      return std::hash<std::uint64_t>{}(key.id) ^ (static_cast<std::size_t>(key.kind) << 60);
+    }
   };
 
   // Both texts are plain UTF-8. An empty name hides the name field but keeps
   // its baseline, so the bubble never jumps when names are switched off.
   export struct Label
   {
-    Domain::PlayerId id{};
-    std::string      name;
-    float            nameSize{};
-    std::string      bubble;
-    float            bubbleAlpha{1.0f};
-    float            x{}, y{};  // Filled by Add: normalized screen position of the anchor.
+    LabelKey      key{};
+    std::string   name;
+    float         nameSize{};
+    std::uint32_t nameColor{DefaultTextColor};
+    std::string   bubble;
+    float         bubbleAlpha{1.0f};
+    BubbleStyle   style;
+    float         x{}, y{};  // Filled by Add: normalized screen position of the anchor.
   };
 
   export struct Frame
   {
     std::vector<Label> labels;
-    BubbleStyle        style;
   };
 
   struct Exchange
@@ -54,23 +86,7 @@ namespace Nameplates
     return exchange;
   }
 
-  bool ClearSight(const RE::NiPoint3& from, const RE::NiPoint3& to)
-  {
-    auto* tes    = RE::TES::GetSingleton();
-    auto* player = RE::PlayerCharacter::GetSingleton();
-    if (!tes || !player || !player->GetParentCell()) return false;
-    RE::bhkPickData pick{};
-    const auto      scale = RE::bhkWorld::GetWorldScale();
-    pick.rayInput.from    = from * scale;
-    pick.rayInput.to      = to * scale;
-    RE::CFilter playerFilter{};
-    player->GetCollisionFilterInfo(playerFilter);
-    pick.rayInput.filterInfo.filter = (playerFilter.filter & 0xFFFF0000u) | static_cast<std::uint32_t>(RE::COL_LAYER::kLineOfSight);
-    tes->Pick(pick);
-    return !pick.pickFailed && !pick.rayOutput.HasHit();
-  }
-
-  // One projection and at most one line-of-sight pick per player serve both
+  // One projection and at most one line-of-sight pick per label serve both
   // the name and the bubble.
   export void Add(Frame& frame, Label label, RE::NiPoint3 anchor, bool occlusion)
   {
@@ -84,7 +100,7 @@ namespace Nameplates
       !camera->WorldPtToScreenPt3(anchor, x, y, z, 1e-5f) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || z <= 0 ||
       x < 0 || x > 1 || y < 0 || y > 1)
       return;
-    if (occlusion && !ClearSight(camera->world.translate, anchor)) return;
+    if (occlusion && !Raycast::Clear(camera->world.translate, anchor)) return;
     label.x = x;
     label.y = 1.0f - y;
     frame.labels.push_back(std::move(label));
@@ -97,7 +113,6 @@ namespace Nameplates
     exchange.frame = std::move(frame);
   }
 
-  constexpr std::uint32_t TextColor         = 0xEEECE5;
   constexpr std::uint32_t BubbleFill        = 0x0A0A0C;
   constexpr std::uint32_t BubbleBorder      = 0x9C9A90;
   constexpr double        BubbleBorderAlpha = 55;    // Percent.
@@ -126,11 +141,19 @@ namespace Nameplates
 
   struct NameField
   {
-    RE::GFxValue value;
-    std::string  text;
-    float        size{};
-    double       width{}, height{};
+    RE::GFxValue  value;
+    std::string   text;
+    float         size{};
+    std::uint32_t color{};
+    double        width{}, height{};
   };
+
+  // Object names in the HUD layer; a kind prefix keeps players and marks apart.
+  std::string ObjectName(std::string_view prefix, const LabelKey& key)
+  {
+    std::string_view kind = key.kind == LabelKind::Player ? "player" : key.kind == LabelKind::Note ? "note" : "death";
+    return std::format("{}_{}_{}", prefix, kind, key.id);
+  }
 
   struct BubbleClip
   {
@@ -151,9 +174,9 @@ namespace Nameplates
   struct Renderer
   {
     // Declare movie first: the managed GFx values must die before the movie.
-    RE::GPtr<RE::GFxMovieView>                  movie;
-    RE::GFxValue                                layer;
-    std::unordered_map<Domain::PlayerId, Entry> entries;
+    RE::GPtr<RE::GFxMovieView>                          movie;
+    RE::GFxValue                                        layer;
+    std::unordered_map<LabelKey, Entry, LabelKeyHash> entries;
 
     bool Bind(RE::GFxMovieView* current)
     {
@@ -174,7 +197,7 @@ namespace Nameplates
       return layer.IsDisplayObject();
     }
 
-    bool MakeText(RE::GFxValue& parent, RE::GFxValue& out, const std::string& name, float size, double width, bool wrap)
+    bool MakeText(RE::GFxValue& parent, RE::GFxValue& out, const std::string& name, float size, double width, bool wrap, std::uint32_t color)
     {
       RE::GFxValue depth;
       if (!parent.Invoke("getNextHighestDepth", &depth) || !depth.IsNumber()) return false;
@@ -197,7 +220,7 @@ namespace Nameplates
       movie->CreateObject(&format, "TextFormat");
       format.SetMember("font", RE::GFxValue("$EverywhereFont"));
       format.SetMember("size", RE::GFxValue(static_cast<double>(size)));
-      format.SetMember("color", RE::GFxValue(static_cast<double>(TextColor)));
+      format.SetMember("color", RE::GFxValue(static_cast<double>(color & 0xFFFFFF)));
       format.SetMember("align", RE::GFxValue(wrap ? "left" : "center"));
       out.Invoke("setNewTextFormat", nullptr, &format, 1);
       return true;
@@ -222,11 +245,12 @@ namespace Nameplates
       bubble = {};
     }
 
-    bool CreateName(NameField& field, Domain::PlayerId id, float size)
+    bool CreateName(NameField& field, const LabelKey& key, float size, std::uint32_t color)
     {
-      if (!MakeText(layer, field.value, std::format("player_{}", id), size, 400, false)) return false;
+      if (!MakeText(layer, field.value, ObjectName("name", key), size, 400, false, color)) return false;
       Outline(field.value);
-      field.size = size;
+      field.size  = size;
+      field.color = color;
       return true;
     }
 
@@ -263,12 +287,12 @@ namespace Nameplates
     // A nested clip owns the background drawing and the wrapped text field, so
     // the fade applies to the whole bubble through the clip's alpha while the
     // background opacity setting only affects the fill.
-    bool CreateBubble(BubbleClip& bubble, Domain::PlayerId id, const BubbleStyle& style)
+    bool CreateBubble(BubbleClip& bubble, const LabelKey& key, const BubbleStyle& style)
     {
-      if (!layer.CreateEmptyMovieClip(&bubble.clip, std::format("bubble_{}", id).c_str()) || !bubble.clip.IsDisplayObject()) return false;
+      if (!layer.CreateEmptyMovieClip(&bubble.clip, ObjectName("bubble", key).c_str()) || !bubble.clip.IsDisplayObject()) return false;
       bubble.clip.SetMember("tabEnabled", RE::GFxValue(false));
       const double textWidth = std::max(32.0, static_cast<double>(style.maxWidth) - 2 * BubblePadding + 2 * TextGutter);
-      if (!MakeText(bubble.clip, bubble.text, "text", style.fontSize, textWidth, true))
+      if (!MakeText(bubble.clip, bubble.text, "text", style.fontSize, textWidth, true, style.textColor))
       {
         Remove(bubble);
         return false;
@@ -304,7 +328,11 @@ namespace Nameplates
       bubble.content         = content;
 
       bubble.clip.Invoke("clear", nullptr);
-      const RE::GFxValue line[]{RE::GFxValue(1.0), RE::GFxValue(static_cast<double>(BubbleBorder)), RE::GFxValue(BubbleBorderAlpha)};
+      // Without a border the line is fully transparent; the outline path still
+      // closes the fill.
+      const RE::GFxValue line[]{
+          RE::GFxValue(1.0), RE::GFxValue(static_cast<double>(BubbleBorder)), RE::GFxValue(bubble.style.border ? BubbleBorderAlpha : 0.0)
+      };
       bubble.clip.Invoke("lineStyle", nullptr, line, 3);
       const RE::GFxValue fill[]{
           RE::GFxValue(static_cast<double>(BubbleFill)),
@@ -345,8 +373,8 @@ namespace Nameplates
         Remove(field);
         return;
       }
-      if (field.value.IsDisplayObject() && field.size != label.nameSize) Remove(field);
-      if (!field.value.IsDisplayObject() && !CreateName(field, label.id, label.nameSize)) return;
+      if (field.value.IsDisplayObject() && (field.size != label.nameSize || field.color != label.nameColor)) Remove(field);
+      if (!field.value.IsDisplayObject() && !CreateName(field, label.key, label.nameSize, label.nameColor)) return;
       if (field.text != label.name)
       {
         // Plain UTF-8 text, never HTML or ActionScript from the network.
@@ -362,16 +390,17 @@ namespace Nameplates
     }
 
     // The bubble bottom sits a fixed gap above the name block; more lines grow it upwards.
-    void DrawBubble(Entry& entry, const Label& label, const BubbleStyle& style, double x, double y)
+    void DrawBubble(Entry& entry, const Label& label, double x, double y)
     {
-      auto& bubble = entry.bubble;
+      auto&       bubble = entry.bubble;
+      const auto& style  = label.style;
       if (label.bubble.empty())
       {
         Remove(bubble);
         return;
       }
       if (bubble.clip.IsDisplayObject() && bubble.style != style) Remove(bubble);
-      if (!bubble.clip.IsDisplayObject() && !CreateBubble(bubble, label.id, style)) return;
+      if (!bubble.clip.IsDisplayObject() && !CreateBubble(bubble, label.key, style)) return;
       if (bubble.content != label.bubble) LayoutBubble(bubble, label.bubble);
       const double              alpha = std::clamp(static_cast<double>(label.bubbleAlpha), 0.0, 1.0) * 100.0;
       RE::GFxValue::DisplayInfo info;
@@ -385,10 +414,10 @@ namespace Nameplates
     void Draw(RE::GFxMovieView* current, const Frame& frame)
     {
       if (!Bind(current)) return;
-      std::unordered_set<Domain::PlayerId> visible;
+      std::unordered_set<LabelKey, LabelKeyHash> visible;
       visible.reserve(frame.labels.size());
       for (const auto& label : frame.labels)
-        visible.insert(label.id);
+        visible.insert(label.key);
       std::erase_if(entries, [&](auto& entry) {
         if (visible.contains(entry.first)) return false;
         Remove(entry.second.name);
@@ -399,12 +428,12 @@ namespace Nameplates
       if (!(rect.right > rect.left && rect.bottom > rect.top)) return;
       for (const auto& label : frame.labels)
       {
-        auto&        entry = entries[label.id];
+        auto&        entry = entries[label.key];
         const double x     = rect.left + label.x * (rect.right - rect.left);
         const double y     = rect.top + label.y * (rect.bottom - rect.top);
         DrawName(entry, label, x, y);
-        DrawBubble(entry, label, frame.style, x, y);
-        if (!entry.name.value.IsDisplayObject() && !entry.bubble.clip.IsDisplayObject()) entries.erase(label.id);
+        DrawBubble(entry, label, x, y);
+        if (!entry.name.value.IsDisplayObject() && !entry.bubble.clip.IsDisplayObject()) entries.erase(label.key);
       }
     }
   };

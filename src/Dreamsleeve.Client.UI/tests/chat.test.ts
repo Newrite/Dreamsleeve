@@ -558,3 +558,146 @@ describe("account", () => {
     });
   });
 });
+describe("ground marks", () => {
+  const marked: HostEvent = {
+    ...snapshot,
+    groundMarksSupported: true,
+    groundMarks: [{ id: "10", kind: "note", text: "mine", time: 0 }],
+  };
+  it("keeps bubble style, firefly height and ground mark defaults; colours are validated", () => {
+    const old = settingsFrom({ fontSize: 20 });
+    expect(old).toMatchObject({
+      bubbleBorder: true,
+      bubbleTextColor: "#EEECE5",
+      fireflyNameColor: "#EEECE5",
+      fireflyHeightOffset: 110,
+      showGroundNotes: true,
+      showDeathMarks: true,
+      maxVisibleNotes: 16,
+      groundDrawDistance: 4096,
+      groundNameDistance: 600,
+      groundTextDistance: 150,
+      deathTextColor: "#D9534F",
+      combatHideGroundMarks: false,
+    });
+    const edited = settingsFrom({
+      bubbleBorder: false,
+      bubbleTextColor: "#ff8800",
+      fireflyNameColor: "red",
+      groundTextColor: "#12345",
+      deathTextColor: "#ABCDEF",
+      fireflyHeightOffset: 1000,
+      maxVisibleNotes: 7.9,
+      maxVisibleDeaths: 0,
+      groundNoteOffset: -100,
+      groundTextDistance: 10,
+    });
+    expect(edited.bubbleBorder).toBe(false);
+    expect(edited.bubbleTextColor).toBe("#ff8800");
+    expect(edited.fireflyNameColor).toBe("#EEECE5");
+    expect(edited.groundTextColor).toBe("#EEECE5");
+    expect(edited.deathTextColor).toBe("#ABCDEF");
+    expect(edited.fireflyHeightOffset).toBe(512);
+    expect(edited.maxVisibleNotes).toBe(7);
+    expect(edited.maxVisibleDeaths).toBe(1);
+    expect(edited.groundNoteOffset).toBe(-64);
+    expect(edited.groundTextDistance).toBe(50);
+  });
+  it("leaves the draft as a ground note and settles the row by markResult", () => {
+    const send = vi.fn((_command: Command) => true);
+    const chat = makeChat(send);
+    chat.receive(snapshot);
+    chat.setDraft("Здесь тролль");
+    chat.placeNote();
+    expect(send.mock.calls.some(([c]) => c.type === "placeGroundNote")).toBe(
+      false,
+    );
+    chat.receive(marked);
+    expect(chat.store.getState().groundMarksSupported).toBe(true);
+    expect(chat.store.getState().groundMarks).toHaveLength(1);
+    chat.setDraft("Здесь тролль");
+    chat.placeNote();
+    expect(
+      send.mock.calls.find(([c]) => c.type === "placeGroundNote")?.[0],
+    ).toEqual({
+      type: "placeGroundNote",
+      requestId: "1",
+      text: "Здесь тролль",
+    });
+    expect(chat.store.getState().pending["1"]).toMatchObject({
+      kind: "note",
+      status: "sending",
+      text: "Здесь тролль",
+    });
+    expect(chat.store.getState().drafts["1"]).toBe("");
+    chat.receive({
+      type: "markResult",
+      requestId: "1",
+      markId: "11",
+      evictedId: "10",
+    });
+    expect(chat.store.getState().pending["1"]).toBeUndefined();
+    expect(chat.store.getState().notice).toContain("№10");
+    chat.receive({
+      type: "groundMarks",
+      marks: [{ id: "11", kind: "note", text: "Здесь тролль", time: 1 }],
+    });
+    expect(chat.store.getState().groundMarks[0].id).toBe("11");
+  });
+  it("shows a refused note with its reason and retries as a note, never as chat", () => {
+    const send = vi.fn((_command: Command) => true);
+    const chat = makeChat(send);
+    chat.receive(marked);
+    chat.receive({ type: "activate" });
+    chat.setDraft("Тест");
+    chat.placeNote();
+    chat.receive({
+      type: "markResult",
+      requestId: "1",
+      error: "Здесь уже слишком много меток",
+    });
+    expect(chat.store.getState().pending["1"]).toMatchObject({
+      kind: "note",
+      status: "failed",
+      error: "Здесь уже слишком много меток",
+    });
+    chat.retry("1");
+    const types = send.mock.calls.map(([c]) => c.type);
+    expect(types.filter((t) => t === "placeGroundNote")).toHaveLength(2);
+    expect(types).not.toContain("sendChat");
+  });
+  it("removes an own mark and reports the outcome as a notice", () => {
+    const send = vi.fn((_command: Command) => true);
+    const chat = makeChat(send);
+    chat.receive(marked);
+    chat.removeMark("10");
+    chat.removeMark("10");
+    expect(
+      send.mock.calls.filter(([c]) => c.type === "removeGroundMark"),
+    ).toHaveLength(1);
+    expect(send.mock.calls.at(-1)?.[0]).toEqual({
+      type: "removeGroundMark",
+      requestId: "1",
+      markId: "10",
+    });
+    chat.receive({ type: "markResult", requestId: "1", removed: true });
+    expect(chat.store.getState().notice).toBe("Метка удалена");
+    chat.receive({ type: "groundMarks", marks: [] });
+    expect(chat.store.getState().groundMarks).toEqual([]);
+    chat.removeMark("10");
+    chat.receive({
+      type: "markResult",
+      requestId: "2",
+      error: "Метка не найдена или уже удалена",
+    });
+    expect(chat.store.getState().notice).toContain("не удалена");
+  });
+  it("a snapshot without mark support disables placing", () => {
+    const send = vi.fn((_command: Command) => true);
+    const chat = makeChat(send);
+    chat.receive(marked);
+    chat.receive(snapshot);
+    expect(chat.store.getState().groundMarksSupported).toBe(false);
+    expect(chat.store.getState().groundMarks).toEqual([]);
+  });
+});

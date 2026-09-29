@@ -1,4 +1,25 @@
-import type { Announcement, Channel, Message, Player } from "../bridge/types";
+import type {
+  Announcement,
+  Channel,
+  GroundMark,
+  Message,
+  Player,
+} from "../bridge/types";
+// Demo marks of the signed-in player: one note and one death place.
+export const groundMarks: GroundMark[] = [
+  {
+    id: "301",
+    kind: "note",
+    text: "Осторожно: за поворотом тролль",
+    time: Date.now() - 45 * 60000,
+  },
+  {
+    id: "302",
+    kind: "death",
+    text: "Морозный тролль",
+    time: Date.now() - 12 * 60000,
+  },
+];
 // The system channel, found by kind like in the game; the id is only data.
 export const SYSTEM_CHANNEL = "5";
 export const channels: Channel[] = [

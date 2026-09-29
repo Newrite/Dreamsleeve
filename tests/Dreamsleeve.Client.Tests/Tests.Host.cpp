@@ -956,4 +956,247 @@ TEST_CASE("Session applies the text filter to history, deltas and bubbles alike"
   CHECK(frame.events[0].find("spam") == std::string::npos);
 }
 
+TEST_CASE("Older UI files keep bubble style, firefly height and ground mark defaults; colours are validated")
+{
+  TempPath file;
+  {
+    std::ofstream output{file.path};
+    output << "[ui.chat]\nbubbleBackground = 0.5\n";
+  }
+  auto loaded = LoadUiFile(file.path);
+  REQUIRE(loaded);
+  const UiSettings defaults{};
+  CHECK(loaded->ui.chat.bubbleBorder == defaults.bubbleBorder);
+  CHECK(loaded->ui.chat.bubbleTextColor == "#EEECE5");
+  CHECK(loaded->ui.chat.fireflyNameColor == "#EEECE5");
+  CHECK(loaded->ui.chat.fireflyHeightOffset == 110);
+  CHECK(loaded->ui.chat.showGroundNotes);
+  CHECK(loaded->ui.chat.showDeathMarks);
+  CHECK(loaded->ui.chat.maxVisibleNotes == 16);
+  CHECK(loaded->ui.chat.groundDrawDistance == 4096);
+  CHECK(loaded->ui.chat.groundNameDistance == 600);
+  CHECK(loaded->ui.chat.groundTextDistance == 150);
+  CHECK(loaded->ui.chat.deathTextColor == "#D9534F");
+  CHECK_FALSE(loaded->ui.chat.combatHideGroundMarks);
+  CHECK_FALSE(loaded->ui.chat.combatHideGroundText);
+
+  UiFile edited;
+  edited.ui.chat.bubbleBorder          = false;
+  edited.ui.chat.bubbleTextColor       = "#FF8800";
+  edited.ui.chat.fireflyNameColor      = "#00FF88";
+  edited.ui.chat.fireflyHeightOffset   = 90;
+  edited.ui.chat.showGroundNotes       = false;
+  edited.ui.chat.maxVisibleDeaths      = 4;
+  edited.ui.chat.groundDrawDistance    = 2000;
+  edited.ui.chat.groundNoteOffset      = -10;
+  edited.ui.chat.deathMarkOffset       = 30;
+  edited.ui.chat.groundTextColor       = "#ABCDEF";
+  edited.ui.chat.deathBackground       = 0.2;
+  edited.ui.chat.deathBorder           = false;
+  edited.ui.chat.combatHideGroundMarks = true;
+  REQUIRE(SaveUiFile(file.path, edited));
+  auto saved = LoadUiFile(file.path);
+  REQUIRE(saved);
+  CHECK(*saved == edited);
+
+  auto invalid                = edited.ui.chat;
+  invalid.bubbleTextColor     = "red";
+  invalid.fireflyNameColor    = "#12345";
+  invalid.deathTextColor      = "#GGGGGG";
+  invalid.fireflyHeightOffset = 1000;
+  invalid.maxVisibleNotes     = 0;
+  invalid.maxVisibleDeaths    = 7.9;
+  invalid.groundNoteOffset    = -100;
+  invalid.groundTextDistance  = 10;
+  auto normalized             = Dreamsleeve::Host::Normalize(invalid);
+  CHECK(normalized.bubbleTextColor == "#EEECE5");
+  CHECK(normalized.fireflyNameColor == "#EEECE5");
+  CHECK(normalized.deathTextColor == "#D9534F");
+  CHECK(normalized.groundTextColor == "#ABCDEF");
+  CHECK(normalized.fireflyHeightOffset == 512);
+  CHECK(normalized.maxVisibleNotes == 1);
+  CHECK(normalized.maxVisibleDeaths == 7);
+  CHECK(normalized.groundNoteOffset == -64);
+  CHECK(normalized.groundTextDistance == 50);
+
+  CHECK(Dreamsleeve::Host::ParseColor("#D9534F") == 0xD9534F);
+  CHECK(Dreamsleeve::Host::ParseColor("#d9534f") == 0xD9534F);
+  CHECK_FALSE(Dreamsleeve::Host::ParseColor("D9534F"));
+  CHECK_FALSE(Dreamsleeve::Host::ParseColor("#D9534"));
+  CHECK_FALSE(Dreamsleeve::Host::ParseColor("#D9534FF"));
+  CHECK_FALSE(Dreamsleeve::Host::ParseColor("#D953 F"));
+}
+
+namespace
+{
+
+  Domain::GroundMark MakeMark(Domain::GroundMarkId id, Domain::PlayerId author, Domain::GroundMarkKind kind, std::string text)
+  {
+    return Domain::GroundMark{
+        id,
+        Domain::PlayerData{author, "user" + std::to_string(author), "Player" + std::to_string(author)},
+        kind,
+        std::move(text),
+        {},
+        {{"skyrim.esm", 0x1A26F}, {100, 200, 300}, 1.5f},
+        Domain::FromUnixMilliseconds(1700000000000)
+    };
+  }
+
+}
+
+TEST_CASE("Session projects visible marks for the game and own marks for the UI")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    GroundMarksChanged{
+        1, {MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"), MakeMark(11, 7, Domain::GroundMarkKind::Death, "Bear")}, {}, true}));
+  Session        session;
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  Settle(session, *exchange, model, frame);
+  REQUIRE(frame.snapshot);
+  CHECK(frame.visibleMarksChanged);
+  CHECK(session.VisibleMarks().size() == 2);
+  REQUIRE(session.OwnMarks().size() == 1);
+  CHECK(session.OwnMarks().contains(10));
+  auto snapshot = Parse(frame.events[0]);
+  CHECK(snapshot["groundMarksSupported"].get<bool>());
+  REQUIRE(snapshot["groundMarks"].size() == 1);
+  CHECK(snapshot["groundMarks"][0]["id"].get<std::string>() == "10");
+  CHECK(snapshot["groundMarks"][0]["kind"].get<std::string>() == "note");
+  CHECK(snapshot["groundMarks"][0]["text"].get<std::string>() == "mine");
+
+  // A space change clears the visible set but not the own marks met so far;
+  // a new own mark arrives through the ordinary delta and updates the UI list.
+  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{2, {MakeMark(12, 1, Domain::GroundMarkKind::Death, "Wolf")}, {}, true}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  CHECK(frame.visibleMarksChanged);
+  CHECK(session.VisibleMarks().size() == 1);
+  CHECK(session.VisibleMarks().contains(12));
+  CHECK(session.OwnMarks().size() == 2);
+  REQUIRE(frame.events.size() == 1);
+  CHECK(Type(frame.events[0]) == "groundMarks");
+  CHECK(Parse(frame.events[0])["marks"].size() == 2);
+
+  // Someone else's marks never reach the own list, and removals leave both sets.
+  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{3, {MakeMark(13, 7, Domain::GroundMarkKind::Note, "theirs")}, {12}, false}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  CHECK(session.VisibleMarks().size() == 1);
+  CHECK(session.VisibleMarks().contains(13));
+  CHECK(session.OwnMarks().size() == 1);
+  CHECK_FALSE(session.OwnMarks().contains(12));
+  REQUIRE(frame.events.size() == 1);
+  CHECK(Type(frame.events[0]) == "groundMarks");
+
+  // Own hidden text shows the placeholder in the list, like a hidden own message.
+  auto flagged    = MakeMark(14, 1, Domain::GroundMarkKind::Note, "bad word");
+  flagged.flagged = {{0, 3}};
+  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{4, {flagged}, {}, false}));
+  UiSettings hide;
+  hide.textFilter = "hide";
+  frame           = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), hide, frame);
+  REQUIRE(frame.events.size() == 1);
+  auto marks = Parse(frame.events[0])["marks"];
+  REQUIRE(marks.size() == 2);
+  CHECK(marks[1]["text"].get<std::string>() == "[скрыто фильтром]");
+}
+
+TEST_CASE("Session correlates note, removal and death requests with their outcomes")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  Session        session;
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  Settle(session, *exchange, model, frame);
+  REQUIRE(session.Ready());
+
+  const Domain::GroundMarkPlacement here{{"skyrim.esm", 0x1A26F}, {1, 2, 3}, 0.5f};
+  REQUIRE(session.PlaceGroundNote(*exchange, "ui-1", "hello", here));
+  REQUIRE(session.ReportDeath(*exchange, "Bear", here));
+  REQUIRE(session.RemoveGroundMark(*exchange, "ui-2", 77));
+  CHECK(session.PendingMarkCount() == 3);
+  std::vector<QueuedClientCommand> commands;
+  exchange->TakeCommands(commands);
+  REQUIRE(commands.size() == 3);
+  const auto* note = std::get_if<PlaceGroundNote>(&commands[0].command);
+  REQUIRE(note);
+  CHECK(note->text == "hello");
+  CHECK(note->placement == here);
+  const auto* death = std::get_if<ReportDeath>(&commands[1].command);
+  REQUIRE(death);
+  CHECK(death->label == "Bear");
+  const auto* removal = std::get_if<RemoveGroundMark>(&commands[2].command);
+  REQUIRE(removal);
+  CHECK(removal->markId == 77);
+
+  // Placed with an eviction: the UI row settles and learns the evicted id.
+  REQUIRE(exchange->Publish(
+    model, false, SessionPhase::Ready, "Tamriel", std::nullopt, GroundMarkConfirmation{model.Generation(), note->requestId, 41, 40, false}));
+  ClientOutput output;
+  exchange->Drain(output);
+  frame = {};
+  session.Process(*exchange, output, UiSettings{}, frame);
+  REQUIRE(frame.events.size() == 1);
+  auto placed = Parse(frame.events[0]);
+  CHECK(placed["type"].get<std::string>() == "markResult");
+  CHECK(placed["requestId"].get<std::string>() == "ui-1");
+  CHECK(placed["markId"].get<std::string>() == "41");
+  CHECK(placed["evictedId"].get<std::string>() == "40");
+  CHECK(session.PendingMarkCount() == 2);
+
+  // A death report settles without any UI event, a note in the log only.
+  REQUIRE(exchange->Publish(
+    model, false, SessionPhase::Ready, "Tamriel", std::nullopt, GroundMarkConfirmation{model.Generation(), death->requestId, 42, std::nullopt, false}));
+  exchange->Drain(output);
+  frame = {};
+  session.Process(*exchange, output, UiSettings{}, frame);
+  CHECK(frame.events.empty());
+  REQUIRE(frame.notes.size() == 1);
+  CHECK(frame.notes[0].find("42") != std::string::npos);
+
+  // A refused removal becomes a readable error for its UI row, never a chat sendResult.
+  REQUIRE(model.Apply(model.Generation(), ServerRejection{removal->requestId, RequestRejectionCode::GroundMarkNotFound, "", ""}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  REQUIRE(frame.events.size() == 1);
+  auto refused = Parse(frame.events[0]);
+  CHECK(refused["type"].get<std::string>() == "markResult");
+  CHECK(refused["requestId"].get<std::string>() == "ui-2");
+  CHECK(refused["error"].get<std::string>() == "Метка не найдена или уже удалена");
+  CHECK(session.PendingMarkCount() == 0);
+
+  CHECK(Bridge::RejectionText(RequestRejectionCode::GroundMarkAreaFull, "") == "Здесь уже слишком много меток");
+  CHECK(Bridge::RejectionText(RequestRejectionCode::InvalidRequest, "Note exceeds 200 characters.") == "Текст метки слишком длинный");
+  CHECK(Bridge::RejectionText(RequestRejectionCode::InvalidRequest, "The mark is not where the player is.") == "Метку нельзя оставить здесь");
+}
+
+TEST_CASE("Bridge validates ground mark commands")
+{
+  auto note = Bridge::ParseCommand(R"({"type":"placeGroundNote","requestId":"5","text":"Осторожно, тролль"})");
+  REQUIRE(note);
+  CHECK(note->text == "Осторожно, тролль");
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"placeGroundNote","requestId":"5","text":""})"));
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"placeGroundNote","text":"x"})"));
+  auto removal = Bridge::ParseCommand(R"({"type":"removeGroundMark","requestId":"6","markId":"18446744073709551615"})");
+  REQUIRE(removal);
+  CHECK(Bridge::ParseId(removal->markId) == 18446744073709551615ull);
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"removeGroundMark","requestId":"6"})"));
+  auto mark = Bridge::ToUiGroundMark(MakeMark(3, 1, Domain::GroundMarkKind::Death, "Wolf"), UiSettings{});
+  CHECK(mark.id == "3");
+  CHECK(mark.kind == "death");
+  CHECK(mark.text == "Wolf");
+  CHECK(mark.time == 1700000000000);
+}
+
 TEST_SUITE_END();

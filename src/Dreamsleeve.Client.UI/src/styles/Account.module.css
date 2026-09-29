@@ -61,3 +61,37 @@
   color: var(--muted);
   font-size: 0.85em;
 }
+.marks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.marks li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.marks li[data-kind="death"] .markKind {
+  color: var(--error);
+}
+.markKind {
+  color: var(--accent);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.markText {
+  overflow-wrap: anywhere;
+}
+.marks time {
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.marks button {
+  border: 1px solid var(--border);
+}

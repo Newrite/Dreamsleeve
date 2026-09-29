@@ -12,6 +12,7 @@ import Dreamsleeve.Events;
 import Dreamsleeve.Hooks;
 import Dreamsleeve.PrismaUI;
 import Dreamsleeve.Game.Fireflies;
+import Dreamsleeve.Game.GroundMarks;
 import Dreamsleeve.ModApi;
 
 // SKSE lifecycle. PluginManager::Dispatch_Message calls this on the sender's
@@ -34,6 +35,7 @@ namespace Plugin
     Hooks::InstallHooks();
     Events::RegisterEvents();
     Fireflies::ResolveForms();
+    GroundMarks::ResolveForms();
     PrismaUI::CreateView();
   }
 

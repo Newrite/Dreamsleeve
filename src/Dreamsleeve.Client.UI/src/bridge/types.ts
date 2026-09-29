@@ -140,6 +140,41 @@ export interface Settings {
   announcementsThirdParty: boolean;
   announcementsEvents: boolean;
   announcementsPeriodic: boolean;
+  // Bubble look above fireflies: fill opacity is bubbleBackground; the border
+  // and the text colour ("#RRGGBB") are separate. Native Scaleform render only.
+  bubbleBorder: boolean;
+  bubbleTextColor: string;
+  fireflyNameColor: string;
+  fireflyHeightOffset: number;
+  // Ground marks drawn by the SKSE DLL: which kinds, how many, how far, and
+  // the look of their labels. Stored and passed through only.
+  showGroundNotes: boolean;
+  showDeathMarks: boolean;
+  maxVisibleNotes: number;
+  maxVisibleDeaths: number;
+  groundDrawDistance: number;
+  groundNoteOffset: number;
+  deathMarkOffset: number;
+  groundNameDistance: number;
+  groundTextDistance: number;
+  groundFontSize: number;
+  groundMaxWidth: number;
+  groundBackground: number;
+  groundBorder: boolean;
+  groundTextColor: string;
+  deathTextColor: string;
+  deathBackground: number;
+  deathBorder: boolean;
+  combatHideGroundMarks: boolean;
+  combatHideGroundText: boolean;
+}
+// One of the player's own ground marks the host knows in this session.
+export type GroundMarkKind = "note" | "death";
+export interface GroundMark {
+  id: Id;
+  kind: GroundMarkKind;
+  text: string;
+  time: number;
 }
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
@@ -165,7 +200,10 @@ export type Command =
   | { type: "signInSaved" }
   | { type: "signOut" }
   | { type: "forgetLogin" }
-  | { type: "disconnect" };
+  | { type: "disconnect" }
+  // A note where the character stands; the host fills the placement.
+  | { type: "placeGroundNote"; requestId: string; text: string }
+  | { type: "removeGroundMark"; requestId: string; markId: Id };
 export type AuthEvent = { type: "auth"; phase: ConnectionPhase } & AuthState;
 export type HostEvent =
   | {
@@ -178,6 +216,20 @@ export type HostEvent =
       settings?: Partial<Settings>;
       // Same session projected again (names or ignore list changed).
       refresh?: boolean;
+      // The session can place marks; the own marks the host knows so far.
+      groundMarksSupported?: boolean;
+      groundMarks?: GroundMark[];
+    }
+  // The own marks changed: placed, removed, evicted or met again.
+  | { type: "groundMarks"; marks: GroundMark[] }
+  // Outcome of placeGroundNote (markId, evictedId) or removeGroundMark (removed).
+  | {
+      type: "markResult";
+      requestId: string;
+      markId?: Id;
+      evictedId?: Id;
+      removed?: boolean;
+      error?: string;
     }
   // Personal ignore list of this server, already named for current settings.
   | { type: "ignored"; players: { id: Id; name: string }[] }

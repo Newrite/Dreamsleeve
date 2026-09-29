@@ -117,3 +117,48 @@ describe("native bridge", () => {
     expect(() => parseHostEvent(snapshot(1001))).toThrow();
   });
 });
+describe("ground mark events", () => {
+  it("accepts own marks and results, rejects wrong kinds and ambiguous results", () => {
+    const marks = {
+      type: "groundMarks",
+      marks: [{ id: "18446744073709551615", kind: "death", text: "", time: 0 }],
+    };
+    expect(parseHostEvent(JSON.stringify(marks))).toEqual(marks);
+    expect(() =>
+      parseHostEvent(
+        JSON.stringify({
+          type: "groundMarks",
+          marks: [{ id: "1", kind: "sign", text: "", time: 0 }],
+        }),
+      ),
+    ).toThrow();
+    for (const result of [
+      { type: "markResult", requestId: "1", markId: "5" },
+      { type: "markResult", requestId: "1", markId: "5", evictedId: "4" },
+      { type: "markResult", requestId: "1", removed: true },
+      { type: "markResult", requestId: "1", error: "Нет" },
+    ])
+      expect(parseHostEvent(JSON.stringify(result))).toEqual(result);
+    for (const broken of [
+      { type: "markResult", requestId: "1" },
+      { type: "markResult", requestId: "1", markId: "5", error: "Нет" },
+      { type: "markResult", requestId: "1", removed: true, error: "Нет" },
+      { type: "markResult", requestId: "1", markId: 5 },
+    ])
+      expect(() => parseHostEvent(JSON.stringify(broken))).toThrow();
+    const snapshot = {
+      type: "snapshot",
+      channels: [],
+      selfId: "1",
+      serverName: "",
+      players: [],
+      messages: [],
+      groundMarksSupported: true,
+      groundMarks: [{ id: "2", kind: "note", text: "x", time: 1 }],
+    };
+    expect(parseHostEvent(JSON.stringify(snapshot))).toEqual(snapshot);
+    expect(() =>
+      parseHostEvent(JSON.stringify({ ...snapshot, groundMarksSupported: 1 })),
+    ).toThrow();
+  });
+});

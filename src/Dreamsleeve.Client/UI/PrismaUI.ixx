@@ -10,6 +10,7 @@ import Dreamsleeve.Runtime;
 import Dreamsleeve.Host.Bridge;
 import Dreamsleeve.Events;
 import Dreamsleeve.Game.Input;
+import Dreamsleeve.Game.GroundMarks;
 
 // PrismaUI host of the production web UI. PrismaUI 1.5.1 wraps every callback
 // (DOM ready, JS listener, console) in SKSE::GetTaskInterface()->AddTask, so
@@ -245,6 +246,24 @@ namespace PrismaUI
     if (type == "close")
     {
       Deactivate();
+      return;
+    }
+    if (type == "placeGroundNote")
+    {
+      // The note stands where the character stands now; without a ready
+      // world there is nowhere to put it.
+      std::expected<void, std::string> placed = std::unexpected{"Персонаж не в игровом мире"};
+      if (const auto placement = GroundMarks::CurrentPlacement())
+        placed = runtime.session.PlaceGroundNote(app.Exchange(), command.requestId, std::move(command.text), *placement);
+      if (!placed) Send(Bridge::MarkResultEvent{.requestId = command.requestId, .error = placed.error()});
+      return;
+    }
+    if (type == "removeGroundMark")
+    {
+      const auto markId = Bridge::ParseId(command.markId);
+      std::expected<void, std::string> removed = std::unexpected{"Некорректный идентификатор метки"};
+      if (markId) removed = runtime.session.RemoveGroundMark(app.Exchange(), command.requestId, *markId);
+      if (!removed) Send(Bridge::MarkResultEvent{.requestId = command.requestId, .error = removed.error()});
       return;
     }
     if (type == "ignore" || type == "unignore")
