@@ -35,39 +35,47 @@ namespace Dreamsleeve.Protocol.Chat {
             "RHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Bbm5vdW5jZW1lbnRCEQoPX2No",
             "YXJhY3Rlcl9uYW1lIikKCFRleHRTcGFuEg0KBXN0YXJ0GAEgASgNEg4KBmxl",
             "bmd0aBgCIAEoDSJICg1DaGF0UHVibGlzaGVkEjcKB21lc3NhZ2UYASABKAsy",
-            "Ji5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRNZXNzYWdlIpsBCgxB",
-            "bm5vdW5jZW1lbnQSPQoGc291cmNlGAEgASgOMi0uRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuQ2hhdC5Bbm5vdW5jZW1lbnRTb3VyY2USOQoEa2luZBgCIAEoDjIr",
-            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQW5ub3VuY2VtZW50S2luZBIR",
-            "CglzaWduYXR1cmUYAyABKAkiswEKEFBvc3RBbm5vdW5jZW1lbnQSDAoEdGV4",
-            "dBgBIAEoCRI5CgRraW5kGAIgASgOMisuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
-            "Q2hhdC5Bbm5vdW5jZW1lbnRLaW5kEkMKBnNvdXJjZRgDIAEoDjIzLkRyZWFt",
-            "c2xlZXZlLlByb3RvY29sLkNoYXQuQ2xpZW50QW5ub3VuY2VtZW50U291cmNl",
-            "EhEKCXNpZ25hdHVyZRgEIAEoCSKZAQoSQW5ub3VuY2VtZW50UG9saWN5EkwK",
-            "D2FsbG93ZWRfc291cmNlcxgBIAMoDjIzLkRyZWFtc2xlZXZlLlByb3RvY29s",
-            "LkNoYXQuQ2xpZW50QW5ub3VuY2VtZW50U291cmNlEhcKD21heF90ZXh0X2xl",
-            "bmd0aBgCIAEoDRIcChRtYXhfc2lnbmF0dXJlX2xlbmd0aBgDIAEoDSqmAQoS",
-            "QW5ub3VuY2VtZW50U291cmNlEiMKH0FOTk9VTkNFTUVOVF9TT1VSQ0VfVU5T",
-            "UEVDSUZJRUQQABIeChpBTk5PVU5DRU1FTlRfU09VUkNFX1NFUlZFUhABEiYK",
-            "IkFOTk9VTkNFTUVOVF9TT1VSQ0VfVFJVU1RFRF9DTElFTlQQAhIjCh9BTk5P",
-            "VU5DRU1FTlRfU09VUkNFX1RISVJEX1BBUlRZEAMqswEKEEFubm91bmNlbWVu",
-            "dEtpbmQSIQodQU5OT1VOQ0VNRU5UX0tJTkRfVU5TUEVDSUZJRUQQABIiCh5B",
-            "Tk5PVU5DRU1FTlRfS0lORF9BTk5PVU5DRU1FTlQQARIbChdBTk5PVU5DRU1F",
-            "TlRfS0lORF9FVkVOVBACEhsKF0FOTk9VTkNFTUVOVF9LSU5EX0FETUlOEAMS",
-            "HgoaQU5OT1VOQ0VNRU5UX0tJTkRfUEVSSU9ESUMQBCqhAQoYQ2xpZW50QW5u",
-            "b3VuY2VtZW50U291cmNlEioKJkNMSUVOVF9BTk5PVU5DRU1FTlRfU09VUkNF",
-            "X1VOU1BFQ0lGSUVEEAASLQopQ0xJRU5UX0FOTk9VTkNFTUVOVF9TT1VSQ0Vf",
-            "VFJVU1RFRF9DTElFTlQQARIqCiZDTElFTlRfQU5OT1VOQ0VNRU5UX1NPVVJD",
-            "RV9USElSRF9QQVJUWRACYgZwcm90bzM="));
+            "Ji5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRNZXNzYWdlIpwBCgtD",
+            "aGF0Q2hhbm5lbBISCgpjaGFubmVsX2lkGAEgASgEEjgKBGtpbmQYAiABKA4y",
+            "Ki5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRDaGFubmVsS2luZBI/",
+            "Cg9yZWNlbnRfbWVzc2FnZXMYAyADKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
+            "bC5DaGF0LkNoYXRNZXNzYWdlIpsBCgxBbm5vdW5jZW1lbnQSPQoGc291cmNl",
+            "GAEgASgOMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Bbm5vdW5jZW1l",
+            "bnRTb3VyY2USOQoEa2luZBgCIAEoDjIrLkRyZWFtc2xlZXZlLlByb3RvY29s",
+            "LkNoYXQuQW5ub3VuY2VtZW50S2luZBIRCglzaWduYXR1cmUYAyABKAkixwEK",
+            "EFBvc3RBbm5vdW5jZW1lbnQSEgoKY2hhbm5lbF9pZBgBIAEoBBIMCgR0ZXh0",
+            "GAIgASgJEjkKBGtpbmQYAyABKA4yKy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
+            "aGF0LkFubm91bmNlbWVudEtpbmQSQwoGc291cmNlGAQgASgOMjMuRHJlYW1z",
+            "bGVldmUuUHJvdG9jb2wuQ2hhdC5DbGllbnRBbm5vdW5jZW1lbnRTb3VyY2US",
+            "EQoJc2lnbmF0dXJlGAUgASgJIpkBChJBbm5vdW5jZW1lbnRQb2xpY3kSTAoP",
+            "YWxsb3dlZF9zb3VyY2VzGAEgAygOMjMuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "Q2hhdC5DbGllbnRBbm5vdW5jZW1lbnRTb3VyY2USFwoPbWF4X3RleHRfbGVu",
+            "Z3RoGAIgASgNEhwKFG1heF9zaWduYXR1cmVfbGVuZ3RoGAMgASgNKnAKD0No",
+            "YXRDaGFubmVsS2luZBIhCh1DSEFUX0NIQU5ORUxfS0lORF9VTlNQRUNJRklF",
+            "RBAAEhwKGENIQVRfQ0hBTk5FTF9LSU5EX0dMT0JBTBABEhwKGENIQVRfQ0hB",
+            "Tk5FTF9LSU5EX1NZU1RFTRAFKqYBChJBbm5vdW5jZW1lbnRTb3VyY2USIwof",
+            "QU5OT1VOQ0VNRU5UX1NPVVJDRV9VTlNQRUNJRklFRBAAEh4KGkFOTk9VTkNF",
+            "TUVOVF9TT1VSQ0VfU0VSVkVSEAESJgoiQU5OT1VOQ0VNRU5UX1NPVVJDRV9U",
+            "UlVTVEVEX0NMSUVOVBACEiMKH0FOTk9VTkNFTUVOVF9TT1VSQ0VfVEhJUkRf",
+            "UEFSVFkQAyqzAQoQQW5ub3VuY2VtZW50S2luZBIhCh1BTk5PVU5DRU1FTlRf",
+            "S0lORF9VTlNQRUNJRklFRBAAEiIKHkFOTk9VTkNFTUVOVF9LSU5EX0FOTk9V",
+            "TkNFTUVOVBABEhsKF0FOTk9VTkNFTUVOVF9LSU5EX0VWRU5UEAISGwoXQU5O",
+            "T1VOQ0VNRU5UX0tJTkRfQURNSU4QAxIeChpBTk5PVU5DRU1FTlRfS0lORF9Q",
+            "RVJJT0RJQxAEKqEBChhDbGllbnRBbm5vdW5jZW1lbnRTb3VyY2USKgomQ0xJ",
+            "RU5UX0FOTk9VTkNFTUVOVF9TT1VSQ0VfVU5TUEVDSUZJRUQQABItCilDTElF",
+            "TlRfQU5OT1VOQ0VNRU5UX1NPVVJDRV9UUlVTVEVEX0NMSUVOVBABEioKJkNM",
+            "SUVOVF9BTk5PVU5DRU1FTlRfU09VUkNFX1RISVJEX1BBUlRZEAJiBnByb3Rv",
+            "Mw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementSource), typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementKind), typeof(global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource), }, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.ChatChannelKind), typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementSource), typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementKind), typeof(global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SendChat), global::Dreamsleeve.Protocol.Chat.SendChat.Parser, new[]{ "ChannelId", "Text" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatMessage), global::Dreamsleeve.Protocol.Chat.ChatMessage.Parser, new[]{ "MessageId", "ChannelId", "Author", "Text", "SentAtUnixMs", "CharacterName", "Flagged", "Announcement" }, new[]{ "CharacterName" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.TextSpan), global::Dreamsleeve.Protocol.Chat.TextSpan.Parser, new[]{ "Start", "Length" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatPublished), global::Dreamsleeve.Protocol.Chat.ChatPublished.Parser, new[]{ "Message" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatChannel), global::Dreamsleeve.Protocol.Chat.ChatChannel.Parser, new[]{ "ChannelId", "Kind", "RecentMessages" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Announcement), global::Dreamsleeve.Protocol.Chat.Announcement.Parser, new[]{ "Source", "Kind", "Signature" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PostAnnouncement), global::Dreamsleeve.Protocol.Chat.PostAnnouncement.Parser, new[]{ "Text", "Kind", "Source", "Signature" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PostAnnouncement), global::Dreamsleeve.Protocol.Chat.PostAnnouncement.Parser, new[]{ "ChannelId", "Text", "Kind", "Source", "Signature" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy), global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy.Parser, new[]{ "AllowedSources", "MaxTextLength", "MaxSignatureLength" }, null, null, null, null)
           }));
     }
@@ -75,6 +83,22 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
   #region Enums
+  /// <summary>
+  /// Channel entities. The client-side "all" view is an aggregate, not a channel.
+  /// Party (2), guild (3) and direct (4) channels are planned, see ProtobufHandbookRu.
+  /// </summary>
+  public enum ChatChannelKind {
+    [pbr::OriginalName("CHAT_CHANNEL_KIND_UNSPECIFIED")] Unspecified = 0,
+    /// <summary>
+    /// Players write with SendChat.
+    /// </summary>
+    [pbr::OriginalName("CHAT_CHANNEL_KIND_GLOBAL")] Global = 1,
+    /// <summary>
+    /// Announcements; the server and PostAnnouncement publish.
+    /// </summary>
+    [pbr::OriginalName("CHAT_CHANNEL_KIND_SYSTEM")] System = 5,
+  }
+
   /// <summary>
   /// Trust origin assigned by the server. SERVER is never accepted from a client.
   /// </summary>
@@ -444,7 +468,8 @@ namespace Dreamsleeve.Protocol.Chat {
     public const int AuthorFieldNumber = 3;
     private global::Dreamsleeve.Protocol.Chat.PlayerProfile author_;
     /// <summary>
-    /// Profile at the time of sending, possibly offline now.
+    /// Profile at the time of sending, possibly offline now. Absent only for
+    /// SERVER announcements: the system source is not a player.
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -529,10 +554,7 @@ namespace Dreamsleeve.Protocol.Chat {
     public const int AnnouncementFieldNumber = 8;
     private global::Dreamsleeve.Protocol.Chat.Announcement announcement_;
     /// <summary>
-    /// Present on messages of the system stream. They travel in the global channel
-    /// so older clients, which ignore this field, show them as ordinary messages of
-    /// the author profile: a reserved server profile for SERVER announcements, the
-    /// posting player for client announcements.
+    /// Present exactly on messages of a SYSTEM channel.
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1302,6 +1324,270 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
+  /// <summary>
+  /// A channel of the session with its retained tail, ascending message_id.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ChatChannel : pb::IMessage<ChatChannel>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ChatChannel> _parser = new pb::MessageParser<ChatChannel>(() => new ChatChannel());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ChatChannel> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[4]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ChatChannel() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ChatChannel(ChatChannel other) : this() {
+      channelId_ = other.channelId_;
+      kind_ = other.kind_;
+      recentMessages_ = other.recentMessages_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ChatChannel Clone() {
+      return new ChatChannel(this);
+    }
+
+    /// <summary>Field number for the "channel_id" field.</summary>
+    public const int ChannelIdFieldNumber = 1;
+    private ulong channelId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong ChannelId {
+      get { return channelId_; }
+      set {
+        channelId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "kind" field.</summary>
+    public const int KindFieldNumber = 2;
+    private global::Dreamsleeve.Protocol.Chat.ChatChannelKind kind_ = global::Dreamsleeve.Protocol.Chat.ChatChannelKind.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.ChatChannelKind Kind {
+      get { return kind_; }
+      set {
+        kind_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "recent_messages" field.</summary>
+    public const int RecentMessagesFieldNumber = 3;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.ChatMessage> _repeated_recentMessages_codec
+        = pb::FieldCodec.ForMessage(26, global::Dreamsleeve.Protocol.Chat.ChatMessage.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatMessage> recentMessages_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatMessage>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatMessage> RecentMessages {
+      get { return recentMessages_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ChatChannel);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ChatChannel other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ChannelId != other.ChannelId) return false;
+      if (Kind != other.Kind) return false;
+      if(!recentMessages_.Equals(other.recentMessages_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ChannelId != 0UL) hash ^= ChannelId.GetHashCode();
+      if (Kind != global::Dreamsleeve.Protocol.Chat.ChatChannelKind.Unspecified) hash ^= Kind.GetHashCode();
+      hash ^= recentMessages_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ChannelId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(ChannelId);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.ChatChannelKind.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Kind);
+      }
+      recentMessages_.WriteTo(output, _repeated_recentMessages_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ChannelId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(ChannelId);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.ChatChannelKind.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Kind);
+      }
+      recentMessages_.WriteTo(ref output, _repeated_recentMessages_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ChannelId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(ChannelId);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.ChatChannelKind.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Kind);
+      }
+      size += recentMessages_.CalculateSize(_repeated_recentMessages_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ChatChannel other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ChannelId != 0UL) {
+        ChannelId = other.ChannelId;
+      }
+      if (other.Kind != global::Dreamsleeve.Protocol.Chat.ChatChannelKind.Unspecified) {
+        Kind = other.Kind;
+      }
+      recentMessages_.Add(other.recentMessages_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ChannelId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Kind = (global::Dreamsleeve.Protocol.Chat.ChatChannelKind) input.ReadEnum();
+            break;
+          }
+          case 26: {
+            recentMessages_.AddEntriesFrom(input, _repeated_recentMessages_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ChannelId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Kind = (global::Dreamsleeve.Protocol.Chat.ChatChannelKind) input.ReadEnum();
+            break;
+          }
+          case 26: {
+            recentMessages_.AddEntriesFrom(ref input, _repeated_recentMessages_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Announcement : pb::IMessage<Announcement>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -1317,7 +1603,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[4]; }
+      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1579,9 +1865,8 @@ namespace Dreamsleeve.Protocol.Chat {
   }
 
   /// <summary>
-  /// Client request to publish into the system stream of the global channel.
-  /// Accepted like SendChat: ChatPublished with request_id to the author, a
-  /// RequestRejected otherwise. Send only to servers announcing AnnouncementPolicy.
+  /// Client request to publish into a SYSTEM channel. Settled like
+  /// SendChat: ChatPublished with request_id to the author, RequestRejected otherwise.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class PostAnnouncement : pb::IMessage<PostAnnouncement>
@@ -1598,7 +1883,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[5]; }
+      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1618,6 +1903,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public PostAnnouncement(PostAnnouncement other) : this() {
+      channelId_ = other.channelId_;
       text_ = other.text_;
       kind_ = other.kind_;
       source_ = other.source_;
@@ -1631,8 +1917,20 @@ namespace Dreamsleeve.Protocol.Chat {
       return new PostAnnouncement(this);
     }
 
+    /// <summary>Field number for the "channel_id" field.</summary>
+    public const int ChannelIdFieldNumber = 1;
+    private ulong channelId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong ChannelId {
+      get { return channelId_; }
+      set {
+        channelId_ = value;
+      }
+    }
+
     /// <summary>Field number for the "text" field.</summary>
-    public const int TextFieldNumber = 1;
+    public const int TextFieldNumber = 2;
     private string text_ = "";
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1644,7 +1942,7 @@ namespace Dreamsleeve.Protocol.Chat {
     }
 
     /// <summary>Field number for the "kind" field.</summary>
-    public const int KindFieldNumber = 2;
+    public const int KindFieldNumber = 3;
     private global::Dreamsleeve.Protocol.Chat.AnnouncementKind kind_ = global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified;
     /// <summary>
     /// ANNOUNCEMENT or EVENT.
@@ -1659,7 +1957,7 @@ namespace Dreamsleeve.Protocol.Chat {
     }
 
     /// <summary>Field number for the "source" field.</summary>
-    public const int SourceFieldNumber = 3;
+    public const int SourceFieldNumber = 4;
     private global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource source_ = global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1671,7 +1969,7 @@ namespace Dreamsleeve.Protocol.Chat {
     }
 
     /// <summary>Field number for the "signature" field.</summary>
-    public const int SignatureFieldNumber = 4;
+    public const int SignatureFieldNumber = 5;
     private string signature_ = "";
     /// <summary>
     /// Required for THIRD_PARTY.
@@ -1700,6 +1998,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (ReferenceEquals(other, this)) {
         return true;
       }
+      if (ChannelId != other.ChannelId) return false;
       if (Text != other.Text) return false;
       if (Kind != other.Kind) return false;
       if (Source != other.Source) return false;
@@ -1711,6 +2010,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
+      if (ChannelId != 0UL) hash ^= ChannelId.GetHashCode();
       if (Text.Length != 0) hash ^= Text.GetHashCode();
       if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) hash ^= Kind.GetHashCode();
       if (Source != global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified) hash ^= Source.GetHashCode();
@@ -1733,20 +2033,24 @@ namespace Dreamsleeve.Protocol.Chat {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
+      if (ChannelId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(ChannelId);
+      }
       if (Text.Length != 0) {
-        output.WriteRawTag(10);
+        output.WriteRawTag(18);
         output.WriteString(Text);
       }
       if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
-        output.WriteRawTag(16);
+        output.WriteRawTag(24);
         output.WriteEnum((int) Kind);
       }
       if (Source != global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified) {
-        output.WriteRawTag(24);
+        output.WriteRawTag(32);
         output.WriteEnum((int) Source);
       }
       if (Signature.Length != 0) {
-        output.WriteRawTag(34);
+        output.WriteRawTag(42);
         output.WriteString(Signature);
       }
       if (_unknownFields != null) {
@@ -1759,20 +2063,24 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ChannelId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(ChannelId);
+      }
       if (Text.Length != 0) {
-        output.WriteRawTag(10);
+        output.WriteRawTag(18);
         output.WriteString(Text);
       }
       if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
-        output.WriteRawTag(16);
+        output.WriteRawTag(24);
         output.WriteEnum((int) Kind);
       }
       if (Source != global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified) {
-        output.WriteRawTag(24);
+        output.WriteRawTag(32);
         output.WriteEnum((int) Source);
       }
       if (Signature.Length != 0) {
-        output.WriteRawTag(34);
+        output.WriteRawTag(42);
         output.WriteString(Signature);
       }
       if (_unknownFields != null) {
@@ -1785,6 +2093,9 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
+      if (ChannelId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(ChannelId);
+      }
       if (Text.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(Text);
       }
@@ -1808,6 +2119,9 @@ namespace Dreamsleeve.Protocol.Chat {
     public void MergeFrom(PostAnnouncement other) {
       if (other == null) {
         return;
+      }
+      if (other.ChannelId != 0UL) {
+        ChannelId = other.ChannelId;
       }
       if (other.Text.Length != 0) {
         Text = other.Text;
@@ -1840,19 +2154,23 @@ namespace Dreamsleeve.Protocol.Chat {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
-          case 10: {
+          case 8: {
+            ChannelId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
             Text = input.ReadString();
             break;
           }
-          case 16: {
+          case 24: {
             Kind = (global::Dreamsleeve.Protocol.Chat.AnnouncementKind) input.ReadEnum();
             break;
           }
-          case 24: {
+          case 32: {
             Source = (global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource) input.ReadEnum();
             break;
           }
-          case 34: {
+          case 42: {
             Signature = input.ReadString();
             break;
           }
@@ -1875,19 +2193,23 @@ namespace Dreamsleeve.Protocol.Chat {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
-          case 10: {
+          case 8: {
+            ChannelId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
             Text = input.ReadString();
             break;
           }
-          case 16: {
+          case 24: {
             Kind = (global::Dreamsleeve.Protocol.Chat.AnnouncementKind) input.ReadEnum();
             break;
           }
-          case 24: {
+          case 32: {
             Source = (global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource) input.ReadEnum();
             break;
           }
-          case 34: {
+          case 42: {
             Signature = input.ReadString();
             break;
           }
@@ -1916,7 +2238,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[6]; }
+      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

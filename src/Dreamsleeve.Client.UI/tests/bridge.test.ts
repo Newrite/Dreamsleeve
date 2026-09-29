@@ -25,6 +25,7 @@ describe("native bridge", () => {
           id: "18446744073709551615",
           channelId: "system",
           source: "system",
+          announcement: { origin: "server", kind: "announcement" },
           text: "Объявление",
           time: 0,
         },

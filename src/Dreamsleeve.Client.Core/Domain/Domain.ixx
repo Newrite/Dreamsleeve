@@ -182,11 +182,13 @@ export namespace Domain
     bool operator==(const TextSpan&) const = default;
   };
 
+  // Channel entities; the UI "all" view is an aggregate of them, not a channel.
+  using ChatChannelKind          = ::Protocol::Chat::ChatChannelKind;
   using AnnouncementSource       = ::Protocol::Chat::AnnouncementSource;
   using AnnouncementKind         = ::Protocol::Chat::AnnouncementKind;
   using ClientAnnouncementSource = ::Protocol::Chat::ClientAnnouncementSource;
 
-  // Marks a message of the system stream. The server assigns the source; the
+  // Marks a message of a system channel. The server assigns the source; the
   // signature is the requesting mod's own label and never raises trust.
   struct Announcement
   {
@@ -216,15 +218,15 @@ export namespace Domain
   {
     ChatMessageId   messageId{};
     ChatChannelId   channelId{};
-    PlayerData      author{};
-    ChatMessageText messageText{};
+    // Absent only for server announcements: the system is not a player.
+    std::optional<PlayerData> author{};
+    ChatMessageText           messageText{};
     MessageTime     sentAt{};
     // Published character name at sending; absent for old history and outside a character.
     std::optional<CharacterName> characterName{};
     // Ranges the server marked without refusing the message; ascending, disjoint.
     std::vector<TextSpan> flagged{};
-    // Present on the system stream; the author is then the reserved server
-    // profile (source Server) or the player whose client posted it.
+    // Present exactly on messages of a system channel.
     std::optional<Announcement> announcement{};
 
     bool operator==(const ChatMessage&) const = default;

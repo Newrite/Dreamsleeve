@@ -150,6 +150,17 @@ static_assert(
 static_assert(Dreamsleeve::Protocol::Chat::LockDifficulty_ARRAYSIZE == 8);
 
 static_assert(
+  static_cast<long long>(Protocol::Chat::ChatChannelKind::Unspecified) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_UNSPECIFIED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::ChatChannelKind::Global) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_GLOBAL));
+static_assert(
+  static_cast<long long>(Protocol::Chat::ChatChannelKind::System) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_SYSTEM));
+static_assert(Dreamsleeve::Protocol::Chat::ChatChannelKind_ARRAYSIZE == 6);
+
+static_assert(
   static_cast<long long>(Protocol::Chat::AnnouncementSource::Unspecified) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_UNSPECIFIED));
 static_assert(

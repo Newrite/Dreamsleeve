@@ -36,8 +36,7 @@ module AuthenticationHttp =
 
     /// Registration only: existing accounts keep signing in with their stored names.
     let private allowedUsername moderation (username: Username) =
-        let text = Username.value username
-        not (text.StartsWith Moderation.HiddenUsernamePrefix) && Moderation.allows moderation text
+        not (Moderation.reservedUsername username) && Moderation.allows moderation (Username.value username)
 
     let private field (body: JsonElement) name =
         match body.TryGetProperty(name: string) with

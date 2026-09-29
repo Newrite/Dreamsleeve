@@ -1,15 +1,6 @@
 module;
 
 #include "Prelude.hpp"
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
-
 #include "API/DreamsleeveAPI.h"
 
 export module Dreamsleeve.ModApi;
@@ -17,10 +8,11 @@ export module Dreamsleeve.ModApi;
 import std;
 import Dreamsleeve.Runtime;
 
-// Plugin API for other mods: the C++ interface handed out through SKSE
-// messaging and the Papyrus script DreamsleeveClient. Calls may arrive on any
-// thread; they are checked and queued in Runtime, and the frame posts them to
-// Core. Outcomes return on the main thread. See docs/DreamsleeveModApiRu.md.
+// Plugin API for other mods: IVDreamsleeve1, handed out by the exported
+// RequestPluginAPI (Main.cpp), and the Papyrus script DreamsleeveClient. Calls
+// may arrive on any thread; they are checked and queued in Runtime, and the
+// frame posts them to Core. Outcomes return on the main thread.
+// See docs/DreamsleeveModApiRu.md.
 export namespace ModApi
 {
 
@@ -30,45 +22,96 @@ export namespace ModApi
   constexpr std::string_view ResultModEvent  = "Dreamsleeve_AnnouncementResult";
   constexpr std::size_t      MaxLoggedSource = 64;
 
-  static_assert(static_cast<std::uint32_t>(DreamsleeveAPI::APIResult::Failed) == static_cast<std::uint32_t>(Api::Result::Failed));
-  static_assert(static_cast<std::uint32_t>(DreamsleeveAPI::APIResult::RateLimited) == static_cast<std::uint32_t>(Api::Result::RateLimited));
   static_assert(static_cast<std::uint32_t>(DreamsleeveAPI::APIResult::Queued) == static_cast<std::uint32_t>(Api::Result::Queued));
+  static_assert(static_cast<std::uint32_t>(DreamsleeveAPI::APIResult::Busy) == static_cast<std::uint32_t>(Api::Result::Busy));
+  static_assert(static_cast<std::uint32_t>(DreamsleeveAPI::APIResult::Failed) == static_cast<std::uint32_t>(Api::Result::Failed));
 
   namespace Detail
   {
 
-    // Log lines carry mod text as a value, cut to a bounded length.
+    // Mod text reaches the log as a value, cleaned and bounded.
     std::string Loggable(std::string_view text)
     {
       return Dreamsleeve::Host::Bridge::SafeLabel(text, MaxLoggedSource);
     }
 
-    std::optional<Domain::AnnouncementKind> Kind(std::uint32_t value)
+    std::optional<Domain::AnnouncementKind> Kind(std::int32_t value)
     {
-      switch (static_cast<DreamsleeveAPI::AnnouncementKind>(value))
-      {
-        case DreamsleeveAPI::AnnouncementKind::Announcement:
-          return Domain::AnnouncementKind::Announcement;
-        case DreamsleeveAPI::AnnouncementKind::Event:
-          return Domain::AnnouncementKind::Event;
-      }
+      if (value == static_cast<std::int32_t>(DreamsleeveAPI::AnnouncementKind::Announcement)) return Domain::AnnouncementKind::Announcement;
+      if (value == static_cast<std::int32_t>(DreamsleeveAPI::AnnouncementKind::Event)) return Domain::AnnouncementKind::Event;
       return std::nullopt;
     }
 
-    Api::Result Post(std::string text, std::uint32_t kind, std::string source)
+    Api::Result Post(std::string text, std::int32_t kind, std::string source)
     {
       const auto mapped = Kind(kind);
-      if (!mapped) return Api::Result::InvalidKind;
-      const auto result =
-        Runtime::RequestAnnouncement({std::move(text), *mapped, Domain::ClientAnnouncementSource::ThirdParty, std::move(source)});
+      const auto result = mapped
+                          ? Runtime::RequestAnnouncement({std::move(text), *mapped, Domain::ClientAnnouncementSource::ThirdParty, source})
+                          : Api::Result::InvalidKind;
+      if (result == Api::Result::Queued)
+        logger::info("Announcement from {} queued", Loggable(source));
+      else
+        logger::warn("Announcement from {} refused locally: {}", Loggable(source), Api::ResultName(result));
       return result;
     }
+
+    struct Callbacks
+    {
+      std::mutex                                                                         mutex;
+      std::unordered_map<SKSE::PluginHandle, DreamsleeveAPI::AnnouncementResultCallback> byPlugin;
+    };
+
+    Callbacks& ResultCallbacks()
+    {
+      static Callbacks callbacks;
+      return callbacks;
+    }
+
+    class Interface final : public DreamsleeveAPI::IVDreamsleeve1
+    {
+  public:
+
+      std::uint32_t GetPluginVersion() const noexcept override
+      {
+        return SKSE::PluginDeclaration::GetSingleton()->GetVersion().pack();
+      }
+
+      bool IsConnected() const noexcept override
+      {
+        return Runtime::AnnouncementsConnected();
+      }
+
+      DreamsleeveAPI::APIResult PostAnnouncement(
+        std::string_view                 text,
+        DreamsleeveAPI::AnnouncementKind kind,
+        std::string_view                 source) noexcept override
+      {
+        return static_cast<DreamsleeveAPI::APIResult>(Post(std::string{text}, static_cast<std::int32_t>(kind), std::string{source}));
+      }
+
+      DreamsleeveAPI::CallbackResult AddAnnouncementResultCallback(
+        SKSE::PluginHandle                         plugin,
+        DreamsleeveAPI::AnnouncementResultCallback callback) noexcept override
+      {
+        auto&           callbacks = ResultCallbacks();
+        std::lock_guard lock{callbacks.mutex};
+        return callbacks.byPlugin.try_emplace(plugin, std::move(callback)).second ? DreamsleeveAPI::CallbackResult::OK
+                                                                                  : DreamsleeveAPI::CallbackResult::AlreadyRegistered;
+      }
+
+      DreamsleeveAPI::CallbackResult RemoveAnnouncementResultCallback(SKSE::PluginHandle plugin) noexcept override
+      {
+        auto&           callbacks = ResultCallbacks();
+        std::lock_guard lock{callbacks.mutex};
+        return callbacks.byPlugin.erase(plugin) ? DreamsleeveAPI::CallbackResult::OK : DreamsleeveAPI::CallbackResult::NotRegistered;
+      }
+    };
 
     // Papyrus strings are bytes of the game's text encoding, which on a
     // localized install is the ANSI code page rather than UTF-8.
     std::string FromPapyrus(std::string value)
     {
-      if (Api::CountCodePoints(value, true)) return value;
+      if (value.empty() || Api::CountCodePoints(value, true)) return value;
       const auto size = static_cast<int>(std::min<std::size_t>(value.size(), 1 << 16));
       const int  wide = MultiByteToWideChar(CP_ACP, 0, value.data(), size, nullptr, 0);
       if (wide <= 0) return value;
@@ -81,78 +124,9 @@ export namespace ModApi
       return utf8;
     }
 
-    void LogAdmission(std::string_view source, Api::Result result)
-    {
-      if (result == Api::Result::Queued)
-        logger::info("Announcement from {} queued", Loggable(source));
-      else
-        logger::warn("Announcement from {} refused locally: {}", Loggable(source), Api::ResultName(result));
-    }
-
-    class Interface final : public DreamsleeveAPI::IVDreamsleeve1
-    {
-  public:
-
-      DreamsleeveAPI::InterfaceVersion GetInterfaceVersion() const noexcept override
-      {
-        return DreamsleeveAPI::InterfaceVersion::V1;
-      }
-
-      std::uint32_t GetPluginVersion() const noexcept override
-      {
-        return SKSE::PluginDeclaration::GetSingleton()->GetVersion().pack();
-      }
-
-      bool IsConnected() const noexcept override
-      {
-        return Runtime::AnnouncementsConnected();
-      }
-
-      DreamsleeveAPI::APIResult PostAnnouncement(const char* text, DreamsleeveAPI::AnnouncementKind kind, const char* source) noexcept
-        override
-      {
-        try
-        {
-          if (!text) return DreamsleeveAPI::APIResult::InvalidText;
-          if (!source) return DreamsleeveAPI::APIResult::InvalidSource;
-          const auto result = Post(text, static_cast<std::uint32_t>(kind), source);
-          LogAdmission(source, result);
-          return static_cast<DreamsleeveAPI::APIResult>(result);
-        }
-        catch (...)
-        {
-          return DreamsleeveAPI::APIResult::Busy;
-        }
-      }
-    };
-
-    Interface& Instance()
-    {
-      static Interface instance;
-      return instance;
-    }
-
-    void* Request(DreamsleeveAPI::InterfaceVersion version)
-    {
-      return version == DreamsleeveAPI::InterfaceVersion::V1 ? static_cast<DreamsleeveAPI::IVDreamsleeve1*>(&Instance()) : nullptr;
-    }
-
-    // Any sender: the exchange fills a function pointer in the caller's struct.
-    void OnPluginMessage(SKSE::MessagingInterface::Message* message)
-    {
-      if (!message || message->type != DreamsleeveAPI::kMessage_RequestInterface || !message->data) return;
-      if (message->dataLen < sizeof(DreamsleeveAPI::RequestInterfaceMessage)) return;
-      static_cast<DreamsleeveAPI::RequestInterfaceMessage*>(message->data)->RequestPluginAPI = Request;
-      logger::info("Plugin API handed to {}", message->sender ? message->sender : "?");
-    }
-
     bool PapyrusPostAnnouncement(RE::StaticFunctionTag*, std::string text, std::int32_t kind, std::string source)
     {
-      if (kind < 0) return false;
-      source            = FromPapyrus(std::move(source));
-      const auto result = Post(FromPapyrus(std::move(text)), static_cast<std::uint32_t>(kind), source);
-      LogAdmission(source, result);
-      return result == Api::Result::Queued;
+      return Post(FromPapyrus(std::move(text)), kind, FromPapyrus(std::move(source))) == Api::Result::Queued;
     }
 
     bool PapyrusIsConnected(RE::StaticFunctionTag*)
@@ -175,25 +149,25 @@ export namespace ModApi
 
   }
 
-  // During SKSEPlugin_Load, after SKSE::Init.
-  bool Register()
+  // Exported by Main.cpp as RequestPluginAPI; the version is DreamsleeveAPI::InterfaceVersion.
+  void* Request(std::uint8_t version)
   {
-    const auto messaging = SKSE::GetMessagingInterface();
-    if (!messaging || !messaging->RegisterListener(nullptr, Detail::OnPluginMessage))
-    {
-      logger::error("Cannot register the plugin API listener");
-      return false;
-    }
-    if (const auto papyrus = SKSE::GetPapyrusInterface(); !papyrus || !papyrus->Register(Detail::RegisterPapyrus))
-    {
-      logger::error("Cannot register Papyrus functions of {}", PapyrusClass);
-      return false;
-    }
-    return true;
+    static Detail::Interface instance;
+    if (version == static_cast<std::uint8_t>(DreamsleeveAPI::InterfaceVersion::V1))
+      return static_cast<DreamsleeveAPI::IVDreamsleeve1*>(&instance);
+    return nullptr;
   }
 
-  // Main thread. Tells every listening plugin and every script registered for
-  // the mod event; the log keeps a line per outcome.
+  // During SKSEPlugin_Load, after SKSE::Init.
+  void Register()
+  {
+    if (const auto papyrus = SKSE::GetPapyrusInterface(); !papyrus || !papyrus->Register(Detail::RegisterPapyrus))
+      logger::error("Cannot register Papyrus functions of {}", PapyrusClass);
+  }
+
+  // Main thread. The log keeps a line per outcome; the registered callbacks and
+  // every script registered for the mod event are told. Callbacks run outside
+  // the lock, so a callback may register or remove callbacks.
   void Report(const Api::Outcome& outcome)
   {
     const auto source = Detail::Loggable(outcome.signature);
@@ -202,14 +176,17 @@ export namespace ModApi
     else
       logger::warn("Announcement from {} not published: {} ({})", source, Api::ResultName(outcome.result), outcome.reason);
 
-    DreamsleeveAPI::AnnouncementResultMessage message{
-        static_cast<DreamsleeveAPI::APIResult>(outcome.result),
-        outcome.signature.c_str(),
-        outcome.text.c_str(),
-        outcome.reason.c_str()
-    };
-    if (const auto messaging = SKSE::GetMessagingInterface())
-      messaging->Dispatch(DreamsleeveAPI::kMessage_AnnouncementResult, &message, static_cast<std::uint32_t>(sizeof(message)), nullptr);
+    std::vector<DreamsleeveAPI::AnnouncementResultCallback> targets;
+    {
+      auto&           callbacks = Detail::ResultCallbacks();
+      std::lock_guard lock{callbacks.mutex};
+      for (const auto& [plugin, callback] : callbacks.byPlugin)
+        targets.push_back(callback);
+    }
+    const DreamsleeveAPI::AnnouncementResult
+      result{static_cast<DreamsleeveAPI::APIResult>(outcome.result), outcome.signature, outcome.text, outcome.reason};
+    for (const auto& callback : targets)
+      callback(result);
 
     if (const auto events = SKSE::GetModCallbackEventSource())
     {

@@ -30,7 +30,7 @@ let private health amount =
     ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok) (ActorValueState.resource amount 100.0f |> ok)
 
 let private chat capacity =
-    let value = Chat.create (channelId 1UL) capacity |> ok
+    let value = Chat.create ChatChannelKind.Global capacity |> ok
     Chat.join (playerId 1UL) value |> ignore
     value
 
@@ -425,7 +425,7 @@ let private chatTests =
             Expect.equal before.Messages page.Messages "Both keep the original message"
 
         testCase "history and channel limits are validated" <| fun _ ->
-            Expect.isError (Chat.create (channelId 1UL) 0) "No unbounded/zero history"
+            Expect.isError (Chat.create ChatChannelKind.Global 0) "No unbounded/zero history"
             Expect.isError (Chat.historyAfter ValueNone 0 (chat 2)) "Page size must be positive"
             let value = chat 2
             append 10UL value
@@ -442,8 +442,8 @@ let private chatTests =
             let renamed = PlayerData.withDisplayName (displayName "Renamed") author
             Expect.equal value.SentAt.Offset TimeSpan.Zero "Wire-facing timestamp is canonical UTC"
             Expect.equal value.SentAt instant "The instant is preserved"
-            Expect.equal value.Author.DisplayName author.DisplayName "Message keeps the immutable send-time author"
-            Expect.notEqual value.Author.DisplayName renamed.DisplayName "Renaming profile does not rewrite message"
+            Expect.equal value.Author (ValueSome author) "Message keeps the immutable send-time author"
+            Expect.notEqual value.Author (ValueSome renamed) "Renaming profile does not rewrite message"
     ]
 
 let private movementTests = testList "Movement" [

@@ -159,7 +159,7 @@ TEST_CASE("State queue restores chat contents after overflow and delivers subseq
     ChatMessage message{
         id,
         1,
-        {7, "player", "Display"},
+        Domain::PlayerData{7, "player", "Display"},
         "Message",
         MessageTime{}
     };

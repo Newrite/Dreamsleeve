@@ -112,7 +112,7 @@ function message(v: unknown): boolean {
     Math.abs(v.time as number) <= 8640000000000000 &&
     (v.filtered === undefined || typeof v.filtered === "boolean") &&
     ((v.source === "system" &&
-      (v.announcement === undefined || announcement(v.announcement)) &&
+      announcement(v.announcement) &&
       (v.author === undefined || player(v.author))) ||
       (v.source === "player" &&
         v.announcement === undefined &&
@@ -189,6 +189,7 @@ export function parseHostEvent(source: string): HostEvent {
       break;
     case "announcementResult":
       valid =
+        id(v.channelId) &&
         signature(v.source) &&
         text(v.text) &&
         v.text.length <= 16000 &&

@@ -146,21 +146,24 @@ let private connected state client =
 
 let private opened state client (packet: ServerPacket) =
     let welcome = packet.SessionOpened
+    // The load goes to the global channel; the system channel is not measured.
+    let globalChannel = welcome.Channels |> Seq.tryFind (fun channel -> channel.Kind = ChatChannelKind.Global)
     if client.Ready || not packet.HasRequestId || packet.RequestId <> 1UL
-       || welcome.SelfPlayerId <> client.AccountId || welcome.GlobalChannelId = 0UL
+       || welcome.SelfPlayerId <> client.AccountId || globalChannel.IsNone || globalChannel.Value.ChannelId = 0UL
        || not (welcome.Players |> Seq.exists (fun player -> not (isNull player.Profile) && player.Profile.PlayerId = welcome.SelfPlayerId)) then
         fail state (sprintf "Client %d invalid session welcome" client.Index)
     else
         client.Ready <- true
         client.ReadyMs <- now state
         client.PlayerId <- welcome.SelfPlayerId
-        client.ChannelId <- welcome.GlobalChannelId
+        client.ChannelId <- globalChannel.Value.ChannelId
         state.ReadyCount <- state.ReadyCount + 1
         for player in welcome.Players do
             if not (client.Online.Add player.Profile.PlayerId) then fail state "Duplicate player in initial snapshot"
         // History is outside the measured load. Its tail establishes ordering.
-        if welcome.RecentMessages.Count > 0 then
-            client.LastMessageId <- welcome.RecentMessages[welcome.RecentMessages.Count - 1].MessageId
+        let history = globalChannel.Value.RecentMessages
+        if history.Count > 0 then
+            client.LastMessageId <- history[history.Count - 1].MessageId
 
 let private published state client (packet: ServerPacket) =
     let message = packet.ChatPublished.Message

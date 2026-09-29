@@ -9,6 +9,7 @@ import {
 import { defaults, settingsFrom } from "../src/state/settings";
 import type {
   Announcement,
+  Channel,
   Command,
   HostEvent,
   Message,
@@ -24,16 +25,16 @@ const author: Player = {
 };
 const announcement = (
   id: string,
-  a?: Announcement,
+  a: Announcement = { origin: "server", kind: "announcement" },
   extra: Partial<Message> = {},
 ): Message =>
   ({
     id,
-    channelId: "announcements",
+    channelId: "9",
     source: "system",
     text: "Объявление",
     time: 0,
-    ...(a ? { announcement: a } : {}),
+    announcement: a,
     ...extra,
   }) as Message;
 const chatLine = (id: string, channelId = "1"): Message => ({
@@ -44,6 +45,11 @@ const chatLine = (id: string, channelId = "1"): Message => ({
   text: "Привет",
   time: 0,
 });
+// The system channel is found by its kind, whatever its ID.
+const channels: Channel[] = [
+  { id: "1", name: "Общий", kind: "global", writable: true },
+  { id: "9", name: "Объявления", kind: "system", writable: false },
+];
 const snapshot: HostEvent = {
   type: "snapshot",
   serverName: "Голоса Тамриэля",
@@ -51,7 +57,7 @@ const snapshot: HostEvent = {
     { id: "1", name: "Общий", kind: "global", writable: true },
     { id: "2", name: "Группа", kind: "party", writable: true },
     {
-      id: "announcements",
+      id: "9",
       name: "Объявления",
       kind: "system",
       writable: false,
@@ -88,7 +94,6 @@ describe("announcement bridge", () => {
           { author },
         ),
         announcement("4", { origin: "thirdParty", kind: "announcement" }),
-        announcement("5"),
       ],
     };
     expect(parse(event)).toEqual(event);
@@ -100,6 +105,7 @@ describe("announcement bridge", () => {
       { ...valid, announcement: { origin: "server", kind: "news" } },
       { ...valid, announcement: { origin: "server" } },
       { ...valid, announcement: "server" },
+      { ...valid, announcement: undefined },
       {
         ...valid,
         announcement: { origin: "thirdParty", kind: "event", signature: 5 },
@@ -151,12 +157,14 @@ describe("announcement bridge", () => {
   it("validates announcementResult", () => {
     const event = {
       type: "announcementResult",
+      channelId: "9",
       source: "Carriage Tours",
       text: "Карета отправляется",
       error: "Слишком часто",
     };
     expect(parse(event)).toEqual(event);
     for (const broken of [
+      { ...event, channelId: undefined },
       { ...event, source: undefined },
       { ...event, source: "x".repeat(129) },
       { ...event, source: "a\u0007b" },
@@ -209,21 +217,21 @@ describe("announcement visibility", () => {
   const server = announcement("s", { origin: "server", kind: "announcement" });
   it("places announcements by announcementChannels", () => {
     const matrix: [Settings["announcementChannels"], string, boolean][] = [
-      ["tab", "announcements", true],
+      ["tab", "9", true],
       ["tab", "all", false],
       ["tab", "1", false],
-      ["all", "announcements", true],
+      ["all", "9", true],
       ["all", "all", true],
       ["all", "1", false],
-      ["current", "announcements", true],
+      ["current", "9", true],
       ["current", "all", true],
       ["current", "1", true],
     ];
     for (const [announcementChannels, filter, expected] of matrix) {
       const s = { ...defaults, announcementChannels };
-      expect(visible(server, filter, s)).toBe(expected);
+      expect(visible(server, filter, s, channels)).toBe(expected);
       // Ordinary lines never move.
-      expect(visible(chatLine("p"), filter, s)).toBe(
+      expect(visible(chatLine("p"), filter, s, channels)).toBe(
         filter === "all" || filter === "1",
       );
     }
@@ -231,7 +239,6 @@ describe("announcement visibility", () => {
   it("origin and kind switches hide everywhere, the own tab included", () => {
     const lines = {
       server,
-      legacy: announcement("l"),
       trusted: announcement("t", {
         origin: "trustedClient",
         kind: "announcement",
@@ -242,36 +249,33 @@ describe("announcement visibility", () => {
       modEvent: announcement("me", { origin: "thirdParty", kind: "event" }),
     };
     const cases: [Partial<Settings>, (keyof typeof lines)[]][] = [
-      [
-        {},
-        ["server", "legacy", "trusted", "mod", "event", "periodic", "modEvent"],
-      ],
+      [{}, ["server", "trusted", "mod", "event", "periodic", "modEvent"]],
       [{ announcementsServer: false }, ["trusted", "mod", "modEvent"]],
       [
         { announcementsTrustedClient: false },
-        ["server", "legacy", "mod", "event", "periodic", "modEvent"],
+        ["server", "mod", "event", "periodic", "modEvent"],
       ],
       [
         { announcementsThirdParty: false },
-        ["server", "legacy", "trusted", "event", "periodic"],
+        ["server", "trusted", "event", "periodic"],
       ],
       [
         { announcementsEvents: false },
-        ["server", "legacy", "trusted", "mod", "periodic"],
+        ["server", "trusted", "mod", "periodic"],
       ],
       [
         { announcementsPeriodic: false },
-        ["server", "legacy", "trusted", "mod", "event", "modEvent"],
+        ["server", "trusted", "mod", "event", "modEvent"],
       ],
     ];
     for (const announcementChannels of ["tab", "all", "current"] as const)
       for (const [patch, shown] of cases) {
         const s = { ...defaults, announcementChannels, ...patch };
-        for (const filter of ["announcements", "all", "1"])
+        for (const filter of ["9", "all", "1"])
           for (const [name, line] of Object.entries(lines))
-            expect(visible(line, filter, s)).toBe(
+            expect(visible(line, filter, s, channels)).toBe(
               shown.includes(name as keyof typeof lines) &&
-                (filter === "announcements" ||
+                (filter === "9" ||
                   announcementChannels === "current" ||
                   (filter === "all" && announcementChannels === "all")),
             );
@@ -287,13 +291,13 @@ describe("announcement visibility", () => {
         announcement("s", { origin: "server", kind: "event" }),
       ],
     });
-    expect(chat.store.getState().unread.announcements).toBe(1);
+    expect(chat.store.getState().unread["9"]).toBe(1);
     chat.configure({ announcementsEvents: false });
     chat.receive({
       type: "messages",
       messages: [announcement("e", { origin: "server", kind: "event" })],
     });
-    expect(chat.store.getState().unread.announcements).toBe(1);
+    expect(chat.store.getState().unread["9"]).toBe(1);
   });
   it("unread follows where announcements are shown", () => {
     const { chat } = ready();
@@ -301,27 +305,28 @@ describe("announcement visibility", () => {
     chat.configure({ announcementChannels: "tab" });
     chat.receive({ type: "messages", messages: [announcement("1")] });
     // Not shown in "Все": the tab badge grows.
-    expect(chat.store.getState().unread.announcements).toBe(1);
+    expect(chat.store.getState().unread["9"]).toBe(1);
     chat.read();
-    expect(chat.store.getState().unread.announcements).toBe(1);
+    expect(chat.store.getState().unread["9"]).toBe(1);
     chat.configure({ announcementChannels: "current" });
     chat.select("2");
     chat.read();
-    expect(chat.store.getState().unread.announcements).toBe(0);
+    expect(chat.store.getState().unread["9"]).toBe(0);
     chat.receive({ type: "messages", messages: [announcement("2")] });
-    expect(chat.store.getState().unread.announcements ?? 0).toBe(0);
+    expect(chat.store.getState().unread["9"] ?? 0).toBe(0);
     chat.configure({ announcementChannels: "all" });
     chat.receive({ type: "messages", messages: [announcement("3")] });
-    expect(chat.store.getState().unread.announcements).toBe(1);
+    expect(chat.store.getState().unread["9"]).toBe(1);
     chat.select("all");
     chat.read();
-    expect(chat.store.getState().unread.announcements).toBe(0);
+    expect(chat.store.getState().unread["9"]).toBe(0);
   });
 });
 
 describe("refused announcements of other mods", () => {
   const refusal = (text = "Карета"): HostEvent => ({
     type: "announcementResult",
+    channelId: "9",
     source: "Carriage Tours",
     text,
     error: "Слишком часто",
@@ -332,7 +337,7 @@ describe("refused announcements of other mods", () => {
     chat.receive(refusal());
     const [[id, row]] = Object.entries(chat.store.getState().pending);
     expect(row).toMatchObject({
-      channelId: "announcements",
+      channelId: "9",
       status: "failed",
       error: "Слишком часто",
       external: "Carriage Tours",

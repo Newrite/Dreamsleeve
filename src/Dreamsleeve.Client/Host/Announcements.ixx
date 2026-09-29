@@ -13,18 +13,17 @@ export namespace Dreamsleeve::Host::Announcements
   // Values of DreamsleeveAPI::APIResult; the plugin API maps them one to one.
   enum class Result : std::uint32_t
   {
-    Queued        = 0,   // Accepted locally; the final outcome follows asynchronously.
-    Published     = 1,   // The server published it (asynchronous outcome only).
-    NotConnected  = 2,   // No ready session, or it ended before a reply.
-    Rejected      = 3,   // The server refused it: disabled source, word list, invalid request.
-    TooLong       = 4,   // Text exceeds the server limit.
-    InvalidText   = 5,   // Empty, blank, invalid UTF-8 or control characters.
-    InvalidSource = 6,   // Missing, blank, too long or multiline mod label.
-    InvalidKind   = 7,   // Not a kind a client may request.
-    Busy          = 8,   // A local queue is full.
-    Unsupported   = 9,   // The server predates client announcements.
-    RateLimited   = 10,  // Too frequent or repeated; try later.
-    Failed        = 11   // Delivery unknown: the session changed or encoding failed.
+    Queued        = 0,  // Accepted locally; the final outcome follows asynchronously.
+    Published     = 1,  // The server published it (asynchronous outcome only).
+    NotConnected  = 2,  // No ready session, or it ended before a reply.
+    Rejected      = 3,  // The server refused it: disabled source, word list, invalid request.
+    TooLong       = 4,  // Text exceeds the server limit.
+    InvalidText   = 5,  // Empty, blank, invalid UTF-8 or control characters.
+    InvalidSource = 6,  // Missing, blank, too long or multiline mod label.
+    InvalidKind   = 7,  // Not a kind a client may request.
+    Busy          = 8,  // A local queue is full.
+    RateLimited   = 9,  // Too frequent or repeated; try later.
+    Failed        = 10  // Delivery unknown: the session changed or encoding failed.
   };
 
   // Copied from the caller before the API call returns.
@@ -36,10 +35,10 @@ export namespace Dreamsleeve::Host::Announcements
     std::string                      signature;
   };
 
-  // Session facts the check needs; the main thread refreshes the copy.
+  // Session facts the check needs; the main thread refreshes the copy. The
+  // policy comes with the session welcome and is absent without a session.
   struct Gate
   {
-    bool                                      connected{};
     std::optional<Domain::AnnouncementPolicy> policy;
   };
 
@@ -128,8 +127,7 @@ export namespace Dreamsleeve::Host::Announcements
       (!request.signature.empty() && Blank(request.signature)))
       return Result::InvalidSource;
 
-    if (!gate.connected) return Result::NotConnected;
-    if (!gate.policy) return Result::Unsupported;
+    if (!gate.policy) return Result::NotConnected;
     if (!gate.policy->Allows(request.source)) return Result::Rejected;
     if (*text > gate.policy->maxTextLength) return Result::TooLong;
     if (*label > gate.policy->maxSignatureLength) return Result::InvalidSource;
@@ -158,8 +156,6 @@ export namespace Dreamsleeve::Host::Announcements
         return "invalid kind";
       case Result::Busy:
         return "busy";
-      case Result::Unsupported:
-        return "unsupported by the server";
       case Result::RateLimited:
         return "rate limited";
       case Result::Failed:

@@ -14,9 +14,9 @@
         <Compile Include="Protocol/ChatCodec.fs" />
         <Compile Include="Protocol/SessionCodec.fs" />
         <Compile Include="Protocol/ProtocolCodec.fs" />
-        <Compile Include="Announcements.fs" />
         <Compile Include="Authentication.fs" />
         <Compile Include="SessionContracts.fs" />
+        <Compile Include="Announcements.fs" />
         <Compile Include="ChatRoomAgent.fs" />
         <Compile Include="SpatialIndex.fs" />
         <Compile Include="PresenceAgent.fs" />

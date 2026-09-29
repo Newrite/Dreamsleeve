@@ -118,11 +118,16 @@ export const messages: Message[] = lines.map(([channelId, text], i) => ({
   text,
   time: Date.now() - (lines.length - i) * 65000,
   ...(channelId === "announcements"
-    ? { source: "system" as const }
+    ? {
+        source: "system" as const,
+        announcement: {
+          origin: "server" as const,
+          kind: "announcement" as const,
+        },
+      }
     : { source: "player" as const, author: players[(i + 1) % 3] }),
 }));
-// Every origin and kind. The welcome line above is a legacy system line
-// without `announcement`; the UI treats it as a server announcement.
+// Every origin and kind.
 const announce = (
   id: string,
   minutesAgo: number,

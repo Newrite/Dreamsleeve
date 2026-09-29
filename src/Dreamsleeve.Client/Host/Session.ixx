@@ -23,7 +23,7 @@ public:
       std::vector<std::string> notes;   // Diagnostics for the host logger.
       // Live publications of other players in the global channel, confirmed by
       // the server in this Process call: never snapshot history, replays or
-      // system-stream messages. Consumed by the firefly chat bubbles.
+      // announcements. Consumed by the firefly chat bubbles.
       std::vector<Domain::ChatMessage> freshMessages;
       // Final results of announcements requested through the plugin API.
       std::vector<Announcements::Outcome> announcementResults;
@@ -91,7 +91,6 @@ public:
     // of retained history can be ignored by ID as well.
     bool Ignore(Domain::PlayerId id)
     {
-      if (id == Bridge::ServerAuthorId) return false;
       const Domain::PlayerData* known = nullptr;
       if (const auto online = players.find(id); online != players.end())
         known = &online->second.data;
@@ -117,7 +116,8 @@ public:
     {
       if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
       const auto channel = Bridge::ParseId(command.channelId);
-      if (!channel || std::ranges::find(channels, *channel) == channels.end()) return std::unexpected{"Канал недоступен"};
+      const auto found   = channel ? channels.find(*channel) : channels.end();
+      if (found == channels.end() || found->second != Domain::ChatChannelKind::Global) return std::unexpected{"Канал недоступен"};
       const auto requestId = exchange.NextRequestId();
       if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
 
@@ -134,21 +134,17 @@ public:
     // calling thread; this only needs a session and a free slot.
     Announcements::Result PostAnnouncement(ClientExchange& exchange, Announcements::Request request)
     {
-      if (!Ready()) return Announcements::Result::NotConnected;
+      const auto system = ChannelOf(Domain::ChatChannelKind::System);
+      if (!Ready() || !system) return Announcements::Result::NotConnected;
       if (pendingAnnouncements.size() >= MaxPendingAnnouncements) return Announcements::Result::Busy;
       const auto requestId = exchange.NextRequestId();
       if (!requestId) return Announcements::Result::Failed;
 
-      PendingAnnouncement pending{request.signature, request.text, generation};
+      PendingAnnouncement pending{*system, request.signature, request.text, generation};
       const auto          posted = exchange.Post({
           generation,
-          Dreamsleeve::Client::PostAnnouncement{
-                                                *requestId,
-                                                std::move(request.text),
-                                                request.kind,
-                                                request.source,
-                                                std::move(request.signature)
-          }
+          Dreamsleeve::Client::
+            PostAnnouncement{*requestId, *system, std::move(request.text), request.kind, request.source, std::move(request.signature)}
       });
       if (posted != CommandPostResult::Queued) return Announcements::Result::Busy;
       pendingAnnouncements.emplace(*requestId, std::move(pending));
@@ -205,7 +201,8 @@ private:
 
     struct PendingAnnouncement
     {
-      std::string   signature;
+      Domain::ChatChannelId channelId{};
+      std::string           signature;
       std::string   text;
       std::uint64_t generation{};
     };
@@ -235,15 +232,21 @@ private:
     // clients' announcements; self and the server are never filtered.
     bool Hidden(const Domain::ChatMessage& message) const
     {
-      const auto author = message.author.playerId;
-      return !Bridge::ServerAuthored(message) && author != selfId && names.Ignored(author);
+      return message.author && message.author->playerId != selfId && names.Ignored(message.author->playerId);
     }
 
     void Remember(const Domain::ChatMessage& message)
     {
-      if (Bridge::ServerAuthored(message)) return;
-      if (authors.size() >= MaxKnownAuthors && !authors.contains(message.author.playerId)) authors.clear();
-      authors.insert_or_assign(message.author.playerId, message.author);
+      if (!message.author) return;
+      if (authors.size() >= MaxKnownAuthors && !authors.contains(message.author->playerId)) authors.clear();
+      authors.insert_or_assign(message.author->playerId, *message.author);
+    }
+
+    std::optional<Domain::ChatChannelId> ChannelOf(Domain::ChatChannelKind kind) const
+    {
+      for (const auto& [id, channelKind] : channels)
+        if (channelKind == kind) return id;
+      return std::nullopt;
     }
 
     // The UI treats every snapshot as a connected session, so only a Ready
@@ -257,11 +260,10 @@ private:
         players.insert_or_assign(player.data.playerId, player);
       channels.clear();
       for (const auto& chat : snapshot.chats)
-        channels.push_back(chat.channelId);
-      // Protocol v6 opens exactly one channel (SessionOpened.global_channel_id)
-      // and the snapshot labels every channel "global"; bubbles follow the first
-      // one. Retained history sets the floor: only later IDs are live.
-      globalChannel      = snapshot.chats.empty() ? std::nullopt : std::optional{snapshot.chats.front().channelId};
+        channels.insert_or_assign(chat.channelId, chat.kind);
+      // Bubbles follow the global channel; retained history sets the floor:
+      // only later IDs are live.
+      globalChannel      = ChannelOf(Domain::ChatChannelKind::Global);
       const bool refresh = std::exchange(refreshing, false) && snapshot.generation == refreshGeneration;
       refreshGeneration  = snapshot.generation;
       authors.clear();
@@ -289,8 +291,7 @@ private:
 
       Bridge::SnapshotEvent event;
       for (const auto& chat : snapshot.chats)
-        event.channels.push_back({Bridge::Id(chat.channelId), "global", "Общий", true});
-      event.channels.push_back({std::string{Bridge::AnnouncementsChannel}, "system", "Объявления", false});
+        event.channels.push_back(Bridge::ToUiChannel(chat.channelId, chat.kind));
       // ChatCache keeps ascending MessageId order; the UI bounds its own history.
       for (const auto& chat : snapshot.chats)
       {
@@ -341,8 +342,10 @@ private:
       }
       for (const auto& change : delta.chats)
       {
-        if (change.state && std::ranges::find(channels, change.channelId) == channels.end()) channels.push_back(change.channelId);
-        if (!change.state) std::erase(channels, change.channelId);
+        if (change.state)
+          channels.insert_or_assign(change.channelId, change.state->kind);
+        else
+          channels.erase(change.channelId);
       }
 
       Bridge::MessagesEvent messages;
@@ -368,13 +371,12 @@ private:
     }
 
     // Bubble admission: global channel, newer than anything seen (history
-    // pages and repeated events stay out), player chat of someone other than self.
-    // Announcements never float above a firefly, whoever posted them.
+    // pages and repeated events stay out), a player other than self.
     bool Fresh(const Domain::ChatMessage& message)
     {
       if (!globalChannel || message.channelId != *globalChannel || message.messageId <= bubbleFloor) return false;
       bubbleFloor = message.messageId;
-      return !message.announcement && message.author.playerId != 0 && message.author.playerId != selfId;
+      return message.author && message.author->playerId != selfId;
     }
 
     static Announcements::Result ResultOf(const ServerRejection& rejection)
@@ -395,8 +397,6 @@ private:
           return Announcements::Result::NotConnected;
         case CommandFailureCode::Busy:
           return Announcements::Result::Busy;
-        case CommandFailureCode::Unsupported:
-          return Announcements::Result::Unsupported;
         case CommandFailureCode::InvalidRequest:
           return Announcements::Result::Rejected;
         case CommandFailureCode::EncodingFailed:
@@ -415,9 +415,10 @@ private:
         Emit(
           frame,
           Bridge::AnnouncementResultEvent{
-              .source = Bridge::SafeLabel(pending.signature),
-              .text   = pending.text,
-              .error  = Bridge::ClipUtf8(reason, Bridge::MaxErrorBytes)
+              .channelId = Bridge::Id(pending.channelId),
+              .source    = Bridge::SafeLabel(pending.signature),
+              .text      = pending.text,
+              .error     = Bridge::ClipUtf8(reason, Bridge::MaxErrorBytes)
           });
       frame.announcementResults.push_back({std::move(pending.signature), std::move(pending.text), result, std::move(reason)});
       pendingAnnouncements.erase(found);
@@ -465,7 +466,7 @@ private:
     std::uint64_t                                  generation{};
     std::optional<Domain::PlayerId>                selfId;
     std::string                                    serverName;
-    std::vector<Domain::ChatChannelId>             channels;
+    std::unordered_map<Domain::ChatChannelId, Domain::ChatChannelKind> channels;
     std::optional<Domain::ChatChannelId>           globalChannel;
     Domain::ChatMessageId                          bubbleFloor{};
     Players                                        players;

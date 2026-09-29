@@ -256,6 +256,12 @@ module Moderation =
     let fallbackUsername (playerId: PlayerId) : Username =
         UMX.tag $"{HiddenUsernamePrefix}{PlayerId.value playerId}"
 
+    /// Names a new account cannot take: placeholders and the names of the
+    /// system source, so no player passes for the server in any client.
+    let reservedUsername (username: Username) =
+        let text = Username.value username
+        text.StartsWith HiddenUsernamePrefix || text = "server" || text = "system"
+
     /// Stored profiles are never rewritten. Outbound copies hide names that
     /// fail the current block rules; IDs and the stored account stay unchanged.
     let publicProfile rules (profile: PlayerData) =

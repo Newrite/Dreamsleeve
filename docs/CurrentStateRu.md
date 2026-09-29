@@ -569,26 +569,33 @@ vitest defaults/типы, Playwright сохранение и восстанов�
 
 ## Объявления и API для модов (29.09.2026)
 
-Системный поток описан в доменной модели ([DomainSpecRu.MD §4.8, §5](DomainSpecRu.MD)):
-источник назначает сервер (`Server` / `TrustedClient` / `ThirdParty`), вид —
-`Announcement` / `Event` / `Admin` / `Periodic`. Протокол v6 расширен совместимо:
-`ChatMessage.announcement`, `PostAnnouncement` (без серверного источника в запросе),
-`SessionOpened.announcements` (политика и признак поддержки), код отказа
-`ANNOUNCEMENT_NOT_ALLOWED = 11`. Объявления идут обычным `ChatPublished` глобального
-канала с ненулевым автором, поэтому старый клиент видит их как сообщения служебного
-профиля сервера или игрока; новый клиент не отправляет `PostAnnouncement` серверу без
-политики. Сервер: секция `[Announcements]` (допуск `TrustedClient`/`ThirdParty`, по
-умолчанию оба, отдельный лимит частоты, расписание `[[Announcements.Scheduled]]`),
-длины в `[Server.ChatInput]`, консольная команда `announce <текст>`; конфигурация, как и
-`moderation.toml`, читается только при запуске. Клиент: вкладка «Объявления», показ по
-источнику и виду, выбор каналов, строка источника в сообщении; облачка объявления не
-показывают. Другие моды публикуют через C++ `IVDreamsleeve1` (SKSE messaging) и Papyrus
-`DreamsleeveClient` ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)); отказ виден в
-логе, строкой «Не отправлено» и как `APIResult`/mod event.
+Виды каналов вошли в домен ([DomainSpecRu.MD §4.8, §5](DomainSpecRu.MD)):
+`ChatChannelKind` — `Global` и `System`; ChannelId серверных видов выводится из вида (1 и 2),
+вид задаёт правила канала. Системный канал — отдельная сущность со своими историей,
+лимитом частоты и ChatRoomAgent; в нём только объявления, в общем — только чат. Источник
+объявления назначает сервер (`Server` / `TrustedClient` / `ThirdParty`), вид —
+`Announcement` / `Event` / `Admin` / `Periodic`. У серверных объявлений нет автора
+(фиктивного игрока нет); имена `server` и `system` зарезервированы при регистрации.
 
-Проверки: 345 managed (Expecto; `dotnet test` завершается с кодом 0), 262 native
-(doctest), 49 vitest, 27 Playwright (Edge), `smoke_chat.py` — 27 проверок, из них 6 новых
-(расписание, консоль, запрет типа, серверный вид, публикация модом, лимит частоты).
+Протокол **v7** (несовместим с v6, клиент и сервер обновляются вместе):
+`SessionOpened.channels` (канал, вид, хвост) вместо `global_channel_id`/`recent_messages`,
+`ChatMessage.announcement` и необязательный автор у объявлений сервера,
+`PostAnnouncement{channel_id}` без серверного источника в запросе, обязательная
+`SessionOpened.announcements` (политика), код `ANNOUNCEMENT_NOT_ALLOWED = 11`.
+Сервер: секция `[Announcements]` (история системного канала, допуск
+`TrustedClient`/`ThirdParty`, по умолчанию оба, лимит частоты, расписание
+`[[Announcements.Scheduled]]`), длины в `[Server.ChatInput]`, консольная команда
+`announce <текст>`; конфигурация, как и `moderation.toml`, читается только при запуске.
+Клиент: модель хранит вид канала, UI находит системный канал по виду, настройки показа
+по источнику и виду и выбор каналов, строка источника в сообщении; облачка следуют только
+общему каналу. Другие моды публикуют через C++ `IVDreamsleeve1` (экспорт
+`RequestPluginAPI`, как у PrismaUI/TrueFlasksNG, callbacks итогов) и Papyrus
+`DreamsleeveClient` ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)); отказ виден в
+логе, строкой «Не отправлено» и как `APIResult`/callback/mod event.
+
+Проверки: 347 managed (Expecto; `dotnet test` завершается с кодом 0), 262 native
+(doctest), 49 vitest, 27 Playwright (Edge), `smoke_chat.py` — 27 проверок, из них 6 по
+объявлениям (расписание, консоль, запрет типа, серверный вид, публикация модом, лимит частоты).
 DLL (SE/AE/VR), Client.Dev, production build UI и `DreamsleeveClient.pex` собираются.
 В Skyrim не проверялись: получение интерфейса другим плагином, mod event в Papyrus,
 перекодировка строк Papyrus, вид вкладки и строк в Ultralight.

@@ -137,6 +137,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
         withHost id execute (fun http received -> task {
             for username, displayName, expected in [ "bad_word_x", "Fine", "username_not_allowed"
                                                      "hidden.7", "Fine", "username_not_allowed"
+                                                     "Server", "Fine", "username_not_allowed"
+                                                     "system", "Fine", "username_not_allowed"
                                                      "player", "B4DW0RD", "display_name_not_allowed" ] do
                 use! response = post http "auth/register" {| username = username; displayName = displayName; password = password |}
                 status 400 response

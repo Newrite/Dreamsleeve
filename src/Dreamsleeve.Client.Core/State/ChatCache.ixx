@@ -50,6 +50,7 @@ export namespace Dreamsleeve::Client
   struct ChatCacheState
   {
     ChatChannelId                channelId{};
+    Domain::ChatChannelKind      kind{Domain::ChatChannelKind::Global};
     std::size_t                  capacity{};
     std::size_t                  count{};
     ChatHistoryState             history{};
@@ -58,7 +59,8 @@ export namespace Dreamsleeve::Client
 
   struct ChatCacheSnapshot
   {
-    ChatChannelId channelId{};
+    ChatChannelId           channelId{};
+    Domain::ChatChannelKind kind{Domain::ChatChannelKind::Global};
     std::size_t   capacity{};
     // Ascending MessageId, independently of timestamps and arrival order.
     std::vector<ChatMessage> messages{};
@@ -80,7 +82,10 @@ public:
     ChatCache& operator=(ChatCache&&) noexcept = default;
     ~ChatCache()                               = default;
 
-    static Domain::Result<ChatCache> TryCreate(ChatChannelId channelId, std::size_t capacity)
+    static Domain::Result<ChatCache> TryCreate(
+      ChatChannelId           channelId,
+      std::size_t             capacity,
+      Domain::ChatChannelKind kind = Domain::ChatChannelKind::Global)
     {
       if (capacity == 0)
       {
@@ -89,7 +94,7 @@ public:
         };
       }
 
-      return ChatCache{channelId, capacity};
+      return ChatCache{channelId, capacity, kind};
     }
 
     ChatChannelId ChannelId() const noexcept
@@ -121,6 +126,7 @@ public:
     {
       return ChatCacheState{
           .channelId     = channelId,
+          .kind          = kind,
           .capacity      = capacity,
           .count         = messages.size(),
           .history       = history,
@@ -138,7 +144,8 @@ public:
 
     ChatCacheSnapshot Snapshot() const
     {
-      ChatCacheSnapshot result{.channelId = channelId, .capacity = capacity, .history = history, .maxObservedId = maxObservedId};
+      ChatCacheSnapshot
+        result{.channelId = channelId, .kind = kind, .capacity = capacity, .history = history, .maxObservedId = maxObservedId};
 
       result.messages.reserve(messages.size());
       for (const auto& [id, message] : messages)
@@ -172,6 +179,13 @@ public:
         {
           return std::unexpected{
               Domain::Error{Domain::ErrorCode::ChannelMismatch, "channelId"}
+          };
+        }
+        // A system channel carries only announcements, other kinds never do.
+        if (message.announcement.has_value() != (kind == Domain::ChatChannelKind::System))
+        {
+          return std::unexpected{
+              Domain::Error{Domain::ErrorCode::ChannelMismatch, "announcement"}
           };
         }
 
@@ -379,9 +393,14 @@ public:
 
 private:
 
-    explicit ChatCache(ChatChannelId channelId, std::size_t capacity) : channelId(channelId), capacity(capacity) {}
+    explicit ChatCache(ChatChannelId channelId, std::size_t capacity, Domain::ChatChannelKind kind)
+        : channelId(channelId),
+          kind(kind),
+          capacity(capacity)
+    {}
 
     ChatChannelId                        channelId{};
+    Domain::ChatChannelKind              kind{};
     std::size_t                          capacity{};
     std::map<ChatMessageId, ChatMessage> messages{};
     ChatHistoryState                     history{};

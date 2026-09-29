@@ -8,7 +8,16 @@ open FSharp.UMX
 [<Struct>]
 type TextSpan = { Start: int; Length: int }
 
-/// Trust origin of a system-stream message. Only the server assigns it.
+/// Channel entities. The client "all" view aggregates channels and is not one.
+/// Party, guild and direct channels are planned kinds with their own targets.
+[<RequireQualifiedAccess>]
+type ChatChannelKind =
+    /// Players write chat messages.
+    | Global
+    /// System events: server announcements and admitted client announcements.
+    | System
+
+/// Trust origin of an announcement. Only the server assigns it.
 [<RequireQualifiedAccess>]
 type AnnouncementSource =
     /// Configuration, schedule or administrator; never accepted from a client.
@@ -33,8 +42,8 @@ type AnnouncementKind =
     /// Scheduled repetition; server only.
     | Periodic
 
-/// Marks a message of the system stream. The signature is the requesting mod's
-/// own label, stored as received; it never raises trust above Source.
+/// Marks a message of a system channel. The signature is the requesting
+/// mod's own label, stored as received; it never raises trust above Source.
 type Announcement = {
     Source: AnnouncementSource
     Kind: AnnouncementKind
@@ -43,14 +52,6 @@ type Announcement = {
 
 [<RequireQualifiedAccess>]
 module Announcement =
-    /// Account IDs are positive SQLite integers, so the top uint64 never names a player.
-    let serverAuthorId: PlayerId = UMX.tag UInt64.MaxValue
-
-    /// Author profile of server announcements. Older clients, unaware of the
-    /// announcement field, show such messages as written by this profile.
-    let serverAuthor (serverName: DisplayName) =
-        PlayerData.create serverAuthorId (UMX.tag "server") serverName
-
     let server kind = { Source = AnnouncementSource.Server; Kind = kind; Signature = ValueNone }
 
     let fromClient source kind signature =
@@ -66,12 +67,31 @@ module Announcement =
         | AnnouncementKind.Announcement | AnnouncementKind.Event -> true
         | AnnouncementKind.Admin | AnnouncementKind.Periodic -> false
 
+[<RequireQualifiedAccess>]
+module ChatChannelKind =
+    /// Server-wide kinds exist once, so their channel ID follows from the kind.
+    let channelId kind : ChatChannelId =
+        match kind with
+        | ChatChannelKind.Global -> UMX.tag 1UL
+        | ChatChannelKind.System -> UMX.tag 2UL
+
+    let tryOfChannelId (id: ChatChannelId) =
+        [ ChatChannelKind.Global; ChatChannelKind.System ]
+        |> List.tryFind (fun kind -> channelId kind = id)
+
+    /// A system channel carries only announcements; other channels never do.
+    let carriesAnnouncements kind =
+        match kind with
+        | ChatChannelKind.System -> true
+        | ChatChannelKind.Global -> false
+
 /// An immutable message with the author's profile at the time of sending.
+/// Only a server announcement has no author: the system is not a player.
 type ChatMessage =
     private {
         messageId: ChatMessageId
         channelId: ChatChannelId
-        author: PlayerData
+        author: PlayerData voption
         characterName: CharacterName voption
         messageText: ChatMessageText
         sentAt: DateTimeOffset
@@ -89,7 +109,7 @@ type ChatMessage =
     /// Ranges the server word list marks without refusing the message; ascending,
     /// non-overlapping. Clients decide whether to show, mask or hide them.
     member this.Flagged = this.flagged
-    /// Present on messages of the system stream; absent on player chat.
+    /// Present exactly on messages of a system channel.
     member this.Announcement = this.announcement
 
 [<RequireQualifiedAccess>]
@@ -101,7 +121,7 @@ module ChatMessage =
         {
             messageId = messageId
             channelId = channelId
-            author = author
+            author = ValueSome author
             characterName = characterName
             messageText = messageText
             sentAt = sentAt.ToUniversalTime()
@@ -112,14 +132,21 @@ module ChatMessage =
     /// Spans come from moderation of this exact text.
     let withFlagged spans (message: ChatMessage) = { message with flagged = spans }
 
-    /// Moves the message into the system stream of its channel.
+    /// A client announcement keeps its author: the player whose client asked for it.
     let withAnnouncement announcement (message: ChatMessage) = { message with announcement = ValueSome announcement }
 
-    /// Server announcements are written by the reserved server profile, not a member.
-    let isServerAnnouncement (message: ChatMessage) =
-        match message.announcement with
-        | ValueSome announcement -> announcement.Source = AnnouncementSource.Server
-        | ValueNone -> false
+    /// Written by the server itself, without an author.
+    let serverAnnouncement messageId channelId kind messageText (sentAt: DateTimeOffset) =
+        {
+            messageId = messageId
+            channelId = channelId
+            author = ValueNone
+            characterName = ValueNone
+            messageText = messageText
+            sentAt = sentAt.ToUniversalTime()
+            flagged = []
+            announcement = ValueSome(Announcement.server kind)
+        }
 
 /// A detached page of retained history, ordered by increasing message ID.
 type ChatHistoryPage = {
@@ -135,6 +162,7 @@ type ChatHistoryPage = {
 /// A detached view that can safely leave the agent owning the chat.
 type ChatSnapshot = {
     ChannelId: ChatChannelId
+    Kind: ChatChannelKind
     Players: Set<PlayerId>
     Messages: ChatMessage list
     HistoryCapacity: int
@@ -146,6 +174,7 @@ type ChatSnapshot = {
 type Chat =
     private {
         channelId: ChatChannelId
+        kind: ChatChannelKind
         historyCapacity: int
         players: HashSet<PlayerId>
         messages: Queue<ChatMessage>
@@ -154,16 +183,19 @@ type Chat =
     }
 
     member this.ChannelId = this.channelId
+    member this.Kind = this.kind
     member this.HistoryCapacity = this.historyCapacity
 
 [<RequireQualifiedAccess>]
 module Chat =
-    let create channelId historyCapacity =
+    /// The channel ID follows from the kind; see ChatChannelKind.channelId.
+    let create kind historyCapacity =
         if historyCapacity <= 0 then
             Error (DomainError.InvalidLimit ("historyCapacity", historyCapacity))
         else
             Ok {
-                channelId = channelId
+                channelId = ChatChannelKind.channelId kind
+                kind = kind
                 historyCapacity = historyCapacity
                 players = HashSet<PlayerId>()
                 messages = Queue<ChatMessage>()
@@ -193,13 +225,19 @@ module Chat =
 
     /// Accepts a member's message for this channel. IDs must strictly increase;
     /// gaps are allowed because the server can allocate IDs across all channels.
-    /// Server announcements share the history and IDs without membership.
-    /// Validation failures leave membership and history unchanged.
+    /// A system channel takes only announcements, other kinds only chat. A server
+    /// announcement has no author and needs no membership. Validation failures
+    /// leave membership and history unchanged.
     let append (message: ChatMessage) (chat: Chat) =
-        if message.ChannelId <> chat.channelId then
+        let outsider =
+            match message.Author with
+            | ValueSome author when not (chat.players.Contains author.PlayerId) -> ValueSome author.PlayerId
+            | ValueSome _ | ValueNone -> ValueNone
+        if message.ChannelId <> chat.channelId
+           || message.Announcement.IsSome <> ChatChannelKind.carriesAnnouncements chat.kind then
             Error DomainError.ChannelMismatch
-        elif not (ChatMessage.isServerAnnouncement message) && not (chat.players.Contains message.Author.PlayerId) then
-            Error (DomainError.NotChatMember message.Author.PlayerId)
+        elif outsider.IsSome then
+            Error (DomainError.NotChatMember outsider.Value)
         else
             match chat.lastAcceptedId with
             | ValueSome previous when message.MessageId <= previous ->
@@ -268,6 +306,7 @@ module Chat =
     let snapshot (chat: Chat) : ChatSnapshot =
         {
             ChannelId = chat.channelId
+            Kind = chat.kind
             Players = membersSnapshot chat
             Messages = List.ofSeq chat.messages
             HistoryCapacity = chat.historyCapacity
@@ -287,8 +326,8 @@ type ChatChannel =
 
 [<RequireQualifiedAccess>]
 module ChatChannel =
-    let create channelId channelName historyCapacity =
-        Chat.create channelId historyCapacity
+    let create kind channelName historyCapacity =
+        Chat.create kind historyCapacity
         |> Result.map (fun chat -> { channelName = channelName; chat = chat })
 
     /// Changes channel metadata while retaining the same agent-owned chat state.

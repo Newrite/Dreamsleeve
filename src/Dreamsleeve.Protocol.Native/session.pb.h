@@ -419,30 +419,12 @@ class SessionOpened final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
-    kRecentMessagesFieldNumber = 4,
     kPlayersFieldNumber = 5,
+    kChannelsFieldNumber = 8,
     kServerNameFieldNumber = 6,
     kAnnouncementsFieldNumber = 7,
     kSelfPlayerIdFieldNumber = 1,
-    kGlobalChannelIdFieldNumber = 2,
   };
-  // repeated .Dreamsleeve.Protocol.Chat.ChatMessage recent_messages = 4;
-  int recent_messages_size() const;
-  private:
-  int _internal_recent_messages_size() const;
-
-  public:
-  void clear_recent_messages() ;
-  ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL mutable_recent_messages(int index);
-  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>* PROTOBUF_NONNULL mutable_recent_messages();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>& _internal_recent_messages() const;
-  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>* PROTOBUF_NONNULL _internal_mutable_recent_messages();
-  public:
-  const ::Dreamsleeve::Protocol::Chat::ChatMessage& recent_messages(int index) const;
-  ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL add_recent_messages();
-  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>& recent_messages() const;
   // repeated .Dreamsleeve.Protocol.Chat.PlayerInfo players = 5;
   int players_size() const;
   private:
@@ -460,6 +442,23 @@ class SessionOpened final : public ::google::protobuf::Message
   const ::Dreamsleeve::Protocol::Chat::PlayerInfo& players(int index) const;
   ::Dreamsleeve::Protocol::Chat::PlayerInfo* PROTOBUF_NONNULL add_players();
   const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerInfo>& players() const;
+  // repeated .Dreamsleeve.Protocol.Chat.ChatChannel channels = 8;
+  int channels_size() const;
+  private:
+  int _internal_channels_size() const;
+
+  public:
+  void clear_channels() ;
+  ::Dreamsleeve::Protocol::Chat::ChatChannel* PROTOBUF_NONNULL mutable_channels(int index);
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>* PROTOBUF_NONNULL mutable_channels();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>& _internal_channels() const;
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>* PROTOBUF_NONNULL _internal_mutable_channels();
+  public:
+  const ::Dreamsleeve::Protocol::Chat::ChatChannel& channels(int index) const;
+  ::Dreamsleeve::Protocol::Chat::ChatChannel* PROTOBUF_NONNULL add_channels();
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>& channels() const;
   // string server_name = 6;
   void clear_server_name() ;
   const ::std::string& server_name() const;
@@ -500,21 +499,11 @@ class SessionOpened final : public ::google::protobuf::Message
   void _internal_set_self_player_id(::uint64_t value);
 
   public:
-  // uint64 global_channel_id = 2;
-  void clear_global_channel_id() ;
-  ::uint64_t global_channel_id() const;
-  void set_global_channel_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_global_channel_id() const;
-  void _internal_set_global_channel_id(::uint64_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SessionOpened)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
                                    3, 59,
                                    2>
       _table_;
@@ -536,12 +525,11 @@ class SessionOpened final : public ::google::protobuf::Message
         const SessionOpened& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::ChatMessage > recent_messages_;
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::PlayerInfo > players_;
+    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::ChatChannel > channels_;
     ::google::protobuf::internal::ArenaStringPtr server_name_;
     ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE announcements_;
     ::uint64_t self_player_id_;
-    ::uint64_t global_channel_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -725,31 +713,6 @@ inline void SessionOpened::_internal_set_self_player_id(::uint64_t value) {
   _impl_.self_player_id_ = value;
 }
 
-// uint64 global_channel_id = 2;
-inline void SessionOpened::clear_global_channel_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.global_channel_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
-}
-inline ::uint64_t SessionOpened::global_channel_id() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.global_channel_id)
-  return _internal_global_channel_id();
-}
-inline void SessionOpened::set_global_channel_id(::uint64_t value) {
-  _internal_set_global_channel_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.global_channel_id)
-}
-inline ::uint64_t SessionOpened::_internal_global_channel_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.global_channel_id_;
-}
-inline void SessionOpened::_internal_set_global_channel_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.global_channel_id_ = value;
-}
-
 // repeated .Dreamsleeve.Protocol.Chat.PlayerInfo players = 5;
 inline int SessionOpened::_internal_players_size() const {
   return _internal_players().size();
@@ -764,7 +727,7 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerInfo* PROTOBUF_NONNULL SessionOpened
 }
 inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::PlayerInfo>* PROTOBUF_NONNULL SessionOpened::mutable_players()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_mutable_list:Dreamsleeve.Protocol.Chat.SessionOpened.players)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_players();
@@ -780,7 +743,7 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerInfo* PROTOBUF_NONNULL SessionOpened
   ::Dreamsleeve::Protocol::Chat::PlayerInfo* _add =
       _internal_mutable_players()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_add:Dreamsleeve.Protocol.Chat.SessionOpened.players)
   return _add;
 }
@@ -798,56 +761,6 @@ inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::Playe
 SessionOpened::_internal_mutable_players() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.players_;
-}
-
-// repeated .Dreamsleeve.Protocol.Chat.ChatMessage recent_messages = 4;
-inline int SessionOpened::_internal_recent_messages_size() const {
-  return _internal_recent_messages().size();
-}
-inline int SessionOpened::recent_messages_size() const {
-  return _internal_recent_messages_size();
-}
-inline ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL SessionOpened::mutable_recent_messages(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.recent_messages)
-  return _internal_mutable_recent_messages()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>* PROTOBUF_NONNULL SessionOpened::mutable_recent_messages()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_mutable_list:Dreamsleeve.Protocol.Chat.SessionOpened.recent_messages)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_recent_messages();
-}
-inline const ::Dreamsleeve::Protocol::Chat::ChatMessage& SessionOpened::recent_messages(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.recent_messages)
-  return _internal_recent_messages().Get(index);
-}
-inline ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL SessionOpened::add_recent_messages()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::Dreamsleeve::Protocol::Chat::ChatMessage* _add =
-      _internal_mutable_recent_messages()->InternalAddWithArena(
-          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_add:Dreamsleeve.Protocol.Chat.SessionOpened.recent_messages)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>& SessionOpened::recent_messages() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:Dreamsleeve.Protocol.Chat.SessionOpened.recent_messages)
-  return _internal_recent_messages();
-}
-inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>&
-SessionOpened::_internal_recent_messages() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.recent_messages_;
-}
-inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>* PROTOBUF_NONNULL
-SessionOpened::_internal_mutable_recent_messages() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.recent_messages_;
 }
 
 // .Dreamsleeve.Protocol.Chat.AnnouncementPolicy announcements = 7;
@@ -941,6 +854,56 @@ inline void SessionOpened::set_allocated_announcements(::Dreamsleeve::Protocol::
 
   _impl_.announcements_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy*>(value);
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
+}
+
+// repeated .Dreamsleeve.Protocol.Chat.ChatChannel channels = 8;
+inline int SessionOpened::_internal_channels_size() const {
+  return _internal_channels().size();
+}
+inline int SessionOpened::channels_size() const {
+  return _internal_channels_size();
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatChannel* PROTOBUF_NONNULL SessionOpened::mutable_channels(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.channels)
+  return _internal_mutable_channels()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>* PROTOBUF_NONNULL SessionOpened::mutable_channels()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:Dreamsleeve.Protocol.Chat.SessionOpened.channels)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_channels();
+}
+inline const ::Dreamsleeve::Protocol::Chat::ChatChannel& SessionOpened::channels(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.channels)
+  return _internal_channels().Get(index);
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatChannel* PROTOBUF_NONNULL SessionOpened::add_channels()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::Dreamsleeve::Protocol::Chat::ChatChannel* _add =
+      _internal_mutable_channels()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:Dreamsleeve.Protocol.Chat.SessionOpened.channels)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>& SessionOpened::channels() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:Dreamsleeve.Protocol.Chat.SessionOpened.channels)
+  return _internal_channels();
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>&
+SessionOpened::_internal_channels() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channels_;
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>* PROTOBUF_NONNULL
+SessionOpened::_internal_mutable_channels() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.channels_;
 }
 
 #ifdef __GNUC__

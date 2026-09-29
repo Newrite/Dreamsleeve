@@ -148,6 +148,7 @@ export namespace Dreamsleeve::Host::Bridge
   struct AnnouncementResultEvent
   {
     std::string type{"announcementResult"};
+    std::string channelId;
     std::string source;
     std::string text;
     std::string error;
@@ -207,8 +208,6 @@ export namespace Dreamsleeve::Host::Bridge
 
   constexpr std::size_t MaxChatText     = 16000;
   constexpr std::size_t MaxSnapshotRows = 500;
-  // The read-only UI channel of the system stream; it has no server ID.
-  constexpr std::string_view AnnouncementsChannel = "announcements";
 
   using Encoded = std::expected<std::string, std::string>;
 
@@ -539,16 +538,14 @@ export namespace Dreamsleeve::Host::Bridge
     return player;
   }
 
-  // Reserved author of server announcements; account IDs never reach it.
-  constexpr Domain::PlayerId ServerAuthorId = std::numeric_limits<Domain::PlayerId>::max();
-
-  // Written by the reserved server profile: nothing to name, ignore or bubble.
-  bool ServerAuthored(const Domain::ChatMessage& message)
+  // The UI description of a channel entity; the UI's "all" view is its own aggregate.
+  UiChannel ToUiChannel(Domain::ChatChannelId id, Domain::ChatChannelKind kind)
   {
-    return message.author.playerId == 0 || (message.announcement && message.announcement->source == Domain::AnnouncementSource::Server);
+    if (kind == Domain::ChatChannelKind::System) return {Id(id), "system", "Объявления", false};
+    return {Id(id), "global", "Общий", true};
   }
 
-  // Sources a newer server may add are shown with the least trust.
+  // An unknown source is shown with the least trust.
   std::string_view OriginName(Domain::AnnouncementSource source)
   {
     using Source = Domain::AnnouncementSource;
@@ -668,8 +665,7 @@ export namespace Dreamsleeve::Host::Bridge
 
   // The author is named from the snapshot taken at sending, never from the
   // character the player uses now.
-  // The system stream travels in the global channel for older clients; here it
-  // moves to its own read-only UI channel.
+  // Announcements are system lines; a client announcement names its player.
   UiMessage ToUiMessage(const Domain::ChatMessage& message, Names& names, const UiSettings& settings)
   {
     UiMessage result;
@@ -677,19 +673,15 @@ export namespace Dreamsleeve::Host::Bridge
     result.channelId = Id(message.channelId);
     result.text      = message.messageText;
     result.time      = Domain::ToUnixMilliseconds(message.sentAt);
-    if (message.announcement || message.author.playerId == 0)
-    {
-      result.channelId = AnnouncementsChannel;
-      result.source    = "system";
-    }
     if (message.announcement)
     {
       const auto& value   = *message.announcement;
+      result.source       = "system";
       result.announcement = UiAnnouncement{std::string{OriginName(value.source)}, std::string{KindName(value.kind)}, std::nullopt};
       if (!value.signature.empty()) result.announcement->signature = SafeLabel(value.signature);
     }
-    if (!ServerAuthored(message))
-      result.author = ToUiAuthor(message.author, message.characterName, message.characterName.has_value(), names, settings);
+    if (message.author)
+      result.author = ToUiAuthor(*message.author, message.characterName, message.characterName.has_value(), names, settings);
     return result;
   }
 
@@ -700,7 +692,7 @@ export namespace Dreamsleeve::Host::Bridge
     const UiSettings&               settings,
     std::optional<Domain::PlayerId> self)
   {
-    const bool own  = self && message.author.playerId == *self;
+    const bool own  = self && message.author && message.author->playerId == *self;
     auto       text = ShownText(message, settings, own);
     if (!text) return std::nullopt;
     auto result     = ToUiMessage(message, names, settings);
@@ -839,8 +831,6 @@ export namespace Dreamsleeve::Host::Bridge
         return "Некорректный запрос";
       case CommandFailureCode::EncodingFailed:
         return "Не удалось закодировать сообщение";
-      case CommandFailureCode::Unsupported:
-        return "Сервер не поддерживает эту команду";
     }
     return "Сообщение не отправлено";
   }

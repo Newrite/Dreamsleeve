@@ -27,18 +27,19 @@ namespace Dreamsleeve.Protocol.Chat {
             "Cg1zZXNzaW9uLnByb3RvEhlEcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Ggpj",
             "aGF0LnByb3RvGgxwbGF5ZXIucHJvdG8iSQoLT3BlblNlc3Npb24SFgoOc2Vz",
             "c2lvbl90aWNrZXQYAyABKAlKBAgBEAJKBAgCEANSCHVzZXJuYW1lUgxkaXNw",
-            "bGF5X25hbWUinAIKDVNlc3Npb25PcGVuZWQSEwoLc2VydmVyX25hbWUYBiAB",
-            "KAkSFgoOc2VsZl9wbGF5ZXJfaWQYASABKAQSGQoRZ2xvYmFsX2NoYW5uZWxf",
-            "aWQYAiABKAQSNgoHcGxheWVycxgFIAMoCzIlLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLkNoYXQuUGxheWVySW5mbxI/Cg9yZWNlbnRfbWVzc2FnZXMYBCADKAsy",
-            "Ji5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRNZXNzYWdlEkQKDWFu",
-            "bm91bmNlbWVudHMYByABKAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
-            "LkFubm91bmNlbWVudFBvbGljeUoECAMQBGIGcHJvdG8z"));
+            "bGF5X25hbWUiqgIKDVNlc3Npb25PcGVuZWQSEwoLc2VydmVyX25hbWUYBiAB",
+            "KAkSFgoOc2VsZl9wbGF5ZXJfaWQYASABKAQSNgoHcGxheWVycxgFIAMoCzIl",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVySW5mbxJECg1hbm5v",
+            "dW5jZW1lbnRzGAcgASgLMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5B",
+            "bm5vdW5jZW1lbnRQb2xpY3kSOAoIY2hhbm5lbHMYCCADKAsyJi5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRDaGFubmVsSgQIAhADSgQIAxAESgQI",
+            "BBAFUhFnbG9iYWxfY2hhbm5lbF9pZFIPcmVjZW50X21lc3NhZ2VzYgZwcm90",
+            "bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.OpenSession), global::Dreamsleeve.Protocol.Chat.OpenSession.Parser, new[]{ "SessionTicket" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "GlobalChannelId", "Players", "RecentMessages", "Announcements" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "Players", "Announcements", "Channels" }, null, null, null, null)
           }));
     }
     #endregion
@@ -284,10 +285,9 @@ namespace Dreamsleeve.Protocol.Chat {
     public SessionOpened(SessionOpened other) : this() {
       serverName_ = other.serverName_;
       selfPlayerId_ = other.selfPlayerId_;
-      globalChannelId_ = other.globalChannelId_;
       players_ = other.players_.Clone();
-      recentMessages_ = other.recentMessages_.Clone();
       announcements_ = other.announcements_ != null ? other.announcements_.Clone() : null;
+      channels_ = other.channels_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -321,18 +321,6 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
-    /// <summary>Field number for the "global_channel_id" field.</summary>
-    public const int GlobalChannelIdFieldNumber = 2;
-    private ulong globalChannelId_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public ulong GlobalChannelId {
-      get { return globalChannelId_; }
-      set {
-        globalChannelId_ = value;
-      }
-    }
-
     /// <summary>Field number for the "players" field.</summary>
     public const int PlayersFieldNumber = 5;
     private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.PlayerInfo> _repeated_players_codec
@@ -347,26 +335,9 @@ namespace Dreamsleeve.Protocol.Chat {
       get { return players_; }
     }
 
-    /// <summary>Field number for the "recent_messages" field.</summary>
-    public const int RecentMessagesFieldNumber = 4;
-    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.ChatMessage> _repeated_recentMessages_codec
-        = pb::FieldCodec.ForMessage(34, global::Dreamsleeve.Protocol.Chat.ChatMessage.Parser);
-    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatMessage> recentMessages_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatMessage>();
-    /// <summary>
-    /// Retained tail, ascending message_id.
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatMessage> RecentMessages {
-      get { return recentMessages_; }
-    }
-
     /// <summary>Field number for the "announcements" field.</summary>
     public const int AnnouncementsFieldNumber = 7;
     private global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy announcements_;
-    /// <summary>
-    /// Absent from servers without client announcements: do not send PostAnnouncement then.
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy Announcements {
@@ -374,6 +345,20 @@ namespace Dreamsleeve.Protocol.Chat {
       set {
         announcements_ = value;
       }
+    }
+
+    /// <summary>Field number for the "channels" field.</summary>
+    public const int ChannelsFieldNumber = 8;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.ChatChannel> _repeated_channels_codec
+        = pb::FieldCodec.ForMessage(66, global::Dreamsleeve.Protocol.Chat.ChatChannel.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatChannel> channels_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatChannel>();
+    /// <summary>
+    /// Every channel of the session: one GLOBAL and one SYSTEM in version 7.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ChatChannel> Channels {
+      get { return channels_; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -393,10 +378,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (ServerName != other.ServerName) return false;
       if (SelfPlayerId != other.SelfPlayerId) return false;
-      if (GlobalChannelId != other.GlobalChannelId) return false;
       if(!players_.Equals(other.players_)) return false;
-      if(!recentMessages_.Equals(other.recentMessages_)) return false;
       if (!object.Equals(Announcements, other.Announcements)) return false;
+      if(!channels_.Equals(other.channels_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -406,10 +390,9 @@ namespace Dreamsleeve.Protocol.Chat {
       int hash = 1;
       if (ServerName.Length != 0) hash ^= ServerName.GetHashCode();
       if (SelfPlayerId != 0UL) hash ^= SelfPlayerId.GetHashCode();
-      if (GlobalChannelId != 0UL) hash ^= GlobalChannelId.GetHashCode();
       hash ^= players_.GetHashCode();
-      hash ^= recentMessages_.GetHashCode();
       if (announcements_ != null) hash ^= Announcements.GetHashCode();
+      hash ^= channels_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -432,11 +415,6 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(8);
         output.WriteUInt64(SelfPlayerId);
       }
-      if (GlobalChannelId != 0UL) {
-        output.WriteRawTag(16);
-        output.WriteUInt64(GlobalChannelId);
-      }
-      recentMessages_.WriteTo(output, _repeated_recentMessages_codec);
       players_.WriteTo(output, _repeated_players_codec);
       if (ServerName.Length != 0) {
         output.WriteRawTag(50);
@@ -446,6 +424,7 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(58);
         output.WriteMessage(Announcements);
       }
+      channels_.WriteTo(output, _repeated_channels_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -460,11 +439,6 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(8);
         output.WriteUInt64(SelfPlayerId);
       }
-      if (GlobalChannelId != 0UL) {
-        output.WriteRawTag(16);
-        output.WriteUInt64(GlobalChannelId);
-      }
-      recentMessages_.WriteTo(ref output, _repeated_recentMessages_codec);
       players_.WriteTo(ref output, _repeated_players_codec);
       if (ServerName.Length != 0) {
         output.WriteRawTag(50);
@@ -474,6 +448,7 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(58);
         output.WriteMessage(Announcements);
       }
+      channels_.WriteTo(ref output, _repeated_channels_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -490,14 +465,11 @@ namespace Dreamsleeve.Protocol.Chat {
       if (SelfPlayerId != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(SelfPlayerId);
       }
-      if (GlobalChannelId != 0UL) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GlobalChannelId);
-      }
       size += players_.CalculateSize(_repeated_players_codec);
-      size += recentMessages_.CalculateSize(_repeated_recentMessages_codec);
       if (announcements_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Announcements);
       }
+      size += channels_.CalculateSize(_repeated_channels_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -516,17 +488,14 @@ namespace Dreamsleeve.Protocol.Chat {
       if (other.SelfPlayerId != 0UL) {
         SelfPlayerId = other.SelfPlayerId;
       }
-      if (other.GlobalChannelId != 0UL) {
-        GlobalChannelId = other.GlobalChannelId;
-      }
       players_.Add(other.players_);
-      recentMessages_.Add(other.recentMessages_);
       if (other.announcements_ != null) {
         if (announcements_ == null) {
           Announcements = new global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy();
         }
         Announcements.MergeFrom(other.Announcements);
       }
+      channels_.Add(other.channels_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -550,14 +519,6 @@ namespace Dreamsleeve.Protocol.Chat {
             SelfPlayerId = input.ReadUInt64();
             break;
           }
-          case 16: {
-            GlobalChannelId = input.ReadUInt64();
-            break;
-          }
-          case 34: {
-            recentMessages_.AddEntriesFrom(input, _repeated_recentMessages_codec);
-            break;
-          }
           case 42: {
             players_.AddEntriesFrom(input, _repeated_players_codec);
             break;
@@ -571,6 +532,10 @@ namespace Dreamsleeve.Protocol.Chat {
               Announcements = new global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy();
             }
             input.ReadMessage(Announcements);
+            break;
+          }
+          case 66: {
+            channels_.AddEntriesFrom(input, _repeated_channels_codec);
             break;
           }
         }
@@ -596,14 +561,6 @@ namespace Dreamsleeve.Protocol.Chat {
             SelfPlayerId = input.ReadUInt64();
             break;
           }
-          case 16: {
-            GlobalChannelId = input.ReadUInt64();
-            break;
-          }
-          case 34: {
-            recentMessages_.AddEntriesFrom(ref input, _repeated_recentMessages_codec);
-            break;
-          }
           case 42: {
             players_.AddEntriesFrom(ref input, _repeated_players_codec);
             break;
@@ -617,6 +574,10 @@ namespace Dreamsleeve.Protocol.Chat {
               Announcements = new global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy();
             }
             input.ReadMessage(Announcements);
+            break;
+          }
+          case 66: {
+            channels_.AddEntriesFrom(ref input, _repeated_channels_codec);
             break;
           }
         }

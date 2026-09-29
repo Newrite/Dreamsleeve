@@ -50,7 +50,7 @@ namespace
     return {
         id,
         channel,
-        {7, "seven", "Seven"},
+        Domain::PlayerData{7, "seven", "Seven"},
         std::move(text),
         Domain::FromUnixMilliseconds(1700000000000)
     };
@@ -546,7 +546,7 @@ TEST_CASE("Session admits only live global-channel publications of other players
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
   REQUIRE(frame.freshMessages.size() == 1);
   CHECK(frame.freshMessages[0].messageId == 12);
-  CHECK(frame.freshMessages[0].author.playerId == 7);
+  CHECK(frame.freshMessages[0].author->playerId == 7);
   CHECK(frame.freshMessages[0].messageText == "live");
   // The UI still receives every message.
   CHECK(std::ranges::any_of(frame.events, [](const auto& e) { return Type(e) == "messages"; }));
@@ -860,7 +860,7 @@ TEST_CASE("Local filter shows, masks or hides server-flagged ranges")
   Domain::ChatMessage message{
       5,
       1,
-      {7, "seven", "Seven"},
+      Domain::PlayerData{7, "seven", "Seven"},
       "Ну ты хач, а?",
       Domain::FromUnixMilliseconds(0)
   };

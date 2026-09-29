@@ -13,6 +13,7 @@ type PlayerSessionMessage =
     | ChatEvent of ChatRoomEvent
     | PresenceEvent of PresenceEvent
     | ChatDetached of Guid
+    | SystemDetached of Guid
     | PresenceDetached of Guid
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
     | PostAnnouncement of requestId: uint64 * AnnouncementRequest
@@ -27,6 +28,7 @@ module PlayerSession =
     type private Opening = {
         Player: Player
         mutable Chat: ChatSnapshot option
+        mutable System: ChatSnapshot option
         mutable Online: PlayerSnapshot list option
         Buffered: ResizeArray<ServerResponse>
     }
@@ -42,6 +44,7 @@ module PlayerSession =
     type private State = {
         mutable Phase: Phase
         mutable ChatAttached: bool
+        mutable SystemAttached: bool
         mutable PresenceAttached: bool
         mutable CloseSent: bool
         /// The current character name failed moderation and is not published.
@@ -51,6 +54,7 @@ module PlayerSession =
         Pending: HashSet<uint64>
         Authentication: AgentOutbox<SessionAuthenticationRequest>
         Chat: AgentOutbox<ChatRoomCommand>
+        System: AgentOutbox<ChatRoomCommand>
         Presence: AgentOutbox<PresenceCommand>
         Host: AgentOutbox<SessionHostCommand>
     }
@@ -69,7 +73,7 @@ module PlayerSession =
 
     let private completeIfDetached state (context: AgentContext<PlayerSessionMessage>) =
         match state.Phase with
-        | Closing when not state.ChatAttached && not state.PresenceAttached -> context.Complete() |> ignore
+        | Closing when not state.ChatAttached && not state.SystemAttached && not state.PresenceAttached -> context.Complete() |> ignore
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
     let private stop (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) =
@@ -90,6 +94,10 @@ module PlayerSession =
                 if state.ChatAttached then
                     let command = ChatRoomCommand.Detach(detach (address.Map PlayerSessionMessage.ChatDetached))
                     if not (state.Chat.TrySend(context, command)) then context.Abort()
+
+                if state.SystemAttached then
+                    let command = ChatRoomCommand.Detach(detach (address.Map PlayerSessionMessage.SystemDetached))
+                    if not (state.System.TrySend(context, command)) then context.Abort()
 
                 if state.PresenceAttached then
                     let command = PresenceCommand.Detach(detach (address.Map PlayerSessionMessage.PresenceDetached))
@@ -173,7 +181,7 @@ module PlayerSession =
         | Reserving player ->
             match reply, reliable context with
             | IdentityAdmission.Reserved, Some address ->
-                state.Phase <- Opening { Player = player; Chat = None; Online = None; Buffered = ResizeArray() }
+                state.Phase <- Opening { Player = player; Chat = None; System = None; Online = None; Buffered = ResizeArray() }
                 let chat = {
                     ConnectionId = request.ConnectionId
                     Profile = player.Data
@@ -185,9 +193,10 @@ module PlayerSession =
                     Events = address.Map PlayerSessionMessage.PresenceEvent
                 }
                 state.ChatAttached <- state.Chat.TrySend(context, ChatRoomCommand.Join chat)
+                state.SystemAttached <- state.System.TrySend(context, ChatRoomCommand.Join chat)
                 state.PresenceAttached <- state.Presence.TrySend(context, PresenceCommand.Join presence)
 
-                if not state.ChatAttached || not state.PresenceAttached then
+                if not state.ChatAttached || not state.SystemAttached || not state.PresenceAttached then
                     close request state context "Subscription admission failed."
             | IdentityAdmission.AlreadyInUse, _ ->
                 rejectOpening options request state context RequestRejectionCode.SessionAlreadyOpen "Player already has a session."
@@ -195,16 +204,16 @@ module PlayerSession =
                 stop request state context
         | Starting | Resolving _ | Opening _ | Active _ | Closing -> ()
 
-    let private activate (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context =
+    let private activate (options: PlayerSessionOptions) (request: SessionOpenRequest) state context =
         match state.Phase with
         | Opening opening ->
-            match opening.Chat, opening.Online with
-            | Some chat, Some online ->
+            match opening.Chat, opening.System, opening.Online with
+            | Some chat, Some system, Some online ->
+                let channel (snapshot: ChatSnapshot) = { ChannelId = snapshot.ChannelId; Kind = snapshot.Kind; Messages = snapshot.Messages }
                 let welcome = {
                     SelfPlayerId = opening.Player.Data.PlayerId
-                    GlobalChannelId = globalId
                     Players = online
-                    RecentMessages = chat.Messages
+                    Channels = [ channel chat; channel system ]
                     AnnouncementSources = AnnouncementOptions.allowedSources state.Announcements
                 }
                 if emit options request state context (SessionHostCommand.Activate(request.ConnectionId, request.RequestId, welcome)) then
@@ -213,7 +222,7 @@ module PlayerSession =
                         match state.Phase with
                         | Active _ -> send options request state context response
                         | Starting | Resolving _ | Reserving _ | Opening _ | Closing -> ()
-            | None, _ | _, None -> ()
+            | None, _, _ | _, None, _ | _, _, None -> ()
         | Starting | Resolving _ | Reserving _ | Active _ | Closing -> ()
 
     let private publish (options: PlayerSessionOptions) (request: SessionOpenRequest) state context response =
@@ -226,15 +235,18 @@ module PlayerSession =
         | Active _ -> send options request state context response
         | Starting | Resolving _ | Reserving _ | Closing -> ()
 
-    let private chatEvent (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context event =
+    let private chatEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
         match event with
         | ChatRoomEvent.Joined snapshot ->
-            match state.Phase with
-            | Opening opening when snapshot.ChannelId = globalId && opening.Chat.IsNone ->
+            match state.Phase, snapshot.Kind with
+            | Opening opening, ChatChannelKind.Global when opening.Chat.IsNone ->
                 opening.Chat <- Some snapshot
-                activate options globalId request state context
-            | Closing -> ()
-            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
+                activate options request state context
+            | Opening opening, ChatChannelKind.System when opening.System.IsNone ->
+                opening.System <- Some snapshot
+                activate options request state context
+            | Closing, _ -> ()
+            | (Starting | Resolving _ | Reserving _ | Opening _ | Active _), _ ->
                 close request state context "Unexpected chat snapshot."
         | ChatRoomEvent.JoinFailed reason ->
             match state.Phase with
@@ -258,13 +270,13 @@ module PlayerSession =
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected chat rejection."
 
-    let private presenceEvent (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context event =
+    let private presenceEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
         match event with
         | PresenceEvent.Snapshot players ->
             match state.Phase with
             | Opening opening when opening.Online.IsNone ->
                 opening.Online <- Some players
-                activate options globalId request state context
+                activate options request state context
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected presence snapshot."
@@ -282,14 +294,17 @@ module PlayerSession =
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
         | PresenceEvent.Left playerId -> publish options request state context (ServerResponse.PlayerLeft playerId)
 
-    let private sendChat (options: PlayerSessionOptions) globalId (request: SessionOpenRequest) state context requestId channelId text =
+    let private sendChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId channelId text =
         match state.Phase, reliable context with
         | Active player, Some address ->
+            let kind = ChatChannelKind.tryOfChannelId channelId
             if requestId = 0UL || state.Pending.Contains requestId then
                 // A second reply with this ID could settle the original request.
                 close request state context "Request ID is invalid or already pending."
-            elif channelId <> globalId then
+            elif kind.IsNone then
                 rejectChat options request state context requestId RequestRejectionCode.ChannelNotFound "Channel does not exist."
+            elif ChatChannelKind.carriesAnnouncements kind.Value then
+                rejectChat options request state context requestId RequestRejectionCode.NotChannelMember "The system channel is read-only."
             elif state.Pending.Count >= options.MaxPendingChat then
                 rejectChat options request state context requestId RequestRejectionCode.Overloaded "Too many pending chat requests."
             elif not (Moderation.allows state.Moderation (ChatMessageText.value text)) then
@@ -315,8 +330,8 @@ module PlayerSession =
         | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
             rejectChat options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
 
-    /// Same path as chat: origin admission here, then the word list before the
-    /// channel sees anything; the channel applies the announcement rate limit.
+    /// Same path as chat into the system channel: origin admission here, then the
+    /// word list before the channel sees anything; the channel applies its rate limit.
     let private postAnnouncement (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (announcement: AnnouncementRequest) =
         let refuse code message field =
             send options request state context (ServerResponse.ChatRejected(requestId, { Code = code; Message = message; Field = field }))
@@ -326,6 +341,8 @@ module PlayerSession =
             let signature = announcement.Signature |> ValueOption.map AnnouncementSignature.value
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
+            elif ChatChannelKind.tryOfChannelId announcement.ChannelId <> Some ChatChannelKind.System then
+                refuse RequestRejectionCode.ChannelNotFound "Announcements are published only in the system channel." "channel_id"
             else
                 match AnnouncementOptions.admit state.Announcements announcement with
                 | Error rejection -> send options request state context (ServerResponse.ChatRejected(requestId, rejection))
@@ -347,7 +364,7 @@ module PlayerSession =
                             Announcement = ValueSome(Announcement.fromClient announcement.Source announcement.Kind announcement.Signature)
                             ReplyTo = address.Map PlayerSessionMessage.ChatEvent
                         }
-                        if state.Chat.TrySend(context, ChatRoomCommand.Publish submission) then
+                        if state.System.TrySend(context, ChatRoomCommand.Publish submission) then
                             state.Pending.Add requestId |> ignore
                         else
                             refuse RequestRejectionCode.Overloaded "Channel admission is full." ""
@@ -410,21 +427,24 @@ module PlayerSession =
             | ValueNone -> ()
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
-    let private handle (options: PlayerSessionOptions) maxActorValues globalId (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) message = task {
+    let private handle (options: PlayerSessionOptions) maxActorValues (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) message = task {
         match message with
         | PlayerSessionMessage.Begin -> beginResolve request state context
         | PlayerSessionMessage.Authenticated reply -> authenticated options request state context reply
         | PlayerSessionMessage.IdentityReplied reply -> identityReply options request state context reply
-        | PlayerSessionMessage.ChatEvent event -> chatEvent options globalId request state context event
-        | PlayerSessionMessage.PresenceEvent event -> presenceEvent options globalId request state context event
+        | PlayerSessionMessage.ChatEvent event -> chatEvent options request state context event
+        | PlayerSessionMessage.PresenceEvent event -> presenceEvent options request state context event
         | PlayerSessionMessage.ChatDetached connectionId ->
             if connectionId = request.ConnectionId then state.ChatAttached <- false
+            completeIfDetached state context
+        | PlayerSessionMessage.SystemDetached connectionId ->
+            if connectionId = request.ConnectionId then state.SystemAttached <- false
             completeIfDetached state context
         | PlayerSessionMessage.PresenceDetached connectionId ->
             if connectionId = request.ConnectionId then state.PresenceAttached <- false
             completeIfDetached state context
         | PlayerSessionMessage.SendChat(requestId, channelId, text) ->
-            sendChat options globalId request state context requestId channelId text
+            sendChat options request state context requestId channelId text
         | PlayerSessionMessage.PostAnnouncement(requestId, announcement) ->
             postAnnouncement options request state context requestId announcement
         | PlayerSessionMessage.Update(requestId, command) ->
@@ -441,7 +461,7 @@ module PlayerSession =
 
     let private isControl = function
         | PlayerSessionMessage.Begin | PlayerSessionMessage.Authenticated _
-        | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.ChatDetached _
+        | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.ChatDetached _ | PlayerSessionMessage.SystemDetached _
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.Stop -> true
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Joined _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.JoinFailed _)
@@ -454,7 +474,8 @@ module PlayerSession =
         | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _
         | PlayerSessionMessage.Read _ -> false
 
-    let start (options: PlayerSessionOptions) maxActorValues moderation announcements globalId authentication chat presence host (request: SessionOpenRequest) =
+    /// chat and system are the owners of the global and the system channel.
+    let start (options: PlayerSessionOptions) maxActorValues moderation announcements authentication chat system presence host (request: SessionOpenRequest) =
         let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
@@ -467,6 +488,7 @@ module PlayerSession =
             let state = {
                 Phase = Starting
                 ChatAttached = false
+                SystemAttached = false
                 PresenceAttached = false
                 CloseSent = false
                 CharacterWithheld = false
@@ -475,6 +497,7 @@ module PlayerSession =
                 Pending = HashSet()
                 Authentication = AgentOutbox(1, authentication)
                 Chat = AgentOutbox(options.MaxPendingChat + 2, chat)
+                System = AgentOutbox(options.MaxPendingChat + 2, system)
                 Presence = AgentOutbox(options.MaxPendingUpdates + 2, presence)
                 Host = AgentOutbox(options.MaxPendingOutput + 2, host)
             }
@@ -482,6 +505,6 @@ module PlayerSession =
                 AgentOptions.create $"player-{request.ConnectionId}" with
                     Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
             }
-            let agent = Agent.Start(settings, handle options maxActorValues globalId request state, isControl = isControl)
+            let agent = Agent.Start(settings, handle options maxActorValues request state, isControl = isControl)
             agent.TryPost PlayerSessionMessage.Begin |> ignore
             Ok agent

@@ -120,11 +120,14 @@ Enabled = true
 # A missing file starts the server with an empty list and a warning.
 RulesPath = "moderation.toml"
 
-# System stream: server announcements and announcements requested by clients.
-# Read at startup, like the rest of this file; there is no hot reload. A missing
-# section keeps these defaults: every client source is accepted.
+# System channel: server announcements and announcements requested by clients.
+# A channel of its own, read-only for chat. Read at startup, like the rest of
+# this file; there is no hot reload. A missing section keeps these defaults:
+# every client source is accepted.
 [Announcements]
-# Client announcements per stable account, separate from the chat limit.
+# Retained announcements, also sent at session opening; at most Server.MaxRecentMessages.
+HistoryCapacity = 128
+# Client announcements per stable account; chat has its own limit in Runtime.Chat.
 RateBurst = 3
 RateRefillMs = 20000
 # The same normalized text is refused again within this window; 0 disables the check.
@@ -141,7 +144,7 @@ Enabled = true
 
 # Server announcements: Kind is Announcement, Event, Admin or Periodic.
 # IntervalSeconds = 0 publishes once after DelaySeconds; otherwise at least 10.
-# Scheduled messages share the global chat history, so keep intervals long.
+# Scheduled announcements take system channel history, so keep intervals long.
 # [[Announcements.Scheduled]]
 # Text = "Welcome to Dreamsleeve. Be kind to other travellers."
 # Kind = "Periodic"

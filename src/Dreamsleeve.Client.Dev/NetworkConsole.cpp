@@ -45,13 +45,20 @@ namespace
     return "Unknown";
   }
 
+  // The session's channels by kind; the "all" view of a UI is not one of them.
+  struct Channels
+  {
+    Domain::ChatChannelId global{};
+    Domain::ChatChannelId system{};
+  };
+
   void PrintMessage(std::ostream& output, const Domain::ChatMessage& message)
   {
     output << '[' << message.channelId << "] ";
     if (message.announcement)
       output << "announcement source=" << static_cast<int>(message.announcement->source)
              << " kind=" << static_cast<int>(message.announcement->kind) << " signature=" << message.announcement->signature << ' ';
-    output << message.author.displayName << ": " << message.messageText << '\n';
+    output << (message.author ? message.author->displayName : std::string{"<system>"}) << ": " << message.messageText << '\n';
   }
 
   std::optional<Domain::AnnouncementKind> AnnouncementKindNamed(std::string_view name)
@@ -66,7 +73,7 @@ namespace
 
   // announce <trusted|third> <kind> <signature|-> <text>: server-only kinds are
   // accepted here on purpose, so a smoke run can see the server refuse them.
-  std::optional<PostAnnouncement> ParseAnnouncement(std::string_view line, std::uint64_t requestId)
+  std::optional<PostAnnouncement> ParseAnnouncement(std::string_view line, std::uint64_t requestId, Domain::ChatChannelId channel)
   {
     std::istringstream input{std::string{line.substr(9)}};
     std::string        source, kind, signature;
@@ -77,6 +84,7 @@ namespace
     std::getline(input >> std::ws, text);
     return PostAnnouncement{
         requestId,
+        channel,
         std::move(text),
         *parsed,
         source == "trusted" ? Domain::ClientAnnouncementSource::TrustedClient : Domain::ClientAnnouncementSource::ThirdParty,
@@ -161,12 +169,7 @@ namespace
     return true;
   }
 
-  void Print(
-    ClientExchange&        exchange,
-    std::uint64_t&         generation,
-    Domain::ChatChannelId& channel,
-    MovementView&          movement,
-    bool                   verbose = true)
+  void Print(ClientExchange& exchange, std::uint64_t& generation, Channels& channel, MovementView& movement, bool verbose = true)
   {
     ClientOutput output;
     exchange.Drain(output);
@@ -198,7 +201,9 @@ namespace
           PrintPlayer(console, player);
         }
 
-        channel = snapshot->chats.empty() ? 0 : snapshot->chats.front().channelId;
+        channel = {};
+        for (const auto& chat : snapshot->chats)
+          (chat.kind == Domain::ChatChannelKind::System ? channel.system : channel.global) = chat.channelId;
         for (const auto& chat : snapshot->chats)
           for (const auto& message : chat.messages)
             PrintMessage(console, message);
@@ -238,12 +243,7 @@ namespace
       std::cout << "pose " << id << " absent\n";
   }
 
-  bool ReadMovement(
-    const std::string&     line,
-    ClientExchange&        exchange,
-    std::uint64_t&         generation,
-    Domain::ChatChannelId& channel,
-    MovementView&          movement)
+  bool ReadMovement(const std::string& line, ClientExchange& exchange, std::uint64_t& generation, Channels& channel, MovementView& movement)
   {
     std::istringstream input{line};
     std::string        command;
@@ -371,7 +371,7 @@ int RunNetworkConsole(int argc, char* argv[])
     return 1;
   }
   std::uint64_t         generation{};
-  Domain::ChatChannelId channel{};
+  Channels              channel{};
 
   std::cout << "Real ENet connection. " << Commands;
 
@@ -416,7 +416,7 @@ int RunNetworkConsole(int argc, char* argv[])
       {
         const auto posted = exchange.Post({
             generation,
-            SendChat{*requestId, channel, line.substr(5)}
+            SendChat{*requestId, channel.global, line.substr(5)}
         });
         if (posted == CommandPostResult::Queued)
           std::cout << "request " << *requestId << " queued\n";
@@ -428,7 +428,7 @@ int RunNetworkConsole(int argc, char* argv[])
     {
       Print(exchange, generation, channel, **movement);
       const auto requestId = exchange.NextRequestId();
-      auto       command   = requestId ? ParseAnnouncement(line, *requestId) : std::nullopt;
+      auto       command   = requestId ? ParseAnnouncement(line, *requestId, channel.system) : std::nullopt;
       if (!command)
         std::cout << Commands;
       else if (exchange.Post({generation, std::move(*command)}) == CommandPostResult::Queued)

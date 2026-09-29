@@ -154,14 +154,17 @@ public:
     ClientModel(ClientModel&&)                 = default;
     ClientModel& operator=(ClientModel&&)      = default;
 
-    Domain::OperationResult RegisterChannel(ChatChannelId channelId, std::size_t capacity)
+    Domain::OperationResult RegisterChannel(
+      ChatChannelId           channelId,
+      std::size_t             capacity,
+      Domain::ChatChannelKind kind = Domain::ChatChannelKind::Global)
     {
       if (chats.contains(channelId))
       {
         return std::unexpected(Domain::Error{Domain::ErrorCode::DuplicateKey, "channelId"});
       }
 
-      auto cache = ChatCache::TryCreate(channelId, capacity);
+      auto cache = ChatCache::TryCreate(channelId, capacity, kind);
       if (!cache)
       {
         return std::unexpected(std::move(cache.error()));

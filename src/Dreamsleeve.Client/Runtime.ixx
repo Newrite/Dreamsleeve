@@ -195,15 +195,14 @@ export namespace Runtime
   {
     auto&           queue = Detail::Announcements();
     std::lock_guard lock{queue.mutex};
-    return queue.gate.connected;
+    return queue.gate.policy.has_value();
   }
 
-  // Main thread, once per frame after the drain.
-  void PublishAnnouncementGate(bool connected, const std::optional<::Domain::AnnouncementPolicy>& policy)
+  // Main thread, once per frame after the drain: the policy of a ready session, or none.
+  void PublishAnnouncementGate(const std::optional<::Domain::AnnouncementPolicy>& policy)
   {
     auto&           queue = Detail::Announcements();
     std::lock_guard lock{queue.mutex};
-    queue.gate.connected = connected;
     if (queue.gate.policy != policy) queue.gate.policy = policy;
   }
 

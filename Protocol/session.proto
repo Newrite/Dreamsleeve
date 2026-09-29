@@ -16,10 +16,11 @@ message OpenSession {
 message SessionOpened {
   string server_name = 6;
   uint64 self_player_id = 1;
-  uint64 global_channel_id = 2;
-  reserved 3; // Version 2 contained PlayerProfile entries here.
+  // Version 6 had a single global channel and its tail here.
+  reserved 2, 3, 4;
+  reserved "global_channel_id", "recent_messages";
   repeated PlayerInfo players = 5; // Complete online list, including self.
-  repeated ChatMessage recent_messages = 4; // Retained tail, ascending message_id.
-  // Absent from servers without client announcements: do not send PostAnnouncement then.
   AnnouncementPolicy announcements = 7;
+  // Every channel of the session: one GLOBAL and one SYSTEM in version 7.
+  repeated ChatChannel channels = 8;
 }

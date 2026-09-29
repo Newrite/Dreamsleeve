@@ -15,8 +15,17 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (message.message_id() == 0 || message.channel_id() == 0) return Invalid("message");
     if (message.sent_at_unix_ms() < -62135596800000LL || message.sent_at_unix_ms() > 253402300799999LL) return Invalid("sent_at_unix_ms");
 
-    auto author = Profile(message.author());
-    if (!author) return std::unexpected{author.error()};
+    // Only a server announcement has no author; the system is not a player.
+    const bool serverAnnouncement = message.has_announcement() && message.announcement().source() == P::ANNOUNCEMENT_SOURCE_SERVER;
+    std::optional<Domain::PlayerData> author;
+    if (message.has_author())
+    {
+      auto profile = Profile(message.author());
+      if (!profile) return std::unexpected{profile.error()};
+      author = std::move(*profile);
+    }
+    else if (!serverAnnouncement)
+      return Invalid("author");
 
     // Ranges must lie inside the text, ascend without overlap and cut on code
     // point boundaries, so a client can mask them without breaking UTF-8.
@@ -36,8 +45,8 @@ namespace Dreamsleeve::Client::Wire::Detail
       floor = end;
     }
 
-    // Values are kept as sent, unknown numbers included: a newer server may add
-    // sources or kinds, and the host treats what it does not know as untrusted.
+    // Values are kept as sent, unknown numbers included; the host treats what it
+    // does not know as untrusted.
     std::optional<Domain::Announcement> announcement;
     if (message.has_announcement())
       announcement = Domain::Announcement{
@@ -49,7 +58,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     return Domain::ChatMessage{
         message.message_id(),
         message.channel_id(),
-        std::move(*author),
+        std::move(author),
         message.text(),
         Domain::FromUnixMilliseconds(message.sent_at_unix_ms()),
         message.has_character_name() ? std::optional{message.character_name()} : std::nullopt,
@@ -66,14 +75,13 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   void WriteAnnouncement(P::PostAnnouncement& target, const PostAnnouncement& value)
   {
+    target.set_channel_id(value.channelId);
     target.set_text(value.text);
     target.set_kind(static_cast<P::AnnouncementKind>(value.kind));
     target.set_source(static_cast<P::ClientAnnouncementSource>(value.source));
     target.set_signature(value.signature);
   }
 
-  // Unknown source numbers from a newer server stay listed; a client only asks
-  // about the sources it knows.
   Domain::AnnouncementPolicy Policy(const P::AnnouncementPolicy& source)
   {
     Domain::AnnouncementPolicy result{{}, source.max_text_length(), source.max_signature_length()};

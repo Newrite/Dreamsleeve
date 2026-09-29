@@ -14,11 +14,12 @@ export namespace Dreamsleeve::Client
     std::string           text;
   };
 
-  // Published into the system stream of the global channel. Settled like
-  // SendChat: a ChatConfirmation, a ServerRejection or a CommandFailure.
+  // Published into a system channel. Settled like SendChat: a
+  // ChatConfirmation, a ServerRejection or a CommandFailure.
   struct PostAnnouncement
   {
     std::uint64_t                    requestId{};
+    Domain::ChatChannelId            channelId{};
     std::string                      text;
     Domain::AnnouncementKind         kind{Domain::AnnouncementKind::Announcement};
     Domain::ClientAnnouncementSource source{Domain::ClientAnnouncementSource::ThirdParty};
@@ -106,9 +107,7 @@ export namespace Dreamsleeve::Client
     SessionNotReady,
     Busy,
     InvalidRequest,
-    EncodingFailed,
-    // The server did not announce the command in its welcome (an older server).
-    Unsupported
+    EncodingFailed
   };
 
   struct CommandFailure
@@ -149,7 +148,7 @@ export namespace Dreamsleeve::Client
     bool              savedLogin{};
     std::string       savedUsername;
     std::uint32_t     authSequence{};  // Bumped per completion so an identical repeat is still observable.
-    // From the welcome of the current session; absent for older servers.
+    // From the welcome of the current session; absent without a session.
     std::optional<Domain::AnnouncementPolicy> announcements;
   };
 

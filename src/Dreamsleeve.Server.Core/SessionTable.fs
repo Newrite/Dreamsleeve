@@ -19,6 +19,7 @@ module internal SessionTable =
         mutable ChildStopped: bool
         mutable TransportClosed: bool
         mutable ChatDetached: bool
+        mutable SystemDetached: bool
         mutable PresenceDetached: bool
     }
 
@@ -33,7 +34,7 @@ module internal SessionTable =
         let entry = {
             ConnectionId = connectionId; Phase = Waiting; Deadline = deadline
             PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
-            ChatDetached = false; PresenceDetached = false
+            ChatDetached = false; SystemDetached = false; PresenceDetached = false
         }
         state.Connections.Add(connectionId, entry)
         entry
@@ -52,7 +53,7 @@ module internal SessionTable =
         | Opening, None | Opening, Some _ -> IdentityAdmission.AlreadyInUse
         | Waiting, _ | Ready, _ | Closing, _ -> IdentityAdmission.Closed
 
-    let domainClean (entry: Entry) = entry.ChildStopped && entry.ChatDetached && entry.PresenceDetached
+    let domainClean (entry: Entry) = entry.ChildStopped && entry.ChatDetached && entry.SystemDetached && entry.PresenceDetached
 
     let clean (entry: Entry) = domainClean entry && entry.TransportClosed
 

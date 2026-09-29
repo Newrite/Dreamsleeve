@@ -77,7 +77,7 @@ NFKC (полноширинные и «математические» буквы)
 
 | Данные | Когда | Результат |
 |---|---|---|
-| Username | регистрация (`/auth/register`) | HTTP 400 `username_not_allowed`; префикс `hidden.` зарезервирован |
+| Username | регистрация (`/auth/register`) | HTTP 400 `username_not_allowed`; префикс `hidden.` и имена `server`, `system` зарезервированы |
 | Display name | регистрация | HTTP 400 `display_name_not_allowed` |
 | Текст сообщения, `[block]` | `PlayerSession` до передачи в канал | `ChatRejected`, код `TEXT_NOT_ALLOWED`; не сохраняется и не рассылается |
 | Текст сообщения, `[flag]` | `PlayerSession`, вне владельца канала | сообщение принимается; `ChatMessage.flagged` — диапазоны в байтах UTF-8, хранятся с сообщением и выдаются в истории |

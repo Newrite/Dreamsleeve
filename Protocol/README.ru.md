@@ -1,11 +1,11 @@
-# Прикладной протокол сессии, версия 6
+# Прикладной протокол сессии, версия 7
 
 Схемы разделены по назначению:
 
 | Файл | Содержимое |
 |---|---|
 | [common.proto](common.proto) | PlayerProfile и FormKey |
-| [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
+| [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
 | [session.proto](session.proto) | OpenSession и начальный SessionOpened |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
@@ -14,13 +14,13 @@
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 6 отделяет движение от команд; версии 1–5 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–6 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 6. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 7. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -65,8 +65,8 @@ plain HTTP допустим только для явно разрешённой 
 |---|---|---|
 | Клиент → сервер | OpenSession | Одноразовый SessionTicket |
 | Клиент → сервер | SendChat | ChannelId и текст, без авторства/времени/MessageId |
-| Клиент → сервер | PostAnnouncement | Текст, вид (Announcement/Event), заявленный источник (TrustedClient/ThirdParty) и подпись; Chat-канал |
-| Сервер → клиент | SessionOpened | SelfPlayerId, GlobalChannelId, весь онлайн и хвост истории |
+| Клиент → сервер | PostAnnouncement | ChannelId системного канала, текст, вид (Announcement/Event), заявленный источник (TrustedClient/ThirdParty) и подпись; Chat-канал ENet |
+| Сервер → клиент | SessionOpened | SelfPlayerId, весь онлайн, каналы с видом и хвостом истории, политика объявлений |
 | Сервер → клиент | ChatPublished | Одно принятое сообщение |
 | Сервер → клиент | RequestRejected | Общий RequestRejectionCode, объяснение, поле |
 | Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SetLocation / SetActorValues / LeaveGame / SetDetails |
@@ -117,30 +117,35 @@ option: пустой или повреждённый пакет может не 
 При обычной публикации сервер передаёт одно сообщение, а локальный UI получает
 Added/Removed из модели. Полная история не копируется при каждом сообщении.
 
-## Объявления (системный поток)
+## Каналы и объявления
 
-Добавлены совместимо в рамках v6; модель — [DomainSpecRu.MD §4.8](../docs/DomainSpecRu.MD).
+Модель — [DomainSpecRu.MD §4.8, §5](../docs/DomainSpecRu.MD).
 
-- `ChatMessage.announcement = 8` (`Announcement{source, kind, signature}`) отмечает
-  сообщение системного потока. Объявления идут обычным `ChatPublished` **глобального**
-  канала с ненулевым автором: у `SERVER` — зарезервированный профиль (PlayerId
-  `2^64−1`, username `server`, display name = имя сервера), у клиентских — игрок-автор.
-  Старый клиент не знает поля и показывает объявление как сообщение этого автора; его
-  codec (ненулевой автор, известный канал и payload) и модель при этом не ломаются.
+- `ChatChannelKind`: `GLOBAL` (1) — игроки пишут `SendChat`; `SYSTEM` (5) — объявления,
+  канал только для чтения. Номера 2–4 оставлены партии, гильдии и личным сообщениям
+  ([ProtobufHandbook](../docs/ProtobufHandbookRu.MD)). Вкладка «Все» клиента — агрегат,
+  а не канал. `SessionOpened.channels` (`ChatChannel{channel_id, kind, recent_messages}`)
+  перечисляет каналы сессии: в версии 7 это один `GLOBAL` и один `SYSTEM`; ID общих
+  каналов сервер выводит из вида (`ChatChannelKind.channelId`: 1 и 2).
+- `ChatMessage.announcement = 8` (`Announcement{source, kind, signature}`) присутствует
+  ровно у сообщений `SYSTEM`-канала; клиент отвергает объявление в общем канале и
+  чат в системном. `author` отсутствует только у объявлений `SERVER`: фиктивного
+  игрока нет; у клиентских объявлений автор — игрок, чей клиент их отправил.
 - `AnnouncementSource`: `SERVER` (1) назначает только сервер; `TRUSTED_CLIENT` (2),
   `THIRD_PARTY` (3). `AnnouncementKind`: `ANNOUNCEMENT` (1), `EVENT` (2), `ADMIN` (3),
   `PERIODIC` (4); два последних клиент запросить не может.
-- `ClientPacket.post_announcement = 13` (`PostAnnouncement`) — запрос клиента. Его
-  enum `ClientAnnouncementSource` не содержит значения сервера. Ответ как у SendChat:
-  автор получает `ChatPublished` со своим `request_id`, при отказе — `RequestRejected`
-  на Chat-канале (`ANNOUNCEMENT_NOT_ALLOWED`, `TEXT_NOT_ALLOWED`, `RATE_LIMITED`,
-  `INVALID_REQUEST` с полем `text`/`source`/`kind`).
+- `ClientPacket.post_announcement = 13` (`PostAnnouncement{channel_id, ...}`) — запрос
+  клиента в системный канал. Его enum `ClientAnnouncementSource` не содержит значения
+  сервера. Ответ как у SendChat: автор получает `ChatPublished` со своим `request_id`,
+  при отказе — `RequestRejected` на Chat-канале ENet (`ANNOUNCEMENT_NOT_ALLOWED`,
+  `TEXT_NOT_ALLOWED`, `RATE_LIMITED`, `CHANNEL_NOT_FOUND` для не системного канала,
+  `INVALID_REQUEST` с полем `text`/`source`/`kind`). `SendChat` в системный канал
+  получает `NOT_CHANNEL_MEMBER`.
 - `SessionOpened.announcements = 7` (`AnnouncementPolicy`: разрешённые клиентские
-  источники, лимиты текста и подписи в скалярах Unicode). Сервер без поддержки его не
-  присылает — новый клиент тогда не отправляет `PostAnnouncement` и отвечает локальным
-  `CommandFailureCode::Unsupported`, так что старый сервер неизвестного payload не получает.
-- Неизвестные значения source/kind от более нового сервера клиент принимает без ошибки
-  codec; host показывает их с наименьшим доверием.
+  источники, лимиты текста и подписи в скалярах Unicode) обязателен; клиент по нему
+  проверяет длины до отправки.
+- Неизвестные значения source/kind клиент принимает без ошибки codec; host показывает
+  их с наименьшим доверием.
 
 ## Игровое состояние
 
@@ -210,17 +215,17 @@ PlayerId, ChatChannelId и ChatMessageId — ненулевые uint64 полн�
 Время — знаковые Unix milliseconds; допустим диапазон DateTimeOffset
 [-62135596800000, 253402300799999]. Порядок истории задаёт MessageId.
 
-SessionOpened содержит уникальные PlayerId, включая SelfPlayerId. RecentMessages
-принадлежат GlobalChannelId и строго возрастают по MessageId; пустая история допустима.
+SessionOpened содержит уникальные PlayerId, включая SelfPlayerId, и уникальные каналы.
+Хвост каждого канала принадлежит ему и строго возрастает по MessageId; пустая история допустима.
 Это ограниченный хвост для начала работы. Здесь нет курсора, hasMore или запроса старой
 истории. Будущая пагинация должна отдельно определить историю и её epoch.
 
-В C++ SessionOpened непосредственно содержит requestId, selfPlayerId,
-globalChannelId, players и recentMessages. Players уже представлены обычными
+В C++ SessionOpened непосредственно содержит requestId, selfPlayerId, players,
+channels (`ChannelOpened{channelId, kind, recentMessages}`) и announcements. Players уже представлены обычными
 Domain::Player, сообщения — Domain::ChatMessage; отдельного типа состояния сессии нет.
 
 Начало сессии — последовательность действий владельца соединения. После проверки
-ожидаемого запроса он сбрасывает прежнюю модель, регистрирует канал, применяет
+ожидаемого запроса он сбрасывает прежнюю модель, регистрирует каналы с их видом, применяет
 OnlinePlayersReplaced, назначает self и передаёт историю через ChatMessagesReceived.
 Модель получает те же операции, что и при дальнейшей работе. PlayerStore проверяет
 дубли игроков, ChatCache — канал и конфликты сообщений. Проверки не дублируются

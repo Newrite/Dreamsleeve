@@ -206,7 +206,7 @@ namespace Logic
     // last frame, checked again against the session they now meet.
     for (const auto& outcome : frame.announcementResults)
       ModApi::Report(outcome);
-    Runtime::PublishAnnouncementGate(runtime.session.Ready(), state.output.status.announcements);
+    Runtime::PublishAnnouncementGate(runtime.session.Ready() ? state.output.status.announcements : std::nullopt);
     Runtime::TakeAnnouncements(state.announcements);
     for (auto& request : state.announcements)
     {
@@ -222,7 +222,7 @@ namespace Logic
     state.bubbleGeneration = generation;
     if (runtime.ui.ui.chat.showBubbles)
       for (const auto& message : frame.freshMessages)
-        runtime.bubbles.Post(message.author.playerId, message.messageText, now);
+        runtime.bubbles.Post(message.author->playerId, message.messageText, now);
   }
 
   void PublishMenuSnapshot()

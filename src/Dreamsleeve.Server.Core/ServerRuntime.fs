@@ -9,7 +9,7 @@ open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
 [<RequireQualifiedAccess>]
-type SessionSource = Chat | Presence | Authentication
+type SessionSource = Chat | System | Presence | Authentication
 
 type ServerRuntimeSnapshot = {
     Connections: int
@@ -42,10 +42,14 @@ type ServerRuntimeMessage =
 module ServerRuntime =
     type private Sources = {
         Chat: Agent<ChatRoomCommand>
+        /// Owner of the system channel: announcements.
+        System: Agent<ChatRoomCommand>
         Presence: Agent<PresenceCommand>
         ChatCleanup: AgentOutbox<ChatRoomCommand>
+        SystemCleanup: AgentOutbox<ChatRoomCommand>
         PresenceCleanup: AgentOutbox<PresenceCommand>
         mutable ChatStopped: bool
+        mutable SystemStopped: bool
         mutable PresenceStopped: bool
     }
 
@@ -57,7 +61,6 @@ module ServerRuntime =
         Moderation: ModerationRules
         Announcements: AnnouncementOptions
         Schedule: AnnouncementSchedule
-        ServerAuthor: PlayerData
         Transport: ServerTransport
         Logger: ILogger
         mutable Sources: Sources option
@@ -84,8 +87,9 @@ module ServerRuntime =
             // Called only after actual child Completion: no late child Join can
             // appear behind these commands in either source mailbox.
             let chat = sources.ChatCleanup.TrySend(context, ChatRoomCommand.Detach(detach SessionSource.Chat), ServerRuntimeMessage.CleanupFailed)
+            let system = sources.SystemCleanup.TrySend(context, ChatRoomCommand.Detach(detach SessionSource.System), ServerRuntimeMessage.CleanupFailed)
             let presence = sources.PresenceCleanup.TrySend(context, PresenceCommand.Detach(detach SessionSource.Presence), ServerRuntimeMessage.CleanupFailed)
-            if not chat || not presence then fail state context "Session cleanup capacity exhausted."
+            if not chat || not system || not presence then fail state context "Session cleanup capacity exhausted."
         | None, _ | _, None -> fail state context "Session cleanup has no sources."
 
     let private close (options: ServerRuntimeOptions) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
@@ -99,6 +103,7 @@ module ServerRuntime =
             | None ->
                 entry.ChildStopped <- true
                 entry.ChatDetached <- true
+                entry.SystemDetached <- true
                 entry.PresenceDetached <- true
                 if SessionTable.clean entry then SessionTable.remove entry state.Table
             | Some child ->
@@ -184,12 +189,12 @@ module ServerRuntime =
             state.Logger.LogWarning("Slow consumer {ConnectionId}", connectionId)
             SessionTable.find connectionId state.Table |> Option.iter (close options state context)
 
-    let private openSession (options: ServerRuntimeOptions) maxActorValues globalId (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket =
+    let private openSession (options: ServerRuntimeOptions) maxActorValues (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket =
         match state.Sources, context.Ref.TryReliable() with
         | Some sources, Some self ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket }
-            match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements globalId (authenticator.Requests)
-                      (sources.Chat.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
+            match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements (authenticator.Requests)
+                      (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                       (self.Map ServerRuntimeMessage.Host) request with
             | Error reason -> fail state context reason
             | Ok child ->
@@ -215,7 +220,7 @@ module ServerRuntime =
                 child.TryPost(PlayerSessionMessage.SampleMovement sample) |> ignore
             | Error _, _ | _, None -> ()
 
-    let private receive (options: ServerRuntimeOptions) globalId authenticator state context entry lane bytes =
+    let private receive (options: ServerRuntimeOptions) authenticator state context entry lane bytes =
         if lane = DeliveryLane.Realtime then receiveSample state entry bytes
         else
             match ProtocolCodec.decodeClient state.Codec bytes with
@@ -236,7 +241,7 @@ module ServerRuntime =
             | Ok request ->
                 match request.Command, entry.Phase with
                 | ClientCommand.OpenSession sessionTicket, SessionTable.Waiting ->
-                    openSession options state.MaxActorValues globalId authenticator state context entry request.RequestId sessionTicket
+                    openSession options state.MaxActorValues authenticator state context entry request.RequestId sessionTicket
                 | ClientCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
                 | ClientCommand.SendChat(channelId, text), SessionTable.Ready ->
@@ -260,7 +265,7 @@ module ServerRuntime =
             close options state context entry
             if SessionTable.clean entry then SessionTable.remove entry state.Table
 
-    let private transportEvent (options: ServerRuntimeOptions) globalId authenticator state context event =
+    let private transportEvent (options: ServerRuntimeOptions) authenticator state context event =
         match event with
         | ServerTransportEvent.Connected connectionId ->
             if state.Stopping || state.Table.Connections.Count >= options.MaxSessions then
@@ -269,7 +274,7 @@ module ServerRuntime =
                 SessionTable.add connectionId (now () + int64 options.OpenTimeoutMs) state.Table |> ignore
         | ServerTransportEvent.Received(connectionId, lane, bytes) ->
             match SessionTable.find connectionId state.Table with
-            | Some entry when entry.Phase <> SessionTable.Closing -> receive options globalId authenticator state context entry lane bytes
+            | Some entry when entry.Phase <> SessionTable.Closing -> receive options authenticator state context entry lane bytes
             | Some _ | None -> ()
         | ServerTransportEvent.Failed(connectionId, reason) ->
             state.Logger.LogWarning("Transport failed for {ConnectionId}: {Reason}", connectionId, reason)
@@ -280,25 +285,28 @@ module ServerRuntime =
         if state.Ticker.IsNone then
             state.Ticker <- Some (AgentTicker.start (TimeSpan.FromMilliseconds(int64 options.PollIntervalMs)) context ServerRuntimeMessage.Tick)
 
-    let private initialize (options: ServerRuntimeOptions) globalId authenticator state (context: AgentContext<ServerRuntimeMessage>) =
+    let private initialize (options: ServerRuntimeOptions) authenticator state (context: AgentContext<ServerRuntimeMessage>) =
         match context.Ref.TryReliable() with
         | None -> fail state context "Runtime requires a reliable mailbox."
         | Some self ->
             let output = self.Map ServerRuntimeMessage.Host
-            match ChatRoomAgent.startWith options.Chat state.Announcements state.ServerAuthor globalId output with
-            | Error error -> fail state context $"Chat startup failed: {error}"
-            | Ok chat ->
+            let system = ChatRoomAgent.start (AnnouncementOptions.channelOptions options.Chat state.Announcements) ChatChannelKind.System output
+            match ChatRoomAgent.start options.Chat ChatChannelKind.Global output, system with
+            | Error error, _ | _, Error error -> fail state context $"Chat startup failed: {error}"
+            | Ok chat, Ok system ->
                 context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
+                context.Own(system, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.System, outcome))
                 match PresenceAgent.start options.Presence output with
                 | Error error -> fail state context $"Presence startup failed: {error}"
                 | Ok presence ->
                     context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
                     context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
                     state.Sources <- Some {
-                        Chat = chat; Presence = presence
+                        Chat = chat; System = system; Presence = presence
                         ChatCleanup = AgentOutbox(options.MaxSessions, chat.Ref.TryReliable().Value)
+                        SystemCleanup = AgentOutbox(options.MaxSessions, system.Ref.TryReliable().Value)
                         PresenceCleanup = AgentOutbox(options.MaxSessions, presence.Ref.TryReliable().Value)
-                        ChatStopped = false; PresenceStopped = false
+                        ChatStopped = false; SystemStopped = false; PresenceStopped = false
                     }
                     state.Transport.SetReadyHandler(fun () ->
                         context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentPostResult.Posted)
@@ -325,6 +333,7 @@ module ServerRuntime =
         | Some entry ->
             match source with
             | SessionSource.Chat -> entry.ChatDetached <- true
+            | SessionSource.System -> entry.SystemDetached <- true
             | SessionSource.Presence -> entry.PresenceDetached <- true
             | SessionSource.Authentication -> ()
 
@@ -363,35 +372,35 @@ module ServerRuntime =
             // Closing changes routes now; transport drain and domain cleanup finish independently.
             visitRoutes state (close options state context)
 
-    let private drain (options: ServerRuntimeOptions) globalId authenticator state context =
+    let private drain (options: ServerRuntimeOptions) authenticator state context =
         match state.Transport.Poll() with
         | Error reason -> fail state context $"Transport failed: {reason}"
         | Ok events ->
             for event in events do
-                transportEvent options globalId authenticator state context event
+                transportEvent options authenticator state context event
 
-    // Announcements are data for the channel owner, not control: a full chat
+    // Announcements are data for the system channel owner, not control: a full
     // mailbox drops one of them with a warning instead of stopping the runtime.
     let private announce state (announcement: ServerAnnouncement) =
         match state.Sources with
         | Some sources when not state.Stopping ->
-            match sources.Chat.TryPost(ChatRoomCommand.Announce announcement) with
+            match sources.System.TryPost(ChatRoomCommand.Announce announcement) with
             | AgentPostResult.Posted ->
                 state.Logger.LogInformation("Server announcement ({Kind}): {Text}", announcement.Kind, ChatMessageText.value announcement.Text)
             | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
-                state.Logger.LogWarning("Server announcement dropped: chat admission is unavailable")
+                state.Logger.LogWarning("Server announcement dropped: system channel admission is unavailable")
         | Some _ | None -> ()
 
-    let private tick (options: ServerRuntimeOptions) globalId authenticator state context =
+    let private tick (options: ServerRuntimeOptions) authenticator state context =
         // Fallback polling also supports non-notifying test transports.
-        drain options globalId authenticator state context
+        drain options authenticator state context
 
         let time = now ()
         for announcement in AnnouncementSchedule.due time state.Schedule do announce state announcement
         visitRoutes state (tickRoute options time state context)
 
         let sourcesStopped =
-            state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.PresenceStopped)
+            state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.SystemStopped && sources.PresenceStopped)
         if state.Stopping && time >= state.StopDeadline && (state.Table.Connections.Count > 0 || not sourcesStopped) then
             fail state context "Server shutdown timed out."
 
@@ -403,9 +412,10 @@ module ServerRuntime =
                 if not state.SourcesStopping then
                     state.SourcesStopping <- true
                     sources.Chat.Complete() |> ignore
+                    sources.System.Complete() |> ignore
                     sources.Presence.Complete() |> ignore
 
-                if sources.ChatStopped && sources.PresenceStopped && state.Table.Connections.Count = 0 then
+                if sources.ChatStopped && sources.SystemStopped && sources.PresenceStopped && state.Table.Connections.Count = 0 then
                     context.Complete() |> ignore
 
     let private sourceStopped state context source (outcome: Result<unit, exn>) =
@@ -417,21 +427,22 @@ module ServerRuntime =
             | Ok () ->
                 match state.Sources, source with
                 | Some sources, SessionSource.Chat -> sources.ChatStopped <- true
+                | Some sources, SessionSource.System -> sources.SystemStopped <- true
                 | Some sources, SessionSource.Presence -> sources.PresenceStopped <- true
                 | Some _, SessionSource.Authentication | None, _ -> ()
 
-    let private handle (options: ServerRuntimeOptions) globalId authenticator state (context: AgentContext<ServerRuntimeMessage>) message = task {
+    let private handle (options: ServerRuntimeOptions) authenticator state (context: AgentContext<ServerRuntimeMessage>) message = task {
         match message with
         | ServerRuntimeMessage.Start ->
-            if state.Sources.IsNone && not state.Stopping then initialize options globalId authenticator state context
-        | ServerRuntimeMessage.TransportReady -> drain options globalId authenticator state context
+            if state.Sources.IsNone && not state.Stopping then initialize options authenticator state context
+        | ServerRuntimeMessage.TransportReady -> drain options authenticator state context
         | ServerRuntimeMessage.Tick notification ->
             let started = Stopwatch.GetTimestamp()
             if state.LastTick <> 0L then RuntimeMetrics.runtimeInterval.Record(Stopwatch.GetElapsedTime(state.LastTick, started).TotalMilliseconds)
             state.LastTick <- started
             RuntimeMetrics.runtimeTimerLateness.Record(Stopwatch.GetElapsedTime(notification.DueTimestamp, notification.QueuedTimestamp).TotalMilliseconds)
             RuntimeMetrics.runtimeQueueDelay.Record(Stopwatch.GetElapsedTime(notification.QueuedTimestamp).TotalMilliseconds)
-            tick options globalId authenticator state context
+            tick options authenticator state context
             RuntimeMetrics.runtimeTick.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
             state.Ticker |> Option.iter _.Acknowledge()
         | ServerRuntimeMessage.Host command -> host options state context command
@@ -487,8 +498,8 @@ module ServerRuntime =
                 "Runtime ControlReserve must allow 3 * MaxSessions + 4 lifecycle messages."
             if options.MaxSessions > config.PeerLimit || options.MaxSessions > config.MaxInitialPlayers then
                 "Runtime MaxSessions must fit transport PeerLimit and protocol MaxInitialPlayers."
-            if options.Chat.HistoryCapacity > config.MaxRecentMessages then
-                "Chat history must fit MaxRecentMessages."
+            if options.Chat.HistoryCapacity > config.MaxRecentMessages || announcements.HistoryCapacity > config.MaxRecentMessages then
+                "Chat and announcement histories must fit MaxRecentMessages."
             if int64 config.ServiceTimeoutMs + int64 options.PollIntervalMs > int64 (min options.OpenTimeoutMs options.ShutdownTimeoutMs) then
                 "Transport service wait plus poll interval must fit runtime deadlines."
             if options.Player.MaxPendingChat > Int32.MaxValue - 2 || options.Player.MaxPendingUpdates > Int32.MaxValue - 2
@@ -501,19 +512,18 @@ module ServerRuntime =
         ]
         let scheduled = if isNull (box config.ChatInput) then Error [] else AnnouncementOptions.resolve config.ChatInput announcements
         let errors = errors @ (match scheduled with Ok _ -> [] | Error failures -> failures)
-        match errors, ProtocolCodec.create config, ChatChannelId.create 1UL, DisplayName.create 128 config.ServerName, scheduled with
-        | [], Ok codec, Ok globalId, Ok serverName, Ok entries ->
+        match errors, ProtocolCodec.create config, scheduled with
+        | [], Ok codec, Ok entries ->
             let state = {
                 Table = SessionTable.create(); RouteScratch = Array.empty; Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
                 Moderation = moderation
                 Announcements = announcements
                 Schedule = AnnouncementSchedule.create (now ()) entries
-                ServerAuthor = Announcement.serverAuthor serverName
                 Transport = transport; Logger = logger
                 Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
             }
             let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
-            let agent = Agent.Start(agentOptions, handle options globalId authenticator state, isControl = isControl)
+            let agent = Agent.Start(agentOptions, handle options authenticator state, isControl = isControl)
             agent.TryPost ServerRuntimeMessage.Start |> ignore
             Ok agent
-        | errors, _, _, _, _ -> Error (if errors.IsEmpty then ["Cannot create runtime codec, global channel or server author."] else errors)
+        | errors, _, _ -> Error (if errors.IsEmpty then ["Cannot create runtime codec."] else errors)

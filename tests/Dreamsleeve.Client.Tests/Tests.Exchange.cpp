@@ -19,7 +19,7 @@ namespace
     Domain::ChatMessage message{
         id,
         1,
-        {7, "player", "Display"},
+        Domain::PlayerData{7, "player", "Display"},
         std::to_string(id),
         {}
     };
@@ -199,7 +199,7 @@ TEST_CASE("Owner receives commands and publishes final output before joined shut
         Domain::ChatMessage message{
             1,
             1,
-            {7, "player", "Display"},
+            Domain::PlayerData{7, "player", "Display"},
             send.text,
             {}
         };

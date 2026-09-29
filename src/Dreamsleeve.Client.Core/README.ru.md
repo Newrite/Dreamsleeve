@@ -245,7 +245,7 @@ leave
 В JSON enum задаются номерами из player.proto: например activity.kind=2 — Combat,
 16 — Menu (menuKey="main" для главного меню), 18 — Loading. Внутри API это enum.
 Для подключения нужен Protocol/protocol.proto на IPv4, три ENet-канала,
-протокол версии 6 без checksum/compression. Старый `--state-demo` и консоль без аргументов
+протокол версии 7 без checksum/compression. Старый `--state-demo` и консоль без аргументов
 остаются явно синтетическими проверками очередей и чата.
 
 ## Проверка с реальным сервером

@@ -23,6 +23,7 @@ const message = (id: string, channelId = "1"): Message => ({
   id,
   channelId,
   source: "system",
+  announcement: { origin: "server", kind: "announcement" },
   text: "<script>alert(1)</script>",
   time: 0,
 });

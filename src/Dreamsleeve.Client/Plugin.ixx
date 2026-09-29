@@ -94,7 +94,7 @@ namespace Plugin
       return false;
     }
 
-    // Other plugins may ask for the interface from kPostLoad on.
+    // Papyrus natives of DreamsleeveClient; the C++ interface is exported by Main.cpp.
     ModApi::Register();
     SKSEMenu::RegisterSKSEMenu();
 

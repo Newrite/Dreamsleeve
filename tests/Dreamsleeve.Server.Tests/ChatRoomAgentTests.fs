@@ -13,7 +13,7 @@ open BackgroundTests
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private config = { MailboxCapacity = 4; ControlReserve = 2; HistoryCapacity = 2; MaxControlDeliveries = 4
                        RateBurst = 100; RateRefillMs = 1000; DuplicateWindowMs = 0 }
-let private channelId = ChatChannelId.create 1UL |> ok
+let private channelId = ChatChannelKind.channelId ChatChannelKind.Global
 let private profile number =
     PlayerData.create (PlayerId.create number |> ok)
         (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok)
@@ -52,6 +52,9 @@ let private announceAs (room: Agent<ChatRoomCommand>) (subscriber: Subscription<
 let private accepted requestId = function
     | ChatRoomEvent.Accepted(actual, message) -> equal requestId actual; message
     | other -> failwithf "Expected accepted publication: %A" other
+let private joinedSnapshot = function
+    | ChatRoomEvent.Joined snapshot -> snapshot
+    | other -> failwithf "Expected join snapshot: %A" other
 let private joined = function
     | ChatRoomEvent.Joined snapshot -> snapshot
     | other -> failwithf "Expected join snapshot: %A" other
@@ -92,7 +95,7 @@ let tests = testList "ChatRoomAgent" [
         use player = Agent.Start(AgentOptions.create "player", collect events)
         use cleanup = Agent.Start(AgentOptions.create "cleanup", collect replies)
         let limited = { config with HistoryCapacity = 8; RateBurst = 2; RateRefillMs = 60000; DuplicateWindowMs = 0 }
-        use room = ChatRoomAgent.start limited channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let first = subscription 1UL player
         do! post room (ChatRoomCommand.Join first)
         let! _ = receive events
@@ -132,7 +135,7 @@ let tests = testList "ChatRoomAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
         let limited = { config with HistoryCapacity = 8; RateBurst = 1; RateRefillMs = 50; DuplicateWindowMs = 60000 }
-        use room = ChatRoomAgent.start limited channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let alice = subscription 1UL player
         do! post room (ChatRoomCommand.Join alice)
         let! _ = receive events
@@ -161,7 +164,7 @@ let tests = testList "ChatRoomAgent" [
         use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
         use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
         use newcomer = Agent.Start(AgentOptions.create "next", collect nextEvents)
-        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let a, b, n = subscription 1UL alice, subscription 2UL bob, subscription 3UL newcomer
         do! post room (ChatRoomCommand.Join a)
         do! post room (ChatRoomCommand.Join b)
@@ -172,7 +175,7 @@ let tests = testList "ChatRoomAgent" [
         let first = accepted 7UL first
         let! broadcast = receive bobEvents
         equal (ChatRoomEvent.Published first) broadcast
-        equal a.Profile first.Author
+        equal (ValueSome a.Profile) first.Author
         equal [] first.Flagged
         equal 1UL (ChatMessageId.value first.MessageId)
         equal channelId first.ChannelId
@@ -199,7 +202,7 @@ let tests = testList "ChatRoomAgent" [
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
-        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let alice = subscription 1UL player
         do! post room (ChatRoomCommand.Join alice)
         let! _ = receive events
@@ -217,7 +220,7 @@ let tests = testList "ChatRoomAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
         use cleanup = Agent.Start(AgentOptions.create "cleanup", collect replies)
-        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let old = subscription 1UL player
         let detach id = post room (ChatRoomCommand.Detach { ConnectionId = id; ReplyTo = cleanup.Ref.TryReliable().Value })
         do! post room (ChatRoomCommand.Join old)
@@ -250,7 +253,7 @@ let tests = testList "ChatRoomAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
         use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
-        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let a = subscription 1UL alice
         let s = { ConnectionId = Guid.NewGuid(); Profile = profile 2UL; Events = receiver.Ref.TryReliable().Value.Map Value }
         do! post room (ChatRoomCommand.Join a)
@@ -280,7 +283,7 @@ let tests = testList "ChatRoomAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
         use conflict = Agent.Start(AgentOptions.create "conflict", collect conflictingEvents)
-        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let original, duplicate = subscription 1UL player, subscription 1UL conflict
         do! post room (ChatRoomCommand.Join original)
         let! _ = receive events
@@ -289,7 +292,7 @@ let tests = testList "ChatRoomAgent" [
         match rejected with ChatRoomEvent.JoinFailed _ -> () | other -> failwithf "Expected join refusal: %A" other
         do! publish room original 1UL "still here"
         let! message = receive events
-        equal original.Profile (accepted 1UL message).Author
+        equal (ValueSome original.Profile) (accepted 1UL message).Author
         do! stop room
     })
 
@@ -298,7 +301,7 @@ let tests = testList "ChatRoomAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use cleanup = Agent.Start(options "full-cleanup" (AgentMailbox.boundedWait 1), slow ackEvents)
         let! release = block cleanup
-        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         do! post room (ChatRoomCommand.Detach { ConnectionId = Guid.NewGuid(); ReplyTo = cleanup.Ref.TryReliable().Value.Map Value })
         let! _ = terminal room.Completion
         check room.Completion.IsCanceled "A lost cleanup reply left the source silently running."
@@ -312,7 +315,7 @@ let tests = testList "ChatRoomAgent" [
         use receiver = Agent.Start(options "blocked-recipient" (AgentMailbox.boundedWait 1), slow ignored)
         let! releaseHost = block host
         let! releaseReceiver = block receiver
-        use room = ChatRoomAgent.start { config with MaxControlDeliveries = 1 } channelId (host.Ref.TryReliable().Value.Map Value) |> ok
+        use room = ChatRoomAgent.start { config with MaxControlDeliveries = 1 } ChatChannelKind.Global (host.Ref.TryReliable().Value.Map Value) |> ok
         for number in [1UL; 2UL] do
             do! post room (ChatRoomCommand.Join { ConnectionId = Guid.NewGuid(); Profile = profile number; Events = receiver.Ref.TryReliable().Value.Map Value })
         let! _ = terminal room.Completion
@@ -327,9 +330,8 @@ let tests = testList "ChatRoomAgent" [
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
-        let secondId = ChatChannelId.create 2UL |> ok
-        use first = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
-        use second = ChatRoomAgent.start config secondId (host.Ref.TryReliable().Value) |> ok
+        use first = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use second = ChatRoomAgent.start config ChatChannelKind.System (host.Ref.TryReliable().Value) |> ok
         let subscriber = subscription 1UL player
         do! post first (ChatRoomCommand.Join subscriber)
         let! _ = receive events
@@ -337,13 +339,13 @@ let tests = testList "ChatRoomAgent" [
         let! _ = receive events
         do! publish first subscriber 1UL "first channel"
         let! one = receive events
-        do! publish second subscriber 2UL "second channel"
+        do! announceAs second subscriber 2UL "second channel"
         let! two = receive events
         let one, two = accepted 1UL one, accepted 2UL two
         equal 1UL (ChatMessageId.value one.MessageId)
         equal 1UL (ChatMessageId.value two.MessageId)
         equal channelId one.ChannelId
-        equal secondId two.ChannelId
+        equal (ChatChannelKind.channelId ChatChannelKind.System) two.ChannelId
         do! stop first
         do! stop second
     })
@@ -352,7 +354,7 @@ let tests = testList "ChatRoomAgent" [
         let hostEvents, ignored = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use receiver = Agent.Start(AgentOptions.create "receiver", collect ignored)
-        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let expected = InvalidOperationException("broken internal event mapper")
         let broken = receiver.Ref.TryReliable().Value.Map(fun (_: ChatRoomEvent) -> raise expected)
         do! post room (ChatRoomCommand.Join { ConnectionId = Guid.NewGuid(); Profile = profile 1UL; Events = broken })
@@ -365,7 +367,7 @@ let tests = testList "ChatRoomAgent" [
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
-        use room = ChatRoomAgent.start config channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let subscriber = subscription 1UL player
         do! post room (ChatRoomCommand.Join subscriber)
         let! _ = receive events
@@ -399,61 +401,60 @@ let tests = testList "ChatRoomAgent" [
         do! stop room
     })
 
-    case "server announcements reach every member in the shared history under the reserved author" (fun () -> task {
+    case "the system channel takes server announcements without an author and client announcements only" (fun () -> task {
         let hostEvents, aliceEvents, bobEvents = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
         use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
-        let author = Announcement.serverAuthor (DisplayName.create 128 "Голоса" |> ok)
-        use room = ChatRoomAgent.startWith { config with HistoryCapacity = 8 } AnnouncementOptions.defaults author channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start { config with HistoryCapacity = 8 } ChatChannelKind.System (host.Ref.TryReliable().Value) |> ok
         let a, b = subscription 1UL alice, subscription 2UL bob
         do! post room (ChatRoomCommand.Join a)
         do! post room (ChatRoomCommand.Join b)
-        let! _ = receive aliceEvents
-        let! _ = receive bobEvents
-        do! publish room a 1UL "chat"
-        let! _ = receive aliceEvents
+        let! joined = receive aliceEvents
+        equal ChatChannelKind.System (joinedSnapshot joined).Kind
         let! _ = receive bobEvents
         do! post room (ChatRoomCommand.Announce { Text = ChatMessageText.create 256 "Рестарт" |> ok; Kind = AnnouncementKind.Admin })
         for events in [aliceEvents; bobEvents] do
             let! delivered = receive events
             match delivered with
             | ChatRoomEvent.Published message ->
-                equal author message.Author
+                equal ValueNone message.Author
                 equal (ValueSome(Announcement.server AnnouncementKind.Admin)) message.Announcement
-                equal 2UL (ChatMessageId.value message.MessageId)
+                equal 1UL (ChatMessageId.value message.MessageId)
             | other -> failwithf "Expected a plain publication: %A" other
+        do! announceAs room a 2UL "event"
+        let! own = receive aliceEvents
+        let message = accepted 2UL own
+        equal (ValueSome a.Profile) message.Author
+        equal (ValueSome AnnouncementSource.ThirdParty) (message.Announcement |> ValueOption.map _.Source)
+        let! _ = receive bobEvents
+        // Chat is refused here: the system channel is read-only for players.
+        do! publish room a 3UL "chat"
+        let! refused = receive aliceEvents
+        match refused with
+        | ChatRoomEvent.Rejected(3UL, rejection) -> equal RequestRejectionCode.NotChannelMember rejection.Code
+        | other -> failwithf "Expected refusal: %A" other
         let! retained = history room
-        equal [ValueNone; ValueSome(Announcement.server AnnouncementKind.Admin)] (retained.Messages |> List.map _.Announcement)
+        equal 2 retained.Messages.Length
         check (hostEvents.Reader.Count = 0) "An announcement has no requester to answer."
         do! stop room
     })
 
-    case "client announcements have their own rate limit, independent of chat" (fun () -> task {
+    case "a global channel refuses client announcements" (fun () -> task {
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
-        let limits = { AnnouncementOptions.defaults with RateBurst = 1; RateRefillMs = 60000; DuplicateWindowMs = 0 }
-        let chatLimit = { config with HistoryCapacity = 8; RateBurst = 1; RateRefillMs = 60000 }
-        use room = ChatRoomAgent.startWith chatLimit limits (Announcement.serverAuthor (DisplayName.create 64 "S" |> ok)) channelId (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let alice = subscription 1UL player
         do! post room (ChatRoomCommand.Join alice)
         let! _ = receive events
-        do! publish room alice 1UL "chat"
-        let! _ = receive events
-        do! announceAs room alice 2UL "event one"
-        let! first = receive events
-        let message = accepted 2UL first
-        equal alice.Profile message.Author
-        equal (ValueSome AnnouncementSource.ThirdParty) (message.Announcement |> ValueOption.map _.Source)
-        do! announceAs room alice 3UL "event two"
-        let! second = receive events
-        rateLimited 3UL second
-        do! publish room alice 4UL "more chat"
-        let! third = receive events
-        rateLimited 4UL third
+        do! announceAs room alice 1UL "event"
+        let! refused = receive events
+        match refused with
+        | ChatRoomEvent.Rejected(1UL, rejection) -> equal RequestRejectionCode.NotChannelMember rejection.Code
+        | other -> failwithf "Expected refusal: %A" other
         let! retained = history room
-        equal 2 retained.Messages.Length
+        equal 0 retained.Messages.Length
         do! stop room
     })
 

@@ -1,6 +1,5 @@
 import { createStore } from "zustand/vanilla";
 import type {
-  Announcement,
   AuthOperation,
   AuthState,
   Command,
@@ -77,11 +76,8 @@ export interface ChatState {
   // Context menu of a message author, at viewport coordinates.
   authorMenu: { playerId: string; name: string; x: number; y: number } | null;
 }
-// The read-only channel the host projects the announcement stream into.
-export const ANNOUNCEMENTS = "announcements";
-const legacy: Announcement = { origin: "server", kind: "announcement" };
 export const announcementOf = (m: Message) =>
-  m.source === "system" ? (m.announcement ?? legacy) : undefined;
+  m.source === "system" ? m.announcement : undefined;
 // Origin and kind switches hide a system line everywhere, its own tab included.
 export function allowed(message: Message, s: Settings) {
   const a = announcementOf(message);
@@ -99,19 +95,28 @@ export function allowed(message: Message, s: Settings) {
         : true)
   );
 }
-// Whether the view `filter` includes lines of a channel: announcements join
-// "Все" or every tab as chosen. Unread counting follows the same rule.
-export function shows(channelId: string, filter: string, s: Settings) {
+// Whether the view `filter` includes lines of a channel: the system channel
+// joins "Все" or every tab as chosen. Unread counting follows the same rule.
+export function shows(
+  channelId: string,
+  filter: string,
+  s: Settings,
+  channels: Channel[],
+) {
   if (channelId === filter) return true;
-  if (channelId === ANNOUNCEMENTS)
+  if (channels.some((c) => c.id === channelId && c.kind === "system"))
     return (
       s.announcementChannels === "current" ||
       (filter === "all" && s.announcementChannels === "all")
     );
   return filter === "all";
 }
-export const visible = (message: Message, filter: string, s: Settings) =>
-  shows(message.channelId, filter, s) && allowed(message, s);
+export const visible = (
+  message: Message,
+  filter: string,
+  s: Settings,
+  channels: Channel[],
+) => shows(message.channelId, filter, s, channels) && allowed(message, s);
 export function makeChat(send: Send, now = () => Date.now()) {
   const store = createStore<ChatState>(() => ({
     channels: [],
@@ -229,7 +234,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
             allowed(m, state.settings) &&
             (!state.active ||
               state.scrolled ||
-              !visible(m, state.filter, state.settings))
+              !visible(m, state.filter, state.settings, state.channels))
           )
             unread[m.channelId] = Math.min(
               HISTORY_LIMIT,
@@ -359,7 +364,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
         if (Object.keys(pending).length >= PENDING_LIMIT) break;
         const at = now();
         pending[`x${++refusals}`] = {
-          channelId: ANNOUNCEMENTS,
+          channelId: event.channelId,
           text: event.text,
           time: at,
           status: "failed",
@@ -478,7 +483,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     const s = store.getState();
     const unread = { ...s.unread };
     for (const id of Object.keys(unread))
-      if (shows(id, s.filter, s.settings)) unread[id] = 0;
+      if (shows(id, s.filter, s.settings, s.channels)) unread[id] = 0;
     store.setState({ unread, scrolled: false });
   }
   return {

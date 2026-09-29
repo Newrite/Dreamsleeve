@@ -42,23 +42,19 @@ int Function RESULT_BUSY() global
     return 8
 EndFunction
 
-int Function RESULT_UNSUPPORTED() global
+int Function RESULT_RATE_LIMITED() global
     return 9
 EndFunction
 
-int Function RESULT_RATE_LIMITED() global
-    return 10
-EndFunction
-
 int Function RESULT_FAILED() global
-    return 11
+    return 10
 EndFunction
 
 ; =======================================================
 ; NATIVE FUNCTIONS
 ; =======================================================
 
-; Asks the server to publish asText in the announcements tab of every player.
+; Asks the server to publish asText in the system channel (the announcements tab).
 ; aiKind: KIND_ANNOUNCEMENT() or KIND_EVENT().
 ; asSource: the name of your mod, one line; shown next to the text.
 ; True means queued, not published: register for the mod event

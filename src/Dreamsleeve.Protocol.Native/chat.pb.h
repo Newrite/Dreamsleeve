@@ -61,6 +61,8 @@ enum AnnouncementKind : int;
 extern const uint32_t AnnouncementKind_internal_data_[];
 enum AnnouncementSource : int;
 extern const uint32_t AnnouncementSource_internal_data_[];
+enum ChatChannelKind : int;
+extern const uint32_t ChatChannelKind_internal_data_[];
 enum ClientAnnouncementSource : int;
 extern const uint32_t ClientAnnouncementSource_internal_data_[];
 class Announcement;
@@ -71,6 +73,10 @@ class AnnouncementPolicy;
 struct AnnouncementPolicyDefaultTypeInternal;
 extern AnnouncementPolicyDefaultTypeInternal _AnnouncementPolicy_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull AnnouncementPolicy_class_data_;
+class ChatChannel;
+struct ChatChannelDefaultTypeInternal;
+extern ChatChannelDefaultTypeInternal _ChatChannel_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull ChatChannel_class_data_;
 class ChatMessage;
 struct ChatMessageDefaultTypeInternal;
 extern ChatMessageDefaultTypeInternal _ChatMessage_default_instance_;
@@ -103,6 +109,9 @@ template <>
 internal::EnumTraitsT<::Dreamsleeve::Protocol::Chat::AnnouncementSource_internal_data_>
     internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Chat::AnnouncementSource>;
 template <>
+internal::EnumTraitsT<::Dreamsleeve::Protocol::Chat::ChatChannelKind_internal_data_>
+    internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Chat::ChatChannelKind>;
+template <>
 internal::EnumTraitsT<::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource_internal_data_>
     internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource>;
 }  // namespace protobuf
@@ -111,6 +120,43 @@ internal::EnumTraitsT<::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource_in
 namespace Dreamsleeve {
 namespace Protocol {
 namespace Chat {
+enum ChatChannelKind : int {
+  CHAT_CHANNEL_KIND_UNSPECIFIED = 0,
+  CHAT_CHANNEL_KIND_GLOBAL = 1,
+  CHAT_CHANNEL_KIND_SYSTEM = 5,
+  ChatChannelKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  ChatChannelKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t ChatChannelKind_internal_data_[];
+inline constexpr ChatChannelKind ChatChannelKind_MIN =
+    static_cast<ChatChannelKind>(0);
+inline constexpr ChatChannelKind ChatChannelKind_MAX =
+    static_cast<ChatChannelKind>(5);
+inline bool ChatChannelKind_IsValid(int value) {
+  return 0 <= value && value <= 5 && ((35u >> value) & 1) != 0;
+}
+inline constexpr int ChatChannelKind_ARRAYSIZE = 5 + 1;
+const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL ChatChannelKind_descriptor();
+template <typename T>
+const ::std::string& ChatChannelKind_Name(T value) {
+  static_assert(::std::is_same<T, ChatChannelKind>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to ChatChannelKind_Name().");
+  return ChatChannelKind_Name(static_cast<ChatChannelKind>(value));
+}
+template <>
+inline const ::std::string& ChatChannelKind_Name(ChatChannelKind value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<ChatChannelKind_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+inline bool ChatChannelKind_Parse(
+    ::absl::string_view name, ChatChannelKind* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<ChatChannelKind>(ChatChannelKind_descriptor(), name,
+                                           value);
+}
 enum AnnouncementSource : int {
   ANNOUNCEMENT_SOURCE_UNSPECIFIED = 0,
   ANNOUNCEMENT_SOURCE_SERVER = 1,
@@ -695,7 +741,7 @@ class PostAnnouncement final : public ::google::protobuf::Message
     return *reinterpret_cast<const PostAnnouncement*>(
         &_PostAnnouncement_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(PostAnnouncement& a, PostAnnouncement& b) { a.Swap(&b); }
   inline void Swap(PostAnnouncement* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -782,12 +828,13 @@ class PostAnnouncement final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
-    kTextFieldNumber = 1,
-    kSignatureFieldNumber = 4,
-    kKindFieldNumber = 2,
-    kSourceFieldNumber = 3,
+    kTextFieldNumber = 2,
+    kSignatureFieldNumber = 5,
+    kChannelIdFieldNumber = 1,
+    kKindFieldNumber = 3,
+    kSourceFieldNumber = 4,
   };
-  // string text = 1;
+  // string text = 2;
   void clear_text() ;
   const ::std::string& text() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -802,7 +849,7 @@ class PostAnnouncement final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_text();
 
   public:
-  // string signature = 4;
+  // string signature = 5;
   void clear_signature() ;
   const ::std::string& signature() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -817,7 +864,17 @@ class PostAnnouncement final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_signature();
 
   public:
-  // .Dreamsleeve.Protocol.Chat.AnnouncementKind kind = 2;
+  // uint64 channel_id = 1;
+  void clear_channel_id() ;
+  ::uint64_t channel_id() const;
+  void set_channel_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_channel_id() const;
+  void _internal_set_channel_id(::uint64_t value);
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.AnnouncementKind kind = 3;
   void clear_kind() ;
   ::Dreamsleeve::Protocol::Chat::AnnouncementKind kind() const;
   void set_kind(::Dreamsleeve::Protocol::Chat::AnnouncementKind value);
@@ -827,7 +884,7 @@ class PostAnnouncement final : public ::google::protobuf::Message
   void _internal_set_kind(::Dreamsleeve::Protocol::Chat::AnnouncementKind value);
 
   public:
-  // .Dreamsleeve.Protocol.Chat.ClientAnnouncementSource source = 3;
+  // .Dreamsleeve.Protocol.Chat.ClientAnnouncementSource source = 4;
   void clear_source() ;
   ::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource source() const;
   void set_source(::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource value);
@@ -841,7 +898,7 @@ class PostAnnouncement final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
                                    0, 64,
                                    2>
       _table_;
@@ -865,6 +922,7 @@ class PostAnnouncement final : public ::google::protobuf::Message
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr text_;
     ::google::protobuf::internal::ArenaStringPtr signature_;
+    ::uint64_t channel_id_;
     int kind_;
     int source_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -931,7 +989,7 @@ class AnnouncementPolicy final : public ::google::protobuf::Message
     return *reinterpret_cast<const AnnouncementPolicy*>(
         &_AnnouncementPolicy_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(AnnouncementPolicy& a, AnnouncementPolicy& b) { a.Swap(&b); }
   inline void Swap(AnnouncementPolicy* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1155,7 +1213,7 @@ class Announcement final : public ::google::protobuf::Message
     return *reinterpret_cast<const Announcement*>(
         &_Announcement_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(Announcement& a, Announcement& b) { a.Swap(&b); }
   inline void Swap(Announcement* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1814,6 +1872,227 @@ class ChatPublished final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull ChatPublished_class_data_;
+// -------------------------------------------------------------------
+
+class ChatChannel final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.ChatChannel) */ {
+ public:
+  inline ChatChannel() : ChatChannel(nullptr) {}
+  ~ChatChannel() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ChatChannel* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ChatChannel));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR ChatChannel(::google::protobuf::internal::ConstantInitialized);
+
+  inline ChatChannel(const ChatChannel& from) : ChatChannel(nullptr, from) {}
+  inline ChatChannel(ChatChannel&& from) noexcept
+      : ChatChannel(nullptr, ::std::move(from)) {}
+  inline ChatChannel& operator=(const ChatChannel& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ChatChannel& operator=(ChatChannel&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const ChatChannel& default_instance() {
+    return *reinterpret_cast<const ChatChannel*>(
+        &_ChatChannel_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(ChatChannel& a, ChatChannel& b) { a.Swap(&b); }
+  inline void Swap(ChatChannel* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ChatChannel* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ChatChannel* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ChatChannel>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ChatChannel& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ChatChannel& from) { ChatChannel::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ChatChannel* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.ChatChannel"; }
+
+  explicit ChatChannel(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ChatChannel(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ChatChannel& from);
+  ChatChannel(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ChatChannel&& from) noexcept
+      : ChatChannel(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRecentMessagesFieldNumber = 3,
+    kChannelIdFieldNumber = 1,
+    kKindFieldNumber = 2,
+  };
+  // repeated .Dreamsleeve.Protocol.Chat.ChatMessage recent_messages = 3;
+  int recent_messages_size() const;
+  private:
+  int _internal_recent_messages_size() const;
+
+  public:
+  void clear_recent_messages() ;
+  ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL mutable_recent_messages(int index);
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>* PROTOBUF_NONNULL mutable_recent_messages();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>& _internal_recent_messages() const;
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>* PROTOBUF_NONNULL _internal_mutable_recent_messages();
+  public:
+  const ::Dreamsleeve::Protocol::Chat::ChatMessage& recent_messages(int index) const;
+  ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL add_recent_messages();
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>& recent_messages() const;
+  // uint64 channel_id = 1;
+  void clear_channel_id() ;
+  ::uint64_t channel_id() const;
+  void set_channel_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_channel_id() const;
+  void _internal_set_channel_id(::uint64_t value);
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.ChatChannelKind kind = 2;
+  void clear_kind() ;
+  ::Dreamsleeve::Protocol::Chat::ChatChannelKind kind() const;
+  void set_kind(::Dreamsleeve::Protocol::Chat::ChatChannelKind value);
+
+  private:
+  ::Dreamsleeve::Protocol::Chat::ChatChannelKind _internal_kind() const;
+  void _internal_set_kind(::Dreamsleeve::Protocol::Chat::ChatChannelKind value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ChatChannel)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   1, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ChatChannel& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::ChatMessage > recent_messages_;
+    ::uint64_t channel_id_;
+    int kind_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_chat_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull ChatChannel_class_data_;
 
 // ===================================================================
 
@@ -2541,6 +2820,116 @@ inline void ChatPublished::set_allocated_message(::Dreamsleeve::Protocol::Chat::
 
 // -------------------------------------------------------------------
 
+// ChatChannel
+
+// uint64 channel_id = 1;
+inline void ChatChannel::clear_channel_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t ChatChannel::channel_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ChatChannel.channel_id)
+  return _internal_channel_id();
+}
+inline void ChatChannel::set_channel_id(::uint64_t value) {
+  _internal_set_channel_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ChatChannel.channel_id)
+}
+inline ::uint64_t ChatChannel::_internal_channel_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channel_id_;
+}
+inline void ChatChannel::_internal_set_channel_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_id_ = value;
+}
+
+// .Dreamsleeve.Protocol.Chat.ChatChannelKind kind = 2;
+inline void ChatChannel::clear_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatChannelKind ChatChannel::kind() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ChatChannel.kind)
+  return _internal_kind();
+}
+inline void ChatChannel::set_kind(::Dreamsleeve::Protocol::Chat::ChatChannelKind value) {
+  _internal_set_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ChatChannel.kind)
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatChannelKind ChatChannel::_internal_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::Dreamsleeve::Protocol::Chat::ChatChannelKind>(_impl_.kind_);
+}
+inline void ChatChannel::_internal_set_kind(::Dreamsleeve::Protocol::Chat::ChatChannelKind value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_ = value;
+}
+
+// repeated .Dreamsleeve.Protocol.Chat.ChatMessage recent_messages = 3;
+inline int ChatChannel::_internal_recent_messages_size() const {
+  return _internal_recent_messages().size();
+}
+inline int ChatChannel::recent_messages_size() const {
+  return _internal_recent_messages_size();
+}
+inline void ChatChannel::clear_recent_messages() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recent_messages_.Clear();
+  ClearHasBitForRepeated(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL ChatChannel::mutable_recent_messages(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ChatChannel.recent_messages)
+  return _internal_mutable_recent_messages()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>* PROTOBUF_NONNULL ChatChannel::mutable_recent_messages()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:Dreamsleeve.Protocol.Chat.ChatChannel.recent_messages)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_recent_messages();
+}
+inline const ::Dreamsleeve::Protocol::Chat::ChatMessage& ChatChannel::recent_messages(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ChatChannel.recent_messages)
+  return _internal_recent_messages().Get(index);
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL ChatChannel::add_recent_messages()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::Dreamsleeve::Protocol::Chat::ChatMessage* _add =
+      _internal_mutable_recent_messages()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:Dreamsleeve.Protocol.Chat.ChatChannel.recent_messages)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>& ChatChannel::recent_messages() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:Dreamsleeve.Protocol.Chat.ChatChannel.recent_messages)
+  return _internal_recent_messages();
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>&
+ChatChannel::_internal_recent_messages() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recent_messages_;
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>* PROTOBUF_NONNULL
+ChatChannel::_internal_mutable_recent_messages() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.recent_messages_;
+}
+
+// -------------------------------------------------------------------
+
 // Announcement
 
 // .Dreamsleeve.Protocol.Chat.AnnouncementSource source = 1;
@@ -2662,7 +3051,32 @@ inline void Announcement::set_allocated_signature(::std::string* PROTOBUF_NULLAB
 
 // PostAnnouncement
 
-// string text = 1;
+// uint64 channel_id = 1;
+inline void PostAnnouncement::clear_channel_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint64_t PostAnnouncement::channel_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PostAnnouncement.channel_id)
+  return _internal_channel_id();
+}
+inline void PostAnnouncement::set_channel_id(::uint64_t value) {
+  _internal_set_channel_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PostAnnouncement.channel_id)
+}
+inline ::uint64_t PostAnnouncement::_internal_channel_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channel_id_;
+}
+inline void PostAnnouncement::_internal_set_channel_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_id_ = value;
+}
+
+// string text = 2;
 inline void PostAnnouncement::clear_text() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.text_.ClearToEmpty();
@@ -2727,12 +3141,12 @@ inline void PostAnnouncement::set_allocated_text(::std::string* PROTOBUF_NULLABL
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PostAnnouncement.text)
 }
 
-// .Dreamsleeve.Protocol.Chat.AnnouncementKind kind = 2;
+// .Dreamsleeve.Protocol.Chat.AnnouncementKind kind = 3;
 inline void PostAnnouncement::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline ::Dreamsleeve::Protocol::Chat::AnnouncementKind PostAnnouncement::kind() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PostAnnouncement.kind)
@@ -2740,7 +3154,7 @@ inline ::Dreamsleeve::Protocol::Chat::AnnouncementKind PostAnnouncement::kind() 
 }
 inline void PostAnnouncement::set_kind(::Dreamsleeve::Protocol::Chat::AnnouncementKind value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PostAnnouncement.kind)
 }
 inline ::Dreamsleeve::Protocol::Chat::AnnouncementKind PostAnnouncement::_internal_kind() const {
@@ -2752,12 +3166,12 @@ inline void PostAnnouncement::_internal_set_kind(::Dreamsleeve::Protocol::Chat::
   _impl_.kind_ = value;
 }
 
-// .Dreamsleeve.Protocol.Chat.ClientAnnouncementSource source = 3;
+// .Dreamsleeve.Protocol.Chat.ClientAnnouncementSource source = 4;
 inline void PostAnnouncement::clear_source() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000010U);
 }
 inline ::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource PostAnnouncement::source() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PostAnnouncement.source)
@@ -2765,7 +3179,7 @@ inline ::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource PostAnnouncement:
 }
 inline void PostAnnouncement::set_source(::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource value) {
   _internal_set_source(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PostAnnouncement.source)
 }
 inline ::Dreamsleeve::Protocol::Chat::ClientAnnouncementSource PostAnnouncement::_internal_source() const {
@@ -2777,7 +3191,7 @@ inline void PostAnnouncement::_internal_set_source(::Dreamsleeve::Protocol::Chat
   _impl_.source_ = value;
 }
 
-// string signature = 4;
+// string signature = 5;
 inline void PostAnnouncement::clear_signature() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.signature_.ClearToEmpty();
@@ -2959,6 +3373,12 @@ inline void AnnouncementPolicy::_internal_set_max_signature_length(::uint32_t va
 namespace google {
 namespace protobuf {
 
+template <>
+struct is_proto_enum<::Dreamsleeve::Protocol::Chat::ChatChannelKind> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::Dreamsleeve::Protocol::Chat::ChatChannelKind>() {
+  return ::Dreamsleeve::Protocol::Chat::ChatChannelKind_descriptor();
+}
 template <>
 struct is_proto_enum<::Dreamsleeve::Protocol::Chat::AnnouncementSource> : std::true_type {};
 template <>

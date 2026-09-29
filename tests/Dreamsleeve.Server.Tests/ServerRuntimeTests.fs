@@ -268,7 +268,7 @@ let tests = testList "ServerRuntime" [
             let! again = welcome fixture reconnected
             equal a.SelfPlayerId again.SelfPlayerId
             equal 1 again.Players.Count
-            equal 1 again.RecentMessages.Count
+            equal 1 again.Channels[0].RecentMessages.Count
             // A stale close from the old connection cannot remove the new route.
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Close(alice, "late close")))
             let! status = stats fixture

@@ -39,13 +39,14 @@ let private send requestId text =
         SendChat = Dreamsleeve.Protocol.Chat.SendChat(ChannelId = 1UL, Text = text))
 let private decode (packet: Dreamsleeve.Protocol.Chat.ClientPacket) =
     ProtocolCodec.decodeClient codec (packet.ToByteArray())
-let private welcome = {
+let private systemChannel = { ChannelId = ChatChannelKind.channelId ChatChannelKind.System; Kind = ChatChannelKind.System; Messages = [] }
+let private welcomeWith messages = {
     SelfPlayerId = pid 7UL
-    GlobalChannelId = channel
     Players = [snapshot]
-    RecentMessages = [message]
+    Channels = [ { ChannelId = channel; Kind = ChatChannelKind.Global; Messages = messages }; systemChannel ]
     AnnouncementSources = [ClientAnnouncementSource.ThirdParty]
 }
+let private welcome = welcomeWith [message]
 
 let private updatePacket action =
     Dreamsleeve.Protocol.Chat.ClientPacket(
@@ -242,10 +243,15 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let namedPacket = ProtocolCodec.encodeServer named (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> parse
         Expect.equal namedPacket.SessionOpened.ServerName "Голоса Тамриэля" "name comes from this server configuration"
         Expect.equal packet.SessionOpened.Players.Count 1 "online"
-        Expect.equal packet.SessionOpened.RecentMessages.Count 1 "initial retained history"
+        Expect.equal packet.SessionOpened.Channels.Count 2 "global and system channels"
+        Expect.equal packet.SessionOpened.Channels[0].Kind Dreamsleeve.Protocol.Chat.ChatChannelKind.Global "kind"
+        Expect.equal packet.SessionOpened.Channels[0].RecentMessages.Count 1 "initial retained history"
+        Expect.equal packet.SessionOpened.Channels[1].Kind Dreamsleeve.Protocol.Chat.ChatChannelKind.System "system kind"
         Expect.isError (encode { welcome with SelfPlayerId = pid 8UL }) "self absent"
         Expect.isError (encode { welcome with Players = [snapshot; snapshot] }) "duplicate player"
-        Expect.isError (encode { welcome with RecentMessages = [message; message] }) "duplicate/out-of-order message"
+        Expect.isError (encode (welcomeWith [message; message])) "duplicate/out-of-order message"
+        Expect.isError (encode { welcome with Channels = [ systemChannel; systemChannel ] }) "duplicate channel"
+        Expect.isError (encode { welcome with Channels = [ { systemChannel with Messages = [message] } ] }) "chat in the system channel"
         Expect.isError (encode { welcome with Players = List.replicate (config.MaxInitialPlayers + 1) snapshot }) "count bound"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(0UL, welcome))) "zero correlation"
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.ChatAccepted(0UL, message))) "zero chat correlation"
@@ -280,7 +286,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (ProtocolCodec.encodeServer (configured { config with MaxInitialPlayers = 1 }) response) "configured count"
         let noHistory = { config with MaxRecentMessages = 0 }
         Expect.isError (ProtocolCodec.encodeServer (configured noHistory) response) "history disabled"
-        let response = ServerResponse.SessionOpened(1UL, { welcome with RecentMessages = [] })
+        let response = ServerResponse.SessionOpened(1UL, welcomeWith [])
         Expect.isOk (ProtocolCodec.encodeServer (configured noHistory) response) "empty history allowed"
 
     testCase "invalid config prevents codec creation" <| fun _ ->

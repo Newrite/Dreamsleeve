@@ -90,7 +90,7 @@ MessageId возрастает внутри канала; идентичност
 Принятое сообщение сохраняется при отключении автора или неудаче доставки.
 Повторы после сбоя не обеспечивают exactly-once и не выполняются автоматически.
 
-В protocol v6 `UpdatePlayer` проходит через тот же персональный владелец. Команды
+С protocol v6 `UpdatePlayer` проходит через тот же персональный владелец. Команды
 `BeginCharacter`, `RenameCharacter`, `SetLocation`, `SetActorValues`, `SetDetails`, `LeaveGame` не содержат
 PlayerId: профиль берётся из аутентифицированной сессии. SetLocation задаёт reliable-контекст location, SetActorValues — только всю карту показаний; отсутствие location означает неизвестную
 позицию, пустая карта удаляет прежние значения. При Rename/SetLocation/SetActorValues нужен активный
@@ -128,27 +128,32 @@ Join получает согласованный snapshot, дальнейшие 
 
 ### Объявления
 
-Системный поток ([DomainSpecRu.MD §4.8](../../docs/DomainSpecRu.MD)) живёт в том же
-ChatRoomAgent глобального канала: общая история, общая последовательность MessageId.
+Системный канал ([DomainSpecRu.MD §4.8](../../docs/DomainSpecRu.MD)) — второй
+ChatRoomAgent (`ChatChannelKind.System`, ChannelId 2) рядом с общим (`Global`, 1): своя
+история (`[Announcements] HistoryCapacity`), своя последовательность MessageId и свой
+лимит частоты (`AnnouncementOptions.channelOptions`). Правило вида — в домене
+(`Chat.append`): системный канал принимает только объявления, общий — только чат.
+PlayerSession подписывается на оба, открывается после обоих снимков и отключается от
+обоих; SessionTable ждёт `SystemDetached` так же, как `ChatDetached`.
 
-- Серверные объявления: `ChatRoomCommand.Announce` без запроса и ответа; автор —
-  зарезервированный профиль `Announcement.serverAuthor` (PlayerId `UInt64.MaxValue`,
-  username `server`, display name = `Server.ServerName`), членство не требуется.
-  Источники — расписание `[[Announcements.Scheduled]]` (AnnouncementSchedule на тике
+- Серверные объявления: `ChatRoomCommand.Announce` без запроса и ответа, без автора
+  (`ChatMessage.serverAnnouncement`), членство не требуется. Источники — расписание `[[Announcements.Scheduled]]` (AnnouncementSchedule на тике
   ServerRuntime: разовые снимаются, периодические после простоя публикуются один раз, без
   догоняния) и консольная команда `announce <текст>` (вид `Admin`,
   `ServerRuntimeMessage.Announce`). Полный mailbox канала отбрасывает объявление с
   предупреждением в логе, не останавливая runtime.
-- Клиентские: `PostAnnouncement` на Chat-канале. Codec отклоняет серверные виды,
-  неизвестные значения, отсутствующую подпись `ThirdParty` и длину (`ChatInput.AnnouncementText`
-  = 500, `AnnouncementSignature` = 64); runtime отвечает `INVALID_REQUEST` с полем `text`/`source`.
-  PlayerSession применяет `AnnouncementOptions.admit` (единая точка будущих правил допуска
-  источника; сейчас — `Enabled` источника, иначе `ANNOUNCEMENT_NOT_ALLOWED`), словарь к
-  тексту и подписи, затем передаёт `ChatSubmission` с `Announcement`. ChatRoomAgent
-  применяет к нему отдельный лимит `[Announcements] RateBurst/RateRefillMs/DuplicateWindowMs`
-  (по умолчанию 3 / 20000 / 300000), а подтверждение идёт тем же `ChatAccepted`.
-- Приветствие несёт `AnnouncementPolicy` (разрешённые источники и лимиты): новый клиент
-  по нему понимает, что сервер принимает `PostAnnouncement`.
+- Клиентские: `PostAnnouncement{channel_id}` на Chat-канале ENet. Codec отклоняет
+  серверные виды, неизвестные значения, отсутствующую подпись `ThirdParty` и длину
+  (`ChatInput.AnnouncementText` = 500, `AnnouncementSignature` = 64); runtime отвечает
+  `INVALID_REQUEST` с полем `text`/`source`. PlayerSession проверяет, что канал системный
+  (иначе `CHANNEL_NOT_FOUND`), применяет `AnnouncementOptions.admit` (единая точка
+  будущих правил допуска источника; сейчас — `Enabled` источника, иначе
+  `ANNOUNCEMENT_NOT_ALLOWED`), словарь к тексту и подписи и передаёт `ChatSubmission` с
+  `Announcement` системному каналу; подтверждение — тем же `ChatAccepted`. `SendChat` в
+  системный канал получает `NOT_CHANNEL_MEMBER`.
+- Приветствие несёт каналы с видом и хвостом и `AnnouncementPolicy` (разрешённые
+  источники и лимиты).
+- Имена `server` и `system` зарезервированы при регистрации (`Moderation.reservedUsername`).
 
 ## Очереди и перегрузка
 

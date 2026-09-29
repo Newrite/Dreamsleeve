@@ -125,7 +125,9 @@ const MessageRow = memo(function MessageRow({
 export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
   const list = useRef<HTMLDivElement>(null);
   const faded = useMessageFade(s);
-  const messages = s.messages.filter((m) => visible(m, s.filter, s.settings));
+  const messages = s.messages.filter((m) =>
+    visible(m, s.filter, s.settings, s.channels),
+  );
   const last = messages[messages.length - 1]?.id;
   useEffect(() => {
     if (!s.scrolled && list.current) {
@@ -142,7 +144,8 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
     }
   }
   const unread = Object.entries(s.unread).reduce(
-    (n, [id, count]) => n + (shows(id, s.filter, s.settings) ? count : 0),
+    (n, [id, count]) =>
+      n + (shows(id, s.filter, s.settings, s.channels) ? count : 0),
     0,
   );
   const channels = new Map(s.channels.map((c) => [c.id, c]));

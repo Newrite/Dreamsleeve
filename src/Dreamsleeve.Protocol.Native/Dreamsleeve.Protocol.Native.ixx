@@ -89,6 +89,18 @@ export namespace Protocol::Chat
 export namespace Protocol::Chat
 {
 
+  enum class ChatChannelKind : std::int32_t
+  {
+    Unspecified = 0,
+    Global      = 1,
+    System      = 5,
+  };
+
+}
+
+export namespace Protocol::Chat
+{
+
   enum class AnnouncementSource : std::int32_t
   {
     Unspecified   = 0,

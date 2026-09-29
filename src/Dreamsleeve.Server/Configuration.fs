@@ -177,8 +177,9 @@ module Configuration =
             Error "Runtime.MaxSessions cannot exceed Server.PeerLimit."
         elif config.Runtime.MaxSessions > config.Server.MaxInitialPlayers then
             Error "Server.MaxInitialPlayers must include every admitted session."
-        elif config.Runtime.Chat.HistoryCapacity > config.Server.MaxRecentMessages then
-            Error "Server.MaxRecentMessages must include the retained chat history."
+        elif config.Runtime.Chat.HistoryCapacity > config.Server.MaxRecentMessages
+             || (not (isNull (box config.Announcements)) && config.Announcements.HistoryCapacity > config.Server.MaxRecentMessages) then
+            Error "Server.MaxRecentMessages must include the retained chat and announcement histories."
         elif String.IsNullOrWhiteSpace config.Database.DatabasePath
              || config.Database.BusyTimeoutSeconds < 1 || config.Database.BusyTimeoutSeconds > 30 then
             Error "Database path must be nonempty and busy timeout 1..30 seconds."

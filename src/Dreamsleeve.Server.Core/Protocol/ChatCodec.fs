@@ -32,9 +32,9 @@ module internal ChatCodec =
             Dreamsleeve.Protocol.Chat.ChatMessage(
                 MessageId = ChatMessageId.value value.MessageId,
                 ChannelId = ChatChannelId.value value.ChannelId,
-                Author = PlayerCodec.profile value.Author,
                 Text = ChatMessageText.value value.MessageText,
                 SentAtUnixMs = Core.toUnixMilliseconds value.SentAt)
+        value.Author |> ValueOption.iter (fun author -> result.Author <- PlayerCodec.profile author)
         value.CharacterName |> ValueOption.iter (fun name -> result.CharacterName <- CharacterName.value name)
         for span in value.Flagged do
             result.Flagged.Add(Dreamsleeve.Protocol.Chat.TextSpan(Start = uint32 span.Start, Length = uint32 span.Length))
@@ -44,6 +44,17 @@ module internal ChatCodec =
                     Source = source announcement.Source,
                     Kind = kind announcement.Kind,
                     Signature = (announcement.Signature |> ValueOption.map AnnouncementSignature.value |> ValueOption.defaultValue "")))
+        result
+
+    let channel (value: WelcomeChannel) =
+        let result =
+            Dreamsleeve.Protocol.Chat.ChatChannel(
+                ChannelId = ChatChannelId.value value.ChannelId,
+                Kind =
+                    match value.Kind with
+                    | ChatChannelKind.Global -> Dreamsleeve.Protocol.Chat.ChatChannelKind.Global
+                    | ChatChannelKind.System -> Dreamsleeve.Protocol.Chat.ChatChannelKind.System)
+        result.RecentMessages.AddRange(value.Messages |> Seq.map message)
         result
 
     let decodeCommand maxText (source: Dreamsleeve.Protocol.Chat.SendChat) =
@@ -85,10 +96,12 @@ module internal ChatCodec =
         requested |> Result.bind (fun origin ->
         wanted |> Result.bind (fun announcementKind ->
         signature origin |> Result.bind (fun label ->
+        ChatChannelId.create request.ChannelId |> Result.mapError ProtocolCodecFailure.InvalidDomain |> Result.bind (fun channelId ->
         announcementText limits.AnnouncementText request.Text
         |> Result.mapError ProtocolCodecFailure.InvalidDomain
         |> Result.map (fun text ->
-            ClientCommand.PostAnnouncement { Text = text; Kind = announcementKind; Source = origin; Signature = label }))))
+            ClientCommand.PostAnnouncement
+                { ChannelId = channelId; Text = text; Kind = announcementKind; Source = origin; Signature = label })))))
 
     let policy (limits: ChatInputLimits) (sources: ClientAnnouncementSource list) =
         let result =

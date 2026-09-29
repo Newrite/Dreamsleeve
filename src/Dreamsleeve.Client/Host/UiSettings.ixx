@@ -57,7 +57,7 @@ export namespace Dreamsleeve::Host
     bool combatHideFireflies{false};
     bool combatHideNames{false};
     bool combatHideBubbles{false};
-    // System stream: tab (only its own tab) | all (also the "all" view) | current (every tab).
+    // System channel: tab (only its own tab) | all (also the "all" view) | current (every tab).
     std::string announcementChannels{"all"};
     // Shown origins and kinds; announcement and admin kinds follow their origin only.
     bool announcementsServer{true};

@@ -33,7 +33,7 @@ export function PendingMessages({
   }, [chat, s.pending, s.active]);
 
   return Object.entries(s.pending)
-    .filter(([, p]) => shows(p.channelId, s.filter, s.settings))
+    .filter(([, p]) => shows(p.channelId, s.filter, s.settings, s.channels))
     .map(([id, p]) => (
       <div
         key={id}

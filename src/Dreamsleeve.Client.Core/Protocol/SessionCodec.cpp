@@ -12,15 +12,12 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   Result<SessionOpened> Welcome(const Configuration& config, std::uint64_t requestId, const P::SessionOpened& source)
   {
-    if (source.self_player_id() == 0 || source.global_channel_id() == 0) return Invalid("session_opened");
-    if (
-      static_cast<std::size_t>(source.players_size()) > config.maxInitialPlayers ||
-      static_cast<std::size_t>(source.recent_messages_size()) > config.maxRecentMessages)
-      return Invalid("initial_count");
+    if (source.self_player_id() == 0 || source.channels().empty() || !source.has_announcements()) return Invalid("session_opened");
+    if (static_cast<std::size_t>(source.players_size()) > config.maxInitialPlayers) return Invalid("initial_count");
 
-    SessionOpened result{requestId, source.self_player_id(), source.global_channel_id()};
-    result.serverName = source.server_name();
-    if (source.has_announcements()) result.announcements = Policy(source.announcements());
+    SessionOpened result{requestId, source.self_player_id()};
+    result.serverName    = source.server_name();
+    result.announcements = Policy(source.announcements());
     for (const auto& player : source.players())
     {
       auto decoded = Player(config, player);
@@ -29,12 +26,22 @@ namespace Dreamsleeve::Client::Wire::Detail
       result.players.push_back(std::move(*decoded));
     }
 
-    for (const auto& value : source.recent_messages())
+    // Channel identity and kind rules are checked by the model on registration and merge.
+    for (const auto& channel : source.channels())
     {
-      auto message = Message(value);
-      if (!message) return std::unexpected{message.error()};
+      if (channel.channel_id() == 0) return Invalid("channel_id");
+      if (channel.kind() != P::CHAT_CHANNEL_KIND_GLOBAL && channel.kind() != P::CHAT_CHANNEL_KIND_SYSTEM) return Invalid("kind");
+      if (static_cast<std::size_t>(channel.recent_messages_size()) > config.maxRecentMessages) return Invalid("initial_count");
 
-      result.recentMessages.push_back(std::move(*message));
+      ChannelOpened opened{channel.channel_id(), static_cast<Domain::ChatChannelKind>(channel.kind())};
+      for (const auto& value : channel.recent_messages())
+      {
+        auto message = Message(value);
+        if (!message) return std::unexpected{message.error()};
+
+        opened.recentMessages.push_back(std::move(*message));
+      }
+      result.channels.push_back(std::move(opened));
     }
 
     return result;

@@ -38,7 +38,7 @@ public:
       Domain::ChatMessage message{
           nextMessage++,
           1,
-          {7, "dev", "Dev"},
+          Domain::PlayerData{7, "dev", "Dev"},
           std::move(text),
           {}
       };

@@ -473,21 +473,22 @@ def smoke(args, log, directory: Path):
         refused(repeat.upper(), 10)
         stage("word list and repeated-text limit refuse messages before storage and relay")
 
-        # Announcements share the global channel: "[1] announcement source=S kind=K signature=L author: text".
+        # The system channel (2): "[2] announcement source=S kind=K signature=L author: text";
+        # a server announcement has no author and prints as <system>.
         def announced(child: Child, marker: str, prefix: str, start: int):
             child.wait_for(lambda lines: any(marker in line and line.startswith(prefix) for line in lines),
                            args.timeout, start, read=True)
 
         welcome = f"smoke-welcome-{nonce}"
         for child in (alice, bob):
-            announced(child, welcome, "[1] announcement source=1 kind=1 signature= ", 0)
-        stage("a scheduled server announcement reached the shared history under the server profile")
+            announced(child, welcome, "[2] announcement source=1 kind=1 signature= <system>: ", 0)
+        stage("a scheduled server announcement reached the system channel history without an author")
 
         admin = f"smoke-admin-{nonce}"
         alice_start, bob_start = alice.mark(), bob.mark()
         server.send("announce " + admin)
         for child, start_at in ((alice, alice_start), (bob, bob_start)):
-            announced(child, admin, "[1] announcement source=1 kind=3 ", start_at)
+            announced(child, admin, "[2] announcement source=1 kind=3 signature= <system>: ", start_at)
         stage("an administrator console announcement reached every client")
 
         def announce_refused(command: str, marker: str, code: int):
@@ -509,7 +510,7 @@ def smoke(args, log, directory: Path):
             alice_start, bob_start = alice.mark(), bob.mark()
             alice.send(f"announce third event SmokeMod {marker}")
             for child, start_at in ((alice, alice_start), (bob, bob_start)):
-                announced(child, marker, "[1] announcement source=3 kind=2 signature=SmokeMod Smoke Alice: ", start_at)
+                announced(child, marker, "[2] announcement source=3 kind=2 signature=SmokeMod Smoke Alice: ", start_at)
         stage("third-party announcements were published with origin, kind, label and author")
 
         announce_refused(f"announce third event SmokeMod smoke-event-3-{nonce}", f"smoke-event-3-{nonce}", 10)

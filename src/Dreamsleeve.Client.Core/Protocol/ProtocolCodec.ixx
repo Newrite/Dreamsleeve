@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 6;
+  inline constexpr std::uint32_t Version = 7;
 
   enum class ErrorCode
   {
@@ -66,16 +66,22 @@ export namespace Dreamsleeve::Client::Wire
 
   using ClientRequest = std::variant<OpenSession, SendChat, UpdatePlayer, PostAnnouncement>;
 
+  // A channel of the session with its retained tail, ascending MessageId.
+  struct ChannelOpened
+  {
+    Domain::ChatChannelId            channelId{};
+    Domain::ChatChannelKind          kind{Domain::ChatChannelKind::Global};
+    std::vector<Domain::ChatMessage> recentMessages;
+  };
+
   struct SessionOpened
   {
-    std::uint64_t                    requestId;
-    Domain::PlayerId                 selfPlayerId;
-    Domain::ChatChannelId            globalChannelId;
-    std::vector<Domain::Player>      players;
-    std::vector<Domain::ChatMessage> recentMessages;
-    std::string                      serverName;
-    // Absent from servers that do not accept PostAnnouncement.
-    std::optional<Domain::AnnouncementPolicy> announcements;
+    std::uint64_t               requestId;
+    Domain::PlayerId            selfPlayerId;
+    std::vector<Domain::Player> players;
+    std::vector<ChannelOpened>  channels;
+    std::string                 serverName;
+    Domain::AnnouncementPolicy  announcements;
   };
 
   struct ChatAccepted

@@ -84,8 +84,8 @@ export interface Announcement {
 }
 // filtered: the host masked or replaced the text by the local filter of
 // server-flagged ranges; the original text never crossed the bridge.
-// A system line without `announcement` predates announcements: a server one.
-// `author` of a system line is the player whose client posted it.
+// A system line is an announcement of a system channel; its `author` is the
+// player whose client posted it, absent for the server.
 export type Message = {
   id: Id;
   channelId: Id;
@@ -94,7 +94,7 @@ export type Message = {
   filtered?: boolean;
 } & (
   | { source: "player"; author: Player }
-  | { source: "system"; announcement?: Announcement; author?: Player }
+  | { source: "system"; announcement: Announcement; author?: Player }
 );
 export interface Settings {
   showFireflyNames: boolean;
@@ -195,5 +195,11 @@ export type HostEvent =
   | { type: "sendResult"; requestId: string; error: string; messageId?: never }
   | { type: "settingsResult"; revision: number; error?: string }
   // An announcement of another mod through the API was not published.
-  | { type: "announcementResult"; source: string; text: string; error: string };
+  | {
+      type: "announcementResult";
+      channelId: Id;
+      source: string;
+      text: string;
+      error: string;
+    };
 export type Send = (command: Command) => boolean;

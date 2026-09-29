@@ -146,7 +146,8 @@ namespace Dreamsleeve.Protocol.Chat {
 
   #region Messages
   /// <summary>
-  /// Control/chat envelope. Version 6 separates repeated realtime poses from reliable commands. Opens sessions
+  /// Control/chat envelope. Version 7 opens a session with a list of channels; version 6
+  /// separated repeated realtime poses from reliable commands. Opens sessions
   /// with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
   /// requires reconnecting. Transport Connected alone is not application readiness.
   /// </summary>

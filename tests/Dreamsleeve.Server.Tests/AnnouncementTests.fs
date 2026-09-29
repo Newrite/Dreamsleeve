@@ -19,7 +19,7 @@ let private error = function
 let private config = ServerConfig.defaults
 let private codec = ProtocolCodec.create config |> ok
 let private pid raw = PlayerId.create raw |> ok
-let private channel = ChatChannelId.create 1UL |> ok
+let private channel = ChatChannelKind.channelId ChatChannelKind.System
 let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
 
 type private WireKind = Dreamsleeve.Protocol.Chat.AnnouncementKind
@@ -28,7 +28,9 @@ type private WireClientSource = Dreamsleeve.Protocol.Chat.ClientAnnouncementSour
 let private post text kind source signature : Result<ClientRequest, ProtocolCodecError> =
     Dreamsleeve.Protocol.Chat.ClientPacket(
         ProtocolVersion = ProtocolCodec.Version, RequestId = 5UL,
-        PostAnnouncement = Dreamsleeve.Protocol.Chat.PostAnnouncement(Text = text, Kind = kind, Source = source, Signature = signature))
+        PostAnnouncement =
+            Dreamsleeve.Protocol.Chat.PostAnnouncement(
+                ChannelId = ChatChannelId.value channel, Text = text, Kind = kind, Source = source, Signature = signature))
     |> fun packet -> ProtocolCodec.decodeClient codec (packet.ToByteArray())
 
 let private request (result: Result<ClientRequest, ProtocolCodecError>) =
@@ -68,13 +70,26 @@ let tests = testList "Announcements" [
             Expect.isError (AnnouncementSignature.create 64 invalid) $"invalid label {invalid}"
         Expect.equal (AnnouncementSignature.create 3 "abcd") (Error(DomainError.InvalidText("AnnouncementSignature", TextError.TooLong 3))) "length in scalars"
 
-    testCase "server announcements share history without membership; client ones need it" <| fun _ ->
-        let chat = Chat.create channel 4 |> ok
-        let author = Announcement.serverAuthor (DisplayName.create 128 "Dreamsleeve" |> ok)
-        Expect.equal (PlayerId.value author.PlayerId) UInt64.MaxValue "reserved author ID"
-        let server =
-            ChatMessage.create (ChatMessageId.create 1UL |> ok) channel author ValueNone (text "notice") DateTimeOffset.UnixEpoch
-            |> ChatMessage.withAnnouncement (Announcement.server AnnouncementKind.Periodic)
+    testCase "channel kinds own their IDs and decide what a channel carries" <| fun _ ->
+        let globalId, systemId = ChatChannelKind.channelId ChatChannelKind.Global, ChatChannelKind.channelId ChatChannelKind.System
+        Expect.notEqual globalId systemId "one ID per server-wide kind"
+        Expect.equal (ChatChannelKind.tryOfChannelId systemId) (Some ChatChannelKind.System) "ID maps back to its kind"
+        Expect.equal (ChatChannelKind.tryOfChannelId (ChatChannelId.create 99UL |> ok)) None "unknown channel"
+        let globalChat = Chat.create ChatChannelKind.Global 4 |> ok
+        Chat.join profile.PlayerId globalChat |> ignore
+        let announcement =
+            ChatMessage.create (ChatMessageId.create 1UL |> ok) globalId profile ValueNone (text "event") DateTimeOffset.UnixEpoch
+            |> ChatMessage.withAnnouncement (Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event ValueNone)
+        Expect.equal (Chat.append announcement globalChat) (Error DomainError.ChannelMismatch) "no announcements in a global channel"
+        let systemChat = Chat.create ChatChannelKind.System 4 |> ok
+        Chat.join profile.PlayerId systemChat |> ignore
+        let chat = ChatMessage.create (ChatMessageId.create 1UL |> ok) systemId profile ValueNone (text "chat") DateTimeOffset.UnixEpoch
+        Expect.equal (Chat.append chat systemChat) (Error DomainError.ChannelMismatch) "no chat in the system channel"
+
+    testCase "server announcements have no author and need no membership; client ones do" <| fun _ ->
+        let chat = Chat.create ChatChannelKind.System 4 |> ok
+        let server = ChatMessage.serverAnnouncement (ChatMessageId.create 1UL |> ok) channel AnnouncementKind.Periodic (text "notice") DateTimeOffset.UnixEpoch
+        Expect.equal server.Author ValueNone "the system is not a player"
         Chat.append server chat |> ok
         let client =
             ChatMessage.create (ChatMessageId.create 2UL |> ok) channel profile ValueNone (text "event") DateTimeOffset.UnixEpoch
@@ -93,6 +108,7 @@ let tests = testList "Announcements" [
         Expect.equal value.Source ClientAnnouncementSource.ThirdParty "requested origin"
         Expect.equal value.Kind AnnouncementKind.Event "kind"
         Expect.equal (value.Signature |> ValueOption.map AnnouncementSignature.value) (ValueSome "DeathMod") "signature"
+        Expect.equal value.ChannelId channel "target channel"
         Expect.equal (ProtocolCodec.requestLane (ok decoded: ClientRequest)) DeliveryLane.Chat "same lane as chat"
         let trusted = post "hello" WireKind.Announcement WireClientSource.TrustedClient "" |> request
         Expect.equal trusted.Signature ValueNone "trusted client may omit the label"
@@ -120,14 +136,16 @@ let tests = testList "Announcements" [
         Expect.equal announcement.Source Dreamsleeve.Protocol.Chat.AnnouncementSource.ThirdParty "origin"
         Expect.equal announcement.Kind WireKind.Event "kind"
         Expect.equal announcement.Signature "DeathMod" "label"
-        Expect.equal wire.ChatPublished.Message.Author.PlayerId 7UL "older clients see the posting player"
-        let plain = ChatMessage.create (ChatMessageId.create 4UL |> ok) channel profile ValueNone (text "chat") DateTimeOffset.UnixEpoch
-        let chat = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished plain) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
-        Expect.isNull chat.ChatPublished.Message.Announcement "player chat has no marker"
+        Expect.equal wire.ChatPublished.Message.Author.PlayerId 7UL "the posting player"
+        let server = ChatMessage.serverAnnouncement (ChatMessageId.create 4UL |> ok) channel AnnouncementKind.Admin (text "notice") DateTimeOffset.UnixEpoch
+        let serverWire = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished server) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
+        Expect.isNull serverWire.ChatPublished.Message.Author "no fictitious player"
+        Expect.equal serverWire.ChatPublished.Message.Announcement.Source Dreamsleeve.Protocol.Chat.AnnouncementSource.Server "server origin"
 
         let welcome = {
-            SelfPlayerId = pid 7UL; GlobalChannelId = channel; Players = [Player.create profile |> Player.snapshot]
-            RecentMessages = []; AnnouncementSources = [ClientAnnouncementSource.TrustedClient]
+            SelfPlayerId = pid 7UL; Players = [Player.create profile |> Player.snapshot]
+            Channels = [ { ChannelId = channel; Kind = ChatChannelKind.System; Messages = [server] } ]
+            AnnouncementSources = [ClientAnnouncementSource.TrustedClient]
         }
         let opened = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         let policy = opened.SessionOpened.Announcements
@@ -136,7 +154,7 @@ let tests = testList "Announcements" [
         Expect.equal policy.MaxSignatureLength (uint32 config.ChatInput.AnnouncementSignature) "label limit"
 
     testCase "admission follows the per-source switches" <| fun _ ->
-        let requestFrom source : AnnouncementRequest = { Text = text "x"; Kind = AnnouncementKind.Event; Source = source; Signature = ValueNone }
+        let requestFrom source : AnnouncementRequest = { ChannelId = channel; Text = text "x"; Kind = AnnouncementKind.Event; Source = source; Signature = ValueNone }
         let options = { AnnouncementOptions.defaults with ThirdParty = { Enabled = false } }
         Expect.equal (AnnouncementOptions.allowedSources AnnouncementOptions.defaults)
             [ClientAnnouncementSource.TrustedClient; ClientAnnouncementSource.ThirdParty] "all by default"

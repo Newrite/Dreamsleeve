@@ -255,8 +255,8 @@ TEST_CASE("ChatCache retains exact accepted text and ignores only identical mess
 {
   auto cache = StateTests::Cache();
   auto message = StateTests::Message(10);
-  message.author.username = " PLAYER_1 ";
-  message.author.displayName = "";
+  message.author->username    = " PLAYER_1 ";
+  message.author->displayName = "";
   message.messageText = "  Cafe\xCC\x81\nsecond line\t ";
   REQUIRE(cache.Merge(message).has_value());
   CHECK(cache.Find(10) == std::optional<ChatMessage>{message});
@@ -267,7 +267,7 @@ TEST_CASE("ChatCache retains exact accepted text and ignores only identical mess
   CHECK(merged->duplicates == 2);
   CHECK(cache.Count() == 2);
   auto changed = message;
-  changed.author.username = "player_1";
+  changed.author->username = "player_1";
   CHECK_FALSE(cache.Merge(changed).has_value());
   CHECK(cache.Find(10) == std::optional<ChatMessage>{message});
 }
@@ -285,7 +285,7 @@ TEST_CASE("ChatCache conflicts and wrong channels reject the entire incoming bat
   CHECK(StateTests::Ids(cache) == std::vector<ChatMessageId>{10});
   CHECK(cache.MaxObservedId() == std::optional<ChatMessageId>{10});
   conflict = StateTests::Message(20);
-  conflict.author.displayName = "A different author snapshot";
+  conflict.author->displayName = "A different author snapshot";
   const std::array newConflict{StateTests::Message(20), conflict};
   CHECK_FALSE(cache.Merge(newConflict).has_value());
   const std::array wrongChannel{StateTests::Message(20), StateTests::Message(30, 8)};

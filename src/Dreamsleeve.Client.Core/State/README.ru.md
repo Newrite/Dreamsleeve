@@ -197,15 +197,18 @@ Post возвращает Queued, Replaced, Full или Closed. Queued не оз
 Команды: SendChat, PostAnnouncement, LocalMovement, LocalLocation, LocalActorValues, CharacterStarted,
 CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot.
 
-PostAnnouncement (текст, вид, заявленный источник, подпись) идёт по пути SendChat:
-Chat-канал, общий лимит ожидающих чат-запросов, `ChatConfirmation` при публикации,
-`ServerRejection` при отказе. Отправляется только серверу, приславшему
-`AnnouncementPolicy` в приветствии; иначе локальный `CommandFailureCode::Unsupported`.
-Длину текста и подписи Core сверяет с этой политикой (`InvalidRequest`), допуск
-источника решает сервер. Политика текущей сессии публикуется в
-`ClientStatus::announcements` и сбрасывается при смене сессии. Принятое объявление
-приходит обычным `ChatMessagesReceived`; `Domain::ChatMessage::announcement` хранит
-источник, вид и подпись, в том числе неизвестные значения нового сервера.
+PostAnnouncement (системный канал, текст, вид, заявленный источник, подпись) идёт по
+пути SendChat: Chat-канал ENet, общий лимит ожидающих чат-запросов, `ChatConfirmation`
+при публикации, `ServerRejection` при отказе. Канал команды должен быть известен и
+подходящего вида: SendChat — `Global`, PostAnnouncement — `System`, иначе локальный
+`InvalidRequest`. Длину текста и подписи Core сверяет с `AnnouncementPolicy` из
+приветствия, допуск источника решает сервер. Политика текущей сессии публикуется в
+`ClientStatus::announcements` и сбрасывается при смене сессии.
+
+Канал знает свой вид (`RegisterChannel(id, capacity, kind)`, `ChatCacheState::kind`,
+`ChatCacheSnapshot::kind`). `ChatCache::Merge` отвергает объявление в не системном
+канале и сообщение без объявления в системном (`ChannelMismatch`). У сообщения
+`author` — `std::optional`: его нет только у объявлений сервера.
 NextRequestId общий для reliable-команд; движение не требует ID или результата.
 QueuedClientCommand несёт generation текущей сессии. LocalMovement хранит последнюю
 позу, LocalLocation — явный reliable-переход/clear. Объединяются только соседние

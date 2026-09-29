@@ -173,6 +173,7 @@ def generate_native_enum_module(native_out: Path) -> None:
         ("protocol.pb.h", "Chat", "RequestRejectionCode", "REQUEST_REJECTION_CODE_", "std::int32_t"),
         ("player.pb.h", "Chat", "ActivityKind", "ACTIVITY_KIND_", "std::int32_t"),
         ("player.pb.h", "Chat", "LockDifficulty", "LOCK_DIFFICULTY_", "std::int32_t"),
+        ("chat.pb.h", "Chat", "ChatChannelKind", "CHAT_CHANNEL_KIND_", "std::int32_t"),
         ("chat.pb.h", "Chat", "AnnouncementSource", "ANNOUNCEMENT_SOURCE_", "std::int32_t"),
         ("chat.pb.h", "Chat", "AnnouncementKind", "ANNOUNCEMENT_KIND_", "std::int32_t"),
         ("chat.pb.h", "Chat", "ClientAnnouncementSource", "CLIENT_ANNOUNCEMENT_SOURCE_", "std::int32_t"),

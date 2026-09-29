@@ -386,6 +386,7 @@ function Workshop() {
           onClick={() =>
             chat.receive({
               type: "announcementResult",
+              channelId: "announcements",
               source: MOD,
               text: "Карета до Рифтена отправляется через минуту.",
               error: "Слишком частые объявления",

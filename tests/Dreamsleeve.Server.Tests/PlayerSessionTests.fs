@@ -11,7 +11,8 @@ open BackgroundTests
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private playerSnapshot profile = Player.snapshot (Player.create profile)
-let private globalId = ChatChannelId.create 1UL |> ok
+let private globalId = ChatChannelKind.channelId ChatChannelKind.Global
+let private systemId = ChatChannelKind.channelId ChatChannelKind.System
 let private options = { ServerRuntimeOptions.defaults.Player with MaxPendingChat = 1; MaxBootstrapEvents = 4; MaxPendingOutput = 16 }
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test output closed."
@@ -34,6 +35,7 @@ type private Fixture = {
     Player: Agent<PlayerSessionMessage>
     Authentication: Channel<SessionAuthenticationRequest>
     Chat: Channel<ChatRoomCommand>
+    System: Channel<ChatRoomCommand>
     Presence: Channel<PresenceCommand>
     Host: Channel<SessionHostCommand>
 }
@@ -45,10 +47,12 @@ let private rules =
 let private withConfiguredPlayer moderation announcements settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
     let queries = Channel.CreateUnbounded<SessionAuthenticationRequest>()
     let chatCommands = Channel.CreateUnbounded<ChatRoomCommand>()
+    let systemCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
     use authentication = Agent.Start(AgentOptions.create "authentication", collect queries)
     use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
+    use system = Agent.Start(AgentOptions.create "system", collect systemCommands)
     use presence = createPresence presenceCommands
     use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
     let request = {
@@ -56,20 +60,22 @@ let private withConfiguredPlayer moderation announcements settings (createPresen
         RequestId = 1UL
         SessionTicket = String('a', 43)
     }
-    use player = PlayerSession.start settings 64 moderation announcements globalId
-                     (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+    use player = PlayerSession.start settings 64 moderation announcements
+                     (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
     let fixture = { Request = request; Player = player; Authentication = queries;
-                    Chat = chatCommands; Presence = presenceCommands; Host = hostCommands }
+                    Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Host = hostCommands }
     do! run fixture
     if not player.Completion.IsCompleted then player.Abort()
     let! _ = terminal player.Completion
     authentication.Complete() |> ignore
     chat.Complete() |> ignore
+    system.Complete() |> ignore
     presence.Complete() |> ignore
     host.Complete() |> ignore
     do! awaitUnit authentication.Completion
     do! awaitUnit chat.Completion
+    do! awaitUnit system.Completion
     do! awaitUnit presence.Completion
     do! awaitUnit host.Completion
 }
@@ -101,21 +107,26 @@ let private resolve fixture = task {
     | other -> return failwithf "Expected Reserve: %A" other
 }
 
+let private snapshot (profile: PlayerData) = {
+    ChannelId = globalId
+    Kind = ChatChannelKind.Global
+    Players = Set.singleton profile.PlayerId
+    Messages = []
+    HistoryCapacity = 4
+}
+
+// The system channel answers at once with an empty history; tests drive the global one.
 let private joins fixture = task {
     let! profile, reply = resolve fixture
     do! deliver reply IdentityAdmission.Reserved
     let! chatCommand = receive fixture.Chat
+    let! systemCommand = receive fixture.System
     let! presenceCommand = receive fixture.Presence
-    match chatCommand, presenceCommand with
-    | ChatRoomCommand.Join chat, PresenceCommand.Join presence -> return profile, chat, presence
+    match chatCommand, systemCommand, presenceCommand with
+    | ChatRoomCommand.Join chat, ChatRoomCommand.Join system, PresenceCommand.Join presence ->
+        do! deliver system.Events (ChatRoomEvent.Joined { snapshot profile with ChannelId = systemId; Kind = ChatChannelKind.System })
+        return profile, chat, presence
     | other -> return failwithf "Expected subscriptions: %A" other
-}
-
-let private snapshot (profile: PlayerData) = {
-    ChannelId = globalId
-    Players = Set.singleton profile.PlayerId
-    Messages = []
-    HistoryCapacity = 4
 }
 
 let private ready fixture = task {
@@ -161,10 +172,12 @@ let private publication profile id =
 
 let private finish fixture = task {
     let! chatCommand = receive fixture.Chat
+    let! systemCommand = receive fixture.System
     let! presenceCommand = receive fixture.Presence
-    match chatCommand, presenceCommand with
-    | ChatRoomCommand.Detach chat, PresenceCommand.Detach presence ->
+    match chatCommand, systemCommand, presenceCommand with
+    | ChatRoomCommand.Detach chat, ChatRoomCommand.Detach system, PresenceCommand.Detach presence ->
         do! deliver chat.ReplyTo fixture.Request.ConnectionId
+        do! deliver system.ReplyTo fixture.Request.ConnectionId
         check (not fixture.Player.Completion.IsCompleted) "Session skipped presence cleanup."
         do! deliver presence.ReplyTo fixture.Request.ConnectionId
         do! awaitUnit fixture.Player.Completion
@@ -183,6 +196,7 @@ let private withAnnouncements announcements run =
     withConfiguredPlayer rules announcements options (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
 
 let private announcementRequest text signature : AnnouncementRequest = {
+    ChannelId = systemId
     Text = ChatMessageText.create 500 text |> ok
     Kind = AnnouncementKind.Event
     Source = ClientAnnouncementSource.ThirdParty
@@ -198,6 +212,7 @@ let private announcementRefused fixture requestId code field = task {
         equal field rejection.Field
     | other -> failwithf "Expected announcement refusal: %A" other
     equal 0 fixture.Chat.Reader.Count
+    equal 0 fixture.System.Reader.Count
 }
 
 let tests = testList "PlayerSession" [
@@ -223,7 +238,7 @@ let tests = testList "PlayerSession" [
             do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(3UL, announcementRequest "Игрок пал" "Mod Badword"))
             do! announcementRefused fixture 3UL RequestRejectionCode.TextNotAllowed "source"
             do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(4UL, announcementRequest "a flagword event" "DeathMod"))
-            let! command = receive fixture.Chat
+            let! command = receive fixture.System
             match command with
             | ChatRoomCommand.Publish submission ->
                 equal 4UL submission.RequestId
@@ -235,6 +250,16 @@ let tests = testList "PlayerSession" [
                     equal (ValueSome "DeathMod") (announcement.Signature |> ValueOption.map AnnouncementSignature.value)
                 | ValueNone -> failtest "The origin was lost."
             | other -> failwithf "Expected publication: %A" other
+        }))
+
+    case "chat never enters the system channel and announcements never leave it" (fun () ->
+        withAnnouncements AnnouncementOptions.defaults (fun fixture -> task {
+            let! _ = ready fixture
+            do! post fixture.Player (PlayerSessionMessage.SendChat(2UL, systemId, ChatMessageText.create 2000 "hello" |> ok))
+            do! announcementRefused fixture 2UL RequestRejectionCode.NotChannelMember ""
+            let misrouted = { announcementRequest "Игрок пал" "DeathMod" with ChannelId = globalId }
+            do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(3UL, misrouted))
+            do! announcementRefused fixture 3UL RequestRejectionCode.ChannelNotFound "channel_id"
         }))
 
     case "word list refuses chat text before the channel sees it" (fun () ->
@@ -312,7 +337,9 @@ let tests = testList "PlayerSession" [
             do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
             let! first = receive fixture.Host
             match first with
-            | SessionHostCommand.Activate(_, _, welcome) -> equal [] welcome.RecentMessages
+            | SessionHostCommand.Activate(_, _, welcome) ->
+                equal [ChatChannelKind.Global; ChatChannelKind.System] (welcome.Channels |> List.map _.Kind)
+                check (welcome.Channels |> List.forall _.Messages.IsEmpty) "Later publications are not history."
             | other -> failwithf "Expected welcome first: %A" other
             let! second = receive fixture.Host
             equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.ChatPublished message)) second
@@ -591,8 +618,8 @@ let tests = testList "PlayerSession" [
             ConnectionId = Guid.NewGuid(); RequestId = 1UL
             SessionTicket = String('b', 43)
         }
-        use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults globalId
-                         (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+        use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults
+                         (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."

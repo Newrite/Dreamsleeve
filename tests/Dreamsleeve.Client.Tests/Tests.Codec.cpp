@@ -49,9 +49,12 @@ namespace
     packet.set_request_id(1);
     auto* welcome = packet.mutable_session_opened();
     welcome->set_self_player_id(7);
-    welcome->set_global_channel_id(1);
+    welcome->mutable_announcements()->set_max_text_length(500);
+    auto* global = welcome->add_channels();
+    global->set_channel_id(1);
+    global->set_kind(P::CHAT_CHANNEL_KIND_GLOBAL);
     *welcome->add_players()->mutable_profile() = published.chat_published().message().author();
-    *welcome->add_recent_messages()            = published.chat_published().message();
+    *global->add_recent_messages()             = published.chat_published().message();
     return packet;
   }
 
@@ -166,23 +169,25 @@ TEST_CASE("Welcome decoding returns ordinary player and chat data without applyi
 {
   const auto codec  = MakeCodec();
   auto       packet = Welcome();
-  packet.mutable_session_opened()->mutable_recent_messages(0)->mutable_author()->set_player_id(99);
+  packet.mutable_session_opened()->mutable_channels(0)->mutable_recent_messages(0)->mutable_author()->set_player_id(99);
   auto decoded = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(decoded);
   const auto& opened = std::get<W::SessionOpened>(*decoded);
   CHECK(opened.requestId == 1);
   CHECK(opened.selfPlayerId == 7);
-  CHECK(opened.globalChannelId == 1);
+  REQUIRE(opened.channels.size() == 1);
+  CHECK(opened.channels[0].channelId == 1);
+  CHECK(opened.channels[0].kind == Domain::ChatChannelKind::Global);
   REQUIRE(opened.players.size() == 1);
   CHECK(opened.players[0].data.playerId == 7);
-  REQUIRE(opened.recentMessages.size() == 1);
-  CHECK(opened.recentMessages[0].author.playerId == 99);  // An author may be offline.
+  REQUIRE(opened.channels[0].recentMessages.size() == 1);
+  CHECK(opened.channels[0].recentMessages[0].author->playerId == 99);  // An author may be offline.
 
   auto* welcome           = packet.mutable_session_opened();
   auto  duplicate         = welcome->players(0);
   *welcome->add_players() = duplicate;
   welcome->set_self_player_id(8);
-  welcome->mutable_recent_messages(0)->set_channel_id(2);
+  welcome->mutable_channels(0)->mutable_recent_messages(0)->set_channel_id(2);
   CHECK(codec.Decode(
     Bytes(packet),
     packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));  // Store/state policy is not repeated in the codec.
@@ -300,7 +305,7 @@ TEST_CASE("Bootstrap counts come from configuration and zero retained messages i
   welcome->mutable_players()->RemoveLast();
   settings.maxRecentMessages = 0;
   CHECK_FALSE(MakeCodec(settings).Decode(Bytes(packet)));
-  welcome->clear_recent_messages();
+  welcome->mutable_channels(0)->clear_recent_messages();
   CHECK(MakeCodec(settings).Decode(Bytes(packet)));
 }
 
@@ -642,7 +647,7 @@ TEST_SUITE_END();
 
 TEST_SUITE_BEGIN("Client.Codec");
 
-TEST_CASE("Announcements decode with unknown values kept and encode on the chat lane")
+TEST_CASE("Announcements decode with unknown values kept, need an author unless the server posts, and encode on the chat lane")
 {
   const auto codec  = MakeCodec();
   auto       packet = Published();
@@ -668,37 +673,52 @@ TEST_CASE("Announcements decode with unknown values kept and encode on the chat 
   CHECK(unknown.announcement->signature == "Mod");
   CHECK_FALSE(std::get<ChatMessagesReceived>(*codec.Decode(Bytes(Published()), W::Channel::Chat)).messages.front().announcement);
 
+  // Only a server announcement has no author.
+  auto authorless = Published();
+  authorless.mutable_chat_published()->mutable_message()->clear_author();
+  CHECK_FALSE(codec.Decode(Bytes(authorless), W::Channel::Chat));
+  authorless.mutable_chat_published()->mutable_message()->mutable_announcement()->set_source(P::ANNOUNCEMENT_SOURCE_SERVER);
+  auto server = codec.Decode(Bytes(authorless), W::Channel::Chat);
+  REQUIRE(server);
+  CHECK_FALSE(std::get<ChatMessagesReceived>(*server).messages.front().author);
+
   auto welcome = Welcome();
-  auto opened  = codec.Decode(Bytes(welcome), W::Channel::Control);
-  REQUIRE(opened);
-  CHECK_FALSE(std::get<W::SessionOpened>(*opened).announcements);
+  welcome.mutable_session_opened()->clear_announcements();
+  CHECK_FALSE(codec.Decode(Bytes(welcome), W::Channel::Control));
+  welcome.mutable_session_opened()->mutable_channels(0)->set_kind(P::CHAT_CHANNEL_KIND_UNSPECIFIED);
   auto* policy = welcome.mutable_session_opened()->mutable_announcements();
+  CHECK_FALSE(codec.Decode(Bytes(welcome), W::Channel::Control));
+  welcome.mutable_session_opened()->mutable_channels(0)->set_kind(P::CHAT_CHANNEL_KIND_GLOBAL);
   policy->add_allowed_sources(P::CLIENT_ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT);
   policy->set_max_text_length(500);
   policy->set_max_signature_length(64);
-  opened = codec.Decode(Bytes(welcome), W::Channel::Control);
+  auto opened = codec.Decode(Bytes(welcome), W::Channel::Control);
   REQUIRE(opened);
   const auto& announced = std::get<W::SessionOpened>(*opened).announcements;
-  REQUIRE(announced);
-  CHECK(announced->Allows(Domain::ClientAnnouncementSource::TrustedClient));
-  CHECK_FALSE(announced->Allows(Domain::ClientAnnouncementSource::ThirdParty));
-  CHECK(announced->maxSignatureLength == 64);
+  CHECK(announced.Allows(Domain::ClientAnnouncementSource::TrustedClient));
+  CHECK_FALSE(announced.Allows(Domain::ClientAnnouncementSource::ThirdParty));
+  CHECK(announced.maxSignatureLength == 64);
 
   const W::ClientRequest request =
-    PostAnnouncement{5, "Пал", Domain::AnnouncementKind::Event, Domain::ClientAnnouncementSource::ThirdParty, "Мод"};
+    PostAnnouncement{5, 2, "Пал", Domain::AnnouncementKind::Event, Domain::ClientAnnouncementSource::ThirdParty, "Мод"};
   CHECK(W::ProtocolCodec::RequestChannel(request) == W::Channel::Chat);
   auto encoded = codec.Encode(request);
   REQUIRE(encoded);
   P::ClientPacket wire;
   REQUIRE(wire.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
   CHECK(wire.request_id() == 5);
+  CHECK(wire.post_announcement().channel_id() == 2);
   CHECK(wire.post_announcement().text() == "Пал");
   CHECK(wire.post_announcement().kind() == P::ANNOUNCEMENT_KIND_EVENT);
   CHECK(wire.post_announcement().source() == P::CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY);
   CHECK(wire.post_announcement().signature() == "Мод");
   CHECK_FALSE(codec.Encode(
     W::ClientRequest{
-        PostAnnouncement{6, "", Domain::AnnouncementKind::Event}
+        PostAnnouncement{6, 2, "", Domain::AnnouncementKind::Event}
+  }));
+  CHECK_FALSE(codec.Encode(
+    W::ClientRequest{
+        PostAnnouncement{7, 0, "text", Domain::AnnouncementKind::Event}
   }));
 }
 

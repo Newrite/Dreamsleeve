@@ -242,7 +242,13 @@ ID и `SentAt`; фабрика сообщения приводит время к
 
 ### Объявления
 
-`ChatMessage.Announcement` (`voption`) отмечает сообщение системного потока:
+`ChatChannelKind` — вид канала: `Global` (чат игроков) и `System` (объявления); партия,
+гильдия и личные сообщения — будущие виды. У серверных видов по одному каналу, поэтому
+`ChatChannelKind.channelId` выводит ChannelId из вида (1 и 2), `tryOfChannelId` — обратно.
+`Chat.create kind capacity` создаёт канал вида; `Chat.append` требует, чтобы объявления
+были ровно в системном канале (`carriesAnnouncements`), иначе `ChannelMismatch`.
+
+`ChatMessage.Announcement` (`voption`) отмечает сообщение системного канала:
 `Announcement { Source; Kind; Signature }`. `AnnouncementSource` — `Server` /
 `TrustedClient` / `ThirdParty`; запрос клиента несёт отдельный `ClientAnnouncementSource`
 без значения сервера, и `Announcement.fromClient` переводит его в источник.
@@ -251,10 +257,9 @@ ID и `SentAt`; фабрика сообщения приводит время к
 `AnnouncementSignature.create` хранит подпись мода как есть: одна строка без
 управляющих символов, не пустая, длина — в скалярах Unicode.
 
-`Chat.append` принимает серверное объявление без членства: его автор —
-`Announcement.serverAuthor` с PlayerId `UInt64.MaxValue` (учётные записи SQLite этого
-значения не достигают). Объявления клиентов требуют членства автора, как обычные
-сообщения. История, ID, курсор и HasGap общие с чатом канала. Модель доверия и
+`ChatMessage.Author` — `PlayerData voption`: его нет только у серверного объявления
+(`ChatMessage.serverAnnouncement`), которое `Chat.append` принимает без членства.
+Объявления клиентов требуют членства автора, как обычные сообщения. Модель доверия и
 поведение — [DomainSpecRu.MD §4.8](../../docs/DomainSpecRu.MD).
 
 `ChatMessage.Author` — снимок профиля при отправке. Клиент может отображать

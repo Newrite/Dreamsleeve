@@ -19,10 +19,13 @@ type ScheduledAnnouncement = {
     IntervalSeconds: int
 }
 
-/// [Announcements]: client admission and the server's own schedule. Read at
-/// startup like the rest of the configuration; there is no hot reload.
+/// [Announcements]: the system channel, client admission and the
+/// server's own schedule. Read at startup like the rest of the configuration;
+/// there is no hot reload.
 type AnnouncementOptions = {
-    /// Client announcements an account may post at once, separate from chat.
+    /// Retained announcements; also the tail sent at session opening.
+    HistoryCapacity: int
+    /// Client announcements an account may post at once; chat has its own limit.
     RateBurst: int
     /// One more client announcement per this interval, up to RateBurst.
     RateRefillMs: int
@@ -33,15 +36,10 @@ type AnnouncementOptions = {
     Scheduled: ScheduledAnnouncement list
 }
 
-/// A server-authored announcement handed to the channel owner.
-type ServerAnnouncement = {
-    Text: ChatMessageText
-    Kind: AnnouncementKind
-}
-
 [<RequireQualifiedAccess>]
 module AnnouncementOptions =
     let defaults = {
+        HistoryCapacity = 128
         RateBurst = 3
         RateRefillMs = 20000
         DuplicateWindowMs = 300000
@@ -49,6 +47,14 @@ module AnnouncementOptions =
         ThirdParty = { Enabled = true }
         Scheduled = []
     }
+
+    /// Mailbox limits follow the chat channel; history and admission are the channel's own.
+    let channelOptions (chat: ChatRoomOptions) options =
+        { chat with
+            HistoryCapacity = options.HistoryCapacity
+            RateBurst = options.RateBurst
+            RateRefillMs = options.RateRefillMs
+            DuplicateWindowMs = options.DuplicateWindowMs }
 
     let private rules options = function
         | ClientAnnouncementSource.TrustedClient -> options.TrustedClient
@@ -83,6 +89,7 @@ module AnnouncementOptions =
             Error ["Announcements sections cannot be null."]
         else
             let mutable errors = [
+                if options.HistoryCapacity < 1 then "Announcements.HistoryCapacity must be positive."
                 if options.RateBurst < 1 then "Announcements.RateBurst must be positive."
                 if options.RateRefillMs < 1 then "Announcements.RateRefillMs must be positive."
                 if options.DuplicateWindowMs < 0 then "Announcements.DuplicateWindowMs must be nonnegative."

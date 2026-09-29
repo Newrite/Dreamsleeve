@@ -86,10 +86,17 @@ type ChatSubmission = {
     Fingerprint: string
     /// Flag-tier ranges of Text, computed by the session outside the channel owner.
     Flagged: TextSpan list
-    /// A client announcement already admitted by origin; judged by its own rate limit.
+    /// Present for a client announcement, already admitted by origin; only the
+    /// system channel accepts it, and it accepts nothing else.
     Announcement: Announcement voption
     /// Also available after membership disappears, so refusals settle the request.
     ReplyTo: ReliableAgentRef<ChatRoomEvent>
+}
+
+/// A server-authored announcement handed to the system channel owner.
+type ServerAnnouncement = {
+    Text: ChatMessageText
+    Kind: AnnouncementKind
 }
 
 [<RequireQualifiedAccess>]
