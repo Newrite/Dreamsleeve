@@ -1,9 +1,91 @@
 import { PendingMessages } from "./PendingMessages";
 import { useMessageFade } from "../features/useMessageFade";
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { visible, type Chat, type ChatState } from "../state/chat";
+import type { Message } from "../bridge/types";
 import { playerName } from "../state/names";
 import styles from "../styles/Chat.module.css";
+// One row per message, memoised on plain props: the window re-renders on
+// every store change (a keystroke, a presence update, a drag), and rebuilding
+// hundreds of rows with locale time formatting each time was the bulk of the
+// CPU cost on Ultralight. A row re-renders only when something it shows moved.
+const MessageRow = memo(function MessageRow({
+  chat,
+  time,
+  text,
+  source,
+  authorId,
+  name,
+  channelName,
+  channelKind,
+  filtered,
+  faded,
+  idleOpacity,
+  duration,
+  active,
+  timestamps,
+}: {
+  chat: Chat;
+  time: number;
+  text: string;
+  source: Message["source"];
+  authorId: string;
+  name: string;
+  channelName: string;
+  channelKind: string | undefined;
+  filtered: boolean;
+  faded: boolean;
+  idleOpacity: number;
+  duration: number;
+  active: boolean;
+  timestamps: boolean;
+}) {
+  return (
+    <div
+      className={styles.message}
+      data-part="message"
+      data-faded={faded}
+      style={{
+        opacity: faded ? idleOpacity : 1,
+        transitionDuration: active ? "0s" : `${duration}s`,
+      }}
+      data-channel={channelKind}
+      data-source={source}
+      data-filtered={filtered || undefined}
+    >
+      {timestamps && (
+        <time>
+          {new Date(time).toLocaleTimeString("ru", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}{" "}
+        </time>
+      )}
+      <span className={styles.channel}>[{channelName}] </span>
+      {source === "player" && (
+        <button
+          className={styles.author}
+          disabled={!active}
+          aria-haspopup="menu"
+          onClick={() => chat.open("profile", authorId)}
+          // Ultralight may not raise contextmenu: the right button opens it too.
+          onMouseDown={(e) => {
+            if (e.button !== 2) return;
+            e.preventDefault();
+            chat.openAuthorMenu(authorId, name, e.clientX, e.clientY);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            chat.openAuthorMenu(authorId, name, e.clientX, e.clientY);
+          }}
+        >
+          {name}:
+        </button>
+      )}
+      <span className={styles.text}> {text}</span>
+    </div>
+  );
+});
 export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
   const list = useRef<HTMLDivElement>(null);
   const faded = useMessageFade(s);
@@ -27,6 +109,7 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
     (n, [id, count]) => n + (s.filter === "all" || s.filter === id ? count : 0),
     0,
   );
+  const channels = new Map(s.channels.map((c) => [c.id, c]));
   return (
     <div className={styles.history}>
       <div
@@ -45,64 +128,27 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
             <p className={styles.empty}>Здесь пока тихо.</p>
           )}
         {messages.map((m) => {
-          const channel = s.channels.find((c) => c.id === m.channelId);
+          const channel = channels.get(m.channelId);
           return (
-            <div
+            <MessageRow
               key={m.id}
-              className={styles.message}
-              data-part="message"
-              data-faded={faded(m.id)}
-              style={{
-                opacity: faded(m.id) ? s.settings.idleOpacity : 1,
-                transitionDuration: s.active ? "0s" : `${s.settings.duration}s`,
-              }}
-              data-channel={channel?.kind}
-              data-source={m.source}
-              data-filtered={m.filtered || undefined}
-            >
-              {s.settings.timestamps && (
-                <time>
-                  {new Date(m.time).toLocaleTimeString("ru", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}{" "}
-                </time>
-              )}
-              <span className={styles.channel}>
-                [{channel?.name ?? "Канал"}]{" "}
-              </span>
-              {m.source === "player" && (
-                <button
-                  className={styles.author}
-                  disabled={!s.active}
-                  aria-haspopup="menu"
-                  onClick={() => chat.open("profile", m.author.id)}
-                  // Ultralight may not raise contextmenu: the right button opens it too.
-                  onMouseDown={(e) => {
-                    if (e.button !== 2) return;
-                    e.preventDefault();
-                    chat.openAuthorMenu(
-                      m.author.id,
-                      playerName(m.author, s.settings),
-                      e.clientX,
-                      e.clientY,
-                    );
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    chat.openAuthorMenu(
-                      m.author.id,
-                      playerName(m.author, s.settings),
-                      e.clientX,
-                      e.clientY,
-                    );
-                  }}
-                >
-                  {playerName(m.author, s.settings)}:
-                </button>
-              )}
-              <span className={styles.text}> {m.text}</span>
-            </div>
+              chat={chat}
+              time={m.time}
+              text={m.text}
+              source={m.source}
+              authorId={m.source === "player" ? m.author.id : ""}
+              name={
+                m.source === "player" ? playerName(m.author, s.settings) : ""
+              }
+              channelName={channel?.name ?? "Канал"}
+              channelKind={channel?.kind}
+              filtered={!!m.filtered}
+              faded={faded(m.id)}
+              idleOpacity={s.settings.idleOpacity}
+              duration={s.settings.duration}
+              active={s.active}
+              timestamps={s.settings.timestamps}
+            />
           );
         })}
         <PendingMessages chat={chat} state={s} />

@@ -1,6 +1,6 @@
 import { controlKey } from "../features/keyboard";
 import { connectionLabels } from "../state/connection";
-import type { CSSProperties, FormEvent } from "react";
+import { useRef, type CSSProperties, type FormEvent } from "react";
 import type { Chat } from "../state/chat";
 import { frame } from "../state/settings";
 import { useChat } from "../features/useChat";
@@ -12,7 +12,8 @@ import { Select } from "../views/Select";
 import styles from "../styles/Chat.module.css";
 export function SkyrimLayout({ chat }: { chat: Chat }) {
   const { state: s, input } = useChat(chat);
-  const { viewport, start } = useFrame(chat);
+  const frameRef = useRef<HTMLElement>(null);
+  const { viewport, start } = useFrame(chat, frameRef);
   const settings = s.settings;
   const bounds = frame(settings, viewport.width, viewport.height);
   const faded = s.faded && settings.fade && !s.active && s.connected;
@@ -36,6 +37,7 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
   return (
     <>
       <section
+        ref={frameRef}
         style={style}
         className={styles.window}
         data-part="chat"
