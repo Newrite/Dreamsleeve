@@ -26,6 +26,7 @@ let main argv =
         EnetTransportTests.tests
         TransportOwnerTests.tests
         ConfigurationTests.tests
+        AnnouncementTests.tests
         AuthenticationHttpTests.tests
     ]
     |> runTestsWithCLIArgs [] argv

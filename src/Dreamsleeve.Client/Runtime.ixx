@@ -13,7 +13,8 @@ export import Dreamsleeve.Host.Bubbles;
 
 // Single owner of the Core application, the interpolation view, the UI session
 // projection and the settings files. Every accessor below is main-thread only,
-// except Post/Take of notices, which is the one cross-thread boundary.
+// except Post/Take of notices and the announcement queue of the plugin API,
+// the cross-thread boundaries.
 export namespace Runtime
 {
 
@@ -153,6 +154,66 @@ export namespace Runtime
       return mirror;
     }
 
+  }
+
+  namespace Detail
+  {
+
+    constexpr std::size_t MaxQueuedAnnouncements = 32;
+
+    // Plugin API calls arrive on any thread. They are checked against the last
+    // gate the frame published and queued; only the frame touches the session.
+    struct AnnouncementQueue
+    {
+      std::mutex                                mutex;
+      std::vector<Host::Announcements::Request> requests;
+      Host::Announcements::Gate                 gate;
+    };
+
+    AnnouncementQueue& Announcements()
+    {
+      static AnnouncementQueue queue;
+      return queue;
+    }
+
+  }
+
+  // Any thread. Queued means the frame will hand the request to the session.
+  Host::Announcements::Result RequestAnnouncement(Host::Announcements::Request request)
+  {
+    auto&           queue = Detail::Announcements();
+    std::lock_guard lock{queue.mutex};
+    const auto      result = Host::Announcements::Check(request, queue.gate);
+    if (result != Host::Announcements::Result::Queued) return result;
+    if (queue.requests.size() >= Detail::MaxQueuedAnnouncements) return Host::Announcements::Result::Busy;
+    queue.requests.push_back(std::move(request));
+    return result;
+  }
+
+  // Any thread.
+  bool AnnouncementsConnected()
+  {
+    auto&           queue = Detail::Announcements();
+    std::lock_guard lock{queue.mutex};
+    return queue.gate.connected;
+  }
+
+  // Main thread, once per frame after the drain.
+  void PublishAnnouncementGate(bool connected, const std::optional<::Domain::AnnouncementPolicy>& policy)
+  {
+    auto&           queue = Detail::Announcements();
+    std::lock_guard lock{queue.mutex};
+    queue.gate.connected = connected;
+    if (queue.gate.policy != policy) queue.gate.policy = policy;
+  }
+
+  // Main thread.
+  void TakeAnnouncements(std::vector<Host::Announcements::Request>& output)
+  {
+    output.clear();
+    auto&           queue = Detail::Announcements();
+    std::lock_guard lock{queue.mutex};
+    output.swap(queue.requests);
   }
 
   void WriteMenuSnapshot(MenuSnapshot snapshot)

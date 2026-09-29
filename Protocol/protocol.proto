@@ -16,6 +16,7 @@ message ClientPacket {
     OpenSession open_session = 10;
     SendChat send_chat = 11;
     UpdatePlayer update_player = 12;
+    PostAnnouncement post_announcement = 13; // Chat lane, like SendChat.
   }
 }
 
@@ -57,6 +58,7 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED = 8; // Missing, expired, invalid or already consumed ticket.
   REQUEST_REJECTION_CODE_TEXT_NOT_ALLOWED = 9; // Text matched the server word list.
   REQUEST_REJECTION_CODE_RATE_LIMITED = 10; // Too frequent or repeated; retry later.
+  REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED = 11; // The server does not accept this announcement source.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

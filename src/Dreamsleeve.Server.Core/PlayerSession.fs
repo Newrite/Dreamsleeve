@@ -15,6 +15,7 @@ type PlayerSessionMessage =
     | ChatDetached of Guid
     | PresenceDetached of Guid
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
+    | PostAnnouncement of requestId: uint64 * AnnouncementRequest
     | Update of requestId: uint64 * PlayerUpdate
     | SampleMovement of MovementSample
     | Read of ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
@@ -46,6 +47,7 @@ module PlayerSession =
         /// The current character name failed moderation and is not published.
         mutable CharacterWithheld: bool
         Moderation: ModerationRules
+        Announcements: AnnouncementOptions
         Pending: HashSet<uint64>
         Authentication: AgentOutbox<SessionAuthenticationRequest>
         Chat: AgentOutbox<ChatRoomCommand>
@@ -203,6 +205,7 @@ module PlayerSession =
                     GlobalChannelId = globalId
                     Players = online
                     RecentMessages = chat.Messages
+                    AnnouncementSources = AnnouncementOptions.allowedSources state.Announcements
                 }
                 if emit options request state context (SessionHostCommand.Activate(request.ConnectionId, request.RequestId, welcome)) then
                     state.Phase <- Active opening.Player
@@ -301,6 +304,7 @@ module PlayerSession =
                     CharacterName = publicCharacterName state player
                     Fingerprint = Moderation.normalize (ChatMessageText.value text)
                     Flagged = Moderation.flag state.Moderation (ChatMessageText.value text)
+                    Announcement = ValueNone
                     ReplyTo = address.Map PlayerSessionMessage.ChatEvent
                 }
                 if state.Chat.TrySend(context, ChatRoomCommand.Publish submission) then
@@ -310,6 +314,46 @@ module PlayerSession =
         | Closing, _ -> ()
         | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
             rejectChat options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
+
+    /// Same path as chat: origin admission here, then the word list before the
+    /// channel sees anything; the channel applies the announcement rate limit.
+    let private postAnnouncement (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (announcement: AnnouncementRequest) =
+        let refuse code message field =
+            send options request state context (ServerResponse.ChatRejected(requestId, { Code = code; Message = message; Field = field }))
+        match state.Phase, reliable context with
+        | Active player, Some address ->
+            let text = ChatMessageText.value announcement.Text
+            let signature = announcement.Signature |> ValueOption.map AnnouncementSignature.value
+            if requestId = 0UL || state.Pending.Contains requestId then
+                close request state context "Request ID is invalid or already pending."
+            else
+                match AnnouncementOptions.admit state.Announcements announcement with
+                | Error rejection -> send options request state context (ServerResponse.ChatRejected(requestId, rejection))
+                | Ok () ->
+                    if state.Pending.Count >= options.MaxPendingChat then
+                        refuse RequestRejectionCode.Overloaded "Too many pending chat requests." ""
+                    elif not (Moderation.allows state.Moderation text) then
+                        refuse RequestRejectionCode.TextNotAllowed "Announcement contains words that are not allowed." "text"
+                    elif signature |> ValueOption.exists (fun label -> not (Moderation.allows state.Moderation label)) then
+                        refuse RequestRejectionCode.TextNotAllowed "Announcement source contains words that are not allowed." "source"
+                    else
+                        let submission = {
+                            ConnectionId = request.ConnectionId
+                            RequestId = requestId
+                            Text = announcement.Text
+                            CharacterName = publicCharacterName state player
+                            Fingerprint = Moderation.normalize text
+                            Flagged = Moderation.flag state.Moderation text
+                            Announcement = ValueSome(Announcement.fromClient announcement.Source announcement.Kind announcement.Signature)
+                            ReplyTo = address.Map PlayerSessionMessage.ChatEvent
+                        }
+                        if state.Chat.TrySend(context, ChatRoomCommand.Publish submission) then
+                            state.Pending.Add requestId |> ignore
+                        else
+                            refuse RequestRejectionCode.Overloaded "Channel admission is full." ""
+        | Closing, _ -> ()
+        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+            refuse RequestRejectionCode.SessionNotReady "Session is not ready." ""
 
     let private validUpdate maxActorValues command (player: Player) =
         match command with
@@ -381,6 +425,8 @@ module PlayerSession =
             completeIfDetached state context
         | PlayerSessionMessage.SendChat(requestId, channelId, text) ->
             sendChat options globalId request state context requestId channelId text
+        | PlayerSessionMessage.PostAnnouncement(requestId, announcement) ->
+            postAnnouncement options request state context requestId announcement
         | PlayerSessionMessage.Update(requestId, command) ->
             update options maxActorValues request state context requestId command
         | PlayerSessionMessage.SampleMovement sample ->
@@ -404,10 +450,11 @@ module PlayerSession =
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Snapshot _) -> true
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Published _)
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.VisibilityChanged _ | PresenceEvent.MetadataChanged _ | PresenceEvent.Left _)
-        | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _
+        | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.PostAnnouncement _
+        | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _
         | PlayerSessionMessage.Read _ -> false
 
-    let start (options: PlayerSessionOptions) maxActorValues moderation globalId authentication chat presence host (request: SessionOpenRequest) =
+    let start (options: PlayerSessionOptions) maxActorValues moderation announcements globalId authentication chat presence host (request: SessionOpenRequest) =
         let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
@@ -424,6 +471,7 @@ module PlayerSession =
                 CloseSent = false
                 CharacterWithheld = false
                 Moderation = moderation
+                Announcements = announcements
                 Pending = HashSet()
                 Authentication = AgentOutbox(1, authentication)
                 Chat = AgentOutbox(options.MaxPendingChat + 2, chat)

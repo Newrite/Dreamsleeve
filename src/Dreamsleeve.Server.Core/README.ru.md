@@ -126,6 +126,30 @@ Join получает согласованный snapshot, дальнейшие 
 по-прежнему требует явного отказа/закрытия. Runtime кодирует готовые пачки сразу,
 без второго словаря движения и flush-барьеров перед другими ответами.
 
+### Объявления
+
+Системный поток ([DomainSpecRu.MD §4.8](../../docs/DomainSpecRu.MD)) живёт в том же
+ChatRoomAgent глобального канала: общая история, общая последовательность MessageId.
+
+- Серверные объявления: `ChatRoomCommand.Announce` без запроса и ответа; автор —
+  зарезервированный профиль `Announcement.serverAuthor` (PlayerId `UInt64.MaxValue`,
+  username `server`, display name = `Server.ServerName`), членство не требуется.
+  Источники — расписание `[[Announcements.Scheduled]]` (AnnouncementSchedule на тике
+  ServerRuntime: разовые снимаются, периодические после простоя публикуются один раз, без
+  догоняния) и консольная команда `announce <текст>` (вид `Admin`,
+  `ServerRuntimeMessage.Announce`). Полный mailbox канала отбрасывает объявление с
+  предупреждением в логе, не останавливая runtime.
+- Клиентские: `PostAnnouncement` на Chat-канале. Codec отклоняет серверные виды,
+  неизвестные значения, отсутствующую подпись `ThirdParty` и длину (`ChatInput.AnnouncementText`
+  = 500, `AnnouncementSignature` = 64); runtime отвечает `INVALID_REQUEST` с полем `text`/`source`.
+  PlayerSession применяет `AnnouncementOptions.admit` (единая точка будущих правил допуска
+  источника; сейчас — `Enabled` источника, иначе `ANNOUNCEMENT_NOT_ALLOWED`), словарь к
+  тексту и подписи, затем передаёт `ChatSubmission` с `Announcement`. ChatRoomAgent
+  применяет к нему отдельный лимит `[Announcements] RateBurst/RateRefillMs/DuplicateWindowMs`
+  (по умолчанию 3 / 20000 / 300000), а подтверждение идёт тем же `ChatAccepted`.
+- Приветствие несёт `AnnouncementPolicy` (разрешённые источники и лимиты): новый клиент
+  по нему понимает, что сервер принимает `PostAnnouncement`.
+
 ## Очереди и перегрузка
 
 AgentMailbox.boundedWithControl задаёт общий FIFO и предел обычных сообщений.
@@ -205,10 +229,13 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Pla
 
 По умолчанию ENet слушает 127.0.0.1:8778, auth HTTP — 127.0.0.1:8779.
 Пароль вводится скрыто; после регистрации запускайте без --register. В сетевом Client.Dev доступны
-`send <text>`, `read`, команды наблюдений персонажа, `disconnect`, `connect`, `quit`; сервер завершается по `quit`
-или Ctrl+C. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
+`send <text>`, `announce <trusted|third> <kind> <signature|-> <text>`, `read`, команды наблюдений персонажа,
+`disconnect`, `connect`, `quit`; сервер завершается по `quit` или Ctrl+C, `announce <текст>` в его консоли публикует
+объявление администратора. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
 
-TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging.
+TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging/Moderation/Announcements.
+Горячей перезагрузки нет ни у `server.toml`, ни у `moderation.toml`: изменения, включая `[Announcements]`, действуют после перезапуска.
+Массивы таблиц поддержаны только для `[[Announcements.Scheduled]]`; каждая запись начинается со значений по умолчанию.
 Неуказанные параметры сохраняют значения по умолчанию; неизвестные поля отклоняются.
 `--port` имеет приоритет над файлом. ServerConfig проверяет согласованность transport
 и codec, MaxSessions укладывается в PeerLimit/MaxInitialPlayers, история — в

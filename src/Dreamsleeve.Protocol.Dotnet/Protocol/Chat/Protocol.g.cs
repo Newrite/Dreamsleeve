@@ -25,54 +25,57 @@ namespace Dreamsleeve.Protocol.Chat {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "Cg5wcm90b2NvbC5wcm90bxIZRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdBoK",
-            "Y2hhdC5wcm90bxoNc2Vzc2lvbi5wcm90bxoMcGxheWVyLnByb3RvIoMCCgxD",
+            "Y2hhdC5wcm90bxoNc2Vzc2lvbi5wcm90bxoMcGxheWVyLnByb3RvIs0CCgxD",
             "bGllbnRQYWNrZXQSGAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRISCgpyZXF1",
             "ZXN0X2lkGAIgASgEEj4KDG9wZW5fc2Vzc2lvbhgKIAEoCzImLkRyZWFtc2xl",
             "ZXZlLlByb3RvY29sLkNoYXQuT3BlblNlc3Npb25IABI4CglzZW5kX2NoYXQY",
             "CyABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlNlbmRDaGF0SAAS",
             "QAoNdXBkYXRlX3BsYXllchgMIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29s",
-            "LkNoYXQuVXBkYXRlUGxheWVySABCCQoHcGF5bG9hZCKZBgoMU2VydmVyUGFj",
-            "a2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SFwoKcmVxdWVzdF9pZBgC",
-            "IAEoBEgBiAEBEkIKDnNlc3Npb25fb3BlbmVkGAogASgLMiguRHJlYW1zbGVl",
-            "dmUuUHJvdG9jb2wuQ2hhdC5TZXNzaW9uT3BlbmVkSAASQgoOY2hhdF9wdWJs",
-            "aXNoZWQYCyABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRQ",
-            "dWJsaXNoZWRIABJGChByZXF1ZXN0X3JlamVjdGVkGAwgASgLMiouRHJlYW1z",
-            "bGVldmUuUHJvdG9jb2wuQ2hhdC5SZXF1ZXN0UmVqZWN0ZWRIABJACg1wbGF5",
-            "ZXJfam9pbmVkGA0gASgLMicuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Q",
-            "bGF5ZXJKb2luZWRIABI8CgtwbGF5ZXJfbGVmdBgOIAEoCzIlLkRyZWFtc2xl",
-            "ZXZlLlByb3RvY29sLkNoYXQuUGxheWVyTGVmdEgAEkIKDnBsYXllcl91cGRh",
-            "dGVkGA8gASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJV",
-            "cGRhdGVkSAASUQoWcGxheWVyX3VwZGF0ZV9hY2NlcHRlZBgQIAEoCzIvLkRy",
-            "ZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyVXBkYXRlQWNjZXB0ZWRI",
-            "ABJXChlwbGF5ZXJfdmlzaWJpbGl0eV9jaGFuZ2VkGBQgASgLMjIuRHJlYW1z",
-            "bGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJWaXNpYmlsaXR5Q2hhbmdlZEgA",
-            "ElMKF3BsYXllcl9tZXRhZGF0YV9jaGFuZ2VkGBIgASgLMjAuRHJlYW1zbGVl",
-            "dmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJNZXRhZGF0YUNoYW5nZWRIAEIJCgdw",
-            "YXlsb2FkQg0KC19yZXF1ZXN0X2lkSgQIERASSgQIExAUUgxwbGF5ZXJfbW92",
-            "ZWRSDXBsYXllcnNfbW92ZWQiFgoUUGxheWVyVXBkYXRlQWNjZXB0ZWQicAoP",
-            "UmVxdWVzdFJlamVjdGVkEj0KBGNvZGUYASABKA4yLy5EcmVhbXNsZWV2ZS5Q",
-            "cm90b2NvbC5DaGF0LlJlcXVlc3RSZWplY3Rpb25Db2RlEg8KB21lc3NhZ2UY",
-            "AiABKAkSDQoFZmllbGQYAyABKAkiawoUQ2xpZW50TW92ZW1lbnRQYWNrZXQS",
-            "GAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRI5CgZzYW1wbGUYAiABKAsyKS5E",
-            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk1vdmVtZW50U2FtcGxlImwKFFNl",
-            "cnZlck1vdmVtZW50UGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0S",
-            "OgoJbW92ZW1lbnRzGAIgASgLMicuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
-            "dC5QbGF5ZXJzTW92ZWQqgAQKFFJlcXVlc3RSZWplY3Rpb25Db2RlEiYKIlJF",
-            "UVVFU1RfUkVKRUNUSU9OX0NPREVfVU5TUEVDSUZJRUQQABIqCiZSRVFVRVNU",
-            "X1JFSkVDVElPTl9DT0RFX0lOVkFMSURfUkVRVUVTVBABEiwKKFJFUVVFU1Rf",
-            "UkVKRUNUSU9OX0NPREVfU0VTU0lPTl9OT1RfUkVBRFkQAhIvCitSRVFVRVNU",
-            "X1JFSkVDVElPTl9DT0RFX1NFU1NJT05fQUxSRUFEWV9PUEVOEAMSKQolUkVR",
-            "VUVTVF9SRUpFQ1RJT05fQ09ERV9VU0VSTkFNRV9UQUtFThAEEiwKKFJFUVVF",
-            "U1RfUkVKRUNUSU9OX0NPREVfQ0hBTk5FTF9OT1RfRk9VTkQQBRItCilSRVFV",
-            "RVNUX1JFSkVDVElPTl9DT0RFX05PVF9DSEFOTkVMX01FTUJFUhAGEiUKIVJF",
-            "UVVFU1RfUkVKRUNUSU9OX0NPREVfT1ZFUkxPQURFRBAHEjAKLFJFUVVFU1Rf",
-            "UkVKRUNUSU9OX0NPREVfQVVUSEVOVElDQVRJT05fRkFJTEVEEAgSKwonUkVR",
-            "VUVTVF9SRUpFQ1RJT05fQ09ERV9URVhUX05PVF9BTExPV0VEEAkSJwojUkVR",
-            "VUVTVF9SRUpFQ1RJT05fQ09ERV9SQVRFX0xJTUlURUQQCmIGcHJvdG8z"));
+            "LkNoYXQuVXBkYXRlUGxheWVySAASSAoRcG9zdF9hbm5vdW5jZW1lbnQYDSAB",
+            "KAsyKy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBvc3RBbm5vdW5jZW1l",
+            "bnRIAEIJCgdwYXlsb2FkIpkGCgxTZXJ2ZXJQYWNrZXQSGAoQcHJvdG9jb2xf",
+            "dmVyc2lvbhgBIAEoDRIXCgpyZXF1ZXN0X2lkGAIgASgESAGIAQESQgoOc2Vz",
+            "c2lvbl9vcGVuZWQYCiABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
+            "LlNlc3Npb25PcGVuZWRIABJCCg5jaGF0X3B1Ymxpc2hlZBgLIAEoCzIoLkRy",
+            "ZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQ2hhdFB1Ymxpc2hlZEgAEkYKEHJl",
+            "cXVlc3RfcmVqZWN0ZWQYDCABKAsyKi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
+            "aGF0LlJlcXVlc3RSZWplY3RlZEgAEkAKDXBsYXllcl9qb2luZWQYDSABKAsy",
+            "Jy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckpvaW5lZEgAEjwK",
+            "C3BsYXllcl9sZWZ0GA4gASgLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5QbGF5ZXJMZWZ0SAASQgoOcGxheWVyX3VwZGF0ZWQYDyABKAsyKC5EcmVh",
+            "bXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllclVwZGF0ZWRIABJRChZwbGF5",
+            "ZXJfdXBkYXRlX2FjY2VwdGVkGBAgASgLMi8uRHJlYW1zbGVldmUuUHJvdG9j",
+            "b2wuQ2hhdC5QbGF5ZXJVcGRhdGVBY2NlcHRlZEgAElcKGXBsYXllcl92aXNp",
+            "YmlsaXR5X2NoYW5nZWQYFCABKAsyMi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
+            "aGF0LlBsYXllclZpc2liaWxpdHlDaGFuZ2VkSAASUwoXcGxheWVyX21ldGFk",
+            "YXRhX2NoYW5nZWQYEiABKAsyMC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
+            "LlBsYXllck1ldGFkYXRhQ2hhbmdlZEgAQgkKB3BheWxvYWRCDQoLX3JlcXVl",
+            "c3RfaWRKBAgREBJKBAgTEBRSDHBsYXllcl9tb3ZlZFINcGxheWVyc19tb3Zl",
+            "ZCIWChRQbGF5ZXJVcGRhdGVBY2NlcHRlZCJwCg9SZXF1ZXN0UmVqZWN0ZWQS",
+            "PQoEY29kZRgBIAEoDjIvLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUmVx",
+            "dWVzdFJlamVjdGlvbkNvZGUSDwoHbWVzc2FnZRgCIAEoCRINCgVmaWVsZBgD",
+            "IAEoCSJrChRDbGllbnRNb3ZlbWVudFBhY2tldBIYChBwcm90b2NvbF92ZXJz",
+            "aW9uGAEgASgNEjkKBnNhbXBsZRgCIAEoCzIpLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLkNoYXQuTW92ZW1lbnRTYW1wbGUibAoUU2VydmVyTW92ZW1lbnRQYWNr",
+            "ZXQSGAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRI6Cgltb3ZlbWVudHMYAiAB",
+            "KAsyJy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllcnNNb3ZlZCq1",
+            "BAoUUmVxdWVzdFJlamVjdGlvbkNvZGUSJgoiUkVRVUVTVF9SRUpFQ1RJT05f",
+            "Q09ERV9VTlNQRUNJRklFRBAAEioKJlJFUVVFU1RfUkVKRUNUSU9OX0NPREVf",
+            "SU5WQUxJRF9SRVFVRVNUEAESLAooUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9T",
+            "RVNTSU9OX05PVF9SRUFEWRACEi8KK1JFUVVFU1RfUkVKRUNUSU9OX0NPREVf",
+            "U0VTU0lPTl9BTFJFQURZX09QRU4QAxIpCiVSRVFVRVNUX1JFSkVDVElPTl9D",
+            "T0RFX1VTRVJOQU1FX1RBS0VOEAQSLAooUkVRVUVTVF9SRUpFQ1RJT05fQ09E",
+            "RV9DSEFOTkVMX05PVF9GT1VORBAFEi0KKVJFUVVFU1RfUkVKRUNUSU9OX0NP",
+            "REVfTk9UX0NIQU5ORUxfTUVNQkVSEAYSJQohUkVRVUVTVF9SRUpFQ1RJT05f",
+            "Q09ERV9PVkVSTE9BREVEEAcSMAosUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9B",
+            "VVRIRU5USUNBVElPTl9GQUlMRUQQCBIrCidSRVFVRVNUX1JFSkVDVElPTl9D",
+            "T0RFX1RFWFRfTk9UX0FMTE9XRUQQCRInCiNSRVFVRVNUX1JFSkVDVElPTl9D",
+            "T0RFX1JBVEVfTElNSVRFRBAKEjMKL1JFUVVFU1RfUkVKRUNUSU9OX0NPREVf",
+            "QU5OT1VOQ0VNRU5UX05PVF9BTExPV0VEEAtiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.RequestRejectionCode), }, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ClientPacket), global::Dreamsleeve.Protocol.Chat.ClientPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "OpenSession", "SendChat", "UpdatePlayer" }, new[]{ "Payload" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ClientPacket), global::Dreamsleeve.Protocol.Chat.ClientPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "OpenSession", "SendChat", "UpdatePlayer", "PostAnnouncement" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ServerPacket), global::Dreamsleeve.Protocol.Chat.ServerPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "SessionOpened", "ChatPublished", "RequestRejected", "PlayerJoined", "PlayerLeft", "PlayerUpdated", "PlayerUpdateAccepted", "PlayerVisibilityChanged", "PlayerMetadataChanged" }, new[]{ "Payload", "RequestId" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted), global::Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RequestRejected), global::Dreamsleeve.Protocol.Chat.RequestRejected.Parser, new[]{ "Code", "Message", "Field" }, null, null, null, null),
@@ -133,6 +136,10 @@ namespace Dreamsleeve.Protocol.Chat {
     /// Too frequent or repeated; retry later.
     /// </summary>
     [pbr::OriginalName("REQUEST_REJECTION_CODE_RATE_LIMITED")] RateLimited = 10,
+    /// <summary>
+    /// The server does not accept this announcement source.
+    /// </summary>
+    [pbr::OriginalName("REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED")] AnnouncementNotAllowed = 11,
   }
 
   #endregion
@@ -189,6 +196,9 @@ namespace Dreamsleeve.Protocol.Chat {
           break;
         case PayloadOneofCase.UpdatePlayer:
           UpdatePlayer = other.UpdatePlayer.Clone();
+          break;
+        case PayloadOneofCase.PostAnnouncement:
+          PostAnnouncement = other.PostAnnouncement.Clone();
           break;
       }
 
@@ -264,6 +274,21 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "post_announcement" field.</summary>
+    public const int PostAnnouncementFieldNumber = 13;
+    /// <summary>
+    /// Chat lane, like SendChat.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.PostAnnouncement PostAnnouncement {
+      get { return payloadCase_ == PayloadOneofCase.PostAnnouncement ? (global::Dreamsleeve.Protocol.Chat.PostAnnouncement) payload_ : null; }
+      set {
+        payload_ = value;
+        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.PostAnnouncement;
+      }
+    }
+
     private object payload_;
     /// <summary>Enum of possible cases for the "payload" oneof.</summary>
     public enum PayloadOneofCase {
@@ -271,6 +296,7 @@ namespace Dreamsleeve.Protocol.Chat {
       OpenSession = 10,
       SendChat = 11,
       UpdatePlayer = 12,
+      PostAnnouncement = 13,
     }
     private PayloadOneofCase payloadCase_ = PayloadOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -306,6 +332,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (!object.Equals(OpenSession, other.OpenSession)) return false;
       if (!object.Equals(SendChat, other.SendChat)) return false;
       if (!object.Equals(UpdatePlayer, other.UpdatePlayer)) return false;
+      if (!object.Equals(PostAnnouncement, other.PostAnnouncement)) return false;
       if (PayloadCase != other.PayloadCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -319,6 +346,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (payloadCase_ == PayloadOneofCase.OpenSession) hash ^= OpenSession.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.SendChat) hash ^= SendChat.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.UpdatePlayer) hash ^= UpdatePlayer.GetHashCode();
+      if (payloadCase_ == PayloadOneofCase.PostAnnouncement) hash ^= PostAnnouncement.GetHashCode();
       hash ^= (int) payloadCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -358,6 +386,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(98);
         output.WriteMessage(UpdatePlayer);
       }
+      if (payloadCase_ == PayloadOneofCase.PostAnnouncement) {
+        output.WriteRawTag(106);
+        output.WriteMessage(PostAnnouncement);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -388,6 +420,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(98);
         output.WriteMessage(UpdatePlayer);
       }
+      if (payloadCase_ == PayloadOneofCase.PostAnnouncement) {
+        output.WriteRawTag(106);
+        output.WriteMessage(PostAnnouncement);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -412,6 +448,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (payloadCase_ == PayloadOneofCase.UpdatePlayer) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(UpdatePlayer);
+      }
+      if (payloadCase_ == PayloadOneofCase.PostAnnouncement) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(PostAnnouncement);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -449,6 +488,12 @@ namespace Dreamsleeve.Protocol.Chat {
             UpdatePlayer = new global::Dreamsleeve.Protocol.Chat.UpdatePlayer();
           }
           UpdatePlayer.MergeFrom(other.UpdatePlayer);
+          break;
+        case PayloadOneofCase.PostAnnouncement:
+          if (PostAnnouncement == null) {
+            PostAnnouncement = new global::Dreamsleeve.Protocol.Chat.PostAnnouncement();
+          }
+          PostAnnouncement.MergeFrom(other.PostAnnouncement);
           break;
       }
 
@@ -506,6 +551,15 @@ namespace Dreamsleeve.Protocol.Chat {
             UpdatePlayer = subBuilder;
             break;
           }
+          case 106: {
+            global::Dreamsleeve.Protocol.Chat.PostAnnouncement subBuilder = new global::Dreamsleeve.Protocol.Chat.PostAnnouncement();
+            if (payloadCase_ == PayloadOneofCase.PostAnnouncement) {
+              subBuilder.MergeFrom(PostAnnouncement);
+            }
+            input.ReadMessage(subBuilder);
+            PostAnnouncement = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -558,6 +612,15 @@ namespace Dreamsleeve.Protocol.Chat {
             }
             input.ReadMessage(subBuilder);
             UpdatePlayer = subBuilder;
+            break;
+          }
+          case 106: {
+            global::Dreamsleeve.Protocol.Chat.PostAnnouncement subBuilder = new global::Dreamsleeve.Protocol.Chat.PostAnnouncement();
+            if (payloadCase_ == PayloadOneofCase.PostAnnouncement) {
+              subBuilder.MergeFrom(PostAnnouncement);
+            }
+            input.ReadMessage(subBuilder);
+            PostAnnouncement = subBuilder;
             break;
           }
         }

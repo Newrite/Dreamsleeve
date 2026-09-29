@@ -28,6 +28,7 @@
     <Compile Include="EnetTransportTests.fs" />
     <Compile Include="TransportOwnerTests.fs" />
     <Compile Include="ConfigurationTests.fs" />
+    <Compile Include="AnnouncementTests.fs" />
     <Compile Include="AuthenticationHttpTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

@@ -21,7 +21,8 @@
 | `Game/Input.ixx` | Состояние захвата клавиатуры и фильтрация цепочки `InputEvent` до всех sinks; адресов не содержит |
 | `UI/PrismaUI.ixx` | View, listener, доставка событий, focus/visibility |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
-| `Host/Bridge.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx` | Без CommonLib: JSON-контракт UI, TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры. Компилируются также в `Dreamsleeve.Client.Tests` |
+| `API/ModApi.ixx`, `API/DreamsleeveAPI.h` | API для других модов: интерфейс `IVDreamsleeve1` через SKSE messaging, Papyrus `DreamsleeveClient`, рассылка итогов объявлений ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)) |
+| `Host/Bridge.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI, TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры, проверка объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
 
 `Runtime::Get()` хранит единственный экземпляр приложения; getter не перемещает
 владение (прежний вариант возвращал `std::move` статического `unique_ptr` и
@@ -97,6 +98,7 @@ patch-site остаётся у трамплина CommonLib (`skse_patch_safety`
 | `TESDeathEvent`, `TESActivateEvent` | могут приходить с AI/скриптовых потоков | `Runtime::Post` → кадр |
 | PrismaUI: DOM ready, JS listener, console | PrismaUI 1.5.1 оборачивает каждый callback в `SKSE::GetTaskInterface()->AddTask`, т.е. главный поток (проверено по `src/API/API.cpp` framework) | прямой вызов `Host::Session`/`ClientApplication` |
 | Рендер SKSE Menu Framework | вне игрового потока | читает `MenuSnapshot` под mutex, действия — `Runtime::Post` |
+| API модов (`IVDreamsleeve1`, Papyrus) | любой поток | `Runtime::RequestAnnouncement`: проверка по копии состояния сессии под mutex и ограниченная очередь (32); отправка в Core — в кадре |
 
 Очередь уведомлений ограничена 64 записями; переполнение сбрасывается флагом, по
 которому кадр пересчитывает видимость из текущего набора меню.
@@ -262,12 +264,56 @@ reliable-снятие позиции; после загрузки отправл
 
 | Каталог | Содержимое |
 |---|---|
-| `dist/Client` | Раскладка мода относительно Data: `SKSE/Plugins/Dreamsleeve.Client.dll(+pdb)`, `SKSE/Plugins/Dreamsleeve/client.toml`, `PrismaUI/views/Dreamsleeve/*`, `Dreamsleeve/README.md`, `Dreamsleeve/THIRD_PARTY_NOTICES.md` |
+| `dist/Client` | Раскладка мода относительно Data: `SKSE/Plugins/Dreamsleeve.Client.dll(+pdb)`, `SKSE/Plugins/Dreamsleeve/client.toml`, `PrismaUI/views/Dreamsleeve/*`, `Scripts/DreamsleeveClient.pex`, `Scripts/Source/DreamsleeveClient.psc`, `Dreamsleeve/API/DreamsleeveAPI.h`, `Dreamsleeve/README.md`, `Dreamsleeve/THIRD_PARTY_NOTICES.md` |
 | `dist/Server` | `Dreamsleeve.Server.dll` с зависимостями, `db/migrations`, `server.example.toml`, `README.md` (нужен ASP.NET Core Runtime 10) |
 
 `--skip-build` использует готовые DLL и UI, `--no-server` собирает только клиент. Сторонние DLL
 (PrismaUI, SKSE Menu Framework, Address Library, Media Keys Fix) не включаются: у них свои
 лицензии и страницы. `node_modules`, demo, dev-server, отчёты тестов, БД и логи в dist не попадают.
+
+## Объявления
+
+Системный поток сервера ([DomainSpecRu.MD §4.8](DomainSpecRu.MD)) приходит в
+глобальном канале с отметкой `ChatMessage.announcement`. `Host::Session` переносит такие
+сообщения в канал UI `announcements` (вид `system`, только чтение, в снимке последний) и
+передаёт `announcement: {origin, kind, signature?}`; у серверных объявлений нет автора,
+у клиентских — игрок, чей клиент их отправил. Неизвестные источник и вид от более нового
+сервера показываются как `thirdParty` и `announcement`: неизвестное не получает доверия
+сервера. Подпись мода перед мостом очищается от управляющих символов и обрезается до 64.
+
+- Облачка над светлячками объявления не показывают, кто бы их ни отправил
+  (`Session::Fresh`), в том числе после reconnect и повторной проекции.
+- Игнор: серверные объявления не скрываются, служебный профиль игнорировать нельзя;
+  объявления, отправленные клиентом игнорируемого игрока, скрываются вместе с его чатом.
+- Фильтр помеченных слов (`textFilter`) применяется к клиентским объявлениям так же, как
+  к чату.
+
+Настройки → «Объявления» (`ui.toml`, `[ui.chat]`, применяются в UI сразу, без повторной
+проекции host):
+
+| Ключ | По умолчанию | Значения |
+|---|---|---|
+| `announcementChannels` | `all` | `tab` — только вкладка «Объявления»; `all` — также «Все»; `current` — также любая выбранная вкладка |
+| `announcementsServer` | true | показывать объявления сервера |
+| `announcementsTrustedClient` | true | объявления клиента Dreamsleeve |
+| `announcementsThirdParty` | true | объявления других модов |
+| `announcementsEvents` | true | вид «событие» |
+| `announcementsPeriodic` | true | вид «напоминание» (периодические) |
+
+Виды `announcement` и `admin` показываются всегда, если показан их источник. Старый
+`ui.toml` без этих ключей получает значения по умолчанию (тест TOML round-trip);
+неизвестное значение `announcementChannels` заменяется на `all`.
+
+API для других модов (C++ `IVDreamsleeve1` и Papyrus `DreamsleeveClient`) описан в
+[DreamsleeveModApiRu.md](DreamsleeveModApiRu.md). Вызов с любого потока проверяется
+`Host::Announcements::Check` по копии состояния сессии (готовность, политика из
+приветствия: разрешённые источники и лимиты) и кладётся в очередь `Runtime`; кадр после
+Drain отдаёт запросы `Session::PostAnnouncement`, который берёт `RequestId` и хранит
+соответствие до ответа. Итог (подтверждение, отказ сервера, локальный отказ Core или
+смена сессии) уходит в `ModApi::Report`: строка лога, SKSE-сообщение
+`kMessage_AnnouncementResult` всем подписчикам и mod event `Dreamsleeve_AnnouncementResult`;
+отказ дополнительно показывается строкой «Не отправлено» во вкладке «Объявления»
+(событие моста `announcementResult`). Новых хуков игры API не добавляет.
 
 ## Проверки и границы
 
@@ -383,8 +429,8 @@ drawing API (`beginFill`/`lineStyle`) и TextField с `wordWrap` на `$Everywhe
 дельта принимает только большие ID, поэтому повтор события или страница истории
 тоже отбрасываются. Фильтр каналов: protocol v6 открывает один канал
 (`SessionOpened.global_channel_id`), облачка следуют первому каналу снимка; сообщения
-других каналов, без автора (`playerId == 0`, серверные объявления) и собственные не
-показываются. Личных сообщений в протоколе нет; при их появлении фильтр в
+других каналов, без автора (`playerId == 0`), объявления (`ChatMessage.announcement`,
+любого источника) и собственные не показываются. Личных сообщений в протоколе нет; при их появлении фильтр в
 `Session::Fresh` нужно расширить явно.
 
 `Host::Bubbles` (Runtime, главный поток) хранит один текст на игрока и время получения:

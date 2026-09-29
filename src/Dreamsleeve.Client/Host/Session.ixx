@@ -3,6 +3,7 @@ export module Dreamsleeve.Host.Session;
 import std;
 export import Dreamsleeve.Client.Exchange;
 export import Dreamsleeve.Host.Bridge;
+export import Dreamsleeve.Host.Announcements;
 
 // Main-thread consumer of ClientOutput: projects Core state into UI bridge events
 // and correlates UI chat requests with Core RequestIds. It keeps the online list
@@ -22,8 +23,10 @@ public:
       std::vector<std::string> notes;   // Diagnostics for the host logger.
       // Live publications of other players in the global channel, confirmed by
       // the server in this Process call: never snapshot history, replays or
-      // authorless (system) messages. Consumed by the firefly chat bubbles.
+      // system-stream messages. Consumed by the firefly chat bubbles.
       std::vector<Domain::ChatMessage> freshMessages;
+      // Final results of announcements requested through the plugin API.
+      std::vector<Announcements::Outcome> announcementResults;
       bool                             snapshot{};
       bool                             playersChanged{};
     };
@@ -42,11 +45,17 @@ public:
       if (frame.playersChanged && !frame.snapshot) Emit(frame, Bridge::PlayersEvent{.players = PlayerList(settings)});
 
       for (const auto& confirmation : output.chatConfirmations)
-        Complete(frame, confirmation.requestId, Bridge::Id(confirmation.messageId), {});
+        if (!Settle(frame, confirmation.requestId, Announcements::Result::Published, {}))
+          Complete(frame, confirmation.requestId, Bridge::Id(confirmation.messageId), {});
       for (const auto& event : output.rejections)
-        Complete(frame, event.rejection.requestId, {}, Bridge::RejectionText(event.rejection.code, event.rejection.message));
+      {
+        auto reason = Bridge::RejectionText(event.rejection.code, event.rejection.message);
+        if (!Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason))
+          Complete(frame, event.rejection.requestId, {}, std::move(reason));
+      }
       for (const auto& failure : output.commandFailures)
-        Complete(frame, failure.requestId, {}, std::string{Bridge::FailureText(failure.code)});
+        if (!Settle(frame, failure.requestId, ResultOf(failure.code), std::string{Bridge::FailureText(failure.code)}))
+          Complete(frame, failure.requestId, {}, std::string{Bridge::FailureText(failure.code)});
 
       PublishStatus(output.status, settings, frame);
       RequestSnapshotIfNeeded(exchange, frame);
@@ -82,6 +91,7 @@ public:
     // of retained history can be ignored by ID as well.
     bool Ignore(Domain::PlayerId id)
     {
+      if (id == Bridge::ServerAuthorId) return false;
       const Domain::PlayerData* known = nullptr;
       if (const auto online = players.find(id); online != players.end())
         known = &online->second.data;
@@ -118,6 +128,36 @@ public:
       if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
       pendingChats.emplace(*requestId, PendingChat{command.requestId, generation});
       return {};
+    }
+
+    // Main thread. The request already passed Announcements::Check on the
+    // calling thread; this only needs a session and a free slot.
+    Announcements::Result PostAnnouncement(ClientExchange& exchange, Announcements::Request request)
+    {
+      if (!Ready()) return Announcements::Result::NotConnected;
+      if (pendingAnnouncements.size() >= MaxPendingAnnouncements) return Announcements::Result::Busy;
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return Announcements::Result::Failed;
+
+      PendingAnnouncement pending{request.signature, request.text, generation};
+      const auto          posted = exchange.Post({
+          generation,
+          Dreamsleeve::Client::PostAnnouncement{
+                                                *requestId,
+                                                std::move(request.text),
+                                                request.kind,
+                                                request.source,
+                                                std::move(request.signature)
+          }
+      });
+      if (posted != CommandPostResult::Queued) return Announcements::Result::Busy;
+      pendingAnnouncements.emplace(*requestId, std::move(pending));
+      return Announcements::Result::Queued;
+    }
+
+    std::size_t PendingAnnouncementCount() const noexcept
+    {
+      return pendingAnnouncements.size();
     }
 
     bool Ready() const noexcept
@@ -163,6 +203,15 @@ private:
       std::uint64_t generation{};
     };
 
+    struct PendingAnnouncement
+    {
+      std::string   signature;
+      std::string   text;
+      std::uint64_t generation{};
+    };
+
+    static constexpr std::size_t MaxPendingAnnouncements = 32;
+
     template <class Event>
     void Emit(Frame& frame, const Event& event)
     {
@@ -182,17 +231,17 @@ private:
       return list;
     }
 
-    // Ignored authors are dropped from every UI projection; self and system
-    // messages (author 0) are never filtered.
+    // Ignored authors are dropped from every UI projection, including their
+    // clients' announcements; self and the server are never filtered.
     bool Hidden(const Domain::ChatMessage& message) const
     {
       const auto author = message.author.playerId;
-      return author != 0 && author != selfId && names.Ignored(author);
+      return !Bridge::ServerAuthored(message) && author != selfId && names.Ignored(author);
     }
 
     void Remember(const Domain::ChatMessage& message)
     {
-      if (message.author.playerId == 0) return;
+      if (Bridge::ServerAuthored(message)) return;
       if (authors.size() >= MaxKnownAuthors && !authors.contains(message.author.playerId)) authors.clear();
       authors.insert_or_assign(message.author.playerId, message.author);
     }
@@ -223,6 +272,12 @@ private:
 
       // A new generation cannot complete requests of the previous session.
       std::erase_if(pendingChats, [&](const auto& entry) { return entry.second.generation != generation; });
+      std::erase_if(pendingAnnouncements, [&](const auto& entry) {
+        if (entry.second.generation == generation) return false;
+        frame.announcementResults.push_back(
+          {entry.second.signature, entry.second.text, Announcements::Result::Failed, "Доставка неизвестна: сессия сменилась"});
+        return true;
+      });
       frame.playersChanged = false;
       snapshotRequested    = false;
       if (!ready)
@@ -235,6 +290,7 @@ private:
       Bridge::SnapshotEvent event;
       for (const auto& chat : snapshot.chats)
         event.channels.push_back({Bridge::Id(chat.channelId), "global", "Общий", true});
+      event.channels.push_back({std::string{Bridge::AnnouncementsChannel}, "system", "Объявления", false});
       // ChatCache keeps ascending MessageId order; the UI bounds its own history.
       for (const auto& chat : snapshot.chats)
       {
@@ -312,12 +368,60 @@ private:
     }
 
     // Bubble admission: global channel, newer than anything seen (history
-    // pages and repeated events stay out), a real author other than self.
+    // pages and repeated events stay out), player chat of someone other than self.
+    // Announcements never float above a firefly, whoever posted them.
     bool Fresh(const Domain::ChatMessage& message)
     {
       if (!globalChannel || message.channelId != *globalChannel || message.messageId <= bubbleFloor) return false;
       bubbleFloor = message.messageId;
-      return message.author.playerId != 0 && message.author.playerId != selfId;
+      return !message.announcement && message.author.playerId != 0 && message.author.playerId != selfId;
+    }
+
+    static Announcements::Result ResultOf(const ServerRejection& rejection)
+    {
+      using Code = Dreamsleeve::Client::RequestRejectionCode;
+      if (rejection.code == Code::RateLimited) return Announcements::Result::RateLimited;
+      if (rejection.code == Code::InvalidRequest && rejection.message.starts_with("Announcement exceeds"))
+        return Announcements::Result::TooLong;
+      return Announcements::Result::Rejected;
+    }
+
+    static Announcements::Result ResultOf(CommandFailureCode code)
+    {
+      switch (code)
+      {
+        case CommandFailureCode::StaleGeneration:
+        case CommandFailureCode::SessionNotReady:
+          return Announcements::Result::NotConnected;
+        case CommandFailureCode::Busy:
+          return Announcements::Result::Busy;
+        case CommandFailureCode::Unsupported:
+          return Announcements::Result::Unsupported;
+        case CommandFailureCode::InvalidRequest:
+          return Announcements::Result::Rejected;
+        case CommandFailureCode::EncodingFailed:
+          break;
+      }
+      return Announcements::Result::Failed;
+    }
+
+    // Settles a plugin API request; a refusal also becomes a failed UI row.
+    bool Settle(Frame& frame, std::uint64_t requestId, Announcements::Result result, std::string reason)
+    {
+      const auto found = pendingAnnouncements.find(requestId);
+      if (found == pendingAnnouncements.end()) return false;
+      auto& pending = found->second;
+      if (result != Announcements::Result::Published)
+        Emit(
+          frame,
+          Bridge::AnnouncementResultEvent{
+              .source = Bridge::SafeLabel(pending.signature),
+              .text   = pending.text,
+              .error  = Bridge::ClipUtf8(reason, Bridge::MaxErrorBytes)
+          });
+      frame.announcementResults.push_back({std::move(pending.signature), std::move(pending.text), result, std::move(reason)});
+      pendingAnnouncements.erase(found);
+      return true;
     }
 
     void Complete(Frame& frame, std::uint64_t requestId, std::optional<std::string> messageId, std::optional<std::string> error)
@@ -366,6 +470,7 @@ private:
     Domain::ChatMessageId                          bubbleFloor{};
     Players                                        players;
     std::unordered_map<std::uint64_t, PendingChat> pendingChats;
+    std::unordered_map<std::uint64_t, PendingAnnouncement> pendingAnnouncements;
     std::optional<ClientStatus>                    lastStatus;
     bool                                           needsSnapshot{true};
     bool                                           snapshotRequested{};

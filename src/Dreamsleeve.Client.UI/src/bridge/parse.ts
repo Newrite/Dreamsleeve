@@ -38,6 +38,19 @@ const failures = [
   "canceled",
   "nameNotAllowed",
 ];
+const origins = ["server", "trustedClient", "thirdParty"];
+const kinds = ["announcement", "event", "admin", "periodic"];
+// A mod label as received: short, one line, shown as plain text.
+const signature = (v: unknown) =>
+  text(v) && v.length <= 128 && !/[\u0000-\u001f\u007f-\u009f]/.test(v);
+function announcement(v: unknown): boolean {
+  return (
+    object(v) &&
+    origins.includes(String(v.origin)) &&
+    kinds.includes(String(v.kind)) &&
+    (v.signature === undefined || signature(v.signature))
+  );
+}
 function actorValue(v: unknown): boolean {
   return (
     object(v) &&
@@ -98,7 +111,12 @@ function message(v: unknown): boolean {
     finite(v.time) &&
     Math.abs(v.time as number) <= 8640000000000000 &&
     (v.filtered === undefined || typeof v.filtered === "boolean") &&
-    (v.source === "system" || (v.source === "player" && player(v.author)))
+    ((v.source === "system" &&
+      (v.announcement === undefined || announcement(v.announcement)) &&
+      (v.author === undefined || player(v.author))) ||
+      (v.source === "player" &&
+        v.announcement === undefined &&
+        player(v.author)))
   );
 }
 export function parseHostEvent(source: string): HostEvent {
@@ -168,6 +186,13 @@ export function parseHostEvent(source: string): HostEvent {
       break;
     case "settings":
       valid = object(v.settings);
+      break;
+    case "announcementResult":
+      valid =
+        signature(v.source) &&
+        text(v.text) &&
+        v.text.length <= 16000 &&
+        label(v.error);
       break;
   }
   if (!valid) throw new Error("Invalid UI event");

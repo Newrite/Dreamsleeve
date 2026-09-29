@@ -27,7 +27,9 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<PlayerMovementReceived> ReadMovement(const P::PlayerMoved&);
 
   void                        WriteChat(P::SendChat&, const SendChat&);
+  void                        WriteAnnouncement(P::PostAnnouncement&, const PostAnnouncement&);
   Result<Domain::ChatMessage> Message(const P::ChatMessage&);
+  Domain::AnnouncementPolicy  Policy(const P::AnnouncementPolicy&);
 
   void                  WriteSession(P::OpenSession&, const OpenSession&);
   bool                  ValidTicket(std::string_view);

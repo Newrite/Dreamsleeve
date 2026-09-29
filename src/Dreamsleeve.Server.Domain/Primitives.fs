@@ -25,6 +25,8 @@ module DomainUMX =
     [<Measure>]
     type chatChannelName
     [<Measure>]
+    type announcementSignature
+    [<Measure>]
     type locationName
     [<Measure>]
     type worldUnit
@@ -57,6 +59,7 @@ type ChatMessageId = uint64<chatMessageId>
 type ChatMessageText = string<chatMessageText>
 type ChatChannelId = uint64<chatChannelId>
 type ChatChannelName = string<chatChannelName>
+type AnnouncementSignature = string<announcementSignature>
 
 [<RequireQualifiedAccess>]
 type TextError =
@@ -341,3 +344,13 @@ module ChatChannelName =
 
     let create maxLength raw : Result<ChatChannelName, DomainError> =
         PrimitiveValidation.name "ChatChannelName" maxLength raw |> Result.map UMX.tag
+
+[<RequireQualifiedAccess>]
+module AnnouncementSignature =
+    let value (signature: AnnouncementSignature) : string = UMX.untag signature
+
+    /// The requesting mod's own label, kept exactly as received: one line
+    /// without control characters, not blank. It is display text, never trust.
+    let create maxLength raw : Result<AnnouncementSignature, DomainError> =
+        PrimitiveValidation.text "AnnouncementSignature" maxLength id false PrimitiveValidation.unrestricted raw
+        |> Result.map UMX.tag

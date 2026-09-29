@@ -112,6 +112,7 @@ enum RequestRejectionCode : int {
   REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED = 8,
   REQUEST_REJECTION_CODE_TEXT_NOT_ALLOWED = 9,
   REQUEST_REJECTION_CODE_RATE_LIMITED = 10,
+  REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED = 11,
   RequestRejectionCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   RequestRejectionCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -122,11 +123,11 @@ extern const uint32_t RequestRejectionCode_internal_data_[];
 inline constexpr RequestRejectionCode RequestRejectionCode_MIN =
     static_cast<RequestRejectionCode>(0);
 inline constexpr RequestRejectionCode RequestRejectionCode_MAX =
-    static_cast<RequestRejectionCode>(10);
+    static_cast<RequestRejectionCode>(11);
 inline bool RequestRejectionCode_IsValid(int value) {
-  return 0 <= value && value <= 10;
+  return 0 <= value && value <= 11;
 }
-inline constexpr int RequestRejectionCode_ARRAYSIZE = 10 + 1;
+inline constexpr int RequestRejectionCode_ARRAYSIZE = 11 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_descriptor();
 template <typename T>
 const ::std::string& RequestRejectionCode_Name(T value) {
@@ -137,7 +138,7 @@ const ::std::string& RequestRejectionCode_Name(T value) {
 }
 template <>
 inline const ::std::string& RequestRejectionCode_Name(RequestRejectionCode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 10>(
+  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 11>(
       static_cast<int>(value));
 }
 inline bool RequestRejectionCode_Parse(
@@ -1404,6 +1405,7 @@ class ClientPacket final : public ::google::protobuf::Message
     kOpenSession = 10,
     kSendChat = 11,
     kUpdatePlayer = 12,
+    kPostAnnouncement = 13,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -1498,6 +1500,7 @@ class ClientPacket final : public ::google::protobuf::Message
     kOpenSessionFieldNumber = 10,
     kSendChatFieldNumber = 11,
     kUpdatePlayerFieldNumber = 12,
+    kPostAnnouncementFieldNumber = 13,
   };
   // uint64 request_id = 2;
   void clear_request_id() ;
@@ -1576,6 +1579,25 @@ class ClientPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::UpdatePlayer* PROTOBUF_NONNULL _internal_mutable_update_player();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.PostAnnouncement post_announcement = 13;
+  bool has_post_announcement() const;
+  private:
+  bool _internal_has_post_announcement() const;
+
+  public:
+  void clear_post_announcement() ;
+  const ::Dreamsleeve::Protocol::Chat::PostAnnouncement& post_announcement() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NULLABLE release_post_announcement();
+  ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NONNULL mutable_post_announcement();
+  void set_allocated_post_announcement(::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_post_announcement(::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NULLABLE unsafe_arena_release_post_announcement();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::PostAnnouncement& _internal_post_announcement() const;
+  ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NONNULL _internal_mutable_post_announcement();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ClientPacket)
@@ -1584,11 +1606,12 @@ class ClientPacket final : public ::google::protobuf::Message
   void set_has_open_session();
   void set_has_send_chat();
   void set_has_update_player();
+  void set_has_post_announcement();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 5,
-                                   3, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 6,
+                                   4, 0,
                                    2>
       _table_;
 
@@ -1617,6 +1640,7 @@ class ClientPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE open_session_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE send_chat_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE update_player_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE post_announcement_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1903,6 +1927,77 @@ inline ::Dreamsleeve::Protocol::Chat::UpdatePlayer* PROTOBUF_NONNULL ClientPacke
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::UpdatePlayer* _msg = _internal_mutable_update_player();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.update_player)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.PostAnnouncement post_announcement = 13;
+inline bool ClientPacket::has_post_announcement() const {
+  return payload_case() == kPostAnnouncement;
+}
+inline bool ClientPacket::_internal_has_post_announcement() const {
+  return payload_case() == kPostAnnouncement;
+}
+inline void ClientPacket::set_has_post_announcement() {
+  _impl_._oneof_case_[0] = kPostAnnouncement;
+}
+inline ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NULLABLE ClientPacket::release_post_announcement() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.post_announcement)
+  if (payload_case() == kPostAnnouncement) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PostAnnouncement*>(_impl_.payload_.post_announcement_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.post_announcement_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::PostAnnouncement& ClientPacket::_internal_post_announcement() const {
+  return payload_case() == kPostAnnouncement ? static_cast<const ::Dreamsleeve::Protocol::Chat::PostAnnouncement&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::PostAnnouncement*>(_impl_.payload_.post_announcement_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::PostAnnouncement&>(::Dreamsleeve::Protocol::Chat::_PostAnnouncement_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::PostAnnouncement& ClientPacket::post_announcement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.post_announcement)
+  return _internal_post_announcement();
+}
+inline ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_post_announcement() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.post_announcement)
+  if (payload_case() == kPostAnnouncement) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PostAnnouncement*>(_impl_.payload_.post_announcement_);
+    _impl_.payload_.post_announcement_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_post_announcement(
+    ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_post_announcement();
+    _impl_.payload_.post_announcement_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.post_announcement)
+}
+inline ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NONNULL ClientPacket::_internal_mutable_post_announcement() {
+  if (payload_case() != kPostAnnouncement) {
+    clear_payload();
+    set_has_post_announcement();
+    _impl_.payload_.post_announcement_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::PostAnnouncement>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::PostAnnouncement*>(_impl_.payload_.post_announcement_);
+}
+inline ::Dreamsleeve::Protocol::Chat::PostAnnouncement* PROTOBUF_NONNULL ClientPacket::mutable_post_announcement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::PostAnnouncement* _msg = _internal_mutable_post_announcement();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.post_announcement)
   return _msg;
 }
 

@@ -240,6 +240,23 @@ ID и `SentAt`; фабрика сообщения приводит время к
 либо продолжить выдачу ID, либо объявить клиенту сброс истории через контракт
 сессии; `Chat` не хранит счётчик на диске. Будущий курсор возвращает пустую страницу.
 
+### Объявления
+
+`ChatMessage.Announcement` (`voption`) отмечает сообщение системного потока:
+`Announcement { Source; Kind; Signature }`. `AnnouncementSource` — `Server` /
+`TrustedClient` / `ThirdParty`; запрос клиента несёт отдельный `ClientAnnouncementSource`
+без значения сервера, и `Announcement.fromClient` переводит его в источник.
+`AnnouncementKind` — `Announcement` / `Event` / `Admin` / `Periodic`;
+`Announcement.clientMayRequest` допускает клиентам только первые два.
+`AnnouncementSignature.create` хранит подпись мода как есть: одна строка без
+управляющих символов, не пустая, длина — в скалярах Unicode.
+
+`Chat.append` принимает серверное объявление без членства: его автор —
+`Announcement.serverAuthor` с PlayerId `UInt64.MaxValue` (учётные записи SQLite этого
+значения не достигают). Объявления клиентов требуют членства автора, как обычные
+сообщения. История, ID, курсор и HasGap общие с чатом канала. Модель доверия и
+поведение — [DomainSpecRu.MD §4.8](../../docs/DomainSpecRu.MD).
+
 `ChatMessage.Author` — снимок профиля при отправке. Клиент может отображать
 актуальный DisplayName из каталога профилей, сохраняя снимок как fallback.
 Открытие карточки автора всегда производится по `PlayerId`.

@@ -86,6 +86,8 @@ type ChatSubmission = {
     Fingerprint: string
     /// Flag-tier ranges of Text, computed by the session outside the channel owner.
     Flagged: TextSpan list
+    /// A client announcement already admitted by origin; judged by its own rate limit.
+    Announcement: Announcement voption
     /// Also available after membership disappears, so refusals settle the request.
     ReplyTo: ReliableAgentRef<ChatRoomEvent>
 }
@@ -94,6 +96,8 @@ type ChatSubmission = {
 type ChatRoomCommand =
     | Join of Subscription<ChatRoomEvent>
     | Publish of ChatSubmission
+    /// Server-authored; no membership, rate limit or reply.
+    | Announce of ServerAnnouncement
     | Detach of SessionDetach
     | ReadHistory of ChatMessageId voption * int * ReplyChannel<Result<ChatHistoryPage, DomainError>>
 

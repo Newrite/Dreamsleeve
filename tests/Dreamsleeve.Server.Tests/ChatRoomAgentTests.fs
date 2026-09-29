@@ -39,7 +39,16 @@ let private publish (room: Agent<ChatRoomCommand>) (subscriber: Subscription<Cha
         Text = ChatMessageText.create 256 text |> ok; ReplyTo = subscriber.Events
         CharacterName = ValueNone; Fingerprint = Moderation.normalize text
         Flagged = if text.StartsWith "flag" then [{ Start = 0; Length = 4 }] else []
+        Announcement = ValueNone
     })
+let private announceAs (room: Agent<ChatRoomCommand>) (subscriber: Subscription<ChatRoomEvent>) requestId text =
+    post room (ChatRoomCommand.Publish {
+        ConnectionId = subscriber.ConnectionId; RequestId = requestId
+        Text = ChatMessageText.create 256 text |> ok; ReplyTo = subscriber.Events
+        CharacterName = ValueNone; Fingerprint = Moderation.normalize text; Flagged = []
+        Announcement = ValueSome(Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event ValueNone)
+    })
+
 let private accepted requestId = function
     | ChatRoomEvent.Accepted(actual, message) -> equal requestId actual; message
     | other -> failwithf "Expected accepted publication: %A" other
@@ -387,6 +396,64 @@ let tests = testList "ChatRoomAgent" [
         equal [4UL; 5UL] (ids current.Messages)
         equal [3UL; 4UL] (ids snapshot.Messages)
         equal [3UL] (ids page.Messages)
+        do! stop room
+    })
+
+    case "server announcements reach every member in the shared history under the reserved author" (fun () -> task {
+        let hostEvents, aliceEvents, bobEvents = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
+        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
+        use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
+        use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
+        let author = Announcement.serverAuthor (DisplayName.create 128 "Голоса" |> ok)
+        use room = ChatRoomAgent.startWith { config with HistoryCapacity = 8 } AnnouncementOptions.defaults author channelId (host.Ref.TryReliable().Value) |> ok
+        let a, b = subscription 1UL alice, subscription 2UL bob
+        do! post room (ChatRoomCommand.Join a)
+        do! post room (ChatRoomCommand.Join b)
+        let! _ = receive aliceEvents
+        let! _ = receive bobEvents
+        do! publish room a 1UL "chat"
+        let! _ = receive aliceEvents
+        let! _ = receive bobEvents
+        do! post room (ChatRoomCommand.Announce { Text = ChatMessageText.create 256 "Рестарт" |> ok; Kind = AnnouncementKind.Admin })
+        for events in [aliceEvents; bobEvents] do
+            let! delivered = receive events
+            match delivered with
+            | ChatRoomEvent.Published message ->
+                equal author message.Author
+                equal (ValueSome(Announcement.server AnnouncementKind.Admin)) message.Announcement
+                equal 2UL (ChatMessageId.value message.MessageId)
+            | other -> failwithf "Expected a plain publication: %A" other
+        let! retained = history room
+        equal [ValueNone; ValueSome(Announcement.server AnnouncementKind.Admin)] (retained.Messages |> List.map _.Announcement)
+        check (hostEvents.Reader.Count = 0) "An announcement has no requester to answer."
+        do! stop room
+    })
+
+    case "client announcements have their own rate limit, independent of chat" (fun () -> task {
+        let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
+        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = Agent.Start(AgentOptions.create "player", collect events)
+        let limits = { AnnouncementOptions.defaults with RateBurst = 1; RateRefillMs = 60000; DuplicateWindowMs = 0 }
+        let chatLimit = { config with HistoryCapacity = 8; RateBurst = 1; RateRefillMs = 60000 }
+        use room = ChatRoomAgent.startWith chatLimit limits (Announcement.serverAuthor (DisplayName.create 64 "S" |> ok)) channelId (host.Ref.TryReliable().Value) |> ok
+        let alice = subscription 1UL player
+        do! post room (ChatRoomCommand.Join alice)
+        let! _ = receive events
+        do! publish room alice 1UL "chat"
+        let! _ = receive events
+        do! announceAs room alice 2UL "event one"
+        let! first = receive events
+        let message = accepted 2UL first
+        equal alice.Profile message.Author
+        equal (ValueSome AnnouncementSource.ThirdParty) (message.Announcement |> ValueOption.map _.Source)
+        do! announceAs room alice 3UL "event two"
+        let! second = receive events
+        rateLimited 3UL second
+        do! publish room alice 4UL "more chat"
+        let! third = receive events
+        rateLimited 4UL third
+        let! retained = history room
+        equal 2 retained.Messages.Length
         do! stop room
     })
 

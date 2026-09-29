@@ -42,7 +42,7 @@ let private rules =
     Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
     |> Moderation.withFlags { Words = ["flagword"]; Substrings = []; Exceptions = [] }
 
-let private withModeratedPlayer moderation settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
+let private withConfiguredPlayer moderation announcements settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
     let queries = Channel.CreateUnbounded<SessionAuthenticationRequest>()
     let chatCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
@@ -56,7 +56,7 @@ let private withModeratedPlayer moderation settings (createPresence: Channel<Pre
         RequestId = 1UL
         SessionTicket = String('a', 43)
     }
-    use player = PlayerSession.start settings 64 moderation globalId
+    use player = PlayerSession.start settings 64 moderation announcements globalId
                      (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
     let fixture = { Request = request; Player = player; Authentication = queries;
@@ -73,6 +73,9 @@ let private withModeratedPlayer moderation settings (createPresence: Channel<Pre
     do! awaitUnit presence.Completion
     do! awaitUnit host.Completion
 }
+
+let private withModeratedPlayer moderation settings createPresence run =
+    withConfiguredPlayer moderation AnnouncementOptions.defaults settings createPresence run
 
 let private withPlayerUsingPresence settings createPresence run =
     withModeratedPlayer Moderation.empty settings createPresence run
@@ -176,7 +179,64 @@ let private submitted fixture requestId text = task {
     | other -> return failwithf "Expected publication: %A" other
 }
 
+let private withAnnouncements announcements run =
+    withConfiguredPlayer rules announcements options (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
+
+let private announcementRequest text signature : AnnouncementRequest = {
+    Text = ChatMessageText.create 500 text |> ok
+    Kind = AnnouncementKind.Event
+    Source = ClientAnnouncementSource.ThirdParty
+    Signature = ValueSome(AnnouncementSignature.create 64 signature |> ok)
+}
+
+let private announcementRefused fixture requestId code field = task {
+    let! refused = receive fixture.Host
+    match refused with
+    | SessionHostCommand.Send(_, ServerResponse.ChatRejected(id, rejection)) ->
+        equal requestId id
+        equal code rejection.Code
+        equal field rejection.Field
+    | other -> failwithf "Expected announcement refusal: %A" other
+    equal 0 fixture.Chat.Reader.Count
+}
+
 let tests = testList "PlayerSession" [
+    case "a disabled announcement source is refused before the channel; the welcome lists admitted sources" (fun () ->
+        let announcements = { AnnouncementOptions.defaults with ThirdParty = { Enabled = false } }
+        withAnnouncements announcements (fun fixture -> task {
+            let! profile, chat, presence = joins fixture
+            do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
+            do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
+            let! activation = receive fixture.Host
+            match activation with
+            | SessionHostCommand.Activate(_, _, welcome) -> equal [ClientAnnouncementSource.TrustedClient] welcome.AnnouncementSources
+            | other -> failwithf "Expected Activate: %A" other
+            do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(2UL, announcementRequest "Игрок пал" "DeathMod"))
+            do! announcementRefused fixture 2UL RequestRejectionCode.AnnouncementNotAllowed "source"
+        }))
+
+    case "announcement text and signature pass the word list; accepted ones carry their origin" (fun () ->
+        withAnnouncements AnnouncementOptions.defaults (fun fixture -> task {
+            let! _ = ready fixture
+            do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(2UL, announcementRequest "a badword" "DeathMod"))
+            do! announcementRefused fixture 2UL RequestRejectionCode.TextNotAllowed "text"
+            do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(3UL, announcementRequest "Игрок пал" "Mod Badword"))
+            do! announcementRefused fixture 3UL RequestRejectionCode.TextNotAllowed "source"
+            do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(4UL, announcementRequest "a flagword event" "DeathMod"))
+            let! command = receive fixture.Chat
+            match command with
+            | ChatRoomCommand.Publish submission ->
+                equal 4UL submission.RequestId
+                equal [{ Start = 2; Length = 8 }] submission.Flagged
+                match submission.Announcement with
+                | ValueSome announcement ->
+                    equal AnnouncementSource.ThirdParty announcement.Source
+                    equal AnnouncementKind.Event announcement.Kind
+                    equal (ValueSome "DeathMod") (announcement.Signature |> ValueOption.map AnnouncementSignature.value)
+                | ValueNone -> failtest "The origin was lost."
+            | other -> failwithf "Expected publication: %A" other
+        }))
+
     case "word list refuses chat text before the channel sees it" (fun () ->
         withRules options (fun fixture -> task {
             let! _ = ready fixture
@@ -531,7 +591,7 @@ let tests = testList "PlayerSession" [
             ConnectionId = Guid.NewGuid(); RequestId = 1UL
             SessionTicket = String('b', 43)
         }
-        use player = PlayerSession.start options 64 Moderation.empty globalId
+        use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults globalId
                          (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
         let! failure = terminal player.Completion

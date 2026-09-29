@@ -6,7 +6,9 @@ dist/Client (copy into Skyrim Data or install as a mod):
   SKSE/Plugins/Dreamsleeve/client.toml            defaults; edited by the user
   SKSE/Plugins/Dreamsleeve/aliases.toml           streamer-mode pseudonym dictionary
   PrismaUI/views/Dreamsleeve/                     production web UI (index.html, assets, theme.user.css)
+  Scripts/DreamsleeveClient.pex, Scripts/Source/DreamsleeveClient.psc   Papyrus API for other mods
   Dreamsleeve/README.md, THIRD_PARTY_NOTICES.md   install notes and licenses
+  Dreamsleeve/API/DreamsleeveAPI.h                C++ API header for other SKSE plugins
 
 dist/Server (framework-dependent `dotnet publish` of Dreamsleeve.Server, Release):
   Dreamsleeve.Server.dll and dependencies, db/migrations, server.example.toml, README.md,
@@ -137,6 +139,11 @@ def client_readme() -> str:
 не передаётся). Личный список игнора тоже хранится в `ui.toml`, отдельно для
 каждого адреса сервера. Имена над светлячками — только SE/AE.
 
+Объявления: вкладка «Объявления» показывает сообщения сервера и объявления других модов;
+где их показывать и от каких источников — настройки чата → «Объявления». Моды публикуют
+через C++ API (`DreamsleeveAPI.h`) или Papyrus (`Scripts/Source/DreamsleeveClient.psc`),
+см. docs/DreamsleeveModApiRu.md в репозитории.
+
 Логи: `Documents/My Games/Skyrim Special Edition/SKSE/DreamsleeveClient.log`.
 """
 
@@ -166,6 +173,11 @@ username/display name, сообщения и публикуемое имя пе�
 `[Moderation] Enabled = false`.
 Антиспам (частота, всплеск, повторы) настраивается в `[Runtime.Chat]`. Это базовая
 защита, а не полная модерация. Изменения читаются только при запуске.
+
+Объявления: `[Announcements]` — допуск объявлений клиентов (`TrustedClient`,
+`ThirdParty`, по умолчанию оба разрешены), их отдельный лимит частоты и расписание
+серверных объявлений `[[Announcements.Scheduled]]`. Разовое объявление администратора —
+команда консоли `announce <текст>`.
 """
 
 
@@ -216,10 +228,20 @@ def main() -> int:
     views = client / "PrismaUI" / "views" / "Dreamsleeve"
     copied = copy_tree(ui_dist, views)
 
+    # Papyrus API for other mods: the source for their compiler, the checked-in
+    # .pex for the game (dist builds do not need the Creation Kit).
+    papyrus = CLIENT / "Papyrus"
+    scripts = client / "Scripts"
+    (scripts / "Source").mkdir(parents=True)
+    shutil.copy2(papyrus / "DreamsleeveClient.psc", scripts / "Source" / "DreamsleeveClient.psc")
+    shutil.copy2(papyrus / "DreamsleeveClient.pex", scripts / "DreamsleeveClient.pex")
+
     notes = client / "Dreamsleeve"
     notes.mkdir()
     (notes / "README.md").write_text(client_readme(), encoding="utf-8")
     (notes / "THIRD_PARTY_NOTICES.md").write_text(notices(), encoding="utf-8")
+    (notes / "API").mkdir()
+    shutil.copy2(CLIENT / "API" / "DreamsleeveAPI.h", notes / "API" / "DreamsleeveAPI.h")
 
     if not args.no_server:
         server = output / "Server"

@@ -69,6 +69,14 @@ export namespace Dreamsleeve::Host::Bridge
     bool        writable{};
   };
 
+  // origin: server | trustedClient | thirdParty; kind: announcement | event | admin | periodic.
+  struct UiAnnouncement
+  {
+    std::string                origin;
+    std::string                kind;
+    std::optional<std::string> signature;
+  };
+
   struct UiMessage
   {
     std::string  id;
@@ -76,9 +84,11 @@ export namespace Dreamsleeve::Host::Bridge
     std::string  text;
     std::int64_t time{};
     std::string  source{"player"};
-    UiPlayer     author;
+    // Absent for server announcements; a client announcement names its player.
+    std::optional<UiPlayer> author;
     // The text was masked or replaced by the local filter of flagged ranges.
-    bool filtered{};
+    bool                          filtered{};
+    std::optional<UiAnnouncement> announcement;
   };
 
   struct SnapshotEvent
@@ -132,6 +142,15 @@ export namespace Dreamsleeve::Host::Bridge
     std::string                requestId;
     std::optional<std::string> messageId;
     std::optional<std::string> error;
+  };
+
+  // An announcement another mod requested through the plugin API was not published.
+  struct AnnouncementResultEvent
+  {
+    std::string type{"announcementResult"};
+    std::string source;
+    std::string text;
+    std::string error;
   };
 
   struct SettingsResultEvent
@@ -188,6 +207,8 @@ export namespace Dreamsleeve::Host::Bridge
 
   constexpr std::size_t MaxChatText     = 16000;
   constexpr std::size_t MaxSnapshotRows = 500;
+  // The read-only UI channel of the system stream; it has no server ID.
+  constexpr std::string_view AnnouncementsChannel = "announcements";
 
   using Encoded = std::expected<std::string, std::string>;
 
@@ -232,6 +253,11 @@ export namespace Dreamsleeve::Host::Bridge
   }
 
   Encoded Encode(const SendResultEvent& event)
+  {
+    return Detail::Write(event);
+  }
+
+  Encoded Encode(const AnnouncementResultEvent& event)
   {
     return Detail::Write(event);
   }
@@ -513,6 +539,56 @@ export namespace Dreamsleeve::Host::Bridge
     return player;
   }
 
+  // Reserved author of server announcements; account IDs never reach it.
+  constexpr Domain::PlayerId ServerAuthorId = std::numeric_limits<Domain::PlayerId>::max();
+
+  // Written by the reserved server profile: nothing to name, ignore or bubble.
+  bool ServerAuthored(const Domain::ChatMessage& message)
+  {
+    return message.author.playerId == 0 || (message.announcement && message.announcement->source == Domain::AnnouncementSource::Server);
+  }
+
+  // Sources a newer server may add are shown with the least trust.
+  std::string_view OriginName(Domain::AnnouncementSource source)
+  {
+    using Source = Domain::AnnouncementSource;
+    if (source == Source::Server) return "server";
+    if (source == Source::TrustedClient) return "trustedClient";
+    return "thirdParty";
+  }
+
+  std::string_view KindName(Domain::AnnouncementKind kind)
+  {
+    using Kind = Domain::AnnouncementKind;
+    if (kind == Kind::Event) return "event";
+    if (kind == Kind::Admin) return "admin";
+    if (kind == Kind::Periodic) return "periodic";
+    return "announcement";
+  }
+
+  // A mod label is display text of an untrusted origin: control characters are
+  // dropped and the length stays within what parse.ts accepts.
+  std::string SafeLabel(std::string_view value, std::size_t maxCodePoints = 64)
+  {
+    std::string result;
+    std::size_t count = 0;
+    for (std::size_t index = 0; index < value.size() && count < maxCodePoints;)
+    {
+      const auto  lead   = static_cast<unsigned char>(value[index]);
+      std::size_t length = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
+      length             = std::min(length, value.size() - index);
+      const bool control =
+        lead < 0x20 || lead == 0x7F || (lead == 0xC2 && length == 2 && static_cast<unsigned char>(value[index + 1]) < 0xA0);
+      if (!control)
+      {
+        result.append(value.substr(index, length));
+        ++count;
+      }
+      index += length;
+    }
+    return result;
+  }
+
   UiPlayer ToUiPlayer(const Domain::Player& source, Names& names, const UiSettings& settings)
   {
     auto player =
@@ -592,6 +668,8 @@ export namespace Dreamsleeve::Host::Bridge
 
   // The author is named from the snapshot taken at sending, never from the
   // character the player uses now.
+  // The system stream travels in the global channel for older clients; here it
+  // moves to its own read-only UI channel.
   UiMessage ToUiMessage(const Domain::ChatMessage& message, Names& names, const UiSettings& settings)
   {
     UiMessage result;
@@ -599,7 +677,19 @@ export namespace Dreamsleeve::Host::Bridge
     result.channelId = Id(message.channelId);
     result.text      = message.messageText;
     result.time      = Domain::ToUnixMilliseconds(message.sentAt);
-    result.author    = ToUiAuthor(message.author, message.characterName, message.characterName.has_value(), names, settings);
+    if (message.announcement || message.author.playerId == 0)
+    {
+      result.channelId = AnnouncementsChannel;
+      result.source    = "system";
+    }
+    if (message.announcement)
+    {
+      const auto& value   = *message.announcement;
+      result.announcement = UiAnnouncement{std::string{OriginName(value.source)}, std::string{KindName(value.kind)}, std::nullopt};
+      if (!value.signature.empty()) result.announcement->signature = SafeLabel(value.signature);
+    }
+    if (!ServerAuthored(message))
+      result.author = ToUiAuthor(message.author, message.characterName, message.characterName.has_value(), names, settings);
     return result;
   }
 
@@ -723,8 +813,11 @@ export namespace Dreamsleeve::Host::Bridge
         return "Сообщение содержит запрещённые слова";
       case Code::RateLimited:
         return "Слишком часто или повтор того же сообщения. Подождите немного";
+      case Code::AnnouncementNotAllowed:
+        return "Сервер не принимает объявления от этого источника";
       case Code::InvalidRequest:
         if (message.starts_with("Message exceeds")) return "Сообщение слишком длинное";
+        if (message.starts_with("Announcement exceeds")) return "Объявление слишком длинное";
         break;
       default:
         break;
@@ -746,6 +839,8 @@ export namespace Dreamsleeve::Host::Bridge
         return "Некорректный запрос";
       case CommandFailureCode::EncodingFailed:
         return "Не удалось закодировать сообщение";
+      case CommandFailureCode::Unsupported:
+        return "Сервер не поддерживает эту команду";
     }
     return "Сообщение не отправлено";
   }

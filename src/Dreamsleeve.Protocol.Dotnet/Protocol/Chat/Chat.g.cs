@@ -26,27 +26,108 @@ namespace Dreamsleeve.Protocol.Chat {
           string.Concat(
             "CgpjaGF0LnByb3RvEhlEcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Ggxjb21t",
             "b24ucHJvdG8iLAoIU2VuZENoYXQSEgoKY2hhbm5lbF9pZBgBIAEoBBIMCgR0",
-            "ZXh0GAIgASgJIvwBCgtDaGF0TWVzc2FnZRISCgptZXNzYWdlX2lkGAEgASgE",
+            "ZXh0GAIgASgJIrsCCgtDaGF0TWVzc2FnZRISCgptZXNzYWdlX2lkGAEgASgE",
             "EhIKCmNoYW5uZWxfaWQYAiABKAQSOAoGYXV0aG9yGAMgASgLMiguRHJlYW1z",
             "bGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJQcm9maWxlEgwKBHRleHQYBCAB",
             "KAkSFwoPc2VudF9hdF91bml4X21zGAUgASgDEhsKDmNoYXJhY3Rlcl9uYW1l",
             "GAYgASgJSACIAQESNAoHZmxhZ2dlZBgHIAMoCzIjLkRyZWFtc2xlZXZlLlBy",
-            "b3RvY29sLkNoYXQuVGV4dFNwYW5CEQoPX2NoYXJhY3Rlcl9uYW1lIikKCFRl",
-            "eHRTcGFuEg0KBXN0YXJ0GAEgASgNEg4KBmxlbmd0aBgCIAEoDSJICg1DaGF0",
-            "UHVibGlzaGVkEjcKB21lc3NhZ2UYASABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90",
-            "b2NvbC5DaGF0LkNoYXRNZXNzYWdlYgZwcm90bzM="));
+            "b3RvY29sLkNoYXQuVGV4dFNwYW4SPQoMYW5ub3VuY2VtZW50GAggASgLMicu",
+            "RHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Bbm5vdW5jZW1lbnRCEQoPX2No",
+            "YXJhY3Rlcl9uYW1lIikKCFRleHRTcGFuEg0KBXN0YXJ0GAEgASgNEg4KBmxl",
+            "bmd0aBgCIAEoDSJICg1DaGF0UHVibGlzaGVkEjcKB21lc3NhZ2UYASABKAsy",
+            "Ji5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRNZXNzYWdlIpsBCgxB",
+            "bm5vdW5jZW1lbnQSPQoGc291cmNlGAEgASgOMi0uRHJlYW1zbGVldmUuUHJv",
+            "dG9jb2wuQ2hhdC5Bbm5vdW5jZW1lbnRTb3VyY2USOQoEa2luZBgCIAEoDjIr",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQW5ub3VuY2VtZW50S2luZBIR",
+            "CglzaWduYXR1cmUYAyABKAkiswEKEFBvc3RBbm5vdW5jZW1lbnQSDAoEdGV4",
+            "dBgBIAEoCRI5CgRraW5kGAIgASgOMisuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "Q2hhdC5Bbm5vdW5jZW1lbnRLaW5kEkMKBnNvdXJjZRgDIAEoDjIzLkRyZWFt",
+            "c2xlZXZlLlByb3RvY29sLkNoYXQuQ2xpZW50QW5ub3VuY2VtZW50U291cmNl",
+            "EhEKCXNpZ25hdHVyZRgEIAEoCSKZAQoSQW5ub3VuY2VtZW50UG9saWN5EkwK",
+            "D2FsbG93ZWRfc291cmNlcxgBIAMoDjIzLkRyZWFtc2xlZXZlLlByb3RvY29s",
+            "LkNoYXQuQ2xpZW50QW5ub3VuY2VtZW50U291cmNlEhcKD21heF90ZXh0X2xl",
+            "bmd0aBgCIAEoDRIcChRtYXhfc2lnbmF0dXJlX2xlbmd0aBgDIAEoDSqmAQoS",
+            "QW5ub3VuY2VtZW50U291cmNlEiMKH0FOTk9VTkNFTUVOVF9TT1VSQ0VfVU5T",
+            "UEVDSUZJRUQQABIeChpBTk5PVU5DRU1FTlRfU09VUkNFX1NFUlZFUhABEiYK",
+            "IkFOTk9VTkNFTUVOVF9TT1VSQ0VfVFJVU1RFRF9DTElFTlQQAhIjCh9BTk5P",
+            "VU5DRU1FTlRfU09VUkNFX1RISVJEX1BBUlRZEAMqswEKEEFubm91bmNlbWVu",
+            "dEtpbmQSIQodQU5OT1VOQ0VNRU5UX0tJTkRfVU5TUEVDSUZJRUQQABIiCh5B",
+            "Tk5PVU5DRU1FTlRfS0lORF9BTk5PVU5DRU1FTlQQARIbChdBTk5PVU5DRU1F",
+            "TlRfS0lORF9FVkVOVBACEhsKF0FOTk9VTkNFTUVOVF9LSU5EX0FETUlOEAMS",
+            "HgoaQU5OT1VOQ0VNRU5UX0tJTkRfUEVSSU9ESUMQBCqhAQoYQ2xpZW50QW5u",
+            "b3VuY2VtZW50U291cmNlEioKJkNMSUVOVF9BTk5PVU5DRU1FTlRfU09VUkNF",
+            "X1VOU1BFQ0lGSUVEEAASLQopQ0xJRU5UX0FOTk9VTkNFTUVOVF9TT1VSQ0Vf",
+            "VFJVU1RFRF9DTElFTlQQARIqCiZDTElFTlRfQU5OT1VOQ0VNRU5UX1NPVVJD",
+            "RV9USElSRF9QQVJUWRACYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementSource), typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementKind), typeof(global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SendChat), global::Dreamsleeve.Protocol.Chat.SendChat.Parser, new[]{ "ChannelId", "Text" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatMessage), global::Dreamsleeve.Protocol.Chat.ChatMessage.Parser, new[]{ "MessageId", "ChannelId", "Author", "Text", "SentAtUnixMs", "CharacterName", "Flagged" }, new[]{ "CharacterName" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatMessage), global::Dreamsleeve.Protocol.Chat.ChatMessage.Parser, new[]{ "MessageId", "ChannelId", "Author", "Text", "SentAtUnixMs", "CharacterName", "Flagged", "Announcement" }, new[]{ "CharacterName" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.TextSpan), global::Dreamsleeve.Protocol.Chat.TextSpan.Parser, new[]{ "Start", "Length" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatPublished), global::Dreamsleeve.Protocol.Chat.ChatPublished.Parser, new[]{ "Message" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChatPublished), global::Dreamsleeve.Protocol.Chat.ChatPublished.Parser, new[]{ "Message" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Announcement), global::Dreamsleeve.Protocol.Chat.Announcement.Parser, new[]{ "Source", "Kind", "Signature" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PostAnnouncement), global::Dreamsleeve.Protocol.Chat.PostAnnouncement.Parser, new[]{ "Text", "Kind", "Source", "Signature" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy), global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy.Parser, new[]{ "AllowedSources", "MaxTextLength", "MaxSignatureLength" }, null, null, null, null)
           }));
     }
     #endregion
 
   }
+  #region Enums
+  /// <summary>
+  /// Trust origin assigned by the server. SERVER is never accepted from a client.
+  /// </summary>
+  public enum AnnouncementSource {
+    [pbr::OriginalName("ANNOUNCEMENT_SOURCE_UNSPECIFIED")] Unspecified = 0,
+    /// <summary>
+    /// Configuration, schedule or administrator.
+    /// </summary>
+    [pbr::OriginalName("ANNOUNCEMENT_SOURCE_SERVER")] Server = 1,
+    /// <summary>
+    /// Requested by the Dreamsleeve client itself.
+    /// </summary>
+    [pbr::OriginalName("ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT")] TrustedClient = 2,
+    /// <summary>
+    /// Requested by another mod through the client API.
+    /// </summary>
+    [pbr::OriginalName("ANNOUNCEMENT_SOURCE_THIRD_PARTY")] ThirdParty = 3,
+  }
+
+  /// <summary>
+  /// What an announcement is about; display settings filter by it.
+  /// </summary>
+  public enum AnnouncementKind {
+    [pbr::OriginalName("ANNOUNCEMENT_KIND_UNSPECIFIED")] Unspecified = 0,
+    /// <summary>
+    /// General notice.
+    /// </summary>
+    [pbr::OriginalName("ANNOUNCEMENT_KIND_ANNOUNCEMENT")] Announcement = 1,
+    /// <summary>
+    /// Game event: a death, an achievement.
+    /// </summary>
+    [pbr::OriginalName("ANNOUNCEMENT_KIND_EVENT")] Event = 2,
+    /// <summary>
+    /// Administrator notice; server only.
+    /// </summary>
+    [pbr::OriginalName("ANNOUNCEMENT_KIND_ADMIN")] Admin = 3,
+    /// <summary>
+    /// Scheduled repetition; server only.
+    /// </summary>
+    [pbr::OriginalName("ANNOUNCEMENT_KIND_PERIODIC")] Periodic = 4,
+  }
+
+  /// <summary>
+  /// Origins a client may request. There is deliberately no server value.
+  /// </summary>
+  public enum ClientAnnouncementSource {
+    [pbr::OriginalName("CLIENT_ANNOUNCEMENT_SOURCE_UNSPECIFIED")] Unspecified = 0,
+    [pbr::OriginalName("CLIENT_ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT")] TrustedClient = 1,
+    [pbr::OriginalName("CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY")] ThirdParty = 2,
+  }
+
+  #endregion
+
   #region Messages
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class SendChat : pb::IMessage<SendChat>
@@ -325,6 +406,7 @@ namespace Dreamsleeve.Protocol.Chat {
       sentAtUnixMs_ = other.sentAtUnixMs_;
       characterName_ = other.characterName_;
       flagged_ = other.flagged_.Clone();
+      announcement_ = other.announcement_ != null ? other.announcement_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -443,6 +525,24 @@ namespace Dreamsleeve.Protocol.Chat {
       get { return flagged_; }
     }
 
+    /// <summary>Field number for the "announcement" field.</summary>
+    public const int AnnouncementFieldNumber = 8;
+    private global::Dreamsleeve.Protocol.Chat.Announcement announcement_;
+    /// <summary>
+    /// Present on messages of the system stream. They travel in the global channel
+    /// so older clients, which ignore this field, show them as ordinary messages of
+    /// the author profile: a reserved server profile for SERVER announcements, the
+    /// posting player for client announcements.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.Announcement Announcement {
+      get { return announcement_; }
+      set {
+        announcement_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -465,6 +565,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (SentAtUnixMs != other.SentAtUnixMs) return false;
       if (CharacterName != other.CharacterName) return false;
       if(!flagged_.Equals(other.flagged_)) return false;
+      if (!object.Equals(Announcement, other.Announcement)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -479,6 +580,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (SentAtUnixMs != 0L) hash ^= SentAtUnixMs.GetHashCode();
       if (HasCharacterName) hash ^= CharacterName.GetHashCode();
       hash ^= flagged_.GetHashCode();
+      if (announcement_ != null) hash ^= Announcement.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -522,6 +624,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteString(CharacterName);
       }
       flagged_.WriteTo(output, _repeated_flagged_codec);
+      if (announcement_ != null) {
+        output.WriteRawTag(66);
+        output.WriteMessage(Announcement);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -557,6 +663,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteString(CharacterName);
       }
       flagged_.WriteTo(ref output, _repeated_flagged_codec);
+      if (announcement_ != null) {
+        output.WriteRawTag(66);
+        output.WriteMessage(Announcement);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -586,6 +696,9 @@ namespace Dreamsleeve.Protocol.Chat {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(CharacterName);
       }
       size += flagged_.CalculateSize(_repeated_flagged_codec);
+      if (announcement_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Announcement);
+      }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -620,6 +733,12 @@ namespace Dreamsleeve.Protocol.Chat {
         CharacterName = other.CharacterName;
       }
       flagged_.Add(other.flagged_);
+      if (other.announcement_ != null) {
+        if (announcement_ == null) {
+          Announcement = new global::Dreamsleeve.Protocol.Chat.Announcement();
+        }
+        Announcement.MergeFrom(other.Announcement);
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -670,6 +789,13 @@ namespace Dreamsleeve.Protocol.Chat {
             flagged_.AddEntriesFrom(input, _repeated_flagged_codec);
             break;
           }
+          case 66: {
+            if (announcement_ == null) {
+              Announcement = new global::Dreamsleeve.Protocol.Chat.Announcement();
+            }
+            input.ReadMessage(Announcement);
+            break;
+          }
         }
       }
     #endif
@@ -718,6 +844,13 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 58: {
             flagged_.AddEntriesFrom(ref input, _repeated_flagged_codec);
+            break;
+          }
+          case 66: {
+            if (announcement_ == null) {
+              Announcement = new global::Dreamsleeve.Protocol.Chat.Announcement();
+            }
+            input.ReadMessage(Announcement);
             break;
           }
         }
@@ -1160,6 +1293,874 @@ namespace Dreamsleeve.Protocol.Chat {
               Message = new global::Dreamsleeve.Protocol.Chat.ChatMessage();
             }
             input.ReadMessage(Message);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class Announcement : pb::IMessage<Announcement>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<Announcement> _parser = new pb::MessageParser<Announcement>(() => new Announcement());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<Announcement> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[4]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Announcement() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Announcement(Announcement other) : this() {
+      source_ = other.source_;
+      kind_ = other.kind_;
+      signature_ = other.signature_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Announcement Clone() {
+      return new Announcement(this);
+    }
+
+    /// <summary>Field number for the "source" field.</summary>
+    public const int SourceFieldNumber = 1;
+    private global::Dreamsleeve.Protocol.Chat.AnnouncementSource source_ = global::Dreamsleeve.Protocol.Chat.AnnouncementSource.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.AnnouncementSource Source {
+      get { return source_; }
+      set {
+        source_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "kind" field.</summary>
+    public const int KindFieldNumber = 2;
+    private global::Dreamsleeve.Protocol.Chat.AnnouncementKind kind_ = global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.AnnouncementKind Kind {
+      get { return kind_; }
+      set {
+        kind_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "signature" field.</summary>
+    public const int SignatureFieldNumber = 3;
+    private string signature_ = "";
+    /// <summary>
+    /// Self-declared label of the requesting mod, stored as received. Empty for
+    /// SERVER. It never raises trust: source alone says who vouches for the text.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Signature {
+      get { return signature_; }
+      set {
+        signature_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as Announcement);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(Announcement other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Source != other.Source) return false;
+      if (Kind != other.Kind) return false;
+      if (Signature != other.Signature) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Source != global::Dreamsleeve.Protocol.Chat.AnnouncementSource.Unspecified) hash ^= Source.GetHashCode();
+      if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) hash ^= Kind.GetHashCode();
+      if (Signature.Length != 0) hash ^= Signature.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Source != global::Dreamsleeve.Protocol.Chat.AnnouncementSource.Unspecified) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Source);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Kind);
+      }
+      if (Signature.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Signature);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Source != global::Dreamsleeve.Protocol.Chat.AnnouncementSource.Unspecified) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Source);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Kind);
+      }
+      if (Signature.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Signature);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Source != global::Dreamsleeve.Protocol.Chat.AnnouncementSource.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Source);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Kind);
+      }
+      if (Signature.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Signature);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(Announcement other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Source != global::Dreamsleeve.Protocol.Chat.AnnouncementSource.Unspecified) {
+        Source = other.Source;
+      }
+      if (other.Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
+        Kind = other.Kind;
+      }
+      if (other.Signature.Length != 0) {
+        Signature = other.Signature;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Source = (global::Dreamsleeve.Protocol.Chat.AnnouncementSource) input.ReadEnum();
+            break;
+          }
+          case 16: {
+            Kind = (global::Dreamsleeve.Protocol.Chat.AnnouncementKind) input.ReadEnum();
+            break;
+          }
+          case 26: {
+            Signature = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Source = (global::Dreamsleeve.Protocol.Chat.AnnouncementSource) input.ReadEnum();
+            break;
+          }
+          case 16: {
+            Kind = (global::Dreamsleeve.Protocol.Chat.AnnouncementKind) input.ReadEnum();
+            break;
+          }
+          case 26: {
+            Signature = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Client request to publish into the system stream of the global channel.
+  /// Accepted like SendChat: ChatPublished with request_id to the author, a
+  /// RequestRejected otherwise. Send only to servers announcing AnnouncementPolicy.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class PostAnnouncement : pb::IMessage<PostAnnouncement>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<PostAnnouncement> _parser = new pb::MessageParser<PostAnnouncement>(() => new PostAnnouncement());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<PostAnnouncement> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[5]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PostAnnouncement() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PostAnnouncement(PostAnnouncement other) : this() {
+      text_ = other.text_;
+      kind_ = other.kind_;
+      source_ = other.source_;
+      signature_ = other.signature_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PostAnnouncement Clone() {
+      return new PostAnnouncement(this);
+    }
+
+    /// <summary>Field number for the "text" field.</summary>
+    public const int TextFieldNumber = 1;
+    private string text_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Text {
+      get { return text_; }
+      set {
+        text_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "kind" field.</summary>
+    public const int KindFieldNumber = 2;
+    private global::Dreamsleeve.Protocol.Chat.AnnouncementKind kind_ = global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified;
+    /// <summary>
+    /// ANNOUNCEMENT or EVENT.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.AnnouncementKind Kind {
+      get { return kind_; }
+      set {
+        kind_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "source" field.</summary>
+    public const int SourceFieldNumber = 3;
+    private global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource source_ = global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource Source {
+      get { return source_; }
+      set {
+        source_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "signature" field.</summary>
+    public const int SignatureFieldNumber = 4;
+    private string signature_ = "";
+    /// <summary>
+    /// Required for THIRD_PARTY.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Signature {
+      get { return signature_; }
+      set {
+        signature_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as PostAnnouncement);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(PostAnnouncement other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Text != other.Text) return false;
+      if (Kind != other.Kind) return false;
+      if (Source != other.Source) return false;
+      if (Signature != other.Signature) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Text.Length != 0) hash ^= Text.GetHashCode();
+      if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) hash ^= Kind.GetHashCode();
+      if (Source != global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified) hash ^= Source.GetHashCode();
+      if (Signature.Length != 0) hash ^= Signature.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Text.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Text);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Kind);
+      }
+      if (Source != global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified) {
+        output.WriteRawTag(24);
+        output.WriteEnum((int) Source);
+      }
+      if (Signature.Length != 0) {
+        output.WriteRawTag(34);
+        output.WriteString(Signature);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Text.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Text);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Kind);
+      }
+      if (Source != global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified) {
+        output.WriteRawTag(24);
+        output.WriteEnum((int) Source);
+      }
+      if (Signature.Length != 0) {
+        output.WriteRawTag(34);
+        output.WriteString(Signature);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Text.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Text);
+      }
+      if (Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Kind);
+      }
+      if (Source != global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Source);
+      }
+      if (Signature.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Signature);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(PostAnnouncement other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Text.Length != 0) {
+        Text = other.Text;
+      }
+      if (other.Kind != global::Dreamsleeve.Protocol.Chat.AnnouncementKind.Unspecified) {
+        Kind = other.Kind;
+      }
+      if (other.Source != global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource.Unspecified) {
+        Source = other.Source;
+      }
+      if (other.Signature.Length != 0) {
+        Signature = other.Signature;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            Text = input.ReadString();
+            break;
+          }
+          case 16: {
+            Kind = (global::Dreamsleeve.Protocol.Chat.AnnouncementKind) input.ReadEnum();
+            break;
+          }
+          case 24: {
+            Source = (global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource) input.ReadEnum();
+            break;
+          }
+          case 34: {
+            Signature = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            Text = input.ReadString();
+            break;
+          }
+          case 16: {
+            Kind = (global::Dreamsleeve.Protocol.Chat.AnnouncementKind) input.ReadEnum();
+            break;
+          }
+          case 24: {
+            Source = (global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource) input.ReadEnum();
+            break;
+          }
+          case 34: {
+            Signature = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Server rules a client can check before sending; the server still decides.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class AnnouncementPolicy : pb::IMessage<AnnouncementPolicy>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<AnnouncementPolicy> _parser = new pb::MessageParser<AnnouncementPolicy>(() => new AnnouncementPolicy());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<AnnouncementPolicy> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor.MessageTypes[6]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AnnouncementPolicy() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AnnouncementPolicy(AnnouncementPolicy other) : this() {
+      allowedSources_ = other.allowedSources_.Clone();
+      maxTextLength_ = other.maxTextLength_;
+      maxSignatureLength_ = other.maxSignatureLength_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AnnouncementPolicy Clone() {
+      return new AnnouncementPolicy(this);
+    }
+
+    /// <summary>Field number for the "allowed_sources" field.</summary>
+    public const int AllowedSourcesFieldNumber = 1;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource> _repeated_allowedSources_codec
+        = pb::FieldCodec.ForEnum(10, x => (int) x, x => (global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource) x);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource> allowedSources_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource> AllowedSources {
+      get { return allowedSources_; }
+    }
+
+    /// <summary>Field number for the "max_text_length" field.</summary>
+    public const int MaxTextLengthFieldNumber = 2;
+    private uint maxTextLength_;
+    /// <summary>
+    /// Unicode scalar values.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MaxTextLength {
+      get { return maxTextLength_; }
+      set {
+        maxTextLength_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_signature_length" field.</summary>
+    public const int MaxSignatureLengthFieldNumber = 3;
+    private uint maxSignatureLength_;
+    /// <summary>
+    /// Unicode scalar values.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MaxSignatureLength {
+      get { return maxSignatureLength_; }
+      set {
+        maxSignatureLength_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as AnnouncementPolicy);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(AnnouncementPolicy other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if(!allowedSources_.Equals(other.allowedSources_)) return false;
+      if (MaxTextLength != other.MaxTextLength) return false;
+      if (MaxSignatureLength != other.MaxSignatureLength) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      hash ^= allowedSources_.GetHashCode();
+      if (MaxTextLength != 0) hash ^= MaxTextLength.GetHashCode();
+      if (MaxSignatureLength != 0) hash ^= MaxSignatureLength.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      allowedSources_.WriteTo(output, _repeated_allowedSources_codec);
+      if (MaxTextLength != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(MaxTextLength);
+      }
+      if (MaxSignatureLength != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(MaxSignatureLength);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      allowedSources_.WriteTo(ref output, _repeated_allowedSources_codec);
+      if (MaxTextLength != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(MaxTextLength);
+      }
+      if (MaxSignatureLength != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(MaxSignatureLength);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      size += allowedSources_.CalculateSize(_repeated_allowedSources_codec);
+      if (MaxTextLength != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MaxTextLength);
+      }
+      if (MaxSignatureLength != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MaxSignatureLength);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(AnnouncementPolicy other) {
+      if (other == null) {
+        return;
+      }
+      allowedSources_.Add(other.allowedSources_);
+      if (other.MaxTextLength != 0) {
+        MaxTextLength = other.MaxTextLength;
+      }
+      if (other.MaxSignatureLength != 0) {
+        MaxSignatureLength = other.MaxSignatureLength;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10:
+          case 8: {
+            allowedSources_.AddEntriesFrom(input, _repeated_allowedSources_codec);
+            break;
+          }
+          case 16: {
+            MaxTextLength = input.ReadUInt32();
+            break;
+          }
+          case 24: {
+            MaxSignatureLength = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10:
+          case 8: {
+            allowedSources_.AddEntriesFrom(ref input, _repeated_allowedSources_codec);
+            break;
+          }
+          case 16: {
+            MaxTextLength = input.ReadUInt32();
+            break;
+          }
+          case 24: {
+            MaxSignatureLength = input.ReadUInt32();
             break;
           }
         }

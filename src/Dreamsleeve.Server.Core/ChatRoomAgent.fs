@@ -18,20 +18,30 @@ module ChatRoomAgent =
         Recent: Queue<struct (string * int64)>
     }
 
+    /// One rate limit: chat and client announcements are admitted separately.
+    type private Admission = {
+        Burst: int
+        RefillMs: int
+        DuplicateWindowMs: int
+        Senders: Dictionary<PlayerId, Sender>
+        mutable NextPrune: int64
+    }
+
     type private State = {
         Chat: Chat
         Members: Dictionary<Guid, Subscription<ChatRoomEvent>>
         Players: Dictionary<PlayerId, Guid>
-        Senders: Dictionary<PlayerId, Sender>
-        Options: ChatRoomOptions
+        Messages: Admission
+        Announcements: Admission
+        /// Reserved author profile of server announcements.
+        ServerAuthor: PlayerData
         Host: AgentOutbox<SessionHostCommand>
         mutable NextMessageId: uint64
-        mutable NextPrune: int64
     }
 
     let private isControl = function
         | ChatRoomCommand.Join _ | ChatRoomCommand.Detach _ -> true
-        | ChatRoomCommand.Publish _ | ChatRoomCommand.ReadHistory _ -> false
+        | ChatRoomCommand.Publish _ | ChatRoomCommand.Announce _ | ChatRoomCommand.ReadHistory _ -> false
 
     let private notifyHost state context command =
         if not (state.Host.TrySend(context, command)) then
@@ -93,80 +103,104 @@ module ChatRoomAgent =
         respond state context request.ConnectionId request.ReplyTo
             (ChatRoomEvent.Rejected(request.RequestId, rejection))
 
-    let private refill (options: ChatRoomOptions) now (sender: Sender) =
-        let elapsed = float (now - sender.Updated) / float options.RateRefillMs
-        sender.Tokens <- min (float options.RateBurst) (sender.Tokens + elapsed)
+    let private admission burst refillMs duplicateWindowMs = {
+        Burst = burst; RefillMs = refillMs; DuplicateWindowMs = duplicateWindowMs
+        Senders = Dictionary(); NextPrune = 0L
+    }
+
+    let private refill (limits: Admission) now (sender: Sender) =
+        let elapsed = float (now - sender.Updated) / float limits.RefillMs
+        sender.Tokens <- min (float limits.Burst) (sender.Tokens + elapsed)
         sender.Updated <- now
         while sender.Recent.Count > 0
-              && (let struct (_, sentAt) = sender.Recent.Peek() in now - sentAt >= int64 options.DuplicateWindowMs) do
+              && (let struct (_, sentAt) = sender.Recent.Peek() in now - sentAt >= int64 limits.DuplicateWindowMs) do
             sender.Recent.Dequeue() |> ignore
 
     // Entries of accounts that became idle are dropped; state stays bounded by
     // recent senders, not by everyone who ever wrote in this channel.
-    let private prune state now =
-        if now >= state.NextPrune then
-            let idle = max (int64 state.Options.RateBurst * int64 state.Options.RateRefillMs) (int64 state.Options.DuplicateWindowMs)
-            let expired = state.Senders |> Seq.filter (fun entry -> now - entry.Value.Updated >= idle) |> Seq.map _.Key |> Seq.toArray
-            for playerId in expired do state.Senders.Remove playerId |> ignore
-            state.NextPrune <- now + max 1000L idle
+    let private prune (limits: Admission) now =
+        if now >= limits.NextPrune then
+            let idle = max (int64 limits.Burst * int64 limits.RefillMs) (int64 limits.DuplicateWindowMs)
+            let expired = limits.Senders |> Seq.filter (fun entry -> now - entry.Value.Updated >= idle) |> Seq.map _.Key |> Seq.toArray
+            for playerId in expired do limits.Senders.Remove playerId |> ignore
+            limits.NextPrune <- now + max 1000L idle
 
     /// Rate and repetition are judged per stable account, so reconnecting
     /// does not reset them. Refused attempts consume nothing.
-    let private admit state playerId (request: ChatSubmission) =
+    let private admit (limits: Admission) playerId (request: ChatSubmission) =
         let now = Environment.TickCount64
-        prune state now
+        prune limits now
         let sender =
-            match state.Senders.TryGetValue playerId with
+            match limits.Senders.TryGetValue playerId with
             | true, sender -> sender
             | false, _ ->
-                let sender = { Tokens = float state.Options.RateBurst; Updated = now; Recent = Queue() }
-                state.Senders[playerId] <- sender
+                let sender = { Tokens = float limits.Burst; Updated = now; Recent = Queue() }
+                limits.Senders[playerId] <- sender
                 sender
-        refill state.Options now sender
+        refill limits now sender
         let repeated =
-            state.Options.DuplicateWindowMs > 0
+            limits.DuplicateWindowMs > 0
             && sender.Recent |> Seq.exists (fun struct (fingerprint, _) -> fingerprint = request.Fingerprint)
         if repeated then Error "The same message was sent too recently."
         elif sender.Tokens < 1.0 then Error "Too many messages. Wait a moment."
         else
             sender.Tokens <- sender.Tokens - 1.0
-            if state.Options.DuplicateWindowMs > 0 then
+            if limits.DuplicateWindowMs > 0 then
                 if sender.Recent.Count >= MaxRecentPerSender then sender.Recent.Dequeue() |> ignore
                 sender.Recent.Enqueue(struct (request.Fingerprint, now))
             Ok ()
+
+    /// Assigns the next ID and time, stores and relays. The requesting
+    /// connection, when there is one, receives the correlated acceptance.
+    let private append (state: State) (context: AgentContext<ChatRoomCommand>) (create: ChatMessageId -> DateTimeOffset -> ChatMessage) (requester: struct (Guid * uint64) voption) =
+        match ChatMessageId.create state.NextMessageId with
+        | Error _ -> context.Abort()
+        | Ok messageId ->
+            let now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+            let message = create messageId now
+
+            match Chat.append message state.Chat with
+            | Error _ -> context.Abort()
+            | Ok () ->
+                state.NextMessageId <-
+                    if state.NextMessageId = UInt64.MaxValue then 0UL else state.NextMessageId + 1UL
+
+                // Delivery may remove a slow subscriber; enumerate the accepted audience.
+                let recipients = state.Members.Values |> Seq.toArray
+                for recipient in recipients do
+                    let event =
+                        match requester with
+                        | ValueSome(struct (connectionId, requestId)) when recipient.ConnectionId = connectionId ->
+                            ChatRoomEvent.Accepted(requestId, message)
+                        | ValueSome _ | ValueNone -> ChatRoomEvent.Published message
+                    deliver state context recipient event |> ignore
 
     let private publish state context (request: ChatSubmission) =
         match state.Members.TryGetValue request.ConnectionId with
         | false, _ -> reject state context request
         | true, author ->
-            match admit state author.Profile.PlayerId request with
+            let limits = if request.Announcement.IsSome then state.Announcements else state.Messages
+            match admit limits author.Profile.PlayerId request with
             | Error message ->
                 let rejection = { Code = RequestRejectionCode.RateLimited; Message = message; Field = "text" }
                 respond state context request.ConnectionId request.ReplyTo (ChatRoomEvent.Rejected(request.RequestId, rejection))
             | Ok () ->
-                match ChatMessageId.create state.NextMessageId with
-                | Error _ -> context.Abort()
-                | Ok messageId ->
-                    let now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                let create messageId sentAt =
                     let message =
-                        ChatMessage.create messageId state.Chat.ChannelId author.Profile request.CharacterName request.Text now
+                        ChatMessage.create messageId state.Chat.ChannelId author.Profile request.CharacterName request.Text sentAt
                         |> ChatMessage.withFlagged request.Flagged
+                    match request.Announcement with
+                    | ValueSome announcement -> ChatMessage.withAnnouncement announcement message
+                    | ValueNone -> message
+                append state context create (ValueSome(struct (request.ConnectionId, request.RequestId)))
 
-                    match Chat.append message state.Chat with
-                    | Error _ -> context.Abort()
-                    | Ok () ->
-                        state.NextMessageId <-
-                            if state.NextMessageId = UInt64.MaxValue then 0UL else state.NextMessageId + 1UL
-
-                        // Delivery may remove a slow subscriber; enumerate the accepted audience.
-                        let recipients = state.Members.Values |> Seq.toArray
-                        for recipient in recipients do
-                            let event =
-                                if recipient.ConnectionId = request.ConnectionId then
-                                    ChatRoomEvent.Accepted(request.RequestId, message)
-                                else
-                                    ChatRoomEvent.Published message
-                            deliver state context recipient event |> ignore
+    /// Server announcements share this channel's history and ID sequence, so a
+    /// client that only knows the channel receives them in order.
+    let private announce state context (announcement: ServerAnnouncement) =
+        let create messageId sentAt =
+            ChatMessage.create messageId state.Chat.ChannelId state.ServerAuthor ValueNone announcement.Text sentAt
+            |> ChatMessage.withAnnouncement (Announcement.server announcement.Kind)
+        append state context create ValueNone
 
     let private detach state (context: AgentContext<ChatRoomCommand>) (request: SessionDetach) =
         remove state request.ConnectionId
@@ -181,12 +215,14 @@ module ChatRoomAgent =
         match command with
         | ChatRoomCommand.Join subscription -> join state context subscription
         | ChatRoomCommand.Publish request -> publish state context request
+        | ChatRoomCommand.Announce announcement -> announce state context announcement
         | ChatRoomCommand.Detach request -> detach state context request
         | ChatRoomCommand.ReadHistory(cursor, count, reply) ->
             reply.Reply(Chat.historyAfter cursor count state.Chat)
     }
 
-    let start (config: ChatRoomOptions) channelId (host: ReliableAgentRef<SessionHostCommand>) =
+    /// Client announcements get their own rate limit; serverAuthor writes server ones.
+    let startWith (config: ChatRoomOptions) (announcements: AnnouncementOptions) serverAuthor channelId (host: ReliableAgentRef<SessionHostCommand>) =
         if config.MailboxCapacity < 1 then
             Error (DomainError.InvalidLimit("mailboxCapacity", config.MailboxCapacity))
         elif config.ControlReserve < 1 || int64 config.MailboxCapacity + int64 config.ControlReserve > int64 Int32.MaxValue then
@@ -199,6 +235,12 @@ module ChatRoomAgent =
             Error (DomainError.InvalidLimit("rateRefillMs", config.RateRefillMs))
         elif config.DuplicateWindowMs < 0 then
             Error (DomainError.InvalidLimit("duplicateWindowMs", config.DuplicateWindowMs))
+        elif announcements.RateBurst < 1 then
+            Error (DomainError.InvalidLimit("announcementRateBurst", announcements.RateBurst))
+        elif announcements.RateRefillMs < 1 then
+            Error (DomainError.InvalidLimit("announcementRateRefillMs", announcements.RateRefillMs))
+        elif announcements.DuplicateWindowMs < 0 then
+            Error (DomainError.InvalidLimit("announcementDuplicateWindowMs", announcements.DuplicateWindowMs))
         else
             Chat.create channelId config.HistoryCapacity
             |> Result.map (fun chat ->
@@ -206,14 +248,19 @@ module ChatRoomAgent =
                     Chat = chat
                     Members = Dictionary()
                     Players = Dictionary()
-                    Senders = Dictionary()
-                    Options = config
+                    Messages = admission config.RateBurst config.RateRefillMs config.DuplicateWindowMs
+                    Announcements = admission announcements.RateBurst announcements.RateRefillMs announcements.DuplicateWindowMs
+                    ServerAuthor = serverAuthor
                     Host = AgentOutbox(config.MaxControlDeliveries, host)
                     NextMessageId = 1UL
-                    NextPrune = 0L
                 }
                 let options = {
                     AgentOptions.create $"chat-room-{ChatChannelId.value channelId}" with
                         Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
                 }
                 Agent.Start(options, handle state, isControl = isControl))
+
+    /// Default announcement limits; server announcements are written as "Dreamsleeve".
+    let start (config: ChatRoomOptions) channelId host =
+        let serverName: DisplayName = FSharp.UMX.UMX.tag ServerConfig.defaults.ServerName
+        startWith config AnnouncementOptions.defaults (Announcement.serverAuthor serverName) channelId host

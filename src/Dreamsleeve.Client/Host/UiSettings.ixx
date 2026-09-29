@@ -57,6 +57,14 @@ export namespace Dreamsleeve::Host
     bool combatHideFireflies{false};
     bool combatHideNames{false};
     bool combatHideBubbles{false};
+    // System stream: tab (only its own tab) | all (also the "all" view) | current (every tab).
+    std::string announcementChannels{"all"};
+    // Shown origins and kinds; announcement and admin kinds follow their origin only.
+    bool announcementsServer{true};
+    bool announcementsTrustedClient{true};
+    bool announcementsThirdParty{true};
+    bool announcementsEvents{true};
+    bool announcementsPeriodic{true};
 
     bool operator==(const UiSettings&) const = default;
   };
@@ -145,6 +153,7 @@ export namespace Dreamsleeve::Host
     Choose(value.textFilter, {"off", "mask", "hide"}, defaults.textFilter);
     Choose(value.activationKey, {"Enter", "F2"}, defaults.activationKey);
     Choose(value.theme, {"skyrim", "contrast"}, defaults.theme);
+    Choose(value.announcementChannels, {"tab", "all", "current"}, defaults.announcementChannels);
 
     value.fireflyNameFontSize = Clamp(value.fireflyNameFontSize, 8, 48, defaults.fireflyNameFontSize);
     value.fireflyNameOffset   = Clamp(value.fireflyNameOffset, 0, 512, defaults.fireflyNameOffset);

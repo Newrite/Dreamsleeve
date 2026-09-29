@@ -73,15 +73,29 @@ export interface Player {
   gameStartedAt?: number;
   actorValues?: ActorValue[];
 }
+// The server assigns the origin. A third-party signature is declared by the
+// mod itself and does not raise trust; it is shown as received, as plain text.
+export type AnnouncementOrigin = "server" | "trustedClient" | "thirdParty";
+export type AnnouncementKind = "announcement" | "event" | "admin" | "periodic";
+export interface Announcement {
+  origin: AnnouncementOrigin;
+  kind: AnnouncementKind;
+  signature?: string;
+}
 // filtered: the host masked or replaced the text by the local filter of
 // server-flagged ranges; the original text never crossed the bridge.
+// A system line without `announcement` predates announcements: a server one.
+// `author` of a system line is the player whose client posted it.
 export type Message = {
   id: Id;
   channelId: Id;
   text: string;
   time: number;
   filtered?: boolean;
-} & ({ source: "player"; author: Player } | { source: "system" });
+} & (
+  | { source: "player"; author: Player }
+  | { source: "system"; announcement?: Announcement; author?: Player }
+);
 export interface Settings {
   showFireflyNames: boolean;
   fireflyNameOcclusion: boolean;
@@ -119,6 +133,13 @@ export interface Settings {
   height: number;
   activationKey: "Enter" | "F2";
   theme: "skyrim" | "contrast";
+  // tab: only the announcements tab; all: also "Все"; current: every tab.
+  announcementChannels: "tab" | "all" | "current";
+  announcementsServer: boolean;
+  announcementsTrustedClient: boolean;
+  announcementsThirdParty: boolean;
+  announcementsEvents: boolean;
+  announcementsPeriodic: boolean;
 }
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
@@ -172,5 +193,7 @@ export type HostEvent =
   | AuthEvent
   | { type: "sendResult"; requestId: string; messageId: Id; error?: never }
   | { type: "sendResult"; requestId: string; error: string; messageId?: never }
-  | { type: "settingsResult"; revision: number; error?: string };
+  | { type: "settingsResult"; revision: number; error?: string }
+  // An announcement of another mod through the API was not published.
+  | { type: "announcementResult"; source: string; text: string; error: string };
 export type Send = (command: Command) => boolean;

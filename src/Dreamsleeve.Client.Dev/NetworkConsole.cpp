@@ -47,7 +47,41 @@ namespace
 
   void PrintMessage(std::ostream& output, const Domain::ChatMessage& message)
   {
-    output << '[' << message.channelId << "] " << message.author.displayName << ": " << message.messageText << '\n';
+    output << '[' << message.channelId << "] ";
+    if (message.announcement)
+      output << "announcement source=" << static_cast<int>(message.announcement->source)
+             << " kind=" << static_cast<int>(message.announcement->kind) << " signature=" << message.announcement->signature << ' ';
+    output << message.author.displayName << ": " << message.messageText << '\n';
+  }
+
+  std::optional<Domain::AnnouncementKind> AnnouncementKindNamed(std::string_view name)
+  {
+    using Kind = Domain::AnnouncementKind;
+    if (name == "announcement") return Kind::Announcement;
+    if (name == "event") return Kind::Event;
+    if (name == "admin") return Kind::Admin;
+    if (name == "periodic") return Kind::Periodic;
+    return std::nullopt;
+  }
+
+  // announce <trusted|third> <kind> <signature|-> <text>: server-only kinds are
+  // accepted here on purpose, so a smoke run can see the server refuse them.
+  std::optional<PostAnnouncement> ParseAnnouncement(std::string_view line, std::uint64_t requestId)
+  {
+    std::istringstream input{std::string{line.substr(9)}};
+    std::string        source, kind, signature;
+    if (!(input >> source >> kind >> signature) || (source != "trusted" && source != "third")) return std::nullopt;
+    const auto parsed = AnnouncementKindNamed(kind);
+    if (!parsed) return std::nullopt;
+    std::string text;
+    std::getline(input >> std::ws, text);
+    return PostAnnouncement{
+        requestId,
+        std::move(text),
+        *parsed,
+        source == "trusted" ? Domain::ClientAnnouncementSource::TrustedClient : Domain::ClientAnnouncementSource::ThirdParty,
+        signature == "-" ? std::string{} : std::move(signature)
+    };
   }
 
   void PrintPlayer(std::ostream& output, const Domain::Player& player)
@@ -57,7 +91,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | read | pose <id> | watch <id> <ms> | quit\n";
 
   bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
@@ -142,6 +176,9 @@ namespace
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.status.phase) << '\n';
     if (!output.status.serverName.empty()) console << "server=" << output.status.serverName << '\n';
+    if (output.status.announcements)
+      console << "announcements sources=" << output.status.announcements->allowedSources.size()
+              << " text<=" << output.status.announcements->maxTextLength << '\n';
     if (output.status.authenticating)
       console << "auth=Pending\n";
     else
@@ -386,6 +423,18 @@ int RunNetworkConsole(int argc, char* argv[])
         else
           std::cout << "Command queue is full or closed\n";
       }
+    }
+    else if (line.starts_with("announce "))
+    {
+      Print(exchange, generation, channel, **movement);
+      const auto requestId = exchange.NextRequestId();
+      auto       command   = requestId ? ParseAnnouncement(line, *requestId) : std::nullopt;
+      if (!command)
+        std::cout << Commands;
+      else if (exchange.Post({generation, std::move(*command)}) == CommandPostResult::Queued)
+        std::cout << "request " << *requestId << " queued\n";
+      else
+        std::cout << "Command queue is full or closed\n";
     }
     else
     {

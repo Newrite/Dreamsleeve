@@ -27,17 +27,18 @@ namespace Dreamsleeve.Protocol.Chat {
             "Cg1zZXNzaW9uLnByb3RvEhlEcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Ggpj",
             "aGF0LnByb3RvGgxwbGF5ZXIucHJvdG8iSQoLT3BlblNlc3Npb24SFgoOc2Vz",
             "c2lvbl90aWNrZXQYAyABKAlKBAgBEAJKBAgCEANSCHVzZXJuYW1lUgxkaXNw",
-            "bGF5X25hbWUi1gEKDVNlc3Npb25PcGVuZWQSEwoLc2VydmVyX25hbWUYBiAB",
+            "bGF5X25hbWUinAIKDVNlc3Npb25PcGVuZWQSEwoLc2VydmVyX25hbWUYBiAB",
             "KAkSFgoOc2VsZl9wbGF5ZXJfaWQYASABKAQSGQoRZ2xvYmFsX2NoYW5uZWxf",
             "aWQYAiABKAQSNgoHcGxheWVycxgFIAMoCzIlLkRyZWFtc2xlZXZlLlByb3Rv",
             "Y29sLkNoYXQuUGxheWVySW5mbxI/Cg9yZWNlbnRfbWVzc2FnZXMYBCADKAsy",
-            "Ji5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRNZXNzYWdlSgQIAxAE",
-            "YgZwcm90bzM="));
+            "Ji5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRNZXNzYWdlEkQKDWFu",
+            "bm91bmNlbWVudHMYByABKAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
+            "LkFubm91bmNlbWVudFBvbGljeUoECAMQBGIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.OpenSession), global::Dreamsleeve.Protocol.Chat.OpenSession.Parser, new[]{ "SessionTicket" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "GlobalChannelId", "Players", "RecentMessages" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "GlobalChannelId", "Players", "RecentMessages", "Announcements" }, null, null, null, null)
           }));
     }
     #endregion
@@ -286,6 +287,7 @@ namespace Dreamsleeve.Protocol.Chat {
       globalChannelId_ = other.globalChannelId_;
       players_ = other.players_.Clone();
       recentMessages_ = other.recentMessages_.Clone();
+      announcements_ = other.announcements_ != null ? other.announcements_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -359,6 +361,21 @@ namespace Dreamsleeve.Protocol.Chat {
       get { return recentMessages_; }
     }
 
+    /// <summary>Field number for the "announcements" field.</summary>
+    public const int AnnouncementsFieldNumber = 7;
+    private global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy announcements_;
+    /// <summary>
+    /// Absent from servers without client announcements: do not send PostAnnouncement then.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy Announcements {
+      get { return announcements_; }
+      set {
+        announcements_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -379,6 +396,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (GlobalChannelId != other.GlobalChannelId) return false;
       if(!players_.Equals(other.players_)) return false;
       if(!recentMessages_.Equals(other.recentMessages_)) return false;
+      if (!object.Equals(Announcements, other.Announcements)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -391,6 +409,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (GlobalChannelId != 0UL) hash ^= GlobalChannelId.GetHashCode();
       hash ^= players_.GetHashCode();
       hash ^= recentMessages_.GetHashCode();
+      if (announcements_ != null) hash ^= Announcements.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -423,6 +442,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(50);
         output.WriteString(ServerName);
       }
+      if (announcements_ != null) {
+        output.WriteRawTag(58);
+        output.WriteMessage(Announcements);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -447,6 +470,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(50);
         output.WriteString(ServerName);
       }
+      if (announcements_ != null) {
+        output.WriteRawTag(58);
+        output.WriteMessage(Announcements);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -468,6 +495,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       size += players_.CalculateSize(_repeated_players_codec);
       size += recentMessages_.CalculateSize(_repeated_recentMessages_codec);
+      if (announcements_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Announcements);
+      }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -491,6 +521,12 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       players_.Add(other.players_);
       recentMessages_.Add(other.recentMessages_);
+      if (other.announcements_ != null) {
+        if (announcements_ == null) {
+          Announcements = new global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy();
+        }
+        Announcements.MergeFrom(other.Announcements);
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -530,6 +566,13 @@ namespace Dreamsleeve.Protocol.Chat {
             ServerName = input.ReadString();
             break;
           }
+          case 58: {
+            if (announcements_ == null) {
+              Announcements = new global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy();
+            }
+            input.ReadMessage(Announcements);
+            break;
+          }
         }
       }
     #endif
@@ -567,6 +610,13 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 50: {
             ServerName = input.ReadString();
+            break;
+          }
+          case 58: {
+            if (announcements_ == null) {
+              Announcements = new global::Dreamsleeve.Protocol.Chat.AnnouncementPolicy();
+            }
+            input.ReadMessage(Announcements);
             break;
           }
         }

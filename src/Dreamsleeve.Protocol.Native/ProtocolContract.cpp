@@ -2,6 +2,7 @@
 #include "network.pb.h"
 #include "protocol.pb.h"
 #include "player.pb.h"
+#include "chat.pb.h"
 
 import Dreamsleeve.Protocol;
 
@@ -60,7 +61,10 @@ static_assert(
 static_assert(
   static_cast<long long>(Protocol::Chat::RequestRejectionCode::RateLimited) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_RATE_LIMITED));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 11);
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::AnnouncementNotAllowed) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 12);
 
 static_assert(
   static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) ==
@@ -144,3 +148,45 @@ static_assert(
   static_cast<long long>(Protocol::Chat::LockDifficulty::RequiresKey) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_REQUIRES_KEY));
 static_assert(Dreamsleeve::Protocol::Chat::LockDifficulty_ARRAYSIZE == 8);
+
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementSource::Unspecified) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_UNSPECIFIED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementSource::Server) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_SERVER));
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementSource::TrustedClient) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT));
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementSource::ThirdParty) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_THIRD_PARTY));
+static_assert(Dreamsleeve::Protocol::Chat::AnnouncementSource_ARRAYSIZE == 4);
+
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementKind::Unspecified) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_UNSPECIFIED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementKind::Announcement) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_ANNOUNCEMENT));
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementKind::Event) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_EVENT));
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementKind::Admin) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_ADMIN));
+static_assert(
+  static_cast<long long>(Protocol::Chat::AnnouncementKind::Periodic) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_PERIODIC));
+static_assert(Dreamsleeve::Protocol::Chat::AnnouncementKind_ARRAYSIZE == 5);
+
+static_assert(
+  static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::Unspecified) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_UNSPECIFIED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::TrustedClient) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT));
+static_assert(
+  static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::ThirdParty) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY));
+static_assert(Dreamsleeve::Protocol::Chat::ClientAnnouncementSource_ARRAYSIZE == 3);

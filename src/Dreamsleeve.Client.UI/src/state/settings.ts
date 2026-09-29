@@ -36,6 +36,12 @@ export const defaults: Settings = {
   height: 390,
   activationKey: "Enter",
   theme: "skyrim",
+  announcementChannels: "all",
+  announcementsServer: true,
+  announcementsTrustedClient: true,
+  announcementsThirdParty: true,
+  announcementsEvents: true,
+  announcementsPeriodic: true,
 };
 const bounds: Partial<Record<keyof Settings, [number, number]>> = {
   fireflyNameFontSize: [8, 48],
@@ -81,7 +87,9 @@ export function settingsFrom(input: Partial<Settings>): Settings {
         ["off", "mask", "hide"].includes(String(value))) ||
       (key === "nameMode" &&
         ["username", "display", "character"].includes(String(value))) ||
-      (key === "activationKey" && ["Enter", "F2"].includes(String(value)))
+      (key === "activationKey" && ["Enter", "F2"].includes(String(value))) ||
+      (key === "announcementChannels" &&
+        ["tab", "all", "current"].includes(String(value)))
     )
       Object.assign(result, { [key]: value });
   }

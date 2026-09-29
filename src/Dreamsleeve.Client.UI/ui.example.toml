@@ -36,6 +36,13 @@ width = 680
 height = 390
 activationKey = "Enter"
 theme = "skyrim"
+# tab (only the announcements tab) | all (also "Все") | current (every tab).
+announcementChannels = "all"
+announcementsServer = true
+announcementsTrustedClient = true
+announcementsThirdParty = true
+announcementsEvents = true
+announcementsPeriodic = true
 
 # Written by the plugin, never sent to the server. IDs are scoped by the
 # server address "ip:port": an account ID is unique only within its server.

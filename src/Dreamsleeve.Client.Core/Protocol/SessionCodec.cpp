@@ -20,6 +20,7 @@ namespace Dreamsleeve::Client::Wire::Detail
 
     SessionOpened result{requestId, source.self_player_id(), source.global_channel_id()};
     result.serverName = source.server_name();
+    if (source.has_announcements()) result.announcements = Policy(source.announcements());
     for (const auto& player : source.players())
     {
       auto decoded = Player(config, player);

@@ -62,3 +62,4 @@
 - [Смерть и actor values](DeathAndActorValuesRu.md): исследованные события/хуки, покрытие и выбранный sampling.
 
 - [Модерация, игнор и отображаемые имена](ModerationAndNamesRu.md): серверный словарь и антиспам, личный игнор, выбор имени и режим стримера.
+- [API для других модов](DreamsleeveModApiRu.md): объявления из C++ (`IVDreamsleeve1`) и Papyrus (`DreamsleeveClient`), результаты, лимиты и модель доверия.

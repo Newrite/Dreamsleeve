@@ -422,6 +422,7 @@ class SessionOpened final : public ::google::protobuf::Message
     kRecentMessagesFieldNumber = 4,
     kPlayersFieldNumber = 5,
     kServerNameFieldNumber = 6,
+    kAnnouncementsFieldNumber = 7,
     kSelfPlayerIdFieldNumber = 1,
     kGlobalChannelIdFieldNumber = 2,
   };
@@ -474,6 +475,21 @@ class SessionOpened final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_server_name();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.AnnouncementPolicy announcements = 7;
+  bool has_announcements() const;
+  void clear_announcements() ;
+  const ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy& announcements() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE release_announcements();
+  ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL mutable_announcements();
+  void set_allocated_announcements(::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_announcements(::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE unsafe_arena_release_announcements();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy& _internal_announcements() const;
+  ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL _internal_mutable_announcements();
+
+  public:
   // uint64 self_player_id = 1;
   void clear_self_player_id() ;
   ::uint64_t self_player_id() const;
@@ -498,8 +514,8 @@ class SessionOpened final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 5,
-                                   2, 59,
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   3, 59,
                                    2>
       _table_;
 
@@ -523,6 +539,7 @@ class SessionOpened final : public ::google::protobuf::Message
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::ChatMessage > recent_messages_;
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::PlayerInfo > players_;
     ::google::protobuf::internal::ArenaStringPtr server_name_;
+    ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE announcements_;
     ::uint64_t self_player_id_;
     ::uint64_t global_channel_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -688,7 +705,7 @@ inline void SessionOpened::clear_self_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.self_player_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000010U);
 }
 inline ::uint64_t SessionOpened::self_player_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.self_player_id)
@@ -696,7 +713,7 @@ inline ::uint64_t SessionOpened::self_player_id() const {
 }
 inline void SessionOpened::set_self_player_id(::uint64_t value) {
   _internal_set_self_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.self_player_id)
 }
 inline ::uint64_t SessionOpened::_internal_self_player_id() const {
@@ -713,7 +730,7 @@ inline void SessionOpened::clear_global_channel_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.global_channel_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000020U);
 }
 inline ::uint64_t SessionOpened::global_channel_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.global_channel_id)
@@ -721,7 +738,7 @@ inline ::uint64_t SessionOpened::global_channel_id() const {
 }
 inline void SessionOpened::set_global_channel_id(::uint64_t value) {
   _internal_set_global_channel_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.global_channel_id)
 }
 inline ::uint64_t SessionOpened::_internal_global_channel_id() const {
@@ -831,6 +848,99 @@ inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatM
 SessionOpened::_internal_mutable_recent_messages() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.recent_messages_;
+}
+
+// .Dreamsleeve.Protocol.Chat.AnnouncementPolicy announcements = 7;
+inline bool SessionOpened::has_announcements() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.announcements_ != nullptr);
+  return value;
+}
+inline const ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy& SessionOpened::_internal_announcements() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* p = _impl_.announcements_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy&>(::Dreamsleeve::Protocol::Chat::_AnnouncementPolicy_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy& SessionOpened::announcements() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
+  return _internal_announcements();
+}
+inline void SessionOpened::unsafe_arena_set_allocated_announcements(
+    ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.announcements_);
+  }
+  _impl_.announcements_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
+}
+inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE SessionOpened::release_announcements() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* released = _impl_.announcements_;
+  _impl_.announcements_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE SessionOpened::unsafe_arena_release_announcements() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* temp = _impl_.announcements_;
+  _impl_.announcements_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL SessionOpened::_internal_mutable_announcements() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.announcements_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy>(GetArena());
+    _impl_.announcements_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy*>(p);
+  }
+  return _impl_.announcements_;
+}
+inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL SessionOpened::mutable_announcements()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* _msg = _internal_mutable_announcements();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
+  return _msg;
+}
+inline void SessionOpened::set_allocated_announcements(::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.announcements_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.announcements_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
 }
 
 #ifdef __GNUC__

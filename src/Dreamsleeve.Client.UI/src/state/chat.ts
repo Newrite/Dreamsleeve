@@ -1,5 +1,6 @@
 import { createStore } from "zustand/vanilla";
 import type {
+  Announcement,
   AuthOperation,
   AuthState,
   Command,
@@ -24,9 +25,22 @@ export interface PendingMessage {
   error?: string;
   messageId?: string;
   since?: number; // when the row became failed or unknown
+  // Refused announcement of another mod: the mod label; never retried here.
+  external?: string;
 }
 export const sending = (state: ChatState) =>
   Object.values(state.pending).some((p) => p.status === "sending");
+export const PENDING_LIMIT = 16;
+// Refusals of other mods give way first: they never block the player's own sending.
+function makeRoom(pending: Record<string, PendingMessage>) {
+  const result = { ...pending };
+  const external = Object.entries(result)
+    .filter(([, p]) => p.external !== undefined)
+    .sort(([, a], [, b]) => (a.since ?? a.time) - (b.since ?? b.time));
+  while (Object.keys(result).length >= PENDING_LIMIT && external.length)
+    delete result[external.shift()![0]];
+  return result;
+}
 // A request without a reply becomes "unknown" after this long; a failed or
 // unknown row leaves the passive HUD after the same time, while an active chat
 // keeps it until the player retries or dismisses.
@@ -63,8 +77,41 @@ export interface ChatState {
   // Context menu of a message author, at viewport coordinates.
   authorMenu: { playerId: string; name: string; x: number; y: number } | null;
 }
-export const visible = (message: Message, filter: string) =>
-  filter === "all" || message.channelId === filter;
+// The read-only channel the host projects the announcement stream into.
+export const ANNOUNCEMENTS = "announcements";
+const legacy: Announcement = { origin: "server", kind: "announcement" };
+export const announcementOf = (m: Message) =>
+  m.source === "system" ? (m.announcement ?? legacy) : undefined;
+// Origin and kind switches hide a system line everywhere, its own tab included.
+export function allowed(message: Message, s: Settings) {
+  const a = announcementOf(message);
+  if (!a) return true;
+  return (
+    (a.origin === "server"
+      ? s.announcementsServer
+      : a.origin === "trustedClient"
+        ? s.announcementsTrustedClient
+        : s.announcementsThirdParty) &&
+    (a.kind === "event"
+      ? s.announcementsEvents
+      : a.kind === "periodic"
+        ? s.announcementsPeriodic
+        : true)
+  );
+}
+// Whether the view `filter` includes lines of a channel: announcements join
+// "Все" or every tab as chosen. Unread counting follows the same rule.
+export function shows(channelId: string, filter: string, s: Settings) {
+  if (channelId === filter) return true;
+  if (channelId === ANNOUNCEMENTS)
+    return (
+      s.announcementChannels === "current" ||
+      (filter === "all" && s.announcementChannels === "all")
+    );
+  return filter === "all";
+}
+export const visible = (message: Message, filter: string, s: Settings) =>
+  shows(message.channelId, filter, s) && allowed(message, s);
 export function makeChat(send: Send, now = () => Date.now()) {
   const store = createStore<ChatState>(() => ({
     channels: [],
@@ -97,6 +144,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     authorMenu: null,
   }));
   let sequence = 0;
+  let refusals = 0;
   const touch = () => store.setState({ activity: now(), faded: false });
   function receive(event: HostEvent) {
     const state = store.getState();
@@ -175,8 +223,14 @@ export function makeChat(send: Send, now = () => Date.now()) {
           return true;
         });
         const unread = { ...state.unread };
+        // A hidden announcement is not news anywhere.
         for (const m of added)
-          if (!state.active || state.scrolled || !visible(m, state.filter))
+          if (
+            allowed(m, state.settings) &&
+            (!state.active ||
+              state.scrolled ||
+              !visible(m, state.filter, state.settings))
+          )
             unread[m.channelId] = Math.min(
               HISTORY_LIMIT,
               (unread[m.channelId] ?? 0) + 1,
@@ -299,6 +353,23 @@ export function makeChat(send: Send, now = () => Date.now()) {
           notice: event.error ?? "Настройки сохранены",
         });
         break;
+      case "announcementResult": {
+        // Shown like a refused own line, expiring the same way.
+        const pending = makeRoom(state.pending);
+        if (Object.keys(pending).length >= PENDING_LIMIT) break;
+        const at = now();
+        pending[`x${++refusals}`] = {
+          channelId: ANNOUNCEMENTS,
+          text: event.text,
+          time: at,
+          status: "failed",
+          error: event.error,
+          since: at,
+          external: event.source,
+        };
+        store.setState({ pending });
+        break;
+      }
     }
   }
   function close() {
@@ -322,7 +393,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
       !s.channels.some((c) => c.id === s.target && c.writable)
     )
       return;
-    if (Object.keys(s.pending).length >= 16) {
+    const room = makeRoom(s.pending);
+    if (Object.keys(room).length >= PENDING_LIMIT) {
       store.setState({
         notice: "Удалите старые неподтверждённые сообщения перед отправкой.",
       });
@@ -333,7 +405,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
       filter: s.filter === "all" ? "all" : s.target,
       scrolled: false,
       pending: {
-        ...s.pending,
+        ...room,
         [requestId]: {
           channelId: s.target,
           text,
@@ -346,7 +418,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     if (!send({ type: "sendChat", requestId, channelId: s.target, text })) {
       store.setState({
         pending: {
-          ...s.pending,
+          ...room,
           [requestId]: {
             channelId: s.target,
             text,
@@ -406,7 +478,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     const s = store.getState();
     const unread = { ...s.unread };
     for (const id of Object.keys(unread))
-      if (s.filter === "all" || id === s.filter) unread[id] = 0;
+      if (shows(id, s.filter, s.settings)) unread[id] = 0;
     store.setState({ unread, scrolled: false });
   }
   return {
@@ -444,6 +516,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
         !s.visible ||
         !item ||
         item.status !== "failed" ||
+        item.external !== undefined ||
         !s.connected ||
         sending(s)
       )

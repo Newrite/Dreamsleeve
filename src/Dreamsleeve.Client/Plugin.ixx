@@ -12,6 +12,7 @@ import Dreamsleeve.Events;
 import Dreamsleeve.Hooks;
 import Dreamsleeve.PrismaUI;
 import Dreamsleeve.Game.Fireflies;
+import Dreamsleeve.ModApi;
 
 // SKSE lifecycle. PluginManager::Dispatch_Message calls this on the sender's
 // thread with borrowed payloads, so handlers only record notices; the frame
@@ -93,6 +94,8 @@ namespace Plugin
       return false;
     }
 
+    // Other plugins may ask for the interface from kPostLoad on.
+    ModApi::Register();
     SKSEMenu::RegisterSKSEMenu();
 
     logger::info("{} has finished loading.", plugin->GetName());

@@ -7,6 +7,10 @@ type ChatInputLimits = {
     Username: int
     DisplayName: int
     MessageText: int
+    /// Client announcement text, Unicode scalar values.
+    AnnouncementText: int
+    /// Self-declared mod label of a client announcement, Unicode scalar values.
+    AnnouncementSignature: int
 }
 
 type PlayerInputLimits = {
@@ -83,7 +87,7 @@ module ServerConfig =
             MaxOutgoingBytes = 32 * 1024 * 1024
             MaxInitialPlayers = 4096
             MaxRecentMessages = 512
-            ChatInput = { Username = 32; DisplayName = 64; MessageText = 2000 }
+            ChatInput = { Username = 32; DisplayName = 64; MessageText = 2000; AnnouncementText = 500; AnnouncementSignature = 64 }
             PlayerInput = {
                 CharacterName = 128; PluginName = 260; LocationName = 256
                 ActorValueKey = 128; ActorValueName = 128; MaxActorValues = 64
@@ -106,6 +110,9 @@ module ServerConfig =
             if config.ChatInput.Username < 1 then "ChatInput.Username must be positive."
             if config.ChatInput.DisplayName < 1 then "ChatInput.DisplayName must be positive."
             if config.ChatInput.MessageText < 1 then "ChatInput.MessageText must be positive."
+            if config.ChatInput.AnnouncementText < 1 then "ChatInput.AnnouncementText must be positive."
+            if config.ChatInput.AnnouncementSignature < 1 || config.ChatInput.AnnouncementSignature > 128 then
+                "ChatInput.AnnouncementSignature must be between 1 and 128."
             if config.PlayerInput.CharacterName < 1 then "PlayerInput.CharacterName must be positive."
             if config.PlayerInput.PluginName < 1 then "PlayerInput.PluginName must be positive."
             if config.PlayerInput.LocationName < 1 then "PlayerInput.LocationName must be positive."

@@ -86,7 +86,7 @@ namespace
           {
             P::ClientPacket packet;
             REQUIRE(packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
-            CHECK(event->TryChannelId() == (packet.has_send_chat() ? 1 : 0));
+            CHECK(event->TryChannelId() == (packet.has_send_chat() || packet.has_post_announcement() ? 1 : 0));
             requests.push_back(std::move(packet));
           }
         }
@@ -126,7 +126,7 @@ namespace
       if (message.has_request_rejected())
       {
         const auto request = std::ranges::find(requests, message.request_id(), &P::ClientPacket::request_id);
-        if (request != requests.end() && request->has_send_chat()) channel = 1;
+        if (request != requests.end() && (request->has_send_chat() || request->has_post_announcement())) channel = 1;
       }
       REQUIRE(peer->PushPacket(std::move(packet), static_cast<ChannelId>(channel)));
       server.FlushPackets();
@@ -959,6 +959,110 @@ TEST_CASE("Explicit location transitions report invalid session generation while
   CHECK(output.commandFailures[0].requestId != 0);
   CHECK(fixture.requests.size() == 1);
   CHECK(fixture.samples.empty());
+}
+
+TEST_CASE("Announcements reach only servers that announce them and settle like chat")
+{
+  const auto announce = [](Fixture& fixture, std::uint64_t generation, std::string text, std::string label) {
+    const auto id = Value(fixture.exchange->NextRequestId());
+    REQUIRE(
+      fixture.exchange->Post({
+          generation,
+          PostAnnouncement{
+                           id, std::move(text),
+                           Domain::AnnouncementKind::Event,
+                           Domain::ClientAnnouncementSource::ThirdParty,
+                           std::move(label)
+          }
+    }) == CommandPostResult::Queued);
+    return id;
+  };
+
+  SUBCASE("an older server without a policy gets no unknown payload")
+  {
+    Fixture    fixture;
+    const auto generation = Ready(fixture);
+    CHECK_FALSE(fixture.Drain().status.announcements);
+    const auto id     = announce(fixture, generation, "event", "Mod");
+    const auto output = fixture.ReceiveOutput();
+    REQUIRE(output.commandFailures.size() == 1);
+    CHECK(output.commandFailures[0].requestId == id);
+    CHECK(output.commandFailures[0].code == CommandFailureCode::Unsupported);
+    CHECK(fixture.requests.size() == 1);
+  }
+
+  SUBCASE("the welcome policy bounds the request and the author confirmation settles it")
+  {
+    Fixture fixture;
+    auto    welcome = Welcome(fixture.Open());
+    auto*   policy  = welcome.mutable_session_opened()->mutable_announcements();
+    policy->add_allowed_sources(P::CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY);
+    policy->set_max_text_length(10);
+    policy->set_max_signature_length(8);
+    fixture.Send(welcome);
+    fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+    const auto opened = fixture.Drain();
+    REQUIRE(opened.status.announcements);
+    CHECK(opened.status.announcements->Allows(Domain::ClientAnnouncementSource::ThirdParty));
+    CHECK_FALSE(opened.status.announcements->Allows(Domain::ClientAnnouncementSource::TrustedClient));
+    CHECK(opened.status.announcements->maxTextLength == 10);
+    const auto generation = std::get<ClientSnapshot>(opened.state.updates.front()).generation;
+
+    for (
+      const auto& [text, label] : {
+          std::pair{"Одиннадцать", "Mod"         },
+          std::pair{"event",       ""            },
+          std::pair{"event",       "TooLongLabel"}
+    })
+    {
+      const auto id     = announce(fixture, generation, text, label);
+      const auto output = fixture.ReceiveOutput();
+      REQUIRE(output.commandFailures.size() == 1);
+      CHECK(output.commandFailures[0].requestId == id);
+      CHECK(output.commandFailures[0].code == CommandFailureCode::InvalidRequest);
+    }
+    CHECK(fixture.requests.size() == 1);
+
+    const auto id = announce(fixture, generation, "Пал в бою", "Мод");
+    fixture.Until([&] { return fixture.requests.size() == 2; });
+    const auto& request = fixture.requests.back().post_announcement();
+    CHECK(fixture.requests.back().request_id() == id);
+    CHECK(request.text() == "Пал в бою");
+    CHECK(request.kind() == P::ANNOUNCEMENT_KIND_EVENT);
+    CHECK(request.source() == P::CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY);
+    CHECK(request.signature() == "Мод");
+
+    auto  published    = Publication(id, 3);
+    auto* announcement = published.mutable_chat_published()->mutable_message()->mutable_announcement();
+    announcement->set_source(P::ANNOUNCEMENT_SOURCE_THIRD_PARTY);
+    announcement->set_kind(P::ANNOUNCEMENT_KIND_EVENT);
+    announcement->set_signature("Мод");
+    fixture.Send(published);
+    const auto confirmed = fixture.ReceiveOutput();
+    REQUIRE(confirmed.chatConfirmations.size() == 1);
+    CHECK(confirmed.chatConfirmations[0].requestId == id);
+    const auto added = Added(confirmed);
+    REQUIRE(added.size() == 1);
+    REQUIRE(added[0].announcement);
+    CHECK(added[0].announcement->source == Domain::AnnouncementSource::ThirdParty);
+    CHECK(added[0].announcement->signature == "Мод");
+    CHECK(fixture.errors.empty());
+
+    // A refusal on the chat lane settles the request without a fault.
+    const auto refused = announce(fixture, generation, "ещё", "Мод");
+    fixture.Until([&] { return fixture.requests.size() == 3; });
+    auto rejection = Rejection(refused);
+    rejection.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED);
+    fixture.Send(rejection);
+    const auto output = fixture.ReceiveOutput();
+    REQUIRE(output.rejections.size() == 1);
+    CHECK(output.rejections[0].rejection.code == RequestRejectionCode::AnnouncementNotAllowed);
+    CHECK(fixture.client->Phase() == SessionPhase::Ready);
+
+    REQUIRE(fixture.client->Disconnect());
+    fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
+    CHECK_FALSE(fixture.Drain().status.announcements);
+  }
 }
 
 TEST_SUITE_END();

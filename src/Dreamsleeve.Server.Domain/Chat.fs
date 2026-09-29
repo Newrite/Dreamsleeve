@@ -2,10 +2,69 @@ namespace Dreamsleeve.Server.Domain
 
 open System
 open System.Collections.Generic
+open FSharp.UMX
 
 /// A range of message text in UTF-8 bytes, the unit of the wire string.
 [<Struct>]
 type TextSpan = { Start: int; Length: int }
+
+/// Trust origin of a system-stream message. Only the server assigns it.
+[<RequireQualifiedAccess>]
+type AnnouncementSource =
+    /// Configuration, schedule or administrator; never accepted from a client.
+    | Server
+    /// Requested by the Dreamsleeve client itself.
+    | TrustedClient
+    /// Requested by another mod through the client API.
+    | ThirdParty
+
+/// Origins a client may claim. Server is not representable in a request.
+[<RequireQualifiedAccess>]
+type ClientAnnouncementSource =
+    | TrustedClient
+    | ThirdParty
+
+[<RequireQualifiedAccess>]
+type AnnouncementKind =
+    | Announcement
+    | Event
+    /// Administrator notice; server only.
+    | Admin
+    /// Scheduled repetition; server only.
+    | Periodic
+
+/// Marks a message of the system stream. The signature is the requesting mod's
+/// own label, stored as received; it never raises trust above Source.
+type Announcement = {
+    Source: AnnouncementSource
+    Kind: AnnouncementKind
+    Signature: AnnouncementSignature voption
+}
+
+[<RequireQualifiedAccess>]
+module Announcement =
+    /// Account IDs are positive SQLite integers, so the top uint64 never names a player.
+    let serverAuthorId: PlayerId = UMX.tag UInt64.MaxValue
+
+    /// Author profile of server announcements. Older clients, unaware of the
+    /// announcement field, show such messages as written by this profile.
+    let serverAuthor (serverName: DisplayName) =
+        PlayerData.create serverAuthorId (UMX.tag "server") serverName
+
+    let server kind = { Source = AnnouncementSource.Server; Kind = kind; Signature = ValueNone }
+
+    let fromClient source kind signature =
+        let origin =
+            match source with
+            | ClientAnnouncementSource.TrustedClient -> AnnouncementSource.TrustedClient
+            | ClientAnnouncementSource.ThirdParty -> AnnouncementSource.ThirdParty
+        { Source = origin; Kind = kind; Signature = signature }
+
+    /// Kinds a client may request; administrator and scheduled notices belong to the server.
+    let clientMayRequest kind =
+        match kind with
+        | AnnouncementKind.Announcement | AnnouncementKind.Event -> true
+        | AnnouncementKind.Admin | AnnouncementKind.Periodic -> false
 
 /// An immutable message with the author's profile at the time of sending.
 type ChatMessage =
@@ -17,6 +76,7 @@ type ChatMessage =
         messageText: ChatMessageText
         sentAt: DateTimeOffset
         flagged: TextSpan list
+        announcement: Announcement voption
     }
 
     member this.MessageId = this.messageId
@@ -29,6 +89,8 @@ type ChatMessage =
     /// Ranges the server word list marks without refusing the message; ascending,
     /// non-overlapping. Clients decide whether to show, mask or hide them.
     member this.Flagged = this.flagged
+    /// Present on messages of the system stream; absent on player chat.
+    member this.Announcement = this.announcement
 
 [<RequireQualifiedAccess>]
 module ChatMessage =
@@ -44,10 +106,20 @@ module ChatMessage =
             messageText = messageText
             sentAt = sentAt.ToUniversalTime()
             flagged = []
+            announcement = ValueNone
         }
 
     /// Spans come from moderation of this exact text.
     let withFlagged spans (message: ChatMessage) = { message with flagged = spans }
+
+    /// Moves the message into the system stream of its channel.
+    let withAnnouncement announcement (message: ChatMessage) = { message with announcement = ValueSome announcement }
+
+    /// Server announcements are written by the reserved server profile, not a member.
+    let isServerAnnouncement (message: ChatMessage) =
+        match message.announcement with
+        | ValueSome announcement -> announcement.Source = AnnouncementSource.Server
+        | ValueNone -> false
 
 /// A detached page of retained history, ordered by increasing message ID.
 type ChatHistoryPage = {
@@ -121,11 +193,12 @@ module Chat =
 
     /// Accepts a member's message for this channel. IDs must strictly increase;
     /// gaps are allowed because the server can allocate IDs across all channels.
+    /// Server announcements share the history and IDs without membership.
     /// Validation failures leave membership and history unchanged.
     let append (message: ChatMessage) (chat: Chat) =
         if message.ChannelId <> chat.channelId then
             Error DomainError.ChannelMismatch
-        elif not (chat.players.Contains message.Author.PlayerId) then
+        elif not (ChatMessage.isServerAnnouncement message) && not (chat.players.Contains message.Author.PlayerId) then
             Error (DomainError.NotChatMember message.Author.PlayerId)
         else
             match chat.lastAcceptedId with

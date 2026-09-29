@@ -914,3 +914,121 @@ test("server-flagged words are shown, masked or hidden by the local filter", asy
   await page.getByRole("option", { name: "Показывать как есть" }).click();
   await expect(history).toContainText("t.me/freeskins");
 });
+
+test("announcement preferences save and restore", async ({ page }) => {
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+    await page
+      .getByRole("button", { name: "Открыть меню Dreamsleeve" })
+      .click();
+    await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  };
+  const where = page.getByRole("combobox", { name: "Где показывать" });
+  const boxes = [
+    "От сервера",
+    "От клиента Dreamsleeve",
+    "От других модов",
+    "События",
+    "Периодические",
+  ];
+  await openSettings();
+  await expect(where).toHaveAttribute("data-value", "all");
+  for (const name of boxes)
+    await expect(page.getByLabel(name, { exact: true })).toBeChecked();
+  await where.click();
+  await page
+    .getByRole("option", { name: "Только во вкладке «Объявления»" })
+    .click();
+  await expect(where).toHaveAttribute("data-value", "tab");
+  await page.getByLabel("От других модов", { exact: true }).uncheck();
+  await page.getByLabel("Периодические", { exact: true }).uncheck();
+  await page.getByRole("button", { name: "Сохранить настройки" }).click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toContainText("сохранены");
+  await page
+    .getByRole("group", { name: "Объявления" })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/announcement-settings.png" });
+  await page.reload();
+  await openSettings();
+  await expect(where).toHaveAttribute("data-value", "tab");
+  await expect(
+    page.getByLabel("От других модов", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByLabel("Периодические", { exact: true }),
+  ).not.toBeChecked();
+  for (const name of ["От сервера", "От клиента Dreamsleeve", "События"])
+    await expect(page.getByLabel(name, { exact: true })).toBeChecked();
+});
+
+test("announcement rows show origin and kind, and follow the placement setting", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const history = page.locator('[data-part="messages"]');
+  const rows = page.locator('[data-part="message"]');
+  const tournament = rows.filter({ hasText: "турнир лучников" });
+  await expect(tournament).toHaveAttribute("data-origin", "server");
+  await expect(tournament).toHaveAttribute("data-kind", "event");
+  await expect(tournament).toContainText("Сервер:");
+  await expect(tournament).toContainText("Событие");
+  // A legacy system line without origin reads as a server announcement.
+  await expect(
+    rows.filter({ hasText: "Добро пожаловать в Dreamsleeve" }),
+  ).toContainText("Сервер:");
+  await expect(rows.filter({ hasText: "перезапустится" })).toContainText(
+    "Администрация",
+  );
+  const trusted = rows.filter({ hasText: "Караван до Виндхельма" });
+  await expect(trusted).toHaveAttribute("data-origin", "trustedClient");
+  await expect(trusted).toContainText("Dreamsleeve · Седобородый:");
+  const mod = rows.filter({ hasText: "Карета до Солитьюда" });
+  await expect(mod).toHaveAttribute("data-origin", "thirdParty");
+  await expect(mod).toContainText("Carriage Tours · Северный:");
+  await expect(mod).not.toContainText("Сервер");
+  // Announcement authors are labels, not buttons with a context menu.
+  await expect(mod.getByRole("button")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/announcement-rows.png" });
+
+  const tabs = page.getByRole("navigation", { name: "Каналы" });
+  const setPlacement = async (label: string) => {
+    await page
+      .getByRole("button", { name: "Открыть меню Dreamsleeve" })
+      .click();
+    await page.getByRole("button", { name: "Настройки", exact: true }).click();
+    await page.getByRole("combobox", { name: "Где показывать" }).click();
+    await page.getByRole("option", { name: label }).click();
+    await page.getByRole("button", { name: "Закрыть панель" }).click();
+  };
+  await expect(history).toContainText("турнир лучников");
+  await setPlacement("Только во вкладке «Объявления»");
+  await expect(history).not.toContainText("турнир лучников");
+  await expect(history).toContainText("Кто-нибудь сейчас в Вайтране?");
+  await tabs.getByRole("button", { name: /^Объявления/ }).click();
+  await expect(history).toContainText("турнир лучников");
+  await tabs.getByRole("button", { name: /^Общий/ }).click();
+  await expect(history).not.toContainText("турнир лучников");
+  await setPlacement("Также в текущем канале");
+  await expect(history).toContainText("турнир лучников");
+  await expect(history).toContainText("Кто-нибудь сейчас в Вайтране?");
+  await expect(history).not.toContainText("Давайте через перевал");
+});
+
+test("a refused announcement of another mod can be dismissed but not retried", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Отказ объявления мода" }).click();
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const row = page.locator('[data-part="pending-message"]');
+  await expect(row).toHaveAttribute("data-status", "failed");
+  await expect(row).toContainText("[Объявления] Carriage Tours: Карета");
+  await expect(row).toContainText("Не отправлено: Слишком частые объявления");
+  await expect(row).not.toContainText("Вы:");
+  await expect(
+    row.getByRole("button", { name: "Повторить", exact: true }),
+  ).toHaveCount(0);
+  await row.getByRole("button", { name: "Убрать статус сообщения" }).click();
+  await expect(row).toHaveCount(0);
+});

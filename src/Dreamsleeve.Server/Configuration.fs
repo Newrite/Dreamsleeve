@@ -36,6 +36,7 @@ type ApplicationConfig = {
     Authentication: AuthenticationSettings
     Logging: LoggingSettings
     Moderation: ModerationSettings
+    Announcements: AnnouncementOptions
 }
 
 [<RequireQualifiedAccess>]
@@ -57,13 +58,38 @@ module Configuration =
         }
         Logging = ServerLogging.defaults
         Moderation = { Enabled = true; RulesPath = "moderation.toml" }
+        Announcements = AnnouncementOptions.defaults
     }
+
+    // Each [[table array]] entry starts from these defaults, like a section does.
+    let private listItemDefaults =
+        dict [ typeof<ScheduledAnnouncement>, box { Text = ""; Kind = "Announcement"; DelaySeconds = 0; IntervalSeconds = 0 } ]
+
+    let private isList (target: Type) =
+        target.IsGenericType && target.GetGenericTypeDefinition() = typedefof<list<_>>
+
+    let private makeList (listType: Type) (items: obj list) =
+        let cases = FSharpType.GetUnionCases listType
+        let empty = cases |> Array.find (fun case -> case.Name = "Empty")
+        let cons = cases |> Array.find (fun case -> case.Name = "Cons")
+        List.foldBack (fun item tail -> FSharpValue.MakeUnion(cons, [| item; tail |])) items (FSharpValue.MakeUnion(empty, [||]))
 
     // Records remain immutable domain settings. TOML overrides only supplied fields.
     let rec private overlay path (current: obj) (input: obj) : Result<obj, string> =
         let target = current.GetType()
         let invalid () = Error $"Invalid TOML value or type: {path}"
-        if FSharpType.IsRecord target then
+        if isList target then
+            let element = target.GetGenericArguments()[0]
+            match input, listItemDefaults.TryGetValue element with
+            | (:? TomlTableArray as tables), (true, template) ->
+                let items = tables |> Seq.mapi (fun index table -> overlay $"{path.TrimEnd('.')}[{index}]." template table) |> Seq.toList
+                match items |> List.tryPick (function Error error -> Some error | Ok _ -> None) with
+                | Some error -> Error error
+                | None -> Ok (makeList target (items |> List.choose (function Ok value -> Some value | Error _ -> None)))
+            // An exported empty list is written as an inline empty array.
+            | (:? TomlArray as values), (true, _) when values.Count = 0 -> Ok (makeList target [])
+            | _ -> invalid ()
+        elif FSharpType.IsRecord target then
             match input with
             | :? TomlTable as table ->
                 let fields = FSharpType.GetRecordFields target
@@ -100,7 +126,12 @@ module Configuration =
 
     let rec private toTableValue (value: obj) : obj =
         let valueType = value.GetType()
-        if FSharpType.IsRecord valueType then
+        if isList valueType then
+            let tables = TomlTableArray()
+            for item in value :?> System.Collections.IEnumerable do
+                tables.Add(toTableValue item :?> TomlTable)
+            box tables
+        elif FSharpType.IsRecord valueType then
             let table = TomlTable()
             for field in FSharpType.GetRecordFields valueType do
                 table.Add(field.Name, toTableValue (field.GetValue value))
@@ -159,6 +190,8 @@ module Configuration =
             Error "Moderation.RulesPath must be set when moderation is enabled."
         elif not (AuthService.validate config.Authentication.Service).IsEmpty then
             Error (String.concat " " (AuthService.validate config.Authentication.Service))
+        elif isNull (box config.Announcements) then
+            Error "Configuration sections cannot be null."
         else
             match Uri.TryCreate(config.Authentication.ListenUrl, UriKind.Absolute) with
             | false, _ -> Error "Authentication.ListenUrl must be an absolute HTTP(S) URL."
@@ -173,6 +206,7 @@ module Configuration =
             | true, _ ->
                 ServerLogging.validate config.Logging
                 |> Result.bind (fun () -> ServerConfig.validate config.Server |> Result.mapError (String.concat " "))
+                |> Result.bind (fun _ -> AnnouncementOptions.resolve config.Server.ChatInput config.Announcements |> Result.mapError (String.concat " "))
                 |> Result.map (fun _ -> config)
 
     [<Literal>]

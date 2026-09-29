@@ -36,6 +36,16 @@ namespace Dreamsleeve::Client::Wire::Detail
       floor = end;
     }
 
+    // Values are kept as sent, unknown numbers included: a newer server may add
+    // sources or kinds, and the host treats what it does not know as untrusted.
+    std::optional<Domain::Announcement> announcement;
+    if (message.has_announcement())
+      announcement = Domain::Announcement{
+          static_cast<Domain::AnnouncementSource>(message.announcement().source()),
+          static_cast<Domain::AnnouncementKind>(message.announcement().kind()),
+          message.announcement().signature()
+      };
+
     return Domain::ChatMessage{
         message.message_id(),
         message.channel_id(),
@@ -43,7 +53,8 @@ namespace Dreamsleeve::Client::Wire::Detail
         message.text(),
         Domain::FromUnixMilliseconds(message.sent_at_unix_ms()),
         message.has_character_name() ? std::optional{message.character_name()} : std::nullopt,
-        std::move(flagged)
+        std::move(flagged),
+        std::move(announcement)
     };
   }
 
@@ -51,6 +62,24 @@ namespace Dreamsleeve::Client::Wire::Detail
   {
     target.set_channel_id(value.channelId);
     target.set_text(value.text);
+  }
+
+  void WriteAnnouncement(P::PostAnnouncement& target, const PostAnnouncement& value)
+  {
+    target.set_text(value.text);
+    target.set_kind(static_cast<P::AnnouncementKind>(value.kind));
+    target.set_source(static_cast<P::ClientAnnouncementSource>(value.source));
+    target.set_signature(value.signature);
+  }
+
+  // Unknown source numbers from a newer server stay listed; a client only asks
+  // about the sources it knows.
+  Domain::AnnouncementPolicy Policy(const P::AnnouncementPolicy& source)
+  {
+    Domain::AnnouncementPolicy result{{}, source.max_text_length(), source.max_signature_length()};
+    for (const auto value : source.allowed_sources())
+      result.allowedSources.push_back(static_cast<Domain::ClientAnnouncementSource>(value));
+    return result;
   }
 
 }

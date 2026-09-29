@@ -44,6 +44,7 @@ let private welcome = {
     GlobalChannelId = channel
     Players = [snapshot]
     RecentMessages = [message]
+    AnnouncementSources = [ClientAnnouncementSource.ThirdParty]
 }
 
 let private updatePacket action =
@@ -73,7 +74,7 @@ let private scalarEntry key scalar =
 let private playerUpdate result =
     match (result |> ok).Command with
     | ClientCommand.UpdatePlayer value -> value
-    | ClientCommand.OpenSession _ | ClientCommand.SendChat _ -> failtest "Expected player update"
+    | ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _ -> failtest "Expected player update"
 
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
@@ -154,7 +155,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal result.RequestId 42UL "request correlation"
         match result.Command with
         | ClientCommand.OpenSession actual -> Expect.equal actual ticket "credential preserved exactly"
-        | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ -> failtest "Wrong command"
+        | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ -> failtest "Wrong command"
 
         for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
             packet.OpenSession.SessionTicket <- invalid

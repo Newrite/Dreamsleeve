@@ -30,6 +30,8 @@ module ProtocolCodec =
                 ChatCodec.decodeCommand config.ChatInput.MessageText packet.SendChat
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.UpdatePlayer ->
                 PlayerCodec.decodeUpdate config.PlayerInput packet.UpdatePlayer |> Result.map ClientCommand.UpdatePlayer
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.PostAnnouncement ->
+                ChatCodec.decodeAnnouncement config.ChatInput packet.PostAnnouncement
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.None ->
                 Error(ProtocolCodecFailure.InvalidPayload "payload")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "payload")
@@ -61,7 +63,7 @@ module ProtocolCodec =
 
     let requestLane (request: ClientRequest) =
         match request.Command with
-        | ClientCommand.SendChat _ -> DeliveryLane.Chat
+        | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _ -> DeliveryLane.Chat
         | ClientCommand.OpenSession _ | ClientCommand.UpdatePlayer _ -> DeliveryLane.Control
 
     let responseLane = function

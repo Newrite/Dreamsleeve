@@ -639,3 +639,67 @@ TEST_CASE("Movement batch validates sequence context finite pose and selected ch
 }
 
 TEST_SUITE_END();
+
+TEST_SUITE_BEGIN("Client.Codec");
+
+TEST_CASE("Announcements decode with unknown values kept and encode on the chat lane")
+{
+  const auto codec  = MakeCodec();
+  auto       packet = Published();
+  auto*      value  = packet.mutable_chat_published()->mutable_message()->mutable_announcement();
+  value->set_source(P::ANNOUNCEMENT_SOURCE_SERVER);
+  value->set_kind(P::ANNOUNCEMENT_KIND_PERIODIC);
+  auto decoded = codec.Decode(Bytes(packet), W::Channel::Chat);
+  REQUIRE(decoded);
+  const auto& message = std::get<ChatMessagesReceived>(*decoded).messages.front();
+  REQUIRE(message.announcement);
+  CHECK(message.announcement->source == Domain::AnnouncementSource::Server);
+  CHECK(message.announcement->kind == Domain::AnnouncementKind::Periodic);
+  CHECK(message.announcement->signature.empty());
+
+  // A newer server may add values; they are not a protocol error.
+  value->set_source(static_cast<P::AnnouncementSource>(42));
+  value->set_kind(static_cast<P::AnnouncementKind>(43));
+  value->set_signature("Mod");
+  decoded = codec.Decode(Bytes(packet), W::Channel::Chat);
+  REQUIRE(decoded);
+  const auto& unknown = std::get<ChatMessagesReceived>(*decoded).messages.front();
+  CHECK(static_cast<int>(unknown.announcement->source) == 42);
+  CHECK(unknown.announcement->signature == "Mod");
+  CHECK_FALSE(std::get<ChatMessagesReceived>(*codec.Decode(Bytes(Published()), W::Channel::Chat)).messages.front().announcement);
+
+  auto welcome = Welcome();
+  auto opened  = codec.Decode(Bytes(welcome), W::Channel::Control);
+  REQUIRE(opened);
+  CHECK_FALSE(std::get<W::SessionOpened>(*opened).announcements);
+  auto* policy = welcome.mutable_session_opened()->mutable_announcements();
+  policy->add_allowed_sources(P::CLIENT_ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT);
+  policy->set_max_text_length(500);
+  policy->set_max_signature_length(64);
+  opened = codec.Decode(Bytes(welcome), W::Channel::Control);
+  REQUIRE(opened);
+  const auto& announced = std::get<W::SessionOpened>(*opened).announcements;
+  REQUIRE(announced);
+  CHECK(announced->Allows(Domain::ClientAnnouncementSource::TrustedClient));
+  CHECK_FALSE(announced->Allows(Domain::ClientAnnouncementSource::ThirdParty));
+  CHECK(announced->maxSignatureLength == 64);
+
+  const W::ClientRequest request =
+    PostAnnouncement{5, "Пал", Domain::AnnouncementKind::Event, Domain::ClientAnnouncementSource::ThirdParty, "Мод"};
+  CHECK(W::ProtocolCodec::RequestChannel(request) == W::Channel::Chat);
+  auto encoded = codec.Encode(request);
+  REQUIRE(encoded);
+  P::ClientPacket wire;
+  REQUIRE(wire.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  CHECK(wire.request_id() == 5);
+  CHECK(wire.post_announcement().text() == "Пал");
+  CHECK(wire.post_announcement().kind() == P::ANNOUNCEMENT_KIND_EVENT);
+  CHECK(wire.post_announcement().source() == P::CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY);
+  CHECK(wire.post_announcement().signature() == "Мод");
+  CHECK_FALSE(codec.Encode(
+    W::ClientRequest{
+        PostAnnouncement{6, "", Domain::AnnouncementKind::Event}
+  }));
+}
+
+TEST_SUITE_END();

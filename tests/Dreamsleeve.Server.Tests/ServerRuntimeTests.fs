@@ -121,7 +121,7 @@ let private withRuntimeUsing options createAuthentication run = task {
         Dispose = ignore
     }
     use authenticator = createAuthentication ()
-    use runtime = ServerRuntime.start options ServerConfig.defaults Dreamsleeve.Server.Domain.Moderation.empty (authentication authenticator) transport NullLogger.Instance |> ok
+    use runtime = ServerRuntime.start options ServerConfig.defaults Dreamsleeve.Server.Domain.Moderation.empty AnnouncementOptions.defaults (authentication authenticator) transport NullLogger.Instance |> ok
     let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
@@ -406,7 +406,7 @@ let tests = testList "ServerRuntime" [
             Close = ignore; Reset = ignore; Dispose = ignore
         }
         let config = { ServerConfig.defaults with ServiceTimeoutMs = UInt32.MaxValue }
-        match ServerRuntime.start ServerRuntimeOptions.defaults config Dreamsleeve.Server.Domain.Moderation.empty (authentication authenticator) transport NullLogger.Instance with
+        match ServerRuntime.start ServerRuntimeOptions.defaults config Dreamsleeve.Server.Domain.Moderation.empty AnnouncementOptions.defaults (authentication authenticator) transport NullLogger.Instance with
         | Error errors -> check (errors |> List.exists (fun error -> error.Contains "deadlines")) "Deadline validation missing."
         | Ok runtime -> runtime.Abort(); failwith "Invalid runtime started.")
 

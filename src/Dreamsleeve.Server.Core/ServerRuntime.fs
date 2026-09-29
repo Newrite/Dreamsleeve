@@ -32,6 +32,8 @@ type ServerRuntimeMessage =
     | Read of ReplyChannel<ServerRuntimeSnapshot>
     | FindPlayer of Guid * ReplyChannel<AgentRef<PlayerSessionMessage> option>
     | RevokePlayer of PlayerId
+    /// One-off server announcement from the administrator console.
+    | Announce of ServerAnnouncement
     | Stop
 
 /// Routes managed transport events without waiting for domain agents.
@@ -53,6 +55,9 @@ module ServerRuntime =
         Codec: ProtocolCodec
         MaxActorValues: int
         Moderation: ModerationRules
+        Announcements: AnnouncementOptions
+        Schedule: AnnouncementSchedule
+        ServerAuthor: PlayerData
         Transport: ServerTransport
         Logger: ILogger
         mutable Sources: Sources option
@@ -183,7 +188,7 @@ module ServerRuntime =
         match state.Sources, context.Ref.TryReliable() with
         | Some sources, Some self ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket }
-            match PlayerSession.start options.Player maxActorValues state.Moderation globalId (authenticator.Requests)
+            match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements globalId (authenticator.Requests)
                       (sources.Chat.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                       (self.Map ServerRuntimeMessage.Host) request with
             | Error reason -> fail state context reason
@@ -220,6 +225,12 @@ module ServerRuntime =
                 | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.TooLong maximum)) ->
                     let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = $"Message exceeds {maximum} characters."; Field = "text" }
                     send options state context entry (ServerResponse.ChatRejected(requestId, rejection))
+                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("AnnouncementText", TextError.TooLong maximum)) ->
+                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = $"Announcement exceeds {maximum} characters."; Field = "text" }
+                    send options state context entry (ServerResponse.ChatRejected(requestId, rejection))
+                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("AnnouncementSignature", _)) ->
+                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = "Announcement source is missing, too long or contains control characters."; Field = "source" }
+                    send options state context entry (ServerResponse.ChatRejected(requestId, rejection))
                 | Some requestId, _ -> reject options state context entry lane requestId RequestRejectionCode.InvalidRequest "Invalid request."
             | Ok request when ProtocolCodec.requestLane request <> lane -> close options state context entry
             | Ok request ->
@@ -232,9 +243,11 @@ module ServerRuntime =
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.SendChat(request.RequestId, channelId, text))
                 | ClientCommand.UpdatePlayer update, SessionTable.Ready ->
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.Update(request.RequestId, update))
-                | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _), (SessionTable.Waiting | SessionTable.Opening) ->
+                | ClientCommand.PostAnnouncement announcement, SessionTable.Ready ->
+                    forward options state context entry lane request.RequestId (PlayerSessionMessage.PostAnnouncement(request.RequestId, announcement))
+                | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _), (SessionTable.Waiting | SessionTable.Opening) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
-                | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _), SessionTable.Closing -> ()
+                | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _), SessionTable.Closing -> ()
 
     let private disconnected options state context connectionId =
         match SessionTable.find connectionId state.Table with
@@ -272,7 +285,7 @@ module ServerRuntime =
         | None -> fail state context "Runtime requires a reliable mailbox."
         | Some self ->
             let output = self.Map ServerRuntimeMessage.Host
-            match ChatRoomAgent.start options.Chat globalId output with
+            match ChatRoomAgent.startWith options.Chat state.Announcements state.ServerAuthor globalId output with
             | Error error -> fail state context $"Chat startup failed: {error}"
             | Ok chat ->
                 context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
@@ -357,11 +370,24 @@ module ServerRuntime =
             for event in events do
                 transportEvent options globalId authenticator state context event
 
+    // Announcements are data for the channel owner, not control: a full chat
+    // mailbox drops one of them with a warning instead of stopping the runtime.
+    let private announce state (announcement: ServerAnnouncement) =
+        match state.Sources with
+        | Some sources when not state.Stopping ->
+            match sources.Chat.TryPost(ChatRoomCommand.Announce announcement) with
+            | AgentPostResult.Posted ->
+                state.Logger.LogInformation("Server announcement ({Kind}): {Text}", announcement.Kind, ChatMessageText.value announcement.Text)
+            | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
+                state.Logger.LogWarning("Server announcement dropped: chat admission is unavailable")
+        | Some _ | None -> ()
+
     let private tick (options: ServerRuntimeOptions) globalId authenticator state context =
         // Fallback polling also supports non-notifying test transports.
         drain options globalId authenticator state context
 
         let time = now ()
+        for announcement in AnnouncementSchedule.due time state.Schedule do announce state announcement
         visitRoutes state (tickRoute options time state context)
 
         let sourcesStopped =
@@ -417,6 +443,7 @@ module ServerRuntime =
             // Close pending authentication too: a consumed ticket's reply may still be in flight.
             let affected = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.PlayerId = Some playerId || entry.Phase = SessionTable.Opening) |> Seq.toArray
             for entry in affected do close options state context entry
+        | ServerRuntimeMessage.Announce announcement -> announce state announcement
         | ServerRuntimeMessage.Stop -> stop options state context
         | ServerRuntimeMessage.Read reply ->
             reply.Reply {
@@ -437,15 +464,15 @@ module ServerRuntime =
 
     let private isControl = function
         | ServerRuntimeMessage.Host(SessionHostCommand.Send _) | ServerRuntimeMessage.Read _
-        | ServerRuntimeMessage.FindPlayer _ | ServerRuntimeMessage.TransportReady -> false
+        | ServerRuntimeMessage.FindPlayer _ | ServerRuntimeMessage.TransportReady | ServerRuntimeMessage.Announce _ -> false
         | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick _ | ServerRuntimeMessage.Host _
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
         | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.RevokePlayer _ | ServerRuntimeMessage.Stop -> true
 
     /// The caller owns authentication separately and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.
-    /// Moderation rules are fixed for the runtime lifetime, like the rest of config.
-    let start (options: ServerRuntimeOptions) config (moderation: ModerationRules) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
+    /// Moderation rules and announcements are fixed for the runtime lifetime, like the rest of config.
+    let start (options: ServerRuntimeOptions) config (moderation: ModerationRules) (announcements: AnnouncementOptions) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let limits = [ options.MaxSessions; options.MailboxCapacity; options.ControlReserve; options.OpenTimeoutMs
                        options.ShutdownTimeoutMs; options.PollIntervalMs; options.Player.MailboxCapacity
                        options.Player.ControlReserve; options.Player.MaxPendingChat; options.Player.MaxPendingUpdates; options.Player.MaxBootstrapEvents
@@ -472,11 +499,16 @@ module ServerRuntime =
                 if int64 ordinary + int64 reserve > int64 Int32.MaxValue then "Mailbox capacity and control reserve overflow."
             match ServerConfig.validate config with Ok _ -> () | Error errors -> yield! errors
         ]
-        match errors, ProtocolCodec.create config, ChatChannelId.create 1UL with
-        | [], Ok codec, Ok globalId ->
+        let scheduled = if isNull (box config.ChatInput) then Error [] else AnnouncementOptions.resolve config.ChatInput announcements
+        let errors = errors @ (match scheduled with Ok _ -> [] | Error failures -> failures)
+        match errors, ProtocolCodec.create config, ChatChannelId.create 1UL, DisplayName.create 128 config.ServerName, scheduled with
+        | [], Ok codec, Ok globalId, Ok serverName, Ok entries ->
             let state = {
                 Table = SessionTable.create(); RouteScratch = Array.empty; Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
                 Moderation = moderation
+                Announcements = announcements
+                Schedule = AnnouncementSchedule.create (now ()) entries
+                ServerAuthor = Announcement.serverAuthor serverName
                 Transport = transport; Logger = logger
                 Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
             }
@@ -484,4 +516,4 @@ module ServerRuntime =
             let agent = Agent.Start(agentOptions, handle options globalId authenticator state, isControl = isControl)
             agent.TryPost ServerRuntimeMessage.Start |> ignore
             Ok agent
-        | errors, _, _ -> Error (if errors.IsEmpty then ["Cannot create runtime codec or global channel."] else errors)
+        | errors, _, _, _, _ -> Error (if errors.IsEmpty then ["Cannot create runtime codec, global channel or server author."] else errors)

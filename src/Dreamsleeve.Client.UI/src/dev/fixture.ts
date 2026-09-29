@@ -1,4 +1,4 @@
-import type { Channel, Message, Player } from "../bridge/types";
+import type { Announcement, Channel, Message, Player } from "../bridge/types";
 export const channels: Channel[] = [
   { id: "1", kind: "global", name: "Общий", writable: true },
   { id: "2", kind: "party", name: "Группа", writable: true },
@@ -121,3 +121,54 @@ export const messages: Message[] = lines.map(([channelId, text], i) => ({
     ? { source: "system" as const }
     : { source: "player" as const, author: players[(i + 1) % 3] }),
 }));
+// Every origin and kind. The welcome line above is a legacy system line
+// without `announcement`; the UI treats it as a server announcement.
+const announce = (
+  id: string,
+  minutesAgo: number,
+  announcement: Announcement,
+  text: string,
+  author?: Player,
+): Message => ({
+  id,
+  channelId: "announcements",
+  source: "system",
+  announcement,
+  ...(author ? { author } : {}),
+  text,
+  time: Date.now() - minutesAgo * 60000,
+});
+export const announcements: Message[] = [
+  announce(
+    "a1",
+    6.5,
+    { origin: "server", kind: "event" },
+    "Сегодня в 20:00 — турнир лучников у ворот Вайтрана.",
+  ),
+  announce(
+    "a2",
+    5.5,
+    { origin: "server", kind: "admin" },
+    "Сервер перезапустится через 10 минут.",
+  ),
+  announce(
+    "a3",
+    4.5,
+    { origin: "server", kind: "periodic" },
+    "Правила сервера — в меню ☰. Не забывайте сохраняться.",
+  ),
+  announce(
+    "a4",
+    3.5,
+    { origin: "trustedClient", kind: "announcement" },
+    "Караван до Виндхельма выходит из Ривервуда.",
+    players[2],
+  ),
+  announce(
+    "a5",
+    2.5,
+    { origin: "thirdParty", kind: "event", signature: "Carriage Tours" },
+    "Карета до Солитьюда отправляется через 5 минут.",
+    players[0],
+  ),
+];

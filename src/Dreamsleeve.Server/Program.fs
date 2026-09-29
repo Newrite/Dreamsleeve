@@ -13,7 +13,7 @@ open Dreamsleeve.Server.Infrastructure
 let private printHelp () =
     printfn "Dreamsleeve.Server [--config path.toml] [--port 8778]"
     printfn "Dreamsleeve.Server --write-config path.toml"
-    printfn "Configuration is read at startup. Commands: quit | reset-password <username> | revoke-access <username>."
+    printfn "Configuration is read at startup. Commands: quit | reset-password <username> | revoke-access <username> | announce <text>."
 
 // Console.In may implement ReadLineAsync synchronously. One background reader
 // keeps console waiting separate from runtime failure/Ctrl+C observation.
@@ -29,7 +29,7 @@ let private readConsole (writer: ChannelWriter<string option>) (token: Cancellat
     | :? OperationCanceledException -> writer.TryComplete() |> ignore
     | error -> writer.TryComplete(error) |> ignore
 
-let private waitForStop usernameLimit (authentication: Agent<AuthMessage>) (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) = task {
+let private waitForStop (chatInput: ChatInputLimits) (authentication: Agent<AuthMessage>) (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) = task {
     use inputCancellation = new CancellationTokenSource()
     let input = Channel.CreateBounded<string option>(BoundedChannelOptions(1, SingleReader = true, SingleWriter = true))
     let _reader = Task.Run(Action(readConsole input.Writer inputCancellation.Token))
@@ -47,8 +47,17 @@ let private waitForStop usernameLimit (authentication: Agent<AuthMessage>) (runt
                 | Some value when value.Trim().Equals("quit", StringComparison.OrdinalIgnoreCase) -> stopping <- true
                 | Some value when value.Trim().Length > 0 ->
                     let parts = value.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)
-                    if parts.Length = 2 && (parts[0] = "reset-password" || parts[0] = "revoke-access") then
-                        match Dreamsleeve.Server.Domain.Username.create usernameLimit parts[1] with
+                    if parts.Length = 2 && parts[0] = "announce" then
+                        // An administrator notice for everyone online; it also enters the chat history.
+                        match AnnouncementOptions.serverText chatInput parts[1] with
+                        | Error _ -> printfn "Announcement text must have 1..%d characters without control characters." chatInput.MessageText
+                        | Ok text ->
+                            match runtime.TryPost(ServerRuntimeMessage.Announce { Text = text; Kind = Dreamsleeve.Server.Domain.AnnouncementKind.Admin }) with
+                            | AgentPostResult.Posted -> printfn "Announcement queued."
+                            | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
+                                printfn "Runtime is busy; announcement not queued."
+                    elif parts.Length = 2 && (parts[0] = "reset-password" || parts[0] = "revoke-access") then
+                        match Dreamsleeve.Server.Domain.Username.create chatInput.Username parts[1] with
                         | Error _ -> printfn "Invalid username."
                         | Ok username ->
                             let command = if parts[0] = "reset-password" then AccountAccessCommand.CreatePasswordReset username else AccountAccessCommand.RevokeAccount username
@@ -58,7 +67,7 @@ let private waitForStop usernameLimit (authentication: Agent<AuthMessage>) (runt
                             | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
                             | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) -> printfn "Unexpected administrative result."
                             | Error error -> printfn "Administrative operation failed: %A" error
-                    else printfn "Commands: quit | reset-password <username> | revoke-access <username>"
+                    else printfn "Commands: quit | reset-password <username> | revoke-access <username> | announce <text>"
                 | Some _ -> ()
             else
                 stopping <- true
@@ -87,7 +96,7 @@ let private stopRuntime settings (logger: ILogger) (runtime: Agent<ServerRuntime
 let private serve settings moderation authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
     let web = AuthenticationHttp.build settings moderation authentication log
     try
-        match ServerRuntime.start settings.Runtime settings.Server moderation (AuthService.authenticator authentication) transport logger with
+        match ServerRuntime.start settings.Runtime settings.Server moderation settings.Announcements (AuthService.authenticator authentication) transport logger with
         | Error errors ->
             logger.LogError("Runtime configuration failed: {Errors}", String.concat " " errors)
             return 1
@@ -106,7 +115,7 @@ let private serve settings moderation authentication transport (logger: ILogger)
                     do! web.StartAsync()
                     logger.LogInformation("Listening on {Address}:{Port}. Authentication: {AuthenticationUrl}. Commands: quit",
                                           settings.Server.BindAddress, settings.Server.Port, settings.Authentication.ListenUrl)
-                    do! waitForStop settings.Server.ChatInput.Username authentication runtime canceled.Task
+                    do! waitForStop settings.Server.ChatInput authentication runtime canceled.Task
                 with error ->
                     logger.LogError(error, "Server listener failed")
                     exitCode <- 1
@@ -155,6 +164,8 @@ let private run settings = task {
     | Ok (moderation, warning) ->
     warning |> Option.iter (fun text -> logger.LogWarning("{Warning}", text))
     logger.LogInformation("Moderation word list: {State}", if settings.Moderation.Enabled then "enabled" else "disabled")
+    logger.LogInformation("Client announcements: trusted client {TrustedClient}, third party {ThirdParty}; scheduled: {Scheduled}",
+                          settings.Announcements.TrustedClient.Enabled, settings.Announcements.ThirdParty.Enabled, settings.Announcements.Scheduled.Length)
     try
         // Migrations and password-hasher startup run before either listener.
         let! initialized = Task.Run(fun () -> SqliteAccountStore.initialize settings.Database)

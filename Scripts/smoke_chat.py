@@ -181,6 +181,12 @@ def smoke(args, log, directory: Path):
         "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
         "Authentication": {"ListenUrl": auth_url, "AllowInsecureLoopback": True, "AllowRegistration": True},
         "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},
+        # Own client disabled to see a type refusal; two mod announcements per minute.
+        "Announcements": {
+            "RateBurst": 2, "RateRefillMs": 60000, "DuplicateWindowMs": 0,
+            "TrustedClient": {"Enabled": False}, "ThirdParty": {"Enabled": True},
+            "Scheduled": [{"Text": f"smoke-welcome-{nonce}", "Kind": "Announcement", "DelaySeconds": 0, "IntervalSeconds": 0}],
+        },
     }), encoding="utf-8")
 
     def stage(message: str):
@@ -466,6 +472,49 @@ def smoke(args, log, directory: Path):
         message_once(alice, bob, repeat, args.timeout)
         refused(repeat.upper(), 10)
         stage("word list and repeated-text limit refuse messages before storage and relay")
+
+        # Announcements share the global channel: "[1] announcement source=S kind=K signature=L author: text".
+        def announced(child: Child, marker: str, prefix: str, start: int):
+            child.wait_for(lambda lines: any(marker in line and line.startswith(prefix) for line in lines),
+                           args.timeout, start, read=True)
+
+        welcome = f"smoke-welcome-{nonce}"
+        for child in (alice, bob):
+            announced(child, welcome, "[1] announcement source=1 kind=1 signature= ", 0)
+        stage("a scheduled server announcement reached the shared history under the server profile")
+
+        admin = f"smoke-admin-{nonce}"
+        alice_start, bob_start = alice.mark(), bob.mark()
+        server.send("announce " + admin)
+        for child, start_at in ((alice, alice_start), (bob, bob_start)):
+            announced(child, admin, "[1] announcement source=1 kind=3 ", start_at)
+        stage("an administrator console announcement reached every client")
+
+        def announce_refused(command: str, marker: str, code: int):
+            alice_start, bob_start = alice.mark(), bob.mark()
+            alice.send(command)
+            alice.wait_for(lambda lines: any(f"rejected ({code})" in line for line in lines),
+                           args.timeout, alice_start, read=True)
+            settle_reads(bob, args.timeout)
+            check(not any(marker in line for line in bob.output(bob_start)), f"Refused announcement reached the peer: {marker}")
+
+        announce_refused(f"announce trusted announcement - smoke-trusted-{nonce}", f"smoke-trusted-{nonce}", 11)
+        stage("a disabled announcement source was refused with ANNOUNCEMENT_NOT_ALLOWED")
+
+        announce_refused(f"announce third admin SmokeMod smoke-admin-kind-{nonce}", f"smoke-admin-kind-{nonce}", 1)
+        stage("a server-only announcement kind requested by a client was refused as invalid")
+
+        for index in (1, 2):
+            marker = f"smoke-event-{index}-{nonce}"
+            alice_start, bob_start = alice.mark(), bob.mark()
+            alice.send(f"announce third event SmokeMod {marker}")
+            for child, start_at in ((alice, alice_start), (bob, bob_start)):
+                announced(child, marker, "[1] announcement source=3 kind=2 signature=SmokeMod Smoke Alice: ", start_at)
+        stage("third-party announcements were published with origin, kind, label and author")
+
+        announce_refused(f"announce third event SmokeMod smoke-event-3-{nonce}", f"smoke-event-3-{nonce}", 10)
+        message_once(alice, bob, f"smoke-after-announcements-{nonce}", args.timeout)
+        stage("the announcement rate limit refused the third one while chat stayed available")
 
         alice_start, bob_start = alice.mark(), bob.mark()
         alice.send("disconnect")

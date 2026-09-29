@@ -18,8 +18,8 @@
 Реализован браузерный UI: TypeScript/React/Vite/Zustand, раздельные логика/разметка/CSS,
 темы и заменяемые layouts, общий интерфейс для браузера и PrismaUI через адаптер.
 [План UI](ClientUiPlanRu.md) фиксирует чат, fade, настройки, drag/resize и отдельный
-канал системных объявлений только для чтения. Объявления закладываются в UI сразу,
-их серверная доставка — отдельный близкий к MVP шаг; она ещё не реализована.
+канал системных объявлений только для чтения. Серверная доставка объявлений и API
+для модов реализованы 29.09.2026 (раздел «Объявления» ниже).
 Имя персонажа в истории решено снимком `ChatMessage.character_name` на момент отправки.
 Рабочий проект и инструкции: [Client.UI](../src/Dreamsleeve.Client.UI/README.ru.md).
 C++ host, запись TOML через UI и PrismaUI-интеграция реализованы в SKSE DLL
@@ -566,3 +566,29 @@ Enter/Escape, зажатые клавиши на границах, конфли�
 останавливаются. Контракт UI ↔ SKSE расширен теми же ключами (TOML и JSON через рефлексию
 `UiSettings`), блок «В бою» в настройках чата; тесты: TOML round-trip и defaults (Client.Host),
 vitest defaults/типы, Playwright сохранение и восстановление. В игре не проверялось.
+
+## Объявления и API для модов (29.09.2026)
+
+Системный поток описан в доменной модели ([DomainSpecRu.MD §4.8, §5](DomainSpecRu.MD)):
+источник назначает сервер (`Server` / `TrustedClient` / `ThirdParty`), вид —
+`Announcement` / `Event` / `Admin` / `Periodic`. Протокол v6 расширен совместимо:
+`ChatMessage.announcement`, `PostAnnouncement` (без серверного источника в запросе),
+`SessionOpened.announcements` (политика и признак поддержки), код отказа
+`ANNOUNCEMENT_NOT_ALLOWED = 11`. Объявления идут обычным `ChatPublished` глобального
+канала с ненулевым автором, поэтому старый клиент видит их как сообщения служебного
+профиля сервера или игрока; новый клиент не отправляет `PostAnnouncement` серверу без
+политики. Сервер: секция `[Announcements]` (допуск `TrustedClient`/`ThirdParty`, по
+умолчанию оба, отдельный лимит частоты, расписание `[[Announcements.Scheduled]]`),
+длины в `[Server.ChatInput]`, консольная команда `announce <текст>`; конфигурация, как и
+`moderation.toml`, читается только при запуске. Клиент: вкладка «Объявления», показ по
+источнику и виду, выбор каналов, строка источника в сообщении; облачка объявления не
+показывают. Другие моды публикуют через C++ `IVDreamsleeve1` (SKSE messaging) и Papyrus
+`DreamsleeveClient` ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)); отказ виден в
+логе, строкой «Не отправлено» и как `APIResult`/mod event.
+
+Проверки: 345 managed (Expecto; `dotnet test` завершается с кодом 0), 262 native
+(doctest), 49 vitest, 27 Playwright (Edge), `smoke_chat.py` — 27 проверок, из них 6 новых
+(расписание, консоль, запрет типа, серверный вид, публикация модом, лимит частоты).
+DLL (SE/AE/VR), Client.Dev, production build UI и `DreamsleeveClient.pex` собираются.
+В Skyrim не проверялись: получение интерфейса другим плагином, mod event в Papyrus,
+перекодировка строк Papyrus, вид вкладки и строк в Ultralight.

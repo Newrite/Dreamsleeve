@@ -25,17 +25,18 @@ export namespace Protocol::Chat
 
   enum class RequestRejectionCode : std::int32_t
   {
-    Unspecified          = 0,
-    InvalidRequest       = 1,
-    SessionNotReady      = 2,
-    SessionAlreadyOpen   = 3,
-    UsernameTaken        = 4,
-    ChannelNotFound      = 5,
-    NotChannelMember     = 6,
-    Overloaded           = 7,
-    AuthenticationFailed = 8,
-    TextNotAllowed       = 9,
-    RateLimited          = 10,
+    Unspecified            = 0,
+    InvalidRequest         = 1,
+    SessionNotReady        = 2,
+    SessionAlreadyOpen     = 3,
+    UsernameTaken          = 4,
+    ChannelNotFound        = 5,
+    NotChannelMember       = 6,
+    Overloaded             = 7,
+    AuthenticationFailed   = 8,
+    TextNotAllowed         = 9,
+    RateLimited            = 10,
+    AnnouncementNotAllowed = 11,
   };
 
 }
@@ -81,6 +82,45 @@ export namespace Protocol::Chat
     Hard        = 5,
     VeryHard    = 6,
     RequiresKey = 7,
+  };
+
+}
+
+export namespace Protocol::Chat
+{
+
+  enum class AnnouncementSource : std::int32_t
+  {
+    Unspecified   = 0,
+    Server        = 1,
+    TrustedClient = 2,
+    ThirdParty    = 3,
+  };
+
+}
+
+export namespace Protocol::Chat
+{
+
+  enum class AnnouncementKind : std::int32_t
+  {
+    Unspecified  = 0,
+    Announcement = 1,
+    Event        = 2,
+    Admin        = 3,
+    Periodic     = 4,
+  };
+
+}
+
+export namespace Protocol::Chat
+{
+
+  enum class ClientAnnouncementSource : std::int32_t
+  {
+    Unspecified   = 0,
+    TrustedClient = 1,
+    ThirdParty    = 2,
   };
 
 }

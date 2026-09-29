@@ -189,6 +189,47 @@ export function SettingsPanel({
         </p>
       </fieldset>
       <fieldset className={styles.group}>
+        <legend>Объявления</legend>
+        <label className={styles.choice}>
+          Где показывать
+          <Select
+            label="Где показывать"
+            value={s.announcementChannels}
+            options={[
+              { value: "tab", label: "Только во вкладке «Объявления»" },
+              { value: "all", label: "Также во «Все»" },
+              { value: "current", label: "Также в текущем канале" },
+            ]}
+            onChange={(announcementChannels) =>
+              chat.configure({ announcementChannels })
+            }
+          />
+        </label>
+        {(
+          [
+            ["announcementsServer", "От сервера"],
+            ["announcementsTrustedClient", "От клиента Dreamsleeve"],
+            ["announcementsThirdParty", "От других модов"],
+            ["announcementsEvents", "События"],
+            ["announcementsPeriodic", "Периодические"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              checked={s[key]}
+              onChange={(e) => chat.configure({ [key]: e.target.checked })}
+            />
+          </label>
+        ))}
+        <p className={styles.muted}>
+          Выключенные источники и виды скрываются везде, включая вкладку
+          «Объявления». Подпись другого мода указывает сам мод, сервер её не
+          проверяет. Применяется сразу.
+        </p>
+      </fieldset>
+      <fieldset className={styles.group}>
         <legend>Имена над светлячками</legend>
         {(
           [

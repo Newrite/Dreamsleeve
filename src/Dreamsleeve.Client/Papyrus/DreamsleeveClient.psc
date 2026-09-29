@@ -1,0 +1,74 @@
+Scriptname DreamsleeveClient Hidden
+{Dreamsleeve client API for Papyrus. Requires Dreamsleeve.Client.dll.
+See docs/DreamsleeveModApiRu.md in the Dreamsleeve repository.}
+
+; =======================================================
+; ANNOUNCEMENT KINDS
+; =======================================================
+
+; A general notice.
+int Function KIND_ANNOUNCEMENT() global
+    return 0
+EndFunction
+
+; A game event: a death, an achievement, a discovery.
+int Function KIND_EVENT() global
+    return 1
+EndFunction
+
+; =======================================================
+; RESULT CODES
+; numArg of the mod event "Dreamsleeve_AnnouncementResult";
+; strArg is the source passed to PostAnnouncement.
+; =======================================================
+
+int Function RESULT_PUBLISHED() global
+    return 1
+EndFunction
+
+int Function RESULT_NOT_CONNECTED() global
+    return 2
+EndFunction
+
+int Function RESULT_REJECTED() global
+    return 3
+EndFunction
+
+int Function RESULT_TOO_LONG() global
+    return 4
+EndFunction
+
+int Function RESULT_BUSY() global
+    return 8
+EndFunction
+
+int Function RESULT_UNSUPPORTED() global
+    return 9
+EndFunction
+
+int Function RESULT_RATE_LIMITED() global
+    return 10
+EndFunction
+
+int Function RESULT_FAILED() global
+    return 11
+EndFunction
+
+; =======================================================
+; NATIVE FUNCTIONS
+; =======================================================
+
+; Asks the server to publish asText in the announcements tab of every player.
+; aiKind: KIND_ANNOUNCEMENT() or KIND_EVENT().
+; asSource: the name of your mod, one line; shown next to the text.
+; True means queued, not published: register for the mod event
+; "Dreamsleeve_AnnouncementResult" to learn the outcome. False: not queued
+; (no connection, invalid text or source, a disabled source); the reason is
+; written to DreamsleeveClient.log.
+bool Function PostAnnouncement(string asText, int aiKind, string asSource) global native
+
+; True while a server session is ready.
+bool Function IsConnected() global native
+
+; Version of this script API; 1 for the functions above.
+int Function GetApiVersion() global native

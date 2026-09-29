@@ -68,6 +68,7 @@ public:
       opening     = Wire::OpenSession{*requestId, std::move(sessionTicket)};
       lastRequest = *requestId;
       serverName.clear();
+      ClearAnnouncements();
       pendingChats.clear();
       pendingUpdates.clear();
       ResetMovement();
@@ -154,6 +155,7 @@ private:
     Result<void> Clear(SessionPhase value)
     {
       serverName.clear();
+      ClearAnnouncements();
       pendingChats.clear();
       pendingUpdates.clear();
       ResetMovement();
@@ -255,7 +257,10 @@ private:
       auto self = model.SetSelfPlayer(generation, opened.selfPlayerId);
       if (!self) return std::unexpected{self.error()};
 
-      serverName = std::move(opened.serverName);
+      serverName         = std::move(opened.serverName);
+      globalChannel      = opened.globalChannelId;
+      announcementPolicy = opened.announcements;
+      exchange.PublishAnnouncementPolicy(announcementPolicy);
       phase      = SessionPhase::Ready;
       for (const auto& message : earlyChat)
       {
@@ -401,6 +406,50 @@ private:
       return {};
     }
 
+    // Counted like the server counts: Unicode scalar values of valid UTF-8.
+    static std::size_t CodePoints(std::string_view text)
+    {
+      return static_cast<std::size_t>(
+        std::ranges::count_if(text, [](char byte) { return (static_cast<unsigned char>(byte) & 0xC0) != 0x80; }));
+    }
+
+    void ClearAnnouncements()
+    {
+      globalChannel = 0;
+      announcementPolicy.reset();
+      exchange.PublishAnnouncementPolicy(std::nullopt);
+    }
+
+    // The server stays the judge of origin, rate and words; locally only what
+    // it announced: support at all and the lengths, so no doomed packet is sent.
+    Result<void> Process(std::uint64_t generation, PostAnnouncement& command)
+    {
+      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
+      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
+      if (command.requestId <= lastRequest || pendingUpdates.contains(command.requestId))
+        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+
+      lastRequest = command.requestId;
+      if (!announcementPolicy) return RejectCommand(generation, command.requestId, CommandFailureCode::Unsupported);
+      const bool labelRequired = command.source == Domain::ClientAnnouncementSource::ThirdParty;
+      if (
+        command.text.empty() || CodePoints(command.text) > announcementPolicy->maxTextLength ||
+        (labelRequired && command.signature.empty()) || CodePoints(command.signature) > announcementPolicy->maxSignatureLength)
+        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      if (pendingChats.size() >= config.maxPendingChatRequests)
+        return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      auto packet = codec.Encode(command);
+      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
+
+      auto sent = transport->Send(std::move(*packet), static_cast<ChannelId>(Wire::Channel::Chat));
+      if (!sent) return Fail(sent.error());
+
+      // Accepted announcements are published in the global channel, like chat.
+      pendingChats.emplace(command.requestId, globalChannel);
+      return {};
+    }
+
     Result<void> Process(std::uint64_t, RequestSnapshot&)
     {
       return Publish(true);
@@ -534,6 +583,8 @@ private:
     SessionPhase                                             phase{SessionPhase::Disconnected};
     Wire::OpenSession                                        opening;
     std::string                                              serverName;
+    Domain::ChatChannelId                                    globalChannel{};
+    std::optional<Domain::AnnouncementPolicy>                announcementPolicy;
     std::uint64_t                                            lastRequest{};
     std::unordered_map<std::uint64_t, Domain::ChatChannelId> pendingChats;
     std::unordered_set<std::uint64_t>                        pendingUpdates;

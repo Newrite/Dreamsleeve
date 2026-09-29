@@ -14,6 +14,17 @@ export namespace Dreamsleeve::Client
     std::string           text;
   };
 
+  // Published into the system stream of the global channel. Settled like
+  // SendChat: a ChatConfirmation, a ServerRejection or a CommandFailure.
+  struct PostAnnouncement
+  {
+    std::uint64_t                    requestId{};
+    std::string                      text;
+    Domain::AnnouncementKind         kind{Domain::AnnouncementKind::Announcement};
+    Domain::ClientAnnouncementSource source{Domain::ClientAnnouncementSource::ThirdParty};
+    std::string                      signature;  // Required for ThirdParty.
+  };
+
   // Complete sampled values, not a patch. Only adjacent pending samples from
   // the same session can replace one another; transitions remain ordered.
   struct LocalMovement
@@ -55,6 +66,7 @@ export namespace Dreamsleeve::Client
 
   using ClientCommand = std::variant<
     SendChat,
+    PostAnnouncement,
     LocalMovement,
     LocalLocation,
     LocalActorValues,
@@ -94,7 +106,9 @@ export namespace Dreamsleeve::Client
     SessionNotReady,
     Busy,
     InvalidRequest,
-    EncodingFailed
+    EncodingFailed,
+    // The server did not announce the command in its welcome (an older server).
+    Unsupported
   };
 
   struct CommandFailure
@@ -135,6 +149,8 @@ export namespace Dreamsleeve::Client
     bool              savedLogin{};
     std::string       savedUsername;
     std::uint32_t     authSequence{};  // Bumped per completion so an identical repeat is still observable.
+    // From the welcome of the current session; absent for older servers.
+    std::optional<Domain::AnnouncementPolicy> announcements;
   };
 
   struct PasswordLogin
@@ -449,6 +465,13 @@ public:
         std::make_move_iterator(rejections.begin()),
         std::make_move_iterator(rejections.end()));
       return accepted;
+    }
+
+    // Owner only, with the welcome and on every session reset.
+    void PublishAnnouncementPolicy(std::optional<Domain::AnnouncementPolicy> policy)
+    {
+      std::lock_guard lock{mutex};
+      status.announcements = std::move(policy);
     }
 
     // Owner only; consumers observe phase through the same synchronized exchange.

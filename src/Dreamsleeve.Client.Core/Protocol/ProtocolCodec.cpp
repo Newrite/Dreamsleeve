@@ -41,6 +41,12 @@ namespace Dreamsleeve::Client::Wire
         packet.set_request_id(value.requestId);
         WriteChat(*packet.mutable_send_chat(), value);
       }
+
+      void operator()(const PostAnnouncement& value) const
+      {
+        packet.set_request_id(value.requestId);
+        WriteAnnouncement(*packet.mutable_post_announcement(), value);
+      }
     };
 
   }
@@ -65,6 +71,7 @@ namespace Dreamsleeve::Client::Wire
     }
 
     if (packet.has_send_chat() && packet.send_chat().channel_id() == 0) return Invalid("channel_id");
+    if (packet.has_post_announcement() && packet.post_announcement().text().empty()) return Invalid("text");
 
     if (
       packet.has_update_player() && packet.update_player().has_set_actor_values() &&

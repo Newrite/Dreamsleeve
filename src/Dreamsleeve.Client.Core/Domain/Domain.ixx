@@ -182,6 +182,36 @@ export namespace Domain
     bool operator==(const TextSpan&) const = default;
   };
 
+  using AnnouncementSource       = ::Protocol::Chat::AnnouncementSource;
+  using AnnouncementKind         = ::Protocol::Chat::AnnouncementKind;
+  using ClientAnnouncementSource = ::Protocol::Chat::ClientAnnouncementSource;
+
+  // Marks a message of the system stream. The server assigns the source; the
+  // signature is the requesting mod's own label and never raises trust.
+  struct Announcement
+  {
+    AnnouncementSource source{AnnouncementSource::Server};
+    AnnouncementKind   kind{AnnouncementKind::Announcement};
+    std::string        signature{};
+
+    bool operator==(const Announcement&) const = default;
+  };
+
+  // Client announcement rules announced in the welcome; the server still decides.
+  struct AnnouncementPolicy
+  {
+    std::vector<ClientAnnouncementSource> allowedSources{};
+    std::uint32_t                         maxTextLength{};       // Unicode scalar values.
+    std::uint32_t                         maxSignatureLength{};  // Unicode scalar values.
+
+    bool Allows(ClientAnnouncementSource source) const
+    {
+      return std::ranges::find(allowedSources, source) != allowedSources.end();
+    }
+
+    bool operator==(const AnnouncementPolicy&) const = default;
+  };
+
   struct ChatMessage final
   {
     ChatMessageId   messageId{};
@@ -193,6 +223,9 @@ export namespace Domain
     std::optional<CharacterName> characterName{};
     // Ranges the server marked without refusing the message; ascending, disjoint.
     std::vector<TextSpan> flagged{};
+    // Present on the system stream; the author is then the reserved server
+    // profile (source Server) or the player whose client posted it.
+    std::optional<Announcement> announcement{};
 
     bool operator==(const ChatMessage&) const = default;
   };

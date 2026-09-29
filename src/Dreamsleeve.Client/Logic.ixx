@@ -12,6 +12,7 @@ import Dreamsleeve.Game.Fireflies;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
 import Dreamsleeve.Host.Bridge;
+import Dreamsleeve.ModApi;
 
 // Per-frame orchestration on the game main thread: notices, Core drain and UI
 // dispatch, session policy, telemetry, fireflies and shutdown.
@@ -37,6 +38,7 @@ namespace Logic
     Clock::time_point            readySince{};
     std::uint64_t                bubbleGeneration{};
     Clock::time_point            nextNamesSave{};
+    std::vector<Dreamsleeve::Host::Announcements::Request> announcements;
   };
 
   State& Get()
@@ -198,6 +200,19 @@ namespace Logic
     {
       state.nextNamesSave = now + NamesSaveInterval;
       if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
+    }
+
+    // Plugin API: outcomes of this drain, then the requests queued since the
+    // last frame, checked again against the session they now meet.
+    for (const auto& outcome : frame.announcementResults)
+      ModApi::Report(outcome);
+    Runtime::PublishAnnouncementGate(runtime.session.Ready(), state.output.status.announcements);
+    Runtime::TakeAnnouncements(state.announcements);
+    for (auto& request : state.announcements)
+    {
+      Dreamsleeve::Host::Announcements::Outcome refused{request.signature, request.text};
+      refused.result = runtime.session.PostAnnouncement(runtime.app->Exchange(), std::move(request));
+      if (refused.result != Dreamsleeve::Host::Announcements::Result::Queued) ModApi::Report(refused);
     }
 
     // Bubbles belong to one session: a disconnect or a new generation drops

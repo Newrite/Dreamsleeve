@@ -20,4 +20,6 @@ message SessionOpened {
   reserved 3; // Version 2 contained PlayerProfile entries here.
   repeated PlayerInfo players = 5; // Complete online list, including self.
   repeated ChatMessage recent_messages = 4; // Retained tail, ascending message_id.
+  // Absent from servers without client announcements: do not send PostAnnouncement then.
+  AnnouncementPolicy announcements = 7;
 }

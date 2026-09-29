@@ -33,4 +33,6 @@ module internal SessionCodec =
             GlobalChannelId = ChatChannelId.value value.GlobalChannelId)
         result.Players.AddRange(value.Players |> Seq.map PlayerCodec.player)
         result.RecentMessages.AddRange(value.RecentMessages |> Seq.map ChatCodec.message)
+        // Always present: it also tells the client this server accepts PostAnnouncement.
+        result.Announcements <- ChatCodec.policy config.ChatInput value.AnnouncementSources
         result

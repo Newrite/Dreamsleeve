@@ -5,7 +5,7 @@
 | Файл | Содержимое |
 |---|---|
 | [common.proto](common.proto) | PlayerProfile и FormKey |
-| [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished |
+| [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
 | [session.proto](session.proto) | OpenSession и начальный SessionOpened |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
@@ -65,6 +65,7 @@ plain HTTP допустим только для явно разрешённой 
 |---|---|---|
 | Клиент → сервер | OpenSession | Одноразовый SessionTicket |
 | Клиент → сервер | SendChat | ChannelId и текст, без авторства/времени/MessageId |
+| Клиент → сервер | PostAnnouncement | Текст, вид (Announcement/Event), заявленный источник (TrustedClient/ThirdParty) и подпись; Chat-канал |
 | Сервер → клиент | SessionOpened | SelfPlayerId, GlobalChannelId, весь онлайн и хвост истории |
 | Сервер → клиент | ChatPublished | Одно принятое сообщение |
 | Сервер → клиент | RequestRejected | Общий RequestRejectionCode, объяснение, поле |
@@ -115,6 +116,31 @@ option: пустой или повреждённый пакет может не 
 Корреляция относится к результату команды и не создаёт второй путь изменения чата.
 При обычной публикации сервер передаёт одно сообщение, а локальный UI получает
 Added/Removed из модели. Полная история не копируется при каждом сообщении.
+
+## Объявления (системный поток)
+
+Добавлены совместимо в рамках v6; модель — [DomainSpecRu.MD §4.8](../docs/DomainSpecRu.MD).
+
+- `ChatMessage.announcement = 8` (`Announcement{source, kind, signature}`) отмечает
+  сообщение системного потока. Объявления идут обычным `ChatPublished` **глобального**
+  канала с ненулевым автором: у `SERVER` — зарезервированный профиль (PlayerId
+  `2^64−1`, username `server`, display name = имя сервера), у клиентских — игрок-автор.
+  Старый клиент не знает поля и показывает объявление как сообщение этого автора; его
+  codec (ненулевой автор, известный канал и payload) и модель при этом не ломаются.
+- `AnnouncementSource`: `SERVER` (1) назначает только сервер; `TRUSTED_CLIENT` (2),
+  `THIRD_PARTY` (3). `AnnouncementKind`: `ANNOUNCEMENT` (1), `EVENT` (2), `ADMIN` (3),
+  `PERIODIC` (4); два последних клиент запросить не может.
+- `ClientPacket.post_announcement = 13` (`PostAnnouncement`) — запрос клиента. Его
+  enum `ClientAnnouncementSource` не содержит значения сервера. Ответ как у SendChat:
+  автор получает `ChatPublished` со своим `request_id`, при отказе — `RequestRejected`
+  на Chat-канале (`ANNOUNCEMENT_NOT_ALLOWED`, `TEXT_NOT_ALLOWED`, `RATE_LIMITED`,
+  `INVALID_REQUEST` с полем `text`/`source`/`kind`).
+- `SessionOpened.announcements = 7` (`AnnouncementPolicy`: разрешённые клиентские
+  источники, лимиты текста и подписи в скалярах Unicode). Сервер без поддержки его не
+  присылает — новый клиент тогда не отправляет `PostAnnouncement` и отвечает локальным
+  `CommandFailureCode::Unsupported`, так что старый сервер неизвестного payload не получает.
+- Неизвестные значения source/kind от более нового сервера клиент принимает без ошибки
+  codec; host показывает их с наименьшим доверием.
 
 ## Игровое состояние
 
@@ -319,6 +345,9 @@ ProtocolError. Realtime не порождает коррелированные �
 | 6 | NotChannelMember | Отправитель не состоит в канале |
 | 7 | Overloaded | Запрос не допущен из-за лимита; сессия остаётся рабочей |
 | 8 | AuthenticationFailed | Билет отсутствует, недействителен, просрочен или уже использован |
+| 9 | TextNotAllowed | Текст или подпись не прошли серверный словарь |
+| 10 | RateLimited | Слишком часто или повтор; лимиты чата и объявлений раздельные |
+| 11 | AnnouncementNotAllowed | Сервер не принимает объявления заявленного источника |
 
 F# использует тип, сгенерированный protoc для .NET. Серверный encoder принимает
 только определённые ненулевые коды. C++ использует автоматически сгенерированное
@@ -340,7 +369,7 @@ F# использует тип, сгенерированный protoc для .NE
 внутри веток, без общего `_ -> None`. В Server.Core FS0025 включён как ошибка сборки.
 Входной protobuf PayloadOneofCase перечисляется явно, включая None. Неименованные
 числовые значения обрабатываются веткой `unknown when not (Enum.IsDefined unknown)`.
-В ProtocolCodec.fs и PlayerCodec.fs подавлен только FS0104 о неименованных enum-значениях; новый именованный
+В ProtocolCodec.fs, PlayerCodec.fs и ChatCodec.fs подавлен только FS0104 о неименованных enum-значениях; новый именованный
 вариант по-прежнему требует обработки и вызывает FS0025.
 
 В C++ реализациях кодека включены ошибки C4061/C4062 после generated headers.
@@ -377,7 +406,7 @@ python Scripts/run_tests.py
 3.33.2. Сгенерированные .pb.h/.pb.cc/.g.cs хранятся в Protocol.Native/Protocol.Dotnet
 и не редактируются вручную. Этот же скрипт извлекает DisconnectReason и
 RequestRejectionCode, ActivityKind и LockDifficulty из вывода protoc в Dreamsleeve.Protocol.Native.ixx и генерирует
-ProtocolContract.cpp со static_assert для всех значений. Оба файла также generated;
+ProtocolContract.cpp со static_assert для всех значений (также AnnouncementSource, AnnouncementKind, ClientAnnouncementSource). Оба файла также generated;
 ручного списка числовых кодов на стороне клиента нет. Неожиданный формат enum
 в выводе protoc останавливает генерацию с ошибкой.
 Кодеки используются C++ ClientRuntime/Client.Dev и F# ServerRuntime по настоящему ENet.

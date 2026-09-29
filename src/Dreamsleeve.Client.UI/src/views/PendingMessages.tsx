@@ -1,5 +1,10 @@
 import { useEffect } from "react";
-import { PENDING_TIMEOUT, type Chat, type ChatState } from "../state/chat";
+import {
+  PENDING_TIMEOUT,
+  shows,
+  type Chat,
+  type ChatState,
+} from "../state/chat";
 import styles from "../styles/Chat.module.css";
 
 export function PendingMessages({
@@ -28,17 +33,18 @@ export function PendingMessages({
   }, [chat, s.pending, s.active]);
 
   return Object.entries(s.pending)
-    .filter(([, p]) => s.filter === "all" || p.channelId === s.filter)
+    .filter(([, p]) => shows(p.channelId, s.filter, s.settings))
     .map(([id, p]) => (
       <div
         key={id}
         className={styles.pendingMessage}
         data-part="pending-message"
         data-status={p.status}
+        data-external={p.external !== undefined || undefined}
       >
         <span className={styles.pendingText}>
-          [{s.channels.find((c) => c.id === p.channelId)?.name ?? "Канал"}] Вы:{" "}
-          {p.text}
+          [{s.channels.find((c) => c.id === p.channelId)?.name ?? "Канал"}]{" "}
+          {p.external === undefined ? "Вы" : p.external || "Мод"}: {p.text}
         </span>
         <small role="status">
           {p.status === "sending"
@@ -47,7 +53,7 @@ export function PendingMessages({
               ? ` · Не отправлено: ${p.error}`
               : " · Доставка неизвестна"}
         </small>
-        {s.active && p.status === "failed" && (
+        {s.active && p.status === "failed" && p.external === undefined && (
           <button disabled={!s.connected} onClick={() => chat.retry(id)}>
             Повторить
           </button>

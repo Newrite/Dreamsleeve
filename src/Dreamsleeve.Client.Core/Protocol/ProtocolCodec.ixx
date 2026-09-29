@@ -64,7 +64,7 @@ export namespace Dreamsleeve::Client::Wire
     PlayerUpdate  update;
   };
 
-  using ClientRequest = std::variant<OpenSession, SendChat, UpdatePlayer>;
+  using ClientRequest = std::variant<OpenSession, SendChat, UpdatePlayer, PostAnnouncement>;
 
   struct SessionOpened
   {
@@ -74,6 +74,8 @@ export namespace Dreamsleeve::Client::Wire
     std::vector<Domain::Player>      players;
     std::vector<Domain::ChatMessage> recentMessages;
     std::string                      serverName;
+    // Absent from servers that do not accept PostAnnouncement.
+    std::optional<Domain::AnnouncementPolicy> announcements;
   };
 
   struct ChatAccepted
@@ -120,7 +122,8 @@ public:
 
     static Channel RequestChannel(const ClientRequest& request)
     {
-      return std::holds_alternative<SendChat>(request) ? Channel::Chat : Channel::Control;
+      const bool chat = std::holds_alternative<SendChat>(request) || std::holds_alternative<PostAnnouncement>(request);
+      return chat ? Channel::Chat : Channel::Control;
     }
 
 private:

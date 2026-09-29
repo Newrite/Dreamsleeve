@@ -22,6 +22,11 @@ message ChatMessage {
   // byte offsets into text, ascending and non-overlapping, on code point
   // boundaries. Clients choose to show, mask or hide them.
   repeated TextSpan flagged = 7;
+  // Present on messages of the system stream. They travel in the global channel
+  // so older clients, which ignore this field, show them as ordinary messages of
+  // the author profile: a reserved server profile for SERVER announcements, the
+  // posting player for client announcements.
+  Announcement announcement = 8;
 }
 
 message TextSpan {
@@ -30,3 +35,52 @@ message TextSpan {
 }
 
 message ChatPublished { ChatMessage message = 1; }
+
+// Trust origin assigned by the server. SERVER is never accepted from a client.
+enum AnnouncementSource {
+  ANNOUNCEMENT_SOURCE_UNSPECIFIED = 0;
+  ANNOUNCEMENT_SOURCE_SERVER = 1; // Configuration, schedule or administrator.
+  ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT = 2; // Requested by the Dreamsleeve client itself.
+  ANNOUNCEMENT_SOURCE_THIRD_PARTY = 3; // Requested by another mod through the client API.
+}
+
+// What an announcement is about; display settings filter by it.
+enum AnnouncementKind {
+  ANNOUNCEMENT_KIND_UNSPECIFIED = 0;
+  ANNOUNCEMENT_KIND_ANNOUNCEMENT = 1; // General notice.
+  ANNOUNCEMENT_KIND_EVENT = 2; // Game event: a death, an achievement.
+  ANNOUNCEMENT_KIND_ADMIN = 3; // Administrator notice; server only.
+  ANNOUNCEMENT_KIND_PERIODIC = 4; // Scheduled repetition; server only.
+}
+
+message Announcement {
+  AnnouncementSource source = 1;
+  AnnouncementKind kind = 2;
+  // Self-declared label of the requesting mod, stored as received. Empty for
+  // SERVER. It never raises trust: source alone says who vouches for the text.
+  string signature = 3;
+}
+
+// Origins a client may request. There is deliberately no server value.
+enum ClientAnnouncementSource {
+  CLIENT_ANNOUNCEMENT_SOURCE_UNSPECIFIED = 0;
+  CLIENT_ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT = 1;
+  CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY = 2;
+}
+
+// Client request to publish into the system stream of the global channel.
+// Accepted like SendChat: ChatPublished with request_id to the author, a
+// RequestRejected otherwise. Send only to servers announcing AnnouncementPolicy.
+message PostAnnouncement {
+  string text = 1;
+  AnnouncementKind kind = 2; // ANNOUNCEMENT or EVENT.
+  ClientAnnouncementSource source = 3;
+  string signature = 4; // Required for THIRD_PARTY.
+}
+
+// Server rules a client can check before sending; the server still decides.
+message AnnouncementPolicy {
+  repeated ClientAnnouncementSource allowed_sources = 1;
+  uint32 max_text_length = 2; // Unicode scalar values.
+  uint32 max_signature_length = 3; // Unicode scalar values.
+}

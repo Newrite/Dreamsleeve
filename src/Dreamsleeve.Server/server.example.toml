@@ -31,6 +31,10 @@ IdleWaitMs = 1
 Username = 32
 DisplayName = 64
 MessageText = 2000
+# Client announcements (Unicode scalar values). Server announcements use MessageText.
+AnnouncementText = 500
+# Self-declared label of the mod posting an announcement, 1..128.
+AnnouncementSignature = 64
 
 [Server.PlayerInput]
 CharacterName = 128
@@ -115,3 +119,31 @@ Enabled = true
 # Separate TOML (see moderation.example.toml), relative to the working directory.
 # A missing file starts the server with an empty list and a warning.
 RulesPath = "moderation.toml"
+
+# System stream: server announcements and announcements requested by clients.
+# Read at startup, like the rest of this file; there is no hot reload. A missing
+# section keeps these defaults: every client source is accepted.
+[Announcements]
+# Client announcements per stable account, separate from the chat limit.
+RateBurst = 3
+RateRefillMs = 20000
+# The same normalized text is refused again within this window; 0 disables the check.
+DuplicateWindowMs = 300000
+
+# Requested by the Dreamsleeve client itself. A disabled source is refused with
+# ANNOUNCEMENT_NOT_ALLOWED; further per-source rules will live in these tables.
+[Announcements.TrustedClient]
+Enabled = true
+
+# Requested by other mods through the Dreamsleeve C++/Papyrus API.
+[Announcements.ThirdParty]
+Enabled = true
+
+# Server announcements: Kind is Announcement, Event, Admin or Periodic.
+# IntervalSeconds = 0 publishes once after DelaySeconds; otherwise at least 10.
+# Scheduled messages share the global chat history, so keep intervals long.
+# [[Announcements.Scheduled]]
+# Text = "Welcome to Dreamsleeve. Be kind to other travellers."
+# Kind = "Periodic"
+# DelaySeconds = 60
+# IntervalSeconds = 1800

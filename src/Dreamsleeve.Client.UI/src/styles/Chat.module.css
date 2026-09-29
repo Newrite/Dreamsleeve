@@ -350,3 +350,28 @@
   background: rgb(255 255 255 / 0.1);
   outline: none;
 }
+/* Announcement kind as a small tag and its origin as a label. A mod's own
+   signature is not vouched for by the server, so it stays subdued. */
+.kind {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--system);
+  color: var(--system);
+  font:
+    0.7em/1.4 "Segoe UI",
+    sans-serif;
+  vertical-align: 0.1em;
+}
+.origin {
+  color: var(--system);
+  font-weight: bold;
+}
+.message[data-origin="thirdParty"] .origin {
+  color: var(--muted);
+  font-weight: normal;
+  font-style: italic;
+}
+.message[data-kind="admin"] .kind {
+  border-color: var(--error);
+  color: var(--error);
+}

@@ -1,10 +1,30 @@
 import { PendingMessages } from "./PendingMessages";
 import { useMessageFade } from "../features/useMessageFade";
 import { memo, useEffect, useRef } from "react";
-import { visible, type Chat, type ChatState } from "../state/chat";
-import type { Message } from "../bridge/types";
+import {
+  announcementOf,
+  shows,
+  visible,
+  type Chat,
+  type ChatState,
+} from "../state/chat";
+import type { Announcement, Message } from "../bridge/types";
 import { playerName } from "../state/names";
 import styles from "../styles/Chat.module.css";
+const kindLabels: Record<Announcement["kind"], string> = {
+  announcement: "Объявление",
+  event: "Событие",
+  admin: "Администрация",
+  periodic: "Напоминание",
+};
+// Who stands behind an announcement. A mod signature is its own claim, shown
+// as received next to the player whose client posted it.
+function originLabel(a: Announcement, author: string) {
+  if (a.origin === "server") return "Сервер";
+  const source =
+    a.origin === "trustedClient" ? "Dreamsleeve" : a.signature || "Мод";
+  return author ? `${source} · ${author}` : source;
+}
 // One row per message, memoised on plain props: the window re-renders on
 // every store change (a keystroke, a presence update, a drag), and rebuilding
 // hundreds of rows with locale time formatting each time was the bulk of the
@@ -19,6 +39,9 @@ const MessageRow = memo(function MessageRow({
   channelName,
   channelKind,
   filtered,
+  origin,
+  kind,
+  label,
   faded,
   idleOpacity,
   duration,
@@ -34,6 +57,9 @@ const MessageRow = memo(function MessageRow({
   channelName: string;
   channelKind: string | undefined;
   filtered: boolean;
+  origin: string; // announcement origin, empty for a player line
+  kind: string;
+  label: string;
   faded: boolean;
   idleOpacity: number;
   duration: number;
@@ -52,6 +78,8 @@ const MessageRow = memo(function MessageRow({
       data-channel={channelKind}
       data-source={source}
       data-filtered={filtered || undefined}
+      data-origin={origin || undefined}
+      data-kind={kind || undefined}
     >
       {timestamps && (
         <time>
@@ -82,6 +110,14 @@ const MessageRow = memo(function MessageRow({
           {name}:
         </button>
       )}
+      {origin && (
+        <>
+          <span className={styles.kind}>
+            {kindLabels[kind as Announcement["kind"]]}
+          </span>{" "}
+          <span className={styles.origin}>{label}:</span>
+        </>
+      )}
       <span className={styles.text}> {text}</span>
     </div>
   );
@@ -89,7 +125,7 @@ const MessageRow = memo(function MessageRow({
 export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
   const list = useRef<HTMLDivElement>(null);
   const faded = useMessageFade(s);
-  const messages = s.messages.filter((m) => visible(m, s.filter));
+  const messages = s.messages.filter((m) => visible(m, s.filter, s.settings));
   const last = messages[messages.length - 1]?.id;
   useEffect(() => {
     if (!s.scrolled && list.current) {
@@ -106,7 +142,7 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
     }
   }
   const unread = Object.entries(s.unread).reduce(
-    (n, [id, count]) => n + (s.filter === "all" || s.filter === id ? count : 0),
+    (n, [id, count]) => n + (shows(id, s.filter, s.settings) ? count : 0),
     0,
   );
   const channels = new Map(s.channels.map((c) => [c.id, c]));
@@ -129,6 +165,8 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
           )}
         {messages.map((m) => {
           const channel = channels.get(m.channelId);
+          const announcement = announcementOf(m);
+          const author = m.author ? playerName(m.author, s.settings) : "";
           return (
             <MessageRow
               key={m.id}
@@ -137,12 +175,13 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
               text={m.text}
               source={m.source}
               authorId={m.source === "player" ? m.author.id : ""}
-              name={
-                m.source === "player" ? playerName(m.author, s.settings) : ""
-              }
+              name={m.source === "player" ? author : ""}
               channelName={channel?.name ?? "Канал"}
               channelKind={channel?.kind}
               filtered={!!m.filtered}
+              origin={announcement?.origin ?? ""}
+              kind={announcement?.kind ?? ""}
+              label={announcement ? originLabel(announcement, author) : ""}
               faded={faded(m.id)}
               idleOpacity={s.settings.idleOpacity}
               duration={s.settings.duration}

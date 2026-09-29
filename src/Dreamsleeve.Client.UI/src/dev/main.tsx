@@ -13,7 +13,7 @@ import type {
 } from "../bridge/types";
 import { defaults, settingsFrom } from "../state/settings";
 import { App } from "../views/App";
-import { channels, messages, players } from "./fixture";
+import { announcements, channels, messages, players } from "./fixture";
 import "../styles/base.css";
 import "../themes/skyrim.css";
 import "./workshop.css";
@@ -93,9 +93,7 @@ function projectMessages(list: Message[], s: Settings) {
     .filter((m) => m.source === "system" || !ignored.has(m.author.id))
     .map((m) => filterText(m, s))
     .filter((m): m is Message => m !== undefined)
-    .map((m) =>
-      m.source === "system" ? m : { ...m, author: project(m.author, s) },
-    );
+    .map((m) => (m.author ? { ...m, author: project(m.author, s) } : m));
 }
 function ignoredEvent(s = chat.store.getState().settings) {
   chat.receive({
@@ -107,7 +105,7 @@ function ignoredEvent(s = chat.store.getState().settings) {
   });
 }
 const history: Message[] = [
-  ...messages,
+  ...[...messages, ...announcements].sort((a, b) => a.time - b.time),
   {
     id: "flagged-1",
     channelId: "1",
@@ -301,17 +299,38 @@ window.addEventListener("keydown", (e) => {
     chat.receive({ type: "activate" });
   }
 });
-function publish(system = false) {
+// Stand-in for a mod posting through the API: the server may refuse it.
+const MOD = "Carriage Tours";
+function publish(system?: "server" | "thirdParty") {
   const message: Message = {
     id: String(nextId++),
     channelId: system ? "announcements" : "1",
-    text: system
-      ? "Объявление сервера: сегодня дороги открыты для всех странников."
-      : "Встретимся у старой башни. Я уже в пути.",
+    text:
+      system === "server"
+        ? "Объявление сервера: сегодня дороги открыты для всех странников."
+        : system
+          ? "Карета до Маркарта ждёт у конюшен Вайтрана."
+          : "Встретимся у старой башни. Я уже в пути.",
     time: Date.now(),
-    ...(system
-      ? { source: "system" as const }
-      : { source: "player" as const, author: players[1] }),
+    ...(system === "server"
+      ? {
+          source: "system" as const,
+          announcement: {
+            origin: "server" as const,
+            kind: "announcement" as const,
+          },
+        }
+      : system
+        ? {
+            source: "system" as const,
+            announcement: {
+              origin: "thirdParty" as const,
+              kind: "event" as const,
+              signature: MOD,
+            },
+            author: players[2],
+          }
+        : { source: "player" as const, author: players[1] }),
   };
   history.push(message);
   chat.receive({
@@ -361,7 +380,20 @@ function Workshop() {
           48 игроков онлайн
         </button>
         <button onClick={() => publish()}>Новое сообщение</button>
-        <button onClick={() => publish(true)}>Системное объявление</button>
+        <button onClick={() => publish("server")}>Системное объявление</button>
+        <button onClick={() => publish("thirdParty")}>Объявление мода</button>
+        <button
+          onClick={() =>
+            chat.receive({
+              type: "announcementResult",
+              source: MOD,
+              text: "Карета до Рифтена отправляется через минуту.",
+              error: "Слишком частые объявления",
+            })
+          }
+        >
+          Отказ объявления мода
+        </button>
         <button
           onClick={() => {
             for (let i = 0; i < 80; i++) publish();

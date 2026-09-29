@@ -24,11 +24,21 @@ type DeliveryLane = Dreamsleeve.Protocol.Network.DeliveryLane
 /// A detached encoded packet. Only the transport adapter chooses native flags.
 type TransportPacket = { Lane: DeliveryLane; Bytes: byte array }
 
+/// A client's request to publish into the system stream of the global channel.
+/// The requested origin cannot be Server; kind admission belongs to the codec.
+type AnnouncementRequest = {
+    Text: ChatMessageText
+    Kind: AnnouncementKind
+    Source: ClientAnnouncementSource
+    Signature: AnnouncementSignature voption
+}
+
 [<RequireQualifiedAccess>]
 type ClientCommand =
     | OpenSession of sessionTicket: string
     | SendChat of ChatChannelId * ChatMessageText
     | UpdatePlayer of PlayerUpdate
+    | PostAnnouncement of AnnouncementRequest
 
 type ClientRequest = {
     RequestId: uint64
@@ -40,6 +50,8 @@ type SessionWelcome = {
     GlobalChannelId: ChatChannelId
     Players: PlayerSnapshot list
     RecentMessages: ChatMessage list
+    /// Client announcement origins this server admits; limits come from ChatInput.
+    AnnouncementSources: ClientAnnouncementSource list
 }
 
 type RequestRejectionCode = Dreamsleeve.Protocol.Chat.RequestRejectionCode
