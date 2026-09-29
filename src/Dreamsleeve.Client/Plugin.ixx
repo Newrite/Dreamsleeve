@@ -82,7 +82,8 @@ namespace Plugin
     const auto plugin = SKSE::PluginDeclaration::GetSingleton();
     logger::info("{} v{} is loading on runtime {}", plugin->GetName(), plugin->GetVersion(), REL::Module::get().version().string());
 
-    // The logger above is ours; one 5-byte call needs 14 trampoline bytes.
+    // The logger above is ours; the two 5-byte calls (Main::Update, input
+    // dispatch) need 14 trampoline bytes each.
     SKSE::Init(skse, {.log = false, .trampoline = true, .trampolineSize = 64});
 
     const auto messaging = SKSE::GetMessagingInterface();

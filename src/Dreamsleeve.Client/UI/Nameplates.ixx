@@ -437,12 +437,9 @@ namespace Nameplates
     return host;
   }
 
-  void                               Advance(RE::HUDMenu* menu, float interval, std::uint32_t time);
-  REL::Relocation<decltype(Advance)> original;
-
-  void Advance(RE::HUDMenu* menu, float interval, std::uint32_t time)
+  // Called by the HUDMenu::AdvanceMovie hook in Hooks.ixx once the HUD advanced.
+  export void Advance(RE::HUDMenu* menu)
   {
-    original(menu, interval, time);
     Frame frame;
     {
       auto&            exchange = GetExchange();
@@ -472,19 +469,6 @@ namespace Nameplates
     std::scoped_lock lock{host.mutex};
     host.stopped = true;
     if (host.renderer) host.renderer->Reset();
-  }
-
-  export void Install()
-  {
-    if (REL::Module::IsVR())
-    {
-      logger::info("Firefly names: flat HUD renderer disabled in VR (stereo renderer pending)");
-      return;
-    }
-    // IMenu/HUDMenu::AdvanceMovie, slot 05 on SE and AE. No VR vtable patch.
-    REL::Relocation<std::uintptr_t> vtable{RE::HUDMenu::VTABLE[0]};
-    original = vtable.write_vfunc(0x05, Advance);
-    logger::info("Scaleform firefly names installed");
   }
 
 }

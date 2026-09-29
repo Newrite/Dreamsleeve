@@ -66,6 +66,8 @@ struct glz::meta<Dreamsleeve::Client::Configuration>
     &T::fireflyNameFontSize,
     "fireflyNameOffset",
     &T::fireflyNameOffset,
+    "captureKeyboard",
+    &T::captureKeyboard,
     "fireflyScale",
     &T::fireflyScale,
     "maxPendingMovementSamples",

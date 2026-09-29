@@ -14,13 +14,14 @@
 | `Plugin.ixx` | `SKSE::Init`, listener сообщений SKSE, порядок инициализации |
 | `Runtime.ixx` | Единственный владелец `ClientApplication`, `MovementView`, `Host::Session`, `ui.toml`; ограниченная очередь уведомлений (64) с других потоков; снимок для страницы SKSE Menu |
 | `Logic.ixx` | Кадр: уведомления → Drain (события UI, свежие сообщения → облачки) → политика сессии → готовность мира → телеметрия → светлячки → focus |
-| `Hooks.ixx` | Вызов `Main::Update` внутри главного цикла окна; поиск callsite с проверкой |
+| `Hooks.ixx` | Все патчи игры: ID Address Library, смещения callsite, проверка байтов и thunks для `Main::Update`, `HUDMenu::AdvanceMovie` (имена над светлячками) и рассылки `InputEvent` (захват клавиатуры) |
 | `Events.ixx` | Sinks: меню, ввод, `TESDeathEvent`, `TESActivateEvent`; только `Runtime::Post` |
 | `Game/Telemetry.ixx` | Персонаж, пространство, позиция, activity, place, actor values |
 | `Game/Fireflies.ixx` | Placed reference на каждого видимого игрока из `MovementView` |
+| `Game/Input.ixx` | Состояние захвата клавиатуры и фильтрация цепочки `InputEvent` до всех sinks; адресов не содержит |
 | `UI/PrismaUI.ixx` | View, listener, доставка событий, focus/visibility |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
-| `Host/Bridge.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx` | Без CommonLib: JSON-контракт UI, TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата. Компилируются также в `Dreamsleeve.Client.Tests` |
+| `Host/Bridge.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx` | Без CommonLib: JSON-контракт UI, TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры. Компилируются также в `Dreamsleeve.Client.Tests` |
 
 `Runtime::Get()` хранит единственный экземпляр приложения; getter не перемещает
 владение (прежний вариант возвращал `std::move` статического `unique_ptr` и
@@ -80,7 +81,8 @@ bAlwaysActive): при паузе, в главном меню и во время
 крутит этот же цикл. Сигнатура `void(Main*)`; прежний второй параметр `float` не существовал.
 Адрес берётся из Address Library плюс смещение callsite для runtime; диагностика
 patch-site остаётся у трамплина CommonLib (`skse_patch_safety`). Трамплин выделяется через
-`SKSE::Init(..., {.trampoline = true, .trampolineSize = 64})`.
+`SKSE::Init(..., {.trampoline = true, .trampolineSize = 64})`; второй 5-байтовый call в нём —
+хук рассылки ввода (см. «Захват клавиатуры»).
 
 Не проверялись реально: другие версии AE (1.6.640, 1.7.99, 1.7.104, GOG/Epic) —
 смещение callsite для них нужно снять с соответствующего binary и добавить отдельно.
@@ -91,6 +93,7 @@ patch-site остаётся у трамплина CommonLib (`skse_patch_safety`
 |---|---|---|
 | Сообщения SKSE | поток отправителя (на практике главный) | `Runtime::Post` → кадр |
 | `MenuOpenCloseEvent`, `InputEvent` | главный (UI/input) | `Runtime::Post` → кадр |
+| Хук рассылки `InputEvent` (`PollInputDevices`) | главный, внутри `Main::Update` | фильтрация цепочки на месте; состояние фильтра под mutex |
 | `TESDeathEvent`, `TESActivateEvent` | могут приходить с AI/скриптовых потоков | `Runtime::Post` → кадр |
 | PrismaUI: DOM ready, JS listener, console | PrismaUI 1.5.1 оборачивает каждый callback в `SKSE::GetTaskInterface()->AddTask`, т.е. главный поток (проверено по `src/API/API.cpp` framework) | прямой вызов `Host::Session`/`ClientApplication` |
 | Рендер SKSE Menu Framework | вне игрового потока | читает `MenuSnapshot` под mutex, действия — `Runtime::Post` |
@@ -158,6 +161,29 @@ PrismaUI открывает свой FocusMenu (контекст MenuMode, бл�
 перехватывает клавиатуру через WndProc. Escape в JS → команда `close` → `Unfocus`. Если игра
 сама сняла focus, через 1,5 с после активации `HasFocus` даёт false и UI получает `deactivate`.
 Enter по умолчанию не занят в контексте Gameplay; в контекстах меню активация заблокирована списком меню.
+
+### Захват клавиатуры
+
+FocusMenu PrismaUI блокирует только gameplay-controls; sinks `BSInputDeviceManager` при
+активном чате продолжали получать каждую клавишу, и хоткеи любых SKSE-модов срабатывали во
+время набора. `Hooks.ixx` ставит `write_call<5>` на вызов рассылки внутри
+`BSInputDeviceManager::PollInputDevices` (ID 67315/68617, смещение +0x7B, VR +0x81) —
+единственную точку, через которую цепочка событий кадра попадает во все sinks, включая
+`MenuControls`/`PlayerControls`. Перед патчем сверяются байты `mov [rsp+40h], rcx; mov rcx, rsi;
+call` и цель вызова (ID 67355/68655; VR — только диапазон): незнакомая версия оставляет ввод
+нетронутым с ошибкой в логе, чужой хук на том же вызове — цепляется за нами как оригинал.
+
+Политика — `Host::InputCapture::Filter` (без CommonLib, doctest): фильтруются только
+`ButtonEvent` клавиатуры. `SetActive(true)` в PrismaUI начинает захват: клавиши, которые
+игра к этому моменту видит нажатыми (в том числе открывший чат Enter), доставляют лишь
+отпускание, всё остальное с клавиатуры отбрасывается. Мышь (нужна PrismaUI через тот же
+sink), геймпад, VR, `CharEvent`, движение мыши и thumbstick проходят всегда. `SetActive(false)`
+(команда `close`, потеря фокуса, пересоздание страницы) снимает захват целиком.
+Цепочка правится на месте (`Input::Dispatch` в `Game/Input.ixx`) — `next` допущенных событий перекидывается через отброшенные,
+голова передаётся через свой стек-слот, после возврата связи восстанавливаются; события
+принадлежат игре и не освобождаются. Отключение: `captureKeyboard = false` в `client.toml`.
+Хук не защищает от `GetAsyncKeyState` и чужих оконных хуков. Подробности и адреса:
+[InputCaptureHookRu.md](InputCaptureHookRu.md). В игре не проверялось.
 
 ## Телеметрия
 
@@ -327,7 +353,7 @@ fireflyNameOffset = 35 # выше центра светлячка, игровы�
 в VR намеренно отключены: проекция на плоский HUD не обеспечивает привязку
 к точке мира для обоих глаз. Для VR нужен отдельный стереокорректный рендерер.
 
-Проверка хука: slot 0x05 HUDMenu; SE 1.5.97 vtable ID 268816,
+Проверка хука (ставится в `Hooks.ixx`): slot 0x05 HUDMenu; SE 1.5.97 vtable ID 268816,
 функция 0x14087EC70; AE 1.6.1170 ID 215362, функция 0x14091E760.
 Адреса только для диагностики; код использует CommonLib relocation.
 SE HasLineOfSight: ID 53029 / 0x14091C620, ветка игрока 0x1406A4A00;

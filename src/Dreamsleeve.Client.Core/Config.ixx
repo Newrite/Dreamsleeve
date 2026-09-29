@@ -52,6 +52,8 @@ export namespace Dreamsleeve::Client
     bool             fireflyNameOcclusion{true};
     float            fireflyNameFontSize{18.0f};
     float            fireflyNameOffset{35.0f};
+    // Withhold keyboard events from the game and other SKSE mods while the chat is open.
+    bool             captureKeyboard{true};
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{4096};
 

@@ -1,46 +1,149 @@
-# Dreamsleeve server word list. Copy to moderation.toml next to the server
-# (Moderation.RulesPath in server.toml). Read once at startup.
+# Dreamsleeve server word list, tuned for stream safety rather than profanity.
+# Copy to moderation.toml next to the server (Moderation.RulesPath in
+# server.toml). Read once at startup. Swearing is deliberately NOT listed:
+# it is allowed on the major streaming platforms; add it yourself if needed.
 #
-# Checked: username and display name at registration, every chat message before
-# it is stored or relayed, and the character name before it is published.
-# Stored accounts are never rewritten: names that fail these rules are shown to
-# other players as "Player <id>" / "hidden.<id>", and a failing character name
-# is withheld (clients fall back to the display name).
+# Two tiers:
+#   [block] — refused. Checked for new usernames and display names at
+#             registration, every chat message before it is stored or relayed,
+#             and the character name before it is published.
+#   [flag]  — delivered, but the matched ranges are marked. Each player chooses
+#             in the chat settings whether to show them, mask them with stars
+#             or hide the whole message ("Помеченные сообщения"). Flags apply to
+#             chat text only; names use the [block] tier.
+# Move any entry between the tiers to match your community. Older files with
+# words/substrings/exceptions at the top level are read as [block].
 #
-# Matching uses a separate normalized copy of the text; the original is kept:
-# case, Unicode compatibility forms (NFKC), accents and other combining marks,
-# invisible/format characters, look-alike Cyrillic/Greek letters, digits and
-# symbols typed as letters (4/@ → a, 3 → e, 1/!/| → i, 0 → o, 5/$ → s, 7 → t,
-# 8 → b), letters repeated more often than in the rule, and punctuation typed
-# inside a word ("b.a.d"). This is a baseline filter, not complete moderation.
+# Rule kinds in each tier:
+#   words      — whole words or phrases: a word boundary is required on both
+#                sides, so "хач" never matches "хачапури". Spaces in a phrase
+#                match any spacing and punctuation between the words.
+#   substrings — anywhere, also inside longer words. Only for roots that do not
+#                occur in ordinary words.
+#   exceptions — allowed words/phrases; a match lying entirely inside one of
+#                them is ignored.
+#
+# Matching uses a separate normalized copy; the original text is kept. Handled:
+# case, full-width and other compatibility forms (NFKC), accents, invisible and
+# format characters, Cyrillic/Greek look-alike letters, digits and symbols typed
+# as letters (4/@ → a, 3 → e, 1/!/| → i, 0 → o, 5/$ → s, 7 → t, 8 → b),
+# stretched letters ("nooo") and punctuation inside a word ("n.a.z.i").
+# Punctuation inside a rule is optional: "t.me" also matches "tme".
+# Letters separated only by spaces are not joined, to avoid false positives.
+#
+# Not covered on purpose: political opinions, religion, sexual orientation and
+# gender identity as topics, names of public figures. Laws differ by country;
+# add region-specific entries yourself. This is a baseline filter, not complete
+# moderation: context, images, links in other forms and new slang pass through.
 
-# Whole words or phrases: a match needs a word boundary on both sides, so
-# "shit" does not match "shiitake". Spaces in a phrase match any spacing.
+[block]
 words = [
-  "fuck",
-  "fucking",
-  "motherfucker",
-  "shit",
-  "bitch",
-  "хуй",
-  "хуйня",
-  "пизда",
-  "блядь",
-  "сука",
-  "мудак",
+  # Sexual content involving minors.
+  "child porn", "child pornography", "cp links", "pedo porn", "lolicon", "shotacon",
+  "детское порно", "детская порнография", "педопорно", "лоликон", "шотакон",
+  # Direct incitement to suicide or self-harm.
+  "kill yourself", "kill urself", "kill ur self", "kys", "neck yourself",
+  "убей себя", "убейся", "самоубейся", "выпились", "вскройся",
+  "иди вскройся", "повесься", "иди повесься", "выйди в окно", "шагни с крыши",
+  # Swatting.
+  "swatting", "swat him", "swat her", "сватинг", "сватнуть",
 ]
-
-# Substrings match anywhere, including inside longer words. Use them only for
-# roots that do not occur in ordinary words.
 substrings = [
-  "fuck",
-  "cunt",
-  "пизд",
-  "бляд",
+  "childporn", "pedoporn", "педопорн",
 ]
+exceptions = []
 
-# Allowed whole words or phrases. A rule match lying entirely inside one of them
-# is ignored (the classic case: the substring "cunt" inside "Scunthorpe").
+[flag]
+words = [
+  # --- Hate slurs, English ---
+  # "nigger", "nigga" and "faggot" forms are covered by substrings below.
+  "negroid", "fag", "fags", "dyke", "dykes",
+  "tranny", "trannies", "shemale", "shemales",
+  "retard", "retards", "retarded",
+  "kike", "kikes", "spic", "spics", "chink", "chinks", "gook", "gooks",
+  "wetback", "wetbacks", "beaner", "beaners", "raghead", "ragheads",
+  "towelhead", "towelheads", "paki", "pakis",
+  "golliwog", "jigaboo", "porch monkey", "zipperhead",
+
+  # --- Hate slurs, Russian ---
+  # "ниггер", "черномаз", "черножоп", "пидор" forms are covered by substrings.
+  "нигга", "нигеры", "нигеров",
+  "негритос", "негритосы", "негритосов",
+  "чурка", "чурки", "чурок", "чуркам", "чурками", "чурбан",
+  "хач", "хачи", "хачей", "хачам", "хачик", "хачики", "хачиков",
+  "жид", "жиды", "жидов", "жидам", "жидами", "жидовка", "жидовский",
+  "жидовская", "жидовские", "жидяра", "жидяры",
+  "хохол", "хохлы", "хохлов", "хохлам", "хохлушка", "хохлятский",
+  "москаль", "москали", "москалей", "кацап", "кацапы", "кацапов",
+  "свинорус", "свинорусы", "рашист", "рашисты", "рашистов",
+  "гомик", "гомики", "педик", "педики", "педиков", "лесбуха", "лесбухи",
+  "трансуха", "трансухи", "даун", "дауны", "даунов", "хохлосрач",
+
+  # --- Extremist slogans and symbols ---
+  "sieg heil", "siegheil", "heil hitler", "zieg heil", "зиг хайль", "зигхайль",
+  "хайль гитлер", "1488", "14 88", "white power", "white pride",
+  "white pride world wide", "white genocide", "great replacement", "rahowa",
+  "gas the jews", "holocaust is a lie", "holocaust never happened",
+  "holohoax", "холокоста не было",
+  "смерть неверным", "death to infidels", "death to jews", "смерть жидам",
+  "zyklon b", "циклон б",
+
+  # --- Terrorist and banned extremist organizations ---
+  "isis", "игил", "даиш", "daesh", "al qaeda", "al qaida", "alqaeda",
+  "аль каида", "аль-каида", "ауе", "колумбайн", "скулшутинг", "скулшутер",
+  "скулшутеры", "school shooter", "school shooting",
+  "bomb the school", "shoot up the school", "взорвать школу", "расстрелять школу",
+
+  # --- Threats and violent wishes ---
+  "i will kill you", "i'll kill you", "ill kill you", "go die",
+  "hope you die", "die in a fire", "i know where you live",
+  "я тебя убью", "убью тебя", "найду и убью", "чтоб ты сдох",
+  "чтобы ты сдох", "сдохни", "знаю где ты живешь", "я знаю где ты живешь",
+  "rape", "raped", "raping", "rapist", "изнасилую", "изнасиловать", "изнасилование",
+
+  # --- Self-harm talk (not refused: people may need help) ---
+  "suicide", "self harm", "selfharm", "cut myself", "cutting myself",
+  "суицид", "самоубийство", "порезать вены", "режу вены", "селфхарм", "самоповреждение",
+
+  # --- Sexual content and solicitation ---
+  "send nudes", "nudes", "onlyfans", "only fans", "porn", "porno", "xhamster", "rule34", "rule 34", "hentai", "dick pic", "dickpic",
+  "webcam sex", "sex cam", "sexcam", "escort service",
+  "нюдсы", "нюдс", "скинь нюдсы", "онлифанс", "порно", "порнуха", "порнушка",
+  "порнография", "хентай", "дикпик", "секс по вебке", "интим услуги",
+  "интим-услуги", "проститутки", "эскорт услуги",
+
+  # --- Drugs trade ---
+  "mephedrone", "cocaine", "heroin", "methamphetamine", "crystal meth",
+  "amphetamine", "mdma", "alpha pvp", "buy drugs", "darknet market",
+  "мефедрон", "меф", "мефа", "мефчик", "кокаин", "героин",
+  "метамфетамин", "амфетамин", "мдма", "альфа пвп", "купить наркотики",
+  "наркошоп", "купить закладку", "закладки мефа", "даркнет маркет",
+
+  # --- Gambling promotion and scams ---
+  "1xbet", "1хбет", "melbet", "мелбет", "pin up casino", "pinup casino",
+  "пин ап казино", "пинап казино", "joycasino", "джойказино", "casino",
+  "казино", "ставки на спорт", "free robux", "free vbucks", "free v bucks",
+  "бесплатные робуксы", "бесплатные скины", "free skins", "раздача скинов",
+  "free nitro", "discord nitro free", "бесплатный нитро",
+  "код из смс", "sms code", "номер карты", "card number", "cvv",
+
+  # --- Links: invites, shorteners and IP loggers ---
+  "discord.gg", "discord.com/invite", "t.me", "bit.ly", "tinyurl",
+  "grabify", "iplogger", "2no.co", "blasze",
+
+  # --- Personal data requests (doxxing) ---
+  "your address", "your real name", "your ip", "твой адрес", "твой айпи",
+  "твой ip", "домашний адрес", "паспортные данные", "номер паспорта",
+]
+substrings = [
+  "nigger", "nigga", "faggot", "sandnigger",
+  "ниггер", "черножоп", "черномаз", "узкоглаз", "чучмек", "пидор", "пидар",
+  "pornhub", "xvideos",
+]
 exceptions = [
-  "Scunthorpe",
+  # Ordinary words containing a listed substring.
+  "niggard", "niggardly",
+  # Idioms around listed words.
+  "chink in the armor", "chink in the armour", "chink in his armor",
+  "spic and span", "синдром дауна", "синдромом дауна", "синдрома дауна",
 ]

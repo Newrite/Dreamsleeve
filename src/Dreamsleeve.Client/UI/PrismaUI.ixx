@@ -9,6 +9,7 @@ import std;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.Host.Bridge;
 import Dreamsleeve.Events;
+import Dreamsleeve.Game.Input;
 
 // PrismaUI host of the production web UI. PrismaUI 1.5.1 wraps every callback
 // (DOM ready, JS listener, console) in SKSE::GetTaskInterface()->AddTask, so
@@ -77,6 +78,17 @@ namespace PrismaUI
     return state;
   }
 
+  // Chat focus and keyboard capture change together: while the chat is active
+  // the input hook withholds keyboard events from the game and other mods.
+  void SetActive(bool active)
+  {
+    Get().active = active;
+    if (active)
+      Input::BeginCapture();
+    else
+      Input::EndCapture();
+  }
+
   bool ViewUsable()
   {
     auto& state = Get();
@@ -127,7 +139,7 @@ namespace PrismaUI
   {
     auto& state = Get();
     if (!state.active) return;
-    state.active = false;
+    SetActive(false);
     if (state.api && state.view) state.api->Unfocus(state.view);
     Send(Bridge::SimpleEvent{"deactivate"});
   }
@@ -191,7 +203,7 @@ namespace PrismaUI
       logger::warn("PrismaUI refused focus");
       return;
     }
-    state.active     = true;
+    SetActive(true);
     state.focusGrace = Clock::now() + FocusGrace;
     Send(Bridge::SimpleEvent{"activate"});
   }
@@ -204,7 +216,7 @@ namespace PrismaUI
     if (!state.active || !ViewUsable() || now < state.focusGrace) return;
     if (!state.api->HasFocus(state.view))
     {
-      state.active = false;
+      SetActive(false);
       Send(Bridge::SimpleEvent{"deactivate"});
     }
   }
@@ -345,7 +357,7 @@ namespace PrismaUI
     auto& state = Get();
     if (view != state.view) return;
     state.domReady = true;
-    state.active   = false;
+    SetActive(false);
     state.jsHidden = false;
     logger::info("Dreamsleeve view ready");
     Send(Bridge::SettingsEvent{.settings = Runtime::Get().ui.ui.chat});

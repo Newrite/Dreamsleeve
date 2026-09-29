@@ -421,6 +421,8 @@ batching: в прежней версии настройка MovementPacketTarget
   повтор с backoff после потери соединения.
 - Ввод: Enter/F2 активирует чат без паузы игры, Escape освобождает focus; видимость
   вычисляется по всему набору открытых меню; полное отключение — в SKSE Menu Framework.
+  При активном чате хук рассылки `InputEvent` не отдаёт клавиатуру игре и другим SKSE-модам
+  (`captureKeyboard` в `client.toml`).
 - Телеметрия: имя/раса/уровень, WRLD/CELL FormKey, позиция и углы, activity/place/меню,
   HP/MP/SP как Resource; движение unreliable по интервалу, details/AV reliable по изменению.
 - Светлячки: placed reference `FXGlowFillRoundXBrt` на видимого игрока из `MovementView`.
@@ -521,3 +523,14 @@ PrismaUI host реализован в SKSE-адаптере: [SkseClientRu.md](S
 переписан под стрим-безопасность (узкий `[block]`, основной `[flag]`). Правый клик по
 нику в чате открывает меню «Открыть профиль» / «Игнорировать». Проверки: 332 managed,
 248 native, 36 vitest, 23 Playwright (Edge).
+
+Перехват ввода (29.09.2026): при активном чате каждая клавиша доходила до sinks
+`BSInputDeviceManager`, и хоткеи любых SKSE-модов срабатывали во время набора. Добавлен хук
+вызова рассылки внутри `BSInputDeviceManager::PollInputDevices` (`Hooks.ixx`, фильтрация в `Game/Input.ixx`; адреса и
+проверка байтов — [InputCaptureHookRu.md](InputCaptureHookRu.md)): при захвате клавиатурные
+`ButtonEvent` вырезаются из цепочки до всех sinks, клавиши, зажатые до открытия чата,
+доставляют только отпускание, мышь/геймпад/VR/`CharEvent` проходят. Политика — `Host::InputCapture`
+без CommonLib, 7 doctest; выключатель `captureKeyboard` в `client.toml` (по умолчанию `true`).
+Проверки: 256 native-тестов, DLL собирается. В игре не проверялось: фокус с хуком,
+Enter/Escape, зажатые клавиши на границах, конфликтующие моды. Все патчи игры (`Main::Update`,
+`HUDMenu::AdvanceMovie`, рассылка ввода) собраны в `Hooks.ixx`; `Nameplates` и `Input` адресов не содержат.

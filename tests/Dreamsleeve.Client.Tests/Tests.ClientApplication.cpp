@@ -114,6 +114,17 @@ TEST_CASE("Firefly name settings have safe defaults and reject invalid rendering
     CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad));
 }
 
+TEST_CASE("Keyboard capture is on by default and can be switched off")
+{
+  SettingsFixture fixture;
+  auto            defaults = fixture.Load("version = 1\n");
+  REQUIRE(defaults);
+  CHECK(defaults->client.captureKeyboard);
+  auto custom = fixture.Load("[client]\ncaptureKeyboard = false\n");
+  REQUIRE(custom);
+  CHECK_FALSE(custom->client.captureKeyboard);
+}
+
 TEST_CASE("Configuration rejects malformed files, unknown fields and invalid bounds before startup")
 {
   SettingsFixture fixture;
