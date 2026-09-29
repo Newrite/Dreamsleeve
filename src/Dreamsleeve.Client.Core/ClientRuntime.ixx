@@ -4,6 +4,7 @@ import std;
 export import Dreamsleeve.Client.ProtocolCodec;
 export import DreamNet.Client;
 import DreamNet.Core;
+import Dreamsleeve.Client.Utils;
 
 export namespace Dreamsleeve::Client
 {
@@ -390,13 +391,6 @@ private:
       return {};
     }
 
-    // Counted like the server counts: Unicode scalar values of valid UTF-8.
-    static std::size_t CodePoints(std::string_view text)
-    {
-      return static_cast<std::size_t>(
-        std::ranges::count_if(text, [](char byte) { return (static_cast<unsigned char>(byte) & 0xC0) != 0x80; }));
-    }
-
     // Chat and announcements share the Chat lane and the pending budget. The
     // channel must exist and be of the kind that accepts the command; valid
     // covers the command's own local limits.
@@ -430,12 +424,14 @@ private:
       return SendToChannel(generation, command, Domain::ChatChannelKind::Global, true);
     }
 
-    // The server judges origin, rate and words; locally only the lengths it
-    // announced, so no doomed packet is sent.
+    // The server judges rate, words and text rules; locally only what its
+    // welcome announced (sources and lengths), so no doomed packet is sent.
     Result<void> Process(std::uint64_t generation, PostAnnouncement& command)
     {
+      using Utils::Text::CodePoints;
       const bool labelRequired = command.source == Domain::ClientAnnouncementSource::ThirdParty;
-      const bool valid         = !command.text.empty() && CodePoints(command.text) <= announcementPolicy.maxTextLength &&
+      const bool valid         = announcementPolicy.Allows(command.source) && !command.text.empty() &&
+                                 CodePoints(command.text) <= announcementPolicy.maxTextLength &&
                                  (!labelRequired || !command.signature.empty()) &&
                                  CodePoints(command.signature) <= announcementPolicy.maxSignatureLength;
       return SendToChannel(generation, command, Domain::ChatChannelKind::System, valid);

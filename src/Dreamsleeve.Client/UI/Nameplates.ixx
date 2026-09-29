@@ -6,6 +6,7 @@ export module Dreamsleeve.UI.Nameplates;
 
 import std;
 import Dreamsleeve.Client.Domain;
+import Dreamsleeve.Client.Utils;
 
 // A small Scaleform HUD layer: a name and, optionally, one chat bubble above
 // each visible firefly. Game objects are read only on the main thread; the HUD
@@ -114,27 +115,13 @@ namespace Nameplates
     return static_cast<double>(nameSize) + 8;
   }
 
-  std::size_t Utf8Length(std::string_view text)
-  {
-    std::size_t count = 0;
-    for (unsigned char byte : text)
-      if ((byte & 0xC0) != 0x80) ++count;
-    return count;
-  }
-
   // Keeps the first `count` code points and appends an ellipsis.
   std::string TrimUtf8(std::string_view text, std::size_t count)
   {
-    std::size_t end = 0;
-    for (std::size_t seen = 0; end < text.size(); ++end)
-    {
-      if ((static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) continue;
-      if (seen == count) break;
-      ++seen;
-    }
-    while (end > 0 && text[end - 1] == ' ')
-      --end;
-    return std::string{text.substr(0, end)} + "\xE2\x80\xA6";
+    auto kept = Dreamsleeve::Utils::Text::Prefix(text, count);
+    while (kept.ends_with(' '))
+      kept.remove_suffix(1);
+    return std::string{kept} + "\xE2\x80\xA6";
   }
 
   struct NameField
@@ -298,13 +285,14 @@ namespace Nameplates
     void LayoutBubble(BubbleClip& bubble, const std::string& content)
     {
       const auto  maxHeight = BubbleMaxLines * bubble.style.fontSize * LineHeightFactor + 2 * TextGutter;
-      std::string text      = Utf8Length(content) > BubbleMaxChars ? TrimUtf8(content, BubbleMaxChars) : content;
+      using Dreamsleeve::Utils::Text::CodePoints;
+      std::string text = CodePoints(content) > BubbleMaxChars ? TrimUtf8(content, BubbleMaxChars) : content;
       // Plain UTF-8 text, never HTML or ActionScript from the network.
       bubble.text.SetText(text.c_str());
       double textHeight = Number(bubble.text, "textHeight");
       for (int step = 0; textHeight > maxHeight && step < 24; ++step)
       {
-        const auto length = Utf8Length(text);
+        const auto length = CodePoints(text);
         if (length <= 8) break;
         text = TrimUtf8(text, length - std::max<std::size_t>(4, length / 8));
         bubble.text.SetText(text.c_str());

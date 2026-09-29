@@ -98,6 +98,57 @@ describe("chat boundary", () => {
     });
     expect(chat.store.getState().messages).toHaveLength(HISTORY_LIMIT);
   });
+  it("keeps history per channel: equal IDs coexist and a busy channel evicts only itself", () => {
+    const { chat } = ready();
+    chat.receive({
+      type: "messages",
+      messages: [message("1", "system"), message("1")],
+    });
+    expect(chat.store.getState().messages).toHaveLength(2);
+    chat.receive({
+      type: "messages",
+      messages: Array.from({ length: 700 }, (_, i) => message(String(i + 2))),
+    });
+    const messages = chat.store.getState().messages;
+    expect(messages).toHaveLength(HISTORY_LIMIT + 1);
+    expect(messages.filter((m) => m.channelId === "system")).toHaveLength(1);
+  });
+  it("a snapshot of several full channels is kept whole, in time order", () => {
+    const chat = makeChat(() => true);
+    const line = (id: string, channelId: string, time: number) => ({
+      ...message(id, channelId),
+      time,
+    });
+    chat.receive({
+      ...snapshot,
+      messages: [
+        ...Array.from({ length: HISTORY_LIMIT }, (_, i) =>
+          line(String(i), "1", i * 2),
+        ),
+        ...Array.from({ length: HISTORY_LIMIT }, (_, i) =>
+          line(String(i), "system", i * 2 + 1),
+        ),
+      ],
+    } as HostEvent);
+    const messages = chat.store.getState().messages;
+    expect(messages).toHaveLength(HISTORY_LIMIT * 2);
+    expect(messages.slice(0, 2).map((m) => m.channelId)).toEqual([
+      "1",
+      "system",
+    ]);
+  });
+  it("settles an own line by channel and ID, not by an equal ID of another channel", () => {
+    const { chat } = ready();
+    chat.receive({ type: "messages", messages: [message("5", "system")] });
+    chat.setDraft("Привет");
+    chat.submit();
+    chat.receive({ type: "sendResult", requestId: "1", messageId: "5" });
+    expect(chat.store.getState().pending["1"]).toMatchObject({
+      messageId: "5",
+    });
+    chat.receive({ type: "messages", messages: [message("5")] });
+    expect(chat.store.getState().pending["1"]).toBeUndefined();
+  });
   it("filtered messages do not wake the chat or change send target", () => {
     const { chat } = ready();
     chat.select("1");
@@ -212,7 +263,10 @@ it("receipt ages are independent, duplicates do not refresh them, and snapshots 
     type: "messages",
     messages: [message("first"), message("second")],
   });
-  expect(chat.store.getState().receivedAt).toEqual({ first: 100, second: 200 });
+  expect(chat.store.getState().receivedAt).toEqual({
+    "1:first": 100,
+    "1:second": 200,
+  });
   chat.receive({
     type: "messages",
     messages: Array.from({ length: 700 }, (_, i) => message(String(i))),

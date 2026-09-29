@@ -6,6 +6,7 @@ export module Dreamsleeve.Host.Bridge;
 
 import std;
 import Dreamsleeve.Client.Exchange;
+import Dreamsleeve.Client.Utils;
 export import Dreamsleeve.Host.UiSettings;
 export import Dreamsleeve.Host.Names;
 
@@ -506,13 +507,9 @@ export namespace Dreamsleeve::Host::Bridge
   // bound is never looser, and the cut stays on a code point boundary.
   constexpr std::size_t MaxErrorBytes = 512;
 
-  std::string ClipUtf8(std::string_view value, std::size_t maxBytes)
+  std::string ClipError(std::string_view value)
   {
-    if (value.size() <= maxBytes) return std::string{value};
-    auto end = maxBytes;
-    while (end > 0 && (static_cast<unsigned char>(value[end]) & 0xC0) == 0x80)
-      --end;
-    return std::string{value.substr(0, end)};
+    return std::string{Dreamsleeve::Utils::Text::ClipBytes(value, MaxErrorBytes)};
   }
 
   UiPlayer ToUiAuthor(
@@ -563,27 +560,13 @@ export namespace Dreamsleeve::Host::Bridge
     return "announcement";
   }
 
-  // A mod label is display text of an untrusted origin: control characters are
-  // dropped and the length stays within what parse.ts accepts.
-  std::string SafeLabel(std::string_view value, std::size_t maxCodePoints = 64)
+  // A mod label is already one checked line (by the server, or by the plugin
+  // API for a local refusal); the display keeps what parse.ts accepts.
+  constexpr std::size_t MaxLabelCodePoints = 64;
+
+  std::string ModLabel(std::string_view value)
   {
-    std::string result;
-    std::size_t count = 0;
-    for (std::size_t index = 0; index < value.size() && count < maxCodePoints;)
-    {
-      const auto  lead   = static_cast<unsigned char>(value[index]);
-      std::size_t length = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
-      length             = std::min(length, value.size() - index);
-      const bool control =
-        lead < 0x20 || lead == 0x7F || (lead == 0xC2 && length == 2 && static_cast<unsigned char>(value[index + 1]) < 0xA0);
-      if (!control)
-      {
-        result.append(value.substr(index, length));
-        ++count;
-      }
-      index += length;
-    }
-    return result;
+    return std::string{Dreamsleeve::Utils::Text::Prefix(value, MaxLabelCodePoints)};
   }
 
   UiPlayer ToUiPlayer(const Domain::Player& source, Names& names, const UiSettings& settings)
@@ -678,7 +661,7 @@ export namespace Dreamsleeve::Host::Bridge
       const auto& value   = *message.announcement;
       result.source       = "system";
       result.announcement = UiAnnouncement{std::string{OriginName(value.source)}, std::string{KindName(value.kind)}, std::nullopt};
-      if (!value.signature.empty()) result.announcement->signature = SafeLabel(value.signature);
+      if (!value.signature.empty()) result.announcement->signature = ModLabel(value.signature);
     }
     if (message.author)
       result.author = ToUiAuthor(*message.author, message.characterName, message.characterName.has_value(), names, settings);
@@ -788,7 +771,7 @@ export namespace Dreamsleeve::Host::Bridge
     event.authenticating = status.authenticating;
     event.operation      = OperationName(status.authOperation);
     event.failure        = FailureName(status.authFailure);
-    event.error          = ClipUtf8(status.error, MaxErrorBytes);
+    event.error          = ClipError(status.error);
     event.savedLogin     = status.savedLogin;
     event.savedUsername  = streamerMode ? std::string{} : status.savedUsername;
     event.phase          = PhaseName(status);

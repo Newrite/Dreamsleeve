@@ -161,13 +161,13 @@ export namespace Runtime
 
     constexpr std::size_t MaxQueuedAnnouncements = 32;
 
-    // Plugin API calls arrive on any thread. They are checked against the last
-    // gate the frame published and queued; only the frame touches the session.
+    // Plugin API calls arrive on any thread and are queued while the session
+    // the frame last saw is ready; only the frame touches the session.
     struct AnnouncementQueue
     {
       std::mutex                                mutex;
       std::vector<Host::Announcements::Request> requests;
-      Host::Announcements::Gate                 gate;
+      bool                                      connected{};
     };
 
     AnnouncementQueue& Announcements()
@@ -183,11 +183,10 @@ export namespace Runtime
   {
     auto&           queue = Detail::Announcements();
     std::lock_guard lock{queue.mutex};
-    const auto      result = Host::Announcements::Check(request, queue.gate);
-    if (result != Host::Announcements::Result::Queued) return result;
+    if (!queue.connected) return Host::Announcements::Result::NotConnected;
     if (queue.requests.size() >= Detail::MaxQueuedAnnouncements) return Host::Announcements::Result::Busy;
     queue.requests.push_back(std::move(request));
-    return result;
+    return Host::Announcements::Result::Queued;
   }
 
   // Any thread.
@@ -195,15 +194,15 @@ export namespace Runtime
   {
     auto&           queue = Detail::Announcements();
     std::lock_guard lock{queue.mutex};
-    return queue.gate.policy.has_value();
+    return queue.connected;
   }
 
-  // Main thread, once per frame after the drain: the policy of a ready session, or none.
-  void PublishAnnouncementGate(const std::optional<::Domain::AnnouncementPolicy>& policy)
+  // Main thread, once per frame after the drain.
+  void PublishAnnouncementsConnected(bool connected)
   {
     auto&           queue = Detail::Announcements();
     std::lock_guard lock{queue.mutex};
-    if (queue.gate.policy != policy) queue.gate.policy = policy;
+    queue.connected = connected;
   }
 
   // Main thread.

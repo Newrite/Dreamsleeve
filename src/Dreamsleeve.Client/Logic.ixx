@@ -203,10 +203,10 @@ namespace Logic
     }
 
     // Plugin API: outcomes of this drain, then the requests queued since the
-    // last frame, checked again against the session they now meet.
+    // last frame, handed to the session they now meet.
     for (const auto& outcome : frame.announcementResults)
       ModApi::Report(outcome);
-    Runtime::PublishAnnouncementGate(runtime.session.Ready() ? state.output.status.announcements : std::nullopt);
+    Runtime::PublishAnnouncementsConnected(runtime.session.Ready());
     Runtime::TakeAnnouncements(state.announcements);
     for (auto& request : state.announcements)
     {

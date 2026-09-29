@@ -10,7 +10,7 @@
 
 | Модуль | Ответственность |
 |---|---|
-| `Main.cpp` | Только экспорт `SKSEPlugin_Load` и `RequestPluginAPI`; заголовки CommonLib не включает (см. ниже) |
+| `Main.cpp` | Только экспорт `SKSEPlugin_Load`; заголовки CommonLib не включает (см. ниже) |
 | `Plugin.ixx` | `SKSE::Init`, listener сообщений SKSE, порядок инициализации |
 | `Runtime.ixx` | Единственный владелец `ClientApplication`, `MovementView`, `Host::Session`, `ui.toml`; ограниченная очередь уведомлений (64) с других потоков; снимок для страницы SKSE Menu |
 | `Logic.ixx` | Кадр: уведомления → Drain (события UI, свежие сообщения → облачки) → политика сессии → готовность мира → телеметрия → светлячки → focus |
@@ -21,7 +21,7 @@
 | `Game/Input.ixx` | Состояние захвата клавиатуры и фильтрация цепочки `InputEvent` до всех sinks; адресов не содержит |
 | `UI/PrismaUI.ixx` | View, listener, доставка событий, focus/visibility |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
-| `API/ModApi.ixx`, `API/DreamsleeveAPI.h` | API для других модов: интерфейс `IVDreamsleeve1` через экспорт `RequestPluginAPI` (как PrismaUI), Papyrus `DreamsleeveClient`, callbacks итогов объявлений ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)) |
+| `API/ModApi.ixx`, `API/DreamsleeveAPI.h` | API для других модов: интерфейс `IVDreamsleeve1` через экспорт `RequestPluginAPI` из `ModApi.ixx` (как PrismaUI и TrueFlasksNG), Papyrus `DreamsleeveClient`, callbacks итогов объявлений ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)) |
 | `Host/Bridge.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI, TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры, проверка объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
 
 `Runtime::Get()` хранит единственный экземпляр приложения; getter не перемещает
@@ -306,11 +306,12 @@ reliable-снятие позиции; после загрузки отправл
 неизвестное значение `announcementChannels` заменяется на `all`.
 
 API для других модов (C++ `IVDreamsleeve1` и Papyrus `DreamsleeveClient`) описан в
-[DreamsleeveModApiRu.md](DreamsleeveModApiRu.md). Вызов с любого потока проверяется
-`Host::Announcements::Check` по копии состояния сессии (готовность, политика из
-приветствия: разрешённые источники и лимиты) и кладётся в очередь `Runtime`; кадр после
-Drain отдаёт запросы `Session::PostAnnouncement`, который берёт `RequestId` и хранит
-соответствие до ответа. Итог (подтверждение, отказ сервера, локальный отказ Core или
+[DreamsleeveModApiRu.md](DreamsleeveModApiRu.md). Каждая проверка делается один раз:
+`ModApi` на входе принимает текст и подпись только корректным UTF-8 (подпись — одной
+строкой, `Utils::Text`), `Runtime` ставит запрос в очередь при готовой сессии, Core
+сверяет источник и длины с политикой из приветствия, сервер проверяет остальное. Кадр
+после Drain отдаёт запросы `Session::PostAnnouncement`, который берёт `RequestId` и
+хранит соответствие до ответа. Итог (подтверждение, отказ сервера, локальный отказ Core или
 смена сессии) уходит в `ModApi::Report`: строка лога, callbacks, зарегистрированные
 плагинами через `AddAnnouncementResultCallback`, и mod event `Dreamsleeve_AnnouncementResult`;
 отказ дополнительно показывается строкой «Не отправлено» в системном канале (событие

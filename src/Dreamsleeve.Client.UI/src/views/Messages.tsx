@@ -3,6 +3,7 @@ import { useMessageFade } from "../features/useMessageFade";
 import { memo, useEffect, useRef } from "react";
 import {
   announcementOf,
+  keyOf,
   shows,
   visible,
   type Chat,
@@ -128,7 +129,8 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
   const messages = s.messages.filter((m) =>
     visible(m, s.filter, s.settings, s.channels),
   );
-  const last = messages[messages.length - 1]?.id;
+  const newest = messages[messages.length - 1];
+  const last = newest && keyOf(newest);
   useEffect(() => {
     if (!s.scrolled && list.current) {
       list.current.scrollTop = list.current.scrollHeight;
@@ -170,9 +172,10 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
           const channel = channels.get(m.channelId);
           const announcement = announcementOf(m);
           const author = m.author ? playerName(m.author, s.settings) : "";
+          const key = keyOf(m);
           return (
             <MessageRow
-              key={m.id}
+              key={key}
               chat={chat}
               time={m.time}
               text={m.text}
@@ -185,7 +188,7 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
               origin={announcement?.origin ?? ""}
               kind={announcement?.kind ?? ""}
               label={announcement ? originLabel(announcement, author) : ""}
-              faded={faded(m.id)}
+              faded={faded(key)}
               idleOpacity={s.settings.idleOpacity}
               duration={s.settings.duration}
               active={s.active}

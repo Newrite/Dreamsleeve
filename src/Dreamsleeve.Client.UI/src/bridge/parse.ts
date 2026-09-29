@@ -129,7 +129,8 @@ export function parseHostEvent(source: string): HostEvent {
     case "snapshot":
       valid =
         list(v.channels, channel, 128) &&
-        list(v.messages, message, 500) &&
+        // The host sends up to 500 lines of every channel.
+        list(v.messages, message, 500 * (v.channels as unknown[]).length) &&
         list(v.players, player, 4096) &&
         id(v.selfId) &&
         text(v.serverName) &&

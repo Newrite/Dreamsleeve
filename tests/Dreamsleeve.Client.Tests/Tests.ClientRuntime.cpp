@@ -1024,6 +1024,23 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
     CHECK(output.commandFailures[0].requestId == id);
     CHECK(output.commandFailures[0].code == CommandFailureCode::InvalidRequest);
   }
+
+  // A source the welcome does not allow stays local as well.
+  const auto trusted = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        PostAnnouncement{
+                         trusted, 2,
+                         "event", Domain::AnnouncementKind::Event,
+                         Domain::ClientAnnouncementSource::TrustedClient,
+                         "Mod"
+        }
+  }) == CommandPostResult::Queued);
+  const auto untrusted = fixture.ReceiveOutput();
+  REQUIRE(untrusted.commandFailures.size() == 1);
+  CHECK(untrusted.commandFailures[0].requestId == trusted);
+  CHECK(untrusted.commandFailures[0].code == CommandFailureCode::InvalidRequest);
   CHECK(fixture.requests.size() == 1);
 
   const auto id = announce(generation, "Пал в бою", "Мод");

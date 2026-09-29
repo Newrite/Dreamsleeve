@@ -491,18 +491,20 @@ def smoke(args, log, directory: Path):
             announced(child, admin, "[2] announcement source=1 kind=3 signature= <system>: ", start_at)
         stage("an administrator console announcement reached every client")
 
-        def announce_refused(command: str, marker: str, code: int):
+        # refusal: "rejected (<server code>)" or "not sent (local <code>)".
+        def announce_refused(command: str, marker: str, refusal: str):
             alice_start, bob_start = alice.mark(), bob.mark()
             alice.send(command)
-            alice.wait_for(lambda lines: any(f"rejected ({code})" in line for line in lines),
+            alice.wait_for(lambda lines: any(refusal in line for line in lines),
                            args.timeout, alice_start, read=True)
             settle_reads(bob, args.timeout)
             check(not any(marker in line for line in bob.output(bob_start)), f"Refused announcement reached the peer: {marker}")
 
-        announce_refused(f"announce trusted announcement - smoke-trusted-{nonce}", f"smoke-trusted-{nonce}", 11)
-        stage("a disabled announcement source was refused with ANNOUNCEMENT_NOT_ALLOWED")
+        # The welcome policy disallows it, so Core refuses it before sending.
+        announce_refused(f"announce trusted announcement - smoke-trusted-{nonce}", f"smoke-trusted-{nonce}", "not sent (local 3)")
+        stage("a source the welcome policy disables was refused locally and never sent")
 
-        announce_refused(f"announce third admin SmokeMod smoke-admin-kind-{nonce}", f"smoke-admin-kind-{nonce}", 1)
+        announce_refused(f"announce third admin SmokeMod smoke-admin-kind-{nonce}", f"smoke-admin-kind-{nonce}", "rejected (1)")
         stage("a server-only announcement kind requested by a client was refused as invalid")
 
         for index in (1, 2):
@@ -513,7 +515,7 @@ def smoke(args, log, directory: Path):
                 announced(child, marker, "[2] announcement source=3 kind=2 signature=SmokeMod Smoke Alice: ", start_at)
         stage("third-party announcements were published with origin, kind, label and author")
 
-        announce_refused(f"announce third event SmokeMod smoke-event-3-{nonce}", f"smoke-event-3-{nonce}", 10)
+        announce_refused(f"announce third event SmokeMod smoke-event-3-{nonce}", f"smoke-event-3-{nonce}", "rejected (10)")
         message_once(alice, bob, f"smoke-after-announcements-{nonce}", args.timeout)
         stage("the announcement rate limit refused the third one while chat stayed available")
 

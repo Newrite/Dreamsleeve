@@ -130,8 +130,8 @@ public:
       return {};
     }
 
-    // Main thread. The request already passed Announcements::Check on the
-    // calling thread; this only needs a session and a free slot.
+    // Main thread. The plugin API already checked the text encoding and the
+    // label; Core checks the server's limits, the server everything else.
     Announcements::Result PostAnnouncement(ClientExchange& exchange, Announcements::Request request)
     {
       const auto system = ChannelOf(Domain::ChatChannelKind::System);
@@ -382,10 +382,7 @@ private:
     static Announcements::Result ResultOf(const ServerRejection& rejection)
     {
       using Code = Dreamsleeve::Client::RequestRejectionCode;
-      if (rejection.code == Code::RateLimited) return Announcements::Result::RateLimited;
-      if (rejection.code == Code::InvalidRequest && rejection.message.starts_with("Announcement exceeds"))
-        return Announcements::Result::TooLong;
-      return Announcements::Result::Rejected;
+      return rejection.code == Code::RateLimited ? Announcements::Result::RateLimited : Announcements::Result::Rejected;
     }
 
     static Announcements::Result ResultOf(CommandFailureCode code)
@@ -416,9 +413,9 @@ private:
           frame,
           Bridge::AnnouncementResultEvent{
               .channelId = Bridge::Id(pending.channelId),
-              .source    = Bridge::SafeLabel(pending.signature),
+              .source    = Bridge::ModLabel(pending.signature),
               .text      = pending.text,
-              .error     = Bridge::ClipUtf8(reason, Bridge::MaxErrorBytes)
+              .error     = Bridge::ClipError(reason)
           });
       frame.announcementResults.push_back({std::move(pending.signature), std::move(pending.text), result, std::move(reason)});
       pendingAnnouncements.erase(found);

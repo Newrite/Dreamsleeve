@@ -55,11 +55,6 @@ namespace
     return message;
   }
 
-  Domain::AnnouncementPolicy Policy(std::vector<Domain::ClientAnnouncementSource> sources = {Domain::ClientAnnouncementSource::ThirdParty})
-  {
-    return {std::move(sources), 20, 8};
-  }
-
   Api::Request Request(std::string text, std::string signature = "DeathMod")
   {
     return {std::move(text), Domain::AnnouncementKind::Event, Domain::ClientAnnouncementSource::ThirdParty, std::move(signature)};
@@ -141,42 +136,6 @@ namespace
 
 TEST_SUITE_BEGIN("Client.Host");
 
-TEST_CASE("Announcement checks reject malformed calls first, then follow the server policy")
-{
-  using Api::Result;
-  const Api::Gate online{Policy()};
-
-  CHECK(Api::Check(Request("Игрок пал в бою"), online) == Result::Queued);
-  CHECK(Api::Check(Request(std::string(20, 'x')), online) == Result::Queued);
-  CHECK(Api::Check(Request(std::string(21, 'x')), online) == Result::TooLong);
-  CHECK(Api::Check(Request(std::string(2001, 'x')), Api::Gate{}) == Result::TooLong);
-  CHECK(Api::Check(Request("one\ntwo\tthree"), online) == Result::Queued);
-
-  for (std::string_view invalid : {"", "   \n", "bell\x07", "\xC0\xAF", "\xED\xA0\x80", "\xE2\x80", "\xC2\x85", "sep\xE2\x80\xA8"})
-    CHECK(Api::Check(Request(std::string{invalid}), online) == Result::InvalidText);
-
-  for (std::string_view label : {"", "  ", "two\nlines", "\xFF", "123456789"})
-    CHECK(Api::Check(Request("text", std::string{label}), online) == Result::InvalidSource);
-  CHECK(Api::Check(Request("text", "Мод-смер"), online) == Result::Queued);
-
-  auto kind = Request("text");
-  kind.kind = Domain::AnnouncementKind::Admin;
-  CHECK(Api::Check(kind, online) == Result::InvalidKind);
-  kind.kind = Domain::AnnouncementKind::Periodic;
-  CHECK(Api::Check(kind, online) == Result::InvalidKind);
-
-  auto trusted   = Request("text", "");
-  trusted.source = Domain::ClientAnnouncementSource::TrustedClient;
-  CHECK(Api::Check(trusted, Api::Gate{Policy({Domain::ClientAnnouncementSource::TrustedClient})}) == Result::Queued);
-  CHECK(Api::Check(trusted, online) == Result::Rejected);
-
-  CHECK(Api::Check(Request("text"), Api::Gate{}) == Result::NotConnected);
-  CHECK(Api::Check(Request("text"), Api::Gate{Policy({})}) == Result::Rejected);
-
-  CHECK(Api::CountCodePoints("Ж😀a", false) == 3);
-  CHECK_FALSE(Api::CountCodePoints("\xF4\x90\x80\x80", false));
-}
-
 TEST_CASE("Session projects the system channel by its kind; announcements never float or pass for players")
 {
   Fixture fixture;
@@ -198,7 +157,7 @@ TEST_CASE("Session projects the system channel by its kind; announcements never 
     ChatMessagesReceived{
         SystemChannel,
         {MakeAnnouncement(10, Source::Server, Kind::Periodic),
-          MakeAnnouncement(11, Source::ThirdParty, Kind::Event, "Death\x01Mod\xC2\x85"),
+          MakeAnnouncement(11, Source::ThirdParty, Kind::Event, "DeathMod"),
           MakeAnnouncement(12, static_cast<Source>(42), static_cast<Kind>(42))}
   }));
   REQUIRE(fixture.model.Apply(

@@ -92,4 +92,28 @@ describe("native bridge", () => {
       ),
     ).toThrow();
   });
+  it("a snapshot carries up to 500 lines of every channel", () => {
+    const line = (channelId: string) => ({
+      id: "1",
+      channelId,
+      source: "system",
+      announcement: { origin: "server", kind: "announcement" },
+      text: "Объявление",
+      time: 0,
+    });
+    const snapshot = (count: number) =>
+      JSON.stringify({
+        type: "snapshot",
+        channels: [
+          { id: "1", kind: "global", name: "Общий", writable: true },
+          { id: "2", kind: "system", name: "Объявления", writable: false },
+        ],
+        selfId: "1",
+        serverName: "",
+        players: [],
+        messages: Array.from({ length: count }, () => line("2")),
+      });
+    expect(parseHostEvent(snapshot(1000))).toMatchObject({ type: "snapshot" });
+    expect(() => parseHostEvent(snapshot(1001))).toThrow();
+  });
 });

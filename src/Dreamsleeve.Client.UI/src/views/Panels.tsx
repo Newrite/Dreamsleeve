@@ -1,5 +1,10 @@
 import { connectionLabels } from "../state/connection";
-import type { Chat, ChatState, Panel } from "../state/chat";
+import {
+  HISTORY_LIMIT,
+  type Chat,
+  type ChatState,
+  type Panel,
+} from "../state/chat";
 import { SettingsPanel } from "./SettingsPanel";
 import { OnlinePanel } from "./OnlinePanel";
 import { PlayerDetails } from "./PlayerDetails";
@@ -105,7 +110,9 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
                 <dt>Игроков онлайн</dt>
                 <dd>{s.players.length}</dd>
                 <dt>Сообщений в памяти UI</dt>
-                <dd>{s.messages.length} / 500</dd>
+                <dd>
+                  {s.messages.length} (до {HISTORY_LIMIT} на канал)
+                </dd>
                 <dt>Ожидает отправки</dt>
                 <dd>{Object.keys(s.pending).length}</dd>
               </dl>

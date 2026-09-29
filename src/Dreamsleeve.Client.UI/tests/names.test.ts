@@ -114,7 +114,7 @@ describe("unsent messages and refresh", () => {
       type: "messages",
       messages: [{ ...snapshot.messages[0], id: "11" }],
     });
-    const receipt = chat.store.getState().receivedAt["11"];
+    const receipt = chat.store.getState().receivedAt["1:11"];
     chat.receive({ ...snapshot, messages: [], refresh: true } as HostEvent);
     const state = chat.store.getState();
     expect(state.messages).toHaveLength(0);

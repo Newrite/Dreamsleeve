@@ -13,7 +13,29 @@ import type {
 } from "../bridge/types";
 import { idleAuth } from "./auth";
 import { defaults, settingsFrom } from "./settings";
+// Lines kept per channel: a busy channel never pushes another one out.
 export const HISTORY_LIMIT = 500;
+// Message IDs are sequential within a channel; a line is named by the pair.
+export const messageKey = (channelId: string, id: string) =>
+  `${channelId}:${id}`;
+export const keyOf = (m: Message) => messageKey(m.channelId, m.id);
+// The newest HISTORY_LIMIT lines of every channel, order kept.
+function retain(messages: Message[]) {
+  const counts = new Map<string, number>();
+  const kept: Message[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const count = counts.get(messages[i].channelId) ?? 0;
+    if (count >= HISTORY_LIMIT) continue;
+    counts.set(messages[i].channelId, count + 1);
+    kept.push(messages[i]);
+  }
+  return kept.reverse();
+}
+// A snapshot lists channel after channel; "Все" reads them in time order.
+const chronological = (messages: Message[]) =>
+  retain([...messages].sort((a, b) => a.time - b.time));
+const confirmedKey = (p: PendingMessage) =>
+  p.messageId === undefined ? undefined : messageKey(p.channelId, p.messageId);
 export type Panel =
   "online" | "profile" | "stats" | "settings" | "account" | null;
 export interface PendingMessage {
@@ -158,8 +180,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
         const channels = event.channels;
         if (event.refresh && state.initialized) {
           // Same session re-projected: keep pending rows, filters and scroll.
-          const messages = event.messages.slice(-HISTORY_LIMIT);
-          const retained = new Set(messages.map((m) => m.id));
+          const messages = chronological(event.messages);
+          const retained = new Set(messages.map(keyOf));
           const receivedAt = Object.fromEntries(
             Object.entries(state.receivedAt).filter(([id]) => retained.has(id)),
           );
@@ -180,9 +202,10 @@ export function makeChat(send: Send, now = () => Date.now()) {
           });
           break;
         }
+        const shown = new Set(event.messages.map(keyOf));
         store.setState({
           channels,
-          messages: event.messages.slice(-HISTORY_LIMIT),
+          messages: chronological(event.messages),
           receivedAt: {},
           players: event.players,
           selfId: event.selfId,
@@ -195,10 +218,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
             state.serverName === event.serverName
               ? Object.fromEntries(
                   Object.entries(state.pending)
-                    .filter(
-                      ([, p]) =>
-                        !event.messages.some((m) => m.id === p.messageId),
-                    )
+                    .filter(([, p]) => !shown.has(confirmedKey(p) ?? ""))
                     .map(([id, p]) => [
                       id,
                       p.status === "sending"
@@ -220,11 +240,12 @@ export function makeChat(send: Send, now = () => Date.now()) {
         break;
       }
       case "messages": {
-        const seen = new Set(state.messages.map((m) => m.id));
+        const seen = new Set(state.messages.map(keyOf));
         const channels = new Set(state.channels.map((c) => c.id));
         const added = event.messages.filter((m) => {
-          if (seen.has(m.id) || !channels.has(m.channelId)) return false;
-          seen.add(m.id);
+          const key = keyOf(m);
+          if (seen.has(key) || !channels.has(m.channelId)) return false;
+          seen.add(key);
           return true;
         });
         const unread = { ...state.unread };
@@ -240,16 +261,16 @@ export function makeChat(send: Send, now = () => Date.now()) {
               HISTORY_LIMIT,
               (unread[m.channelId] ?? 0) + 1,
             );
-        const messages = [...state.messages, ...added].slice(-HISTORY_LIMIT);
+        const messages = retain([...state.messages, ...added]);
         const receivedAt = { ...state.receivedAt };
         const receipt = now();
-        for (const message of added) receivedAt[message.id] = receipt;
-        const retained = new Set(messages.map((message) => message.id));
-        for (const id of Object.keys(receivedAt))
-          if (!retained.has(id)) delete receivedAt[id];
+        for (const message of added) receivedAt[keyOf(message)] = receipt;
+        const retained = new Set(messages.map(keyOf));
+        for (const key of Object.keys(receivedAt))
+          if (!retained.has(key)) delete receivedAt[key];
         const pending = Object.fromEntries(
           Object.entries(state.pending).filter(
-            ([, p]) => !seen.has(p.messageId ?? ""),
+            ([, p]) => !seen.has(confirmedKey(p) ?? ""),
           ),
         );
         store.setState({ messages, receivedAt, unread, pending });
@@ -340,7 +361,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
             error: event.error,
             since: now(),
           };
-        } else if (state.messages.some((m) => m.id === event.messageId)) {
+        } else if (
+          state.messages.some(
+            (m) => keyOf(m) === messageKey(item.channelId, event.messageId),
+          )
+        ) {
           delete pending[event.requestId];
         } else {
           pending[event.requestId] = { ...item, messageId: event.messageId };

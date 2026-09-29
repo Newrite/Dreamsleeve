@@ -34,20 +34,16 @@ int Function RESULT_REJECTED() global
     return 3
 EndFunction
 
-int Function RESULT_TOO_LONG() global
+int Function RESULT_BUSY() global
     return 4
 EndFunction
 
-int Function RESULT_BUSY() global
-    return 8
-EndFunction
-
 int Function RESULT_RATE_LIMITED() global
-    return 9
+    return 5
 EndFunction
 
 int Function RESULT_FAILED() global
-    return 10
+    return 6
 EndFunction
 
 ; =======================================================
@@ -59,8 +55,8 @@ EndFunction
 ; asSource: the name of your mod, one line; shown next to the text.
 ; True means queued, not published: register for the mod event
 ; "Dreamsleeve_AnnouncementResult" to learn the outcome. False: not queued
-; (no connection, invalid text or source, a disabled source); the reason is
-; written to DreamsleeveClient.log.
+; (no connection, text or source not UTF-8, a multiline source, a full
+; queue); the reason is written to DreamsleeveClient.log.
 bool Function PostAnnouncement(string asText, int aiKind, string asSource) global native
 
 ; True while a server session is ready.

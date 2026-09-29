@@ -295,3 +295,11 @@ Client.Dev: --movement-demo выводит детерминированную т
 Имена над светлячками: `showFireflyNames = true`, `fireflyNameOcclusion = true`,
 `fireflyNameFontSize = 18` (8..48), `fireflyNameOffset = 35` (0..512).
 Настройки относятся к Scaleform-адаптеру SE/AE. Через UI они сохраняются в ui.toml и применяются без перезапуска; значения client.toml служат начальными.
+
+## Общие помощники
+
+`Utils/Utils.ixx` — один модуль `Dreamsleeve.Client.Utils` для переиспользуемых функций
+Core и игрового клиента; темы разделены пространствами имён. `Utils::Text` — UTF-8:
+`ValidUtf8` и `HasControl` применяются один раз там, где текст входит в клиент (API
+модов), дальше текст считается корректным и только измеряется (`CodePoints`) или
+режется (`Prefix`, `ClipBytes`).

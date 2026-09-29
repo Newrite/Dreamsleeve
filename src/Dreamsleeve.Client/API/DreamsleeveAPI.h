@@ -42,17 +42,13 @@ namespace DreamsleeveAPI
   // (Published or a refusal). New values may be appended.
   enum class APIResult : std::uint8_t
   {
-    Queued        = 0,  // Accepted locally; the outcome follows in the result callback.
-    Published     = 1,  // The server published the announcement.
-    NotConnected  = 2,  // No ready session, or it ended before the server replied.
-    Rejected      = 3,  // Refused: the server disabled mod announcements, the word list, an invalid request.
-    TooLong       = 4,  // Text exceeds the limit announced by the server.
-    InvalidText   = 5,  // Empty, blank, not UTF-8, or control characters other than tab and newline.
-    InvalidSource = 6,  // Empty, blank, multiline or too long source label.
-    InvalidKind   = 7,  // Not an AnnouncementKind value.
-    Busy          = 8,  // A local queue is full; try later.
-    RateLimited   = 9,  // Too frequent or repeated; the server limit is per player account.
-    Failed        = 10  // Delivery unknown: the session changed or the request could not be encoded.
+    Queued       = 0,  // Accepted locally; the outcome follows in the result callback.
+    Published    = 1,  // The server published the announcement.
+    NotConnected = 2,  // No ready session, or it ended before the server replied.
+    Rejected     = 3,  // Refused; the callback reason tells why (synchronously: not UTF-8, an empty or multiline label, an unknown kind).
+    Busy         = 4,  // A local queue is full; try later.
+    RateLimited  = 5,  // Too frequent or repeated; the server limit is per player account.
+    Failed       = 6   // Delivery unknown: the session changed or the request could not be encoded.
   };
 
   enum class CallbackResult : std::uint8_t
@@ -91,9 +87,9 @@ public:
     virtual bool IsConnected() const noexcept = 0;
 
     // Asks the server to publish text in the system channel ("Объявления").
-    // text: UTF-8, 1..500 characters by default (the server announces its limit),
-    // newlines allowed. source: the name of your mod, UTF-8, one line, 1..64
-    // characters by default; it is shown next to the text and never raises trust.
+    // text: UTF-8, up to 500 characters by default (the server announces its
+    // limit), newlines allowed. source: the name of your mod, UTF-8, one line, up
+    // to 64 characters by default; it is shown next to the text and never raises trust.
     // Both are copied before the call returns. Queued is not publication: the
     // outcome arrives in the result callback.
     virtual APIResult PostAnnouncement(std::string_view text, AnnouncementKind kind, std::string_view source) noexcept = 0;
