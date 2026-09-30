@@ -5,15 +5,18 @@ open System.Collections.Generic
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
+/// Where a connection is in its life. The runtime's table holds it and the
+/// panel reads the same value.
+[<RequireQualifiedAccess>]
+type RuntimeSessionPhase = Waiting | Opening | Ready | Closing
+
 /// These records are touched only by the runtime handler, never by session agents.
 [<RequireQualifiedAccess>]
 module internal SessionTable =
-    type Phase = Waiting | Opening | Ready | Closing
-
     type Entry = {
         ConnectionId: Guid
         ConnectedAt: DateTimeOffset
-        mutable Phase: Phase
+        mutable Phase: RuntimeSessionPhase
         mutable Deadline: int64
         mutable PlayerId: PlayerId option
         mutable Child: Agent<PlayerSessionMessage> option
@@ -45,7 +48,7 @@ module internal SessionTable =
 
     let add connectionId connectedAt deadline state =
         let entry = {
-            ConnectionId = connectionId; ConnectedAt = connectedAt; Phase = Waiting; Deadline = deadline
+            ConnectionId = connectionId; ConnectedAt = connectedAt; Phase = RuntimeSessionPhase.Waiting; Deadline = deadline
             PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
             ChatDetached = false; SystemDetached = false; PresenceDetached = false; GroundMarksDetached = false
         }
@@ -62,29 +65,29 @@ module internal SessionTable =
     let reserve (profile: PlayerData) hiding pick entry state =
         let playerId = profile.PlayerId
         match entry.Phase, entry.PlayerId with
-        | Opening, None when not (state.Players.ContainsKey playerId) ->
+        | RuntimeSessionPhase.Opening, None when not (state.Players.ContainsKey playerId) ->
             state.Players.Add(playerId, entry.ConnectionId)
             entry.PlayerId <- Some playerId
             IdentityAdmission.Reserved(PseudonymBook.apply pick hiding profile state.Names)
-        | Opening, None | Opening, Some _ -> IdentityAdmission.AlreadyInUse
-        | Waiting, _ | Ready, _ | Closing, _ -> IdentityAdmission.Closed
+        | RuntimeSessionPhase.Opening, None | RuntimeSessionPhase.Opening, Some _ -> IdentityAdmission.AlreadyInUse
+        | RuntimeSessionPhase.Waiting, _ | RuntimeSessionPhase.Ready, _ | RuntimeSessionPhase.Closing, _ -> IdentityAdmission.Closed
 
     /// See PseudonymBook.apply. None when the connection is not a ready session
     /// holding its reservation.
     let changeIdentity hiding pick (entry: Entry) state =
         match entry.Phase, entry.PlayerId |> Option.map (fun playerId -> PseudonymBook.tryProfile playerId state.Names) with
-        | Ready, Some (ValueSome profile) -> Some (PseudonymBook.apply pick hiding profile state.Names)
-        | (Waiting | Opening | Ready | Closing), _ -> None
+        | RuntimeSessionPhase.Ready, Some (ValueSome profile) -> Some (PseudonymBook.apply pick hiding profile state.Names)
+        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> None
 
     /// Keeps the pseudonym and hiding of the player; None when this connection
     /// is not the ready or opening owner of the reservation.
     let updateProfile (profile: PlayerData) own (entry: Entry) state =
         match entry.Phase, entry.PlayerId with
-        | (Opening | Ready), Some playerId when playerId = profile.PlayerId ->
+        | (RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready), Some playerId when playerId = profile.PlayerId ->
             PseudonymBook.rename profile state.Names
             if own then state.Profiles.Remove playerId |> ignore
             true
-        | (Waiting | Opening | Ready | Closing), _ -> false
+        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> false
 
     let domainClean (entry: Entry) =
         entry.ChildStopped && entry.ChatDetached && entry.SystemDetached && entry.PresenceDetached && entry.GroundMarksDetached

@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Core
 
 open System
 open System.Collections.Generic
+open Microsoft.Extensions.Logging
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
@@ -94,6 +95,7 @@ module PlayerSession =
         Presence: AgentOutbox<PresenceCommand>
         GroundMarks: AgentOutbox<GroundMarkCommand>
         Host: AgentOutbox<SessionHostCommand>
+        Logger: ILogger
     }
 
     let private reliable (context: AgentContext<PlayerSessionMessage>) = context.Ref.TryReliable()
@@ -204,13 +206,27 @@ module PlayerSession =
     let private send (options: PlayerSessionOptions) (request: SessionOpenRequest) state context response =
         emit options request state context (SessionHostCommand.Send(request.ConnectionId, response)) |> ignore
 
+    // The account for the log; 0 until the ticket is resolved.
+    let private accountId state =
+        state.Account |> ValueOption.map (fun profile -> PlayerId.value profile.PlayerId) |> ValueOption.defaultValue 0UL
+
+    // Every refusal of this session passes here. The level says who should
+    // notice: words and frequency concern moderators, overload the operator.
+    let private sendRefusal (options: PlayerSessionOptions) (request: SessionOpenRequest) state context lane requestId (rejection: RequestRejection) =
+        let level =
+            match rejection.Code with
+            | RequestRejectionCode.TextNotAllowed | RequestRejectionCode.RateLimited -> LogLevel.Information
+            | RequestRejectionCode.Overloaded -> LogLevel.Warning
+            | _ -> LogLevel.Debug
+        state.Logger.Log(level, "Player {PlayerId} (session {ConnectionId}) refused request {RequestId}: {Code} {Field} {Message}",
+                         accountId state, request.ConnectionId, requestId, rejection.Code, rejection.Field, rejection.Message)
+        send options request state context (ProtocolCodec.refusal lane requestId rejection)
+
     let private reject (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
-        let rejection = { Code = code; Message = message; Field = "" }
-        send options request state context (ServerResponse.RequestRejected(requestId, rejection))
+        sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "" }
 
     let private rejectChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
-        let rejection = { Code = code; Message = message; Field = "" }
-        send options request state context (ServerResponse.ChatRejected(requestId, rejection))
+        sendRefusal options request state context DeliveryLane.Chat requestId { Code = code; Message = message; Field = "" }
 
     let private rejectOpening (options: PlayerSessionOptions) (request: SessionOpenRequest) state context code message =
         reject options request state context request.RequestId code message
@@ -240,6 +256,8 @@ module PlayerSession =
             | Ok stored, Some address ->
                 state.Account <- ValueSome stored.Profile
                 state.Role <- stored.Role
+                state.Logger.LogDebug("Session {ConnectionId} authenticated as player {PlayerId} ({Role})",
+                                      request.ConnectionId, PlayerId.value stored.Profile.PlayerId, stored.Role)
                 // Accounts created under older rules keep their stored names;
                 // every copy leaving this session uses the moderated profile.
                 let profile = Moderation.publicProfile state.Moderation stored.Profile
@@ -290,6 +308,7 @@ module PlayerSession =
             | IdentityAdmission.AlreadyInUse, _ ->
                 rejectOpening options request state context RequestRejectionCode.SessionAlreadyOpen "Player already has a session."
             | IdentityAdmission.Closed, _ | IdentityAdmission.Reserved _, None ->
+                state.Logger.LogDebug("Session {ConnectionId} of player {PlayerId} lost its reservation; stopping", request.ConnectionId, accountId state)
                 stop request state context
         | Starting | Resolving _ | Opening _ | Active _ | Closing -> ()
 
@@ -356,7 +375,7 @@ module PlayerSession =
         | ChatRoomEvent.Rejected(requestId, rejection) ->
             match state.Phase with
             | Active _ when state.Pending.Remove requestId ->
-                send options request state context (ServerResponse.ChatRejected(requestId, rejection))
+                sendRefusal options request state context DeliveryLane.Chat requestId rejection
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected chat rejection."
@@ -386,18 +405,21 @@ module PlayerSession =
         | PresenceEvent.Left playerId -> publish options request state context (ServerResponse.PlayerLeft playerId)
 
     let private groundMarkEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
-        let settle requestId response =
+        let settle requestId reply =
             match state.Phase with
-            | Active _ when state.Pending.Remove requestId -> send options request state context response
+            | Active _ when state.Pending.Remove requestId -> reply ()
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected ground mark reply."
         match event with
         | GroundMarkEvent.Changed view -> publish options request state context (ServerResponse.GroundMarksChanged view)
         | GroundMarkEvent.Own records -> publish options request state context (ServerResponse.OwnGroundMarks records)
-        | GroundMarkEvent.Placed(requestId, record, evicted) -> settle requestId (ServerResponse.GroundMarkPlaced(requestId, record, evicted))
-        | GroundMarkEvent.Removed(requestId, id) -> settle requestId (ServerResponse.GroundMarkRemoved(requestId, id))
-        | GroundMarkEvent.Rejected(requestId, rejection) -> settle requestId (ServerResponse.RequestRejected(requestId, rejection))
+        | GroundMarkEvent.Placed(requestId, record, evicted) ->
+            settle requestId (fun () -> send options request state context (ServerResponse.GroundMarkPlaced(requestId, record, evicted)))
+        | GroundMarkEvent.Removed(requestId, id) ->
+            settle requestId (fun () -> send options request state context (ServerResponse.GroundMarkRemoved(requestId, id)))
+        | GroundMarkEvent.Rejected(requestId, rejection) ->
+            settle requestId (fun () -> sendRefusal options request state context DeliveryLane.Control requestId rejection)
 
     // Visibility of marks follows the player's own position; a lost update is
     // repaired by the next one, since the owner compares with what it last saw.
@@ -409,7 +431,7 @@ module PlayerSession =
     /// density and the ID belong to the mark owner, which also answers.
     let private placeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (body: GroundMarkBody) placement gameDate =
         let refuse code message field =
-            send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = field }))
+            sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = field }
         match state.Phase with
         | Active player ->
             let text = GroundMarkBody.text body
@@ -472,7 +494,7 @@ module PlayerSession =
             elif not (Moderation.allows state.Moderation (ChatMessageText.value text)) then
                 // Refused before the channel sees it: nothing is stored or relayed.
                 let rejection = { Code = RequestRejectionCode.TextNotAllowed; Message = "Message contains words that are not allowed."; Field = "text" }
-                send options request state context (ServerResponse.ChatRejected(requestId, rejection))
+                sendRefusal options request state context DeliveryLane.Chat requestId rejection
             else
                 let submission = {
                     ConnectionId = request.ConnectionId
@@ -497,7 +519,7 @@ module PlayerSession =
     /// word list before the channel sees anything; the channel applies its rate limit.
     let private postAnnouncement (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (announcement: AnnouncementRequest) =
         let refuse code message field =
-            send options request state context (ServerResponse.ChatRejected(requestId, { Code = code; Message = message; Field = field }))
+            sendRefusal options request state context DeliveryLane.Chat requestId { Code = code; Message = message; Field = field }
         match state.Phase, reliable context with
         | Active player, Some address ->
             let text = ChatMessageText.value announcement.Text
@@ -508,7 +530,7 @@ module PlayerSession =
                 refuse RequestRejectionCode.InvalidRequest "Announcements are published only in the system channel." "channel_id"
             else
                 match AnnouncementOptions.admit state.Announcements announcement with
-                | Error rejection -> send options request state context (ServerResponse.ChatRejected(requestId, rejection))
+                | Error rejection -> sendRefusal options request state context DeliveryLane.Chat requestId rejection
                 | Ok () ->
                     if state.Pending.Count >= options.MaxPendingChat then
                         refuse RequestRejectionCode.Overloaded "Too many pending chat requests." ""
@@ -567,6 +589,8 @@ module PlayerSession =
                     | PlayerUpdate.SetLocation _ | PlayerUpdate.SetActorValues _ | PlayerUpdate.SetDetails _ -> state.CharacterWithheld
                 let previous = state.CharacterWithheld
                 state.CharacterWithheld <- withheld
+                if withheld && not previous then
+                    state.Logger.LogInformation("Player {PlayerId}: the character name is withheld by the word list", accountId state)
                 let change = PresenceCommand.Update(request.ConnectionId, publicSnapshot state updated)
                 if state.Presence.TrySend(context, change) then
                     state.Phase <- Active updated
@@ -588,7 +612,7 @@ module PlayerSession =
     /// Asking for the current state settles at once and is not a switch.
     let private setIdentity (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId hiding =
         let refuse code message =
-            send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "hidden" }))
+            sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "hidden" }
         match state.Phase, reliable context with
         | Active _, Some address ->
             let now = Environment.TickCount64
@@ -637,7 +661,9 @@ module PlayerSession =
     let private profileChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state context own (stored: PlayerData) =
         let apply (player: Player) =
             match Player.withProfile (Moderation.publicProfile state.Moderation stored) player with
-            | Error _ -> None
+            | Error error ->
+                state.Logger.LogWarning("Player {PlayerId}: the changed profile cannot be applied ({Error})", accountId state, error)
+                None
             | Ok updated ->
                 state.Account <- ValueSome stored
                 if emit options request state context (SessionHostCommand.UpdateProfile(request.ConnectionId, updated.Data, own)) then
@@ -663,7 +689,7 @@ module PlayerSession =
     /// like chat text; storage and the change interval belong to the account service.
     let private changeDisplayName (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (name: DisplayName) =
         let refuse code message =
-            send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "display_name" }))
+            sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "display_name" }
         match state.Phase, reliable context with
         | Active player, Some address ->
             if requestId = 0UL || state.Pending.Contains requestId then
@@ -701,7 +727,7 @@ module PlayerSession =
             state.NameRequest <- ValueNone
             state.Pending.Remove requestId |> ignore
             let refuse code message =
-                send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "display_name" }))
+                sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "display_name" }
             match state.Phase, reply.Result with
             | Active _, Ok stored ->
                 profileChanged options request state context true stored
@@ -783,7 +809,9 @@ module PlayerSession =
             | Starting | Resolving _ | Reserving _ | Opening _ -> reply.Reply(Error PlayerStateError.NotReady)
         | PlayerSessionMessage.RoleChanged role ->
             match state.Phase with
-            | Opening _ | Active _ -> state.Role <- role
+            | Opening _ | Active _ ->
+                state.Logger.LogDebug("Player {PlayerId} (session {ConnectionId}) now has role {Role}", accountId state, request.ConnectionId, role)
+                state.Role <- role
             | Starting | Resolving _ | Reserving _ | Closing -> ()
         | PlayerSessionMessage.ProfileChanged stored -> profileChanged options request state context false stored
         | PlayerSessionMessage.ChangeDisplayName(requestId, name) -> changeDisplayName options request state context requestId name
@@ -818,7 +846,7 @@ module PlayerSession =
     /// chat and system are the owners of the global and the system channel; marks owns the ground marks.
     /// identity says whether names may be hidden and how often the choice may change.
     let start (options: PlayerSessionOptions) maxActorValues moderation announcements groundMarkRules (identity: IdentityOptions)
-              authentication displayNames chat system presence marks host (request: SessionOpenRequest) =
+              authentication displayNames chat system presence marks host (logger: ILogger) (request: SessionOpenRequest) =
         let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
@@ -856,6 +884,7 @@ module PlayerSession =
                 Presence = AgentOutbox(options.MaxPendingUpdates + 2, presence)
                 GroundMarks = AgentOutbox(options.MaxPendingUpdates + options.MaxPendingChat + 2, marks)
                 Host = AgentOutbox(options.MaxPendingOutput + 2, host)
+                Logger = logger
             }
             let settings = {
                 AgentOptions.create $"player-{request.ConnectionId}" with

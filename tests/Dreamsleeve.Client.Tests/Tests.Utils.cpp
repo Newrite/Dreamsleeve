@@ -25,4 +25,25 @@ TEST_CASE("UTF-8 is validated once and then measured and cut on code point bound
   CHECK(ClipBytes("ЖЖ", 4) == "ЖЖ");
 }
 
+TEST_CASE("Backoff doubles the wait after each attempt up to the maximum and starts over after a reset")
+{
+  using namespace std::chrono_literals;
+  using Dreamsleeve::Utils::Timing::Backoff;
+
+  Backoff    backoff{5s, 20s};
+  const auto start = Backoff::Clock::time_point{} + 1h;
+  CHECK(backoff.Due(start));
+  CHECK_FALSE(backoff.Due(start + 4s));
+  CHECK(backoff.Due(start + 5s));
+  CHECK_FALSE(backoff.Due(start + 14s));
+  CHECK(backoff.Due(start + 15s));
+  CHECK_FALSE(backoff.Due(start + 34s));
+  CHECK(backoff.Due(start + 35s));
+  CHECK(backoff.Due(start + 55s));  // The wait stays at the maximum.
+  backoff.Reset();
+  CHECK(backoff.Due(start + 56s));
+  CHECK_FALSE(backoff.Due(start + 60s));
+  CHECK(backoff.Due(start + 61s));
+}
+
 TEST_SUITE_END();

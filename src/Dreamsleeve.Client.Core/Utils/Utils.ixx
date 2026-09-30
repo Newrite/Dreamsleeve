@@ -66,3 +66,46 @@ export namespace Dreamsleeve::Utils::Text
   }
 
 }
+
+// Pacing of retries after failures.
+export namespace Dreamsleeve::Utils::Timing
+{
+
+  // Each attempt doubles the wait before the next one, up to the maximum.
+  // Success resets it, and the first attempt after a reset is due at once.
+  class Backoff
+  {
+public:
+
+    using Clock = std::chrono::steady_clock;
+
+    constexpr Backoff(Clock::duration minimum, Clock::duration maximum) noexcept
+        : minimum(minimum),
+          maximum(maximum),
+          delay(minimum)
+    {}
+
+    // True when an attempt may start now; the next one is then scheduled.
+    bool Due(Clock::time_point now) noexcept
+    {
+      if (now < next) return false;
+      next  = now + delay;
+      delay = std::min(maximum, delay * 2);
+      return true;
+    }
+
+    void Reset() noexcept
+    {
+      delay = minimum;
+      next  = {};
+    }
+
+private:
+
+    Clock::duration   minimum;
+    Clock::duration   maximum;
+    Clock::duration   delay;
+    Clock::time_point next{};
+  };
+
+}

@@ -151,6 +151,12 @@ export namespace Dreamsleeve::Client
     Faulted
   };
 
+  // No session and no transport of one: another session may start.
+  constexpr bool SessionIdle(SessionPhase phase) noexcept
+  {
+    return phase == SessionPhase::Disconnected || phase == SessionPhase::Faulted;
+  }
+
   enum class CommandFailureCode
   {
     StaleGeneration,
@@ -232,6 +238,17 @@ export namespace Dreamsleeve::Client
     // while the names are shown or outside a session.
     std::optional<std::string> pseudonym;
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
+
+    // Nothing runs: no sign-in in flight and no session.
+    bool Idle() const noexcept
+    {
+      return !authenticating && SessionIdle(phase);
+    }
+
+    bool Ready() const noexcept
+    {
+      return phase == SessionPhase::Ready && !stopped;
+    }
   };
 
   struct PasswordLogin
@@ -330,7 +347,7 @@ public:
       const bool activeAllowed = operation == AuthOperation::SignOut || operation == AuthOperation::ForgetSavedLogin;
       if (
         status.authenticating || disconnectRequested ||
-        (!activeAllowed && status.phase != SessionPhase::Disconnected && status.phase != SessionPhase::Faulted))
+        (!activeAllowed && !SessionIdle(status.phase)))
         return std::unexpected{"A connection operation or session is already active"};
 
       authenticationCanceled = false;

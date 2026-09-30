@@ -19,9 +19,6 @@ type ServerRuntimeSnapshot = {
     Stopping: bool
 }
 
-[<RequireQualifiedAccess>]
-type RuntimeSessionPhase = Waiting | Opening | Ready | Closing
-
 /// One connection for the panel's online table. Session is the address to ask
 /// for details (Describe); the row itself carries no names.
 type RuntimeSessionRow = {
@@ -130,15 +127,15 @@ module ServerRuntime =
         | ValueNone -> "?"
 
     let private close (options: ServerRuntimeOptions) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
-        if entry.Phase <> SessionTable.Closing then
+        if entry.Phase <> RuntimeSessionPhase.Closing then
             match entry.Phase, entry.PlayerId with
-            | SessionTable.Ready, Some playerId ->
+            | RuntimeSessionPhase.Ready, Some playerId ->
                 let duration = DateTimeOffset.UtcNow - entry.ConnectedAt
                 state.Logger.LogInformation("Player {PlayerId} {Username} left (session {ConnectionId}, {Duration})",
                                             PlayerId.value playerId, username state playerId, entry.ConnectionId,
                                             duration.ToString(if duration.TotalDays >= 1.0 then @"d\.hh\:mm\:ss" else @"hh\:mm\:ss"))
-            | (SessionTable.Waiting | SessionTable.Opening | SessionTable.Ready | SessionTable.Closing), _ -> ()
-            entry.Phase <- SessionTable.Closing
+            | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> ()
+            entry.Phase <- RuntimeSessionPhase.Closing
             let deadline = now () + int64 options.ShutdownTimeoutMs
             entry.Deadline <- if state.Stopping then min deadline state.StopDeadline else deadline
             if not entry.TransportClosed then state.Transport.Close entry.ConnectionId
@@ -163,7 +160,7 @@ module ServerRuntime =
             close options state context entry
         | Ok packets ->
             for bytes in packets do
-                if entry.Phase <> SessionTable.Closing then
+                if entry.Phase <> RuntimeSessionPhase.Closing then
                     match state.Transport.Send(entry.ConnectionId, { Lane = lane; Bytes = bytes }) with
                     | Ok () -> ()
                     | Error _ when lane = DeliveryLane.Realtime -> () // Next period repairs a dropped pose.
@@ -186,12 +183,14 @@ module ServerRuntime =
                 ProtocolCodec.encodeServer state.Codec response |> Result.map List.singleton
         transmit options state context entry (ProtocolCodec.responseLane response) encoded
 
+    // The rejection goes back on the lane of the request it answers.
+    let private refuse options state context (entry: SessionTable.Entry) lane requestId (rejection: RequestRejection) =
+        state.Logger.LogDebug("Refused request {RequestId} of {ConnectionId}: {Code} {Field} {Message}",
+                              requestId, entry.ConnectionId, rejection.Code, rejection.Field, rejection.Message)
+        send options state context entry (ProtocolCodec.refusal lane requestId rejection)
+
     let private reject options state context entry lane requestId code message =
-        let rejection = { Code = code; Message = message; Field = "" }
-        let response =
-            if lane = DeliveryLane.Chat then ServerResponse.ChatRejected(requestId, rejection)
-            else ServerResponse.RequestRejected(requestId, rejection)
-        send options state context entry response
+        refuse options state context entry lane requestId { Code = code; Message = message; Field = "" }
 
     // The session hears of panel changes after its reservation reply, in its own FIFO.
     let private panelChanges state (entry: SessionTable.Entry) playerId =
@@ -218,12 +217,18 @@ module ServerRuntime =
                 | Some entry when not state.Stopping -> SessionTable.reserve profile hiding pick entry state.Table
                 | Some _ | None -> IdentityAdmission.Closed
 
+            match answer with
+            | IdentityAdmission.AlreadyInUse ->
+                state.Logger.LogInformation("Player {PlayerId} {Username} is already online; session {ConnectionId} is refused",
+                                            PlayerId.value profile.PlayerId, Username.value profile.Username, connectionId)
+            | IdentityAdmission.Reserved _ | IdentityAdmission.Closed -> ()
             match reply.TryPost answer with
             | AgentTryDeliveryResult.Posted ->
                 match answer, SessionTable.find connectionId state.Table with
                 | IdentityAdmission.Reserved _, Some entry -> panelChanges state entry profile.PlayerId
                 | (IdentityAdmission.Reserved _ | IdentityAdmission.AlreadyInUse | IdentityAdmission.Closed), _ -> ()
             | AgentTryDeliveryResult.Full | AgentTryDeliveryResult.Closed ->
+                state.Logger.LogWarning("Session {ConnectionId} did not take its reservation reply; closing", connectionId)
                 SessionTable.find connectionId state.Table |> Option.iter (close options state context)
 
         | SessionHostCommand.ChangeIdentity(connectionId, hiding, reply) ->
@@ -239,7 +244,9 @@ module ServerRuntime =
                     | AgentTryDeliveryResult.Posted -> ()
                     | AgentTryDeliveryResult.Full | AgentTryDeliveryResult.Closed -> close options state context entry
                 // A session that is not ready cannot be told a new identity; it is closing already.
-                | None -> close options state context entry
+                | None ->
+                    state.Logger.LogDebug("Session {ConnectionId} changed identity outside Ready during {Phase}; closing", connectionId, entry.Phase)
+                    close options state context entry
             | None -> ()
 
         | SessionHostCommand.UpdateProfile(connectionId, profile, own) ->
@@ -249,22 +256,27 @@ module ServerRuntime =
 
         | SessionHostCommand.Activate(connectionId, requestId, welcome) ->
             match SessionTable.find connectionId state.Table with
-            | Some entry when entry.Phase = SessionTable.Opening && not state.Stopping ->
-                if now () >= entry.Deadline || entry.PlayerId <> Some welcome.SelfPlayerId then
+            | Some entry when entry.Phase = RuntimeSessionPhase.Opening && not state.Stopping ->
+                if now () >= entry.Deadline then
+                    state.Logger.LogWarning("Session {ConnectionId} opened after its deadline; closing", connectionId)
+                    close options state context entry
+                elif entry.PlayerId <> Some welcome.SelfPlayerId then
+                    state.Logger.LogError("Session {ConnectionId} opened for player {PlayerId} it did not reserve; closing",
+                                          connectionId, PlayerId.value welcome.SelfPlayerId)
                     close options state context entry
                 else
                     // Mark ready in the same handler that queues the welcome packet.
-                    entry.Phase <- SessionTable.Ready
+                    entry.Phase <- RuntimeSessionPhase.Ready
                     state.Logger.LogInformation("Player {PlayerId} {Username} joined (session {ConnectionId}, hides names: {Hiding}, {Online} online)",
                                                 PlayerId.value welcome.SelfPlayerId, username state welcome.SelfPlayerId, connectionId, welcome.Hiding,
                                                 state.Table.Players.Count)
                     send options state context entry (ServerResponse.SessionOpened(requestId, welcome))
-            | Some _ | None -> ()
+            | Some _ | None -> state.Logger.LogDebug("Late activation of {ConnectionId} ignored", connectionId)
 
         | SessionHostCommand.Send(connectionId, response) ->
             match SessionTable.find connectionId state.Table with
-            | Some entry when entry.Phase = SessionTable.Ready -> send options state context entry response
-            | Some entry when entry.Phase = SessionTable.Opening ->
+            | Some entry when entry.Phase = RuntimeSessionPhase.Ready -> send options state context entry response
+            | Some entry when entry.Phase = RuntimeSessionPhase.Opening ->
                 match response with
                 | ServerResponse.RequestRejected _ -> send options state context entry response
                 | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
@@ -288,25 +300,54 @@ module ServerRuntime =
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket; Hiding = hiding }
             match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements state.GroundMarkRules state.Identity authenticator.Requests authenticator.DisplayNames
                       (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
-                      (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) request with
+                      (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) state.Logger request with
             | Error reason -> fail state context reason
             | Ok child ->
                 entry.Child <- Some child
-                entry.Phase <- SessionTable.Opening
+                entry.Phase <- RuntimeSessionPhase.Opening
                 context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
-        | None, _ | _, None -> close options state context entry
+                state.Logger.LogDebug("Session {ConnectionId} is opening (request {RequestId}, hides names: {Hiding})", entry.ConnectionId, requestId, hiding)
+        | None, _ | _, None ->
+            state.Logger.LogWarning("Cannot open session {ConnectionId}: runtime sources are not running", entry.ConnectionId)
+            close options state context entry
 
     let private forward (options: ServerRuntimeOptions) state context (entry: SessionTable.Entry) lane requestId message =
         match entry.Child with
         | Some child ->
             match child.TryPost message with
             | AgentPostResult.Posted -> ()
-            | AgentPostResult.Full -> reject options state context entry lane requestId RequestRejectionCode.Overloaded "Session input is full."
-            | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped -> close options state context entry
-        | None -> close options state context entry
+            | AgentPostResult.Full ->
+                state.Logger.LogWarning("Session {ConnectionId} input is full; request {RequestId} is refused", entry.ConnectionId, requestId)
+                reject options state context entry lane requestId RequestRejectionCode.Overloaded "Session input is full."
+            | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped as result ->
+                state.Logger.LogDebug("Session {ConnectionId} no longer takes input ({Result}); closing", entry.ConnectionId, result)
+                close options state context entry
+        | None ->
+            state.Logger.LogWarning("Ready connection {ConnectionId} has no session; closing", entry.ConnectionId)
+            close options state context entry
+
+    /// Where a decoded command goes: it opens this connection's session or is a
+    /// message to the open session. The phase rules for both live in receive.
+    [<RequireQualifiedAccess>]
+    type private CommandRoute =
+        | Open of sessionTicket: string * HiddenIdentity
+        | Session of PlayerSessionMessage
+
+    let private route requestId = function
+        | ClientCommand.OpenSession(sessionTicket, hiding) -> CommandRoute.Open(sessionTicket, hiding)
+        | ClientCommand.SendChat(channelId, text) -> CommandRoute.Session(PlayerSessionMessage.SendChat(requestId, channelId, text))
+        | ClientCommand.UpdatePlayer update -> CommandRoute.Session(PlayerSessionMessage.Update(requestId, update))
+        | ClientCommand.PostAnnouncement announcement -> CommandRoute.Session(PlayerSessionMessage.PostAnnouncement(requestId, announcement))
+        | ClientCommand.PlaceGroundNote(text, placement, gameDate) ->
+            CommandRoute.Session(PlayerSessionMessage.PlaceGroundNote(requestId, text, placement, gameDate))
+        | ClientCommand.ReportDeath(label, placement, gameDate) ->
+            CommandRoute.Session(PlayerSessionMessage.ReportDeath(requestId, label, placement, gameDate))
+        | ClientCommand.RemoveGroundMark id -> CommandRoute.Session(PlayerSessionMessage.RemoveGroundMark(requestId, id))
+        | ClientCommand.SetIdentityVisibility hiding -> CommandRoute.Session(PlayerSessionMessage.SetIdentityVisibility(requestId, hiding))
+        | ClientCommand.ChangeDisplayName name -> CommandRoute.Session(PlayerSessionMessage.ChangeDisplayName(requestId, name))
 
     let private receiveSample state (entry: SessionTable.Entry) bytes =
-        if entry.Phase = SessionTable.Ready then
+        if entry.Phase = RuntimeSessionPhase.Ready then
             match ProtocolCodec.decodeMovement state.Codec bytes, entry.Child with
             | Ok sample, Some child ->
                 // A dropped sample is repaired by the next periodic absolute pose.
@@ -318,65 +359,36 @@ module ServerRuntime =
         else
             match ProtocolCodec.decodeClient state.Codec bytes with
             | Error error ->
-                match error.RequestId, error.Failure with
-                | None, _ -> close options state context entry
-                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.TooLong maximum)) ->
-                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = $"Message exceeds {maximum} characters."; Field = "text" }
-                    send options state context entry (ServerResponse.ChatRejected(requestId, rejection))
-                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("AnnouncementText", TextError.TooLong maximum)) ->
-                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = $"Announcement exceeds {maximum} characters."; Field = "text" }
-                    send options state context entry (ServerResponse.ChatRejected(requestId, rejection))
-                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("AnnouncementSignature", _)) ->
-                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = "Announcement source is missing, too long or contains control characters."; Field = "source" }
-                    send options state context entry (ServerResponse.ChatRejected(requestId, rejection))
-                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("GroundNoteText", TextError.TooLong maximum)) ->
-                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = $"Note exceeds {maximum} characters."; Field = "text" }
-                    send options state context entry (ServerResponse.RequestRejected(requestId, rejection))
-                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DisplayName", error)) ->
-                    let message =
-                        match error with
-                        | TextError.TooLong maximum -> $"Display name exceeds {maximum} characters."
-                        | TextError.Missing | TextError.InvalidUnicode | TextError.InvalidCharacters | TextError.InvalidFormat ->
-                            "Display name is empty or contains control characters."
-                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = "display_name" }
-                    send options state context entry (ServerResponse.RequestRejected(requestId, rejection))
-                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DeathMarkText", _)) ->
-                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = "Death label is too long or contains control characters."; Field = "text" }
-                    send options state context entry (ServerResponse.RequestRejected(requestId, rejection))
-                | Some requestId, _ -> reject options state context entry lane requestId RequestRejectionCode.InvalidRequest "Invalid request."
-            | Ok request when ProtocolCodec.requestLane request <> lane -> close options state context entry
+                match error.RequestId with
+                | None ->
+                    state.Logger.LogWarning("Closing {ConnectionId}: undecodable packet on {Lane} ({Failure})", entry.ConnectionId, lane, error.Failure)
+                    close options state context entry
+                | Some requestId -> refuse options state context entry lane requestId (ProtocolCodec.rejection error.Failure)
+            | Ok request when ProtocolCodec.requestLane request <> lane ->
+                state.Logger.LogWarning("Closing {ConnectionId}: request {RequestId} arrived on {Lane} instead of {Expected}",
+                                        entry.ConnectionId, request.RequestId, lane, ProtocolCodec.requestLane request)
+                close options state context entry
             | Ok request ->
-                match request.Command, entry.Phase with
-                | ClientCommand.OpenSession(sessionTicket, hiding), SessionTable.Waiting ->
+                match route request.RequestId request.Command, entry.Phase with
+                | CommandRoute.Open(sessionTicket, hiding), RuntimeSessionPhase.Waiting ->
                     openSession options state.MaxActorValues authenticator state context entry request.RequestId sessionTicket hiding
-                | ClientCommand.OpenSession _, (SessionTable.Opening | SessionTable.Ready) ->
+                | CommandRoute.Open _, (RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
-                | ClientCommand.SendChat(channelId, text), SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.SendChat(request.RequestId, channelId, text))
-                | ClientCommand.UpdatePlayer update, SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.Update(request.RequestId, update))
-                | ClientCommand.PostAnnouncement announcement, SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.PostAnnouncement(request.RequestId, announcement))
-                | ClientCommand.PlaceGroundNote(text, placement, gameDate), SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.PlaceGroundNote(request.RequestId, text, placement, gameDate))
-                | ClientCommand.ReportDeath(label, placement, gameDate), SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.ReportDeath(request.RequestId, label, placement, gameDate))
-                | ClientCommand.RemoveGroundMark id, SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.RemoveGroundMark(request.RequestId, id))
-                | ClientCommand.SetIdentityVisibility hiding, SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.SetIdentityVisibility(request.RequestId, hiding))
-                | ClientCommand.ChangeDisplayName name, SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.ChangeDisplayName(request.RequestId, name))
-                | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _), (SessionTable.Waiting | SessionTable.Opening) ->
+                | CommandRoute.Session message, RuntimeSessionPhase.Ready -> forward options state context entry lane request.RequestId message
+                | CommandRoute.Session _, (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
-                | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _), SessionTable.Closing -> ()
+                | (CommandRoute.Open _ | CommandRoute.Session _), RuntimeSessionPhase.Closing -> ()
 
     let private disconnected options state context connectionId =
         match SessionTable.find connectionId state.Table with
         | None -> ()
         | Some entry ->
-            if entry.Phase <> SessionTable.Closing then
+            // A ready player's departure is logged by close together with the name.
+            match entry.Phase with
+            | RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening ->
                 state.Logger.LogInformation("Transport disconnected {ConnectionId} during {Phase}", connectionId, entry.Phase)
+            | RuntimeSessionPhase.Ready -> state.Logger.LogDebug("Transport disconnected {ConnectionId}", connectionId)
+            | RuntimeSessionPhase.Closing -> ()
 
             entry.TransportClosed <- true
             close options state context entry
@@ -385,13 +397,20 @@ module ServerRuntime =
     let private transportEvent (options: ServerRuntimeOptions) authenticator state context event =
         match event with
         | ServerTransportEvent.Connected connectionId ->
-            if state.Stopping || state.Table.Connections.Count >= options.MaxSessions then
+            if state.Stopping then
+                state.Logger.LogDebug("Refusing connection {ConnectionId}: the server is stopping", connectionId)
                 state.Transport.Close connectionId
-            elif not (state.Table.Connections.ContainsKey connectionId) then
+            elif state.Table.Connections.Count >= options.MaxSessions then
+                state.Logger.LogWarning("Refusing connection {ConnectionId}: the server is full ({MaxSessions} connections)", connectionId, options.MaxSessions)
+                state.Transport.Close connectionId
+            elif state.Table.Connections.ContainsKey connectionId then
+                state.Logger.LogWarning("Transport reported connection {ConnectionId} twice", connectionId)
+            else
                 SessionTable.add connectionId DateTimeOffset.UtcNow (now () + int64 options.OpenTimeoutMs) state.Table |> ignore
+                state.Logger.LogDebug("Connection {ConnectionId} accepted ({Connections} connections)", connectionId, state.Table.Connections.Count)
         | ServerTransportEvent.Received(connectionId, lane, bytes) ->
             match SessionTable.find connectionId state.Table with
-            | Some entry when entry.Phase <> SessionTable.Closing -> receive options authenticator state context entry lane bytes
+            | Some entry when entry.Phase <> RuntimeSessionPhase.Closing -> receive options authenticator state context entry lane bytes
             | Some _ | None -> ()
         | ServerTransportEvent.Failed(connectionId, reason) ->
             state.Logger.LogWarning("Transport failed for {ConnectionId}: {Reason}", connectionId, reason)
@@ -432,6 +451,8 @@ module ServerRuntime =
                     state.Transport.SetReadyHandler(fun () ->
                         context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentPostResult.Posted)
                     schedule options state context
+                    state.Logger.LogDebug("Server runtime started: up to {MaxSessions} connections, open timeout {OpenTimeoutMs} ms",
+                                          options.MaxSessions, options.OpenTimeoutMs)
 
     let private stopped (options: ServerRuntimeOptions) state context connectionId (outcome: Result<unit, exn>) =
         match SessionTable.find connectionId state.Table with
@@ -439,8 +460,8 @@ module ServerRuntime =
         | Some entry when entry.ChildStopped -> ()
         | Some entry ->
             match outcome with
-            | Error error when entry.Phase <> SessionTable.Closing -> state.Logger.LogError(error, "Player session {ConnectionId} terminated", connectionId)
-            | Ok () when entry.Phase <> SessionTable.Closing ->
+            | Error error when entry.Phase <> RuntimeSessionPhase.Closing -> state.Logger.LogError(error, "Player session {ConnectionId} terminated", connectionId)
+            | Ok () when entry.Phase <> RuntimeSessionPhase.Closing ->
                 state.Logger.LogWarning("Player session {ConnectionId} completed unexpectedly during {Phase}", connectionId, entry.Phase)
             | Error _ | Ok () -> ()
 
@@ -477,18 +498,22 @@ module ServerRuntime =
 
     let private tickRoute (options: ServerRuntimeOptions) time state context (entry: SessionTable.Entry) =
         match entry.Phase with
-        | SessionTable.Waiting | SessionTable.Opening when time >= entry.Deadline -> close options state context entry
-        | SessionTable.Closing when time >= entry.Deadline ->
+        | RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening when time >= entry.Deadline ->
+            state.Logger.LogInformation("Closing {ConnectionId}: no session opened in time (during {Phase})", entry.ConnectionId, entry.Phase)
+            close options state context entry
+        | RuntimeSessionPhase.Closing when time >= entry.Deadline ->
             if SessionTable.domainClean entry then
+                state.Logger.LogInformation("Transport of {ConnectionId} did not confirm its close; resetting", entry.ConnectionId)
                 state.Transport.Reset entry.ConnectionId
                 entry.TransportClosed <- true
                 SessionTable.remove entry state.Table
             else
                 fail state context $"Session cleanup timed out: {entry.ConnectionId}"
-        | SessionTable.Ready | SessionTable.Waiting | SessionTable.Opening | SessionTable.Closing -> ()
+        | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Closing -> ()
 
     let private stop (options: ServerRuntimeOptions) state context =
         if not state.Stopping then
+            state.Logger.LogInformation("Server runtime stopping: closing {Connections} connections", state.Table.Connections.Count)
             state.Stopping <- true
             state.StopDeadline <- now () + int64 options.ShutdownTimeoutMs
             // Closing changes routes now; transport drain and domain cleanup finish independently.
@@ -576,43 +601,43 @@ module ServerRuntime =
         | ServerRuntimeMessage.CleanupFailed failure -> fail state context $"Session cleanup delivery failed: {failure}"
         | ServerRuntimeMessage.RevokePlayer playerId ->
             // Close pending authentication too: a consumed ticket's reply may still be in flight.
-            let affected = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.PlayerId = Some playerId || entry.Phase = SessionTable.Opening) |> Seq.toArray
+            let affected = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.PlayerId = Some playerId || entry.Phase = RuntimeSessionPhase.Opening) |> Seq.toArray
+            state.Logger.LogInformation("Access of player {PlayerId} revoked: closing {Count} connections, sessions still opening included",
+                                        PlayerId.value playerId, affected.Length)
             for entry in affected do close options state context entry
         | ServerRuntimeMessage.Announce announcement -> announce state announcement
         | ServerRuntimeMessage.SetPlayerRole(playerId, role) ->
+            state.Logger.LogDebug("Role of player {PlayerId} is now {Role}; online: {Online}", PlayerId.value playerId, role, state.Table.Players.ContainsKey playerId)
             state.Table.Roles[playerId] <- role
             match state.Table.Players.TryGetValue playerId with
             | true, connectionId -> SessionTable.find connectionId state.Table |> Option.iter (fun entry -> panelChanges state entry playerId)
             | false, _ -> ()
         | ServerRuntimeMessage.RenamePlayer profile ->
+            state.Logger.LogDebug("Player {PlayerId} renamed by an administrator; online: {Online}",
+                                  PlayerId.value profile.PlayerId, state.Table.Players.ContainsKey profile.PlayerId)
             state.Table.Profiles[profile.PlayerId] <- profile
             match state.Table.Players.TryGetValue profile.PlayerId with
             | true, connectionId -> SessionTable.find connectionId state.Table |> Option.iter (fun entry -> panelChanges state entry profile.PlayerId)
             | false, _ -> ()
         | ServerRuntimeMessage.ListSessions reply ->
-            let phase = function
-                | SessionTable.Waiting -> RuntimeSessionPhase.Waiting
-                | SessionTable.Opening -> RuntimeSessionPhase.Opening
-                | SessionTable.Ready -> RuntimeSessionPhase.Ready
-                | SessionTable.Closing -> RuntimeSessionPhase.Closing
             reply.Reply [
                 for entry in state.Table.Connections.Values do
-                    { ConnectionId = entry.ConnectionId; PlayerId = entry.PlayerId; Phase = phase entry.Phase
+                    { ConnectionId = entry.ConnectionId; PlayerId = entry.PlayerId; Phase = entry.Phase
                       ConnectedAt = entry.ConnectedAt; Session = entry.Child |> Option.map _.Ref }
             ]
         | ServerRuntimeMessage.Stop -> stop options state context
         | ServerRuntimeMessage.Read reply ->
             reply.Reply {
                 Connections = state.Table.Connections.Count
-                Ready = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.Phase = SessionTable.Ready) |> Seq.length
+                Ready = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.Phase = RuntimeSessionPhase.Ready) |> Seq.length
                 Reservations = state.Table.Players.Count
-                Closing = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.Phase = SessionTable.Closing) |> Seq.length
+                Closing = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.Phase = RuntimeSessionPhase.Closing) |> Seq.length
                 Stopping = state.Stopping
             }
         | ServerRuntimeMessage.FindPlayer(connectionId, reply) ->
             let player =
                 SessionTable.find connectionId state.Table
-                |> Option.bind (fun entry -> if entry.Phase = SessionTable.Ready then entry.Child |> Option.map _.Ref else None)
+                |> Option.bind (fun entry -> if entry.Phase = RuntimeSessionPhase.Ready then entry.Child |> Option.map _.Ref else None)
             reply.Reply player
 
         finish state context

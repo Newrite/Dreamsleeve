@@ -77,6 +77,32 @@ module ProtocolCodec =
         | ClientCommand.OpenSession _ | ClientCommand.UpdatePlayer _ | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _
         | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ -> DeliveryLane.Control
 
+    /// What the client hears for a request this codec refused: the wire field
+    /// that was wrong and why, worded for the player.
+    let rejection failure : RequestRejection =
+        let invalid field message = { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = field }
+        match failure with
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.TooLong maximum)) ->
+            invalid "text" $"Message exceeds {maximum} characters."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("AnnouncementText", TextError.TooLong maximum)) ->
+            invalid "text" $"Announcement exceeds {maximum} characters."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("AnnouncementSignature", _)) ->
+            invalid "source" "Announcement source is missing, too long or contains control characters."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("GroundNoteText", TextError.TooLong maximum)) ->
+            invalid "text" $"Note exceeds {maximum} characters."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DisplayName", TextError.TooLong maximum)) ->
+            invalid "display_name" $"Display name exceeds {maximum} characters."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DisplayName", (TextError.Missing | TextError.InvalidUnicode | TextError.InvalidCharacters | TextError.InvalidFormat))) ->
+            invalid "display_name" "Display name is empty or contains control characters."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DeathMarkText", _)) ->
+            invalid "text" "Death label is too long or contains control characters."
+        | _ -> invalid "" "Invalid request."
+
+    /// The refusal of a request, sent back on the lane the request came by.
+    let refusal lane requestId rejection =
+        if lane = DeliveryLane.Chat then ServerResponse.ChatRejected(requestId, rejection)
+        else ServerResponse.RequestRejected(requestId, rejection)
+
     let responseLane = function
         | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _ | ServerResponse.ChatRejected _ -> DeliveryLane.Chat
         | ServerResponse.PlayersMoved _ -> DeliveryLane.Realtime

@@ -14,6 +14,7 @@ import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
 import Dreamsleeve.Host.Bridge;
 import Dreamsleeve.ModApi;
+import Dreamsleeve.Client.Utils;
 
 // Per-frame orchestration on the game main thread: notices, Core drain and UI
 // dispatch, session policy, telemetry, fireflies and shutdown.
@@ -34,8 +35,7 @@ namespace Logic
     Dream::ClientOutput                                    output;
     bool                                                   resumeTried{};
     bool                                                   wasReady{};
-    Clock::time_point                                      nextReconnect{};
-    std::chrono::seconds                                   reconnectDelay{ReconnectMinimum};
+    Dreamsleeve::Utils::Timing::Backoff                    reconnect{ReconnectMinimum, ReconnectMaximum};
     Clock::time_point                                      readySince{};
     std::uint64_t                                          bubbleGeneration{};
     Clock::time_point                                      nextNamesSave{};
@@ -158,21 +158,19 @@ namespace Logic
     auto&       runtime = Runtime::Get();
     auto&       state   = Get();
     const auto& status  = state.output.status;
-    const bool  idle =
-      !status.authenticating && (status.phase == Dream::SessionPhase::Disconnected || status.phase == Dream::SessionPhase::Faulted);
 
-    if (status.phase == Dream::SessionPhase::Ready)
+    if (status.Ready())
     {
-      state.wasReady       = true;
-      state.reconnectDelay = ReconnectMinimum;
+      state.wasReady = true;
+      state.reconnect.Reset();
       return;
     }
-    if (!idle || !status.savedLogin || runtime.manualDisconnect) return;
+    if (!status.Idle() || !status.savedLogin || runtime.manualDisconnect) return;
 
     if (!state.resumeTried)
     {
-      state.resumeTried   = true;
-      state.nextReconnect = now + state.reconnectDelay;
+      state.resumeTried = true;
+      state.reconnect.Due(now);
       if (auto started = runtime.app->ConnectSaved()) logger::info("Resuming saved login");
       return;
     }
@@ -182,9 +180,7 @@ namespace Logic
       status.authFailure == Failure::InvalidCredentials || status.authFailure == Failure::CredentialStorage ||
       status.authFailure == Failure::InvalidRequest || status.authFailure == Failure::RegistrationDisabled)
       return;
-    if (now < state.nextReconnect) return;
-    state.nextReconnect  = now + state.reconnectDelay;
-    state.reconnectDelay = std::min(ReconnectMaximum, state.reconnectDelay * 2);
+    if (!state.reconnect.Due(now)) return;
     if (runtime.app->ConnectSaved()) logger::info("Reconnecting with saved login");
   }
 

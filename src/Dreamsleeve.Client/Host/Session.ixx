@@ -45,7 +45,7 @@ public:
     // delta requires a fresh full state.
     void Process(ClientExchange& exchange, const ClientOutput& output, const UiSettings& settings, Frame& frame)
     {
-      const bool ready = output.status.phase == SessionPhase::Ready && !output.status.stopped;
+      const bool ready = output.status.Ready();
       serverName       = output.status.serverName;
       if (!ready && pendingName)
       {
@@ -348,7 +348,7 @@ public:
 
     bool Ready() const noexcept
     {
-      return lastStatus && lastStatus->phase == SessionPhase::Ready && !lastStatus->stopped;
+      return lastStatus && lastStatus->Ready();
     }
 
     std::uint64_t Generation() const noexcept

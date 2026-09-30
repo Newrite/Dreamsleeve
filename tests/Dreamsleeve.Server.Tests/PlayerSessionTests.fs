@@ -69,7 +69,7 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     }
     use player = PlayerSession.start settings 64 moderation announcements (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok) identity
                      (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
-                     (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
+                     (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request |> ok
     let fixture = { Request = request; Player = player; Authentication = queries;
                     Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Host = hostCommands
                     Names = nameRequests }
@@ -855,7 +855,7 @@ let tests = testList "PlayerSession" ([
         use names = Agent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<DisplayNameChangeRequest>()))
         use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok)
                          IdentityOptions.defaults (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
-                         (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
+                         (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request |> ok
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
         equal 0 chatCommands.Reader.Count

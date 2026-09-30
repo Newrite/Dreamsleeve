@@ -46,7 +46,7 @@ public:
 
     Result<void> Connect(std::string sessionTicket)
     {
-      if (phase != SessionPhase::Disconnected && phase != SessionPhase::Faulted)
+      if (!SessionIdle(phase))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "A session is already active")};
 
       if (model.PendingServerRejectionCount() != 0)
@@ -68,16 +68,7 @@ public:
       transport   = std::move(*created);
       opening     = Wire::OpenSession{*requestId, std::move(sessionTicket), exchange.HideIdentity()};
       lastRequest = *requestId;
-      serverName.clear();
-      pendingChats.clear();
-      pendingUpdates.clear();
-      pendingMarks.clear();
-      pendingIdentity.clear();
-      pendingNames.clear();
-      ResetMovement();
-      earlyChat.clear();
-      model.ResetSession();
-      exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
+      ResetSession();
       auto published = Publish();
       if (!published) return Fail(published.error());
 
@@ -91,7 +82,7 @@ public:
 
     Result<void> Disconnect()
     {
-      if (!transport || phase == SessionPhase::Disconnected || phase == SessionPhase::Faulted) return {};
+      if (!transport || SessionIdle(phase)) return {};
       if (phase == SessionPhase::Disconnecting) return {};
 
       if (phase == SessionPhase::Connecting)
@@ -110,7 +101,7 @@ public:
     Result<void> Poll(TimeOutMs waitMs = 0)
     {
       auto commandsResult = ProcessCommands();
-      if (!transport || phase == SessionPhase::Disconnected || phase == SessionPhase::Faulted) return commandsResult;
+      if (!transport || SessionIdle(phase)) return commandsResult;
 
       events.clear();
 
@@ -143,6 +134,22 @@ private:
 
     using Clock = std::chrono::steady_clock;
 
+    // What a sent request waits for. Chat and announcements remember their channel.
+    enum class PendingKind
+    {
+      Chat,
+      Update,
+      Mark,
+      Identity,
+      Name
+    };
+
+    struct PendingRequest
+    {
+      PendingKind           kind{};
+      Domain::ChatChannelId channelId{};
+    };
+
     ClientRuntime(Configuration settings, Wire::ProtocolCodec codec, ClientExchange& exchange)
         : config(std::move(settings)),
           codec(std::move(codec)),
@@ -156,18 +163,20 @@ private:
       exchange.PublishPhase(value);
     }
 
-    Result<void> Clear(SessionPhase value)
+    // Forgets the previous session, its pending requests included.
+    void ResetSession()
     {
       serverName.clear();
-      pendingChats.clear();
-      pendingUpdates.clear();
-      pendingMarks.clear();
-      pendingIdentity.clear();
-      pendingNames.clear();
+      pending.clear();
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
       exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
+    }
+
+    Result<void> Clear(SessionPhase value)
+    {
+      ResetSession();
       phase          = value;
       auto published = Publish(true);
       if (!published) SetPhase(SessionPhase::Faulted);
@@ -237,7 +246,7 @@ private:
 
     Result<void> Handle(ClientReceived& received)
     {
-      if (phase == SessionPhase::Disconnecting || phase == SessionPhase::Disconnected || phase == SessionPhase::Faulted)
+      if (phase == SessionPhase::Disconnecting || SessionIdle(phase))
         return {};  // A terminal reply may have closed the session earlier in this batch.
       if (received.channelId > 2) return Unexpected("channel");
       const auto channel = static_cast<Wire::Channel>(received.channelId);
@@ -252,7 +261,9 @@ private:
 
       if (auto* rejection = std::get_if<ServerRejection>(&*response))
       {
-        const auto expected = pendingChats.contains(rejection->requestId) ? Wire::Channel::Chat : Wire::Channel::Control;
+        const auto found    = pending.find(rejection->requestId);
+        const bool chat     = found != pending.end() && found->second.kind == PendingKind::Chat;
+        const auto expected = chat ? Wire::Channel::Chat : Wire::Channel::Control;
         if (channel != expected) return Unexpected("rejection_channel");
       }
       return std::visit([this](auto& value) { return Receive(value); }, *response);
@@ -311,12 +322,7 @@ private:
         return Clear(SessionPhase::Disconnected);
       }
 
-      if (phase != SessionPhase::Ready) return Unexpected("request_id");
-      if (
-        pendingChats.erase(rejection.requestId) == 0 && pendingUpdates.erase(rejection.requestId) == 0 &&
-        pendingMarks.erase(rejection.requestId) == 0 && pendingIdentity.erase(rejection.requestId) == 0 &&
-        pendingNames.erase(rejection.requestId) == 0)
-        return Unexpected("request_id");
+      if (phase != SessionPhase::Ready || pending.erase(rejection.requestId) == 0) return Unexpected("request_id");
 
       if (rejection.requestId == pendingLocation) ResetMovement();
       return Apply(rejection);
@@ -324,9 +330,9 @@ private:
 
     Result<void> Receive(Wire::ChatAccepted& accepted)
     {
-      const auto found = pendingChats.find(accepted.requestId);
-      if (phase != SessionPhase::Ready || found == pendingChats.end()) return Unexpected("request_id");
-      if (accepted.changes.channelId != found->second) return Unexpected("channel_id");
+      const auto request = TakePending(accepted.requestId, PendingKind::Chat);
+      if (!request) return Unexpected("request_id");
+      if (accepted.changes.channelId != request->channelId) return Unexpected("channel_id");
       const auto& author = accepted.changes.messages.front().author;
       if (!author || author->playerId != model.SelfPlayerId()) return Unexpected("author");
 
@@ -336,13 +342,12 @@ private:
       auto                   applied = model.Apply(model.Generation(), accepted.changes);
       if (!applied) return std::unexpected{applied.error()};
 
-      pendingChats.erase(found);
       return Publish(false, confirmation);
     }
 
     Result<void> Receive(Wire::PlayerUpdateAccepted& accepted)
     {
-      if (phase != SessionPhase::Ready || pendingUpdates.erase(accepted.requestId) == 0) return Unexpected("request_id");
+      if (!TakePending(accepted.requestId, PendingKind::Update)) return Unexpected("request_id");
       if (accepted.requestId == pendingLocation)
       {
         pendingLocation  = 0;
@@ -361,7 +366,7 @@ private:
     // the ordinary delta, so the author sees the mark the way everyone does.
     Result<void> Receive(Wire::GroundMarkPlaced& placed)
     {
-      if (phase != SessionPhase::Ready || pendingMarks.erase(placed.requestId) == 0) return Unexpected("request_id");
+      if (!TakePending(placed.requestId, PendingKind::Mark)) return Unexpected("request_id");
       if (placed.mark.author.playerId != model.SelfPlayerId()) return Unexpected("author");
       return Publish(
         false,
@@ -371,7 +376,7 @@ private:
 
     Result<void> Receive(Wire::GroundMarkRemoved& removed)
     {
-      if (phase != SessionPhase::Ready || pendingMarks.erase(removed.requestId) == 0) return Unexpected("request_id");
+      if (!TakePending(removed.requestId, PendingKind::Mark)) return Unexpected("request_id");
       return Publish(
         false,
         std::nullopt,
@@ -381,7 +386,7 @@ private:
     // The self entry keeps the real profile; the status carries what the others see.
     Result<void> Receive(Wire::IdentityVisibilityChanged& changed)
     {
-      if (phase != SessionPhase::Ready || pendingIdentity.erase(changed.requestId) == 0) return Unexpected("request_id");
+      if (!TakePending(changed.requestId, PendingKind::Identity)) return Unexpected("request_id");
       exchange.PublishIdentity(changed.pseudonym, changed.hiding);
       return Publish(
         false,
@@ -393,7 +398,7 @@ private:
     // The own profile changes through the PlayerUpdated that follows; this only settles the request.
     Result<void> Receive(Wire::DisplayNameChanged& changed)
     {
-      if (phase != SessionPhase::Ready || pendingNames.erase(changed.requestId) == 0) return Unexpected("request_id");
+      if (!TakePending(changed.requestId, PendingKind::Name)) return Unexpected("request_id");
       return Publish(
         false,
         std::nullopt,
@@ -472,32 +477,61 @@ private:
       return {};
     }
 
+    // A reply settles only a request of its own kind, and only in a ready session.
+    std::optional<PendingRequest> TakePending(std::uint64_t requestId, PendingKind kind)
+    {
+      const auto found = pending.find(requestId);
+      if (phase != SessionPhase::Ready || found == pending.end() || found->second.kind != kind) return std::nullopt;
+      const auto request = found->second;
+      pending.erase(found);
+      return request;
+    }
+
+    std::size_t PendingCount(PendingKind kind) const
+    {
+      return static_cast<std::size_t>(std::ranges::count(pending | std::views::values, kind, &PendingRequest::kind));
+    }
+
+    // Every command with a caller-supplied request ID: the current generation,
+    // a ready session and an ID that was never used and is not pending.
+    std::optional<CommandFailureCode> Admit(std::uint64_t generation, std::uint64_t requestId)
+    {
+      if (generation != model.Generation()) return CommandFailureCode::StaleGeneration;
+      if (phase != SessionPhase::Ready) return CommandFailureCode::SessionNotReady;
+      if (requestId <= lastRequest || pending.contains(requestId)) return CommandFailureCode::InvalidRequest;
+      lastRequest = requestId;
+      return std::nullopt;
+    }
+
+    // Sends an admitted command; it stays pending until its reply.
+    template <class Command>
+    Result<void> SendRequest(std::uint64_t generation, const Command& command, PendingRequest request, Wire::Channel channel = Wire::Channel::Control)
+    {
+      auto packet = codec.Encode(command);
+      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
+
+      auto sent = transport->Send(std::move(*packet), static_cast<ChannelId>(channel));
+      if (!sent) return Fail(sent.error());
+
+      pending.emplace(command.requestId, request);
+      return {};
+    }
+
     // Chat and announcements share the Chat lane and the pending budget. The
     // channel must exist and be of the kind that accepts the command; valid
     // covers the command's own local limits.
     template <class Command>
     Result<void> SendToChannel(std::uint64_t generation, Command& command, Domain::ChatChannelKind kind, bool valid)
     {
-      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
-      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
-      if (command.requestId <= lastRequest || pendingUpdates.contains(command.requestId))
-        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
 
-      lastRequest        = command.requestId;
       const auto channel = model.FindChatState(command.channelId);
       if (!channel || channel->kind != kind || !valid)
         return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
-      if (pendingChats.size() >= config.maxPendingChatRequests)
+      if (PendingCount(PendingKind::Chat) >= config.maxPendingChatRequests)
         return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
-      auto packet = codec.Encode(command);
-      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
-
-      auto sent = transport->Send(std::move(*packet), static_cast<ChannelId>(Wire::Channel::Chat));
-      if (!sent) return Fail(sent.error());
-
-      pendingChats.emplace(command.requestId, command.channelId);
-      return {};
+      return SendRequest(generation, command, {PendingKind::Chat, command.channelId}, Wire::Channel::Chat);
     }
 
     Result<void> Process(std::uint64_t generation, SendChat& command)
@@ -527,26 +561,13 @@ private:
     template <class Command>
     Result<void> SendMarkCommand(std::uint64_t generation, Command& command, bool valid)
     {
-      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
-      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
-      if (
-        command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId) ||
-        pendingIdentity.contains(command.requestId) || pendingNames.contains(command.requestId))
-        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
 
-      lastRequest = command.requestId;
       if (!valid) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
-      if (pendingMarks.size() >= config.maxPendingChatRequests)
+      if (PendingCount(PendingKind::Mark) >= config.maxPendingChatRequests)
         return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
-      auto packet = codec.Encode(command);
-      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
-
-      auto sent = transport->Send(std::move(*packet));
-      if (!sent) return Fail(sent.error());
-
-      pendingMarks.insert(command.requestId);
-      return {};
+      return SendRequest(generation, command, {PendingKind::Mark});
     }
 
     Result<void> Process(std::uint64_t generation, PlaceGroundNote& command)
@@ -567,45 +588,24 @@ private:
     // One switch at a time; the server judges permission and frequency.
     Result<void> Process(std::uint64_t generation, SetIdentityVisibility& command)
     {
-      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
-      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
-      if (
-        command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId) ||
-        pendingMarks.contains(command.requestId))
-        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
-      lastRequest = command.requestId;
-      if (!pendingIdentity.empty()) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
+      if (PendingCount(PendingKind::Identity) != 0) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
-      auto packet = codec.Encode(command);
-      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
-      auto sent = transport->Send(std::move(*packet));
-      if (!sent) return Fail(sent.error());
-      pendingIdentity.insert(command.requestId);
-      return {};
+      return SendRequest(generation, command, {PendingKind::Identity});
     }
 
     // One change at a time; the server judges the word list and how often.
     // Locally only the shape: one line of valid UTF-8 that is not blank.
     Result<void> Process(std::uint64_t generation, ChangeDisplayName& command)
     {
-      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
-      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
-      if (
-        command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId) ||
-        pendingMarks.contains(command.requestId) || pendingIdentity.contains(command.requestId))
-        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
-      lastRequest      = command.requestId;
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
+
       const bool blank = std::ranges::all_of(command.displayName, [](char value) { return value == ' ' || value == '\t'; });
       if (blank || !Utils::Text::ValidUtf8(command.displayName) || Utils::Text::HasControl(command.displayName))
         return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
-      if (!pendingNames.empty()) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+      if (PendingCount(PendingKind::Name) != 0) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
-      auto packet = codec.Encode(command);
-      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
-      auto sent = transport->Send(std::move(*packet));
-      if (!sent) return Fail(sent.error());
-      pendingNames.insert(command.requestId);
-      return {};
+      return SendRequest(generation, command, {PendingKind::Name});
     }
 
     template <class T>
@@ -615,16 +615,12 @@ private:
       if (!requestId) return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Request IDs exhausted")};
       if (generation != model.Generation()) return RejectCommand(generation, *requestId, CommandFailureCode::StaleGeneration);
       if (phase != SessionPhase::Ready) return RejectCommand(generation, *requestId, CommandFailureCode::SessionNotReady);
-      if (pendingUpdates.size() >= config.maxPendingPlayerUpdates) return RejectCommand(generation, *requestId, CommandFailureCode::Busy);
+      if (PendingCount(PendingKind::Update) >= config.maxPendingPlayerUpdates)
+        return RejectCommand(generation, *requestId, CommandFailureCode::Busy);
 
-      auto packet = codec.Encode(Wire::UpdatePlayer{*requestId, std::move(command)});
-      if (!packet) return RejectCommand(generation, *requestId, CommandFailureCode::EncodingFailed);
-      auto sent = transport->Send(std::move(*packet));
-      if (!sent) return Fail(sent.error());
-
-      pendingUpdates.insert(*requestId);
-      if (locationTransition) pendingLocation = *requestId;
-      return {};
+      auto sent = SendRequest(generation, Wire::UpdatePlayer{*requestId, std::move(command)}, {PendingKind::Update});
+      if (sent && pending.contains(*requestId) && locationTransition) pendingLocation = *requestId;
+      return sent;
     }
 
     void ResetMovement()
@@ -715,10 +711,7 @@ private:
     Result<void> ProcessCommands()
     {
       const auto openingReply = phase == SessionPhase::Connecting || phase == SessionPhase::Opening ? 1u : 0u;
-      exchange.TakeCommands(
-        commands,
-        pendingChats.size() + pendingUpdates.size() + pendingMarks.size() + pendingIdentity.size() + pendingNames.size() + openingReply +
-          model.PendingServerRejectionCount());
+      exchange.TakeCommands(commands, pending.size() + openingReply + model.PendingServerRejectionCount());
       Result<void> firstError;
 
       for (auto& queued : commands)
@@ -741,11 +734,7 @@ private:
     std::string                                              serverName;
     Domain::AnnouncementPolicy                               announcementPolicy;
     std::uint64_t                                            lastRequest{};
-    std::unordered_map<std::uint64_t, Domain::ChatChannelId> pendingChats;
-    std::unordered_set<std::uint64_t>                        pendingUpdates;
-    std::unordered_set<std::uint64_t>                        pendingMarks;
-    std::unordered_set<std::uint64_t>                        pendingIdentity;
-    std::unordered_set<std::uint64_t>                        pendingNames;
+    std::unordered_map<std::uint64_t, PendingRequest>        pending;
     std::vector<QueuedClientCommand>                         commands;
     Clock::time_point                                        deadline{};
     Clock::time_point                                        nextPlayerSample{};

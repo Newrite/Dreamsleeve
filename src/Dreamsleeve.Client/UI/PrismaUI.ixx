@@ -303,9 +303,8 @@ namespace PrismaUI
       // the next one changes. While a session is being opened it waits.
       auto&      chat   = runtime.ui.ui.chat;
       const auto status = app.Status();
-      const bool idle =
-        !status.authenticating && (status.phase == Dream::SessionPhase::Disconnected || status.phase == Dream::SessionPhase::Faulted);
-      auto& session = runtime.session;
+      const bool idle    = status.Idle();
+      auto&      session = runtime.session;
       if (session.Ready())
       {
         if (auto posted = session.SetIdentityVisibility(app.Exchange(), Bridge::HidingOf(command.hiding)); !posted)

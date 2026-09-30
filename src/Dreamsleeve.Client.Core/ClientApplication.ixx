@@ -147,6 +147,14 @@ private:
       if (!result) exchange->PublishError(Describe(result.error()));
     }
 
+    // Closes the session and serves the transport until the close completes.
+    void CloseSession()
+    {
+      Report(runtime->Disconnect());
+      while (runtime->Phase() == SessionPhase::Disconnecting)
+        Report(runtime->Poll(10));
+    }
+
     using AuthResult = std::expected<void, Auth::Failure>;
 
     AuthResult ForgetLogin()
@@ -225,9 +233,7 @@ private:
 
     AuthResult Authenticate(const SignOutAccount&)
     {
-      Report(runtime->Disconnect());
-      while (runtime->Phase() == SessionPhase::Disconnecting)
-        Report(runtime->Poll(10));
+      CloseSession();
       return SignOutSaved();
     }
 
@@ -272,12 +278,10 @@ private:
         if (control.disconnect || (control.authentication && exchange->AuthenticationCanceled())) Report(runtime->Disconnect());
         Report(runtime->Poll(10));
 
-        if (runtime->Phase() == SessionPhase::Disconnected || runtime->Phase() == SessionPhase::Faulted) exchange->WaitForControl();
+        if (SessionIdle(runtime->Phase())) exchange->WaitForControl();
       }
 
-      Report(runtime->Disconnect());
-      while (runtime->Phase() == SessionPhase::Disconnecting)
-        Report(runtime->Poll(10));
+      CloseSession();
       runtime.reset();
       exchange->Finish();
     }
