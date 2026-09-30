@@ -195,6 +195,39 @@ let tests = testList "ChatRoomAgent" [
         do! stop room
     })
 
+    case "a removal reaches every member and the history; an unknown message is refused to the requester only" (fun () -> task {
+        let hostEvents, aliceEvents, bobEvents =
+            Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
+        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
+        use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
+        use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        let a, b = subscription 1UL alice, subscription 2UL bob
+        do! post room (ChatRoomCommand.Join a)
+        do! post room (ChatRoomCommand.Join b)
+        let! _ = receive aliceEvents
+        let! _ = receive bobEvents
+        do! publish room a 7UL "spam"
+        let! published = receive aliceEvents
+        let message = accepted 7UL published
+        let! _ = receive bobEvents
+        let remove requestId = post room (ChatRoomCommand.Remove { ConnectionId = b.ConnectionId; RequestId = requestId; MessageId = message.MessageId; ReplyTo = b.Events })
+        do! remove 8UL
+        let! removed = receive bobEvents
+        equal (ChatRoomEvent.Removed(ValueSome 8UL, message)) removed
+        let! seen = receive aliceEvents
+        equal (ChatRoomEvent.Removed(ValueNone, message)) seen
+        let! retained = history room
+        equal [] retained.Messages
+        do! remove 9UL
+        let! refused = receive bobEvents
+        match refused with
+        | ChatRoomEvent.Rejected(9UL, rejection) -> equal RequestRejectionCode.TargetNotFound rejection.Code
+        | other -> failwithf "Expected a refusal: %A" other
+        check (not (aliceEvents.Reader.TryPeek() |> fst)) "A refusal reaches only the requester."
+        do! stop room
+    })
+
     case "flagged ranges travel with the stored message and its broadcast" (fun () -> task {
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)

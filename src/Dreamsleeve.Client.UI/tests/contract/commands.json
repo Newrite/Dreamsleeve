@@ -201,5 +201,47 @@
   {
     "type": "changeDisplayName",
     "displayName": "Новое имя"
+  },
+  {
+    "type": "sanctionPlayer",
+    "requestId": "m1",
+    "playerId": "7",
+    "kind": "mute",
+    "minutes": 60,
+    "reason": "Флуд"
+  },
+  {
+    "type": "liftSanction",
+    "requestId": "m2",
+    "playerId": "7",
+    "kind": "ban"
+  },
+  {
+    "type": "kickPlayer",
+    "requestId": "m3",
+    "playerId": "7",
+    "reason": "Остынь"
+  },
+  {
+    "type": "listSanctions",
+    "requestId": "m4"
+  },
+  {
+    "type": "listPlayerMarks",
+    "requestId": "m5",
+    "playerId": "7"
+  },
+  {
+    "type": "clearPlayerMarks",
+    "requestId": "m6",
+    "playerId": "7",
+    "notes": false,
+    "deaths": true
+  },
+  {
+    "type": "deleteChatMessage",
+    "requestId": "m7",
+    "channelId": "1",
+    "messageId": "11"
   }
 ]

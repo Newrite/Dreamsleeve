@@ -108,8 +108,10 @@ C++ host, запись TOML через UI и PrismaUI-интеграция ре�
 
 Модерация: панель выдаёт и снимает муты и баны на срок или бессрочно и кикает игрока
 (`AuthService` + `sanctions`, protocol v14: `MuteChanged`, `SessionEnded`, код `MUTED`, HTTP 403
-`banned`); клиент закрывает ввод при муте и показывает причину кика или бана. Инструменты
-модератора в игре — следующий шаг. См. [ModerationAndNamesRu.md](ModerationAndNamesRu.md#муты-баны-и-кик).
+`banned`); клиент закрывает ввод при муте и показывает причину кика или бана. Модератор
+(protocol v15) мутит, банит, кикает, снимает наказания, смотрит и чистит метки игрока и удаляет
+сообщения из игры; каждое действие — в аудите под модератором. См.
+[ModerationAndNamesRu.md](ModerationAndNamesRu.md#инструменты-модератора-в-игре).
 
 Правила домена без состояния собраны в `Domain.Logic` (Core): расстояния и
 досягаемость, прыжок движения, смешивание поз и время источника, слияние профиля
@@ -824,6 +826,31 @@ setup по коду из консоли, вход, страницы, объяв�
 Проверки: 438 managed, 284 native (5838 assertions), 64 vitest, 33 Playwright (Edge),
 `smoke_chat.py` — 45 проверок (новые: смена имени через Client.Dev доходит до собеседника,
 отказ по словарю и по интервалу).
+
+## Инструменты модератора в игре и вкладка «Игнор» (30.09.2026)
+
+- Протокол **v15** (несовместим с v14): роль в `SessionOpened` и `RoleChanged`; запросы
+  `SanctionPlayer`, `LiftSanction`, `KickPlayer`, `ListSanctions`, `ListPlayerMarks`,
+  `ClearPlayerMarks` и `DeleteChatMessage` (Chat-полоса) с ответами; коды `NOT_PERMITTED` и
+  `TARGET_NOT_FOUND`. Подробности —
+  [ModerationAndNamesRu.md](ModerationAndNamesRu.md#инструменты-модератора-в-игре).
+- Сервер: сессия проверяет роль и ведёт запрос к владельцу — наказания, кик и список к
+  `AuthService` (право и аудит в транзакции `SqliteSanctionStore`, кик панели тем же путём),
+  сообщение к `ChatRoomAgent.Remove`, метки к `GroundMarksAgent` (`Remove` любого автора,
+  `ListOf`, `ClearOf`); удалённый контент попадает в аудит через `AuthService`. Схема 9:
+  `admin_audit.moderator_id`; журнал панели показывает, кто действовал.
+- Клиент: Core — команды и исходы модератора, роль в `ClientStatus`, удаление сообщения
+  отдельно от вытеснения из кэша (`ChatMessagesDeleted`/`ChatMessagesEvicted`); host — команды
+  bridge, события `role`, `messagesRemoved`, `moderationResult`, облачко удалённого сообщения
+  гаснет; UI — пункты модератора в меню ника и профиле, диалог мута/бана/кика/удаления меток,
+  вкладка «Модерация»; Client.Dev — команды `mod …`.
+- Личный чёрный список переехал из настроек в отдельную вкладку «Игнор»: имя, в сети ли,
+  «Профиль», «Не игнорировать».
+
+Проверки: 462 managed, 309 native, 70 vitest, 35 Playwright (Edge; «bubble style and ground mark
+preferences save and restore» падает и на чистом master — гонка стенда, не этого шага),
+`smoke_chat.py` и `smoke_saved_auth.py` — без изменений, новый `smoke_moderation.py` — 6 стадий;
+DLL и Client.Dev собираются. В Skyrim не проверялось: инструменты модератора в Ultralight.
 
 ## Игровая дата меток (30.09.2026)
 

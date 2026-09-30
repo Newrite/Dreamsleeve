@@ -56,9 +56,16 @@ let private names =
         request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok profile } |> ignore
     }))
 
+// Moderation is the account service's; runtime tests route it, not decide it.
+let private moderation =
+    lazy (Agent.Start(AgentOptions.create "fixture-moderation", fun _ (request: ModerationRequest) -> task {
+        request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ModerationError.Unavailable } |> ignore
+    }))
+
 let private authentication (agent: Agent<SessionAuthenticationRequest>) : SessionAuthenticator = {
     Requests = agent.Ref.TryReliable().Value
     DisplayNames = names.Value.Ref.TryReliable().Value
+    Moderation = moderation.Value.Ref.TryReliable().Value
     Completion = agent.Completion
 }
 
@@ -249,7 +256,7 @@ let tests = testList "ServerRuntime" [
             equal alice closed
             let! state = stats fixture
             equal 1 state.Ready
-            do! post fixture.Runtime (ServerRuntimeMessage.KickPlayer(pid 2UL, reason "Остынь"))
+            do! post fixture.Runtime (ServerRuntimeMessage.AccountChanged(AccountChange.Kicked(pid 2UL, reason "Остынь")))
             let! _, kicked = nextWhere fixture (fun id packet -> id = bob && packet.PayloadCase = ServerPacket.PayloadOneofCase.SessionEnded)
             equal SessionEndReason.Kicked kicked.SessionEnded.Reason
             equal "Остынь" kicked.SessionEnded.Text

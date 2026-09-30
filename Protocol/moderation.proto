@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package Dreamsleeve.Protocol.Chat;
+
+import "ground.proto";
+
+// Moderation from the game (version 15). Every command is a moderator's: the
+// server refuses others with NOT_PERMITTED. A mute, a ban or a kick needs the
+// moderator to outrank the target (a player, never another moderator or
+// themselves); removing content only needs the role. All go on the Control
+// lane except DeleteChatMessage, which travels with chat. Players are named by
+// their public ID only: the client resolves names as everywhere else.
+
+enum PlayerRole {
+  PLAYER_ROLE_PLAYER = 0;
+  PLAYER_ROLE_MODERATOR = 1;
+}
+
+enum SanctionKind {
+  SANCTION_KIND_UNSPECIFIED = 0;
+  SANCTION_KIND_MUTE = 1; // No chat, notes, client announcements or display name change.
+  SANCTION_KIND_BAN = 2; // No session; a live one ends.
+}
+
+// The receiver's role changed while the session is open. No request_id.
+message RoleChanged {
+  PlayerRole role = 1;
+}
+
+// A sanction in force.
+message SanctionEntry {
+  uint64 player_id = 1;
+  SanctionKind kind = 2;
+  string reason = 3;
+  int64 issued_at_unix_ms = 4;
+  optional int64 until_unix_ms = 5; // Absent: until lifted.
+}
+
+// Mute or ban a player; a new one replaces the one of its kind in force.
+// Settled by SanctionIssued.
+message SanctionPlayer {
+  uint64 player_id = 1;
+  SanctionKind kind = 2;
+  optional uint32 minutes = 3; // 1..5256000; absent: until lifted.
+  string reason = 4; // Required, one line; the target reads it.
+}
+
+message SanctionIssued {
+  SanctionEntry sanction = 1;
+}
+
+// Settled by SanctionLifted; TARGET_NOT_FOUND when nothing of that kind holds.
+message LiftSanction {
+  uint64 player_id = 1;
+  SanctionKind kind = 2;
+}
+
+message SanctionLifted {
+  uint64 player_id = 1;
+  SanctionKind kind = 2;
+}
+
+// End the player's session now, with the reason. Settled by PlayerKicked,
+// also when the player has no session.
+message KickPlayer {
+  uint64 player_id = 1;
+  string reason = 2;
+}
+
+message PlayerKicked {
+  uint64 player_id = 1;
+}
+
+// Every sanction in force, offline players included. Settled by SanctionList.
+message ListSanctions {}
+
+message SanctionList {
+  repeated SanctionEntry sanctions = 1; // Newest first, bounded by the server.
+}
+
+// One player's marks, to pick one to remove with RemoveGroundMark, which
+// takes any mark from a moderator. Settled by PlayerMarks.
+message ListPlayerMarks {
+  uint64 player_id = 1;
+}
+
+message PlayerMarks {
+  uint64 player_id = 1;
+  repeated GroundMark marks = 2; // As the others see them, newest first.
+}
+
+// Remove all notes and/or all death marks of a player. Settled by PlayerMarksCleared.
+message ClearPlayerMarks {
+  uint64 player_id = 1;
+  bool notes = 2;
+  bool deaths = 3;
+}
+
+message PlayerMarksCleared {
+  uint64 player_id = 1;
+  uint32 removed = 2;
+}
+
+// Remove one message from a channel's history. Chat lane; settled by the
+// requester's ChatMessageRemoved (with request_id) or TARGET_NOT_FOUND.
+message DeleteChatMessage {
+  uint64 channel_id = 1;
+  uint64 message_id = 2;
+}
+
+// A message left the channel's history: every member drops it. Chat lane;
+// request_id only in the copy that settles DeleteChatMessage.
+message ChatMessageRemoved {
+  uint64 channel_id = 1;
+  uint64 message_id = 2;
+}

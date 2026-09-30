@@ -37,6 +37,10 @@ type PlayerSessionMessage =
     | RoleChanged of PlayerRole
     /// The player's mute now, if any; applied without reconnecting.
     | MuteChanged of Sanction voption
+    /// A moderator's request from the client.
+    | Moderate of requestId: uint64 * ModerationAction
+    /// The account service answered a moderation request.
+    | ModerationReplied of ModerationReply
     /// An administrator renamed the player: the stored profile, before moderation.
     | ProfileChanged of PlayerData
     /// The panel's view of this player; None before the profile is known.
@@ -92,6 +96,10 @@ module PlayerSession =
         Pending: HashSet<uint64>
         Authentication: AgentOutbox<SessionAuthenticationRequest>
         DisplayNames: AgentOutbox<DisplayNameChangeRequest>
+        /// Sanctions, kicks, their list and the audit of removed content.
+        AccountModeration: AgentOutbox<ModerationRequest>
+        /// Moderation requests the account service still has to answer.
+        ModerationRequests: Dictionary<Guid, struct (uint64 * ModerationAction)>
         Chat: AgentOutbox<ChatRoomCommand>
         System: AgentOutbox<ChatRoomCommand>
         Presence: AgentOutbox<PresenceCommand>
@@ -229,6 +237,25 @@ module PlayerSession =
 
     let private muted state = state.Mute |> ValueOption.exists (Sanction.activeAt DateTimeOffset.UtcNow)
 
+    let private selfId state =
+        match state.Account with
+        | ValueSome account -> ValueSome account.PlayerId
+        | ValueNone -> ValueNone
+
+    // The audit line of content a moderator removed through another owner.
+    // It settles nothing: a full admission loses the line with a warning.
+    let private audit state context action target details =
+        match selfId state, reliable context with
+        | ValueSome moderator, Some address ->
+            let request = {
+                OperationId = Guid.NewGuid()
+                Command = ModerationCommand.Record(moderator, AuditRecord.create action (AuditTarget.Player target) details)
+                ReplyTo = address.Map PlayerSessionMessage.ModerationReplied
+            }
+            if not (state.AccountModeration.TrySend(context, request)) then
+                state.Logger.LogWarning("Audit line {Action} of moderator {PlayerId} was not admitted", AdminAction.key action, PlayerId.value moderator)
+        | ValueNone, _ | _, None -> ()
+
     // A muted player's writing is refused whole; the client shows the mute it was told.
     let private mutedRejection = { Code = RequestRejectionCode.Muted; Message = "The player is muted."; Field = "" }
 
@@ -334,6 +361,7 @@ module PlayerSession =
                     OwnPseudonym = state.Pseudonym
                     Hiding = state.Hiding
                     Mute = state.Mute |> ValueOption.filter (Sanction.activeAt DateTimeOffset.UtcNow)
+                    Role = state.Role
                 }
                 if emit options request state context (SessionHostCommand.Activate(request.ConnectionId, request.RequestId, welcome)) then
                     state.Phase <- Active opening.Player
@@ -388,6 +416,17 @@ module PlayerSession =
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected chat rejection."
+        | ChatRoomEvent.Removed(ValueNone, message) ->
+            publish options request state context (ServerResponse.ChatMessageRemoved(ValueNone, message.ChannelId, message.MessageId))
+        | ChatRoomEvent.Removed(ValueSome requestId, message) ->
+            match state.Phase with
+            | Active _ when state.Pending.Remove requestId ->
+                send options request state context (ServerResponse.ChatMessageRemoved(ValueSome requestId, message.ChannelId, message.MessageId))
+                message.Author |> ValueOption.iter (fun author ->
+                    audit state context AdminAction.DeletedChatMessage author.PlayerId (ChatMessageText.value message.MessageText))
+            | Closing -> ()
+            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
+                close request state context "Unexpected chat removal."
 
     let private presenceEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
         match event with
@@ -425,10 +464,19 @@ module PlayerSession =
         | GroundMarkEvent.Own records -> publish options request state context (ServerResponse.OwnGroundMarks records)
         | GroundMarkEvent.Placed(requestId, record, evicted) ->
             settle requestId (fun () -> send options request state context (ServerResponse.GroundMarkPlaced(requestId, record, evicted)))
-        | GroundMarkEvent.Removed(requestId, id) ->
-            settle requestId (fun () -> send options request state context (ServerResponse.GroundMarkRemoved(requestId, id)))
+        | GroundMarkEvent.Removed(requestId, id, author) ->
+            settle requestId (fun () ->
+                send options request state context (ServerResponse.GroundMarkRemoved(requestId, id))
+                if selfId state <> ValueSome author then
+                    audit state context AdminAction.RemovedGroundMark author $"mark {GroundMarkId.value id}")
         | GroundMarkEvent.Rejected(requestId, rejection) ->
             settle requestId (fun () -> sendRefusal options request state context DeliveryLane.Control requestId rejection)
+        | GroundMarkEvent.AuthorMarks(requestId, author, records) ->
+            settle requestId (fun () -> send options request state context (ServerResponse.PlayerMarks(requestId, author, records)))
+        | GroundMarkEvent.Cleared(requestId, author, ids) ->
+            settle requestId (fun () ->
+                send options request state context (ServerResponse.PlayerMarksCleared(requestId, author, ids.Length))
+                if not ids.IsEmpty then audit state context AdminAction.ClearedGroundMarks author $"{ids.Length} marks")
 
     // Visibility of marks follows the player's own position; a lost update is
     // repaired by the next one, since the owner compares with what it last saw.
@@ -482,7 +530,8 @@ module PlayerSession =
                 close request state context "Request ID is invalid or already pending."
             elif state.Pending.Count >= options.MaxPendingChat then
                 reject options request state context requestId RequestRejectionCode.Overloaded "Too many pending requests."
-            elif state.GroundMarks.TrySend(context, GroundMarkCommand.Remove(request.ConnectionId, requestId, id)) then
+            // A moderator removes any mark; the owner answers with its author for the audit.
+            elif state.GroundMarks.TrySend(context, GroundMarkCommand.Remove(request.ConnectionId, requestId, id, state.Role = PlayerRole.Moderator)) then
                 state.Pending.Add requestId |> ignore
             else
                 reject options request state context requestId RequestRejectionCode.Overloaded "Ground mark admission is full."
@@ -739,6 +788,75 @@ module PlayerSession =
         | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
             refuse RequestRejectionCode.SessionNotReady "Session is not ready."
 
+    /// The role is checked here; whether a moderator outranks the target is the
+    /// account service's to decide against the stored roles.
+    let private moderate (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (action: ModerationAction) =
+        let lane =
+            match action with
+            | ModerationAction.DeleteMessage _ -> DeliveryLane.Chat
+            | ModerationAction.Sanction _ | ModerationAction.Lift _ | ModerationAction.Kick _ | ModerationAction.ListSanctions
+            | ModerationAction.ListMarks _ | ModerationAction.ClearMarks _ -> DeliveryLane.Control
+        let refuse code message = sendRefusal options request state context lane requestId { Code = code; Message = message; Field = "" }
+        let admitted sent = if sent then state.Pending.Add requestId |> ignore else refuse RequestRejectionCode.Overloaded "Moderation admission is full."
+        match state.Phase, reliable context with
+        | Active player, Some address ->
+            let self = player.Data.PlayerId
+            let ask command =
+                let operationId = Guid.NewGuid()
+                let sent = state.AccountModeration.TrySend(context, { OperationId = operationId; Command = command; ReplyTo = address.Map PlayerSessionMessage.ModerationReplied })
+                if sent then state.ModerationRequests[operationId] <- struct (requestId, action)
+                admitted sent
+            if requestId = 0UL || state.Pending.Contains requestId then
+                close request state context "Request ID is invalid or already pending."
+            elif state.Role <> PlayerRole.Moderator then
+                refuse RequestRejectionCode.NotPermitted "Only a moderator may do this."
+            elif state.Pending.Count >= options.MaxPendingChat then
+                refuse RequestRejectionCode.Overloaded "Too many pending requests."
+            else
+                match action with
+                | ModerationAction.Sanction(target, kind, term, reason) ->
+                    ask (ModerationCommand.Sanction { Target = target; Kind = kind; Term = term; Reason = reason; IssuedBy = SanctionIssuer.Moderator self })
+                | ModerationAction.Lift(target, kind) -> ask (ModerationCommand.Lift(target, kind, self))
+                | ModerationAction.Kick(target, reason) -> ask (ModerationCommand.Kick(target, reason, self))
+                | ModerationAction.ListSanctions -> ask ModerationCommand.ListSanctions
+                | ModerationAction.ListMarks target ->
+                    admitted (state.GroundMarks.TrySend(context, GroundMarkCommand.ListOf(request.ConnectionId, requestId, target)))
+                | ModerationAction.ClearMarks(target, kinds) ->
+                    admitted (state.GroundMarks.TrySend(context, GroundMarkCommand.ClearOf(request.ConnectionId, requestId, target, kinds)))
+                | ModerationAction.DeleteMessage(channel, message) ->
+                    let removal = { ConnectionId = request.ConnectionId; RequestId = requestId; MessageId = message; ReplyTo = address.Map PlayerSessionMessage.ChatEvent }
+                    match ChatChannelKind.tryOfChannelId channel with
+                    | Some ChatChannelKind.Global -> admitted (state.Chat.TrySend(context, ChatRoomCommand.Remove removal))
+                    | Some ChatChannelKind.System -> admitted (state.System.TrySend(context, ChatRoomCommand.Remove removal))
+                    | None -> refuse RequestRejectionCode.ChannelNotFound "Channel does not exist."
+        | Closing, _ -> ()
+        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+            refuse RequestRejectionCode.SessionNotReady "Session is not ready."
+
+    let private moderationReplied (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: ModerationReply) =
+        match state.ModerationRequests.TryGetValue reply.OperationId with
+        | false, _ -> () // An audit line: nothing waits for it.
+        | true, struct (requestId, action) ->
+            state.ModerationRequests.Remove reply.OperationId |> ignore
+            match state.Phase with
+            | Active _ when state.Pending.Remove requestId ->
+                let refuse code message =
+                    sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "" }
+                match reply.Result, action with
+                | Ok(ModerationResult.Sanctioned sanction), _ -> send options request state context (ServerResponse.SanctionIssued(requestId, sanction))
+                | Ok(ModerationResult.Lifted sanction), _ ->
+                    send options request state context (ServerResponse.SanctionLifted(requestId, sanction.Target, sanction.Kind))
+                | Ok ModerationResult.Kicked, ModerationAction.Kick(target, _) -> send options request state context (ServerResponse.PlayerKicked(requestId, target))
+                | Ok(ModerationResult.Sanctions sanctions), _ -> send options request state context (ServerResponse.SanctionList(requestId, sanctions))
+                | Error(ModerationError.Refused SanctionError.NotAllowed), _ ->
+                    refuse RequestRejectionCode.NotPermitted "A moderator acts only on players, not on moderators or themselves."
+                | Error(ModerationError.Refused SanctionError.PlayerNotFound), _ -> refuse RequestRejectionCode.TargetNotFound "No such player."
+                | Error(ModerationError.Refused SanctionError.NotActive), _ -> refuse RequestRejectionCode.TargetNotFound "No such sanction in force."
+                | Error(ModerationError.Busy | ModerationError.Unavailable), _ -> refuse RequestRejectionCode.Overloaded "Moderation is busy; try again."
+                | Ok(ModerationResult.Kicked | ModerationResult.Recorded), _ -> close request state context "Unexpected moderation reply."
+            | Closing -> ()
+            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected moderation reply."
+
     let private displayNameReplied (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: DisplayNameChangeReply) =
         match state.NameRequest with
         | ValueSome(struct (requestId, operationId)) when operationId = reply.OperationId ->
@@ -827,10 +945,18 @@ module PlayerSession =
             | Starting | Resolving _ | Reserving _ | Opening _ -> reply.Reply(Error PlayerStateError.NotReady)
         | PlayerSessionMessage.RoleChanged role ->
             match state.Phase with
-            | Opening _ | Active _ ->
+            // The welcome carries the role of an opening session.
+            | Opening _ ->
                 state.Logger.LogDebug("Player {PlayerId} (session {ConnectionId}) now has role {Role}", accountId state, request.ConnectionId, role)
                 state.Role <- role
+            | Active _ ->
+                state.Logger.LogDebug("Player {PlayerId} (session {ConnectionId}) now has role {Role}", accountId state, request.ConnectionId, role)
+                if state.Role <> role then
+                    state.Role <- role
+                    send options request state context (ServerResponse.RoleChanged role)
             | Starting | Resolving _ | Reserving _ | Closing -> ()
+        | PlayerSessionMessage.Moderate(requestId, action) -> moderate options request state context requestId action
+        | PlayerSessionMessage.ModerationReplied reply -> moderationReplied options request state context reply
         | PlayerSessionMessage.MuteChanged mute ->
             state.Logger.LogDebug("Player {PlayerId} (session {ConnectionId}) is muted: {Muted}", accountId state, request.ConnectionId, mute.IsSome)
             match state.Phase with
@@ -855,23 +981,27 @@ module PlayerSession =
         // Rare administrator changes use the reserve so a busy session still applies them.
         | PlayerSessionMessage.RoleChanged _ | PlayerSessionMessage.ProfileChanged _ | PlayerSessionMessage.MuteChanged _ -> true
         // The account service must be able to settle a pending change.
-        | PlayerSessionMessage.DisplayNameReplied _ -> true
+        | PlayerSessionMessage.DisplayNameReplied _ | PlayerSessionMessage.ModerationReplied _ -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Placed _ | GroundMarkEvent.Removed _ | GroundMarkEvent.Rejected _) -> true
+        | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.AuthorMarks _ | GroundMarkEvent.Cleared _) -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Changed _ | GroundMarkEvent.Own _) -> false
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Joined _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.JoinFailed _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Accepted _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Rejected _)
+        | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Removed(ValueSome _, _))
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Snapshot _) -> true
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Published _)
+        | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Removed(ValueNone, _))
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.VisibilityChanged _ | PresenceEvent.MetadataChanged _ | PresenceEvent.Left _)
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.PostAnnouncement _
         | PlayerSessionMessage.PlaceGroundNote _ | PlayerSessionMessage.ReportDeath _ | PlayerSessionMessage.RemoveGroundMark _
         | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _ | PlayerSessionMessage.SetIdentityVisibility _
-        | PlayerSessionMessage.Read _ | PlayerSessionMessage.Describe _ | PlayerSessionMessage.ChangeDisplayName _ -> false
+        | PlayerSessionMessage.Read _ | PlayerSessionMessage.Describe _ | PlayerSessionMessage.ChangeDisplayName _
+        | PlayerSessionMessage.Moderate _ -> false
 
     /// chat and system are the owners of the global and the system channel; marks owns the ground marks.
-    let start (settings: GameSettings) moderation authentication displayNames chat system presence marks host (logger: ILogger) (request: SessionOpenRequest) =
+    let start (settings: GameSettings) moderation authentication displayNames accountModeration chat system presence marks host (logger: ILogger) (request: SessionOpenRequest) =
         let options = settings.Runtime.Player
         let reserve = PlayerSessionOptions.OutboxReserve
         let state = {
@@ -896,6 +1026,8 @@ module PlayerSession =
             Pending = HashSet()
             Authentication = AgentOutbox(1, authentication)
             DisplayNames = AgentOutbox(1, displayNames)
+            AccountModeration = AgentOutbox(options.MaxPendingChat + reserve, accountModeration)
+            ModerationRequests = Dictionary()
             Chat = AgentOutbox(options.MaxPendingChat + reserve, chat)
             System = AgentOutbox(options.MaxPendingChat + reserve, system)
             Presence = AgentOutbox(options.MaxPendingUpdates + reserve, presence)

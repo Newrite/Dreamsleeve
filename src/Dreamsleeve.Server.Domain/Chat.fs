@@ -297,6 +297,19 @@ module Chat =
                 NextCursor = nextCursor
             }
 
+    /// A moderator's removal of one retained message; absent when it is not
+    /// retained (never accepted, evicted or removed already). Its ID is never
+    /// accepted again, and history pages report no gap for it: nothing was
+    /// lost that a reader should fetch.
+    let remove messageId (chat: Chat) =
+        match chat.messages |> Seq.tryFind (fun message -> message.MessageId = messageId) with
+        | None -> ValueNone
+        | Some removed ->
+            let kept = chat.messages |> Seq.filter (fun message -> message.MessageId <> messageId) |> Seq.toArray
+            chat.messages.Clear()
+            for message in kept do chat.messages.Enqueue message
+            ValueSome removed
+
     /// Removes retained messages but preserves accepted/evicted cursor tracking.
     /// Clearing history does not permit old IDs to be accepted again.
     let clearHistory (chat: Chat) =

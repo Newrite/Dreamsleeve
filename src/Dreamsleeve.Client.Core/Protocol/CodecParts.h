@@ -88,6 +88,10 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<GroundMarksChanged>     ReadMarksChanged(const P::GroundMarksChanged&);
   Result<OwnGroundMarksReplaced> ReadOwnMarks(const P::OwnGroundMarks&);
 
+  Result<Domain::PlayerRole>   Role(int);
+  Result<Domain::SanctionKind> Kind(int);
+  Result<Domain::Sanction>     ReadSanction(const P::SanctionEntry&);
+
   void                  WriteSession(P::OpenSession&, const OpenSession&);
   Result<SessionOpened> Welcome(const Configuration&, std::uint64_t, const P::SessionOpened&);
   Domain::MuteState     Mute(const P::MuteState&);

@@ -1,0 +1,100 @@
+/* Rows of the ignore list and of the sanctions in force: the name first, the
+   details after it, the actions at the end. */
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.list small {
+  color: var(--muted);
+}
+.list button {
+  border: 1px solid var(--border);
+}
+.rowActions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.kind {
+  color: var(--accent);
+  font-size: 0.85em;
+}
+.list li[data-kind="ban"] .kind {
+  color: var(--error);
+}
+.reason {
+  overflow-wrap: anywhere;
+}
+/* The dialog of a moderator's action, above the chat and the menu. */
+.dialog {
+  width: min(460px, calc(100vw - 48px));
+  padding: 22px 26px;
+  background: rgb(var(--surface));
+  border: 1px solid var(--border);
+}
+.form {
+  display: grid;
+  gap: 14px;
+}
+.dialog h3 {
+  margin: 0;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.dialog input:not([type="checkbox"]) {
+  width: 100%;
+  background: #1e2226;
+  color: var(--ink);
+  border: 1px solid #565d64;
+  padding: 6px 10px;
+}
+.dialog button {
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+}
+.dialog button:disabled {
+  opacity: 0.45;
+}
+.field {
+  display: grid;
+  gap: 5px;
+  font-size: 0.9em;
+}
+.custom {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.removals {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+}
+.removals label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.error {
+  margin: 0;
+  color: var(--error);
+}
+.actions {
+  display: flex;
+  gap: 10px;
+}

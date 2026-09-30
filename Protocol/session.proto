@@ -4,6 +4,7 @@ package Dreamsleeve.Protocol.Chat;
 
 import "chat.proto";
 import "player.proto";
+import "moderation.proto";
 
 // Where other players see the server pseudonym instead of the sender's names.
 // Presence (online list, name above the firefly) and chat (messages, client
@@ -46,6 +47,8 @@ message SessionOpened {
   HiddenIdentity hidden_identity = 10;
   // The receiver's mute in force when the session opened; absent: not muted.
   MuteState mute = 11;
+  // The receiver's role: a moderator gets the moderation commands.
+  PlayerRole role = 12;
 }
 
 // A mute in force on the receiver: chat, notes, client announcements and the

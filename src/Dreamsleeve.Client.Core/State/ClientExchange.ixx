@@ -44,7 +44,7 @@ export namespace Dreamsleeve::Client
     Domain::GameDate            gameDate;  // Required: the calendar at the death.
   };
 
-  // Only the author's own mark.
+  // The author's own mark; a moderator's, any mark.
   struct RemoveGroundMark
   {
     std::uint64_t        requestId{};
@@ -65,6 +65,65 @@ export namespace Dreamsleeve::Client
   {
     std::uint64_t requestId{};
     std::string   displayName;
+  };
+
+  // Moderator requests. The server checks the role and whom a moderator may
+  // act on; a hidden player is named by the public PlayerId.
+
+  // A mute or a ban for the minutes given, or until lifted without them. The
+  // short reason is required.
+  struct SanctionPlayer
+  {
+    std::uint64_t                requestId{};
+    Domain::PlayerId             playerId{};
+    Domain::SanctionKind         kind{Domain::SanctionKind::Mute};
+    std::optional<std::uint32_t> minutes;
+    std::string                  reason;
+  };
+
+  struct LiftSanction
+  {
+    std::uint64_t        requestId{};
+    Domain::PlayerId     playerId{};
+    Domain::SanctionKind kind{Domain::SanctionKind::Mute};
+  };
+
+  // Ends the player's session now; they may sign in again at once.
+  struct KickPlayer
+  {
+    std::uint64_t    requestId{};
+    Domain::PlayerId playerId{};
+    std::string      reason;
+  };
+
+  // Every sanction in force, offline players included, newest first.
+  struct ListSanctions
+  {
+    std::uint64_t requestId{};
+  };
+
+  // Every mark of one player, far ones included, newest first.
+  struct ListPlayerMarks
+  {
+    std::uint64_t    requestId{};
+    Domain::PlayerId playerId{};
+  };
+
+  // The player's notes, death marks or both; at least one kind.
+  struct ClearPlayerMarks
+  {
+    std::uint64_t    requestId{};
+    Domain::PlayerId playerId{};
+    bool             notes{};
+    bool             deaths{};
+  };
+
+  // One message of a channel, gone for everyone.
+  struct DeleteChatMessage
+  {
+    std::uint64_t         requestId{};
+    Domain::ChatChannelId channelId{};
+    Domain::ChatMessageId messageId{};
   };
 
   // Complete sampled values, not a patch. Only adjacent pending samples from
@@ -114,6 +173,13 @@ export namespace Dreamsleeve::Client
     RemoveGroundMark,
     SetIdentityVisibility,
     ChangeDisplayName,
+    SanctionPlayer,
+    LiftSanction,
+    KickPlayer,
+    ListSanctions,
+    ListPlayerMarks,
+    ClearPlayerMarks,
+    DeleteChatMessage,
     LocalMovement,
     LocalLocation,
     LocalActorValues,
@@ -204,12 +270,66 @@ export namespace Dreamsleeve::Client
     std::string displayName;
   };
 
+  // Moderator answers. Players are named by PlayerId; the UI resolves names.
+  struct Sanctioned
+  {
+    Domain::Sanction sanction;
+  };
+
+  struct Lifted
+  {
+    Domain::PlayerId     playerId{};
+    Domain::SanctionKind kind{Domain::SanctionKind::Mute};
+  };
+
+  struct Kicked
+  {
+    Domain::PlayerId playerId{};
+  };
+
+  struct SanctionsListed
+  {
+    std::vector<Domain::Sanction> sanctions;
+  };
+
+  struct MarksListed
+  {
+    Domain::PlayerId                playerId{};
+    std::vector<Domain::GroundMark> marks;
+  };
+
+  struct MarksCleared
+  {
+    Domain::PlayerId playerId{};
+    std::uint32_t    removed{};
+  };
+
+  // The chat drops the message through the ordinary delta, as for everyone.
+  struct MessageDeleted
+  {
+    Domain::ChatChannelId channelId{};
+    Domain::ChatMessageId messageId{};
+  };
+
   // Exactly one result settles every command with a request ID: the server's
   // answer, its refusal or a local failure, with the command's generation.
   struct CommandResult
   {
-    using Outcome =
-      std::variant<MessagePublished, MarkPlaced, MarkRemoved, IdentityChanged, NameChanged, ServerRejection, CommandFailureCode>;
+    using Outcome = std::variant<
+      MessagePublished,
+      MarkPlaced,
+      MarkRemoved,
+      IdentityChanged,
+      NameChanged,
+      Sanctioned,
+      Lifted,
+      Kicked,
+      SanctionsListed,
+      MarksListed,
+      MarksCleared,
+      MessageDeleted,
+      ServerRejection,
+      CommandFailureCode>;
 
     std::uint64_t generation{};
     std::uint64_t requestId{};
@@ -246,6 +366,8 @@ export namespace Dreamsleeve::Client
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
     // The player's mute in this session, as the server reported it.
     std::optional<Domain::MuteState> mute;
+    // The player's role in this session; a moderator gets the moderator tools.
+    Domain::PlayerRole role{Domain::PlayerRole::Player};
     // Why the last session ended or a sign-in was refused by a ban; kept until
     // the next sign-in. The sequence tells a repeat of the same notice apart.
     std::optional<Domain::SessionEnd> sessionEnd;
@@ -448,6 +570,12 @@ public:
     {
       std::lock_guard lock{mutex};
       status.mute = std::move(mute);
+    }
+
+    void PublishRole(Domain::PlayerRole role)
+    {
+      std::lock_guard lock{mutex};
+      status.role = role;
     }
 
     // A kick, a ban or a revocation from the server, or a ban refusing sign-in;

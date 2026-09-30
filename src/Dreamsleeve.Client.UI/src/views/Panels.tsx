@@ -10,19 +10,29 @@ import { OnlinePanel } from "./OnlinePanel";
 import { PlayerDetails } from "./PlayerDetails";
 import { AccountPanel } from "./AccountPanel";
 import { MarksPanel } from "./MarksPanel";
+import { IgnoredPanel } from "./IgnoredPanel";
+import { ModeratorPanel } from "./ModeratorPanel";
+import { playerActions } from "../state/moderator";
 import { useDialog } from "../features/useDialog";
 import styles from "../styles/Workspace.module.css";
 const tabs: { id: Exclude<Panel, null>; label: string }[] = [
   { id: "online", label: "Онлайн" },
   { id: "profile", label: "Профиль" },
   { id: "marks", label: "Метки" },
+  { id: "ignored", label: "Игнор" },
   { id: "stats", label: "Статистика" },
   { id: "settings", label: "Настройки" },
   { id: "account", label: "Аккаунт" },
 ];
+// Shown to moderators only; the server checks the role of every request anyway.
+const moderatorTab = { id: "moderation", label: "Модерация" } as const;
 export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
   const dialog = useDialog();
   const player = s.players.find((p) => p.id === s.selectedPlayer);
+  const selectedName =
+    player?.name ??
+    s.ignored.find((p) => p.id === s.selectedPlayer)?.name ??
+    `#${s.selectedPlayer}`;
   return (
     <div
       className={styles.backdrop}
@@ -49,7 +59,7 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
           </button>
         </header>
         <nav aria-label="Разделы меню" className={styles.nav}>
-          {tabs.map((t) => (
+          {(s.moderator ? [...tabs, moderatorTab] : tabs).map((t) => (
             <button
               key={t.id}
               aria-current={s.panel === t.id ? "page" : undefined}
@@ -73,7 +83,6 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
               <SettingsPanel
                 chat={chat}
                 settings={s.settings}
-                ignored={s.ignored}
                 identity={s.identity}
                 phase={s.connectionPhase}
               />
@@ -104,6 +113,30 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
                 </small>
               </div>
             )}
+          {s.panel === "profile" &&
+            s.moderator &&
+            s.selectedPlayer &&
+            s.selectedPlayer !== s.selfId && (
+              <div
+                className={styles.playerActions}
+                role="group"
+                aria-label="Действия модератора"
+              >
+                {playerActions(
+                  chat.moderator,
+                  s.selectedPlayer,
+                  selectedName,
+                ).map((item) => (
+                  <button key={item.label} onClick={item.run}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          {s.panel === "ignored" && <IgnoredPanel chat={chat} state={s} />}
+          {s.panel === "moderation" && s.moderator && (
+            <ModeratorPanel chat={chat} state={s} />
+          )}
           {s.panel === "account" && <AccountPanel chat={chat} state={s} />}
           {s.panel === "marks" && <MarksPanel chat={chat} state={s} />}
           {s.panel === "stats" && (

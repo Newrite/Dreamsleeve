@@ -78,7 +78,8 @@ module main =
 
     type admin_audit =
         { id: int64
-          admin_id: int64
+          admin_id: Option<int64>
+          moderator_id: Option<int64>
           action: string
           target: string
           details: string
@@ -88,6 +89,7 @@ module main =
             member this.WriteColumns =
                 [ { WriteColumn.Name = "id"; Value = box this.id; ProviderDbType = None }
                   { WriteColumn.Name = "admin_id"; Value = box this.admin_id; ProviderDbType = None }
+                  { WriteColumn.Name = "moderator_id"; Value = box this.moderator_id; ProviderDbType = None }
                   { WriteColumn.Name = "action"; Value = box this.action; ProviderDbType = None }
                   { WriteColumn.Name = "target"; Value = box this.target; ProviderDbType = None }
                   { WriteColumn.Name = "details"; Value = box this.details; ProviderDbType = None }

@@ -32,6 +32,8 @@ function originLabel(a: Announcement, author: string) {
 // CPU cost on Ultralight. A row re-renders only when something it shows moved.
 const MessageRow = memo(function MessageRow({
   chat,
+  id,
+  channelId,
   time,
   text,
   source,
@@ -51,6 +53,8 @@ const MessageRow = memo(function MessageRow({
   timestamps,
 }: {
   chat: Chat;
+  id: string;
+  channelId: string;
   time: number;
   text: string;
   source: Message["source"];
@@ -111,6 +115,7 @@ const MessageRow = memo(function MessageRow({
               e.clientX,
               e.clientY,
               pseudonymous,
+              { channelId, id },
             );
           }}
           onContextMenu={(e) => {
@@ -121,6 +126,7 @@ const MessageRow = memo(function MessageRow({
               e.clientX,
               e.clientY,
               pseudonymous,
+              { channelId, id },
             );
           }}
         >
@@ -191,6 +197,8 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
             <MessageRow
               key={key}
               chat={chat}
+              id={m.id}
+              channelId={m.channelId}
               time={m.time}
               text={m.text}
               source={m.source}

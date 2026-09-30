@@ -100,6 +100,11 @@ ClientApplication. Не вызывать его методы непосредс�
 | `nearbyMarks` | Метки, которые сервер показывает рядом с персонажем, с именем автора (`author`) от host; в снимке — `nearbyMarks`; метки игнорируемых не приходят |
 | `markResult` | Итог `placeGroundNote` (markId, evictedId) или `removeGroundMark` (removed) по requestId, либо error; это не дельта видимых меток |
 | `displayName` | Смена своего отображаемого имени: pending (ждём сервер), changed (сохранённое имя, один раз), error (текст отказа); свой профиль приходит в `players` |
+| `mute` | Свой мут: muted, причина модератора, until (Unix ms; нет — бессрочно); поле ввода закрыто до конца срока |
+| `sessionEnded` | Как сервер закрыл сессию или отказал во входе: reason (`revoked`/`banned`/`kicked`), text — причина, until — конец бана |
+| `role` | moderator: роль игрока в сессии; только модератор видит пункты модератора и вкладку «Модерация» |
+| `messagesRemoved` | channelId, messageIds: сообщения, удалённые модератором, уходят из истории у всех |
+| `moderationResult` | Ответ на запрос модератора по requestId: error при отказе, иначе поля своего вида — sanction, sanctions (игрок по playerId, name — если host его встречал), playerId, marks, removed |
 | `identity` | «Скрывать моё имя от других игроков»: mode (`off`/`everywhere`/`exceptGroundMarks`; во время ожидания — запрошенный), pending (ждём сервер), pseudonym (что видят другие, только в Ready-сессии), error (последний отказ); приходит при каждом изменении, после (пере)создания view и в ответ на `setIdentityVisibility` |
 
 | UI → host | Смысл |
@@ -115,7 +120,10 @@ ClientApplication. Не вызывать его методы непосредс�
 | `ignore` / `unignore` | playerId; host хранит список в `ui.toml` по адресу сервера и повторно проецирует снимок |
 | `displaySettings` | Полный набор settings; host берёт из него `instantKeys` (nameMode, streamerMode, textFilter, markDateStyle), применяет и сохраняет сразу, затем шлёт refresh-снимок |
 | `placeGroundNote` | requestId, text: оставить черновик меткой там, где стоит персонаж; положение подставляет host |
-| `removeGroundMark` | requestId, markId: удалить свою метку |
+| `removeGroundMark` | requestId, markId: удалить свою метку (модератору — любую) |
+| `sanctionPlayer` / `liftSanction` / `kickPlayer` | Модератор: requestId, playerId, kind (`mute`/`ban`), minutes (нет — бессрочно), reason; сервер проверяет роль и цель |
+| `listSanctions` / `listPlayerMarks` / `clearPlayerMarks` | Модератор: requestId; действующие наказания, метки игрока, удаление его надписей (notes) и/или мест смерти (deaths) |
+| `deleteChatMessage` | Модератор: requestId, channelId, messageId — удалить сообщение для всех |
 | `changeDisplayName` | displayName: в Ready-сессии — запрос серверу; username не меняется; одна смена за раз |
 | `setIdentityVisibility` | hiding (`off`/`everywhere`/`exceptGroundMarks`): в Ready-сессии — запрос серверу (выбор сохраняется после подтверждения), без сессии — выбор для следующего входа; пока сессия открывается — отказ «Дождитесь подключения к серверу» |
 

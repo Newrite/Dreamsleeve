@@ -38,7 +38,8 @@ let private request (result: Result<ClientRequest, ProtocolCodecError>) =
     | ClientCommand.PostAnnouncement value -> value
     | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _
     | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
-    | ClientCommand.SetIdentityVisibility _ -> failtest "Expected announcement"
+    | ClientCommand.SetIdentityVisibility _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
+    | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.DeleteChatMessage _ -> failtest "Expected announcement"
 
 let private withFile (text: string) action =
     let path = Path.Combine(Path.GetTempPath(), sprintf "dreamsleeve-announcements-%O.toml" (Guid.NewGuid()))
@@ -151,6 +152,7 @@ let tests = testList "Announcements" [
             OwnPseudonym = ValueNone
             Hiding = HiddenIdentity.Shown
             Mute = ValueNone
+            Role = PlayerRole.Player
         }
         let opened = Packets.single codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         let policy = opened.SessionOpened.Announcements

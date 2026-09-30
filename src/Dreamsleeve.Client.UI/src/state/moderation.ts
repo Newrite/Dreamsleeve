@@ -6,7 +6,7 @@ const endFormat = new Intl.DateTimeFormat("ru-RU", {
   hour: "2-digit",
   minute: "2-digit",
 });
-const term = (until?: number) =>
+export const term = (until?: number) =>
   until === undefined ? "бессрочно" : `до ${endFormat.format(until)}`;
 // A mute holds until its end; one without an end until it is lifted.
 export const muted = (mute: MuteState, now: number) =>

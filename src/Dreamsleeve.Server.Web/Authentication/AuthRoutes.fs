@@ -115,7 +115,8 @@ module AuthRoutes =
         | Ok AccountAccessResult.Completed -> Results.NoContent()
         // Trusted results never come from a public route.
         | Ok (AccountAccessResult.PasswordResetCreated _) | Ok (AccountAccessResult.Renamed _)
-        | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) -> unavailable ()
+        | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
+        | Ok (AccountAccessResult.ActiveSanctions _) -> unavailable ()
         // 403, not 401: a saved login stays saved and works again once the ban ends.
         | Error (AccountAccessError.Banned ban) ->
             WebHost.json 403 {| code = "banned"; message = "The account is banned."; reason = SanctionReason.value ban.Reason

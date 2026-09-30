@@ -291,7 +291,8 @@ TEST_CASE("Malformed unsupported and structurally incomplete server packets retu
   auto bytes = Bytes(packet);
   bytes.insert(bytes.end(), {std::byte{0x98}, std::byte{0x06}, std::byte{0x01}});
   CHECK(codec.Decode(bytes, W::Channel::Chat));  // An unknown additive field is allowed within this version.
-  const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{W::Version}, std::byte{0xFA}, std::byte{0x01}, std::byte{0x00}};
+  // Field 60, not defined.
+  const std::vector<std::byte> futurePayload{std::byte{0x08}, std::byte{W::Version}, std::byte{0xE2}, std::byte{0x03}, std::byte{0x00}};
   auto                         unknown = codec.Decode(futurePayload);
   REQUIRE_FALSE(unknown);
   CHECK(unknown.error().code == W::ErrorCode::InvalidPayload);
@@ -826,6 +827,75 @@ TEST_CASE("A display name change and its answer round-trip with the correlation"
   changed.mutable_display_name_changed()->set_display_name("Новое Имя");
   changed.clear_request_id();
   CHECK_FALSE(codec.Decode(Bytes(changed)));
+}
+
+TEST_CASE("Moderator requests encode as asked and their answers decode with correlation, lane and role")
+{
+  const auto codec = MakeCodec();
+  const auto sent  = [&](W::ClientRequest request) {
+    const auto encoded = codec.Encode(request);
+    REQUIRE(encoded);
+    P::ClientPacket packet;
+    REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+    return packet;
+  };
+  const auto mute = sent(SanctionPlayer{5, 9, Domain::SanctionKind::Mute, 15, "Флуд"}).sanction_player();
+  CHECK(mute.player_id() == 9);
+  CHECK(mute.kind() == P::SANCTION_KIND_MUTE);
+  CHECK(mute.minutes() == 15);
+  CHECK(mute.reason() == "Флуд");
+  CHECK_FALSE(sent(SanctionPlayer{6, 9, Domain::SanctionKind::Ban, std::nullopt, "Читы"}).sanction_player().has_minutes());
+  const auto clear = sent(ClearPlayerMarks{7, 9, false, true}).clear_player_marks();
+  CHECK((clear.player_id() == 9 && !clear.notes() && clear.deaths()));
+  CHECK(sent(DeleteChatMessage{8, 1, 3}).delete_chat_message().message_id() == 3);
+  CHECK(sent(ListSanctions{9}).has_list_sanctions());
+
+  P::ServerPacket issued;
+  issued.set_protocol_version(W::Version);
+  issued.set_request_id(5);
+  auto* entry = issued.mutable_sanction_issued()->mutable_sanction();
+  entry->set_player_id(9);
+  entry->set_kind(P::SANCTION_KIND_MUTE);
+  entry->set_reason("Флуд");
+  entry->set_issued_at_unix_ms(1000);
+  entry->set_until_unix_ms(901000);
+  const auto decoded = codec.Decode(Bytes(issued));
+  REQUIRE(decoded);
+  CHECK(std::get<W::SanctionIssued>(*decoded).sanction == Domain::Sanction{9, Domain::SanctionKind::Mute, "Флуд", 1000, 901000});
+  entry->set_kind(P::SANCTION_KIND_UNSPECIFIED);
+  CHECK_FALSE(codec.Decode(Bytes(issued)));
+  entry->set_kind(P::SANCTION_KIND_BAN);
+  issued.clear_request_id();
+  CHECK_FALSE(codec.Decode(Bytes(issued)));
+
+  // A removal travels on the chat lane; only the moderator's copy is correlated.
+  P::ServerPacket removed;
+  removed.set_protocol_version(W::Version);
+  removed.mutable_chat_message_removed()->set_channel_id(1);
+  removed.mutable_chat_message_removed()->set_message_id(3);
+  const auto notice = codec.Decode(Bytes(removed), W::Channel::Chat);
+  REQUIRE(notice);
+  CHECK_FALSE(std::get<W::ChatMessageRemoved>(*notice).requestId);
+  CHECK_FALSE(codec.Decode(Bytes(removed), W::Channel::Control));
+  removed.set_request_id(8);
+  const auto own = codec.Decode(Bytes(removed), W::Channel::Chat);
+  REQUIRE(own);
+  CHECK(std::get<W::ChatMessageRemoved>(*own).requestId == 8);
+
+  P::ServerPacket role;
+  role.set_protocol_version(W::Version);
+  role.mutable_role_changed()->set_role(P::PLAYER_ROLE_MODERATOR);
+  const auto changed = codec.Decode(Bytes(role));
+  REQUIRE(changed);
+  CHECK(std::get<W::RoleChanged>(*changed).role == Domain::PlayerRole::Moderator);
+  role.mutable_role_changed()->set_role(static_cast<P::PlayerRole>(7));
+  CHECK_FALSE(codec.Decode(Bytes(role)));
+
+  auto welcome = Welcome();
+  welcome.mutable_session_opened()->set_role(P::PLAYER_ROLE_MODERATOR);
+  const auto opened = codec.Decode(Bytes(welcome));
+  REQUIRE(opened);
+  CHECK(std::get<W::SessionOpened>(*opened).role == Domain::PlayerRole::Moderator);
 }
 
 TEST_CASE("The codec refuses only what would close the connection: a zero request ID or text that is not UTF-8")

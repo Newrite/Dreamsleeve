@@ -87,6 +87,8 @@ type ChatRoomEvent =
     | Accepted of requestId: uint64 * ChatMessage
     | Published of ChatMessage
     | Rejected of requestId: uint64 * RequestRejection
+    /// A message left the history; the request ID only in the requester's copy.
+    | Removed of requestId: uint64 voption * ChatMessage
 
 type ChatSubmission = {
     ConnectionId: Guid
@@ -107,6 +109,26 @@ type ChatSubmission = {
     ReplyTo: ReliableAgentRef<ChatRoomEvent>
 }
 
+/// What a moderator asks from the game; the session checks the role, the
+/// account service the rank against the target.
+[<RequireQualifiedAccess>]
+type ModerationAction =
+    | Sanction of PlayerId * SanctionKind * SanctionTerm * SanctionReason
+    | Lift of PlayerId * SanctionKind
+    | Kick of PlayerId * SanctionReason
+    | ListSanctions
+    | ListMarks of PlayerId
+    | ClearMarks of PlayerId * GroundMarkKind list
+    | DeleteMessage of ChatChannelId * ChatMessageId
+
+/// A moderator's removal of one message; the session has checked the role.
+type ChatRemoval = {
+    ConnectionId: Guid
+    RequestId: uint64
+    MessageId: ChatMessageId
+    ReplyTo: ReliableAgentRef<ChatRoomEvent>
+}
+
 /// A server-authored announcement handed to the system channel owner.
 type ServerAnnouncement = {
     Text: ChatMessageText
@@ -121,6 +143,7 @@ type ChatRoomCommand =
     | Announce of ServerAnnouncement
     | Detach of SessionDetach
     | ReadHistory of ChatMessageId voption * int * ReplyChannel<Result<ChatHistoryPage, DomainError>>
+    | Remove of ChatRemoval
 
 [<RequireQualifiedAccess>]
 type PresenceEvent =
@@ -148,10 +171,14 @@ type GroundMarkWrite =
 type GroundMarkEvent =
     | Changed of GroundMarkView
     | Placed of requestId: uint64 * GroundMarkRecord * evicted: GroundMarkId voption
-    | Removed of requestId: uint64 * GroundMarkId
+    | Removed of requestId: uint64 * GroundMarkId * author: PlayerId
     | Rejected of requestId: uint64 * RequestRejection
     /// Every mark of the observer, wherever it stands: after Join and on each change of that set.
     | Own of GroundMarkRecord list
+    /// Answers ListOf: the author's marks, newest first.
+    | AuthorMarks of requestId: uint64 * author: PlayerId * GroundMarkRecord list
+    /// Answers ClearOf with the IDs removed.
+    | Cleared of requestId: uint64 * author: PlayerId * GroundMarkId list
 
 /// A validated placement request; the session has already checked the word
 /// list, computed the flags and verified the position against the player's own.
@@ -192,7 +219,13 @@ type GroundMarkCommand =
     /// The observer's latest position and character generation; visibility follows it.
     | Observe of connectionId: Guid * characterGeneration: uint64 * PlayerLocation voption
     | Place of GroundMarkSubmission
-    | Remove of connectionId: Guid * requestId: uint64 * GroundMarkId
+    /// anyAuthor: a moderator's removal of someone else's mark; otherwise only
+    /// the observer's own. The session decides it from the role.
+    | Remove of connectionId: Guid * requestId: uint64 * GroundMarkId * anyAuthor: bool
+    /// A moderator's look at one author's marks; the session has checked the role.
+    | ListOf of connectionId: Guid * requestId: uint64 * author: PlayerId
+    /// A moderator's removal of an author's marks of these kinds.
+    | ClearOf of connectionId: Guid * requestId: uint64 * author: PlayerId * GroundMarkKind list
     /// The observer's moderated profile after a rename; marks sent from now on carry it.
     | Rename of connectionId: Guid * PlayerData
     | Expire of AgentTick

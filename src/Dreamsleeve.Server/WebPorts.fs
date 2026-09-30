@@ -61,6 +61,5 @@ module WebPorts =
             | None -> Task.FromResult None
           Announce = fun announcement -> runtime.TryPost(ServerRuntimeMessage.Announce announcement) |> posted
           ApplyRole = fun playerId role -> runtime.TryPost(ServerRuntimeMessage.SetPlayerRole(playerId, role)) |> posted
-          Kick = fun playerId reason -> runtime.TryPost(ServerRuntimeMessage.KickPlayer(playerId, reason)) |> posted
           ApplyProfile = fun profile -> runtime.TryPost(ServerRuntimeMessage.RenamePlayer profile) |> posted
           Configuration = configuration }

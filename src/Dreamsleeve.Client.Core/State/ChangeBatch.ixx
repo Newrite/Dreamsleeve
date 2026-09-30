@@ -26,13 +26,21 @@ export namespace Dreamsleeve::Client
     std::vector<Domain::ChatMessage> messages{};
   };
 
-  struct ChatMessagesRemoved final
+  // Messages the cache let go to keep its capacity; the UI bounds its own history.
+  struct ChatMessagesEvicted final
   {
     Domain::ChatChannelId              channelId{};
     std::vector<Domain::ChatMessageId> messageIds{};
   };
 
-  using ChatContentChange = std::variant<ChatMessagesRemoved, ChatMessagesAdded>;
+  // Messages a moderator removed: gone from the cache and from any history.
+  struct ChatMessagesDeleted final
+  {
+    Domain::ChatChannelId              channelId{};
+    std::vector<Domain::ChatMessageId> messageIds{};
+  };
+
+  using ChatContentChange = std::variant<ChatMessagesEvicted, ChatMessagesAdded, ChatMessagesDeleted>;
 
   // Exact transitions of the visible ground marks, in order: a clear starts a
   // new baseline, removals and additions follow.

@@ -3,6 +3,7 @@ module Dreamsleeve.Server.Tests.SanctionTests
 open System
 open System.Collections.Concurrent
 open System.Threading
+open System.Threading.Channels
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging.Abstractions
 open Dreamsleeve.Agent
@@ -124,6 +125,49 @@ let private storeTests = testList "SQLite sanctions" [
         // A moderator cannot lift what holds on another moderator.
         equal (SanctionOutcome.Refused SanctionError.NotAllowed)
               (SqliteSanctionStore.lift database.Config carol.PlayerId SanctionKind.Ban (by alice) (now.AddMinutes 4.) token |> ok))
+
+    testCase "a kick is authorized like a sanction; every action leaves an audit line under its issuer" (fun () ->
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let alice = register database "alice"
+        let bob = register database "bob"
+        moderator database alice
+        let by = SanctionIssuer.Moderator alice.PlayerId
+        SqliteSanctionStore.issue database.Config (order bob.PlayerId SanctionKind.Mute (SanctionTerm.For(TimeSpan.FromHours 1.)) by) now token |> ok |> applied |> ignore
+        SqliteSanctionStore.lift database.Config bob.PlayerId SanctionKind.Mute by (now.AddMinutes 1.) token |> ok |> applied |> ignore
+        equal (Ok()) (SqliteSanctionStore.kick database.Config bob.PlayerId (reason "Остынь") by (now.AddMinutes 2.) token |> ok)
+        // Refusals write nothing.
+        equal (Error SanctionError.NotAllowed) (SqliteSanctionStore.kick database.Config alice.PlayerId (reason "Сам") by (now.AddMinutes 3.) token |> ok)
+        equal (Error SanctionError.PlayerNotFound)
+              (SqliteSanctionStore.kick database.Config (PlayerId.create 404UL |> ok) (reason "Никто") by (now.AddMinutes 3.) token |> ok)
+        let audit = SqliteAdminStore.recentAudit database.Config 10 token |> ok
+        equal [ AdminAction.KickedPlayer; AdminAction.LiftedSanction; AdminAction.SanctionedPlayer ] (audit |> List.map _.Action)
+        for entry in audit do
+            equal (ValueSome(AuditActor.Moderator alice.PlayerId)) entry.Actor
+            equal (ValueSome "alice") (entry.ActorName |> ValueOption.map Username.value)
+            equal $"player:{PlayerId.value bob.PlayerId}" entry.Target
+        equal [ "Остынь"; "mute"; "mute until 2027-01-15 09:00 UTC: Флуд" ] (audit |> List.map _.Details)
+        // The panel's own lines name the administrator.
+        let root = admin database
+        equal (Ok()) (SqliteSanctionStore.kick database.Config bob.PlayerId (reason "Проверка") (SanctionIssuer.Admin root) (now.AddMinutes 4.) token |> ok)
+        let panel = (SqliteAdminStore.recentAudit database.Config 1 token |> ok).Head
+        equal (ValueSome(AuditActor.Admin root), ValueSome "root") (panel.Actor, panel.ActorName |> ValueOption.map Username.value)
+        // A moderator's lines keep their text once the profile is gone.
+        database.Execute $"DELETE FROM profiles WHERE player_id={PlayerId.value alice.PlayerId}"
+        let orphaned = SqliteAdminStore.recentAudit database.Config 10 token |> ok |> List.tail
+        equal 3 orphaned.Length
+        check (orphaned |> List.forall (fun entry -> entry.Actor.IsNone && entry.ActorName.IsNone)) "The actor is gone, the line stays.")
+
+    testCase "a moderator's removal of content is recorded under the moderator" (fun () ->
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let alice = register database "alice"
+        let bob = register database "bob"
+        let record = AuditRecord.create AdminAction.DeletedChatMessage (AuditTarget.Player bob.PlayerId) "spam"
+        SqliteAdminStore.recordModeration database.Config alice.PlayerId record now token |> ok
+        let line = (SqliteAdminStore.recentAudit database.Config 1 token |> ok).Head
+        equal (ValueSome(AuditActor.Moderator alice.PlayerId)) line.Actor
+        equal (AdminAction.DeletedChatMessage, "spam", now) (line.Action, line.Details, line.At))
 ]
 
 let private access (service: Agent<AuthMessage>) command =
@@ -215,4 +259,42 @@ let private serviceTests = testList "Account service sanctions" [
         }))
 ]
 
-let tests = testList "Sanctions" [ domainTests; storeTests; serviceTests ]
+let private moderationTests = testList "Account service moderation" [
+    case "a moderator's kick, list and audit line go through the account service; a kick reaches the runtime" (fun () ->
+        withService (fun database service profile changes -> task {
+            let! registered = access service (AccountAccessCommand.Register(Username.create 32 "moderator" |> ok, DisplayName.create 64 "Mod" |> ok, password))
+            let mod' = match registered with Ok (AccountAccessResult.Registered mod') -> mod' | other -> failtestf "%A" other
+            database.Execute $"INSERT INTO player_roles(player_id, role, granted_at) VALUES ({PlayerId.value mod'.PlayerId}, 1, 0)"
+            let replies = Channel.CreateUnbounded<ModerationReply>()
+            use receiver = Agent.Start(AgentOptions.create "moderation-reply", fun _ (reply: ModerationReply) -> task { replies.Writer.TryWrite reply |> ignore })
+            let moderation = (AuthService.authenticator service).Moderation
+            let ask command = task {
+                let request: ModerationRequest = { OperationId = Guid.NewGuid(); Command = command; ReplyTo = receiver.Ref.TryReliable().Value }
+                let! admitted = moderation.PostAsync request
+                equal AgentDeliveryResult.Posted admitted
+                let! reply = replies.Reader.ReadAsync().AsTask().WaitAsync guard
+                equal request.OperationId reply.OperationId
+                return reply.Result
+            }
+            let! refused = ask (ModerationCommand.Kick(mod'.PlayerId, reason "Сам", mod'.PlayerId))
+            equal (Error(ModerationError.Refused SanctionError.NotAllowed)) refused
+            let! kicked = ask (ModerationCommand.Kick(profile.PlayerId, reason "Остынь", mod'.PlayerId))
+            equal (Ok ModerationResult.Kicked) kicked
+            let! told = changes 1
+            equal [ AccountChange.Kicked(profile.PlayerId, reason "Остынь") ] told
+            let! muted = ask (ModerationCommand.Sanction(order profile.PlayerId SanctionKind.Mute SanctionTerm.UntilLifted (SanctionIssuer.Moderator mod'.PlayerId)))
+            let mute = match muted with Ok (ModerationResult.Sanctioned mute) -> mute | other -> failtestf "%A" other
+            let! listed = ask ModerationCommand.ListSanctions
+            equal (Ok(ModerationResult.Sanctions [ mute ])) listed
+            let! lifted = ask (ModerationCommand.Lift(profile.PlayerId, SanctionKind.Mute, mod'.PlayerId))
+            equal (Ok(ModerationResult.Lifted mute)) lifted
+            let line = AuditRecord.create AdminAction.RemovedGroundMark (AuditTarget.Player profile.PlayerId) "mark 3"
+            let! recorded = ask (ModerationCommand.Record(mod'.PlayerId, line))
+            equal (Ok ModerationResult.Recorded) recorded
+            let audit = SqliteAdminStore.recentAudit database.Config 10 token |> ok
+            equal [ AdminAction.RemovedGroundMark; AdminAction.LiftedSanction; AdminAction.SanctionedPlayer; AdminAction.KickedPlayer ]
+                  (audit |> List.map _.Action)
+        }))
+]
+
+let tests = testList "Sanctions" [ domainTests; storeTests; serviceTests; moderationTests ]

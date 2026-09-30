@@ -19,9 +19,10 @@ type SanctionRecord = {
     Target: PlayerData
 }
 
-/// Mutes and bans (db/migrations/*_sanctions.sql), run by the account service's
-/// workers like the account store. The rules are the domain's: who may act
-/// (PlayerRole.outranks), terms and expiry (Sanction). Times are Unix milliseconds.
+/// Mutes, bans and kicks (db/migrations/*_sanctions.sql), run by the account
+/// service's workers like the account store. The rules are the domain's: who
+/// may act (PlayerRole.outranks), terms and expiry (Sanction). Every action
+/// writes its audit line in the same transaction. Times are Unix milliseconds.
 [<RequireQualifiedAccess>]
 module SqliteSanctionStore =
     /// The most sanctions the panel lists at once.
@@ -109,6 +110,18 @@ module SqliteSanctionStore =
         | Ok(Error refused) -> Ok(SanctionOutcome.Refused refused)
         | Ok(Ok()) -> action ()
 
+    let private actor = function
+        | SanctionIssuer.Admin id -> AuditActor.Admin id
+        | SanctionIssuer.Moderator id -> AuditActor.Moderator id
+
+    let private term (sanction: Sanction) =
+        match sanction.Expires with
+        | ValueSome expires -> expires.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'")
+        | ValueNone -> "lifted"
+
+    let private audit context issuer action (target: PlayerId) details now =
+        SqliteAdminStore.audit context (actor issuer) (AuditRecord.create action (AuditTarget.Player target) details) now
+
     /// Issues order at now; the sanction of its kind in force is lifted first.
     let issue config (order: SanctionOrder) (now: DateTimeOffset) token =
         // Stored in milliseconds: the sanction returned is the one read back later.
@@ -131,7 +144,11 @@ module SqliteSanctionStore =
                               "@reason", box (SanctionReason.value order.Reason); "@admin", admin; "@moderator", moderator; "@now", at
                               "@expires", (match expires with ValueSome value -> box value | ValueNone -> box DBNull.Value) ]
                     match SanctionId.create (id :?> int64) with
-                    | Ok id -> Ok(SanctionOutcome.Applied(Sanction.issue id now order))
+                    | Ok id ->
+                        let sanction = Sanction.issue id now order
+                        audit context order.IssuedBy AdminAction.SanctionedPlayer order.Target
+                            $"{SanctionKind.key sanction.Kind} until {term sanction}: {SanctionReason.value sanction.Reason}" now
+                        Ok(SanctionOutcome.Applied sanction)
                     | Error _ -> invalidData ())))
 
     /// Lifts the sanction of kind in force on target at now.
@@ -147,7 +164,19 @@ module SqliteSanctionStore =
                         | ValueSome sanction ->
                             execute context "UPDATE sanctions SET lifted_at=@now WHERE id=@id"
                                 [ "@id", box (SanctionId.value sanction.Id); "@now", box (milliseconds now) ] |> ignore
+                            audit context issuer AdminAction.LiftedSanction target (SanctionKind.key kind) now
                             Ok(SanctionOutcome.Applied sanction))))
+
+    /// Whether issuer may end the target's session now; the runtime does it.
+    let kick config target (reason: SanctionReason) issuer now token =
+        SqliteAccountStore.withContext config token (fun context ->
+            transaction context (fun () ->
+                match authorize context issuer target with
+                | Error error -> Error error
+                | Ok(Error refused) -> Ok(Error refused)
+                | Ok(Ok()) ->
+                    audit context issuer AdminAction.KickedPlayer target (SanctionReason.value reason) now
+                    Ok(Ok())))
 
     /// The sanctions in force at now with their players, newest first.
     let listActive config now token =

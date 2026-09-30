@@ -211,6 +211,59 @@ export namespace Dreamsleeve::Host
           session.SetNameError(posted.error());
         Emit(session.NameEvent());
       }
+
+      // Moderator tools: the server answers with moderationResult; a request
+      // that did not leave is answered here.
+      template <class Command>
+      void Moderate(const std::string& requestId, Command command)
+      {
+        if (auto posted = context.session.Moderate(context.exchange, requestId, std::move(command)); !posted)
+          Emit(Bridge::ModerationResultEvent{.requestId = requestId, .error = posted.error()});
+      }
+
+      void operator()(Commands::SanctionPlayer& command)
+      {
+        Moderate(
+          command.requestId,
+          Client::SanctionPlayer{
+              .playerId = command.playerId.value,
+              .kind     = Bridge::SanctionKindOf(command.kind),
+              .minutes  = command.minutes,
+              .reason   = std::move(command.reason)
+          });
+      }
+
+      void operator()(Commands::LiftSanction& command)
+      {
+        Moderate(command.requestId, Client::LiftSanction{.playerId = command.playerId.value, .kind = Bridge::SanctionKindOf(command.kind)});
+      }
+
+      void operator()(Commands::KickPlayer& command)
+      {
+        Moderate(command.requestId, Client::KickPlayer{.playerId = command.playerId.value, .reason = std::move(command.reason)});
+      }
+
+      void operator()(Commands::ListSanctions& command)
+      {
+        Moderate(command.requestId, Client::ListSanctions{});
+      }
+
+      void operator()(Commands::ListPlayerMarks& command)
+      {
+        Moderate(command.requestId, Client::ListPlayerMarks{.playerId = command.playerId.value});
+      }
+
+      void operator()(Commands::ClearPlayerMarks& command)
+      {
+        Moderate(
+          command.requestId,
+          Client::ClearPlayerMarks{.playerId = command.playerId.value, .notes = command.notes, .deaths = command.deaths});
+      }
+
+      void operator()(Commands::DeleteChatMessage& command)
+      {
+        Moderate(command.requestId, Client::DeleteChatMessage{.channelId = command.channelId.value, .messageId = command.messageId.value});
+      }
     };
 
   }

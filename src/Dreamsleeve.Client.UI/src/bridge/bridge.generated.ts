@@ -21,6 +21,9 @@ export const eventTypes = [
   "displayName",
   "mute",
   "sessionEnded",
+  "role",
+  "messagesRemoved",
+  "moderationResult",
   "show",
   "hide",
   "activate",
@@ -42,6 +45,13 @@ export const commandTypes = [
   "removeGroundMark",
   "setIdentityVisibility",
   "changeDisplayName",
+  "sanctionPlayer",
+  "liftSanction",
+  "kickPlayer",
+  "listSanctions",
+  "listPlayerMarks",
+  "clearPlayerMarks",
+  "deleteChatMessage",
 ] as const;
 
 // Enum strings of the events.
@@ -105,9 +115,15 @@ export const sessionEndReasons = [
   "banned",
   "kicked",
 ] as const;
+export const sanctionKinds = [
+  "mute",
+  "ban",
+] as const;
 
 // Bounds of text the host sends: chat and mark text, snapshot lines per
 // channel, error strings (UTF-8 bytes, never more UTF-16 units).
 export const maxText = 16000;
 export const maxSnapshotRows = 500;
 export const maxError = 512;
+// Bytes of a moderator's reason the host accepts; the server's limit is smaller.
+export const maxReason = 1024;

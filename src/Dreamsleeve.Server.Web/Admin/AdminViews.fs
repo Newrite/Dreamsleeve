@@ -429,14 +429,14 @@ module AdminViews =
 
     let audit admin (entries: AuditModel list) =
         page "Аудит" Audit (Some admin) None [
-            Elem.p [ css "muted" ] [ text "Последние 200 действий." ]
+            Elem.p [ css "muted" ] [ text "Последние 200 действий администраторов и модераторов." ]
             Elem.table [] [
-                Elem.thead [] [ Elem.tr [] [ for heading in [ "Когда"; "Администратор"; "Действие"; "Цель"; "Подробности" ] do Elem.th [] [ text heading ] ] ]
+                Elem.thead [] [ Elem.tr [] [ for heading in [ "Когда"; "Кто"; "Действие"; "Цель"; "Подробности" ] do Elem.th [] [ text heading ] ] ]
                 Elem.tbody [] [
                     for entry in entries do
                         Elem.tr [] [
                             Elem.td [] [ text (time entry.At) ]
-                            Elem.td [] [ text entry.Admin ]
+                            Elem.td [] [ text entry.Actor ]
                             Elem.td [] [ text entry.Action ]
                             Elem.td [] [ text entry.Target ]
                             Elem.td [] [ text entry.Details ]

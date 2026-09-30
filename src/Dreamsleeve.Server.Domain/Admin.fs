@@ -102,6 +102,10 @@ type AdminAction =
     | SanctionedPlayer
     | LiftedSanction
     | KickedPlayer
+    // Content a moderator removed in the game.
+    | RemovedGroundMark
+    | ClearedGroundMarks
+    | DeletedChatMessage
 
 [<RequireQualifiedAccess>]
 module AdminAction =
@@ -110,6 +114,7 @@ module AdminAction =
         AdminAction.Announced; AdminAction.CreatedApiToken; AdminAction.RevokedApiToken
         AdminAction.ResetAdminPassword; AdminAction.CreatedAdmin
         AdminAction.SanctionedPlayer; AdminAction.LiftedSanction; AdminAction.KickedPlayer
+        AdminAction.RemovedGroundMark; AdminAction.ClearedGroundMarks; AdminAction.DeletedChatMessage
     ]
 
     let key action =
@@ -126,6 +131,9 @@ module AdminAction =
         | AdminAction.SanctionedPlayer -> "sanction_player"
         | AdminAction.LiftedSanction -> "lift_sanction"
         | AdminAction.KickedPlayer -> "kick_player"
+        | AdminAction.RemovedGroundMark -> "remove_ground_mark"
+        | AdminAction.ClearedGroundMarks -> "clear_ground_marks"
+        | AdminAction.DeletedChatMessage -> "delete_chat_message"
 
     let ofKey (text: string) = all |> List.tryFind (fun action -> key action = text)
 
@@ -155,9 +163,17 @@ type AuditRecord = {
     Details: string
 }
 
-/// One stored audit line, with the administrator's name at reading time.
+/// Who did an audited action: a panel administrator or a moderator in the game.
+[<RequireQualifiedAccess>]
+type AuditActor =
+    | Admin of AdminId
+    | Moderator of PlayerId
+
+/// One stored audit line, with the actor's name at reading time; absent once
+/// a moderator's profile is gone.
 type AuditEntry = {
-    Admin: AdminAccount
+    Actor: AuditActor voption
+    ActorName: Username voption
     Action: AdminAction
     Target: string
     Details: string

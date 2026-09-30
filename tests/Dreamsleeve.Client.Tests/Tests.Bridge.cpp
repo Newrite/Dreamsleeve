@@ -57,16 +57,19 @@ namespace
            List("authFailures", Bridge::FailureNames) + List("announcementOrigins", Bridge::OriginNames) +
            List("announcementKinds", Bridge::KindNames) + List("groundMarkKinds", Bridge::MarkKindNames) +
            List("channelKinds", Bridge::ChannelKindNames) + List("hidingModes", HidingNames) +
-           List("sessionEndReasons", Bridge::EndNames) +
+           List("sessionEndReasons", Bridge::EndNames) + List("sanctionKinds", Bridge::SanctionKindNames) +
            std::format(
              "\n// Bounds of text the host sends: chat and mark text, snapshot lines per\n"
              "// channel, error strings (UTF-8 bytes, never more UTF-16 units).\n"
              "export const maxText = {};\n"
              "export const maxSnapshotRows = {};\n"
-             "export const maxError = {};\n",
+             "export const maxError = {};\n"
+             "// Bytes of a moderator's reason the host accepts; the server's limit is smaller.\n"
+             "export const maxReason = {};\n",
              Bridge::MaxChatText,
              Bridge::MaxSnapshotRows,
-             Bridge::MaxErrorBytes);
+             Bridge::MaxErrorBytes,
+             Bridge::MaxReasonBytes);
   }
 
   // Compares the file with expected, or writes it under DREAMSLEEVE_WRITE_GENERATED.
@@ -124,6 +127,15 @@ namespace
   }
 
   // One event of every kind, as the host builds them.
+  // A sanction of a player the host has met and one of a player it has not.
+  std::vector<Bridge::UiSanction> SampleSanctions()
+  {
+    return {
+        Bridge::ToUiSanction({7, Domain::SanctionKind::Mute, "Флуд", 1700000000000, 1700000900000}, "Seven"),
+        Bridge::ToUiSanction({9, Domain::SanctionKind::Ban, "Читы", 1700000000000, std::nullopt}, std::nullopt),
+    };
+  }
+
   std::vector<Bridge::HostEvent> SampleEvents()
   {
     Names            names;
@@ -173,6 +185,9 @@ namespace
         Bridge::DisplayNameEvent{.changed = "Seven"},
         Bridge::MuteEvent{.muted = true, .reason = "Флуд", .until = 1700000900000},
         Bridge::Ended({Domain::SessionEndReason::Banned, "Читы", 1700086400000}),
+        Bridge::RoleEvent{.moderator = true},
+        Bridge::MessagesRemovedEvent{.channelId = "1", .messageIds = {"11"}},
+        Bridge::ModerationResultEvent{.requestId = "m1", .sanctions = SampleSanctions()},
         Bridge::ShowEvent{},
         Bridge::HideEvent{},
         Bridge::ActivateEvent{},
@@ -193,6 +208,7 @@ TEST_CASE("Bridge name tables follow the enumerators they name")
   CHECK(Strings(Bridge::KindNames) == EnumeratorNames<Domain::AnnouncementKind>());
   CHECK(Strings(Bridge::MarkKindNames) == EnumeratorNames<Domain::GroundMarkKind>());
   CHECK(Strings(Bridge::ChannelKindNames) == EnumeratorNames<Domain::ChatChannelKind>());
+  CHECK(Strings(Bridge::SanctionKindNames) == EnumeratorNames<Domain::SanctionKind>());
   // "off" is the ui.toml word for None; the others follow the enumerators.
   auto hiding    = EnumeratorNames<Domain::HiddenIdentity>();
   hiding.front() = "off";

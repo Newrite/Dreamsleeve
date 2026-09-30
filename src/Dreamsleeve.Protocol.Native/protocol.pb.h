@@ -35,6 +35,7 @@
 #include "session.pb.h"
 #include "player.pb.h"
 #include "ground.pb.h"
+#include "moderation.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -119,6 +120,8 @@ enum RequestRejectionCode : int {
   REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED = 14,
   REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15,
   REQUEST_REJECTION_CODE_MUTED = 16,
+  REQUEST_REJECTION_CODE_NOT_PERMITTED = 17,
+  REQUEST_REJECTION_CODE_TARGET_NOT_FOUND = 18,
   RequestRejectionCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   RequestRejectionCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -129,11 +132,11 @@ extern const uint32_t RequestRejectionCode_internal_data_[];
 inline constexpr RequestRejectionCode RequestRejectionCode_MIN =
     static_cast<RequestRejectionCode>(0);
 inline constexpr RequestRejectionCode RequestRejectionCode_MAX =
-    static_cast<RequestRejectionCode>(16);
+    static_cast<RequestRejectionCode>(18);
 inline bool RequestRejectionCode_IsValid(int value) {
-  return 0 <= value && value <= 16;
+  return 0 <= value && value <= 18;
 }
-inline constexpr int RequestRejectionCode_ARRAYSIZE = 16 + 1;
+inline constexpr int RequestRejectionCode_ARRAYSIZE = 18 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_descriptor();
 template <typename T>
 const ::std::string& RequestRejectionCode_Name(T value) {
@@ -144,7 +147,7 @@ const ::std::string& RequestRejectionCode_Name(T value) {
 }
 template <>
 inline const ::std::string& RequestRejectionCode_Name(RequestRejectionCode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 16>(
+  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 18>(
       static_cast<int>(value));
 }
 inline bool RequestRejectionCode_Parse(
@@ -1003,6 +1006,14 @@ class ServerPacket final : public ::google::protobuf::Message
     kDisplayNameChanged = 26,
     kMuteChanged = 27,
     kSessionEnded = 28,
+    kRoleChanged = 29,
+    kSanctionIssued = 30,
+    kSanctionLifted = 31,
+    kPlayerKicked = 32,
+    kSanctionList = 33,
+    kPlayerMarks = 34,
+    kPlayerMarksCleared = 35,
+    kChatMessageRemoved = 36,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 1;
@@ -1111,6 +1122,14 @@ class ServerPacket final : public ::google::protobuf::Message
     kDisplayNameChangedFieldNumber = 26,
     kMuteChangedFieldNumber = 27,
     kSessionEndedFieldNumber = 28,
+    kRoleChangedFieldNumber = 29,
+    kSanctionIssuedFieldNumber = 30,
+    kSanctionLiftedFieldNumber = 31,
+    kPlayerKickedFieldNumber = 32,
+    kSanctionListFieldNumber = 33,
+    kPlayerMarksFieldNumber = 34,
+    kPlayerMarksClearedFieldNumber = 35,
+    kChatMessageRemovedFieldNumber = 36,
   };
   // optional uint64 request_id = 2;
   bool has_request_id() const;
@@ -1456,6 +1475,158 @@ class ServerPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NONNULL _internal_mutable_session_ended();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.RoleChanged role_changed = 29;
+  bool has_role_changed() const;
+  private:
+  bool _internal_has_role_changed() const;
+
+  public:
+  void clear_role_changed() ;
+  const ::Dreamsleeve::Protocol::Chat::RoleChanged& role_changed() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NULLABLE release_role_changed();
+  ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NONNULL mutable_role_changed();
+  void set_allocated_role_changed(::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_role_changed(::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NULLABLE unsafe_arena_release_role_changed();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::RoleChanged& _internal_role_changed() const;
+  ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NONNULL _internal_mutable_role_changed();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.SanctionIssued sanction_issued = 30;
+  bool has_sanction_issued() const;
+  private:
+  bool _internal_has_sanction_issued() const;
+
+  public:
+  void clear_sanction_issued() ;
+  const ::Dreamsleeve::Protocol::Chat::SanctionIssued& sanction_issued() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NULLABLE release_sanction_issued();
+  ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NONNULL mutable_sanction_issued();
+  void set_allocated_sanction_issued(::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_sanction_issued(::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NULLABLE unsafe_arena_release_sanction_issued();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::SanctionIssued& _internal_sanction_issued() const;
+  ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NONNULL _internal_mutable_sanction_issued();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.SanctionLifted sanction_lifted = 31;
+  bool has_sanction_lifted() const;
+  private:
+  bool _internal_has_sanction_lifted() const;
+
+  public:
+  void clear_sanction_lifted() ;
+  const ::Dreamsleeve::Protocol::Chat::SanctionLifted& sanction_lifted() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NULLABLE release_sanction_lifted();
+  ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NONNULL mutable_sanction_lifted();
+  void set_allocated_sanction_lifted(::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_sanction_lifted(::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NULLABLE unsafe_arena_release_sanction_lifted();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::SanctionLifted& _internal_sanction_lifted() const;
+  ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NONNULL _internal_mutable_sanction_lifted();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.PlayerKicked player_kicked = 32;
+  bool has_player_kicked() const;
+  private:
+  bool _internal_has_player_kicked() const;
+
+  public:
+  void clear_player_kicked() ;
+  const ::Dreamsleeve::Protocol::Chat::PlayerKicked& player_kicked() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NULLABLE release_player_kicked();
+  ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NONNULL mutable_player_kicked();
+  void set_allocated_player_kicked(::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_player_kicked(::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NULLABLE unsafe_arena_release_player_kicked();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::PlayerKicked& _internal_player_kicked() const;
+  ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NONNULL _internal_mutable_player_kicked();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.SanctionList sanction_list = 33;
+  bool has_sanction_list() const;
+  private:
+  bool _internal_has_sanction_list() const;
+
+  public:
+  void clear_sanction_list() ;
+  const ::Dreamsleeve::Protocol::Chat::SanctionList& sanction_list() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NULLABLE release_sanction_list();
+  ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NONNULL mutable_sanction_list();
+  void set_allocated_sanction_list(::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_sanction_list(::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NULLABLE unsafe_arena_release_sanction_list();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::SanctionList& _internal_sanction_list() const;
+  ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NONNULL _internal_mutable_sanction_list();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.PlayerMarks player_marks = 34;
+  bool has_player_marks() const;
+  private:
+  bool _internal_has_player_marks() const;
+
+  public:
+  void clear_player_marks() ;
+  const ::Dreamsleeve::Protocol::Chat::PlayerMarks& player_marks() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NULLABLE release_player_marks();
+  ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NONNULL mutable_player_marks();
+  void set_allocated_player_marks(::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_player_marks(::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NULLABLE unsafe_arena_release_player_marks();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::PlayerMarks& _internal_player_marks() const;
+  ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NONNULL _internal_mutable_player_marks();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.PlayerMarksCleared player_marks_cleared = 35;
+  bool has_player_marks_cleared() const;
+  private:
+  bool _internal_has_player_marks_cleared() const;
+
+  public:
+  void clear_player_marks_cleared() ;
+  const ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared& player_marks_cleared() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NULLABLE release_player_marks_cleared();
+  ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NONNULL mutable_player_marks_cleared();
+  void set_allocated_player_marks_cleared(::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_player_marks_cleared(::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NULLABLE unsafe_arena_release_player_marks_cleared();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared& _internal_player_marks_cleared() const;
+  ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NONNULL _internal_mutable_player_marks_cleared();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.ChatMessageRemoved chat_message_removed = 36;
+  bool has_chat_message_removed() const;
+  private:
+  bool _internal_has_chat_message_removed() const;
+
+  public:
+  void clear_chat_message_removed() ;
+  const ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved& chat_message_removed() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NULLABLE release_chat_message_removed();
+  ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NONNULL mutable_chat_message_removed();
+  void set_allocated_chat_message_removed(::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_chat_message_removed(::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NULLABLE unsafe_arena_release_chat_message_removed();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved& _internal_chat_message_removed() const;
+  ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NONNULL _internal_mutable_chat_message_removed();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ServerPacket)
@@ -1478,12 +1649,20 @@ class ServerPacket final : public ::google::protobuf::Message
   void set_has_display_name_changed();
   void set_has_mute_changed();
   void set_has_session_ended();
+  void set_has_role_changed();
+  void set_has_sanction_issued();
+  void set_has_sanction_lifted();
+  void set_has_player_kicked();
+  void set_has_sanction_list();
+  void set_has_player_marks();
+  void set_has_player_marks_cleared();
+  void set_has_chat_message_removed();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 19,
-                                   17, 0,
-                                   2>
+  static const ::google::protobuf::internal::TcParseTable<1, 27,
+                                   25, 0,
+                                   7>
       _table_;
 
   friend class ::google::protobuf::MessageLite;
@@ -1525,6 +1704,14 @@ class ServerPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE display_name_changed_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE mute_changed_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE session_ended_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE role_changed_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE sanction_issued_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE sanction_lifted_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE player_kicked_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE sanction_list_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE player_marks_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE player_marks_cleared_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE chat_message_removed_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1602,6 +1789,13 @@ class ClientPacket final : public ::google::protobuf::Message
     kSetIdentityVisibility = 17,
     kChangeDisplayName = 18,
     kJoinAsGuest = 19,
+    kSanctionPlayer = 20,
+    kLiftSanction = 21,
+    kKickPlayer = 22,
+    kListSanctions = 23,
+    kListPlayerMarks = 24,
+    kClearPlayerMarks = 25,
+    kDeleteChatMessage = 26,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -1703,6 +1897,13 @@ class ClientPacket final : public ::google::protobuf::Message
     kSetIdentityVisibilityFieldNumber = 17,
     kChangeDisplayNameFieldNumber = 18,
     kJoinAsGuestFieldNumber = 19,
+    kSanctionPlayerFieldNumber = 20,
+    kLiftSanctionFieldNumber = 21,
+    kKickPlayerFieldNumber = 22,
+    kListSanctionsFieldNumber = 23,
+    kListPlayerMarksFieldNumber = 24,
+    kClearPlayerMarksFieldNumber = 25,
+    kDeleteChatMessageFieldNumber = 26,
   };
   // uint64 request_id = 2;
   void clear_request_id() ;
@@ -1914,6 +2115,139 @@ class ClientPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NONNULL _internal_mutable_join_as_guest();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.SanctionPlayer sanction_player = 20;
+  bool has_sanction_player() const;
+  private:
+  bool _internal_has_sanction_player() const;
+
+  public:
+  void clear_sanction_player() ;
+  const ::Dreamsleeve::Protocol::Chat::SanctionPlayer& sanction_player() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NULLABLE release_sanction_player();
+  ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NONNULL mutable_sanction_player();
+  void set_allocated_sanction_player(::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_sanction_player(::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NULLABLE unsafe_arena_release_sanction_player();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::SanctionPlayer& _internal_sanction_player() const;
+  ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NONNULL _internal_mutable_sanction_player();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.LiftSanction lift_sanction = 21;
+  bool has_lift_sanction() const;
+  private:
+  bool _internal_has_lift_sanction() const;
+
+  public:
+  void clear_lift_sanction() ;
+  const ::Dreamsleeve::Protocol::Chat::LiftSanction& lift_sanction() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NULLABLE release_lift_sanction();
+  ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NONNULL mutable_lift_sanction();
+  void set_allocated_lift_sanction(::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_lift_sanction(::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NULLABLE unsafe_arena_release_lift_sanction();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::LiftSanction& _internal_lift_sanction() const;
+  ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NONNULL _internal_mutable_lift_sanction();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.KickPlayer kick_player = 22;
+  bool has_kick_player() const;
+  private:
+  bool _internal_has_kick_player() const;
+
+  public:
+  void clear_kick_player() ;
+  const ::Dreamsleeve::Protocol::Chat::KickPlayer& kick_player() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NULLABLE release_kick_player();
+  ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NONNULL mutable_kick_player();
+  void set_allocated_kick_player(::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_kick_player(::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NULLABLE unsafe_arena_release_kick_player();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::KickPlayer& _internal_kick_player() const;
+  ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NONNULL _internal_mutable_kick_player();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.ListSanctions list_sanctions = 23;
+  bool has_list_sanctions() const;
+  private:
+  bool _internal_has_list_sanctions() const;
+
+  public:
+  void clear_list_sanctions() ;
+  const ::Dreamsleeve::Protocol::Chat::ListSanctions& list_sanctions() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NULLABLE release_list_sanctions();
+  ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NONNULL mutable_list_sanctions();
+  void set_allocated_list_sanctions(::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_list_sanctions(::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NULLABLE unsafe_arena_release_list_sanctions();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::ListSanctions& _internal_list_sanctions() const;
+  ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NONNULL _internal_mutable_list_sanctions();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.ListPlayerMarks list_player_marks = 24;
+  bool has_list_player_marks() const;
+  private:
+  bool _internal_has_list_player_marks() const;
+
+  public:
+  void clear_list_player_marks() ;
+  const ::Dreamsleeve::Protocol::Chat::ListPlayerMarks& list_player_marks() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NULLABLE release_list_player_marks();
+  ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NONNULL mutable_list_player_marks();
+  void set_allocated_list_player_marks(::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_list_player_marks(::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NULLABLE unsafe_arena_release_list_player_marks();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::ListPlayerMarks& _internal_list_player_marks() const;
+  ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NONNULL _internal_mutable_list_player_marks();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.ClearPlayerMarks clear_player_marks = 25;
+  bool has_clear_player_marks() const;
+  private:
+  bool _internal_has_clear_player_marks() const;
+
+  public:
+  void clear_clear_player_marks() ;
+  const ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks& clear_player_marks() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NULLABLE release_clear_player_marks();
+  ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NONNULL mutable_clear_player_marks();
+  void set_allocated_clear_player_marks(::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_clear_player_marks(::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NULLABLE unsafe_arena_release_clear_player_marks();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks& _internal_clear_player_marks() const;
+  ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NONNULL _internal_mutable_clear_player_marks();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.DeleteChatMessage delete_chat_message = 26;
+  bool has_delete_chat_message() const;
+  private:
+  bool _internal_has_delete_chat_message() const;
+
+  public:
+  void clear_delete_chat_message() ;
+  const ::Dreamsleeve::Protocol::Chat::DeleteChatMessage& delete_chat_message() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NULLABLE release_delete_chat_message();
+  ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NONNULL mutable_delete_chat_message();
+  void set_allocated_delete_chat_message(::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_delete_chat_message(::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NULLABLE unsafe_arena_release_delete_chat_message();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::DeleteChatMessage& _internal_delete_chat_message() const;
+  ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NONNULL _internal_mutable_delete_chat_message();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ClientPacket)
@@ -1929,11 +2263,18 @@ class ClientPacket final : public ::google::protobuf::Message
   void set_has_set_identity_visibility();
   void set_has_change_display_name();
   void set_has_join_as_guest();
+  void set_has_sanction_player();
+  void set_has_lift_sanction();
+  void set_has_kick_player();
+  void set_has_list_sanctions();
+  void set_has_list_player_marks();
+  void set_has_clear_player_marks();
+  void set_has_delete_chat_message();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 12,
-                                   10, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 19,
+                                   17, 0,
                                    2>
       _table_;
 
@@ -1969,6 +2310,13 @@ class ClientPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE set_identity_visibility_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE change_display_name_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE join_as_guest_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE sanction_player_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE lift_sanction_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE kick_player_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE list_sanctions_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE list_player_marks_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE clear_player_marks_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE delete_chat_message_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -2752,6 +3100,503 @@ inline ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NONNULL ClientPacket
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::JoinAsGuest* _msg = _internal_mutable_join_as_guest();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.join_as_guest)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.SanctionPlayer sanction_player = 20;
+inline bool ClientPacket::has_sanction_player() const {
+  return payload_case() == kSanctionPlayer;
+}
+inline bool ClientPacket::_internal_has_sanction_player() const {
+  return payload_case() == kSanctionPlayer;
+}
+inline void ClientPacket::set_has_sanction_player() {
+  _impl_._oneof_case_[0] = kSanctionPlayer;
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NULLABLE ClientPacket::release_sanction_player() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.sanction_player)
+  if (payload_case() == kSanctionPlayer) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionPlayer*>(_impl_.payload_.sanction_player_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.sanction_player_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::SanctionPlayer& ClientPacket::_internal_sanction_player() const {
+  return payload_case() == kSanctionPlayer ? static_cast<const ::Dreamsleeve::Protocol::Chat::SanctionPlayer&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionPlayer*>(_impl_.payload_.sanction_player_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SanctionPlayer&>(::Dreamsleeve::Protocol::Chat::_SanctionPlayer_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::SanctionPlayer& ClientPacket::sanction_player() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.sanction_player)
+  return _internal_sanction_player();
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_sanction_player() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.sanction_player)
+  if (payload_case() == kSanctionPlayer) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionPlayer*>(_impl_.payload_.sanction_player_);
+    _impl_.payload_.sanction_player_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_sanction_player(
+    ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_sanction_player();
+    _impl_.payload_.sanction_player_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.sanction_player)
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NONNULL ClientPacket::_internal_mutable_sanction_player() {
+  if (payload_case() != kSanctionPlayer) {
+    clear_payload();
+    set_has_sanction_player();
+    _impl_.payload_.sanction_player_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SanctionPlayer>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionPlayer*>(_impl_.payload_.sanction_player_);
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionPlayer* PROTOBUF_NONNULL ClientPacket::mutable_sanction_player()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::SanctionPlayer* _msg = _internal_mutable_sanction_player();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.sanction_player)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.LiftSanction lift_sanction = 21;
+inline bool ClientPacket::has_lift_sanction() const {
+  return payload_case() == kLiftSanction;
+}
+inline bool ClientPacket::_internal_has_lift_sanction() const {
+  return payload_case() == kLiftSanction;
+}
+inline void ClientPacket::set_has_lift_sanction() {
+  _impl_._oneof_case_[0] = kLiftSanction;
+}
+inline ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NULLABLE ClientPacket::release_lift_sanction() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.lift_sanction)
+  if (payload_case() == kLiftSanction) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::LiftSanction*>(_impl_.payload_.lift_sanction_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.lift_sanction_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::LiftSanction& ClientPacket::_internal_lift_sanction() const {
+  return payload_case() == kLiftSanction ? static_cast<const ::Dreamsleeve::Protocol::Chat::LiftSanction&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::LiftSanction*>(_impl_.payload_.lift_sanction_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::LiftSanction&>(::Dreamsleeve::Protocol::Chat::_LiftSanction_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::LiftSanction& ClientPacket::lift_sanction() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.lift_sanction)
+  return _internal_lift_sanction();
+}
+inline ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_lift_sanction() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.lift_sanction)
+  if (payload_case() == kLiftSanction) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::LiftSanction*>(_impl_.payload_.lift_sanction_);
+    _impl_.payload_.lift_sanction_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_lift_sanction(
+    ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_lift_sanction();
+    _impl_.payload_.lift_sanction_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.lift_sanction)
+}
+inline ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NONNULL ClientPacket::_internal_mutable_lift_sanction() {
+  if (payload_case() != kLiftSanction) {
+    clear_payload();
+    set_has_lift_sanction();
+    _impl_.payload_.lift_sanction_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::LiftSanction>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::LiftSanction*>(_impl_.payload_.lift_sanction_);
+}
+inline ::Dreamsleeve::Protocol::Chat::LiftSanction* PROTOBUF_NONNULL ClientPacket::mutable_lift_sanction()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::LiftSanction* _msg = _internal_mutable_lift_sanction();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.lift_sanction)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.KickPlayer kick_player = 22;
+inline bool ClientPacket::has_kick_player() const {
+  return payload_case() == kKickPlayer;
+}
+inline bool ClientPacket::_internal_has_kick_player() const {
+  return payload_case() == kKickPlayer;
+}
+inline void ClientPacket::set_has_kick_player() {
+  _impl_._oneof_case_[0] = kKickPlayer;
+}
+inline ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NULLABLE ClientPacket::release_kick_player() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.kick_player)
+  if (payload_case() == kKickPlayer) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::KickPlayer*>(_impl_.payload_.kick_player_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.kick_player_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::KickPlayer& ClientPacket::_internal_kick_player() const {
+  return payload_case() == kKickPlayer ? static_cast<const ::Dreamsleeve::Protocol::Chat::KickPlayer&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::KickPlayer*>(_impl_.payload_.kick_player_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::KickPlayer&>(::Dreamsleeve::Protocol::Chat::_KickPlayer_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::KickPlayer& ClientPacket::kick_player() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.kick_player)
+  return _internal_kick_player();
+}
+inline ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_kick_player() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.kick_player)
+  if (payload_case() == kKickPlayer) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::KickPlayer*>(_impl_.payload_.kick_player_);
+    _impl_.payload_.kick_player_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_kick_player(
+    ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_kick_player();
+    _impl_.payload_.kick_player_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.kick_player)
+}
+inline ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NONNULL ClientPacket::_internal_mutable_kick_player() {
+  if (payload_case() != kKickPlayer) {
+    clear_payload();
+    set_has_kick_player();
+    _impl_.payload_.kick_player_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::KickPlayer>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::KickPlayer*>(_impl_.payload_.kick_player_);
+}
+inline ::Dreamsleeve::Protocol::Chat::KickPlayer* PROTOBUF_NONNULL ClientPacket::mutable_kick_player()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::KickPlayer* _msg = _internal_mutable_kick_player();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.kick_player)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.ListSanctions list_sanctions = 23;
+inline bool ClientPacket::has_list_sanctions() const {
+  return payload_case() == kListSanctions;
+}
+inline bool ClientPacket::_internal_has_list_sanctions() const {
+  return payload_case() == kListSanctions;
+}
+inline void ClientPacket::set_has_list_sanctions() {
+  _impl_._oneof_case_[0] = kListSanctions;
+}
+inline ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NULLABLE ClientPacket::release_list_sanctions() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.list_sanctions)
+  if (payload_case() == kListSanctions) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::ListSanctions*>(_impl_.payload_.list_sanctions_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.list_sanctions_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::ListSanctions& ClientPacket::_internal_list_sanctions() const {
+  return payload_case() == kListSanctions ? static_cast<const ::Dreamsleeve::Protocol::Chat::ListSanctions&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::ListSanctions*>(_impl_.payload_.list_sanctions_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::ListSanctions&>(::Dreamsleeve::Protocol::Chat::_ListSanctions_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::ListSanctions& ClientPacket::list_sanctions() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.list_sanctions)
+  return _internal_list_sanctions();
+}
+inline ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_list_sanctions() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.list_sanctions)
+  if (payload_case() == kListSanctions) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::ListSanctions*>(_impl_.payload_.list_sanctions_);
+    _impl_.payload_.list_sanctions_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_list_sanctions(
+    ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_list_sanctions();
+    _impl_.payload_.list_sanctions_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.list_sanctions)
+}
+inline ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NONNULL ClientPacket::_internal_mutable_list_sanctions() {
+  if (payload_case() != kListSanctions) {
+    clear_payload();
+    set_has_list_sanctions();
+    _impl_.payload_.list_sanctions_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::ListSanctions>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::ListSanctions*>(_impl_.payload_.list_sanctions_);
+}
+inline ::Dreamsleeve::Protocol::Chat::ListSanctions* PROTOBUF_NONNULL ClientPacket::mutable_list_sanctions()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::ListSanctions* _msg = _internal_mutable_list_sanctions();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.list_sanctions)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.ListPlayerMarks list_player_marks = 24;
+inline bool ClientPacket::has_list_player_marks() const {
+  return payload_case() == kListPlayerMarks;
+}
+inline bool ClientPacket::_internal_has_list_player_marks() const {
+  return payload_case() == kListPlayerMarks;
+}
+inline void ClientPacket::set_has_list_player_marks() {
+  _impl_._oneof_case_[0] = kListPlayerMarks;
+}
+inline ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NULLABLE ClientPacket::release_list_player_marks() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.list_player_marks)
+  if (payload_case() == kListPlayerMarks) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::ListPlayerMarks*>(_impl_.payload_.list_player_marks_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.list_player_marks_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::ListPlayerMarks& ClientPacket::_internal_list_player_marks() const {
+  return payload_case() == kListPlayerMarks ? static_cast<const ::Dreamsleeve::Protocol::Chat::ListPlayerMarks&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::ListPlayerMarks*>(_impl_.payload_.list_player_marks_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::ListPlayerMarks&>(::Dreamsleeve::Protocol::Chat::_ListPlayerMarks_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::ListPlayerMarks& ClientPacket::list_player_marks() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.list_player_marks)
+  return _internal_list_player_marks();
+}
+inline ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_list_player_marks() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.list_player_marks)
+  if (payload_case() == kListPlayerMarks) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::ListPlayerMarks*>(_impl_.payload_.list_player_marks_);
+    _impl_.payload_.list_player_marks_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_list_player_marks(
+    ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_list_player_marks();
+    _impl_.payload_.list_player_marks_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.list_player_marks)
+}
+inline ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NONNULL ClientPacket::_internal_mutable_list_player_marks() {
+  if (payload_case() != kListPlayerMarks) {
+    clear_payload();
+    set_has_list_player_marks();
+    _impl_.payload_.list_player_marks_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::ListPlayerMarks>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::ListPlayerMarks*>(_impl_.payload_.list_player_marks_);
+}
+inline ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* PROTOBUF_NONNULL ClientPacket::mutable_list_player_marks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::ListPlayerMarks* _msg = _internal_mutable_list_player_marks();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.list_player_marks)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.ClearPlayerMarks clear_player_marks = 25;
+inline bool ClientPacket::has_clear_player_marks() const {
+  return payload_case() == kClearPlayerMarks;
+}
+inline bool ClientPacket::_internal_has_clear_player_marks() const {
+  return payload_case() == kClearPlayerMarks;
+}
+inline void ClientPacket::set_has_clear_player_marks() {
+  _impl_._oneof_case_[0] = kClearPlayerMarks;
+}
+inline ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NULLABLE ClientPacket::release_clear_player_marks() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.clear_player_marks)
+  if (payload_case() == kClearPlayerMarks) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::ClearPlayerMarks*>(_impl_.payload_.clear_player_marks_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.clear_player_marks_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks& ClientPacket::_internal_clear_player_marks() const {
+  return payload_case() == kClearPlayerMarks ? static_cast<const ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::ClearPlayerMarks*>(_impl_.payload_.clear_player_marks_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks&>(::Dreamsleeve::Protocol::Chat::_ClearPlayerMarks_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks& ClientPacket::clear_player_marks() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.clear_player_marks)
+  return _internal_clear_player_marks();
+}
+inline ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_clear_player_marks() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.clear_player_marks)
+  if (payload_case() == kClearPlayerMarks) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::ClearPlayerMarks*>(_impl_.payload_.clear_player_marks_);
+    _impl_.payload_.clear_player_marks_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_clear_player_marks(
+    ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_clear_player_marks();
+    _impl_.payload_.clear_player_marks_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.clear_player_marks)
+}
+inline ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NONNULL ClientPacket::_internal_mutable_clear_player_marks() {
+  if (payload_case() != kClearPlayerMarks) {
+    clear_payload();
+    set_has_clear_player_marks();
+    _impl_.payload_.clear_player_marks_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::ClearPlayerMarks>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::ClearPlayerMarks*>(_impl_.payload_.clear_player_marks_);
+}
+inline ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* PROTOBUF_NONNULL ClientPacket::mutable_clear_player_marks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::ClearPlayerMarks* _msg = _internal_mutable_clear_player_marks();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.clear_player_marks)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.DeleteChatMessage delete_chat_message = 26;
+inline bool ClientPacket::has_delete_chat_message() const {
+  return payload_case() == kDeleteChatMessage;
+}
+inline bool ClientPacket::_internal_has_delete_chat_message() const {
+  return payload_case() == kDeleteChatMessage;
+}
+inline void ClientPacket::set_has_delete_chat_message() {
+  _impl_._oneof_case_[0] = kDeleteChatMessage;
+}
+inline ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NULLABLE ClientPacket::release_delete_chat_message() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.delete_chat_message)
+  if (payload_case() == kDeleteChatMessage) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::DeleteChatMessage*>(_impl_.payload_.delete_chat_message_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.delete_chat_message_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::DeleteChatMessage& ClientPacket::_internal_delete_chat_message() const {
+  return payload_case() == kDeleteChatMessage ? static_cast<const ::Dreamsleeve::Protocol::Chat::DeleteChatMessage&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::DeleteChatMessage*>(_impl_.payload_.delete_chat_message_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::DeleteChatMessage&>(::Dreamsleeve::Protocol::Chat::_DeleteChatMessage_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::DeleteChatMessage& ClientPacket::delete_chat_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.delete_chat_message)
+  return _internal_delete_chat_message();
+}
+inline ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_delete_chat_message() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.delete_chat_message)
+  if (payload_case() == kDeleteChatMessage) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::DeleteChatMessage*>(_impl_.payload_.delete_chat_message_);
+    _impl_.payload_.delete_chat_message_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_delete_chat_message(
+    ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_delete_chat_message();
+    _impl_.payload_.delete_chat_message_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.delete_chat_message)
+}
+inline ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NONNULL ClientPacket::_internal_mutable_delete_chat_message() {
+  if (payload_case() != kDeleteChatMessage) {
+    clear_payload();
+    set_has_delete_chat_message();
+    _impl_.payload_.delete_chat_message_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::DeleteChatMessage>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::DeleteChatMessage*>(_impl_.payload_.delete_chat_message_);
+}
+inline ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NONNULL ClientPacket::mutable_delete_chat_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* _msg = _internal_mutable_delete_chat_message();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.delete_chat_message)
   return _msg;
 }
 
@@ -4048,6 +4893,574 @@ inline ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NONNULL ServerPacke
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::SessionEnded* _msg = _internal_mutable_session_ended();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.session_ended)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.RoleChanged role_changed = 29;
+inline bool ServerPacket::has_role_changed() const {
+  return payload_case() == kRoleChanged;
+}
+inline bool ServerPacket::_internal_has_role_changed() const {
+  return payload_case() == kRoleChanged;
+}
+inline void ServerPacket::set_has_role_changed() {
+  _impl_._oneof_case_[0] = kRoleChanged;
+}
+inline ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NULLABLE ServerPacket::release_role_changed() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.role_changed)
+  if (payload_case() == kRoleChanged) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::RoleChanged*>(_impl_.payload_.role_changed_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.role_changed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::RoleChanged& ServerPacket::_internal_role_changed() const {
+  return payload_case() == kRoleChanged ? static_cast<const ::Dreamsleeve::Protocol::Chat::RoleChanged&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::RoleChanged*>(_impl_.payload_.role_changed_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::RoleChanged&>(::Dreamsleeve::Protocol::Chat::_RoleChanged_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::RoleChanged& ServerPacket::role_changed() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.role_changed)
+  return _internal_role_changed();
+}
+inline ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_role_changed() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.role_changed)
+  if (payload_case() == kRoleChanged) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::RoleChanged*>(_impl_.payload_.role_changed_);
+    _impl_.payload_.role_changed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_role_changed(
+    ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_role_changed();
+    _impl_.payload_.role_changed_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.role_changed)
+}
+inline ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NONNULL ServerPacket::_internal_mutable_role_changed() {
+  if (payload_case() != kRoleChanged) {
+    clear_payload();
+    set_has_role_changed();
+    _impl_.payload_.role_changed_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::RoleChanged>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::RoleChanged*>(_impl_.payload_.role_changed_);
+}
+inline ::Dreamsleeve::Protocol::Chat::RoleChanged* PROTOBUF_NONNULL ServerPacket::mutable_role_changed()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::RoleChanged* _msg = _internal_mutable_role_changed();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.role_changed)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.SanctionIssued sanction_issued = 30;
+inline bool ServerPacket::has_sanction_issued() const {
+  return payload_case() == kSanctionIssued;
+}
+inline bool ServerPacket::_internal_has_sanction_issued() const {
+  return payload_case() == kSanctionIssued;
+}
+inline void ServerPacket::set_has_sanction_issued() {
+  _impl_._oneof_case_[0] = kSanctionIssued;
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NULLABLE ServerPacket::release_sanction_issued() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_issued)
+  if (payload_case() == kSanctionIssued) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionIssued*>(_impl_.payload_.sanction_issued_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.sanction_issued_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::SanctionIssued& ServerPacket::_internal_sanction_issued() const {
+  return payload_case() == kSanctionIssued ? static_cast<const ::Dreamsleeve::Protocol::Chat::SanctionIssued&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionIssued*>(_impl_.payload_.sanction_issued_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SanctionIssued&>(::Dreamsleeve::Protocol::Chat::_SanctionIssued_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::SanctionIssued& ServerPacket::sanction_issued() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_issued)
+  return _internal_sanction_issued();
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_sanction_issued() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_issued)
+  if (payload_case() == kSanctionIssued) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionIssued*>(_impl_.payload_.sanction_issued_);
+    _impl_.payload_.sanction_issued_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_sanction_issued(
+    ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_sanction_issued();
+    _impl_.payload_.sanction_issued_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_issued)
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NONNULL ServerPacket::_internal_mutable_sanction_issued() {
+  if (payload_case() != kSanctionIssued) {
+    clear_payload();
+    set_has_sanction_issued();
+    _impl_.payload_.sanction_issued_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SanctionIssued>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionIssued*>(_impl_.payload_.sanction_issued_);
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionIssued* PROTOBUF_NONNULL ServerPacket::mutable_sanction_issued()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::SanctionIssued* _msg = _internal_mutable_sanction_issued();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_issued)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.SanctionLifted sanction_lifted = 31;
+inline bool ServerPacket::has_sanction_lifted() const {
+  return payload_case() == kSanctionLifted;
+}
+inline bool ServerPacket::_internal_has_sanction_lifted() const {
+  return payload_case() == kSanctionLifted;
+}
+inline void ServerPacket::set_has_sanction_lifted() {
+  _impl_._oneof_case_[0] = kSanctionLifted;
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NULLABLE ServerPacket::release_sanction_lifted() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_lifted)
+  if (payload_case() == kSanctionLifted) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionLifted*>(_impl_.payload_.sanction_lifted_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.sanction_lifted_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::SanctionLifted& ServerPacket::_internal_sanction_lifted() const {
+  return payload_case() == kSanctionLifted ? static_cast<const ::Dreamsleeve::Protocol::Chat::SanctionLifted&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionLifted*>(_impl_.payload_.sanction_lifted_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SanctionLifted&>(::Dreamsleeve::Protocol::Chat::_SanctionLifted_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::SanctionLifted& ServerPacket::sanction_lifted() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_lifted)
+  return _internal_sanction_lifted();
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_sanction_lifted() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_lifted)
+  if (payload_case() == kSanctionLifted) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionLifted*>(_impl_.payload_.sanction_lifted_);
+    _impl_.payload_.sanction_lifted_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_sanction_lifted(
+    ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_sanction_lifted();
+    _impl_.payload_.sanction_lifted_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_lifted)
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NONNULL ServerPacket::_internal_mutable_sanction_lifted() {
+  if (payload_case() != kSanctionLifted) {
+    clear_payload();
+    set_has_sanction_lifted();
+    _impl_.payload_.sanction_lifted_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SanctionLifted>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionLifted*>(_impl_.payload_.sanction_lifted_);
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionLifted* PROTOBUF_NONNULL ServerPacket::mutable_sanction_lifted()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::SanctionLifted* _msg = _internal_mutable_sanction_lifted();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_lifted)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.PlayerKicked player_kicked = 32;
+inline bool ServerPacket::has_player_kicked() const {
+  return payload_case() == kPlayerKicked;
+}
+inline bool ServerPacket::_internal_has_player_kicked() const {
+  return payload_case() == kPlayerKicked;
+}
+inline void ServerPacket::set_has_player_kicked() {
+  _impl_._oneof_case_[0] = kPlayerKicked;
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NULLABLE ServerPacket::release_player_kicked() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.player_kicked)
+  if (payload_case() == kPlayerKicked) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerKicked*>(_impl_.payload_.player_kicked_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.player_kicked_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::PlayerKicked& ServerPacket::_internal_player_kicked() const {
+  return payload_case() == kPlayerKicked ? static_cast<const ::Dreamsleeve::Protocol::Chat::PlayerKicked&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerKicked*>(_impl_.payload_.player_kicked_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::PlayerKicked&>(::Dreamsleeve::Protocol::Chat::_PlayerKicked_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::PlayerKicked& ServerPacket::player_kicked() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.player_kicked)
+  return _internal_player_kicked();
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_player_kicked() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.player_kicked)
+  if (payload_case() == kPlayerKicked) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerKicked*>(_impl_.payload_.player_kicked_);
+    _impl_.payload_.player_kicked_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_player_kicked(
+    ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_player_kicked();
+    _impl_.payload_.player_kicked_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.player_kicked)
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NONNULL ServerPacket::_internal_mutable_player_kicked() {
+  if (payload_case() != kPlayerKicked) {
+    clear_payload();
+    set_has_player_kicked();
+    _impl_.payload_.player_kicked_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::PlayerKicked>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerKicked*>(_impl_.payload_.player_kicked_);
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerKicked* PROTOBUF_NONNULL ServerPacket::mutable_player_kicked()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::PlayerKicked* _msg = _internal_mutable_player_kicked();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.player_kicked)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.SanctionList sanction_list = 33;
+inline bool ServerPacket::has_sanction_list() const {
+  return payload_case() == kSanctionList;
+}
+inline bool ServerPacket::_internal_has_sanction_list() const {
+  return payload_case() == kSanctionList;
+}
+inline void ServerPacket::set_has_sanction_list() {
+  _impl_._oneof_case_[0] = kSanctionList;
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NULLABLE ServerPacket::release_sanction_list() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_list)
+  if (payload_case() == kSanctionList) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionList*>(_impl_.payload_.sanction_list_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.sanction_list_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::SanctionList& ServerPacket::_internal_sanction_list() const {
+  return payload_case() == kSanctionList ? static_cast<const ::Dreamsleeve::Protocol::Chat::SanctionList&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionList*>(_impl_.payload_.sanction_list_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SanctionList&>(::Dreamsleeve::Protocol::Chat::_SanctionList_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::SanctionList& ServerPacket::sanction_list() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_list)
+  return _internal_sanction_list();
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_sanction_list() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_list)
+  if (payload_case() == kSanctionList) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionList*>(_impl_.payload_.sanction_list_);
+    _impl_.payload_.sanction_list_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_sanction_list(
+    ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_sanction_list();
+    _impl_.payload_.sanction_list_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_list)
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NONNULL ServerPacket::_internal_mutable_sanction_list() {
+  if (payload_case() != kSanctionList) {
+    clear_payload();
+    set_has_sanction_list();
+    _impl_.payload_.sanction_list_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SanctionList>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SanctionList*>(_impl_.payload_.sanction_list_);
+}
+inline ::Dreamsleeve::Protocol::Chat::SanctionList* PROTOBUF_NONNULL ServerPacket::mutable_sanction_list()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::SanctionList* _msg = _internal_mutable_sanction_list();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.sanction_list)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.PlayerMarks player_marks = 34;
+inline bool ServerPacket::has_player_marks() const {
+  return payload_case() == kPlayerMarks;
+}
+inline bool ServerPacket::_internal_has_player_marks() const {
+  return payload_case() == kPlayerMarks;
+}
+inline void ServerPacket::set_has_player_marks() {
+  _impl_._oneof_case_[0] = kPlayerMarks;
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NULLABLE ServerPacket::release_player_marks() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks)
+  if (payload_case() == kPlayerMarks) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMarks*>(_impl_.payload_.player_marks_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.player_marks_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::PlayerMarks& ServerPacket::_internal_player_marks() const {
+  return payload_case() == kPlayerMarks ? static_cast<const ::Dreamsleeve::Protocol::Chat::PlayerMarks&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMarks*>(_impl_.payload_.player_marks_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::PlayerMarks&>(::Dreamsleeve::Protocol::Chat::_PlayerMarks_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::PlayerMarks& ServerPacket::player_marks() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks)
+  return _internal_player_marks();
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_player_marks() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks)
+  if (payload_case() == kPlayerMarks) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMarks*>(_impl_.payload_.player_marks_);
+    _impl_.payload_.player_marks_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_player_marks(
+    ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_player_marks();
+    _impl_.payload_.player_marks_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks)
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NONNULL ServerPacket::_internal_mutable_player_marks() {
+  if (payload_case() != kPlayerMarks) {
+    clear_payload();
+    set_has_player_marks();
+    _impl_.payload_.player_marks_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::PlayerMarks>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMarks*>(_impl_.payload_.player_marks_);
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerMarks* PROTOBUF_NONNULL ServerPacket::mutable_player_marks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::PlayerMarks* _msg = _internal_mutable_player_marks();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.PlayerMarksCleared player_marks_cleared = 35;
+inline bool ServerPacket::has_player_marks_cleared() const {
+  return payload_case() == kPlayerMarksCleared;
+}
+inline bool ServerPacket::_internal_has_player_marks_cleared() const {
+  return payload_case() == kPlayerMarksCleared;
+}
+inline void ServerPacket::set_has_player_marks_cleared() {
+  _impl_._oneof_case_[0] = kPlayerMarksCleared;
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NULLABLE ServerPacket::release_player_marks_cleared() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks_cleared)
+  if (payload_case() == kPlayerMarksCleared) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMarksCleared*>(_impl_.payload_.player_marks_cleared_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.player_marks_cleared_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared& ServerPacket::_internal_player_marks_cleared() const {
+  return payload_case() == kPlayerMarksCleared ? static_cast<const ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMarksCleared*>(_impl_.payload_.player_marks_cleared_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared&>(::Dreamsleeve::Protocol::Chat::_PlayerMarksCleared_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared& ServerPacket::player_marks_cleared() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks_cleared)
+  return _internal_player_marks_cleared();
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_player_marks_cleared() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks_cleared)
+  if (payload_case() == kPlayerMarksCleared) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMarksCleared*>(_impl_.payload_.player_marks_cleared_);
+    _impl_.payload_.player_marks_cleared_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_player_marks_cleared(
+    ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_player_marks_cleared();
+    _impl_.payload_.player_marks_cleared_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks_cleared)
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NONNULL ServerPacket::_internal_mutable_player_marks_cleared() {
+  if (payload_case() != kPlayerMarksCleared) {
+    clear_payload();
+    set_has_player_marks_cleared();
+    _impl_.payload_.player_marks_cleared_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::PlayerMarksCleared>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::PlayerMarksCleared*>(_impl_.payload_.player_marks_cleared_);
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* PROTOBUF_NONNULL ServerPacket::mutable_player_marks_cleared()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::PlayerMarksCleared* _msg = _internal_mutable_player_marks_cleared();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.player_marks_cleared)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.ChatMessageRemoved chat_message_removed = 36;
+inline bool ServerPacket::has_chat_message_removed() const {
+  return payload_case() == kChatMessageRemoved;
+}
+inline bool ServerPacket::_internal_has_chat_message_removed() const {
+  return payload_case() == kChatMessageRemoved;
+}
+inline void ServerPacket::set_has_chat_message_removed() {
+  _impl_._oneof_case_[0] = kChatMessageRemoved;
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NULLABLE ServerPacket::release_chat_message_removed() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.chat_message_removed)
+  if (payload_case() == kChatMessageRemoved) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::ChatMessageRemoved*>(_impl_.payload_.chat_message_removed_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.chat_message_removed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved& ServerPacket::_internal_chat_message_removed() const {
+  return payload_case() == kChatMessageRemoved ? static_cast<const ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::ChatMessageRemoved*>(_impl_.payload_.chat_message_removed_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved&>(::Dreamsleeve::Protocol::Chat::_ChatMessageRemoved_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved& ServerPacket::chat_message_removed() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.chat_message_removed)
+  return _internal_chat_message_removed();
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_chat_message_removed() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.chat_message_removed)
+  if (payload_case() == kChatMessageRemoved) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::ChatMessageRemoved*>(_impl_.payload_.chat_message_removed_);
+    _impl_.payload_.chat_message_removed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_chat_message_removed(
+    ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_chat_message_removed();
+    _impl_.payload_.chat_message_removed_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.chat_message_removed)
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NONNULL ServerPacket::_internal_mutable_chat_message_removed() {
+  if (payload_case() != kChatMessageRemoved) {
+    clear_payload();
+    set_has_chat_message_removed();
+    _impl_.payload_.chat_message_removed_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::ChatMessageRemoved>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::ChatMessageRemoved*>(_impl_.payload_.chat_message_removed_);
+}
+inline ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NONNULL ServerPacket::mutable_chat_message_removed()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* _msg = _internal_mutable_chat_message_removed();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.chat_message_removed)
   return _msg;
 }
 

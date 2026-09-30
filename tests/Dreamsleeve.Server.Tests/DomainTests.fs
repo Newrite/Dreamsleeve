@@ -413,6 +413,18 @@ let private chatTests =
             Expect.equal empty.NextCursor (ValueSome (messageId 10UL)) "Empty page retains supplied cursor"
             append 30UL value
 
+        testCase "a removed message leaves no gap and its ID is not accepted again" <| fun _ ->
+            let value = chat 3
+            append 10UL value
+            append 20UL value
+            append 30UL value
+            Expect.equal (Chat.remove (messageId 20UL) value |> ValueOption.map _.MessageId) (ValueSome (messageId 20UL)) "The removed message is returned"
+            Expect.equal (Chat.remove (messageId 20UL) value) ValueNone "It is gone"
+            let page = Chat.historyAfter (ValueSome (messageId 10UL)) 10 value |> ok
+            Expect.equal (historyIds page) [ 30UL ] "Only the kept message follows"
+            Expect.isFalse page.HasGap "Nothing a reader should fetch was lost"
+            Expect.isError (Chat.append (message 1UL 20UL (profile 1UL "First")) value) "Removed IDs cannot be reused"
+
         testCase "snapshot and pages remain stable after mutation" <| fun _ ->
             let value = chat 2
             append 10UL value

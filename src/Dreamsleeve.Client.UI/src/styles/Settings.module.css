@@ -104,16 +104,3 @@
   color: var(--error);
   font-size: 0.9em;
 }
-
-.ignored {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.ignored li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-}

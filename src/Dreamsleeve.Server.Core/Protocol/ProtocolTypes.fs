@@ -63,6 +63,14 @@ type ClientCommand =
     | SetIdentityVisibility of HiddenIdentity
     /// The sender's own new display name, already accepted by DisplayName.create.
     | ChangeDisplayName of DisplayName
+    // A moderator's; the session and the account service decide who may.
+    | SanctionPlayer of PlayerId * SanctionKind * SanctionTerm * SanctionReason
+    | LiftSanction of PlayerId * SanctionKind
+    | KickPlayer of PlayerId * SanctionReason
+    | ListSanctions
+    | ListPlayerMarks of PlayerId
+    | ClearPlayerMarks of PlayerId * GroundMarkKind list
+    | DeleteChatMessage of ChatChannelId * ChatMessageId
 
 type ClientRequest = {
     RequestId: uint64
@@ -88,6 +96,8 @@ type SessionWelcome = {
     Hiding: HiddenIdentity
     /// This player's mute in force when the session opens.
     Mute: Sanction voption
+    /// A moderator gets the moderation commands.
+    Role: PlayerRole
 }
 
 /// Why the server ends a session; the connection closes right after.
@@ -131,6 +141,15 @@ type ServerResponse =
     /// The player's own mute now, if any.
     | MuteChanged of Sanction voption
     | SessionEnded of SessionEnd
+    | RoleChanged of PlayerRole
+    | SanctionIssued of requestId: uint64 * Sanction
+    | SanctionLifted of requestId: uint64 * PlayerId * SanctionKind
+    | PlayerKicked of requestId: uint64 * PlayerId
+    | SanctionList of requestId: uint64 * Sanction list
+    | PlayerMarks of requestId: uint64 * PlayerId * GroundMarkRecord list
+    | PlayerMarksCleared of requestId: uint64 * PlayerId * removed: int
+    /// Every member drops the message; the request ID only in the requester's copy.
+    | ChatMessageRemoved of requestId: uint64 voption * ChatChannelId * ChatMessageId
 
 /// How a response travels: its lane, the request it settles (none for a
 /// notification) and whether it may leave while the session is still opening.

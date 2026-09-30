@@ -839,15 +839,96 @@ test("streamer mode hides real names everywhere and ignore hides history without
   ).toBeVisible();
   await page.getByRole("button", { name: "Онлайн", exact: true }).click();
   await expect(workspace).toContainText("Мира");
-  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  // The ignore list has its own tab, named like every other surface.
+  const ignoredTab = page.getByRole("button", { name: "Игнор", exact: true });
+  const settingsTab = page.getByRole("button", {
+    name: "Настройки",
+    exact: true,
+  });
+  const streamer = page.getByLabel("Скрывать чужие имена (только у меня)");
+  await ignoredTab.click();
   const list = page.getByLabel("Игнорируемые игроки");
   await expect(list).toContainText("Мира");
-  await page.getByLabel("Скрывать чужие имена (только у меня)").check();
+  await expect(list).toContainText("в сети");
+  await settingsTab.click();
+  await streamer.check();
+  await ignoredTab.click();
   await expect(list).not.toContainText("Мира");
-  await page.getByLabel("Скрывать чужие имена (только у меня)").uncheck();
-  await list.getByRole("button", { name: "Убрать" }).click();
+  await settingsTab.click();
+  await streamer.uncheck();
+  await ignoredTab.click();
+  await list.getByRole("button", { name: "Не игнорировать" }).click();
   await expect(list).toHaveCount(0);
+  await expect(page.getByText("Список пуст.")).toBeVisible();
   await expect(history).toContainText("Мира:");
+});
+
+test("a moderator mutes from the author menu, lifts it in the list, removes a message and a mark", async ({
+  page,
+}) => {
+  await page.goto("/demo.html?moderator");
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const history = page.locator('[data-part="messages"]');
+  const author = page.getByRole("button", { name: "Мира:" }).first();
+  const menu = page.getByRole("menu", { name: "Действия: Мира" });
+  await author.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Мут…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Мут: Мира" });
+  const mute = dialog.getByRole("button", { name: "Замутить" });
+  // A reason is required; the removals of marks are off by default.
+  await expect(mute).toBeDisabled();
+  await expect(dialog.getByLabel("Все надписи")).not.toBeChecked();
+  await expect(dialog.getByLabel("Все места смерти")).not.toBeChecked();
+  await dialog.getByLabel("Причина").fill("Флуд");
+  await mute.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("status").first()).toContainText("Мут до");
+
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Модерация", exact: true }).click();
+  const sanctions = page.getByLabel("Наказания в силе");
+  await expect(sanctions).toContainText("Мира");
+  await expect(sanctions).toContainText("Флуд");
+  await sanctions.getByRole("button", { name: "Снять" }).click();
+  await expect(page.getByText("Никто не наказан.")).toBeVisible();
+  await page.getByRole("button", { name: "Закрыть панель" }).click();
+
+  // Her marks open in the moderation panel; one of them goes.
+  await author.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Метки игрока" }).click();
+  const marks = page.getByLabel("Метки игрока");
+  await expect(marks).toContainText("Убийца: Медведь");
+  await marks.getByRole("button", { name: "Удалить метку 310" }).click();
+  await expect(page.getByText("У игрока нет меток.")).toBeVisible();
+  await page.getByRole("button", { name: "Закрыть панель" }).click();
+
+  // The message goes for everyone.
+  const line = page
+    .locator('[data-part="message"]')
+    .filter({ has: page.getByRole("button", { name: "Мира:" }) })
+    .first();
+  const text = (await line.locator("span").last().textContent())!.trim();
+  await line.getByRole("button", { name: "Мира:" }).click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Удалить сообщение" }).click();
+  await expect(history).not.toContainText(text);
+});
+
+test("a player without the role sees no moderator tools", async ({ page }) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page
+    .getByRole("button", { name: "Мира:" })
+    .first()
+    .click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "Действия: Мира" });
+  await expect(menu.getByRole("menuitem", { name: "Мут…" })).toHaveCount(0);
+  await expect(
+    menu.getByRole("menuitem", { name: "Удалить сообщение" }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await expect(
+    page.getByRole("button", { name: "Модерация", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("right click on an author opens a menu with profile and ignore", async ({

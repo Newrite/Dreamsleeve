@@ -48,6 +48,7 @@ let private welcomeWith messages = {
     OwnPseudonym = ValueNone
     Hiding = HiddenIdentity.Shown
     Mute = ValueNone
+    Role = PlayerRole.Player
 }
 let private welcome = welcomeWith [message]
 
@@ -80,7 +81,8 @@ let private playerUpdate result =
     | ClientCommand.UpdatePlayer value -> value
     | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _
     | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
-    | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ -> failtest "Expected player update"
+    | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
+    | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.DeleteChatMessage _ -> failtest "Expected player update"
 
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
@@ -165,7 +167,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             Expect.equal hidden HiddenIdentity.Shown "names are shown unless the client asks otherwise"
         | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _
         | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
-        | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ -> failtest "Wrong command"
+        | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _
+        | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _
+        | ClientCommand.DeleteChatMessage _ -> failtest "Wrong command"
 
         for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
             packet.OpenSession.SessionTicket <- invalid
@@ -669,6 +673,51 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (Packets.single codec (ServerResponse.SessionOpened(1UL, selfHidden))) "the self entry keeps the real profile"
         Expect.equal welcomed.SessionOpened.OwnPseudonym "Страж" "the owner learns its pseudonym at opening"
         Expect.isFalse (parse (Packets.single codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok)).SessionOpened.HasOwnPseudonym "absent when shown"
+    testCase "moderator requests decode through the domain and their answers carry the correlation" <| fun _ ->
+        let packet (fill: Dreamsleeve.Protocol.Chat.ClientPacket -> unit) =
+            let value = Dreamsleeve.Protocol.Chat.ClientPacket(ProtocolVersion = ProtocolCodec.Version, RequestId = 5UL)
+            fill value
+            decode value
+        let command result = (result |> ok).Command
+        let sanction minutes reason =
+            let value = Dreamsleeve.Protocol.Chat.SanctionPlayer(PlayerId = 9UL, Kind = Dreamsleeve.Protocol.Chat.SanctionKind.Mute, Reason = reason)
+            minutes |> Option.iter (fun minutes -> value.Minutes <- minutes)
+            packet (fun p -> p.SanctionPlayer <- value)
+        match command (sanction (Some 15u) " Флуд ") with
+        | ClientCommand.SanctionPlayer(target, SanctionKind.Mute, term, reason) ->
+            Expect.equal (target, term, SanctionReason.value reason) (pid 9UL, SanctionTerm.For(TimeSpan.FromMinutes 15.), "Флуд") "a term and a trimmed reason"
+        | other -> failtestf "%A" other
+        match command (sanction None "Флуд") with
+        | ClientCommand.SanctionPlayer(_, _, SanctionTerm.UntilLifted, _) -> ()
+        | other -> failtestf "no minutes is until lifted: %A" other
+        Expect.isError (sanction (Some 0u) "Флуд") "a term is at least a minute"
+        Expect.isError (sanction (Some 15u) "   ") "a reason is required"
+        Expect.isError (packet (fun p -> p.SanctionPlayer <- Dreamsleeve.Protocol.Chat.SanctionPlayer(PlayerId = 9UL, Reason = "x"))) "a kind is required"
+        Expect.isError (packet (fun p -> p.KickPlayer <- Dreamsleeve.Protocol.Chat.KickPlayer(PlayerId = 0UL, Reason = "x"))) "a player is required"
+        match command (packet (fun p -> p.ClearPlayerMarks <- Dreamsleeve.Protocol.Chat.ClearPlayerMarks(PlayerId = 9UL, Deaths = true))) with
+        | ClientCommand.ClearPlayerMarks(_, kinds) -> Expect.equal kinds [ GroundMarkKind.Death ] "only deaths"
+        | other -> failtestf "%A" other
+        Expect.isError (packet (fun p -> p.ClearPlayerMarks <- Dreamsleeve.Protocol.Chat.ClearPlayerMarks(PlayerId = 9UL))) "a clearing names a kind"
+        let delete = packet (fun p -> p.DeleteChatMessage <- Dreamsleeve.Protocol.Chat.DeleteChatMessage(ChannelId = 1UL, MessageId = 3UL)) |> ok
+        Expect.equal (ProtocolCodec.requestLane delete) DeliveryLane.Chat "a removal settles on the chat lane"
+        let lists = packet (fun p -> p.ListSanctions <- Dreamsleeve.Protocol.Chat.ListSanctions()) |> ok
+        Expect.equal (lists.Command, ProtocolCodec.requestLane lists) (ClientCommand.ListSanctions, DeliveryLane.Control) "a list settles on control"
+        let encoded response = Packets.single codec response |> ok |> parse
+        let removed = encoded (ServerResponse.ChatMessageRemoved(ValueNone, channel, message.MessageId))
+        Expect.equal (removed.RequestId, removed.ChatMessageRemoved.MessageId) (0UL, UInt64.MaxValue) "another member's copy is a notification"
+        Expect.equal (ProtocolCodec.delivery (ServerResponse.ChatMessageRemoved(ValueSome 5UL, channel, message.MessageId))).Lane DeliveryLane.Chat "chat lane"
+        let issued =
+            Sanction.issue (SanctionId.create 1L |> ok) (DateTimeOffset.FromUnixTimeMilliseconds 1_000L)
+                { Target = pid 9UL; Kind = SanctionKind.Ban; Term = SanctionTerm.UntilLifted; Reason = SanctionReason.create "Читы" |> ok
+                  IssuedBy = SanctionIssuer.Moderator(pid 7UL) }
+        let listed = (encoded (ServerResponse.SanctionList(6UL, [ issued ]))).SanctionList.Sanctions |> Seq.exactlyOne
+        Expect.equal (listed.PlayerId, listed.Kind, listed.Reason, listed.IssuedAtUnixMs, listed.HasUntilUnixMs)
+                     (9UL, Dreamsleeve.Protocol.Chat.SanctionKind.Ban, "Читы", 1_000L, false) "the entry names the player, not the issuer"
+        Expect.equal (encoded (ServerResponse.RoleChanged PlayerRole.Moderator)).RoleChanged.Role Dreamsleeve.Protocol.Chat.PlayerRole.Moderator "role"
+        Expect.equal (encoded (ServerResponse.SessionOpened(1UL, { welcome with Role = PlayerRole.Moderator }))).SessionOpened.Role
+                     Dreamsleeve.Protocol.Chat.PlayerRole.Moderator "the welcome carries the role"
+        Expect.isError (Packets.single codec (ServerResponse.PlayerKicked(0UL, pid 9UL))) "an answer needs its request"
+
     testCase "a display name change decodes through the domain limit and its answer carries the correlation" <| fun _ ->
         let change name =
             Dreamsleeve.Protocol.Chat.ClientPacket(

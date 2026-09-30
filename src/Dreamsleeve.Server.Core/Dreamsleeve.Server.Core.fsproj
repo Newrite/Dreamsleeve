@@ -13,6 +13,7 @@
         <Compile Include="Protocol/PlayerCodec.fs" />
         <Compile Include="Protocol/ChatCodec.fs" />
         <Compile Include="Protocol/GroundMarkCodec.fs" />
+        <Compile Include="Protocol/ModerationCodec.fs" />
         <Compile Include="Protocol/SessionCodec.fs" />
         <Compile Include="Protocol/ProtocolCodec.fs" />
         <Compile Include="Authentication.fs" />

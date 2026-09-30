@@ -7,9 +7,11 @@ import type {
   AuthState,
   Command,
   ConnectionPhase,
+  HostEvent,
   Message,
   HideIdentity,
   Player,
+  Sanction,
   Settings,
 } from "../bridge/types";
 import { defaults } from "../bridge/settings.generated";
@@ -238,8 +240,10 @@ function command(c: Command) {
   }
   if (c.type === "removeGroundMark") {
     setTimeout(() => {
+      // Own marks; a moderator's request may name any mark nearby.
       const index = marks.findIndex((m) => m.id === c.markId);
-      if (index < 0) {
+      const shown = nearby.findIndex((m) => m.id === c.markId);
+      if (index < 0 && (shown < 0 || !chat.store.getState().moderator)) {
         chat.receive({
           type: "markResult",
           requestId: c.requestId,
@@ -247,8 +251,7 @@ function command(c: Command) {
         });
         return;
       }
-      marks.splice(index, 1);
-      const shown = nearby.findIndex((m) => m.id === c.markId);
+      if (index >= 0) marks.splice(index, 1);
       if (shown >= 0) nearby.splice(shown, 1);
       chat.receive({
         type: "markResult",
@@ -422,7 +425,7 @@ function command(c: Command) {
     emitAuth({}, "disconnected");
     return true;
   }
-  if (c.type !== "sendChat") return c satisfies never;
+  if (c.type !== "sendChat") return moderate(c);
   const rejected = rejectNext;
   rejectNext = false;
   setTimeout(() => {
@@ -453,6 +456,127 @@ function command(c: Command) {
   }, 600);
   return true;
 }
+// Stand-in for the server's moderation: sanctions by kind and player, marks
+// of the demo players nearby, answers after a short wait. The demo player is
+// a moderator with ?moderator in the address.
+const sanctions = new Map<string, Sanction>();
+type ModeratorCommand = Extract<
+  Command,
+  {
+    type:
+      | "sanctionPlayer"
+      | "liftSanction"
+      | "kickPlayer"
+      | "listSanctions"
+      | "listPlayerMarks"
+      | "clearPlayerMarks"
+      | "deleteChatMessage";
+  }
+>;
+function moderate(c: ModeratorCommand) {
+  const answer = (
+    result: Omit<
+      Extract<HostEvent, { type: "moderationResult" }>,
+      "type" | "requestId"
+    >,
+  ) =>
+    setTimeout(
+      () =>
+        chat.receive({
+          type: "moderationResult",
+          requestId: c.requestId,
+          ...result,
+        }),
+      300,
+    );
+  const settings = chat.store.getState().settings;
+  const known = (id: string) => players.find((p) => p.id === id);
+  const reasonMissing = { error: "Нужна короткая причина в одну строку" };
+  switch (c.type) {
+    case "sanctionPlayer": {
+      const player = known(c.playerId);
+      if (!c.reason.trim()) answer(reasonMissing);
+      else if (c.playerId === players[0].id)
+        answer({
+          error: "Модератор не может наказать себя или другого модератора",
+        });
+      else {
+        const sanction: Sanction = {
+          playerId: c.playerId,
+          ...(player ? { name: project(player, settings).name } : {}),
+          kind: c.kind,
+          reason: c.reason.trim(),
+          issuedAt: Date.now(),
+          ...(c.minutes === undefined
+            ? {}
+            : { until: Date.now() + c.minutes * 60000 }),
+        };
+        sanctions.set(`${c.kind}:${c.playerId}`, sanction);
+        answer({ sanction });
+      }
+      return true;
+    }
+    case "liftSanction":
+      answer(
+        sanctions.delete(`${c.kind}:${c.playerId}`)
+          ? { playerId: c.playerId }
+          : { error: "Такого наказания уже нет" },
+      );
+      return true;
+    case "kickPlayer":
+      answer(c.reason.trim() ? { playerId: c.playerId } : reasonMissing);
+      return true;
+    case "listSanctions":
+      answer({
+        sanctions: [...sanctions.values()].sort(
+          (a, b) => b.issuedAt - a.issuedAt,
+        ),
+      });
+      return true;
+    case "listPlayerMarks": {
+      const author = known(c.playerId)?.displayName;
+      answer({
+        playerId: c.playerId,
+        marks: nearby.filter((m) => m.author === author),
+      });
+      return true;
+    }
+    case "clearPlayerMarks": {
+      const author = known(c.playerId)?.displayName;
+      const gone = nearby.filter(
+        (m) =>
+          m.author === author &&
+          ((c.notes && m.kind === "note") || (c.deaths && m.kind === "death")),
+      );
+      for (const mark of gone) nearby.splice(nearby.indexOf(mark), 1);
+      setTimeout(markEvents, 300);
+      answer({ playerId: c.playerId, removed: gone.length });
+      return true;
+    }
+    case "deleteChatMessage": {
+      const index = history.findIndex(
+        (m) => m.channelId === c.channelId && m.id === c.messageId,
+      );
+      if (index < 0) {
+        answer({ error: "Сообщение не найдено или уже удалено" });
+        return true;
+      }
+      history.splice(index, 1);
+      setTimeout(
+        () =>
+          chat.receive({
+            type: "messagesRemoved",
+            channelId: c.channelId,
+            messageIds: [c.messageId],
+          }),
+        300,
+      );
+      answer({});
+      return true;
+    }
+  }
+  return c satisfies never;
+}
 const chat = makeChat(command);
 installVisibility(chat);
 // The host normalizes real settings; the preview trusts its own saved copy.
@@ -468,6 +592,8 @@ try {
 snapshot(settings);
 emitAuth({}, "connected");
 identityEvent();
+if (new URLSearchParams(location.search).has("moderator"))
+  chat.receive({ type: "role", moderator: true });
 window.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
   if (

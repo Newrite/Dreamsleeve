@@ -43,10 +43,8 @@ type ServerRuntimeMessage =
     | CleanupFailed of AgentSendFailure
     | Read of ReplyChannel<ServerRuntimeSnapshot>
     | FindPlayer of Guid * ReplyChannel<AgentRef<PlayerSessionMessage> option>
-    /// From the account service: revocations and sanctions live sessions follow.
+    /// From the account service: revocations, sanctions and kicks live sessions follow.
     | AccountChanged of AccountChange
-    /// Ends the player's session now; nothing stops the next one.
-    | KickPlayer of PlayerId * SanctionReason
     /// One-off server announcement from the administrator console or panel.
     | Announce of ServerAnnouncement
     /// Every connection with its phase, for the panel.
@@ -291,7 +289,7 @@ module ServerRuntime =
         | Some sources, Some self ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket; Hiding = hiding }
             let child =
-                PlayerSession.start state.Settings state.Moderation authenticator.Requests authenticator.DisplayNames
+                PlayerSession.start state.Settings state.Moderation authenticator.Requests authenticator.DisplayNames authenticator.Moderation
                     (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                     (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) state.Logger request
             entry.Child <- Some child
@@ -342,6 +340,16 @@ module ServerRuntime =
         | ClientCommand.RemoveGroundMark id -> CommandRoute.Session(PlayerSessionMessage.RemoveGroundMark(requestId, id))
         | ClientCommand.SetIdentityVisibility hiding -> CommandRoute.Session(PlayerSessionMessage.SetIdentityVisibility(requestId, hiding))
         | ClientCommand.ChangeDisplayName name -> CommandRoute.Session(PlayerSessionMessage.ChangeDisplayName(requestId, name))
+        | ClientCommand.SanctionPlayer(target, kind, term, reason) ->
+            CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Sanction(target, kind, term, reason)))
+        | ClientCommand.LiftSanction(target, kind) -> CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Lift(target, kind)))
+        | ClientCommand.KickPlayer(target, reason) -> CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Kick(target, reason)))
+        | ClientCommand.ListSanctions -> CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.ListSanctions))
+        | ClientCommand.ListPlayerMarks target -> CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.ListMarks target))
+        | ClientCommand.ClearPlayerMarks(target, kinds) ->
+            CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.ClearMarks(target, kinds)))
+        | ClientCommand.DeleteChatMessage(channel, message) ->
+            CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.DeleteMessage(channel, message)))
 
     let private receiveSample state (entry: SessionTable.Entry) bytes =
         if entry.Phase = RuntimeSessionPhase.Ready then
@@ -630,7 +638,7 @@ module ServerRuntime =
             | AccountChange.MuteChanged(playerId, mute) ->
                 state.Table.Mutes[playerId] <- mute
                 online state playerId |> Option.iter (fun entry -> tell state entry (PlayerSessionMessage.MuteChanged mute))
-        | ServerRuntimeMessage.KickPlayer(playerId, reason) -> endSessions options state context playerId (SessionEnd.Kicked reason)
+            | AccountChange.Kicked(playerId, reason) -> endSessions options state context playerId (SessionEnd.Kicked reason)
         | ServerRuntimeMessage.Announce announcement -> announce state announcement
         | ServerRuntimeMessage.SetPlayerRole(playerId, role) ->
             state.Logger.LogDebug("Role of player {PlayerId} is now {Role}; online: {Online}", PlayerId.value playerId, role, state.Table.Players.ContainsKey playerId)
@@ -674,7 +682,7 @@ module ServerRuntime =
         | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick _ | ServerRuntimeMessage.Host _
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
         | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.AccountChanged _
-        | ServerRuntimeMessage.KickPlayer _ | ServerRuntimeMessage.Stop -> true
+        | ServerRuntimeMessage.Stop -> true
 
     /// The caller owns authentication separately and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.

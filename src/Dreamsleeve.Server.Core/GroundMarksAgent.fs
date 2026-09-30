@@ -196,6 +196,17 @@ module GroundMarksAgent =
                 let gone = ids |> List.filter observer.Visible.Remove
                 changed state context observer [] gone false
 
+    /// Forgets the marks, stores the removal and tells whoever saw them and
+    /// their authors; one pass for expiry, a removal and a moderator's clearing.
+    let private drop state context (marks: GroundMark list) =
+        if not marks.IsEmpty then
+            for mark in marks do forget state mark
+            let ids = marks |> List.map _.Id
+            persist state context (GroundMarkWrite.Delete ids)
+            for author in marks |> List.map _.Author |> List.distinct do
+                announceOwn state context author
+            announceRemoved state context ids
+
     let private place state context (submission: GroundMarkSubmission) =
         match state.Observers.TryGetValue submission.ConnectionId with
         | false, _ -> ()
@@ -253,32 +264,42 @@ module GroundMarksAgent =
                                     else []
                                 changed state context recipient added gone false
 
-    let private removeMark state context connectionId requestId id =
+    let private removeMark state context connectionId requestId id anyAuthor =
         match state.Observers.TryGetValue connectionId with
         | false, _ -> ()
         | true, observer ->
             match GroundMarkStorage.tryFind id state.Marks with
-            | ValueSome mark when mark.Author = observer.Profile.PlayerId ->
-                forget state mark
-                persist state context (GroundMarkWrite.Delete [id])
-                deliver state context observer (GroundMarkEvent.Removed(requestId, id))
-                state.Logger.LogInformation("Ground mark {MarkId} removed by its author, player {PlayerId}", GroundMarkId.value id, PlayerId.value mark.Author)
-                announceOwn state context mark.Author
-                announceRemoved state context [id]
+            | ValueSome mark when anyAuthor || mark.Author = observer.Profile.PlayerId ->
+                deliver state context observer (GroundMarkEvent.Removed(requestId, id, mark.Author))
+                state.Logger.LogInformation("Ground mark {MarkId} of player {PlayerId} removed by player {Remover}",
+                                            GroundMarkId.value id, PlayerId.value mark.Author, PlayerId.value observer.Profile.PlayerId)
+                drop state context [ mark ]
             | ValueSome _ | ValueNone ->
                 reject state context observer requestId RequestRejectionCode.GroundMarkNotFound "No such mark of yours." "mark_id"
 
+    /// Newest first, as the author's own list reads backwards.
+    let private listOf state context connectionId requestId author =
+        match state.Observers.TryGetValue connectionId with
+        | false, _ -> ()
+        | true, observer ->
+            let marks = GroundMarkStorage.ofAuthor author state.Marks |> List.rev |> List.map (record state)
+            deliver state context observer (GroundMarkEvent.AuthorMarks(requestId, author, marks))
+
+    let private clearOf state context connectionId requestId author (kinds: GroundMarkKind list) =
+        match state.Observers.TryGetValue connectionId with
+        | false, _ -> ()
+        | true, observer ->
+            let marks = GroundMarkStorage.ofAuthor author state.Marks |> List.filter (fun mark -> List.contains mark.Kind kinds)
+            deliver state context observer (GroundMarkEvent.Cleared(requestId, author, marks |> List.map _.Id))
+            state.Logger.LogInformation("{Count} ground marks of player {PlayerId} removed by player {Remover}",
+                                        marks.Length, PlayerId.value author, PlayerId.value observer.Profile.PlayerId)
+            drop state context marks
+
     let private expire state context =
-        let now = DateTimeOffset.UtcNow
-        let expired = GroundMarkStorage.expired state.Rules now state.Marks
+        let expired = GroundMarkStorage.expired state.Rules DateTimeOffset.UtcNow state.Marks
         if not expired.IsEmpty then
-            for mark in expired do forget state mark
-            let ids = expired |> List.map _.Id
-            persist state context (GroundMarkWrite.Delete ids)
-            state.Logger.LogInformation("Removed {Count} expired ground marks", ids.Length)
-            announceRemoved state context ids
-            for author in expired |> List.map _.Author |> List.distinct do
-                announceOwn state context author
+            state.Logger.LogInformation("Removed {Count} expired ground marks", expired.Length)
+            drop state context expired
 
     let private detach state (context: AgentContext<GroundMarkCommand>) (request: SessionDetach) =
         remove state request.ConnectionId
@@ -296,7 +317,9 @@ module GroundMarksAgent =
         | GroundMarkCommand.Join subscription -> join state context subscription
         | GroundMarkCommand.Observe(connectionId, generation, location) -> observe state context connectionId generation location
         | GroundMarkCommand.Place submission -> place state context submission
-        | GroundMarkCommand.Remove(connectionId, requestId, id) -> removeMark state context connectionId requestId id
+        | GroundMarkCommand.Remove(connectionId, requestId, id, anyAuthor) -> removeMark state context connectionId requestId id anyAuthor
+        | GroundMarkCommand.ListOf(connectionId, requestId, author) -> listOf state context connectionId requestId author
+        | GroundMarkCommand.ClearOf(connectionId, requestId, author, kinds) -> clearOf state context connectionId requestId author kinds
         | GroundMarkCommand.Expire _ ->
             expire state context
             state.Ticker |> Option.iter _.Acknowledge()
@@ -311,7 +334,8 @@ module GroundMarksAgent =
 
     let private isControl = function
         | GroundMarkCommand.Join _ | GroundMarkCommand.Expire _ | GroundMarkCommand.Detach _ -> true
-        | GroundMarkCommand.Observe _ | GroundMarkCommand.Place _ | GroundMarkCommand.Remove _ | GroundMarkCommand.Rename _ -> false
+        | GroundMarkCommand.Observe _ | GroundMarkCommand.Place _ | GroundMarkCommand.Remove _ | GroundMarkCommand.Rename _
+        | GroundMarkCommand.ListOf _ | GroundMarkCommand.ClearOf _ -> false
 
     /// loaded are the stored marks with their authors' current profiles; nextId
     /// is the storage high-water mark plus one, so IDs never repeat across runs.

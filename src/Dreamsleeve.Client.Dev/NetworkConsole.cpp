@@ -90,6 +90,88 @@ namespace
     };
   }
 
+  std::string_view SanctionName(Domain::SanctionKind kind)
+  {
+    return kind == Domain::SanctionKind::Ban ? "ban" : "mute";
+  }
+
+  // "<player> <mute|ban> until=<unix ms|lifted>: <reason>"
+  void PrintSanction(std::ostream& output, const Domain::Sanction& sanction)
+  {
+    output << sanction.playerId << ' ' << SanctionName(sanction.kind)
+           << " until=" << (sanction.untilUnixMs ? std::to_string(*sanction.untilUnixMs) : std::string{"lifted"}) << ": "
+           << sanction.reason;
+  }
+
+  std::optional<Domain::PlayerId> ParseId(std::string_view text)
+  {
+    Domain::PlayerId id{};
+    const auto       parsed = std::from_chars(text.data(), text.data() + text.size(), id);
+    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || id == Domain::InvalidId) return std::nullopt;
+    return id;
+  }
+
+  // mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> |
+  // mod sanctions | mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id>
+  std::optional<ClientCommand> ParseModeration(std::string_view line, std::uint64_t requestId, Domain::ChatChannelId global)
+  {
+    std::istringstream input{std::string{line.substr(4)}};
+    std::string        action, first, second;
+    input >> action;
+    const auto rest = [&] {
+      std::string text;
+      std::getline(input >> std::ws, text);
+      return text;
+    };
+    if (action == "mute" || action == "ban")
+    {
+      if (!(input >> first >> second)) return std::nullopt;
+      const auto                   id = ParseId(first);
+      std::optional<std::uint32_t> minutes;
+      if (second != "forever")
+      {
+        std::uint32_t value{};
+        if (std::from_chars(second.data(), second.data() + second.size(), value).ec != std::errc{}) return std::nullopt;
+        minutes = value;
+      }
+      if (!id) return std::nullopt;
+      const auto kind = action == "ban" ? Domain::SanctionKind::Ban : Domain::SanctionKind::Mute;
+      return SanctionPlayer{requestId, *id, kind, minutes, rest()};
+    }
+    if (action == "lift" && input >> first >> second && (first == "mute" || first == "ban"))
+    {
+      const auto id = ParseId(second);
+      if (!id) return std::nullopt;
+      return LiftSanction{requestId, *id, first == "ban" ? Domain::SanctionKind::Ban : Domain::SanctionKind::Mute};
+    }
+    if (action == "kick" && input >> first)
+    {
+      const auto id = ParseId(first);
+      if (!id) return std::nullopt;
+      return KickPlayer{requestId, *id, rest()};
+    }
+    if (action == "sanctions") return ListSanctions{requestId};
+    if (action == "marks" && input >> first)
+    {
+      const auto id = ParseId(first);
+      if (!id) return std::nullopt;
+      return ListPlayerMarks{requestId, *id};
+    }
+    if (action == "clear" && input >> first >> second && (second == "notes" || second == "deaths" || second == "all"))
+    {
+      const auto id = ParseId(first);
+      if (!id) return std::nullopt;
+      return ClearPlayerMarks{requestId, *id, second != "deaths", second != "notes"};
+    }
+    if (action == "delete" && input >> first)
+    {
+      const auto id = ParseId(first);
+      if (!id) return std::nullopt;
+      return DeleteChatMessage{requestId, global, *id};
+    }
+    return std::nullopt;
+  }
+
   void PrintPlayer(std::ostream& output, const Domain::Player& player)
   {
     auto json = glz::write_json(player);
@@ -115,7 +197,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -260,6 +342,10 @@ namespace
     console << "session=" << PhaseName(output.status.phase) << '\n';
     if (!output.status.serverName.empty()) console << "server=" << output.status.serverName << '\n';
     if (output.status.pseudonym) console << "pseudonym=" << *output.status.pseudonym << '\n';
+    if (output.status.role == Domain::PlayerRole::Moderator) console << "role=moderator\n";
+    if (output.status.mute) console << "muted: " << output.status.mute->reason << '\n';
+    if (output.status.sessionEnd)
+      console << "ended=" << static_cast<int>(output.status.sessionEnd->reason) << ": " << output.status.sessionEnd->text << '\n';
     if (output.status.authenticating)
       console << "auth=Pending\n";
     else
@@ -304,6 +390,9 @@ namespace
           if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
             for (const auto& message : added->messages)
               PrintMessage(console, message);
+          else if (const auto* deleted = std::get_if<ChatMessagesDeleted>(&change))
+            for (const auto id : deleted->messageIds)
+              console << "message-deleted " << id << '\n';
         for (const auto& change : delta.groundMarks)
         {
           if (std::holds_alternative<GroundMarksCleared>(change)) console << "marks-cleared\n";
@@ -339,6 +428,28 @@ namespace
                                                 : std::string{"shown"});
           else if constexpr (std::is_same_v<Outcome, NameChanged>)
             console << "display name " << value.displayName;
+          else if constexpr (std::is_same_v<Outcome, Sanctioned>)
+            PrintSanction(console << "sanctioned ", value.sanction);
+          else if constexpr (std::is_same_v<Outcome, Lifted>)
+            console << "lifted " << SanctionName(value.kind) << " of " << value.playerId;
+          else if constexpr (std::is_same_v<Outcome, Kicked>)
+            console << "kicked " << value.playerId;
+          else if constexpr (std::is_same_v<Outcome, SanctionsListed>)
+          {
+            console << "sanctions " << value.sanctions.size();
+            for (const auto& sanction : value.sanctions)
+              PrintSanction(console << "\nsanction ", sanction);
+          }
+          else if constexpr (std::is_same_v<Outcome, MarksListed>)
+          {
+            console << "player-marks " << value.playerId << ' ' << value.marks.size();
+            for (const auto& mark : value.marks)
+              console << "\nmark " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " text=" << mark.text;
+          }
+          else if constexpr (std::is_same_v<Outcome, MarksCleared>)
+            console << "cleared " << value.removed << " marks of " << value.playerId;
+          else if constexpr (std::is_same_v<Outcome, MessageDeleted>)
+            console << "deleted message " << value.messageId;
           else if constexpr (std::is_same_v<Outcome, ServerRejection>)
             console << "rejected (" << static_cast<int>(value.code) << "): " << value.message;
           else
@@ -584,6 +695,18 @@ int RunNetworkConsole(int argc, char* argv[])
     {
       exchange.Post({generation, RequestSnapshot{}});
       Print(exchange, generation, channel, *movement);
+    }
+    else if (line.starts_with("mod "))
+    {
+      Print(exchange, generation, channel, *movement);
+      const auto requestId = exchange.NextRequestId();
+      auto       command   = requestId ? ParseModeration(line, *requestId, channel.global) : std::nullopt;
+      if (!command)
+        std::cout << Commands;
+      else if (exchange.Post({generation, std::move(*command)}) == CommandPostResult::Queued)
+        std::cout << "request " << *requestId << " queued\n";
+      else
+        std::cout << "Command queue is full or closed\n";
     }
     else if (line.starts_with("announce "))
     {

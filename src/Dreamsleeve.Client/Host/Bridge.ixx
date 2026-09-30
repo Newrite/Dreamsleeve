@@ -60,6 +60,8 @@ export namespace Dreamsleeve::Host::Bridge
   constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "system"});
   // Domain::SessionEndReason from AccessRevoked.
   constexpr auto EndNames = std::to_array<std::string_view>({"revoked", "banned", "kicked"});
+  // Domain::SanctionKind from Mute.
+  constexpr auto SanctionKindNames = std::to_array<std::string_view>({"mute", "ban"});
 
   // names[value - first]; a value outside the table (Unspecified, a newer
   // server value) takes fallback.
@@ -90,6 +92,8 @@ export namespace Dreamsleeve::Host::Bridge
   // parse.ts drops an event whose error exceeds 512 UTF-16 units; a UTF-8 byte
   // bound is never looser, and the cut stays on a code point boundary.
   constexpr std::size_t MaxErrorBytes = 512;
+  // Bytes of a moderator's reason; the server applies its own, smaller limit.
+  constexpr std::size_t MaxReasonBytes = 1024;
 
   // ---- UI -> host ----------------------------------------------------------
 
@@ -182,6 +186,57 @@ export namespace Dreamsleeve::Host::Bridge
       std::string displayName;
     };
 
+    // Moderator tools; the server checks the role and the target. kind is
+    // SanctionKindNames; no minutes: until lifted.
+    struct SanctionPlayer
+    {
+      std::string                  requestId;
+      UiId                         playerId;
+      std::string                  kind;
+      std::optional<std::uint32_t> minutes;
+      std::string                  reason;
+    };
+
+    struct LiftSanction
+    {
+      std::string requestId;
+      UiId        playerId;
+      std::string kind;
+    };
+
+    struct KickPlayer
+    {
+      std::string requestId;
+      UiId        playerId;
+      std::string reason;
+    };
+
+    struct ListSanctions
+    {
+      std::string requestId;
+    };
+
+    struct ListPlayerMarks
+    {
+      std::string requestId;
+      UiId        playerId;
+    };
+
+    struct ClearPlayerMarks
+    {
+      std::string requestId;
+      UiId        playerId;
+      bool        notes{};
+      bool        deaths{};
+    };
+
+    struct DeleteChatMessage
+    {
+      std::string requestId;
+      UiId        channelId;
+      UiId        messageId;
+    };
+
   }
 
   using UiCommand = std::variant<
@@ -199,7 +254,14 @@ export namespace Dreamsleeve::Host::Bridge
     Commands::PlaceGroundNote,
     Commands::RemoveGroundMark,
     Commands::SetIdentityVisibility,
-    Commands::ChangeDisplayName>;
+    Commands::ChangeDisplayName,
+    Commands::SanctionPlayer,
+    Commands::LiftSanction,
+    Commands::KickPlayer,
+    Commands::ListSanctions,
+    Commands::ListPlayerMarks,
+    Commands::ClearPlayerMarks,
+    Commands::DeleteChatMessage>;
 
   // The "type" of each UiCommand alternative, in variant order.
   constexpr auto CommandNames = std::to_array<std::string_view>({
@@ -218,6 +280,13 @@ export namespace Dreamsleeve::Host::Bridge
       "removeGroundMark",
       "setIdentityVisibility",
       "changeDisplayName",
+      "sanctionPlayer",
+      "liftSanction",
+      "kickPlayer",
+      "listSanctions",
+      "listPlayerMarks",
+      "clearPlayerMarks",
+      "deleteChatMessage",
   });
   static_assert(CommandNames.size() == std::variant_size_v<UiCommand>);
 
@@ -319,6 +388,18 @@ export namespace Dreamsleeve::Host::Bridge
   {
     std::string id;
     std::string name;
+  };
+
+  // A sanction in force for the moderator's list: kind is SanctionKindNames;
+  // name is the host's name for a player it has met, absent for anyone else.
+  struct UiSanction
+  {
+    std::string                 playerId;
+    std::optional<std::string>  name;
+    std::string                 kind;
+    std::string                 reason;
+    std::int64_t                issuedAt{};
+    std::optional<std::int64_t> until;
   };
 
   struct SnapshotEvent
@@ -473,6 +554,34 @@ export namespace Dreamsleeve::Host::Bridge
     bool operator==(const SessionEndedEvent&) const = default;
   };
 
+  // The player's role in the session; a moderator gets the moderator tools.
+  struct RoleEvent
+  {
+    bool moderator{};
+
+    bool operator==(const RoleEvent&) const = default;
+  };
+
+  // Messages a moderator removed: gone from every surface.
+  struct MessagesRemovedEvent
+  {
+    std::string              channelId;
+    std::vector<std::string> messageIds;
+  };
+
+  // The answer to a moderator request: error on a refusal, otherwise the
+  // fields of its kind. The removal of one mark answers with markResult.
+  struct ModerationResultEvent
+  {
+    std::string                              requestId;
+    std::optional<std::string>               error;
+    std::optional<UiSanction>                sanction;   // sanctionPlayer
+    std::optional<std::vector<UiSanction>>   sanctions;  // listSanctions
+    std::optional<std::string>               playerId;   // liftSanction, kickPlayer, listPlayerMarks, clearPlayerMarks
+    std::optional<std::vector<UiGroundMark>> marks;      // listPlayerMarks
+    std::optional<std::uint32_t>             removed;    // clearPlayerMarks
+  };
+
   // View visibility and chat focus, decided by the host.
   struct ShowEvent
   {};
@@ -504,6 +613,9 @@ export namespace Dreamsleeve::Host::Bridge
     DisplayNameEvent,
     MuteEvent,
     SessionEndedEvent,
+    RoleEvent,
+    MessagesRemovedEvent,
+    ModerationResultEvent,
     ShowEvent,
     HideEvent,
     ActivateEvent,
@@ -528,6 +640,9 @@ export namespace Dreamsleeve::Host::Bridge
       "displayName",
       "mute",
       "sessionEnded",
+      "role",
+      "messagesRemoved",
+      "moderationResult",
       "show",
       "hide",
       "activate",
@@ -616,6 +731,54 @@ export namespace Dreamsleeve::Host::Bridge
     {
       if (command.displayName.size() > MaxDisplayName) return std::unexpected{"changeDisplayName displayName is too long"};
       return {};
+    }
+
+    // Every moderator request carries the page's correlation.
+    template <class Command>
+    requires requires(Command command) { command.requestId; }
+    std::expected<void, std::string> Correlated(const Command& command, std::string_view name)
+    {
+      if (command.requestId.empty()) return std::unexpected{std::format("{} requires requestId", name)};
+      return {};
+    }
+
+    std::expected<void, std::string> Admit(Commands::SanctionPlayer& command)
+    {
+      if (!std::ranges::contains(SanctionKindNames, command.kind)) return std::unexpected{"sanctionPlayer requires kind mute or ban"};
+      if (command.reason.size() > MaxReasonBytes) return std::unexpected{"sanctionPlayer reason is too long"};
+      return Correlated(command, "sanctionPlayer");
+    }
+
+    std::expected<void, std::string> Admit(Commands::LiftSanction& command)
+    {
+      if (!std::ranges::contains(SanctionKindNames, command.kind)) return std::unexpected{"liftSanction requires kind mute or ban"};
+      return Correlated(command, "liftSanction");
+    }
+
+    std::expected<void, std::string> Admit(Commands::KickPlayer& command)
+    {
+      if (command.reason.size() > MaxReasonBytes) return std::unexpected{"kickPlayer reason is too long"};
+      return Correlated(command, "kickPlayer");
+    }
+
+    std::expected<void, std::string> Admit(Commands::ListSanctions& command)
+    {
+      return Correlated(command, "listSanctions");
+    }
+
+    std::expected<void, std::string> Admit(Commands::ListPlayerMarks& command)
+    {
+      return Correlated(command, "listPlayerMarks");
+    }
+
+    std::expected<void, std::string> Admit(Commands::ClearPlayerMarks& command)
+    {
+      return Correlated(command, "clearPlayerMarks");
+    }
+
+    std::expected<void, std::string> Admit(Commands::DeleteChatMessage& command)
+    {
+      return Correlated(command, "deleteChatMessage");
     }
 
     // Commands without values have nothing to admit.
@@ -1097,6 +1260,34 @@ export namespace Dreamsleeve::Host::Bridge
     return {.muted = true, .reason = status.mute->reason, .until = status.mute->untilUnixMs};
   }
 
+  RoleEvent Role(const ClientStatus& status)
+  {
+    return {.moderator = status.role == Domain::PlayerRole::Moderator};
+  }
+
+  std::string_view SanctionKindName(Domain::SanctionKind kind)
+  {
+    return NameOf(SanctionKindNames, kind, Domain::SanctionKind::Mute, SanctionKindNames.front());
+  }
+
+  // Bridge::Admit let only SanctionKindNames through.
+  Domain::SanctionKind SanctionKindOf(std::string_view name)
+  {
+    return name == SanctionKindNames[1] ? Domain::SanctionKind::Ban : Domain::SanctionKind::Mute;
+  }
+
+  UiSanction ToUiSanction(const Domain::Sanction& sanction, std::optional<std::string> name)
+  {
+    return {
+        .playerId = Id(sanction.playerId),
+        .name     = std::move(name),
+        .kind     = std::string{SanctionKindName(sanction.kind)},
+        .reason   = sanction.reason,
+        .issuedAt = sanction.issuedAtUnixMs,
+        .until    = sanction.untilUnixMs
+    };
+  }
+
   SessionEndedEvent Ended(const Domain::SessionEnd& end)
   {
     return {
@@ -1172,6 +1363,34 @@ export namespace Dreamsleeve::Host::Bridge
         break;
     }
     return message.empty() ? std::string{"Сервер отклонил имя"} : std::string{message};
+  }
+
+  // Refusals of a moderator request, in the UI language.
+  std::string ModerationRejectionText(Dreamsleeve::Client::RequestRejectionCode code, std::string_view message, std::string_view field)
+  {
+    using Code = Dreamsleeve::Client::RequestRejectionCode;
+    switch (code)
+    {
+      case Code::NotPermitted:
+        if (message.starts_with("Only a moderator")) return "Это может только модератор";
+        return "Модератор не может наказать себя или другого модератора";
+      case Code::TargetNotFound:
+        if (message.starts_with("No such sanction")) return "Такого наказания уже нет";
+        if (message.starts_with("No such message")) return "Сообщение не найдено или уже удалено";
+        return "Игрок не найден";
+      case Code::ChannelNotFound:
+        return "Канал не найден";
+      case Code::Overloaded:
+        return "Сервер занят. Попробуйте позже";
+      case Code::InvalidRequest:
+        if (field == "reason") return "Нужна короткая причина в одну строку";
+        if (field == "minutes") return "Срок — от минуты до десяти лет";
+        if (field == "kinds") return "Выберите заметки, метки смерти или оба вида";
+        return "Некорректный запрос";
+      default:
+        break;
+    }
+    return message.empty() ? std::string{"Сервер отклонил запрос"} : std::string{message};
   }
 
   std::string_view FailureText(CommandFailureCode code)

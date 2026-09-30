@@ -25,46 +25,48 @@ namespace Dreamsleeve.Protocol.Chat {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "Cg1zZXNzaW9uLnByb3RvEhlEcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Ggpj",
-            "aGF0LnByb3RvGgxwbGF5ZXIucHJvdG8ijQEKC09wZW5TZXNzaW9uEhYKDnNl",
-            "c3Npb25fdGlja2V0GAMgASgJEkIKD2hpZGRlbl9pZGVudGl0eRgEIAEoDjIp",
-            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuSGlkZGVuSWRlbnRpdHlKBAgB",
-            "EAJKBAgCEANSCHVzZXJuYW1lUgxkaXNwbGF5X25hbWUiDQoLSm9pbkFzR3Vl",
-            "c3Qi0AMKDVNlc3Npb25PcGVuZWQSEwoLc2VydmVyX25hbWUYBiABKAkSFgoO",
-            "c2VsZl9wbGF5ZXJfaWQYASABKAQSNgoHcGxheWVycxgFIAMoCzIlLkRyZWFt",
-            "c2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVySW5mbxJECg1hbm5vdW5jZW1l",
-            "bnRzGAcgASgLMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Bbm5vdW5j",
-            "ZW1lbnRQb2xpY3kSOAoIY2hhbm5lbHMYCCADKAsyJi5EcmVhbXNsZWV2ZS5Q",
-            "cm90b2NvbC5DaGF0LkNoYXRDaGFubmVsEhoKDW93bl9wc2V1ZG9ueW0YCSAB",
-            "KAlIAIgBARJCCg9oaWRkZW5faWRlbnRpdHkYCiABKA4yKS5EcmVhbXNsZWV2",
-            "ZS5Qcm90b2NvbC5DaGF0LkhpZGRlbklkZW50aXR5EjIKBG11dGUYCyABKAsy",
-            "JC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk11dGVTdGF0ZUIQCg5fb3du",
-            "X3BzZXVkb255bUoECAIQA0oECAMQBEoECAQQBVIRZ2xvYmFsX2NoYW5uZWxf",
-            "aWRSD3JlY2VudF9tZXNzYWdlcyJJCglNdXRlU3RhdGUSDgoGcmVhc29uGAEg",
-            "ASgJEhoKDXVudGlsX3VuaXhfbXMYAiABKANIAIgBAUIQCg5fdW50aWxfdW5p",
-            "eF9tcyJBCgtNdXRlQ2hhbmdlZBIyCgRtdXRlGAEgASgLMiQuRHJlYW1zbGVl",
-            "dmUuUHJvdG9jb2wuQ2hhdC5NdXRlU3RhdGUihwEKDFNlc3Npb25FbmRlZBI7",
-            "CgZyZWFzb24YASABKA4yKy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlNl",
-            "c3Npb25FbmRSZWFzb24SDAoEdGV4dBgCIAEoCRIaCg11bnRpbF91bml4X21z",
-            "GAMgASgDSACIAQFCEAoOX3VudGlsX3VuaXhfbXMiUgoVU2V0SWRlbnRpdHlW",
-            "aXNpYmlsaXR5EjkKBmhpZGRlbhgBIAEoDjIpLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLkNoYXQuSGlkZGVuSWRlbnRpdHkifAoZSWRlbnRpdHlWaXNpYmlsaXR5",
-            "Q2hhbmdlZBIWCglwc2V1ZG9ueW0YASABKAlIAIgBARI5CgZoaWRkZW4YAiAB",
-            "KA4yKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkhpZGRlbklkZW50aXR5",
-            "QgwKCl9wc2V1ZG9ueW0iKQoRQ2hhbmdlRGlzcGxheU5hbWUSFAoMZGlzcGxh",
-            "eV9uYW1lGAEgASgJIioKEkRpc3BsYXlOYW1lQ2hhbmdlZBIUCgxkaXNwbGF5",
-            "X25hbWUYASABKAkqcwoOSGlkZGVuSWRlbnRpdHkSGAoUSElEREVOX0lERU5U",
-            "SVRZX05PTkUQABIeChpISURERU5fSURFTlRJVFlfRVZFUllXSEVSRRABEicK",
-            "I0hJRERFTl9JREVOVElUWV9FWENFUFRfR1JPVU5EX01BUktTEAIqmwEKEFNl",
-            "c3Npb25FbmRSZWFzb24SIgoeU0VTU0lPTl9FTkRfUkVBU09OX1VOU1BFQ0lG",
-            "SUVEEAASJQohU0VTU0lPTl9FTkRfUkVBU09OX0FDQ0VTU19SRVZPS0VEEAES",
-            "HQoZU0VTU0lPTl9FTkRfUkVBU09OX0JBTk5FRBACEh0KGVNFU1NJT05fRU5E",
-            "X1JFQVNPTl9LSUNLRUQQA2IGcHJvdG8z"));
+            "aGF0LnByb3RvGgxwbGF5ZXIucHJvdG8aEG1vZGVyYXRpb24ucHJvdG8ijQEK",
+            "C09wZW5TZXNzaW9uEhYKDnNlc3Npb25fdGlja2V0GAMgASgJEkIKD2hpZGRl",
+            "bl9pZGVudGl0eRgEIAEoDjIpLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQu",
+            "SGlkZGVuSWRlbnRpdHlKBAgBEAJKBAgCEANSCHVzZXJuYW1lUgxkaXNwbGF5",
+            "X25hbWUiDQoLSm9pbkFzR3Vlc3QihQQKDVNlc3Npb25PcGVuZWQSEwoLc2Vy",
+            "dmVyX25hbWUYBiABKAkSFgoOc2VsZl9wbGF5ZXJfaWQYASABKAQSNgoHcGxh",
+            "eWVycxgFIAMoCzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVy",
+            "SW5mbxJECg1hbm5vdW5jZW1lbnRzGAcgASgLMi0uRHJlYW1zbGVldmUuUHJv",
+            "dG9jb2wuQ2hhdC5Bbm5vdW5jZW1lbnRQb2xpY3kSOAoIY2hhbm5lbHMYCCAD",
+            "KAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkNoYXRDaGFubmVsEhoK",
+            "DW93bl9wc2V1ZG9ueW0YCSABKAlIAIgBARJCCg9oaWRkZW5faWRlbnRpdHkY",
+            "CiABKA4yKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkhpZGRlbklkZW50",
+            "aXR5EjIKBG11dGUYCyABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
+            "Lk11dGVTdGF0ZRIzCgRyb2xlGAwgASgOMiUuRHJlYW1zbGVldmUuUHJvdG9j",
+            "b2wuQ2hhdC5QbGF5ZXJSb2xlQhAKDl9vd25fcHNldWRvbnltSgQIAhADSgQI",
+            "AxAESgQIBBAFUhFnbG9iYWxfY2hhbm5lbF9pZFIPcmVjZW50X21lc3NhZ2Vz",
+            "IkkKCU11dGVTdGF0ZRIOCgZyZWFzb24YASABKAkSGgoNdW50aWxfdW5peF9t",
+            "cxgCIAEoA0gAiAEBQhAKDl91bnRpbF91bml4X21zIkEKC011dGVDaGFuZ2Vk",
+            "EjIKBG11dGUYASABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk11",
+            "dGVTdGF0ZSKHAQoMU2Vzc2lvbkVuZGVkEjsKBnJlYXNvbhgBIAEoDjIrLkRy",
+            "ZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuU2Vzc2lvbkVuZFJlYXNvbhIMCgR0",
+            "ZXh0GAIgASgJEhoKDXVudGlsX3VuaXhfbXMYAyABKANIAIgBAUIQCg5fdW50",
+            "aWxfdW5peF9tcyJSChVTZXRJZGVudGl0eVZpc2liaWxpdHkSOQoGaGlkZGVu",
+            "GAEgASgOMikuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5IaWRkZW5JZGVu",
+            "dGl0eSJ8ChlJZGVudGl0eVZpc2liaWxpdHlDaGFuZ2VkEhYKCXBzZXVkb255",
+            "bRgBIAEoCUgAiAEBEjkKBmhpZGRlbhgCIAEoDjIpLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLkNoYXQuSGlkZGVuSWRlbnRpdHlCDAoKX3BzZXVkb255bSIpChFD",
+            "aGFuZ2VEaXNwbGF5TmFtZRIUCgxkaXNwbGF5X25hbWUYASABKAkiKgoSRGlz",
+            "cGxheU5hbWVDaGFuZ2VkEhQKDGRpc3BsYXlfbmFtZRgBIAEoCSpzCg5IaWRk",
+            "ZW5JZGVudGl0eRIYChRISURERU5fSURFTlRJVFlfTk9ORRAAEh4KGkhJRERF",
+            "Tl9JREVOVElUWV9FVkVSWVdIRVJFEAESJwojSElEREVOX0lERU5USVRZX0VY",
+            "Q0VQVF9HUk9VTkRfTUFSS1MQAiqbAQoQU2Vzc2lvbkVuZFJlYXNvbhIiCh5T",
+            "RVNTSU9OX0VORF9SRUFTT05fVU5TUEVDSUZJRUQQABIlCiFTRVNTSU9OX0VO",
+            "RF9SRUFTT05fQUNDRVNTX1JFVk9LRUQQARIdChlTRVNTSU9OX0VORF9SRUFT",
+            "T05fQkFOTkVEEAISHQoZU0VTU0lPTl9FTkRfUkVBU09OX0tJQ0tFRBADYgZw",
+            "cm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
-          new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
+          new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.ModerationReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.HiddenIdentity), typeof(global::Dreamsleeve.Protocol.Chat.SessionEndReason), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.OpenSession), global::Dreamsleeve.Protocol.Chat.OpenSession.Parser, new[]{ "SessionTicket", "HiddenIdentity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.JoinAsGuest), global::Dreamsleeve.Protocol.Chat.JoinAsGuest.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "Players", "Announcements", "Channels", "OwnPseudonym", "HiddenIdentity", "Mute" }, new[]{ "OwnPseudonym" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "Players", "Announcements", "Channels", "OwnPseudonym", "HiddenIdentity", "Mute", "Role" }, new[]{ "OwnPseudonym" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.MuteState), global::Dreamsleeve.Protocol.Chat.MuteState.Parser, new[]{ "Reason", "UntilUnixMs" }, new[]{ "UntilUnixMs" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.MuteChanged), global::Dreamsleeve.Protocol.Chat.MuteChanged.Parser, new[]{ "Mute" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionEnded), global::Dreamsleeve.Protocol.Chat.SessionEnded.Parser, new[]{ "Reason", "Text", "UntilUnixMs" }, new[]{ "UntilUnixMs" }, null, null, null),
@@ -562,6 +564,7 @@ namespace Dreamsleeve.Protocol.Chat {
       ownPseudonym_ = other.ownPseudonym_;
       hiddenIdentity_ = other.hiddenIdentity_;
       mute_ = other.mute_ != null ? other.mute_.Clone() : null;
+      role_ = other.role_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -695,6 +698,21 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "role" field.</summary>
+    public const int RoleFieldNumber = 12;
+    private global::Dreamsleeve.Protocol.Chat.PlayerRole role_ = global::Dreamsleeve.Protocol.Chat.PlayerRole.Player;
+    /// <summary>
+    /// The receiver's role: a moderator gets the moderation commands.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.PlayerRole Role {
+      get { return role_; }
+      set {
+        role_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -718,6 +736,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (OwnPseudonym != other.OwnPseudonym) return false;
       if (HiddenIdentity != other.HiddenIdentity) return false;
       if (!object.Equals(Mute, other.Mute)) return false;
+      if (Role != other.Role) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -733,6 +752,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (HasOwnPseudonym) hash ^= OwnPseudonym.GetHashCode();
       if (HiddenIdentity != global::Dreamsleeve.Protocol.Chat.HiddenIdentity.None) hash ^= HiddenIdentity.GetHashCode();
       if (mute_ != null) hash ^= Mute.GetHashCode();
+      if (Role != global::Dreamsleeve.Protocol.Chat.PlayerRole.Player) hash ^= Role.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -777,6 +797,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(90);
         output.WriteMessage(Mute);
       }
+      if (Role != global::Dreamsleeve.Protocol.Chat.PlayerRole.Player) {
+        output.WriteRawTag(96);
+        output.WriteEnum((int) Role);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -813,6 +837,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(90);
         output.WriteMessage(Mute);
       }
+      if (Role != global::Dreamsleeve.Protocol.Chat.PlayerRole.Player) {
+        output.WriteRawTag(96);
+        output.WriteEnum((int) Role);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -842,6 +870,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (mute_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Mute);
+      }
+      if (Role != global::Dreamsleeve.Protocol.Chat.PlayerRole.Player) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Role);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -880,6 +911,9 @@ namespace Dreamsleeve.Protocol.Chat {
           Mute = new global::Dreamsleeve.Protocol.Chat.MuteState();
         }
         Mute.MergeFrom(other.Mute);
+      }
+      if (other.Role != global::Dreamsleeve.Protocol.Chat.PlayerRole.Player) {
+        Role = other.Role;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -938,6 +972,10 @@ namespace Dreamsleeve.Protocol.Chat {
             input.ReadMessage(Mute);
             break;
           }
+          case 96: {
+            Role = (global::Dreamsleeve.Protocol.Chat.PlayerRole) input.ReadEnum();
+            break;
+          }
         }
       }
     #endif
@@ -993,6 +1031,10 @@ namespace Dreamsleeve.Protocol.Chat {
               Mute = new global::Dreamsleeve.Protocol.Chat.MuteState();
             }
             input.ReadMessage(Mute);
+            break;
+          }
+          case 96: {
+            Role = (global::Dreamsleeve.Protocol.Chat.PlayerRole) input.ReadEnum();
             break;
           }
         }

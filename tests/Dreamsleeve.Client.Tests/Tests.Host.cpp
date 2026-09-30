@@ -492,14 +492,14 @@ TEST_CASE("Bubbles keep one text per player, replace it, expire and fade on elap
   settings.bubbleFadeDuration = 2;
   const auto start            = Bubbles::Clock::time_point{} + 100s;
 
-  bubbles.Post(7, "first", start);
-  bubbles.Post(9, "other", start);
+  bubbles.Post(7, 7, "first", start);
+  bubbles.Post(9, 9, "other", start);
   REQUIRE(bubbles.Find(7, start + 1s, settings));
   CHECK(bubbles.Find(7, start + 1s, settings)->text == "first");
   CHECK(bubbles.Find(7, start + 1s, settings)->alpha == 1.0f);
 
   // Replacement restarts the timer; the old text is gone.
-  bubbles.Post(7, "second", start + 5s);
+  bubbles.Post(7, 7, "second", start + 5s);
   CHECK(bubbles.Find(7, start + 12s, settings)->text == "second");
   CHECK(bubbles.Size() == 2);
 
@@ -517,7 +517,7 @@ TEST_CASE("Bubbles keep one text per player, replace it, expire and fade on elap
   CHECK_FALSE(bubbles.Find(9, start + 8s, settings));
 
   // Pruning drops expired texts and players that left; the rest survive.
-  bubbles.Post(11, "stays", start + 20s);
+  bubbles.Post(11, 11, "stays", start + 20s);
   bubbles.Prune(start + 20s, settings, [](Domain::PlayerId id) { return id != 7; });
   CHECK(bubbles.Size() == 1);
   CHECK(bubbles.Find(11, start + 20s, settings));

@@ -90,6 +90,7 @@ module internal SessionCodec =
             Announcements = ChatCodec.policy config.ChatInput value.AnnouncementSources)
         value.OwnPseudonym |> ValueOption.iter (fun name -> result.OwnPseudonym <- Pseudonym.value name)
         value.Mute |> ValueOption.iter (fun sanction -> result.Mute <- mute sanction)
+        result.Role <- ModerationCodec.role value.Role
         result.HiddenIdentity <- hiding value.Hiding
         result.Players.AddRange(value.Players |> Seq.map PlayerCodec.player)
         result.Channels.AddRange(value.Channels |> Seq.map ChatCodec.channel)

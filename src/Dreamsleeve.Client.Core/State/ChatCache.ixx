@@ -190,6 +190,12 @@ public:
       return result;
     }
 
+    // A moderator's removal; a message no longer retained is simply absent.
+    void Erase(ChatMessageId messageId)
+    {
+      messages.erase(messageId);
+    }
+
 private:
 
     explicit ChatCache(ChatChannelId channelId, std::size_t capacity, Domain::ChatChannelKind kind)

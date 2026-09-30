@@ -62,21 +62,15 @@ module SqliteAdminStore =
         | Ok id, Ok username -> Ok { Id = id; Username = username }
         | _ -> invalidData "A stored administrator is invalid."
 
-    let private audit (context: QueryContext) (actor: AdminId) (record: AuditRecord) now =
-        let row: main.admin_audit = {
-            id = 0L
-            admin_id = AdminId.value actor
-            action = AdminAction.key record.Action
-            target = AuditTarget.key record.Target
-            details = record.Details
-            at = milliseconds now
-        }
-        let query = insert {
-            for entry in main.admin_audit do
-            entity row
-            getId entry.id
-        }
-        context.Insert query |> ignore
+    /// The one writer of audit lines: the panel's actions and the moderators'.
+    let internal audit (context: QueryContext) (actor: AuditActor) (record: AuditRecord) now =
+        let admin, moderator =
+            match actor with
+            | AuditActor.Admin id -> box (AdminId.value id), box DBNull.Value
+            | AuditActor.Moderator id -> box DBNull.Value, box (int64 (PlayerId.value id))
+        execute context "INSERT INTO admin_audit(admin_id, moderator_id, action, target, details, at) VALUES (@admin, @moderator, @action, @target, @details, @at)"
+            [ "@admin", admin; "@moderator", moderator; "@action", box (AdminAction.key record.Action)
+              "@target", box (AuditTarget.key record.Target); "@details", box record.Details; "@at", box (milliseconds now) ] |> ignore
 
     let private insertSession (context: QueryContext) (actor: AdminId) (session: PanelSession) =
         execute context "DELETE FROM admin_sessions WHERE expires_at<=@now" [ "@now", box (milliseconds session.CreatedAt) ] |> ignore
@@ -113,7 +107,7 @@ module SqliteAdminStore =
                     match admin id row.username with
                     | Error error -> Error error
                     | Ok account ->
-                        audit context account.Id (AuditRecord.create AdminAction.CreatedAdmin (AuditTarget.Admin account.Id) (Username.value username)) now
+                        audit context (AuditActor.Admin account.Id) (AuditRecord.create AdminAction.CreatedAdmin (AuditTarget.Admin account.Id) (Username.value username)) now
                         insertSession context account.Id (session account.Id)
                         Ok (Some account)))
 
@@ -151,7 +145,7 @@ module SqliteAdminStore =
                 | Ok (Some account) ->
                     execute context "UPDATE admin_accounts SET password_hash=@hash WHERE id=@id" [ "@hash", box passwordHash; "@id", box (AdminId.value id) ] |> ignore
                     execute context "DELETE FROM admin_sessions WHERE admin_id=@id" [ "@id", box (AdminId.value id) ] |> ignore
-                    audit context account.Id (AuditRecord.create AdminAction.ResetAdminPassword (AuditTarget.Admin account.Id) "") now
+                    audit context (AuditActor.Admin account.Id) (AuditRecord.create AdminAction.ResetAdminPassword (AuditTarget.Admin account.Id) "") now
                     insertSession context account.Id session
                     Ok (Some account)))
 
@@ -185,7 +179,7 @@ module SqliteAdminStore =
                     entity row
                 }
                 context.Insert query |> ignore
-                audit context actor.Id (AuditRecord.create AdminAction.CreatedApiToken (AuditTarget.ApiToken (hash.Substring(0, 8))) (ApiTokenLabel.value label)) now
+                audit context (AuditActor.Admin actor.Id) (AuditRecord.create AdminAction.CreatedApiToken (AuditTarget.ApiToken (hash.Substring(0, 8))) (ApiTokenLabel.value label)) now
                 Ok ()))
 
     let findApiToken config hash token =
@@ -213,7 +207,7 @@ module SqliteAdminStore =
             transaction context (fun () ->
                 let removed = execute context "DELETE FROM admin_api_tokens WHERE token_hash=@hash" [ "@hash", box hash ]
                 if removed > 0 then
-                    audit context actor.Id (AuditRecord.create AdminAction.RevokedApiToken (AuditTarget.ApiToken (hash.Substring(0, min 8 hash.Length))) "") now
+                    audit context (AuditActor.Admin actor.Id) (AuditRecord.create AdminAction.RevokedApiToken (AuditTarget.ApiToken (hash.Substring(0, min 8 hash.Length))) "") now
                 Ok (removed > 0)))
 
     let private readPlayer (reader: DbDataReader) =
@@ -286,7 +280,7 @@ module SqliteAdminStore =
                     | Ok assignment ->
                         execute context "INSERT INTO player_roles(player_id, role, granted_by, granted_at) VALUES (@id, @role, @admin, @at) ON CONFLICT(player_id) DO UPDATE SET role=excluded.role, granted_by=excluded.granted_by, granted_at=excluded.granted_at"
                             [ "@id", box (int64 id); "@role", box (PlayerRole.toInt assignment.Role); "@admin", box (AdminId.value actor.Id); "@at", box (milliseconds now) ] |> ignore
-                        audit context actor.Id (AuditRecord.create AdminAction.SetRole (AuditTarget.Player playerId) (PlayerRole.key role)) now
+                        audit context (AuditActor.Admin actor.Id) (AuditRecord.create AdminAction.SetRole (AuditTarget.Player playerId) (PlayerRole.key role)) now
                         Ok (stored |> Option.map (fun record -> { record with Role = assignment.Role }))))
 
     /// The latest display name changes of a player, by the player and by administrators.
@@ -316,23 +310,42 @@ module SqliteAdminStore =
     /// An action that another owner performed (rename, reset, revoke, announcement).
     let record config (actor: AdminAccount) (entry: AuditRecord) (now: DateTimeOffset) token =
         SqliteAccountStore.withContext config token (fun context ->
-            audit context actor.Id entry now
+            audit context (AuditActor.Admin actor.Id) entry now
+            Ok ())
+
+    /// Content a moderator removed in the game through another owner.
+    let recordModeration config (moderator: PlayerId) (entry: AuditRecord) (now: DateTimeOffset) token =
+        SqliteAccountStore.withContext config token (fun context ->
+            audit context (AuditActor.Moderator moderator) entry now
             Ok ())
 
     let recentAudit config limit token =
         SqliteAccountStore.withContext config token (fun context ->
-            use statement = command context "SELECT u.admin_id, a.username, u.action, u.target, u.details, u.at FROM admin_audit u JOIN admin_accounts a ON a.id=u.admin_id ORDER BY u.at DESC, u.id DESC LIMIT @limit"
-                                [ "@limit", box (max 1 limit) ]
+            use statement =
+                command context
+                    ("SELECT u.admin_id, a.username, u.moderator_id, m.username, u.action, u.target, u.details, u.at FROM admin_audit u "
+                     + "LEFT JOIN admin_accounts a ON a.id=u.admin_id LEFT JOIN profiles p ON p.player_id=u.moderator_id "
+                     + "LEFT JOIN accounts m ON m.id=p.account_id ORDER BY u.at DESC, u.id DESC LIMIT @limit")
+                    [ "@limit", box (max 1 limit) ]
             use reader = statement.ExecuteReader()
             let rows = ResizeArray()
             let mutable failure = None
+            let name index =
+                if reader.IsDBNull index then Ok ValueNone
+                else Username.create Int32.MaxValue (reader.GetString index) |> Result.map ValueSome
+            let actor =
+                fun () ->
+                    if not (reader.IsDBNull 0) then AdminId.create (reader.GetInt64 0) |> Result.map (AuditActor.Admin >> ValueSome)
+                    elif not (reader.IsDBNull 2) then PlayerId.create (uint64 (reader.GetInt64 2)) |> Result.map (AuditActor.Moderator >> ValueSome)
+                    else Ok ValueNone
             while failure.IsNone && reader.Read() do
-                match admin (reader.GetInt64 0) (reader.GetString 1), AdminAction.ofKey (reader.GetString 2) with
-                | Ok account, Some action ->
-                    rows.Add { Admin = account; Action = action; Target = reader.GetString 3; Details = reader.GetString 4
-                               At = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 5) }
-                | Error error, _ -> failure <- Some error
-                | Ok _, None -> failure <- Some (AccountStoreError.Failed(InvalidDataException "An audit line has an unknown action."))
+                let actorName = if reader.IsDBNull 0 then name 3 else name 1
+                match actor (), actorName, AdminAction.ofKey (reader.GetString 4) with
+                | Ok actor, Ok actorName, Some action ->
+                    rows.Add { Actor = actor; ActorName = actorName; Action = action; Target = reader.GetString 5; Details = reader.GetString 6
+                               At = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 7) }
+                | Error _, _, _ | _, Error _, _ -> failure <- Some (AccountStoreError.Failed(InvalidDataException "An audit line names an invalid actor."))
+                | Ok _, Ok _, None -> failure <- Some (AccountStoreError.Failed(InvalidDataException "An audit line has an unknown action."))
             match failure with
             | Some error -> Error error
             | None -> Ok (List.ofSeq rows))

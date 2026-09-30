@@ -68,13 +68,11 @@ const ranges = [
 export function SettingsPanel({
   chat,
   settings: s,
-  ignored,
   identity,
   phase,
 }: {
   chat: Chat;
   settings: Settings;
-  ignored: { id: string; name: string }[];
   identity: IdentityState;
   phase: ConnectionPhase;
 }) {
@@ -268,25 +266,6 @@ export function SettingsPanel({
           опасные для трансляций). Фильтр работает только у вас: в чате и в
           сообщениях над светлячками. Ваше скрытое сообщение показывается
           заглушкой. Применяется сразу.
-        </p>
-      </fieldset>
-      <fieldset className={styles.group}>
-        <legend>Игнорируемые игроки</legend>
-        {ignored.length ? (
-          <ul className={styles.ignored} aria-label="Игнорируемые игроки">
-            {ignored.map((p) => (
-              <li key={p.id}>
-                <span>{p.name}</span>
-                <button onClick={() => chat.unignore(p.id)}>Убрать</button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className={styles.muted}>Список пуст.</p>
-        )}
-        <p className={styles.muted}>
-          Добавить игрока: правый клик по нику в чате или «Игнорировать» в
-          профиле. Список хранится локально для этого сервера.
         </p>
       </fieldset>
       <fieldset className={styles.group}>

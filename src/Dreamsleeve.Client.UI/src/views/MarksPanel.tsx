@@ -12,7 +12,7 @@ const coordinate = (value: number) => Math.round(value).toString();
 // One row per mark: kind, text, author (nearby only), character snapshot,
 // the in-game date, the real time and the place. Text is a React text node,
 // never HTML.
-function MarkRow({
+export function MarkRow({
   mark,
   action,
 }: {

@@ -135,8 +135,8 @@ TEST_CASE("State publication forwards owned chat deltas without rereading full h
   const auto& delta  = Delta(update);
   CHECK(delta.chats.empty());  // Ordinary messages carry only content changes.
   REQUIRE(delta.chatContent.size() == 2);
-  REQUIRE(std::holds_alternative<ChatMessagesRemoved>(delta.chatContent[0]));
-  CHECK(std::get<ChatMessagesRemoved>(delta.chatContent[0]).messageIds == std::vector<ChatMessageId>{1});
+  REQUIRE(std::holds_alternative<ChatMessagesEvicted>(delta.chatContent[0]));
+  CHECK(std::get<ChatMessagesEvicted>(delta.chatContent[0]).messageIds == std::vector<ChatMessageId>{1});
   REQUIRE(std::holds_alternative<ChatMessagesAdded>(delta.chatContent[1]));
   CHECK(std::get<ChatMessagesAdded>(delta.chatContent[1]).messages == std::vector<ChatMessage>{Message(3)});
 

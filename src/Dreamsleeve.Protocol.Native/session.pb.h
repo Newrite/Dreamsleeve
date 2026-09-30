@@ -33,6 +33,7 @@
 #include "google/protobuf/unknown_field_set.h"
 #include "chat.pb.h"
 #include "player.pb.h"
+#include "moderation.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -2103,6 +2104,7 @@ class SessionOpened final : public ::google::protobuf::Message
     kMuteFieldNumber = 11,
     kSelfPlayerIdFieldNumber = 1,
     kHiddenIdentityFieldNumber = 10,
+    kRoleFieldNumber = 12,
   };
   // repeated .Dreamsleeve.Protocol.Chat.PlayerInfo players = 5;
   int players_size() const;
@@ -2219,11 +2221,21 @@ class SessionOpened final : public ::google::protobuf::Message
   void _internal_set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value);
 
   public:
+  // .Dreamsleeve.Protocol.Chat.PlayerRole role = 12;
+  void clear_role() ;
+  ::Dreamsleeve::Protocol::Chat::PlayerRole role() const;
+  void set_role(::Dreamsleeve::Protocol::Chat::PlayerRole value);
+
+  private:
+  ::Dreamsleeve::Protocol::Chat::PlayerRole _internal_role() const;
+  void _internal_set_role(::Dreamsleeve::Protocol::Chat::PlayerRole value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SessionOpened)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<4, 8,
+  static const ::google::protobuf::internal::TcParseTable<4, 9,
                                    4, 80,
                                    2>
       _table_;
@@ -2253,6 +2265,7 @@ class SessionOpened final : public ::google::protobuf::Message
     ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE mute_;
     ::uint64_t self_player_id_;
     int hidden_identity_;
+    int role_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2849,6 +2862,31 @@ inline void SessionOpened::set_allocated_mute(::Dreamsleeve::Protocol::Chat::Mut
 
   _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(value);
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
+}
+
+// .Dreamsleeve.Protocol.Chat.PlayerRole role = 12;
+inline void SessionOpened::clear_role() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000100U);
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerRole SessionOpened::role() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.role)
+  return _internal_role();
+}
+inline void SessionOpened::set_role(::Dreamsleeve::Protocol::Chat::PlayerRole value) {
+  _internal_set_role(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.role)
+}
+inline ::Dreamsleeve::Protocol::Chat::PlayerRole SessionOpened::_internal_role() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::Dreamsleeve::Protocol::Chat::PlayerRole>(_impl_.role_);
+}
+inline void SessionOpened::_internal_set_role(::Dreamsleeve::Protocol::Chat::PlayerRole value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_ = value;
 }
 
 // -------------------------------------------------------------------

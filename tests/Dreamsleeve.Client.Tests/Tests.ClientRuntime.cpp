@@ -90,7 +90,9 @@ namespace
           {
             P::ClientPacket packet;
             REQUIRE(packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
-            CHECK(event->TryChannelId() == (packet.has_send_chat() || packet.has_post_announcement() ? 1 : 0));
+            CHECK(
+              event->TryChannelId() ==
+              (packet.has_send_chat() || packet.has_post_announcement() || packet.has_delete_chat_message() ? 1 : 0));
             requests.push_back(std::move(packet));
           }
         }
@@ -126,11 +128,13 @@ namespace
       auto packet = Value(DreamNetPacket::TryAllocateWith(message.ByteSizeLong(), [&](std::span<std::byte> bytes) {
         return message.SerializeToArray(bytes.data(), static_cast<int>(bytes.size()));
       }));
-      auto channel = message.has_chat_published() ? 1 : 0;
+      auto channel = message.has_chat_published() || message.has_chat_message_removed() ? 1 : 0;
       if (message.has_request_rejected())
       {
         const auto request = std::ranges::find(requests, message.request_id(), &P::ClientPacket::request_id);
-        if (request != requests.end() && (request->has_send_chat() || request->has_post_announcement())) channel = 1;
+        if (
+          request != requests.end() && (request->has_send_chat() || request->has_post_announcement() || request->has_delete_chat_message()))
+          channel = 1;
       }
       REQUIRE(peer->PushPacket(std::move(packet), static_cast<ChannelId>(channel)));
       server.FlushPackets();
@@ -1302,6 +1306,117 @@ TEST_CASE("Hidden identity opens from the first packet and a switch settles with
   fixture.Send(shown);
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
   CHECK_FALSE(fixture.Drain().status.pseudonym);
+}
+
+TEST_CASE("Moderator requests settle by request ID; a removed message leaves every model and the role follows the server")
+{
+  Fixture    fixture;
+  const auto generation = Ready(fixture);
+  CHECK(fixture.exchange->Status().role == Domain::PlayerRole::Player);
+
+  P::ServerPacket role;
+  role.set_protocol_version(Wire::Version);
+  role.mutable_role_changed()->set_role(P::PLAYER_ROLE_MODERATOR);
+  fixture.Send(role);
+  fixture.Until([&] { return fixture.exchange->Status().role == Domain::PlayerRole::Moderator; });
+
+  // Until repeats the predicate once more: keep what was drained.
+  const auto settled = [&] {
+    ClientOutput found;
+    fixture.Until([&] {
+      if (!found.results.empty()) return true;
+      fixture.exchange->Drain(found);
+      return !found.results.empty();
+    });
+    return found;
+  };
+  const auto deleted = [](const ClientOutput& output) {
+    std::vector<Domain::ChatMessageId> ids;
+    for (const auto& update : output.state.updates)
+      if (const auto* delta = std::get_if<ClientStateDelta>(&update))
+        for (const auto& change : delta->chatContent)
+          if (const auto* removal = std::get_if<ChatMessagesDeleted>(&change))
+            ids.insert(ids.end(), removal->messageIds.begin(), removal->messageIds.end());
+    return ids;
+  };
+
+  const auto muteId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        SanctionPlayer{muteId, 9, Domain::SanctionKind::Mute, 15, "Флуд"}
+  }) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  CHECK(fixture.requests.back().sanction_player().minutes() == 15);
+  P::ServerPacket issued;
+  issued.set_protocol_version(Wire::Version);
+  issued.set_request_id(muteId);
+  auto* entry = issued.mutable_sanction_issued()->mutable_sanction();
+  entry->set_player_id(9);
+  entry->set_kind(P::SANCTION_KIND_MUTE);
+  entry->set_reason("Флуд");
+  entry->set_issued_at_unix_ms(1000);
+  fixture.Send(issued);
+  const auto sanctioned = settled();
+  REQUIRE(ResultsOf<Sanctioned>(sanctioned).size() == 1);
+  CHECK(ResultsOf<Sanctioned>(sanctioned)[0].value.sanction == Domain::Sanction{9, Domain::SanctionKind::Mute, "Флуд", 1000, std::nullopt});
+
+  // The moderator's copy of a removal settles the deletion and drops the message.
+  const auto deleteId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        DeleteChatMessage{deleteId, 1, 2}
+  }) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+  P::ServerPacket removed;
+  removed.set_protocol_version(Wire::Version);
+  removed.set_request_id(deleteId);
+  removed.mutable_chat_message_removed()->set_channel_id(1);
+  removed.mutable_chat_message_removed()->set_message_id(2);
+  fixture.Send(removed);
+  const auto own = settled();
+  REQUIRE(ResultsOf<MessageDeleted>(own).size() == 1);
+  CHECK(deleted(own) == std::vector<Domain::ChatMessageId>{2});
+
+  // Another moderator's removal is a notification; the ID leaves even a history the cache no longer holds.
+  removed.clear_request_id();
+  removed.mutable_chat_message_removed()->set_message_id(1);
+  fixture.Send(removed);
+  CHECK(deleted(fixture.ReceiveOutput()) == std::vector<Domain::ChatMessageId>{1});
+
+  // A mark list names one author; any other is a protocol fault.
+  const auto listMarks = [&](std::uint64_t author) {
+    const auto marksId = Value(fixture.exchange->NextRequestId());
+    const auto count   = fixture.requests.size();
+    REQUIRE(
+      fixture.exchange->Post({
+          generation,
+          ListPlayerMarks{marksId, 9}
+    }) == CommandPostResult::Queued);
+    fixture.Until([&] { return fixture.requests.size() == count + 1; });
+    P::ServerPacket marks;
+    marks.set_protocol_version(Wire::Version);
+    marks.set_request_id(marksId);
+    marks.mutable_player_marks()->set_player_id(9);
+    auto* mark = marks.mutable_player_marks()->add_marks();
+    mark->set_mark_id(4);
+    mark->mutable_author()->set_player_id(author);
+    mark->mutable_author()->set_username("nine");
+    mark->mutable_author()->set_display_name("Nine");
+    mark->set_kind(P::GROUND_MARK_KIND_NOTE);
+    mark->set_text("note");
+    mark->mutable_placement()->mutable_location_id()->set_plugin_name("skyrim.esm");
+    mark->mutable_placement()->mutable_location_id()->set_local_form_id(0x1A26F);
+    fixture.Send(marks);
+  };
+  listMarks(9);
+  const auto listed = settled();
+  REQUIRE(ResultsOf<MarksListed>(listed).size() == 1);
+  CHECK(ResultsOf<MarksListed>(listed)[0].value.marks.size() == 1);
+  listMarks(8);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
+  CHECK(fixture.exchange->Status().role == Domain::PlayerRole::Player);
 }
 
 TEST_CASE("A display name change settles once, one at a time, and a refusal keeps the session")

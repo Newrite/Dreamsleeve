@@ -28,6 +28,44 @@ type AccountChange =
     | Banned of Sanction
     /// The mute now in force, if any.
     | MuteChanged of PlayerId * Sanction voption
+    /// The player's session ends now; nothing stops the next one.
+    | Kicked of PlayerId * SanctionReason
+
+/// What a moderator in the game asks of the account service, which checks the
+/// rank against the stored roles and writes the audit line.
+[<RequireQualifiedAccess>]
+type ModerationCommand =
+    | Sanction of SanctionOrder
+    | Lift of PlayerId * SanctionKind * issuer: PlayerId
+    | Kick of PlayerId * SanctionReason * issuer: PlayerId
+    | ListSanctions
+    /// The audit line of content the moderator removed through another owner.
+    | Record of moderator: PlayerId * AuditRecord
+
+[<RequireQualifiedAccess>]
+type ModerationResult =
+    | Sanctioned of Sanction
+    | Lifted of Sanction
+    | Kicked
+    | Sanctions of Sanction list
+    | Recorded
+
+[<RequireQualifiedAccess>]
+type ModerationError =
+    | Refused of SanctionError
+    | Busy
+    | Unavailable
+
+type ModerationReply = {
+    OperationId: Guid
+    Result: Result<ModerationResult, ModerationError>
+}
+
+type ModerationRequest = {
+    OperationId: Guid
+    Command: ModerationCommand
+    ReplyTo: ReliableAgentRef<ModerationReply>
+}
 
 type SessionAuthenticationReply = {
     OperationId: Guid
@@ -70,5 +108,6 @@ type DisplayNameChangeRequest = {
 type SessionAuthenticator = {
     Requests: ReliableAgentRef<SessionAuthenticationRequest>
     DisplayNames: ReliableAgentRef<DisplayNameChangeRequest>
+    Moderation: ReliableAgentRef<ModerationRequest>
     Completion: Task
 }

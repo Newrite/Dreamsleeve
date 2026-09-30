@@ -174,6 +174,20 @@ Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIde
 проекции UI без username и персонажа (`UiPlayer.pseudonymous`); `NameFor` называет их
 псевдонимом в любом режиме имени.
 
+Инструменты модератора ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#инструменты-модератора-в-игре)).
+`ClientStatus::role` из приветствия и `RoleChanged`; host шлёт странице `role{moderator}` при
+смене (страница начинает без инструментов). Команды `sanctionPlayer`, `liftSanction`,
+`kickPlayer`, `listSanctions`, `listPlayerMarks`, `clearPlayerMarks`, `deleteChatMessage`
+(`Bridge::Commands`, проверка только корреляции, вида и длины причины) идут в
+`Session::Moderate` → Core-команду с новым RequestId; ответ — `moderationResult`
+(`requestId`, `error` или поля своего вида: `sanction`, `sanctions`, `playerId`, `marks`,
+`removed`). Имена игроков в списке наказаний host берёт из онлайна и авторов истории, иначе
+имени нет и страница пишет `#PlayerId`; метки игрока проецируются как соседние, с именем
+автора. Удаление сообщения приходит всем дельтой `ChatMessagesDeleted`: host шлёт
+`messagesRemoved{channelId, messageIds}` на своём месте в порядке изменений и убирает облачко
+этого сообщения (`Bubbles::EraseMessage`, `Frame::deletedMessages`). Удаление одной метки —
+прежний `removeGroundMark`.
+
 Смена отображаемого имени ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#смена-отображаемого-имени)).
 Команда UI `changeDisplayName{displayName}` в Ready-сессии идёт в `Session::ChangeDisplayName` →
 Core `ChangeDisplayName{requestId, displayName}` (одна за раз). Итог — `NameChanged`

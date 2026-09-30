@@ -502,8 +502,8 @@ module AdminRoutes =
 
     let private reasonHint = $"Причина обязательна: одна строка до {SanctionReason.MaxLength} символов."
 
-    /// A mute or a ban from the panel: the account service stores it and the
-    /// runtime applies it to a live session, as for a moderator's.
+    /// A mute or a ban from the panel: the account service stores it with its
+    /// audit line and the runtime applies it to a live session, as for a moderator's.
     let private sanction routes =
         playerAction routes (fun admin playerId form context -> task {
             let refuse message = showCard routes admin 400 (Some message) None playerId context
@@ -514,10 +514,7 @@ module AdminRoutes =
             | Some kind, Ok term, Ok reason ->
                 let order = { Target = playerId; Kind = kind; Term = term; Reason = reason; IssuedBy = SanctionIssuer.Admin admin.Id }
                 match! account routes context (AccountAccessCommand.Sanction order) with
-                | Ok (AccountAccessResult.Sanctioned issued) ->
-                    let! audited = record routes context admin AdminAction.SanctionedPlayer (AuditTarget.Player playerId) (AdminModels.sanctionDetails issued)
-                    if audited then return! redirect $"/players/{PlayerId.value playerId}?done=sanctioned" context
-                    else return! errorPage 503 "Наказание выдано, но строка аудита не записана; см. лог сервера." (Some admin) context
+                | Ok (AccountAccessResult.Sanctioned _) -> return! redirect $"/players/{PlayerId.value playerId}?done=sanctioned" context
                 | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
                 | Error error -> return! accountFailure (Some admin) error context
         })
@@ -528,26 +525,21 @@ module AdminRoutes =
             | None -> return! showCard routes admin 400 (Some "Неизвестный вид наказания.") None playerId context
             | Some kind ->
                 match! account routes context (AccountAccessCommand.LiftSanction(playerId, kind, SanctionIssuer.Admin admin.Id)) with
-                | Ok (AccountAccessResult.SanctionLifted lifted) ->
-                    let! audited = record routes context admin AdminAction.LiftedSanction (AuditTarget.Player playerId) (SanctionKind.key lifted.Kind)
-                    if audited then return! redirect $"/players/{PlayerId.value playerId}?done=lifted" context
-                    else return! errorPage 503 "Наказание снято, но строка аудита не записана; см. лог сервера." (Some admin) context
+                | Ok (AccountAccessResult.SanctionLifted _) -> return! redirect $"/players/{PlayerId.value playerId}?done=lifted" context
                 | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
                 | Error error -> return! accountFailure (Some admin) error context
         })
 
-    /// Ends the live session now; the player may sign in again at once.
+    /// Ends the live session now, as a moderator's kick; the player may sign in again at once.
     let private kick routes =
         playerAction routes (fun admin playerId form context -> task {
             match SanctionReason.create (value form "reason") with
             | Error _ -> return! showCard routes admin 400 (Some reasonHint) None playerId context
             | Ok reason ->
-                if not (routes.Ports.Kick playerId reason) then
-                    return! errorPage 503 "Рантайм занят; сессия не закрыта." (Some admin) context
-                else
-                    let! audited = record routes context admin AdminAction.KickedPlayer (AuditTarget.Player playerId) (SanctionReason.value reason)
-                    if audited then return! redirect $"/players/{PlayerId.value playerId}?done=kicked" context
-                    else return! errorPage 503 "Сессия закрыта, но строка аудита не записана; см. лог сервера." (Some admin) context
+                match! account routes context (AccountAccessCommand.Kick(playerId, reason, SanctionIssuer.Admin admin.Id)) with
+                | Ok AccountAccessResult.Kicked -> return! redirect $"/players/{PlayerId.value playerId}?done=kicked" context
+                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                | Error error -> return! accountFailure (Some admin) error context
         })
 
     let private activeSanctions routes context = task {

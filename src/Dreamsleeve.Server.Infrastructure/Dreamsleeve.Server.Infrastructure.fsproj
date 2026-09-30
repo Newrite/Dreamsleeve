@@ -8,6 +8,7 @@
       <Visible>False</Visible>
     </Compile>
     <Compile Include="SqliteDatabase.fs" />
+    <Compile Include="SqliteStatements.fs" />
     <Compile Include="Secrets.fs" />
     <Compile Include="SqliteAccountStore.fs" />
     <Compile Include="SqliteGroundMarkStore.fs" />

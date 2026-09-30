@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 14u
+    let Version = 15u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -41,6 +41,13 @@ module ProtocolCodec =
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.ChangeDisplayName ->
                 SessionCodec.decodeDisplayName config packet.ChangeDisplayName
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.JoinAsGuest -> Ok ClientCommand.JoinAsGuest
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.SanctionPlayer -> ModerationCodec.decodeSanction packet.SanctionPlayer
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.LiftSanction -> ModerationCodec.decodeLift packet.LiftSanction
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.KickPlayer -> ModerationCodec.decodeKick packet.KickPlayer
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.ListSanctions -> Ok ClientCommand.ListSanctions
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.ListPlayerMarks -> ModerationCodec.decodeListMarks packet.ListPlayerMarks
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.ClearPlayerMarks -> ModerationCodec.decodeClearMarks packet.ClearPlayerMarks
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.DeleteChatMessage -> ModerationCodec.decodeDeleteMessage packet.DeleteChatMessage
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.None ->
                 Error(ProtocolCodecFailure.InvalidPayload "payload")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "payload")
@@ -72,10 +79,11 @@ module ProtocolCodec =
 
     let requestLane (request: ClientRequest) =
         match request.Command with
-        | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _ -> DeliveryLane.Chat
+        | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _ | ClientCommand.DeleteChatMessage _ -> DeliveryLane.Chat
         | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.UpdatePlayer _ | ClientCommand.SetIdentityVisibility _
-        | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ ->
-            DeliveryLane.Control
+        | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
+        | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
+        | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ -> DeliveryLane.Control
 
     /// What the client hears for a request this codec refused: the wire field
     /// that was wrong and why, worded for the player.
@@ -96,6 +104,11 @@ module ProtocolCodec =
             invalid "display_name" "Display name is empty or contains control characters."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DeathMarkText", _)) ->
             invalid "text" "Death label is too long or contains control characters."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("SanctionReason", _)) ->
+            invalid "reason" $"A reason of one line up to {SanctionReason.MaxLength} characters is required."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidLimit("SanctionTerm", _)) ->
+            invalid "minutes" "A term runs from a minute to ten years."
+        | ProtocolCodecFailure.InvalidPayload "kinds" -> invalid "kinds" "Choose notes, death marks or both."
         | _ -> invalid "" "Invalid request."
 
     /// The refusal of a request, sent back on the lane the request came by.
@@ -112,15 +125,20 @@ module ProtocolCodec =
         match response with
         | ServerResponse.SessionOpened(requestId, _) | ServerResponse.PlayerUpdateAccepted requestId
         | ServerResponse.GroundMarkPlaced(requestId, _, _) | ServerResponse.GroundMarkRemoved(requestId, _)
-        | ServerResponse.IdentityVisibilityChanged(requestId, _, _) | ServerResponse.DisplayNameChanged(requestId, _) ->
+        | ServerResponse.IdentityVisibilityChanged(requestId, _, _) | ServerResponse.DisplayNameChanged(requestId, _)
+        | ServerResponse.SanctionIssued(requestId, _) | ServerResponse.SanctionLifted(requestId, _, _) | ServerResponse.PlayerKicked(requestId, _)
+        | ServerResponse.SanctionList(requestId, _) | ServerResponse.PlayerMarks(requestId, _, _) | ServerResponse.PlayerMarksCleared(requestId, _, _) ->
             settles DeliveryLane.Control requestId
+        | ServerResponse.ChatMessageRemoved(ValueSome requestId, _, _) -> settles DeliveryLane.Chat requestId
+        | ServerResponse.ChatMessageRemoved(ValueNone, _, _) -> notifies DeliveryLane.Chat
         | ServerResponse.RequestRejected(requestId, _) -> { settles DeliveryLane.Control requestId with WhileOpening = true }
         | ServerResponse.ChatAccepted(requestId, _) | ServerResponse.ChatRejected(requestId, _) -> settles DeliveryLane.Chat requestId
         | ServerResponse.ChatPublished _ -> notifies DeliveryLane.Chat
         | ServerResponse.PlayersMoved _ -> notifies DeliveryLane.Realtime
         | ServerResponse.PlayerJoined _ | ServerResponse.PlayerLeft _ | ServerResponse.PlayerUpdated _
         | ServerResponse.PlayerVisibilityChanged _ | ServerResponse.PlayerMetadataChanged _
-        | ServerResponse.GroundMarksChanged _ | ServerResponse.OwnGroundMarks _ | ServerResponse.MuteChanged _ -> notifies DeliveryLane.Control
+        | ServerResponse.GroundMarksChanged _ | ServerResponse.OwnGroundMarks _ | ServerResponse.MuteChanged _
+        | ServerResponse.RoleChanged _ -> notifies DeliveryLane.Control
         // The last packet before the runtime closes the connection, whatever the phase.
         | ServerResponse.SessionEnded _ -> { notifies DeliveryLane.Control with WhileOpening = true }
 
@@ -265,4 +283,31 @@ module ProtocolCodec =
                 envelope ()
             | ServerResponse.SessionEnded value ->
                 packet.SessionEnded <- SessionCodec.ended value
+                envelope ()
+            | ServerResponse.RoleChanged role ->
+                packet.RoleChanged <- Dreamsleeve.Protocol.Chat.RoleChanged(Role = ModerationCodec.role role)
+                envelope ()
+            | ServerResponse.SanctionIssued(_, sanction) ->
+                packet.SanctionIssued <- Dreamsleeve.Protocol.Chat.SanctionIssued(Sanction = ModerationCodec.entry sanction)
+                envelope ()
+            | ServerResponse.SanctionLifted(_, target, kind) ->
+                packet.SanctionLifted <- Dreamsleeve.Protocol.Chat.SanctionLifted(PlayerId = PlayerId.value target, Kind = ModerationCodec.kind kind)
+                envelope ()
+            | ServerResponse.PlayerKicked(_, target) ->
+                packet.PlayerKicked <- Dreamsleeve.Protocol.Chat.PlayerKicked(PlayerId = PlayerId.value target)
+                envelope ()
+            | ServerResponse.SanctionList(_, sanctions) ->
+                packet.SanctionList <- ModerationCodec.list sanctions
+                envelope ()
+            | ServerResponse.PlayerMarks(_, author, records) ->
+                if records |> List.exists (fun record -> record.Mark.Author <> author || record.Author.PlayerId <> author) then invalid "player_marks"
+                else
+                    packet.PlayerMarks <- ModerationCodec.marks author records
+                    envelope ()
+            | ServerResponse.PlayerMarksCleared(_, target, removed) ->
+                packet.PlayerMarksCleared <- Dreamsleeve.Protocol.Chat.PlayerMarksCleared(PlayerId = PlayerId.value target, Removed = uint32 removed)
+                envelope ()
+            | ServerResponse.ChatMessageRemoved(_, channel, message) ->
+                packet.ChatMessageRemoved <-
+                    Dreamsleeve.Protocol.Chat.ChatMessageRemoved(ChannelId = ChatChannelId.value channel, MessageId = ChatMessageId.value message)
                 envelope ()

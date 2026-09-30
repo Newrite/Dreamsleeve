@@ -168,9 +168,12 @@ private:
           if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
             for (const auto& message : added->messages)
               PrintMessage(message);
+          else if (const auto* evicted = std::get_if<ChatMessagesEvicted>(&change))
+            for (const auto id : evicted->messageIds)
+              std::cout << "  evicted " << id << '\n';
           else
-            for (const auto id : std::get<ChatMessagesRemoved>(change).messageIds)
-              std::cout << "  removed " << id << '\n';
+            for (const auto id : std::get<ChatMessagesDeleted>(change).messageIds)
+              std::cout << "  deleted " << id << '\n';
         }
       }
     }

@@ -255,6 +255,26 @@ Runtime после завершения сессии шлёт `Detach` и мет
   `ListSessions`/`SetPlayerRole`/`RenamePlayer` — обычные сообщения runtime.
 - Объявление панели — тот же `ServerRuntimeMessage.Announce`, что у консоли.
 
+### Модератор в игре
+
+Команды модератора (`ClientCommand.SanctionPlayer` … `DeleteChatMessage`, значения уже проверены
+доменом в `ModerationCodec`) runtime пересылает Ready-сессии как
+`PlayerSessionMessage.Moderate(requestId, ModerationAction)`. Сессия проверяет только роль
+(`NOT_PERMITTED`) и бюджет ожидающих запросов, затем ведёт запрос к владельцу:
+
+- мут, бан, снятие, кик, список — `ModerationRequest` по `SessionAuthenticator.Moderation`
+  (outbox `AccountModeration`); `AuthService` отображает его в `AccountAccessCommand`, а
+  `SqliteSanctionStore` решает, может ли модератор действовать на цель (`PlayerRole.outranks`),
+  и пишет аудит в той же транзакции. Ответ `ModerationReplied` — служебное сообщение сессии;
+  кик доходит до runtime как `AccountChange.Kicked` и закрывает сессию цели, как бан;
+- удаление сообщения — `ChatRoomCommand.Remove` владельцу канала (глобального или системного);
+  владелец рассылает `ChatRoomEvent.Removed` всем участникам, просившему — с его RequestId;
+- метки — `GroundMarkCommand.Remove(..., anyAuthor = роль модератора)`, `ListOf`, `ClearOf`;
+  владелец отвечает с автором.
+
+Удалённый чужой контент сессия записывает в аудит (`ModerationCommand.Record` → `admin_audit`
+с `moderator_id`); ответ на запись ничего не завершает, потерянная строка — предупреждение в логе.
+
 ### Смена отображаемого имени игроком
 
 `ClientCommand.ChangeDisplayName` (кодек уже применил `DisplayName.create`) → runtime пересылает

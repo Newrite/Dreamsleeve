@@ -11,6 +11,7 @@ import {
   maxError,
   maxSnapshotRows,
   maxText,
+  sanctionKinds,
   sessionEndReasons,
 } from "./bridge.generated";
 type ObjectValue = Record<string, unknown>;
@@ -124,6 +125,19 @@ function message(v: unknown): boolean {
   );
 }
 const marks = (limit: number) => (v: unknown) => list(v, groundMark, limit);
+function sanction(v: unknown): boolean {
+  return (
+    object(v) &&
+    id(v.playerId) &&
+    optional(label)(v.name) &&
+    oneOf(sanctionKinds)(v.kind) &&
+    label(v.reason) &&
+    time(v.issuedAt) &&
+    optional(time)(v.until)
+  );
+}
+const count = (v: unknown) =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 const bare = () => true;
 // One check per host event: a new event type does not compile until it has one.
 const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
@@ -189,6 +203,17 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     oneOf(sessionEndReasons)(v.reason) &&
     label(v.text) &&
     optional(time)(v.until),
+  role: (v) => flag(v.moderator),
+  messagesRemoved: (v) =>
+    id(v.channelId) && list(v.messageIds, id, maxSnapshotRows),
+  moderationResult: (v) =>
+    id(v.requestId) &&
+    optional(error)(v.error) &&
+    optional(sanction)(v.sanction) &&
+    optional((x) => list(x, sanction, 4096))(v.sanctions) &&
+    optional(id)(v.playerId) &&
+    optional(marks(4096))(v.marks) &&
+    optional(count)(v.removed),
   show: bare,
   hide: bare,
   activate: bare,

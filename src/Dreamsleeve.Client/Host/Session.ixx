@@ -38,6 +38,8 @@ public:
       bool identityRefused{};
       // How the server ended the session in this Process call, if it did.
       std::optional<Domain::SessionEndReason> sessionEnded;
+      // Messages a moderator removed in this Process call; their bubbles go too.
+      std::vector<Domain::ChatMessageId> deletedMessages;
     };
 
     using Players = std::unordered_map<Domain::PlayerId, Domain::Player>;
@@ -65,7 +67,7 @@ public:
       if (frame.playersChanged && !frame.snapshot) Emit(frame, Bridge::PlayersEvent{.players = PlayerList(settings)});
 
       for (const auto& result : output.results)
-        Resolve(frame, result);
+        Resolve(frame, result, settings);
       pseudonym = output.status.pseudonym;
       if (ownMarksChanged && !frame.snapshot) Emit(frame, Bridge::GroundMarksEvent{.marks = OwnMarkList(settings)});
       ownMarksChanged = false;
@@ -189,6 +191,17 @@ public:
       return Count<PendingMark>();
     }
 
+    // A moderator request of the web UI, answered with moderationResult. The
+    // server checks the role and the target; Core fills the request ID.
+    template <class Command>
+    std::expected<void, std::string> Moderate(ClientExchange& exchange, std::string uiRequestId, Command command)
+    {
+      return Posted(Submit(exchange, PendingModeration{std::move(uiRequestId)}, [&](std::uint64_t id) {
+        command.requestId = id;
+        return std::move(command);
+      }));
+    }
+
     // The next Process must deliver a full snapshot; old correlations are dropped
     // so a reply cannot reach a view that no longer exists.
     void ResetView()
@@ -196,11 +209,12 @@ public:
       needsSnapshot     = true;
       snapshotRequested = false;
       refreshing        = false;
-      // Chat sends and mark requests lose their view. Death reports have no UI
-      // correlation and settle silently either way.
+      // Chat sends, mark and moderator requests lose their view. Death reports
+      // have no UI correlation and settle silently either way.
       std::erase_if(pending, [](const auto& entry) {
         const auto* mark = std::get_if<PendingMark>(&entry.second.request);
-        return std::holds_alternative<PendingChat>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
+        return std::holds_alternative<PendingChat>(entry.second.request) ||
+               std::holds_alternative<PendingModeration>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
       });
       lastStatus.reset();
       lastIdentity.reset();
@@ -359,7 +373,12 @@ private:
     struct PendingName
     {};
 
-    using PendingRequest = std::variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName>;
+    struct PendingModeration
+    {
+      std::string uiRequestId;
+    };
+
+    using PendingRequest = std::variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName, PendingModeration>;
 
     struct Pending
     {
@@ -430,7 +449,7 @@ private:
     // Routes a result to the request that waits for it. An opening refused for
     // hidden names has none: the preference itself is refused. Game updates
     // carry their own IDs and settle silently.
-    void Resolve(Frame& frame, const CommandResult& result)
+    void Resolve(Frame& frame, const CommandResult& result, const UiSettings& settings)
     {
       const auto found = pending.find(result.requestId);
       if (found == pending.end())
@@ -445,7 +464,7 @@ private:
       }
       auto request = std::move(found->second.request);
       pending.erase(found);
-      std::visit([&](auto& value) { Resolve(frame, value, result.outcome); }, request);
+      std::visit([&](auto& value) { Resolve(frame, value, result.outcome, settings); }, request);
     }
 
     // The text a refusal shows; a success of another kind would be a Core fault.
@@ -456,7 +475,7 @@ private:
       return "Неожиданный ответ";
     }
 
-    void Resolve(Frame& frame, PendingChat& chat, const CommandResult::Outcome& outcome)
+    void Resolve(Frame& frame, PendingChat& chat, const CommandResult::Outcome& outcome, const UiSettings&)
     {
       Bridge::SendResultEvent event;
       event.requestId = std::move(chat.uiRequestId);
@@ -467,7 +486,7 @@ private:
       Emit(frame, event);
     }
 
-    void Resolve(Frame& frame, PendingAnnouncement& announcement, const CommandResult::Outcome& outcome)
+    void Resolve(Frame& frame, PendingAnnouncement& announcement, const CommandResult::Outcome& outcome, const UiSettings&)
     {
       if (std::holds_alternative<MessagePublished>(outcome))
         Finish(frame, std::move(announcement), Announcements::Result::Published, {});
@@ -475,7 +494,7 @@ private:
         Finish(frame, std::move(announcement), ResultOf(outcome), Reason(outcome));
     }
 
-    void Resolve(Frame& frame, PendingMark& mark, const CommandResult::Outcome& outcome)
+    void Resolve(Frame& frame, PendingMark& mark, const CommandResult::Outcome& outcome, const UiSettings&)
     {
       const auto* placed = std::get_if<MarkPlaced>(&outcome);
       if (mark.request == MarkRequest::Death)
@@ -498,7 +517,7 @@ private:
     }
 
     // A refused switch returns to the server's state; the reason stays under it.
-    void Resolve(Frame& frame, PendingIdentity&, const CommandResult::Outcome& outcome)
+    void Resolve(Frame& frame, PendingIdentity&, const CommandResult::Outcome& outcome, const UiSettings&)
     {
       if (const auto* changed = std::get_if<IdentityChanged>(&outcome))
       {
@@ -509,7 +528,7 @@ private:
         identityError = Bridge::ClipError(Reason(outcome));
     }
 
-    void Resolve(Frame&, PendingName&, const CommandResult::Outcome& outcome)
+    void Resolve(Frame&, PendingName&, const CommandResult::Outcome& outcome, const UiSettings&)
     {
       if (const auto* changed = std::get_if<NameChanged>(&outcome))
       {
@@ -520,6 +539,59 @@ private:
         nameError = Bridge::ClipError(Bridge::DisplayNameRejectionText(rejection->code, rejection->message));
       else
         nameError = Bridge::ClipError(Reason(outcome));
+    }
+
+    // Every answer names its player; lists name them as far as the host knows.
+    void Resolve(Frame& frame, PendingModeration& moderation, const CommandResult::Outcome& outcome, const UiSettings& settings)
+    {
+      Bridge::ModerationResultEvent event{.requestId = std::move(moderation.uiRequestId)};
+      if (const auto* sanctioned = std::get_if<Sanctioned>(&outcome))
+        event.sanction = Bridge::ToUiSanction(sanctioned->sanction, KnownName(sanctioned->sanction.playerId, settings));
+      else if (const auto* lifted = std::get_if<Lifted>(&outcome))
+        event.playerId = Bridge::Id(lifted->playerId);
+      else if (const auto* kicked = std::get_if<Kicked>(&outcome))
+        event.playerId = Bridge::Id(kicked->playerId);
+      else if (const auto* listed = std::get_if<SanctionsListed>(&outcome))
+      {
+        event.sanctions.emplace();
+        for (const auto& sanction : listed->sanctions)
+          event.sanctions->push_back(Bridge::ToUiSanction(sanction, KnownName(sanction.playerId, settings)));
+      }
+      else if (const auto* marks = std::get_if<MarksListed>(&outcome))
+      {
+        event.playerId = Bridge::Id(marks->playerId);
+        event.marks.emplace();
+        for (const auto& mark : marks->marks)
+        {
+          auto entry   = Bridge::ToUiGroundMark(mark, settings, false);
+          entry.author = names.NameFor(mark.author.playerId, mark.author, mark.characterName, settings);
+          event.marks->push_back(std::move(entry));
+        }
+      }
+      else if (const auto* cleared = std::get_if<MarksCleared>(&outcome))
+      {
+        event.playerId = Bridge::Id(cleared->playerId);
+        event.removed  = cleared->removed;
+      }
+      else if (std::holds_alternative<MessageDeleted>(outcome))
+      {
+        // The chat drops the message through messagesRemoved, as for everyone.
+      }
+      else if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
+        event.error = Bridge::ClipError(Bridge::ModerationRejectionText(rejection->code, rejection->message, rejection->field));
+      else
+        event.error = Bridge::ClipError(Reason(outcome));
+      Emit(frame, std::move(event));
+    }
+
+    // The name of a player the host has met: online now or the author of
+    // retained chat; absent for anyone else, such as an offline player never seen.
+    std::optional<std::string> KnownName(Domain::PlayerId id, const UiSettings& settings)
+    {
+      if (const auto online = players.find(id); online != players.end())
+        return names.NameFor(id, online->second.data, online->second.characterName, settings);
+      if (const auto author = authors.find(id); author != authors.end()) return names.NameFor(id, author->second, std::nullopt, settings);
+      return std::nullopt;
     }
 
     std::vector<Bridge::UiGroundMark> OwnMarkList(const UiSettings& settings) const
@@ -717,9 +789,24 @@ private:
       }
       if (delta.ownGroundMarks) ReplaceOwn(*delta.ownGroundMarks);
 
+      // Additions travel together; a removal goes out in its place in the order.
       Bridge::MessagesEvent messages;
+      const auto            flush = [&] {
+        if (!messages.messages.empty()) Emit(frame, std::exchange(messages, {}));
+      };
       for (const auto& change : delta.chatContent)
-        if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
+        if (const auto* deleted = std::get_if<ChatMessagesDeleted>(&change))
+        {
+          flush();
+          Bridge::MessagesRemovedEvent removed{.channelId = Bridge::Id(deleted->channelId)};
+          for (const auto id : deleted->messageIds)
+          {
+            removed.messageIds.push_back(Bridge::Id(id));
+            frame.deletedMessages.push_back(id);
+          }
+          Emit(frame, std::move(removed));
+        }
+        else if (const auto* added = std::get_if<ChatMessagesAdded>(&change))
           for (const auto& message : added->messages)
           {
             Remember(message);
@@ -736,7 +823,7 @@ private:
             if (Hidden(message)) continue;
             if (auto shown = Bridge::ToShownMessage(message, names, settings, selfId)) messages.messages.push_back(std::move(*shown));
           }
-      if (!messages.messages.empty()) Emit(frame, messages);
+      flush();
     }
 
     // Bubble admission: global channel, newer than anything seen (history
@@ -793,8 +880,10 @@ private:
                                lastStatus->savedLogin != status.savedLogin || lastStatus->savedUsername != status.savedUsername;
       if (connectionChanged) Emit(frame, Bridge::ConnectionState(status));
       if (authChanged || connectionChanged) Emit(frame, Bridge::AuthState(status, settings.streamerMode));
-      // The page starts unmuted: only a mute or its change is news.
+      // The page starts unmuted and without moderator tools: only a mute, the
+      // moderator role or their change is news.
       if ((first ? std::nullopt : lastStatus->mute) != status.mute) Emit(frame, Bridge::MuteState(status));
+      if ((first ? Domain::PlayerRole::Player : lastStatus->role) != status.role) Emit(frame, Bridge::Role(status));
       if (status.sessionEnd && (first || lastStatus->sessionEndSequence != status.sessionEndSequence))
       {
         Emit(frame, Bridge::Ended(*status.sessionEnd));

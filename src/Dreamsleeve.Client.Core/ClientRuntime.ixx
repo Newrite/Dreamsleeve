@@ -157,14 +157,17 @@ private:
     static constexpr auto GuestRetryMinimum = std::chrono::seconds{5};
     static constexpr auto GuestRetryMaximum = std::chrono::seconds{60};
 
-    // What a sent request waits for. Chat and announcements remember their channel.
+    // What a sent request waits for. Chat, announcements and deletions remember
+    // their channel and settle on the chat lane.
     enum class PendingKind
     {
       Chat,
       Update,
       Mark,
       Identity,
-      Name
+      Name,
+      Moderation,
+      Deletion
     };
 
     struct PendingRequest
@@ -196,6 +199,7 @@ private:
       model.ResetSession();
       exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
       exchange.PublishMute(std::nullopt);
+      exchange.PublishRole(Domain::PlayerRole::Player);
     }
 
     // result: the terminal answer that ends the session, published with its end.
@@ -336,7 +340,8 @@ private:
       if (auto* rejected = std::get_if<Wire::RequestRejected>(&*response))
       {
         const auto found    = pending.find(rejected->requestId);
-        const bool chat     = found != pending.end() && found->second.kind == PendingKind::Chat;
+        const bool chat =
+          found != pending.end() && (found->second.kind == PendingKind::Chat || found->second.kind == PendingKind::Deletion);
         const auto expected = chat ? Wire::Channel::Chat : Wire::Channel::Control;
         if (channel != expected) return Unexpected("rejection_channel");
       }
@@ -372,10 +377,11 @@ private:
       announcementPolicy = std::move(opened.announcements);
       exchange.PublishIdentity(std::move(opened.ownPseudonym), opened.hiding);
       exchange.PublishMute(std::move(opened.mute));
+      exchange.PublishRole(opened.role);
       phase = SessionPhase::Ready;
-      for (const auto& message : earlyChat)
+      for (const auto& change : earlyChat)
       {
-        auto applied = model.Apply(generation, message);
+        auto applied = model.Apply(generation, change);
         if (!applied) return std::unexpected{applied.error()};
       }
       earlyChat.clear();
@@ -387,6 +393,66 @@ private:
       if (phase != SessionPhase::Ready) return Unexpected("mute_changed");
       exchange.PublishMute(std::move(changed.mute));
       return {};
+    }
+
+    Result<void> Receive(Wire::RoleChanged& changed)
+    {
+      if (phase != SessionPhase::Ready) return Unexpected("role_changed");
+      exchange.PublishRole(changed.role);
+      return {};
+    }
+
+    Result<void> Receive(Wire::SanctionIssued& issued)
+    {
+      if (!TakePending(issued.requestId, PendingKind::Moderation)) return Unexpected("request_id");
+      return Settle(issued.requestId, Sanctioned{std::move(issued.sanction)});
+    }
+
+    Result<void> Receive(Wire::SanctionLifted& lifted)
+    {
+      if (!TakePending(lifted.requestId, PendingKind::Moderation)) return Unexpected("request_id");
+      return Settle(lifted.requestId, Lifted{lifted.playerId, lifted.kind});
+    }
+
+    Result<void> Receive(Wire::PlayerKicked& kicked)
+    {
+      if (!TakePending(kicked.requestId, PendingKind::Moderation)) return Unexpected("request_id");
+      return Settle(kicked.requestId, Kicked{kicked.playerId});
+    }
+
+    Result<void> Receive(Wire::SanctionList& listed)
+    {
+      if (!TakePending(listed.requestId, PendingKind::Moderation)) return Unexpected("request_id");
+      return Settle(listed.requestId, SanctionsListed{std::move(listed.sanctions)});
+    }
+
+    // The list is of the named author only; any other is a protocol fault.
+    Result<void> Receive(Wire::PlayerMarks& listed)
+    {
+      if (!TakePending(listed.requestId, PendingKind::Moderation)) return Unexpected("request_id");
+      for (const auto& mark : listed.marks)
+        if (mark.author.playerId != listed.playerId) return Unexpected("author");
+      return Settle(listed.requestId, MarksListed{listed.playerId, std::move(listed.marks)});
+    }
+
+    Result<void> Receive(Wire::PlayerMarksCleared& cleared)
+    {
+      if (!TakePending(cleared.requestId, PendingKind::Moderation)) return Unexpected("request_id");
+      return Settle(cleared.requestId, MarksCleared{cleared.playerId, cleared.removed});
+    }
+
+    // Everyone drops the message through the same delta; the moderator's copy
+    // also settles the deletion.
+    Result<void> Receive(Wire::ChatMessageRemoved& removed)
+    {
+      const ChatMessageDeleted deleted{removed.channelId, removed.messageId};
+      if (!removed.requestId) return ReceiveChat(deleted);
+
+      const auto request = TakePending(*removed.requestId, PendingKind::Deletion);
+      if (!request || request->channelId != removed.channelId) return Unexpected("request_id");
+      auto applied = model.Apply(model.Generation(), deleted);
+      if (!applied) return std::unexpected{applied.error()};
+      return Settle(*removed.requestId, MessageDeleted{removed.channelId, removed.messageId});
     }
 
     // The server closes the connection next; ClientClosed ends the session.
@@ -512,13 +578,20 @@ private:
 
     Result<void> Receive(ChatMessagesReceived& value)
     {
+      return ReceiveChat(std::move(value));
+    }
+
+    // The chat lane may overtake the welcome on the control lane: its changes
+    // wait for the channels to be registered.
+    Result<void> ReceiveChat(ClientUpdate change)
+    {
       if (phase == SessionPhase::Opening)
       {
         if (earlyChat.size() >= config.chatCapacity) return Unexpected("bootstrap_chat_capacity");
-        earlyChat.push_back(std::move(value));
+        earlyChat.push_back(std::move(change));
         return {};
       }
-      return Apply(value);
+      return Apply(change);
     }
 
     Result<void> Receive(PlayerUpserted& value)
@@ -685,6 +758,59 @@ private:
       return SendRequest(generation, command, {PendingKind::Name});
     }
 
+    // Moderator requests share one pending budget on the control lane; the
+    // server judges the role, the target and the values.
+    template <class Command>
+    Result<void> SendModeration(std::uint64_t generation, Command& command)
+    {
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
+      if (PendingCount(PendingKind::Moderation) >= config.maxPendingChatRequests)
+        return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      return SendRequest(generation, command, {PendingKind::Moderation});
+    }
+
+    Result<void> Process(std::uint64_t generation, SanctionPlayer& command)
+    {
+      return SendModeration(generation, command);
+    }
+
+    Result<void> Process(std::uint64_t generation, LiftSanction& command)
+    {
+      return SendModeration(generation, command);
+    }
+
+    Result<void> Process(std::uint64_t generation, KickPlayer& command)
+    {
+      return SendModeration(generation, command);
+    }
+
+    Result<void> Process(std::uint64_t generation, ListSanctions& command)
+    {
+      return SendModeration(generation, command);
+    }
+
+    Result<void> Process(std::uint64_t generation, ListPlayerMarks& command)
+    {
+      return SendModeration(generation, command);
+    }
+
+    Result<void> Process(std::uint64_t generation, ClearPlayerMarks& command)
+    {
+      return SendModeration(generation, command);
+    }
+
+    // A deletion settles on the chat lane of its channel, which must exist.
+    Result<void> Process(std::uint64_t generation, DeleteChatMessage& command)
+    {
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
+      if (!model.FindChatState(command.channelId)) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      if (PendingCount(PendingKind::Deletion) >= config.maxPendingChatRequests)
+        return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      return SendRequest(generation, command, {PendingKind::Deletion, command.channelId}, Wire::Channel::Chat);
+    }
+
     template <class T>
     Result<void> SendPlayerUpdate(std::uint64_t generation, T& command, bool locationTransition = false)
     {
@@ -826,7 +952,7 @@ private:
     std::uint64_t                                     movementSequence{};
     std::uint64_t                                     pendingLocation{Domain::InvalidId};  // The location update in flight.
     bool                                              movementReady{};
-    std::vector<ChatMessagesReceived>                 earlyChat;
+    std::vector<ClientUpdate>                         earlyChat;
     std::vector<ClientEvent>                          events;
   };
 

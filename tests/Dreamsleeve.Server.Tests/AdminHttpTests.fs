@@ -93,7 +93,6 @@ let private withPanel customize run = task {
         Announce = fun announcement -> announcements.Enqueue announcement; true
         ApplyRole = fun _ _ -> true
         ApplyProfile = fun _ -> true
-        Kick = fun _ _ -> true
         Configuration = fun () -> []
     }
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()

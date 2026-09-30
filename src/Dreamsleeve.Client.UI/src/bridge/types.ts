@@ -10,6 +10,7 @@ import type {
   eventTypes,
   groundMarkKinds,
   hidingModes,
+  sanctionKinds,
   sessionEndReasons,
 } from "./bridge.generated";
 export type { Settings };
@@ -143,6 +144,17 @@ export interface GroundMark {
   // Formatted by the host in the chosen markDateStyle; absent on old marks.
   gameDate?: string;
 }
+export type SanctionKind = (typeof sanctionKinds)[number];
+// A sanction in force as a moderator lists it: the player by ID, named by the
+// host when it has met them; until is Unix ms, absent until lifted.
+export interface Sanction {
+  playerId: Id;
+  name?: string;
+  kind: SanctionKind;
+  reason: string;
+  issuedAt: number;
+  until?: number;
+}
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
   | { type: "close" }
@@ -169,7 +181,39 @@ export type Command =
   // Outside a session only the choice for the next one changes.
   | { type: "setIdentityVisibility"; hiding: HideIdentity }
   // In a session only; the server applies its word list and change interval.
-  | { type: "changeDisplayName"; displayName: string };
+  | { type: "changeDisplayName"; displayName: string }
+  // Moderator tools; the server checks the role and whom a moderator may act
+  // on. No minutes: until lifted. Each is answered with moderationResult.
+  | {
+      type: "sanctionPlayer";
+      requestId: string;
+      playerId: Id;
+      kind: SanctionKind;
+      minutes?: number;
+      reason: string;
+    }
+  | {
+      type: "liftSanction";
+      requestId: string;
+      playerId: Id;
+      kind: SanctionKind;
+    }
+  | { type: "kickPlayer"; requestId: string; playerId: Id; reason: string }
+  | { type: "listSanctions"; requestId: string }
+  | { type: "listPlayerMarks"; requestId: string; playerId: Id }
+  | {
+      type: "clearPlayerMarks";
+      requestId: string;
+      playerId: Id;
+      notes: boolean;
+      deaths: boolean;
+    }
+  | {
+      type: "deleteChatMessage";
+      requestId: string;
+      channelId: Id;
+      messageId: Id;
+    };
 export type AuthEvent = { type: "auth"; phase: ConnectionPhase } & AuthState;
 export type HostEvent =
   | {
@@ -206,6 +250,22 @@ export type HostEvent =
   | ({ type: "displayName" } & DisplayNameState)
   | ({ type: "mute" } & MuteState)
   | ({ type: "sessionEnded" } & SessionEndState)
+  // The player's role; a moderator gets the moderator tools.
+  | { type: "role"; moderator: boolean }
+  // Messages a moderator removed: gone from every surface.
+  | { type: "messagesRemoved"; channelId: Id; messageIds: Id[] }
+  // The answer to a moderator request: error on a refusal, otherwise the
+  // fields of its kind.
+  | {
+      type: "moderationResult";
+      requestId: string;
+      error?: string;
+      sanction?: Sanction;
+      sanctions?: Sanction[];
+      playerId?: Id;
+      marks?: GroundMark[];
+      removed?: number;
+    }
   // Personal ignore list of this server, already named for current settings.
   | { type: "ignored"; players: { id: Id; name: string }[] }
   | { type: "messages"; messages: Message[] }

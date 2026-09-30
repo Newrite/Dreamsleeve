@@ -22,7 +22,7 @@ module ChatRoomAgent =
 
     let private isControl = function
         | ChatRoomCommand.Join _ | ChatRoomCommand.Detach _ -> true
-        | ChatRoomCommand.Publish _ | ChatRoomCommand.Announce _ | ChatRoomCommand.ReadHistory _ -> false
+        | ChatRoomCommand.Publish _ | ChatRoomCommand.Announce _ | ChatRoomCommand.ReadHistory _ | ChatRoomCommand.Remove _ -> false
 
     let private notifyHost state context command =
         if not (state.Host.TrySend(context, command)) then
@@ -143,6 +143,19 @@ module ChatRoomAgent =
             ChatMessage.serverAnnouncement messageId state.Chat.ChannelId announcement.Kind announcement.Text sentAt
         append state context create ValueNone
 
+    /// The channel forgets the message and every member drops it; the
+    /// requester's copy settles its request.
+    let private removeMessage state context (request: ChatRemoval) =
+        match Chat.remove request.MessageId state.Chat with
+        | ValueNone ->
+            let rejection = { Code = RequestRejectionCode.TargetNotFound; Message = "No such message in the channel."; Field = "message_id" }
+            respond state context request.ConnectionId request.ReplyTo (ChatRoomEvent.Rejected(request.RequestId, rejection))
+        | ValueSome message ->
+            let recipients = state.Members.Values |> Seq.filter (fun recipient -> recipient.ConnectionId <> request.ConnectionId) |> Seq.toArray
+            for recipient in recipients do
+                deliver state context recipient (ChatRoomEvent.Removed(ValueNone, message)) |> ignore
+            respond state context request.ConnectionId request.ReplyTo (ChatRoomEvent.Removed(ValueSome request.RequestId, message))
+
     let private detach state (context: AgentContext<ChatRoomCommand>) (request: SessionDetach) =
         remove state request.ConnectionId
 
@@ -160,6 +173,7 @@ module ChatRoomAgent =
         | ChatRoomCommand.Detach request -> detach state context request
         | ChatRoomCommand.ReadHistory(cursor, count, reply) ->
             reply.Reply(Chat.historyAfter cursor count state.Chat)
+        | ChatRoomCommand.Remove request -> removeMessage state context request
     }
 
     /// One owner per channel; its ID follows from the kind. The options come

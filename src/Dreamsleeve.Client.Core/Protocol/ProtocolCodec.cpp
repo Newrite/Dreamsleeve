@@ -84,6 +84,61 @@ namespace Dreamsleeve::Client::Wire
         packet.set_request_id(value.requestId);
         packet.mutable_change_display_name()->set_display_name(value.displayName);
       }
+
+      void operator()(const SanctionPlayer& value) const
+      {
+        packet.set_request_id(value.requestId);
+        auto& sanction = *packet.mutable_sanction_player();
+        sanction.set_player_id(value.playerId);
+        sanction.set_kind(static_cast<P::SanctionKind>(value.kind));
+        if (value.minutes) sanction.set_minutes(*value.minutes);
+        sanction.set_reason(value.reason);
+      }
+
+      void operator()(const LiftSanction& value) const
+      {
+        packet.set_request_id(value.requestId);
+        auto& lift = *packet.mutable_lift_sanction();
+        lift.set_player_id(value.playerId);
+        lift.set_kind(static_cast<P::SanctionKind>(value.kind));
+      }
+
+      void operator()(const KickPlayer& value) const
+      {
+        packet.set_request_id(value.requestId);
+        auto& kick = *packet.mutable_kick_player();
+        kick.set_player_id(value.playerId);
+        kick.set_reason(value.reason);
+      }
+
+      void operator()(const ListSanctions& value) const
+      {
+        packet.set_request_id(value.requestId);
+        packet.mutable_list_sanctions();
+      }
+
+      void operator()(const ListPlayerMarks& value) const
+      {
+        packet.set_request_id(value.requestId);
+        packet.mutable_list_player_marks()->set_player_id(value.playerId);
+      }
+
+      void operator()(const ClearPlayerMarks& value) const
+      {
+        packet.set_request_id(value.requestId);
+        auto& clear = *packet.mutable_clear_player_marks();
+        clear.set_player_id(value.playerId);
+        clear.set_notes(value.notes);
+        clear.set_deaths(value.deaths);
+      }
+
+      void operator()(const DeleteChatMessage& value) const
+      {
+        packet.set_request_id(value.requestId);
+        auto& removal = *packet.mutable_delete_chat_message();
+        removal.set_channel_id(value.channelId);
+        removal.set_message_id(value.messageId);
+      }
     };
 
     // The first string field, nested ones included, that is not well-formed
@@ -187,7 +242,7 @@ namespace Dreamsleeve::Client::Wire
     if (packet.protocol_version() != Version) return Failure(ErrorCode::UnsupportedVersion, "protocol_version");
     if (packet.has_request_id() && packet.request_id() == Domain::InvalidId) return Failure(ErrorCode::InvalidEnvelope, "request_id");
 
-    const auto expected = packet.has_chat_published() ? Channel::Chat : Channel::Control;
+    const auto expected = packet.has_chat_published() || packet.has_chat_message_removed() ? Channel::Chat : Channel::Control;
     if (!packet.has_request_rejected() && channel != expected) return Failure(ErrorCode::InvalidEnvelope, "channel");
 
     switch (packet.payload_case())
@@ -309,6 +364,67 @@ namespace Dreamsleeve::Client::Wire
         if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
         if (packet.display_name_changed().display_name().empty()) return Invalid("display_name");
         return DisplayNameChanged{packet.request_id(), packet.display_name_changed().display_name()};
+      case P::ServerPacket::kRoleChanged: {
+        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        auto role = Role(packet.role_changed().role());
+        if (!role) return std::unexpected{role.error()};
+        return RoleChanged{*role};
+      }
+      case P::ServerPacket::kSanctionIssued: {
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        auto sanction = ReadSanction(packet.sanction_issued().sanction());
+        if (!sanction) return std::unexpected{sanction.error()};
+        return SanctionIssued{packet.request_id(), std::move(*sanction)};
+      }
+      case P::ServerPacket::kSanctionLifted: {
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        const auto& lifted = packet.sanction_lifted();
+        if (lifted.player_id() == Domain::InvalidId) return Invalid("player_id");
+        auto kind = Kind(lifted.kind());
+        if (!kind) return std::unexpected{kind.error()};
+        return SanctionLifted{packet.request_id(), lifted.player_id(), *kind};
+      }
+      case P::ServerPacket::kPlayerKicked:
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        if (packet.player_kicked().player_id() == Domain::InvalidId) return Invalid("player_id");
+        return PlayerKicked{packet.request_id(), packet.player_kicked().player_id()};
+      case P::ServerPacket::kSanctionList: {
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        SanctionList result{packet.request_id()};
+        for (const auto& value : packet.sanction_list().sanctions())
+        {
+          auto sanction = ReadSanction(value);
+          if (!sanction) return std::unexpected{sanction.error()};
+          result.sanctions.push_back(std::move(*sanction));
+        }
+        return result;
+      }
+      case P::ServerPacket::kPlayerMarks: {
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        const auto& listed = packet.player_marks();
+        if (listed.player_id() == Domain::InvalidId) return Invalid("player_id");
+        PlayerMarks result{packet.request_id(), listed.player_id()};
+        for (const auto& value : listed.marks())
+        {
+          auto mark = Mark(value);
+          if (!mark) return std::unexpected{mark.error()};
+          result.marks.push_back(std::move(*mark));
+        }
+        return result;
+      }
+      case P::ServerPacket::kPlayerMarksCleared: {
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        const auto& cleared = packet.player_marks_cleared();
+        if (cleared.player_id() == Domain::InvalidId) return Invalid("player_id");
+        return PlayerMarksCleared{packet.request_id(), cleared.player_id(), cleared.removed()};
+      }
+      case P::ServerPacket::kChatMessageRemoved: {
+        const auto& removed = packet.chat_message_removed();
+        if (removed.channel_id() == Domain::InvalidId) return Invalid("channel_id");
+        if (removed.message_id() == Domain::InvalidId) return Invalid("message_id");
+        const auto requestId = packet.has_request_id() ? std::optional{packet.request_id()} : std::nullopt;
+        return ChatMessageRemoved{requestId, removed.channel_id(), removed.message_id()};
+      }
       case P::ServerPacket::PAYLOAD_NOT_SET:
         return Invalid("payload");
       default:

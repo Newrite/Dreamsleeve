@@ -31,8 +31,6 @@ type AdminPorts = {
     ApplyRole: PlayerId -> PlayerRole -> bool
     /// The stored profile after a rename.
     ApplyProfile: PlayerData -> bool
-    /// Ends the player's live session with the reason; false when the runtime did not take it.
-    Kick: PlayerId -> SanctionReason -> bool
     Configuration: unit -> ConfigSection list
 }
 

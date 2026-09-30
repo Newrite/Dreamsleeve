@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 14;
+  inline constexpr std::uint32_t Version = 15;
 
   enum class ErrorCode
   {
@@ -83,7 +83,14 @@ export namespace Dreamsleeve::Client::Wire
     ReportDeath,
     RemoveGroundMark,
     SetIdentityVisibility,
-    ChangeDisplayName>;
+    ChangeDisplayName,
+    SanctionPlayer,
+    LiftSanction,
+    KickPlayer,
+    ListSanctions,
+    ListPlayerMarks,
+    ClearPlayerMarks,
+    DeleteChatMessage>;
 
   // A channel of the session with its retained tail, ascending MessageId.
   struct ChannelOpened
@@ -107,6 +114,13 @@ export namespace Dreamsleeve::Client::Wire
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
     // The receiver's mute when the session opened.
     std::optional<Domain::MuteState> mute;
+    Domain::PlayerRole               role{Domain::PlayerRole::Player};
+  };
+
+  // The receiver's role changed while the session is open.
+  struct RoleChanged
+  {
+    Domain::PlayerRole role{Domain::PlayerRole::Player};
   };
 
   // The receiver's own mute changed; absent when lifted.
@@ -168,6 +182,55 @@ export namespace Dreamsleeve::Client::Wire
     std::string   displayName;
   };
 
+  // Moderator answers, each settling its request.
+  struct SanctionIssued
+  {
+    std::uint64_t    requestId;
+    Domain::Sanction sanction;
+  };
+
+  struct SanctionLifted
+  {
+    std::uint64_t        requestId;
+    Domain::PlayerId     playerId;
+    Domain::SanctionKind kind;
+  };
+
+  struct PlayerKicked
+  {
+    std::uint64_t    requestId;
+    Domain::PlayerId playerId;
+  };
+
+  struct SanctionList
+  {
+    std::uint64_t                 requestId;
+    std::vector<Domain::Sanction> sanctions;
+  };
+
+  struct PlayerMarks
+  {
+    std::uint64_t                   requestId;
+    Domain::PlayerId                playerId;
+    std::vector<Domain::GroundMark> marks;
+  };
+
+  struct PlayerMarksCleared
+  {
+    std::uint64_t    requestId;
+    Domain::PlayerId playerId;
+    std::uint32_t    removed;
+  };
+
+  // A message a moderator removed, on the chat lane; the request ID only on
+  // the moderator's own copy.
+  struct ChatMessageRemoved
+  {
+    std::optional<std::uint64_t> requestId;
+    Domain::ChatChannelId        channelId;
+    Domain::ChatMessageId        messageId;
+  };
+
   struct RequestRejected
   {
     std::uint64_t   requestId;
@@ -194,7 +257,15 @@ export namespace Dreamsleeve::Client::Wire
     IdentityVisibilityChanged,
     DisplayNameChanged,
     MuteChanged,
-    SessionEnded>;
+    SessionEnded,
+    RoleChanged,
+    SanctionIssued,
+    SanctionLifted,
+    PlayerKicked,
+    SanctionList,
+    PlayerMarks,
+    PlayerMarksCleared,
+    ChatMessageRemoved>;
 
   // One immutable configuration per network owner, checked by ValidateClientSettings.
   class ProtocolCodec

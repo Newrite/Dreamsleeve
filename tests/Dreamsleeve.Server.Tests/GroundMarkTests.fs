@@ -179,7 +179,7 @@ let private agentTests = testList "GroundMarksAgent" [
             let! replaced = receive fixture.Alice.Events
             equal [2UL; 3UL] (ids (own replaced))
             let! _ = next fixture.Alice
-            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 6UL, markId 3UL))
+            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 6UL, markId 3UL, false))
             let! _ = next fixture.Alice
             let! removed = receive fixture.Alice.Events
             equal [2UL] (ids (own removed))
@@ -192,6 +192,49 @@ let private agentTests = testList "GroundMarksAgent" [
             equal [] (ids (own expired))
             let! count = settled fixture fixture.Bob
             equal 0 count
+        }))
+
+    case "a moderator lists, removes and clears another player's marks; whoever saw them drops them" (fun () ->
+        let loaded = [ stored 1UL 1UL GroundMarkKind.Note 0.0f DateTimeOffset.UtcNow
+                       stored 2UL 1UL GroundMarkKind.Death 5.0f DateTimeOffset.UtcNow
+                       stored 3UL 1UL GroundMarkKind.Note 9000.0f DateTimeOffset.UtcNow ]
+        withMarksUsing options loaded 4UL (fun fixture -> task {
+            let alice = fixture.Alice.Subscription.Profile.PlayerId
+            let moderator = fixture.Bob.Subscription.ConnectionId
+            do! observe fixture fixture.Alice 1UL (located whiterun 0.0f)
+            let! _ = next fixture.Alice
+            // Every mark of the author, far ones included, newest first.
+            do! post fixture.Marks (GroundMarkCommand.ListOf(moderator, 5UL, alice))
+            match! next fixture.Bob with
+            | GroundMarkEvent.AuthorMarks(5UL, author, records) ->
+                equal alice author
+                equal [3UL; 2UL; 1UL] (ids records)
+            | other -> failwithf "Expected the author's marks: %A" other
+            // Another's mark goes only when the session asks for any author.
+            do! post fixture.Marks (GroundMarkCommand.Remove(moderator, 6UL, markId 3UL, false))
+            let! refused = next fixture.Bob
+            rejected 6UL RequestRejectionCode.GroundMarkNotFound refused
+            do! post fixture.Marks (GroundMarkCommand.Remove(moderator, 7UL, markId 3UL, true))
+            let! removed = next fixture.Bob
+            equal (GroundMarkEvent.Removed(7UL, markId 3UL, alice)) removed
+            let! remaining = receive fixture.Alice.Events
+            equal [1UL; 2UL] (ids (own remaining))
+            // Clearing by kind: the author's list and view both lose the death mark.
+            do! post fixture.Marks (GroundMarkCommand.ClearOf(moderator, 8UL, alice, [ GroundMarkKind.Death ]))
+            let! cleared = next fixture.Bob
+            equal (GroundMarkEvent.Cleared(8UL, alice, [ markId 2UL ])) cleared
+            let! notes = receive fixture.Alice.Events
+            equal [1UL] (ids (own notes))
+            let! gone = next fixture.Alice
+            equal [2UL] (removedIds (changed gone))
+            let! firstWrite = receive fixture.Writes
+            equal (GroundMarkWrite.Delete [ markId 3UL ]) firstWrite
+            let! secondWrite = receive fixture.Writes
+            equal (GroundMarkWrite.Delete [ markId 2UL ]) secondWrite
+            // Nothing of that kind left: an empty clearing still answers.
+            do! post fixture.Marks (GroundMarkCommand.ClearOf(moderator, 9UL, alice, [ GroundMarkKind.Death ]))
+            let! nothing = next fixture.Bob
+            equal (GroundMarkEvent.Cleared(9UL, alice, [])) nothing
         }))
 
     case "a placed mark is confirmed to the author and delivered to observers in range only" (fun () ->
@@ -270,15 +313,15 @@ let private agentTests = testList "GroundMarksAgent" [
             let! _ = next fixture.Alice
             let! _ = next fixture.Bob
             let! _ = receive fixture.Writes
-            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Bob.Subscription.ConnectionId, 5UL, markId 1UL))
+            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Bob.Subscription.ConnectionId, 5UL, markId 1UL, false))
             let! refused = next fixture.Bob
             rejected 5UL RequestRejectionCode.GroundMarkNotFound refused
-            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 6UL, markId 9UL))
+            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 6UL, markId 9UL, false))
             let! unknown = next fixture.Alice
             rejected 6UL RequestRejectionCode.GroundMarkNotFound unknown
-            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 7UL, markId 1UL))
+            do! post fixture.Marks (GroundMarkCommand.Remove(fixture.Alice.Subscription.ConnectionId, 7UL, markId 1UL, false))
             let! removed = next fixture.Alice
-            equal (GroundMarkEvent.Removed(7UL, markId 1UL)) removed
+            equal (GroundMarkEvent.Removed(7UL, markId 1UL, fixture.Alice.Subscription.Profile.PlayerId)) removed
             let! own = next fixture.Alice
             let! seen = next fixture.Bob
             equal [1UL] (removedIds (changed own))
@@ -619,14 +662,14 @@ let private storeTests = testList "SQLite ground marks" [
     testCase "a fresh database and a version two database both reach the current schema" (fun () ->
         use fresh = new Database()
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 8L (fresh.Scalar "PRAGMA user_version")
+        equal 9L (fresh.Scalar "PRAGMA user_version")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks")
         // Back to version two: the mark table, the admin tables and their migration markers are gone.
-        fresh.Execute "DROP TABLE sanctions; DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%'; DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_mark%'; PRAGMA user_version = 2"
+        fresh.Execute "DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%'; DROP TABLE sanctions; DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%'; DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_mark%'; PRAGMA user_version = 2"
         Expect.throws (fun () -> fresh.Scalar "SELECT count(*) FROM ground_marks" |> ignore) "table is gone"
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 8L (fresh.Scalar "PRAGMA user_version")
-        equal 8L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
+        equal 9L (fresh.Scalar "PRAGMA user_version")
+        equal 9L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks"))
 
     testCase "a version three database keeps its marks and gains the pseudonym and game date columns" (fun () ->
@@ -635,9 +678,9 @@ let private storeTests = testList "SQLite ground marks" [
         let alice = register database "alice"
         let mark = GroundMark.create (markId 1UL) alice.PlayerId (note "before") (placement whiterun 1.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
         SqliteGroundMarkStore.insert database.Config mark token |> ok
-        database.Execute "DROP TABLE sanctions; DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%'; DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; ALTER TABLE ground_marks DROP COLUMN game_era; ALTER TABLE ground_marks DROP COLUMN game_year; ALTER TABLE ground_marks DROP COLUMN game_month; ALTER TABLE ground_marks DROP COLUMN game_day; ALTER TABLE ground_marks DROP COLUMN game_day_of_week; ALTER TABLE ground_marks DROP COLUMN game_hour; ALTER TABLE ground_marks DROP COLUMN game_minute; DELETE FROM __migrondi_migrations WHERE name LIKE '%game_date%'; PRAGMA user_version = 3"
+        database.Execute "DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%'; DROP TABLE sanctions; DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%'; DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; ALTER TABLE ground_marks DROP COLUMN game_era; ALTER TABLE ground_marks DROP COLUMN game_year; ALTER TABLE ground_marks DROP COLUMN game_month; ALTER TABLE ground_marks DROP COLUMN game_day; ALTER TABLE ground_marks DROP COLUMN game_day_of_week; ALTER TABLE ground_marks DROP COLUMN game_hour; ALTER TABLE ground_marks DROP COLUMN game_minute; DELETE FROM __migrondi_migrations WHERE name LIKE '%game_date%'; PRAGMA user_version = 3"
         SqliteAccountStore.initialize database.Config |> ok
-        equal 8L (database.Scalar "PRAGMA user_version")
+        equal 9L (database.Scalar "PRAGMA user_version")
         let loaded = SqliteGroundMarkStore.loadAll database.Config token |> ok
         equal [ValueNone] (loaded.Marks |> List.map (fun entry -> entry.Mark.Pseudonym))
         equal [ValueNone] (loaded.Marks |> List.map (fun entry -> entry.Mark.GameDate))

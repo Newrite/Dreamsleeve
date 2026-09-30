@@ -39,6 +39,8 @@ export namespace Protocol::Chat
     HiddenIdentityNotAllowed = 14,
     DisplayNameChangeNotAllowed = 15,
     Muted = 16,
+    NotPermitted = 17,
+    TargetNotFound = 18,
   };
 }
 
@@ -154,5 +156,24 @@ export namespace Protocol::Chat
     AccessRevoked = 1,
     Banned = 2,
     Kicked = 3,
+  };
+}
+
+export namespace Protocol::Chat
+{
+  enum class PlayerRole : std::int32_t
+  {
+    Player = 0,
+    Moderator = 1,
+  };
+}
+
+export namespace Protocol::Chat
+{
+  enum class SanctionKind : std::int32_t
+  {
+    Unspecified = 0,
+    Mute = 1,
+    Ban = 2,
   };
 }

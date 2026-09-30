@@ -40,6 +40,7 @@ type private Fixture = {
     Marks: Channel<GroundMarkCommand>
     Host: Channel<SessionHostCommand>
     Names: Channel<DisplayNameChangeRequest>
+    Moderation: Channel<ModerationRequest>
 }
 
 let private rules =
@@ -54,8 +55,10 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     let markCommands = Channel.CreateUnbounded<GroundMarkCommand>()
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
     let nameRequests = Channel.CreateUnbounded<DisplayNameChangeRequest>()
+    let moderationRequests = Channel.CreateUnbounded<ModerationRequest>()
     use authentication = Agent.Start(AgentOptions.create "authentication", collect queries)
     use names = Agent.Start(AgentOptions.create "names", collect nameRequests)
+    use moderation' = Agent.Start(AgentOptions.create "account-moderation", collect moderationRequests)
     use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
     use system = Agent.Start(AgentOptions.create "system", collect systemCommands)
     use presence = createPresence presenceCommands
@@ -69,11 +72,12 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     }
     let game = Settings.game ServerConfig.defaults { ServerRuntimeOptions.defaults with Player = settings } identity announcements GroundMarkOptions.defaults
     use player = PlayerSession.start game moderation
-                     (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
+                     (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (moderation'.Ref.TryReliable().Value)
+                     (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
     let fixture = { Request = request; Player = player; Authentication = queries;
                     Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Host = hostCommands
-                    Names = nameRequests }
+                    Names = nameRequests; Moderation = moderationRequests }
     do! run fixture
     if not player.Completion.IsCompleted then player.Abort()
     let! _ = terminal player.Completion
@@ -854,8 +858,10 @@ let tests = testList "PlayerSession" ([
         }
         use marks = Agent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
         use names = Agent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<DisplayNameChangeRequest>()))
+        use moderation = Agent.Start(AgentOptions.create "account-moderation", collect (Channel.CreateUnbounded<ModerationRequest>()))
         let game = Settings.game ServerConfig.defaults { ServerRuntimeOptions.defaults with Player = options } IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults
-        use player = PlayerSession.start game Moderation.empty (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+        use player = PlayerSession.start game Moderation.empty (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (moderation.Ref.TryReliable().Value)
+                         (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
@@ -1031,6 +1037,105 @@ let tests = testList "PlayerSession" ([
                 equal RequestRejectionCode.DisplayNameChangeNotAllowed rejection.Code
             | other -> failwithf "Expected a refusal: %A" other
             equal 0 fixture.Names.Reader.Count
+        }))
+
+    case "moderation is a moderator's: a player is refused, a moderator's requests reach their owners, settle and leave audit lines" (fun () ->
+        withIdentity IdentityOptions.defaults HiddenIdentity.Shown (fun fixture -> task {
+            let! profile, chat, _ = ready fixture
+            let bob = PlayerId.create 7UL |> ok
+            let reason = SanctionReason.create "Флуд" |> ok
+            let sent response = SessionHostCommand.Send(fixture.Request.ConnectionId, response)
+            let refused requestId code = task {
+                let! answer = receive fixture.Host
+                match answer with
+                | SessionHostCommand.Send(_, (ServerResponse.ChatRejected(id, rejection) | ServerResponse.RequestRejected(id, rejection))) ->
+                    equal requestId id
+                    equal code rejection.Code
+                | other -> failwithf "Expected a refusal: %A" other
+            }
+            let audited action details = task {
+                let! line = receive fixture.Moderation
+                match line.Command with
+                | ModerationCommand.Record(moderator, record) ->
+                    equal profile.PlayerId moderator
+                    equal action record.Action
+                    equal (AuditTarget.key (AuditTarget.Player bob)) (AuditTarget.key record.Target)
+                    equal details record.Details
+                | other -> failwithf "Expected an audit line: %A" other
+                return line
+            }
+            do! post fixture.Player (PlayerSessionMessage.Moderate(2UL, ModerationAction.Kick(bob, reason)))
+            do! refused 2UL RequestRejectionCode.NotPermitted
+            equal 0 fixture.Moderation.Reader.Count
+            // The panel grants the role while the session is open.
+            do! post fixture.Player (PlayerSessionMessage.RoleChanged PlayerRole.Moderator)
+            let! told = receive fixture.Host
+            equal (sent (ServerResponse.RoleChanged PlayerRole.Moderator)) told
+            // The account service decides on the target; its refusal settles the request.
+            do! post fixture.Player (PlayerSessionMessage.Moderate(3UL, ModerationAction.Kick(bob, reason)))
+            let! kick = receive fixture.Moderation
+            equal (ModerationCommand.Kick(bob, reason, profile.PlayerId)) kick.Command
+            do! deliver kick.ReplyTo { OperationId = kick.OperationId; Result = Error(ModerationError.Refused SanctionError.NotAllowed) }
+            do! refused 3UL RequestRejectionCode.NotPermitted
+            do! post fixture.Player (PlayerSessionMessage.Moderate(4UL, ModerationAction.Sanction(bob, SanctionKind.Mute, SanctionTerm.UntilLifted, reason)))
+            let! sanction = receive fixture.Moderation
+            let order = { Target = bob; Kind = SanctionKind.Mute; Term = SanctionTerm.UntilLifted; Reason = reason; IssuedBy = SanctionIssuer.Moderator profile.PlayerId }
+            equal (ModerationCommand.Sanction order) sanction.Command
+            let mute = Sanction.issue (SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
+            do! deliver sanction.ReplyTo { OperationId = sanction.OperationId; Result = Ok(ModerationResult.Sanctioned mute) }
+            let! issued = receive fixture.Host
+            equal (sent (ServerResponse.SanctionIssued(4UL, mute))) issued
+            // A chat removal goes to the channel owner; the requester's copy settles it.
+            let author = PlayerData.create bob (Username.create 32 "bob" |> ok) (DisplayName.create 64 "Bob" |> ok)
+            let message = publication author 9UL
+            do! post fixture.Player (PlayerSessionMessage.Moderate(5UL, ModerationAction.DeleteMessage(globalId, message.MessageId)))
+            let! command = receive fixture.Chat
+            let removal = match command with ChatRoomCommand.Remove removal -> removal | other -> failwithf "Expected a removal: %A" other
+            equal (5UL, message.MessageId) (removal.RequestId, removal.MessageId)
+            do! deliver removal.ReplyTo (ChatRoomEvent.Removed(ValueSome 5UL, message))
+            let! removed = receive fixture.Host
+            equal (sent (ServerResponse.ChatMessageRemoved(ValueSome 5UL, globalId, message.MessageId))) removed
+            let! _ = audited AdminAction.DeletedChatMessage "message 9"
+            // Another member's copy only drops the message.
+            do! deliver chat.Events (ChatRoomEvent.Removed(ValueNone, message))
+            let! seen = receive fixture.Host
+            equal (sent (ServerResponse.ChatMessageRemoved(ValueNone, globalId, message.MessageId))) seen
+            // Marks: a moderator removes another's, and clears them by kind.
+            let mark = GroundMarkId.create 4UL |> ok
+            do! post fixture.Player (PlayerSessionMessage.RemoveGroundMark(6UL, mark))
+            let! remove = receive fixture.Marks
+            equal (GroundMarkCommand.Remove(fixture.Request.ConnectionId, 6UL, mark, true)) remove
+            do! post fixture.Player (PlayerSessionMessage.GroundMarkEvent(GroundMarkEvent.Removed(6UL, mark, bob)))
+            let! markGone = receive fixture.Host
+            equal (sent (ServerResponse.GroundMarkRemoved(6UL, mark))) markGone
+            let! _ = audited AdminAction.RemovedGroundMark "mark 4"
+            do! post fixture.Player (PlayerSessionMessage.Moderate(7UL, ModerationAction.ClearMarks(bob, [ GroundMarkKind.Death ])))
+            let! clear = receive fixture.Marks
+            equal (GroundMarkCommand.ClearOf(fixture.Request.ConnectionId, 7UL, bob, [ GroundMarkKind.Death ])) clear
+            do! post fixture.Player (PlayerSessionMessage.GroundMarkEvent(GroundMarkEvent.Cleared(7UL, bob, [ mark ])))
+            let! cleared = receive fixture.Host
+            equal (sent (ServerResponse.PlayerMarksCleared(7UL, bob, 1))) cleared
+            let! line = audited AdminAction.ClearedGroundMarks "1 marks"
+            // An audit line's answer settles nothing.
+            do! deliver line.ReplyTo { OperationId = line.OperationId; Result = Ok ModerationResult.Recorded }
+            let! current = read fixture.Player
+            check (Result.isOk current) "An audit answer leaves the session open."
+            equal 0 fixture.Moderation.Reader.Count
+        }))
+
+    case "a moderator's own mark leaves no audit line" (fun () ->
+        withIdentity IdentityOptions.defaults HiddenIdentity.Shown (fun fixture -> task {
+            let! profile, _, _ = ready fixture
+            do! post fixture.Player (PlayerSessionMessage.RoleChanged PlayerRole.Moderator)
+            let! _ = receive fixture.Host
+            let mark = GroundMarkId.create 4UL |> ok
+            do! post fixture.Player (PlayerSessionMessage.RemoveGroundMark(2UL, mark))
+            let! _ = receive fixture.Marks
+            do! post fixture.Player (PlayerSessionMessage.GroundMarkEvent(GroundMarkEvent.Removed(2UL, mark, profile.PlayerId)))
+            let! removed = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.GroundMarkRemoved(2UL, mark))) removed
+            let! _ = read fixture.Player
+            equal 0 fixture.Moderation.Reader.Count
         }))
 
     case "a muted player reads but does not write; a death mark still goes and a lifted mute writes again" (fun () ->

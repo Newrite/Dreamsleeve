@@ -277,7 +277,8 @@ inline constexpr SessionOpened::Impl_::Impl_(
         announcements_{nullptr},
         mute_{nullptr},
         self_player_id_{::uint64_t{0u}},
-        hidden_identity_{static_cast< ::Dreamsleeve::Protocol::Chat::HiddenIdentity >(0)} {}
+        hidden_identity_{static_cast< ::Dreamsleeve::Protocol::Chat::HiddenIdentity >(0)},
+        role_{static_cast< ::Dreamsleeve::Protocol::Chat::PlayerRole >(0)} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR SessionOpened::SessionOpened(::_pbi::ConstantInitialized)
@@ -318,7 +319,7 @@ const ::uint32_t
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_.server_name_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_.self_player_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_.players_),
@@ -327,6 +328,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_.own_pseudonym_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_.hidden_identity_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_.mute_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_.role_),
         2,
         6,
         0,
@@ -335,6 +337,7 @@ const ::uint32_t
         3,
         7,
         5,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::MuteState, _impl_._has_bits_),
         5, // hasbit index offset
@@ -385,13 +388,13 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::Dreamsleeve::Protocol::Chat::OpenSession)},
         {7, sizeof(::Dreamsleeve::Protocol::Chat::JoinAsGuest)},
         {8, sizeof(::Dreamsleeve::Protocol::Chat::SessionOpened)},
-        {27, sizeof(::Dreamsleeve::Protocol::Chat::MuteState)},
-        {34, sizeof(::Dreamsleeve::Protocol::Chat::MuteChanged)},
-        {39, sizeof(::Dreamsleeve::Protocol::Chat::SessionEnded)},
-        {48, sizeof(::Dreamsleeve::Protocol::Chat::SetIdentityVisibility)},
-        {53, sizeof(::Dreamsleeve::Protocol::Chat::IdentityVisibilityChanged)},
-        {60, sizeof(::Dreamsleeve::Protocol::Chat::ChangeDisplayName)},
-        {65, sizeof(::Dreamsleeve::Protocol::Chat::DisplayNameChanged)},
+        {29, sizeof(::Dreamsleeve::Protocol::Chat::MuteState)},
+        {36, sizeof(::Dreamsleeve::Protocol::Chat::MuteChanged)},
+        {41, sizeof(::Dreamsleeve::Protocol::Chat::SessionEnded)},
+        {50, sizeof(::Dreamsleeve::Protocol::Chat::SetIdentityVisibility)},
+        {55, sizeof(::Dreamsleeve::Protocol::Chat::IdentityVisibilityChanged)},
+        {62, sizeof(::Dreamsleeve::Protocol::Chat::ChangeDisplayName)},
+        {67, sizeof(::Dreamsleeve::Protocol::Chat::DisplayNameChanged)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_OpenSession_default_instance_._instance,
@@ -408,60 +411,63 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
 const char descriptor_table_protodef_session_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\rsession.proto\022\031Dreamsleeve.Protocol.Ch"
-    "at\032\nchat.proto\032\014player.proto\"\215\001\n\013OpenSes"
-    "sion\022\026\n\016session_ticket\030\003 \001(\t\022B\n\017hidden_i"
-    "dentity\030\004 \001(\0162).Dreamsleeve.Protocol.Cha"
-    "t.HiddenIdentityJ\004\010\001\020\002J\004\010\002\020\003R\010usernameR\014"
-    "display_name\"\r\n\013JoinAsGuest\"\320\003\n\rSessionO"
-    "pened\022\023\n\013server_name\030\006 \001(\t\022\026\n\016self_playe"
-    "r_id\030\001 \001(\004\0226\n\007players\030\005 \003(\0132%.Dreamsleev"
-    "e.Protocol.Chat.PlayerInfo\022D\n\rannounceme"
-    "nts\030\007 \001(\0132-.Dreamsleeve.Protocol.Chat.An"
-    "nouncementPolicy\0228\n\010channels\030\010 \003(\0132&.Dre"
-    "amsleeve.Protocol.Chat.ChatChannel\022\032\n\row"
-    "n_pseudonym\030\t \001(\tH\000\210\001\001\022B\n\017hidden_identit"
-    "y\030\n \001(\0162).Dreamsleeve.Protocol.Chat.Hidd"
-    "enIdentity\0222\n\004mute\030\013 \001(\0132$.Dreamsleeve.P"
-    "rotocol.Chat.MuteStateB\020\n\016_own_pseudonym"
-    "J\004\010\002\020\003J\004\010\003\020\004J\004\010\004\020\005R\021global_channel_idR\017r"
-    "ecent_messages\"I\n\tMuteState\022\016\n\006reason\030\001 "
-    "\001(\t\022\032\n\runtil_unix_ms\030\002 \001(\003H\000\210\001\001B\020\n\016_unti"
-    "l_unix_ms\"A\n\013MuteChanged\0222\n\004mute\030\001 \001(\0132$"
-    ".Dreamsleeve.Protocol.Chat.MuteState\"\207\001\n"
-    "\014SessionEnded\022;\n\006reason\030\001 \001(\0162+.Dreamsle"
-    "eve.Protocol.Chat.SessionEndReason\022\014\n\004te"
-    "xt\030\002 \001(\t\022\032\n\runtil_unix_ms\030\003 \001(\003H\000\210\001\001B\020\n\016"
-    "_until_unix_ms\"R\n\025SetIdentityVisibility\022"
-    "9\n\006hidden\030\001 \001(\0162).Dreamsleeve.Protocol.C"
-    "hat.HiddenIdentity\"|\n\031IdentityVisibility"
-    "Changed\022\026\n\tpseudonym\030\001 \001(\tH\000\210\001\001\0229\n\006hidde"
-    "n\030\002 \001(\0162).Dreamsleeve.Protocol.Chat.Hidd"
-    "enIdentityB\014\n\n_pseudonym\")\n\021ChangeDispla"
-    "yName\022\024\n\014display_name\030\001 \001(\t\"*\n\022DisplayNa"
-    "meChanged\022\024\n\014display_name\030\001 \001(\t*s\n\016Hidde"
-    "nIdentity\022\030\n\024HIDDEN_IDENTITY_NONE\020\000\022\036\n\032H"
-    "IDDEN_IDENTITY_EVERYWHERE\020\001\022\'\n#HIDDEN_ID"
-    "ENTITY_EXCEPT_GROUND_MARKS\020\002*\233\001\n\020Session"
-    "EndReason\022\"\n\036SESSION_END_REASON_UNSPECIF"
-    "IED\020\000\022%\n!SESSION_END_REASON_ACCESS_REVOK"
-    "ED\020\001\022\035\n\031SESSION_END_REASON_BANNED\020\002\022\035\n\031S"
-    "ESSION_END_REASON_KICKED\020\003b\006proto3"
+    "at\032\nchat.proto\032\014player.proto\032\020moderation"
+    ".proto\"\215\001\n\013OpenSession\022\026\n\016session_ticket"
+    "\030\003 \001(\t\022B\n\017hidden_identity\030\004 \001(\0162).Dreams"
+    "leeve.Protocol.Chat.HiddenIdentityJ\004\010\001\020\002"
+    "J\004\010\002\020\003R\010usernameR\014display_name\"\r\n\013JoinAs"
+    "Guest\"\205\004\n\rSessionOpened\022\023\n\013server_name\030\006"
+    " \001(\t\022\026\n\016self_player_id\030\001 \001(\004\0226\n\007players\030"
+    "\005 \003(\0132%.Dreamsleeve.Protocol.Chat.Player"
+    "Info\022D\n\rannouncements\030\007 \001(\0132-.Dreamsleev"
+    "e.Protocol.Chat.AnnouncementPolicy\0228\n\010ch"
+    "annels\030\010 \003(\0132&.Dreamsleeve.Protocol.Chat"
+    ".ChatChannel\022\032\n\rown_pseudonym\030\t \001(\tH\000\210\001\001"
+    "\022B\n\017hidden_identity\030\n \001(\0162).Dreamsleeve."
+    "Protocol.Chat.HiddenIdentity\0222\n\004mute\030\013 \001"
+    "(\0132$.Dreamsleeve.Protocol.Chat.MuteState"
+    "\0223\n\004role\030\014 \001(\0162%.Dreamsleeve.Protocol.Ch"
+    "at.PlayerRoleB\020\n\016_own_pseudonymJ\004\010\002\020\003J\004\010"
+    "\003\020\004J\004\010\004\020\005R\021global_channel_idR\017recent_mes"
+    "sages\"I\n\tMuteState\022\016\n\006reason\030\001 \001(\t\022\032\n\run"
+    "til_unix_ms\030\002 \001(\003H\000\210\001\001B\020\n\016_until_unix_ms"
+    "\"A\n\013MuteChanged\0222\n\004mute\030\001 \001(\0132$.Dreamsle"
+    "eve.Protocol.Chat.MuteState\"\207\001\n\014SessionE"
+    "nded\022;\n\006reason\030\001 \001(\0162+.Dreamsleeve.Proto"
+    "col.Chat.SessionEndReason\022\014\n\004text\030\002 \001(\t\022"
+    "\032\n\runtil_unix_ms\030\003 \001(\003H\000\210\001\001B\020\n\016_until_un"
+    "ix_ms\"R\n\025SetIdentityVisibility\0229\n\006hidden"
+    "\030\001 \001(\0162).Dreamsleeve.Protocol.Chat.Hidde"
+    "nIdentity\"|\n\031IdentityVisibilityChanged\022\026"
+    "\n\tpseudonym\030\001 \001(\tH\000\210\001\001\0229\n\006hidden\030\002 \001(\0162)"
+    ".Dreamsleeve.Protocol.Chat.HiddenIdentit"
+    "yB\014\n\n_pseudonym\")\n\021ChangeDisplayName\022\024\n\014"
+    "display_name\030\001 \001(\t\"*\n\022DisplayNameChanged"
+    "\022\024\n\014display_name\030\001 \001(\t*s\n\016HiddenIdentity"
+    "\022\030\n\024HIDDEN_IDENTITY_NONE\020\000\022\036\n\032HIDDEN_IDE"
+    "NTITY_EVERYWHERE\020\001\022\'\n#HIDDEN_IDENTITY_EX"
+    "CEPT_GROUND_MARKS\020\002*\233\001\n\020SessionEndReason"
+    "\022\"\n\036SESSION_END_REASON_UNSPECIFIED\020\000\022%\n!"
+    "SESSION_END_REASON_ACCESS_REVOKED\020\001\022\035\n\031S"
+    "ESSION_END_REASON_BANNED\020\002\022\035\n\031SESSION_EN"
+    "D_REASON_KICKED\020\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_session_2eproto_deps[2] = {
+    descriptor_table_session_2eproto_deps[3] = {
         &::descriptor_table_chat_2eproto,
+        &::descriptor_table_moderation_2eproto,
         &::descriptor_table_player_2eproto,
 };
 static ::absl::once_flag descriptor_table_session_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_session_2eproto = {
     false,
     false,
-    1554,
+    1625,
     descriptor_table_protodef_session_2eproto,
     "session.proto",
     &descriptor_table_session_2eproto_once,
     descriptor_table_session_2eproto_deps,
-    2,
+    3,
     10,
     schemas,
     file_default_instances,
@@ -974,9 +980,9 @@ SessionOpened::SessionOpened(
                offsetof(Impl_, self_player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, self_player_id_),
-           offsetof(Impl_, hidden_identity_) -
+           offsetof(Impl_, role_) -
                offsetof(Impl_, self_player_id_) +
-               sizeof(Impl_::hidden_identity_));
+               sizeof(Impl_::role_));
 
   // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.SessionOpened)
 }
@@ -994,9 +1000,9 @@ inline void SessionOpened::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, announcements_),
            0,
-           offsetof(Impl_, hidden_identity_) -
+           offsetof(Impl_, role_) -
                offsetof(Impl_, announcements_) +
-               sizeof(Impl_::hidden_identity_));
+               sizeof(Impl_::role_));
 }
 SessionOpened::~SessionOpened() {
   // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.SessionOpened)
@@ -1075,16 +1081,16 @@ SessionOpened::GetClassData() const {
   return SessionOpened_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<4, 8, 4, 80, 2>
+const ::_pbi::TcParseTable<4, 9, 4, 80, 2>
 SessionOpened::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_._has_bits_),
     0, // no _extensions_
-    11, 120,  // max_field_number, fast_idx_mask
+    12, 120,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294965262,  // skipmap
+    4294963214,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    8,  // num_field_entries
+    9,  // num_field_entries
     4,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     SessionOpened_class_data_.base(),
@@ -1130,7 +1136,10 @@ SessionOpened::_table_ = {
     {::_pbi::TcParser::FastMtS1,
      {90, 5, 3,
       PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_.mute_)}},
-    {::_pbi::TcParser::MiniParse, {}},
+    // .Dreamsleeve.Protocol.Chat.PlayerRole role = 12;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SessionOpened, _impl_.role_), 8>(),
+     {96, 8, 0,
+      PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_.role_)}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
@@ -1153,6 +1162,8 @@ SessionOpened::_table_ = {
     {PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_.hidden_identity_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // .Dreamsleeve.Protocol.Chat.MuteState mute = 11;
     {PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_.mute_), _Internal::kHasBitsOffset + 5, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.PlayerRole role = 12;
+    {PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_.role_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerInfo>()},
@@ -1202,6 +1213,7 @@ PROTOBUF_NOINLINE void SessionOpened::Clear() {
         reinterpret_cast<char*>(&_impl_.hidden_identity_) -
         reinterpret_cast<char*>(&_impl_.self_player_id_)) + sizeof(_impl_.hidden_identity_));
   }
+  _impl_.role_ = 0;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1301,6 +1313,15 @@ PROTOBUF_NOINLINE void SessionOpened::Clear() {
         stream);
   }
 
+  // .Dreamsleeve.Protocol.Chat.PlayerRole role = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_role() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          12, this_._internal_role(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1378,6 +1399,15 @@ PROTOBUF_NOINLINE void SessionOpened::Clear() {
       }
     }
   }
+   {
+    // .Dreamsleeve.Protocol.Chat.PlayerRole role = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_role() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_role());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -1447,6 +1477,11 @@ void SessionOpened::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_role() != 0) {
+      _this->_impl_.role_ = from._impl_.role_;
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -1471,8 +1506,8 @@ void SessionOpened::InternalSwap(SessionOpened* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.server_name_, &other->_impl_.server_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.own_pseudonym_, &other->_impl_.own_pseudonym_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_.hidden_identity_)
-      + sizeof(SessionOpened::_impl_.hidden_identity_)
+      PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_.role_)
+      + sizeof(SessionOpened::_impl_.role_)
       - PROTOBUF_FIELD_OFFSET(SessionOpened, _impl_.announcements_)>(
           reinterpret_cast<char*>(&_impl_.announcements_),
           reinterpret_cast<char*>(&other->_impl_.announcements_));

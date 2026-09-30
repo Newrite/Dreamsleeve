@@ -268,6 +268,22 @@ export namespace Domain
     bool operator==(const SessionEnd&) const = default;
   };
 
+  using PlayerRole   = ::Protocol::Chat::PlayerRole;
+  using SanctionKind = ::Protocol::Chat::SanctionKind;
+
+  // A mute or a ban in force, as moderators list it: the player by PlayerId
+  // only, the name is the client's to resolve.
+  struct Sanction
+  {
+    PlayerId                    playerId{};
+    SanctionKind                kind{SanctionKind::Mute};
+    std::string                 reason;
+    std::int64_t                issuedAtUnixMs{};
+    std::optional<std::int64_t> untilUnixMs;  // Absent: until lifted.
+
+    bool operator==(const Sanction&) const = default;
+  };
+
   // Where a mark stands: the space, the point and the author's heading (Z
   // angle, radians) so the visual can face the way the author looked.
   struct GroundMarkPlacement

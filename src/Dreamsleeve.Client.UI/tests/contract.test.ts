@@ -55,6 +55,41 @@ const commands: { [K in Command["type"]]: Extract<Command, { type: K }> } = {
     hiding: "exceptGroundMarks",
   },
   changeDisplayName: { type: "changeDisplayName", displayName: "Новое имя" },
+  sanctionPlayer: {
+    type: "sanctionPlayer",
+    requestId: "m1",
+    playerId: "7",
+    kind: "mute",
+    minutes: 60,
+    reason: "Флуд",
+  },
+  liftSanction: {
+    type: "liftSanction",
+    requestId: "m2",
+    playerId: "7",
+    kind: "ban",
+  },
+  kickPlayer: {
+    type: "kickPlayer",
+    requestId: "m3",
+    playerId: "7",
+    reason: "Остынь",
+  },
+  listSanctions: { type: "listSanctions", requestId: "m4" },
+  listPlayerMarks: { type: "listPlayerMarks", requestId: "m5", playerId: "7" },
+  clearPlayerMarks: {
+    type: "clearPlayerMarks",
+    requestId: "m6",
+    playerId: "7",
+    notes: false,
+    deaths: true,
+  },
+  deleteChatMessage: {
+    type: "deleteChatMessage",
+    requestId: "m7",
+    channelId: "1",
+    messageId: "11",
+  },
 };
 
 describe("bridge contract with the host", () => {

@@ -63,6 +63,14 @@ export namespace Dreamsleeve::Client
     std::vector<ChatMessage> messages;
   };
 
+  // A moderator removed the message. Evicted from the cache already, it still
+  // leaves the recipient's longer history.
+  struct ChatMessageDeleted
+  {
+    ChatChannelId channelId;
+    ChatMessageId messageId;
+  };
+
   using ClientUpdate = std::variant<
     SelfPlayerAssigned,
     OnlinePlayersReplaced,
@@ -72,6 +80,7 @@ export namespace Dreamsleeve::Client
     PlayerMovementReceived,
     PlayerMetadataUpdated,
     ChatMessagesReceived,
+    ChatMessageDeleted,
     GroundMarksChanged,
     OwnGroundMarksReplaced>;
 
@@ -251,7 +260,8 @@ private:
       else if constexpr (
         std::is_same_v<Update, SelfPlayerAssigned> || std::is_same_v<Update, OnlinePlayersReplaced> ||
         std::is_same_v<Update, PlayerMetadataUpdated> || std::is_same_v<Update, ChatMessagesReceived> ||
-        std::is_same_v<Update, GroundMarksChanged> || std::is_same_v<Update, OwnGroundMarksReplaced>)
+        std::is_same_v<Update, ChatMessageDeleted> || std::is_same_v<Update, GroundMarksChanged> ||
+        std::is_same_v<Update, OwnGroundMarksReplaced>)
       {
         // No new motion, or a complete online replacement already supersedes it.
       }
@@ -301,13 +311,15 @@ private:
       }
     }
 
+    // Consecutive removals of one kind and channel travel as one change.
+    template <class Removal>
     void AppendChatContent(ChatChannelId channelId, std::vector<ChatMessageId> messageIds)
     {
       if (messageIds.empty()) return;
 
       if (!pendingChanges.chatContent.empty())
       {
-        if (auto* last = std::get_if<ChatMessagesRemoved>(&pendingChanges.chatContent.back()); last && last->channelId == channelId)
+        if (auto* last = std::get_if<Removal>(&pendingChanges.chatContent.back()); last && last->channelId == channelId)
         {
           last->messageIds.reserve(last->messageIds.size() + messageIds.size());
           last->messageIds.insert(
@@ -318,7 +330,7 @@ private:
         }
       }
 
-      pendingChanges.chatContent.emplace_back(ChatMessagesRemoved{.channelId = channelId, .messageIds = std::move(messageIds)});
+      pendingChanges.chatContent.emplace_back(Removal{.channelId = channelId, .messageIds = std::move(messageIds)});
     }
 
     void AppendChatContent(ChatChannelId channelId, std::vector<ChatMessage> messages)
@@ -344,7 +356,7 @@ private:
 
       // Preserve cache transition order across multiple Merge calls between
       // TakeChanges invocations. Removals precede additions for one merge.
-      AppendChatContent(channelId, std::move(result.removedMessageIds));
+      AppendChatContent<ChatMessagesEvicted>(channelId, std::move(result.removedMessageIds));
       AppendChatContent(channelId, std::move(result.addedMessages));
     }
 
@@ -380,8 +392,8 @@ private:
         MarkPlayer(update.player.data.playerId);
       }
       else if constexpr (
-        !std::is_same_v<Update, ChatMessagesReceived> && !std::is_same_v<Update, GroundMarksChanged> &&
-        !std::is_same_v<Update, OwnGroundMarksReplaced>)
+        !std::is_same_v<Update, ChatMessagesReceived> && !std::is_same_v<Update, ChatMessageDeleted> &&
+        !std::is_same_v<Update, GroundMarksChanged> && !std::is_same_v<Update, OwnGroundMarksReplaced>)
       {
         MarkPlayer(update.playerId);
       }
@@ -441,6 +453,19 @@ private:
       }
 
       RecordChatMerge(update.channelId, std::move(*result));
+      return {};
+    }
+
+    Domain::OperationResult ApplyOne(const ChatMessageDeleted& update)
+    {
+      auto found = chats.find(update.channelId);
+      if (found == chats.end())
+      {
+        return std::unexpected(Domain::Error{Domain::ErrorCode::UnknownChannel, "channelId"});
+      }
+
+      found->second.Erase(update.messageId);
+      if (!pendingChanges.requiresSnapshot) AppendChatContent<ChatMessagesDeleted>(update.channelId, {update.messageId});
       return {};
     }
 

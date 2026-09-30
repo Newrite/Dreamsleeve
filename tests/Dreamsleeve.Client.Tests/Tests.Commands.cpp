@@ -131,7 +131,7 @@ TEST_CASE("Ignoring saves, drops the bubble, re-projects and answers with the li
   Fixture fixture;
   fixture.Ready();
   const auto now = Bubbles::Clock::now();
-  fixture.bubbles.Post(7, "hello", now);
+  fixture.bubbles.Post(7, 7, "hello", now);
 
   auto ignored = fixture.Run(R"({"type":"ignore","playerId":"7"})");
   CHECK(fixture.saves == 1);
@@ -176,7 +176,7 @@ TEST_CASE("Saved settings apply the activation key and report the revision with 
 TEST_CASE("Display settings take only the instant keys, clear the bubbles and save")
 {
   Fixture fixture;
-  fixture.bubbles.Post(7, "hello", Bubbles::Clock::now());
+  fixture.bubbles.Post(7, 7, "hello", Bubbles::Clock::now());
   const auto output = fixture.Run(R"({"type":"displaySettings","settings":{"textFilter":"mask","fontSize":24}})");
   CHECK(fixture.ui.ui.chat.textFilter == "mask");
   CHECK(fixture.ui.ui.chat.fontSize == UiSettings{}.fontSize);

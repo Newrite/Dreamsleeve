@@ -295,9 +295,9 @@ TEST_CASE("ClientModel emits ordered chat deltas instead of invalidating full ch
   model.TakeChanges(changes);
   CHECK(changes.chats.empty());
   REQUIRE(changes.chatContent.size() == 2);
-  REQUIRE(std::holds_alternative<ChatMessagesRemoved>(changes.chatContent[0]));
+  REQUIRE(std::holds_alternative<ChatMessagesEvicted>(changes.chatContent[0]));
   REQUIRE(std::holds_alternative<ChatMessagesAdded>(changes.chatContent[1]));
-  const auto& removed = std::get<ChatMessagesRemoved>(changes.chatContent[0]);
+  const auto& removed = std::get<ChatMessagesEvicted>(changes.chatContent[0]);
   const auto& added   = std::get<ChatMessagesAdded>(changes.chatContent[1]);
   REQUIRE(removed.messageIds.size() == 1);
   CHECK(removed.messageIds[0] == 1);

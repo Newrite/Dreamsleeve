@@ -19,6 +19,7 @@ import type {
 } from "../bridge/types";
 import { idleAuth } from "./auth";
 import { muted, muteText, sessionEndText } from "./moderation";
+import { idleModerator, makeModerator, type ModeratorState } from "./moderator";
 import { defaults, instantKeys } from "../bridge/settings.generated";
 // The settings the host applies and saves at once (displaySettings).
 const instantOf = (settings: Settings) =>
@@ -46,7 +47,15 @@ const chronological = (messages: Message[]) =>
 const confirmedKey = (p: PendingMessage) =>
   p.messageId === undefined ? undefined : messageKey(p.channelId, p.messageId);
 export type Panel =
-  "online" | "profile" | "stats" | "settings" | "account" | "marks" | null;
+  | "online"
+  | "profile"
+  | "stats"
+  | "settings"
+  | "account"
+  | "marks"
+  | "ignored"
+  | "moderation"
+  | null;
 export interface PendingMessage {
   channelId: string;
   text: string;
@@ -78,7 +87,7 @@ function makeRoom(pending: Record<string, PendingMessage>) {
 // unknown row leaves the passive HUD after the same time, while an active chat
 // keeps it until the player retries or dismisses.
 export const PENDING_TIMEOUT = 15000;
-export interface ChatState {
+export interface ChatState extends ModeratorState {
   channels: Channel[];
   messages: Message[];
   receivedAt: Record<string, number>;
@@ -107,13 +116,15 @@ export interface ChatState {
   savedRevision: number;
   // Personal ignore list of the current server, named by the host.
   ignored: { id: string; name: string }[];
-  // Context menu of a message author, at viewport coordinates.
+  // Context menu of a message author, at viewport coordinates, with the
+  // message it was opened on.
   authorMenu: {
     playerId: string;
     name: string;
     x: number;
     y: number;
     pseudonymous?: boolean;
+    message?: { channelId: string; id: string };
   } | null;
   // "Hide my name from other players", as the host reports it.
   identity: IdentityState;
@@ -207,7 +218,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
     groundMarksSupported: false,
     groundMarks: [],
     nearbyMarks: [],
+    ...idleModerator,
   }));
+  const moderator = makeModerator(store, send);
   let sequence = 0;
   let refusals = 0;
   // Removal requests in flight: request id -> mark id, for the result notice.
@@ -338,6 +351,28 @@ export function makeChat(send: Send, now = () => Date.now()) {
         store.setState({ messages, receivedAt, unread, pending });
         break;
       }
+      case "messagesRemoved": {
+        // A moderator removed them: gone from the history and any pending row.
+        const gone = new Set(
+          event.messageIds.map((id) => messageKey(event.channelId, id)),
+        );
+        const receivedAt = { ...state.receivedAt };
+        for (const key of gone) delete receivedAt[key];
+        store.setState({
+          messages: state.messages.filter((m) => !gone.has(keyOf(m))),
+          receivedAt,
+          pending: Object.fromEntries(
+            Object.entries(state.pending).filter(
+              ([, p]) => !gone.has(confirmedKey(p) ?? ""),
+            ),
+          ),
+        });
+        break;
+      }
+      case "role":
+      case "moderationResult":
+        moderator.receive(event);
+        break;
       case "players":
         store.setState({ players: event.players });
         break;
@@ -351,11 +386,21 @@ export function makeChat(send: Send, now = () => Date.now()) {
         const removed = removals.get(event.requestId);
         if (removed !== undefined) {
           removals.delete(event.requestId);
+          const listed = state.playerMarks;
           store.setState({
             notice:
               event.error !== undefined
                 ? `Метка не удалена: ${event.error}`
                 : "Метка удалена",
+            // A moderator's list of another player's marks loses it too.
+            ...(listed && event.error === undefined
+              ? {
+                  playerMarks: {
+                    ...listed,
+                    marks: listed.marks.filter((m) => m.id !== removed),
+                  },
+                }
+              : {}),
           });
           break;
         }
@@ -742,7 +787,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
       else submit();
     },
     placeNote,
-    // Only the author's own marks can be removed; the result is a notice.
+    moderator,
+    // The author's own marks, or any for a moderator; the result is a notice.
     removeMark(markId: string) {
       const s = store.getState();
       if (!s.connected || !s.groundMarksSupported || !markId) return;
@@ -865,17 +911,21 @@ export function makeChat(send: Send, now = () => Date.now()) {
       if (!send({ type: "unignore", playerId }))
         store.setState({ notice: "Команда не принята приложением" });
     },
-    // Right click on an author: profile and ignore actions for that account.
+    // Right click on an author: profile and ignore actions for that account,
+    // a moderator's tools for the account and the message.
     openAuthorMenu(
       playerId: string,
       name: string,
       x: number,
       y: number,
       pseudonymous = false,
+      message?: { channelId: string; id: string },
     ) {
       const s = store.getState();
       if (!s.visible || !s.active || !playerId) return;
-      store.setState({ authorMenu: { playerId, name, x, y, pseudonymous } });
+      store.setState({
+        authorMenu: { playerId, name, x, y, pseudonymous, message },
+      });
     },
     closeAuthorMenu() {
       if (store.getState().authorMenu) store.setState({ authorMenu: null });

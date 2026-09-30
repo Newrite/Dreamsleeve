@@ -177,7 +177,7 @@ TEST_CASE("State queue restores chat contents after overflow and delivers subseq
   const auto& delta = std::get<ClientStateDelta>(batch.updates[1]);
   for (const auto& change : delta.chatContent)
   {
-    if (const auto* removed = std::get_if<ChatMessagesRemoved>(&change))
+    if (const auto* removed = std::get_if<ChatMessagesEvicted>(&change))
       std::erase_if(messages, [&](const auto& message) {
         return std::ranges::find(removed->messageIds, message.messageId) != removed->messageIds.end();
       });

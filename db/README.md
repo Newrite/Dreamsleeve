@@ -67,6 +67,14 @@ bans (kind 1) with a required reason, the issuing administrator or moderator,
 is in force while it is not lifted and not expired; issuing lifts the one of its
 kind in force. `SqliteSanctionStore` owns the SQL; the rules are the domain's.
 
+Schema 9 (`1791158400000_moderator_audit.sql`) lets an audit line name a moderator
+acting in the game: `admin_audit.admin_id` becomes nullable and `moderator_id`
+references `profiles(player_id)` with `ON DELETE SET NULL`; a CHECK forbids both. A
+moderator's line keeps its text once the profile is gone. `SqliteAdminStore.audit` is
+the one writer of audit lines: panel actions, sanction actions of both issuers (in the
+sanction's transaction) and content a moderator removed. DOWN drops the moderator lines
+(schema 8 has no such actor) and returns to version 8.
+
 ## Verification
 
 ```powershell

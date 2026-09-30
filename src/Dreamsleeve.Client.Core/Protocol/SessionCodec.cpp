@@ -43,6 +43,9 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (source.has_own_pseudonym()) result.ownPseudonym = source.own_pseudonym();
     result.hiding = static_cast<Domain::HiddenIdentity>(source.hidden_identity());
     if (source.has_mute()) result.mute = Mute(source.mute());
+    auto role = Role(source.role());
+    if (!role) return std::unexpected{role.error()};
+    result.role = *role;
     for (const auto& player : source.players())
     {
       auto decoded = Player(config, player);

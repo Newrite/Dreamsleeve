@@ -5,6 +5,7 @@
 #include "chat.pb.h"
 #include "ground.pb.h"
 #include "session.pb.h"
+#include "moderation.pb.h"
 
 import Dreamsleeve.Protocol;
 
@@ -34,7 +35,9 @@ static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Groun
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::HiddenIdentityNotAllowed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::DisplayNameChangeNotAllowed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Muted) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_MUTED));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 17);
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotPermitted) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NOT_PERMITTED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::TargetNotFound) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_TARGET_NOT_FOUND));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 19);
 
 static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_UNKNOWN));
 static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Exploring) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_EXPLORING));
@@ -105,3 +108,12 @@ static_assert(static_cast<long long>(Protocol::Chat::SessionEndReason::AccessRev
 static_assert(static_cast<long long>(Protocol::Chat::SessionEndReason::Banned) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_BANNED));
 static_assert(static_cast<long long>(Protocol::Chat::SessionEndReason::Kicked) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_KICKED));
 static_assert(Dreamsleeve::Protocol::Chat::SessionEndReason_ARRAYSIZE == 4);
+
+static_assert(static_cast<long long>(Protocol::Chat::PlayerRole::Player) == static_cast<long long>(Dreamsleeve::Protocol::Chat::PLAYER_ROLE_PLAYER));
+static_assert(static_cast<long long>(Protocol::Chat::PlayerRole::Moderator) == static_cast<long long>(Dreamsleeve::Protocol::Chat::PLAYER_ROLE_MODERATOR));
+static_assert(Dreamsleeve::Protocol::Chat::PlayerRole_ARRAYSIZE == 2);
+
+static_assert(static_cast<long long>(Protocol::Chat::SanctionKind::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::SanctionKind::Mute) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_MUTE));
+static_assert(static_cast<long long>(Protocol::Chat::SanctionKind::Ban) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_BAN));
+static_assert(Dreamsleeve::Protocol::Chat::SanctionKind_ARRAYSIZE == 3);

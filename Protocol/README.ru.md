@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 13
+# Прикладной протокол сессии, версия 15
 
 Схемы разделены по назначению:
 
@@ -9,13 +9,14 @@
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
 | [session.proto](session.proto) | OpenSession, JoinAsGuest и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged |
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
+| [moderation.proto](moderation.proto) | Роль и инструменты модератора: PlayerRole, SanctionKind, RoleChanged, SanctionEntry, запросы наказаний, списков и удаления контента с их ответами |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
 
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 13 оставляет клиента подключённым гостем до входа; версия 12 датирует метки игровым календарём; версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–12 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 15 даёт модератору инструменты в игре; версия 14 добавляет муты, баны и кик; версия 13 оставляет клиента подключённым гостем до входа; версия 12 датирует метки игровым календарём; версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–14 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
@@ -255,6 +256,33 @@ Control-канале ENet.
   скрытым именем другие по-прежнему видят псевдоним, `PlayerUpdated` им не приходит.
 - Клиентский кодек отвергает пустое имя в запросе и в ответе и ответ без RequestId.
 
+## Модерация
+
+С версии 14 сервер сообщает игроку его мут и конец сессии; с версии 15 модератор действует
+из игры. Правила, хранение и аудит — [ModerationAndNamesRu.md](../docs/ModerationAndNamesRu.md#муты-баны-и-кик).
+
+- v14: `SessionOpened.mute = 11` (`MuteState{reason, optional until_unix_ms}`),
+  `ServerPacket.mute_changed = 27` (`MuteChanged{mute}`; без `mute` — снят),
+  `ServerPacket.session_ended = 28` (`SessionEnded{reason, text, optional until_unix_ms}`: `ACCESS_REVOKED`,
+  `BANNED`, `KICKED`; последний пакет перед закрытием), код `MUTED = 16`.
+- v15: `SessionOpened.role = 12` (`PlayerRole`: `PLAYER = 0`, `MODERATOR = 1`) и уведомление
+  `ServerPacket.role_changed = 29` (Control, без RequestId), когда панель меняет роль в живой сессии.
+- Запросы модератора (Control, RequestId): `sanction_player = 20`
+  (`SanctionPlayer{player_id, kind, optional minutes, reason}`; без `minutes` — бессрочно),
+  `lift_sanction = 21`, `kick_player = 22`, `list_sanctions = 23`, `list_player_marks = 24`,
+  `clear_player_marks = 25` (`notes`, `deaths`, хотя бы одно). Ответы: `sanction_issued = 30`
+  (`SanctionEntry`), `sanction_lifted = 31`, `player_kicked = 32`, `sanction_list = 33` (все
+  действующие, новые сверху; игроки только по PlayerId), `player_marks = 34` (все метки одного
+  автора, новые сверху), `player_marks_cleared = 35` (`removed`).
+- Удаление сообщения идёт по Chat-полосе: `ClientPacket.delete_chat_message = 26`
+  (`DeleteChatMessage{channel_id, message_id}`); `ServerPacket.chat_message_removed = 36`
+  (`ChatMessageRemoved{channel_id, message_id}`) получают все участники канала, копия модератора —
+  с его RequestId. Отказ удаления — `ChatRejected`, как у сообщения.
+- Удаление одной метки — прежний `RemoveGroundMark`: модератору сервер удаляет метку любого автора.
+- Коды: `NOT_PERMITTED = 17` (нет роли модератора, или цель — модератор/сам модератор),
+  `TARGET_NOT_FOUND = 18` (нет игрока, действующего наказания или сообщения). Причина и срок
+  проверяются в кодеке доменом: `INVALID_REQUEST` с полем `reason` или `minutes`.
+
 ## Игровое состояние
 
 PlayerInfo включает неизменяемую идентичность PlayerProfile, optional character_name,
@@ -468,6 +496,9 @@ ProtocolError. Realtime не порождает коррелированные �
 | 13 | GroundMarkNotFound | Нет такой метки этого автора |
 | 14 | HiddenIdentityNotAllowed | Сервер не разрешает скрывать имя (открытие со скрытым именем или переключение) |
 | 15 | DisplayNameChangeNotAllowed | Сервер не разрешает игрокам менять отображаемое имя |
+| 16 | Muted | Игрок в муте: писать нельзя, пока мут не истёк или не снят |
+| 17 | NotPermitted | Запрос модератора без роли, или цель — модератор или сам модератор |
+| 18 | TargetNotFound | Нет такого игрока, действующего наказания или сообщения в канале |
 
 F# использует тип, сгенерированный protoc для .NET. Серверный encoder принимает
 только определённые ненулевые коды. C++ использует автоматически сгенерированное

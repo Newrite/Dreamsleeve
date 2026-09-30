@@ -65,6 +65,12 @@ type AccountAccessCommand =
     | Sanction of SanctionOrder
     /// Lifts the sanction of a kind in force on a player.
     | LiftSanction of PlayerId * SanctionKind * SanctionIssuer
+    /// Ends the player's session now, when the issuer may act on them.
+    | Kick of PlayerId * SanctionReason * SanctionIssuer
+    /// Every sanction in force, newest first.
+    | ListSanctions
+    /// The audit line of content a moderator removed in the game.
+    | RecordModeration of moderator: PlayerId * AuditRecord
 
 [<RequireQualifiedAccess>]
 type AccountAccessResult =
@@ -75,6 +81,8 @@ type AccountAccessResult =
     | Renamed of PlayerData
     | Sanctioned of Sanction
     | SanctionLifted of Sanction
+    | Kicked
+    | ActiveSanctions of Sanction list
 
 [<RequireQualifiedAccess>]
 type AccountWorkResult =
@@ -85,6 +93,9 @@ type AccountWorkResult =
     | Renamed of previous: DisplayName * PlayerData * changedBy: AdminId voption
     | Sanctioned of Sanction
     | SanctionLifted of Sanction
+    | Kicked of PlayerId * SanctionReason
+    | ActiveSanctions of Sanction list
+    | Recorded
 
 type AccountWorkReply = {
     OperationId: Guid
@@ -109,6 +120,8 @@ type AuthMessage =
     | ChangeFailed of AgentSendFailure
     /// From a game session; settled by a DisplayNameChangeReply.
     | ChangeDisplayName of DisplayNameChangeRequest
+    /// A moderator's request from a game session; settled by a ModerationReply.
+    | Moderate of ModerationRequest
     | Stop
 
 /// Account I/O and password work run in bounded library workers. Only this
@@ -122,6 +135,7 @@ module AuthService =
     type private Requester =
         | Caller of ReplyChannel<Result<AccountAccessResult, AccountAccessError>>
         | Session of DisplayNameChangeRequest
+        | Moderator of ModerationRequest
 
     type private Pending = { Command: AccountAccessCommand; Requester: Requester }
 
@@ -286,6 +300,19 @@ module AuthService =
                 | AccountAccessCommand.LiftSanction(target, kind, issuer) ->
                     SqliteSanctionStore.lift database target kind issuer (clock.GetUtcNow()) token
                     |> sanctioned logger AccountWorkResult.SanctionLifted
+                | AccountAccessCommand.Kick(target, reason, issuer) ->
+                    match SqliteSanctionStore.kick database target reason issuer (clock.GetUtcNow()) token with
+                    | Ok(Ok()) -> Ok (AccountWorkResult.Kicked(target, reason))
+                    | Ok(Error refused) -> Error (AccountAccessError.SanctionRefused refused)
+                    | Error error -> Error (storageError logger error)
+                | AccountAccessCommand.ListSanctions ->
+                    SqliteSanctionStore.listActive database (clock.GetUtcNow()) token
+                    |> Result.map (fun records -> AccountWorkResult.ActiveSanctions(records |> List.map _.Sanction))
+                    |> Result.mapError (storageError logger)
+                | AccountAccessCommand.RecordModeration(moderator, record) ->
+                    SqliteAdminStore.recordModeration database moderator record (clock.GetUtcNow()) token
+                    |> Result.map (fun () -> AccountWorkResult.Recorded)
+                    |> Result.mapError (storageError logger)
             with
             | :? OperationCanceledException -> Error AccountAccessError.Unavailable
             | error ->
@@ -337,7 +364,9 @@ module AuthService =
         // The player is online: no second session of theirs can open with a stale
         // ticket, and outstanding tickets are updated when the change settles.
         | AccountAccessCommand.Register _ | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _
-        | AccountAccessCommand.Resume _ | AccountAccessCommand.ChangeOwnDisplayName _ -> false
+        | AccountAccessCommand.Resume _ | AccountAccessCommand.ChangeOwnDisplayName _
+        // A kick issues no ticket; a list and an audit line change no account.
+        | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ -> false
 
     let private settle (logger: ILogger) (requester: Requester) (result: Result<AccountAccessResult, AccountAccessError>) =
         match requester with
@@ -354,10 +383,29 @@ module AuthService =
             | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
             | AgentTryDeliveryResult.Full ->
                 logger.LogWarning("Display name reply for player {PlayerId} was not delivered: the session is full", PlayerId.value request.PlayerId)
+        | Requester.Moderator request ->
+            let answer =
+                match result with
+                | Ok (AccountAccessResult.Sanctioned sanction) -> Ok (ModerationResult.Sanctioned sanction)
+                | Ok (AccountAccessResult.SanctionLifted sanction) -> Ok (ModerationResult.Lifted sanction)
+                | Ok AccountAccessResult.Kicked -> Ok ModerationResult.Kicked
+                | Ok (AccountAccessResult.ActiveSanctions sanctions) -> Ok (ModerationResult.Sanctions sanctions)
+                | Ok AccountAccessResult.Completed -> Ok ModerationResult.Recorded
+                | Error (AccountAccessError.SanctionRefused refused) -> Error (ModerationError.Refused refused)
+                | Error AccountAccessError.Busy -> Error ModerationError.Busy
+                | Ok _ | Error _ -> Error ModerationError.Unavailable
+            match request.Command, answer with
+            | ModerationCommand.Record(moderator, record), Error _ ->
+                logger.LogWarning("Audit line {Action} of moderator {PlayerId} was lost: the account service was busy",
+                                  AdminAction.key record.Action, PlayerId.value moderator)
+            | _, (Ok _ | Error _) -> ()
+            match request.ReplyTo.TryPost { OperationId = request.OperationId; Result = answer } with
+            | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
+            | AgentTryDeliveryResult.Full -> logger.LogWarning("A moderation reply was not delivered: the session is full")
 
     let private abandoned = function
         | Requester.Caller reply -> reply.IsCompleted
-        | Requester.Session _ -> false
+        | Requester.Session _ | Requester.Moderator _ -> false
 
     let private access options (logger: ILogger) state (context: AgentContext<AuthMessage>) command (requester: Requester) =
         if state.Stopping then settle logger requester (Error AccountAccessError.Unavailable)
@@ -382,7 +430,8 @@ module AuthService =
         | AccountAccessCommand.Resume _ -> "saved login"
         | AccountAccessCommand.Register _ | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _
         | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _
-        | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ -> "other"
+        | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
+        | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ -> "other"
 
     let private until (sanction: Sanction) =
         match sanction.Expires with
@@ -401,7 +450,8 @@ module AuthService =
             logger.LogInformation("Sign-in refused for {Username}: banned until {Until}", Username.value username, until ban)
         | AccountAccessCommand.Resume _, Error (AccountAccessError.Banned ban) ->
             logger.LogInformation("Saved login of player {PlayerId} refused: banned until {Until}", PlayerId.value ban.Target, until ban)
-        | (AccountAccessCommand.Sanction { Target = target } | AccountAccessCommand.LiftSanction(target, _, _)), Error (AccountAccessError.SanctionRefused refused) ->
+        | (AccountAccessCommand.Sanction { Target = target } | AccountAccessCommand.LiftSanction(target, _, _) | AccountAccessCommand.Kick(target, _, _)),
+          Error (AccountAccessError.SanctionRefused refused) ->
             logger.LogInformation("Sanction on player {PlayerId} refused: {Refusal}", PlayerId.value target, refused)
         | (AccountAccessCommand.Login(username, _) | AccountAccessCommand.RememberLogin(username, _)), Error AccountAccessError.InvalidCredentials ->
             logger.LogInformation("Sign-in refused for {Username}: wrong username or password", Username.value username)
@@ -489,6 +539,11 @@ module AuthService =
                             withMute (ValueSome sanction) state sanction.Target
                             AccountChange.MuteChanged(sanction.Target, ValueSome sanction)
                     delivered state context change (Ok (AccountAccessResult.Sanctioned sanction))
+                | Ok (AccountWorkResult.Kicked(target, reason)) ->
+                    logger.LogInformation("Player {PlayerId} kicked: {Reason}", PlayerId.value target, SanctionReason.value reason)
+                    delivered state context (AccountChange.Kicked(target, reason)) (Ok AccountAccessResult.Kicked)
+                | Ok (AccountWorkResult.ActiveSanctions sanctions) -> Ok (AccountAccessResult.ActiveSanctions sanctions)
+                | Ok AccountWorkResult.Recorded -> Ok AccountAccessResult.Completed
                 | Ok (AccountWorkResult.SanctionLifted sanction) ->
                     logger.LogInformation("The {Kind} of player {PlayerId} was lifted", SanctionKind.key sanction.Kind, PlayerId.value sanction.Target)
                     match sanction.Kind with
@@ -511,6 +566,15 @@ module AuthService =
         | AuthMessage.ChangeDisplayName request ->
             let command = AccountAccessCommand.ChangeOwnDisplayName(request.PlayerId, request.DisplayName, request.MinInterval)
             access options logger state context command (Requester.Session request)
+        | AuthMessage.Moderate request ->
+            let command =
+                match request.Command with
+                | ModerationCommand.Sanction order -> AccountAccessCommand.Sanction order
+                | ModerationCommand.Lift(target, kind, moderator) -> AccountAccessCommand.LiftSanction(target, kind, SanctionIssuer.Moderator moderator)
+                | ModerationCommand.Kick(target, reason, moderator) -> AccountAccessCommand.Kick(target, reason, SanctionIssuer.Moderator moderator)
+                | ModerationCommand.ListSanctions -> AccountAccessCommand.ListSanctions
+                | ModerationCommand.Record(moderator, record) -> AccountAccessCommand.RecordModeration(moderator, record)
+            access options logger state context command (Requester.Moderator request)
         | AuthMessage.Finished reply -> finished options clock logger state context reply
         | AuthMessage.ConsumeTicket request -> do! consumeRequest context request
         | AuthMessage.WorkersStopped outcome ->
@@ -532,7 +596,7 @@ module AuthService =
     let private isControl = function
         | AuthMessage.Start | AuthMessage.Finished _ | AuthMessage.WorkersStopped _ | AuthMessage.Stop
         | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ -> true
-        | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeDisplayName _ -> false
+        | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeDisplayName _ | AuthMessage.Moderate _ -> false
 
     /// The options come checked with the configuration.
     let start options database (logger: ILogger) (clock: TimeProvider) =
@@ -559,5 +623,6 @@ module AuthService =
     let authenticator (agent: Agent<AuthMessage>) = {
         Requests = agent.Ref.TryReliable().Value.Map AuthMessage.ConsumeTicket
         DisplayNames = agent.Ref.TryReliable().Value.Map AuthMessage.ChangeDisplayName
+        Moderation = agent.Ref.TryReliable().Value.Map AuthMessage.Moderate
         Completion = agent.Completion
     }

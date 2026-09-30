@@ -9,6 +9,7 @@ import { useFrame } from "../features/useFrame";
 import { Messages } from "../views/Messages";
 import { Panels } from "../views/Panels";
 import { AuthorMenu } from "../views/AuthorMenu";
+import { ModerationDialog } from "../views/ModerationDialog";
 import { Select } from "../views/Select";
 import styles from "../styles/Chat.module.css";
 export function SkyrimLayout({ chat }: { chat: Chat }) {
@@ -225,6 +226,13 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
       </section>
       {s.active && s.authorMenu && <AuthorMenu chat={chat} state={s} />}
       {s.active && s.panel && <Panels chat={chat} state={s} />}
+      {s.active && s.moderation && (
+        <ModerationDialog
+          key={`${s.moderation.action}:${s.moderation.playerId}`}
+          chat={chat}
+          state={s}
+        />
+      )}
     </>
   );
 }

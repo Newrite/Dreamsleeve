@@ -245,7 +245,9 @@ namespace Logic
     state.bubbleGeneration = generation;
     if (runtime.ui.ui.chat.showBubbles)
       for (const auto& message : frame.freshMessages)
-        runtime.bubbles.Post(message.author->playerId, message.messageText, now);
+        runtime.bubbles.Post(message.author->playerId, message.messageId, message.messageText, now);
+    for (const auto id : frame.deletedMessages)
+      runtime.bubbles.EraseMessage(id);
   }
 
   // Fireflies and ground marks share one HUD frame: labels of both go into it

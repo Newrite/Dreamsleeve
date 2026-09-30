@@ -24,14 +24,20 @@ public:
     };
 
     // A new message replaces the previous text and restarts the timer.
-    void Post(Domain::PlayerId author, std::string text, Clock::time_point now)
+    void Post(Domain::PlayerId author, Domain::ChatMessageId messageId, std::string text, Clock::time_point now)
     {
-      entries.insert_or_assign(author, Entry{std::move(text), now});
+      entries.insert_or_assign(author, Entry{messageId, std::move(text), now});
     }
 
     void Erase(Domain::PlayerId author)
     {
       entries.erase(author);
+    }
+
+    // A moderator removed the message: its bubble goes, an author's later one stays.
+    void EraseMessage(Domain::ChatMessageId messageId)
+    {
+      std::erase_if(entries, [&](const auto& entry) { return entry.second.messageId == messageId; });
     }
 
     void Clear()
@@ -64,8 +70,9 @@ private:
 
     struct Entry
     {
-      std::string       text;
-      Clock::time_point shownAt{};
+      Domain::ChatMessageId messageId{};
+      std::string           text;
+      Clock::time_point     shownAt{};
     };
 
     // Elapsed time alone decides: visibility never pauses or restarts the timer.

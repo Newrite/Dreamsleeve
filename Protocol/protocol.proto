@@ -6,8 +6,10 @@ import "chat.proto";
 import "session.proto";
 import "player.proto";
 import "ground.proto";
+import "moderation.proto";
 
-// Control/chat envelope. Version 14 mutes, bans and kicks players; version 13
+// Control/chat envelope. Version 15 gives moderators their tools in the game;
+// version 14 mutes, bans and kicks players; version 13
 // keeps a client connected as a guest before it signs in; version 12 dates
 // marks with the in-game calendar;
 // version 11 lets a player change the display name; version 10 lets a player hide their names behind a
@@ -29,6 +31,13 @@ message ClientPacket {
     SetIdentityVisibility set_identity_visibility = 17; // Control lane.
     ChangeDisplayName change_display_name = 18; // Control lane.
     JoinAsGuest join_as_guest = 19; // Control lane, no reply.
+    SanctionPlayer sanction_player = 20; // Control lane.
+    LiftSanction lift_sanction = 21; // Control lane.
+    KickPlayer kick_player = 22; // Control lane.
+    ListSanctions list_sanctions = 23; // Control lane.
+    ListPlayerMarks list_player_marks = 24; // Control lane.
+    ClearPlayerMarks clear_player_marks = 25; // Control lane.
+    DeleteChatMessage delete_chat_message = 26; // Chat lane.
   }
 }
 
@@ -58,6 +67,14 @@ message ServerPacket {
     DisplayNameChanged display_name_changed = 26; // Control lane, request_id required.
     MuteChanged mute_changed = 27; // Control lane, no request_id.
     SessionEnded session_ended = 28; // Control lane, no request_id; the connection closes next.
+    RoleChanged role_changed = 29; // Control lane, no request_id.
+    SanctionIssued sanction_issued = 30; // Control lane, request_id required.
+    SanctionLifted sanction_lifted = 31; // Control lane, request_id required.
+    PlayerKicked player_kicked = 32; // Control lane, request_id required.
+    SanctionList sanction_list = 33; // Control lane, request_id required.
+    PlayerMarks player_marks = 34; // Control lane, request_id required.
+    PlayerMarksCleared player_marks_cleared = 35; // Control lane, request_id required.
+    ChatMessageRemoved chat_message_removed = 36; // Chat lane; request_id only for the requester.
   }
 }
 
@@ -80,10 +97,12 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_RATE_LIMITED = 10; // Too frequent or repeated; retry later.
   REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED = 11; // The server does not accept this announcement source.
   REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL = 12; // The spatial cell already holds the configured number of marks.
-  REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND = 13; // No such mark of this author.
+  REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND = 13; // No such mark (of this author, unless a moderator asks).
   REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED = 14; // The server does not let players hide their names.
   REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15; // The server does not let players change their display name.
   REQUEST_REJECTION_CODE_MUTED = 16; // The sender is muted (see MuteState).
+  REQUEST_REJECTION_CODE_NOT_PERMITTED = 17; // Not a moderator, or the target is not a player it outranks.
+  REQUEST_REJECTION_CODE_TARGET_NOT_FOUND = 18; // No such player, sanction in force or message.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

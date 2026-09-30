@@ -361,6 +361,10 @@
   background: rgb(255 255 255 / 0.1);
   outline: none;
 }
+/* The moderator's items, set apart from the personal ones. */
+.authorMenu .menuModerator {
+  color: #e3b877;
+}
 /* Announcement kind as a small tag and its origin as a label. A mod's own
    signature is not vouched for by the server, so it stays subdued. */
 .kind {

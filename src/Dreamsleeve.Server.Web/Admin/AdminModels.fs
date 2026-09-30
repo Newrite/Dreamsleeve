@@ -89,7 +89,8 @@ type PlayerCardModel = {
 }
 
 type AuditModel = {
-    Admin: string
+    /// "администратор root" or "модератор alice".
+    Actor: string
     Action: string
     Target: string
     Details: string
@@ -139,17 +140,17 @@ module AdminModels =
             | ValueSome(SanctionIssuer.Moderator moderator) -> AuditTarget.key (AuditTarget.Player moderator)
             | ValueNone -> null }
 
+    /// Who did an audited action, as the page names them.
+    let actor (entry: AuditEntry) =
+        let name = entry.ActorName |> ValueOption.map Username.value |> ValueOption.defaultValue "?"
+        match entry.Actor with
+        | ValueSome(AuditActor.Admin _) -> $"администратор {name}"
+        | ValueSome(AuditActor.Moderator _) -> $"модератор {name}"
+        | ValueNone -> "удалённый модератор"
+
     let sanctionEntry (record: SanctionRecord) : SanctionEntryModel =
         { PlayerId = PlayerId.value record.Target.PlayerId; Username = Username.value record.Target.Username
           DisplayName = DisplayName.value record.Target.DisplayName; Sanction = sanction record.Sanction }
-
-    /// The audit line of an issued sanction: public facts only.
-    let sanctionDetails (value: Sanction) =
-        let until =
-            match value.Expires with
-            | ValueSome expires -> expires.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'")
-            | ValueNone -> "lifted"
-        $"{SanctionKind.key value.Kind} until {until}: {SanctionReason.value value.Reason}"
 
     let hidden = function
         | HiddenIdentity.Shown -> "none"
@@ -199,7 +200,7 @@ module AdminModels =
           ChangedBy = change.ChangedBy |> Option.map Username.value |> Option.defaultValue null; At = change.At }
 
     let audit (entry: AuditEntry) : AuditModel =
-        { Admin = Username.value entry.Admin.Username; Action = AdminAction.key entry.Action; Target = entry.Target
+        { Actor = actor entry; Action = AdminAction.key entry.Action; Target = entry.Target
           Details = entry.Details; At = entry.At }
 
     let token (info: ApiTokenInfo) : TokenModel =
