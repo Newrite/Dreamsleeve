@@ -12,6 +12,7 @@ module internal SessionTable =
 
     type Entry = {
         ConnectionId: Guid
+        ConnectedAt: DateTimeOffset
         mutable Phase: Phase
         mutable Deadline: int64
         mutable PlayerId: PlayerId option
@@ -30,13 +31,21 @@ module internal SessionTable =
         /// Names shown for each reserved player and the pseudonyms of hidden ones;
         /// freed together with the PlayerId reservation.
         Names: PseudonymBook
+        /// Roles and stored profiles an administrator changed since the runtime
+        /// started. They are newer than any ticket issued before the change, so a
+        /// session reserving its PlayerId later still receives them. Bounded by
+        /// the number of administrator actions.
+        Roles: Dictionary<PlayerId, PlayerRole>
+        Profiles: Dictionary<PlayerId, PlayerData>
     }
 
-    let create dictionary = { Connections = Dictionary(); Players = Dictionary(); Names = PseudonymBook.create dictionary }
+    let create dictionary =
+        { Connections = Dictionary(); Players = Dictionary(); Names = PseudonymBook.create dictionary
+          Roles = Dictionary(); Profiles = Dictionary() }
 
-    let add connectionId deadline state =
+    let add connectionId connectedAt deadline state =
         let entry = {
-            ConnectionId = connectionId; Phase = Waiting; Deadline = deadline
+            ConnectionId = connectionId; ConnectedAt = connectedAt; Phase = Waiting; Deadline = deadline
             PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
             ChatDetached = false; SystemDetached = false; PresenceDetached = false; GroundMarksDetached = false
         }
@@ -66,6 +75,15 @@ module internal SessionTable =
         match entry.Phase, entry.PlayerId |> Option.map (fun playerId -> PseudonymBook.tryProfile playerId state.Names) with
         | Ready, Some (ValueSome profile) -> Some (PseudonymBook.apply pick hiding profile state.Names)
         | (Waiting | Opening | Ready | Closing), _ -> None
+
+    /// Keeps the pseudonym and hiding of the player; None when this connection
+    /// is not the ready or opening owner of the reservation.
+    let updateProfile (profile: PlayerData) (entry: Entry) state =
+        match entry.Phase, entry.PlayerId with
+        | (Opening | Ready), Some playerId when playerId = profile.PlayerId ->
+            PseudonymBook.rename profile state.Names
+            true
+        | (Waiting | Opening | Ready | Closing), _ -> false
 
     let domainClean (entry: Entry) =
         entry.ChildStopped && entry.ChatDetached && entry.SystemDetached && entry.PresenceDetached && entry.GroundMarksDetached

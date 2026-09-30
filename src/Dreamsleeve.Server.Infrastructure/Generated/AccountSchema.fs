@@ -46,6 +46,70 @@ module main =
 
     let accounts = table<accounts>
 
+    type admin_accounts =
+        { id: int64
+          username: string
+          password_hash: string
+          created_at: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "id"; Value = box this.id; ProviderDbType = None }
+                  { WriteColumn.Name = "username"; Value = box this.username; ProviderDbType = None }
+                  { WriteColumn.Name = "password_hash"; Value = box this.password_hash; ProviderDbType = None }
+                  { WriteColumn.Name = "created_at"; Value = box this.created_at; ProviderDbType = None } ]
+
+    let admin_accounts = table<admin_accounts>
+
+    type admin_api_tokens =
+        { token_hash: string
+          admin_id: int64
+          label: string
+          created_at: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "token_hash"; Value = box this.token_hash; ProviderDbType = None }
+                  { WriteColumn.Name = "admin_id"; Value = box this.admin_id; ProviderDbType = None }
+                  { WriteColumn.Name = "label"; Value = box this.label; ProviderDbType = None }
+                  { WriteColumn.Name = "created_at"; Value = box this.created_at; ProviderDbType = None } ]
+
+    let admin_api_tokens = table<admin_api_tokens>
+
+    type admin_audit =
+        { id: int64
+          admin_id: int64
+          action: string
+          target: string
+          details: string
+          at: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "id"; Value = box this.id; ProviderDbType = None }
+                  { WriteColumn.Name = "admin_id"; Value = box this.admin_id; ProviderDbType = None }
+                  { WriteColumn.Name = "action"; Value = box this.action; ProviderDbType = None }
+                  { WriteColumn.Name = "target"; Value = box this.target; ProviderDbType = None }
+                  { WriteColumn.Name = "details"; Value = box this.details; ProviderDbType = None }
+                  { WriteColumn.Name = "at"; Value = box this.at; ProviderDbType = None } ]
+
+    let admin_audit = table<admin_audit>
+
+    type admin_sessions =
+        { token_hash: string
+          admin_id: int64
+          created_at: int64
+          expires_at: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "token_hash"; Value = box this.token_hash; ProviderDbType = None }
+                  { WriteColumn.Name = "admin_id"; Value = box this.admin_id; ProviderDbType = None }
+                  { WriteColumn.Name = "created_at"; Value = box this.created_at; ProviderDbType = None }
+                  { WriteColumn.Name = "expires_at"; Value = box this.expires_at; ProviderDbType = None } ]
+
+    let admin_sessions = table<admin_sessions>
+
     type auth_tokens =
         { token_hash: string
           account_id: int64
@@ -93,6 +157,21 @@ module main =
                   { WriteColumn.Name = "author_pseudonym"; Value = box this.author_pseudonym; ProviderDbType = None } ]
 
     let ground_marks = table<ground_marks>
+
+    type player_roles =
+        { player_id: int64
+          role: int64
+          granted_by: Option<int64>
+          granted_at: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "player_id"; Value = box this.player_id; ProviderDbType = None }
+                  { WriteColumn.Name = "role"; Value = box this.role; ProviderDbType = None }
+                  { WriteColumn.Name = "granted_by"; Value = box this.granted_by; ProviderDbType = None }
+                  { WriteColumn.Name = "granted_at"; Value = box this.granted_at; ProviderDbType = None } ]
+
+    let player_roles = table<player_roles>
 
     type profiles =
         { player_id: int64

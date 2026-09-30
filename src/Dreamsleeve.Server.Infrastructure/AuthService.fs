@@ -6,12 +6,10 @@ namespace Dreamsleeve.Server.Infrastructure
 open System
 open System.Collections.Generic
 open System.Security.Cryptography
-open System.Text
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Identity
 open Microsoft.Extensions.Logging
-open Microsoft.Extensions.Options
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Domain
@@ -52,6 +50,8 @@ type AccountAccessCommand =
     // Trusted server callers only. Never map these directly to public HTTP input.
     | CreatePasswordReset of Username
     | RevokeAccount of Username
+    /// The caller has validated and moderated the new name.
+    | RenamePlayer of PlayerId * DisplayName
 
 [<RequireQualifiedAccess>]
 type AccountAccessResult =
@@ -59,13 +59,15 @@ type AccountAccessResult =
     | SignedIn of SessionGrant
     | Completed
     | PasswordResetCreated of code: string
+    | Renamed of PlayerData
 
 [<RequireQualifiedAccess>]
 type AccountWorkResult =
     | Registered of PlayerData
-    | Verified of PlayerData * rememberToken: string
+    | Verified of AuthenticatedPlayer * rememberToken: string
     | LoggedOut of tokenHash: string
     | Revoked of PlayerData * resetCode: string
+    | Renamed of PlayerData
 
 type AccountWorkReply = {
     OperationId: Guid
@@ -93,7 +95,7 @@ type AuthMessage =
 /// agent owns ticket issuance/consumption and request orchestration.
 [<RequireQualifiedAccess>]
 module AuthService =
-    type private Ticket = { Profile: PlayerData; CreatedAt: int64; RememberKey: string }
+    type private Ticket = { Player: AuthenticatedPlayer; CreatedAt: int64; RememberKey: string }
 
     type private State = {
         Tickets: Dictionary<string, Ticket>
@@ -123,14 +125,9 @@ module AuthService =
         if options.PasswordIterations < 210000 || options.PasswordIterations > 2000000 then "Password iterations must be 210000..2000000."
     ]
 
-    let validPassword (password: string) =
-        if isNull password || password.Length > 128 then false
-        else
-            let bytes = Encoding.UTF8.GetByteCount password
-            bytes >= 12 && bytes <= 128
+    let validPassword password = Secrets.validPassword password
 
-    let private hasher options =
-        PasswordHasher<obj>(Options.Create(PasswordHasherOptions(IterationCount = options.PasswordIterations)))
+    let private hasher options = Secrets.hasher options.PasswordIterations
 
     let private storageError (logger: ILogger) = function
         | AccountStoreError.InvalidCredential -> AccountAccessError.InvalidCredentials
@@ -141,7 +138,10 @@ module AuthService =
             AccountAccessError.Unavailable
 
     let private identity (account: StoredAccount) : StoredIdentity =
-        { AccountId = account.AccountId; Profile = account.Profile }
+        { AccountId = account.AccountId; Profile = account.Profile; Role = account.Role }
+
+    let private player (account: StoredIdentity) : AuthenticatedPlayer =
+        { Profile = account.Profile; Role = account.Role }
 
     let private verify options database dummyHash logger token username password =
         match SqliteAccountStore.find database username token with
@@ -159,20 +159,17 @@ module AuthService =
             | None, _ | Some _, PasswordVerificationResult.Failed -> Error AccountAccessError.InvalidCredentials
             | Some _, unknown when not (Enum.IsDefined unknown) -> Error AccountAccessError.Unavailable
 
-    let private newToken () =
-        Convert.ToBase64String(RandomNumberGenerator.GetBytes 32).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    let private newToken () = Secrets.newToken ()
 
-    let private ticketKey (ticket: string) =
-        Encoding.ASCII.GetBytes ticket |> SHA256.HashData |> Convert.ToHexString
+    let private ticketKey (ticket: string) = Secrets.hash ticket
 
-    let validToken (value: string) =
-        not (isNull value) && value.Length = 43 && value |> Seq.forall (fun c -> Char.IsAsciiLetterOrDigit c || c = '-' || c = '_')
+    let validToken value = Secrets.validToken value
 
     let private savedLogin options database now logger token (account: StoredIdentity) =
         let secret = newToken ()
         let expires = now + int64 options.SavedLoginDays * 86400L
         SqliteAccountStore.remember database account.AccountId (ticketKey secret) now expires options.MaxSavedLogins token
-        |> Result.map (fun () -> AccountWorkResult.Verified(account.Profile, secret))
+        |> Result.map (fun () -> AccountWorkResult.Verified(player account, secret))
         |> Result.mapError (storageError logger)
 
     let private administer options database now logger token username reset =
@@ -203,7 +200,7 @@ module AuthService =
                 | AccountAccessCommand.Login(username, password) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else verify options database dummyHash logger token username password
-                         |> Result.map (fun account -> AccountWorkResult.Verified(account.Profile, ""))
+                         |> Result.map (fun account -> AccountWorkResult.Verified(player account, ""))
                 | AccountAccessCommand.RememberLogin(username, password) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else verify options database dummyHash logger token username password
@@ -211,7 +208,7 @@ module AuthService =
                 | AccountAccessCommand.Resume secret ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
                     else SqliteAccountStore.resume database (ticketKey secret) now token
-                         |> Result.map (fun account -> AccountWorkResult.Verified(account.Profile, secret))
+                         |> Result.map (fun account -> AccountWorkResult.Verified(player account, secret))
                          |> Result.mapError (storageError logger)
                 | AccountAccessCommand.Logout secret ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
@@ -227,6 +224,11 @@ module AuthService =
                         |> Result.mapError (storageError logger)
                 | AccountAccessCommand.CreatePasswordReset username -> administer options database now logger token username true
                 | AccountAccessCommand.RevokeAccount username -> administer options database now logger token username false
+                | AccountAccessCommand.RenamePlayer(playerId, displayName) ->
+                    match SqliteAccountStore.rename database playerId displayName token with
+                    | Ok (Some account) -> Ok (AccountWorkResult.Renamed account.Profile)
+                    | Ok None -> Error AccountAccessError.InvalidCredentials
+                    | Error error -> Error (storageError logger error)
             with
             | :? OperationCanceledException -> Error AccountAccessError.Unavailable
             | error ->
@@ -244,13 +246,13 @@ module AuthService =
             |> Seq.toArray
         for key in expired do state.Tickets.Remove key |> ignore
 
-    let private issue options (clock: TimeProvider) state profile (rememberToken: string) =
+    let private issue options (clock: TimeProvider) state (player: AuthenticatedPlayer) (rememberToken: string) =
         expire options clock state
         if state.Tickets.Count >= options.MaxTickets then Error AccountAccessError.Busy
         else
             let ticket = newToken ()
-            state.Tickets.Add(ticketKey ticket, { Profile = profile; CreatedAt = clock.GetTimestamp(); RememberKey = if rememberToken.Length = 0 then "" else ticketKey rememberToken })
-            Ok (AccountAccessResult.SignedIn { Profile = profile; SessionTicket = ticket; ExpiresInSeconds = options.TicketLifetimeSeconds; RememberToken = rememberToken })
+            state.Tickets.Add(ticketKey ticket, { Player = player; CreatedAt = clock.GetTimestamp(); RememberKey = if rememberToken.Length = 0 then "" else ticketKey rememberToken })
+            Ok (AccountAccessResult.SignedIn { Profile = player.Profile; SessionTicket = ticket; ExpiresInSeconds = options.TicketLifetimeSeconds; RememberToken = rememberToken })
 
     let private consume options clock state (request: SessionAuthenticationRequest) : SessionAuthenticationReply =
         expire options clock state
@@ -262,7 +264,7 @@ module AuthService =
                 | false, _ -> Error SessionAuthenticationError.InvalidTicket
                 | true, ticket ->
                     state.Tickets.Remove(ticketKey request.Ticket) |> ignore
-                    Ok ticket.Profile
+                    Ok ticket.Player
         { OperationId = request.OperationId; Result = result }
 
     let private completeIfStopped state (context: AgentContext<AuthMessage>) =
@@ -272,7 +274,7 @@ module AuthService =
 
     let private exclusive = function
         | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _
-        | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.Logout _ -> true
+        | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.Logout _ | AccountAccessCommand.RenamePlayer _ -> true
         | AccountAccessCommand.Register _ | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _
         | AccountAccessCommand.Resume _ -> false
 
@@ -304,16 +306,22 @@ module AuthService =
                     logger.LogInformation("Account registered for player {PlayerId}", PlayerId.value profile.PlayerId)
                     Ok (AccountAccessResult.Registered profile)
                 | Ok (AccountWorkResult.Verified _) when state.Stopping || reply.IsCompleted -> Error AccountAccessError.Unavailable
-                | Ok (AccountWorkResult.Verified(profile, rememberToken)) ->
-                    logger.LogDebug("Account authenticated for player {PlayerId}", PlayerId.value profile.PlayerId)
-                    issue options clock state profile rememberToken
+                | Ok (AccountWorkResult.Verified(player, rememberToken)) ->
+                    logger.LogDebug("Account authenticated for player {PlayerId}", PlayerId.value player.Profile.PlayerId)
+                    issue options clock state player rememberToken
+                | Ok (AccountWorkResult.Renamed profile) ->
+                    // Exclusive: no login was pending, so outstanding tickets are the only stale copies.
+                    let keys = state.Tickets |> Seq.filter (fun entry -> entry.Value.Player.Profile.PlayerId = profile.PlayerId) |> Seq.map _.Key |> Seq.toArray
+                    for key in keys do state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Profile = profile } }
+                    logger.LogInformation("Display name changed for player {PlayerId}", PlayerId.value profile.PlayerId)
+                    Ok (AccountAccessResult.Renamed profile)
                 | Ok (AccountWorkResult.LoggedOut key) ->
                     // Logout is exclusive: no pending resume can issue a late ticket.
                     let keys = state.Tickets |> Seq.filter (fun entry -> entry.Value.RememberKey = key) |> Seq.map _.Key |> Seq.toArray
                     for key in keys do state.Tickets.Remove key |> ignore
                     Ok AccountAccessResult.Completed
                 | Ok (AccountWorkResult.Revoked(profile, code)) ->
-                    let keys = state.Tickets |> Seq.filter (fun entry -> entry.Value.Profile.PlayerId = profile.PlayerId) |> Seq.map _.Key |> Seq.toArray
+                    let keys = state.Tickets |> Seq.filter (fun entry -> entry.Value.Player.Profile.PlayerId = profile.PlayerId) |> Seq.map _.Key |> Seq.toArray
                     for key in keys do state.Tickets.Remove key |> ignore
                     logger.LogInformation("Account access revoked for player {PlayerId}", PlayerId.value profile.PlayerId)
                     let delivered =

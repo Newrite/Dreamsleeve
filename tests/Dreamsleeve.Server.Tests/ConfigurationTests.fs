@@ -271,4 +271,52 @@ let tests = testList "Server configuration" [
             match Configuration.parse [|"--config"; serverPath|] with
             | Ok (LaunchCommand.Run config) -> Expect.equal config.Identity Configuration.defaults.Identity "example documents the defaults"
             | other -> failtestf "%A" other)
+    testCase "the admin panel section has loopback defaults and an old server.toml without it keeps them" <| fun _ ->
+        let admin = Configuration.defaults.Admin
+        Expect.isTrue admin.Enabled "enabled by default"
+        Expect.equal admin.ListenUrl "http://127.0.0.1:8780" "loopback only"
+        Expect.isFalse admin.TrustForwardedHeaders "forwarded headers are not trusted"
+        Expect.isFalse Configuration.defaults.Authentication.TrustForwardedHeaders "same for authentication"
+        withFile "[Authentication]\nListenUrl = \"http://127.0.0.1:8779\"\nAllowRegistration = false\n" (fun path ->
+            match Configuration.parse [|"--config"; path|] with
+            | Ok (LaunchCommand.Run config) -> Expect.equal config.Admin admin "an older file gets the defaults"
+            | other -> failtestf "%A" other)
+        withFile "[Admin]\nEnabled = false\nListenUrl = \"http://0.0.0.0:8780\"\n" (fun path ->
+            Expect.isOk (Configuration.parse [|"--config"; path|]) "a disabled panel is not validated")
+
+    testCase "the admin panel refuses remote HTTP without permission, a shared port and bad limits" <| fun _ ->
+        for source in [
+            "[Admin]\nListenUrl = \"http://0.0.0.0:8780\"\n"
+            "[Admin]\nListenUrl = \"http://admin.example.test:8780\"\n"
+            "[Admin]\nListenUrl = \"http://127.0.0.1:8779\"\n"
+            "[Admin]\nListenUrl = \"https://example.test/admin\"\n"
+            "[Admin]\nAllowInsecureLoopback = false\n"
+            "[Admin]\nSessionHours = 0\n"
+            "[Admin]\nCodeLifetimeMinutes = 61\n"
+            "[Admin]\nLoginAttemptsPerMinute = 0\n"
+            "[Admin]\nRequestsPerMinute = 0\n"
+            "[Admin]\nTrustForwardedHeaders = 1\n"
+            "[Admin]\nPassword = \"x\"\n"
+        ] do
+            withFile source (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) $"refused: {source}")
+        for source in [
+            "[Admin]\nListenUrl = \"http://0.0.0.0:8780\"\nAllowInsecureRemote = true\n"
+            "[Admin]\nListenUrl = \"https://admin.example.test:9443\"\n"
+            "[Admin]\nListenUrl = \"http://[::1]:8780\"\nTrustForwardedHeaders = true\n"
+        ] do
+            withFile source (fun path ->
+                Expect.isOk (Configuration.parse [|"--config"; path|]) $"accepted: {source}")
+
+    testCase "the bundled server example documents the authentication and admin defaults" <| fun _ ->
+        let rec find (directory: DirectoryInfo) =
+            let candidate = Path.Combine(directory.FullName, "src", "Dreamsleeve.Server", "server.example.toml")
+            if File.Exists candidate then candidate
+            elif isNull directory.Parent then failtest "server.example.toml not found"
+            else find directory.Parent
+        match Configuration.parse [|"--config"; find (DirectoryInfo AppContext.BaseDirectory)|] with
+        | Ok (LaunchCommand.Run config) ->
+            Expect.equal config.Admin Configuration.defaults.Admin "[Admin] equals the defaults"
+            Expect.equal config.Authentication Configuration.defaults.Authentication "[Authentication] equals the defaults"
+        | other -> failtestf "%A" other
 ]

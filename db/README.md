@@ -79,3 +79,19 @@ and absolute UTC expiry. Raw bearer tokens are never persisted in SQLite. The re
 transaction consumes its code, replaces the password hash and revokes all account tokens.
 The account service also invalidates in-memory tickets and notifies the game runtime.
 Do not bypass that service by modifying live authentication rows from an admin UI.
+
+Schema v5 (`1790812800000_admin.sql`) adds the web admin panel (docs/AdminPanelRu.md).
+Times are Unix milliseconds (UTC); secrets are stored only as SHA-256 hashes.
+
+| Table | Contents |
+|---|---|
+| `admin_accounts(id, username UNIQUE, password_hash, created_at)` | Administrators, separate from player accounts; same PasswordHasher |
+| `admin_sessions(token_hash PK, admin_id, created_at, expires_at)` | Panel cookies; a new password deletes all of an administrator's rows |
+| `admin_api_tokens(token_hash PK, admin_id, label, created_at)` | REST bearer tokens with a 1..64 character label |
+| `player_roles(player_id PK -> profiles, role, granted_by, granted_at)` | 0 player, 1 moderator; read with the profile at login/resume |
+| `admin_audit(id, admin_id, action, target, details, at)` | One line per panel mutation; indexed by `admin_id` and `at` |
+
+Only the admin service's bounded workers (`SqliteAdminStore`) touch these tables; every
+panel mutation writes its audit line in the same transaction or right after the owning
+agent reports success. One-time setup/reset codes live only in the service's memory.
+The DOWN section drops the five tables and returns `user_version` to 4.

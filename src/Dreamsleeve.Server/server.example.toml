@@ -97,6 +97,8 @@ AllowInsecureLoopback = true
 AllowInsecureRemote = false
 AllowRegistration = true
 CertificatePath = ""
+# true only behind a reverse proxy on this machine: X-Forwarded-For/Proto are then read from loopback.
+TrustForwardedHeaders = false
 RequestsPerMinute = 120
 RequestTimeoutSeconds = 15
 
@@ -109,6 +111,22 @@ PasswordIterations = 210000
 SavedLoginDays = 30
 MaxSavedLogins = 8
 ResetLifetimeMinutes = 15
+
+# Web admin panel (docs/AdminPanelRu.md). Loopback only by default: reach it through an SSH tunnel
+# or a reverse proxy. Without administrators the server prints a one-time setup code to the console.
+[Admin]
+Enabled = true
+ListenUrl = "http://127.0.0.1:8780"
+AllowInsecureLoopback = true
+AllowInsecureRemote = false      # passwords without TLS only by explicit choice, as for authentication
+CertificatePath = ""             # direct HTTPS without a reverse proxy
+TrustForwardedHeaders = false    # true only behind a proxy on loopback
+SessionHours = 12
+CodeLifetimeMinutes = 15
+LoginAttemptsPerMinute = 10      # per client address and per administrator name
+RequestsPerMinute = 600          # all other requests per client address
+MaxConnections = 64
+RequestTimeoutSeconds = 15
 
 [Logging]
 MinimumLevel = "Information"

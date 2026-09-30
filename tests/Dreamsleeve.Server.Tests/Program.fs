@@ -9,6 +9,7 @@ let main argv =
         IdentityTests.tests
         GroundMarkDomainTests.tests
         ModerationTests.tests
+        AdminDomainTests.tests
         PlayerDetailsTests.tests
         AgentTests.tests
         CodecTests.tests
@@ -21,16 +22,20 @@ let main argv =
         ProfileStoreTests.tests
         SqliteAccountStoreTests.tests
         AuthServiceTests.tests
+        AdminStoreTests.tests
+        AdminServiceTests.tests
         ChatRoomAgentTests.tests
         PresenceAgentTests.tests
         PlayerSessionTests.tests
         ServerRuntimeTests.tests
         ServerRuntimeTests.hiddenIdentityTests
+        ServerRuntimeTests.adminTests
         EnetTransportTests.tests
         TransportOwnerTests.tests
         ConfigurationTests.tests
         AnnouncementTests.tests
         GroundMarkTests.tests
         AuthenticationHttpTests.tests
+        AdminHttpTests.tests
     ]
     |> runTestsWithCLIArgs [] argv

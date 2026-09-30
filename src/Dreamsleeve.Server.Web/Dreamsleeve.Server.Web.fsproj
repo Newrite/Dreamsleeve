@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <WarningsAsErrors>$(WarningsAsErrors);FS0025</WarningsAsErrors>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="WebHost.fs" />
+        <Compile Include="Authentication/AuthRoutes.fs" />
+        <Compile Include="Admin/AdminPorts.fs" />
+        <Compile Include="Admin/AdminModels.fs" />
+        <Compile Include="Admin/AdminViews.fs" />
+        <Compile Include="Admin/AdminRoutes.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Served from the assembly: no CDN, no files beside the server. -->
+        <EmbeddedResource Include="Resources/htmx.min.js" LogicalName="Dreamsleeve.Server.Web.htmx.min.js" />
+        <EmbeddedResource Include="Resources/admin.css" LogicalName="Dreamsleeve.Server.Web.admin.css" />
+        <EmbeddedResource Include="Resources/htmx.LICENSE" LogicalName="Dreamsleeve.Server.Web.htmx.LICENSE" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Falco" Version="5.2.0" />
+        <PackageReference Include="Falco.Markup" Version="1.4.0" />
+        <PackageReference Include="Falco.Htmx" Version="1.2.0" />
+        <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+        <ProjectReference Include="../Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
+        <ProjectReference Include="../Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
+        <ProjectReference Include="../Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />
+        <ProjectReference Include="../Dreamsleeve.Server.Infrastructure/Dreamsleeve.Server.Infrastructure.fsproj" />
+    </ItemGroup>
+
+</Project>

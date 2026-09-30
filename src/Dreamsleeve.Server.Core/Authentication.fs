@@ -10,9 +10,15 @@ type SessionAuthenticationError =
     | InvalidTicket
     | Unavailable
 
+/// The stored profile and role behind a consumed ticket.
+type AuthenticatedPlayer = {
+    Profile: PlayerData
+    Role: PlayerRole
+}
+
 type SessionAuthenticationReply = {
     OperationId: Guid
-    Result: Result<PlayerData, SessionAuthenticationError>
+    Result: Result<AuthenticatedPlayer, SessionAuthenticationError>
 }
 
 /// An opaque, short-lived credential; never include it in diagnostics.

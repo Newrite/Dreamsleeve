@@ -14,6 +14,7 @@ open Dreamsleeve.Agent
 open Dreamsleeve.Server
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure
+open Dreamsleeve.Server.Web.Authentication
 open Expecto
 open AgentTests
 open BackgroundTests
@@ -44,7 +45,8 @@ let private withHost customize execute run = task {
             Authentication = { Configuration.defaults.Authentication with ListenUrl = "http://127.0.0.1:0" }
     }
     let settings = customize initial
-    let app = AuthenticationHttp.build settings moderation auth logger
+    // The host exactly as Program builds it: the same settings mapping and ports.
+    let app = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth auth) logger
     let! outcome = task {
         try
             do! app.StartAsync()
@@ -77,7 +79,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ -> response.Reply signedIn
             | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _ -> response.Reply (Ok AccountAccessResult.Completed)
             | AccountAccessCommand.Register _ | AccountAccessCommand.Login _
-            | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ -> failtest "Unexpected public command"
+            | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
+            | AccountAccessCommand.RenamePlayer _ -> failtest "Unexpected public command"
         withHost id execute (fun http received -> task {
             use! remembered = post http "auth/login" {| username = "player"; password = password; rememberMe = true |}
             status 200 remembered
@@ -102,7 +105,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Register _ -> response.Reply(Ok (AccountAccessResult.Registered profile))
             | AccountAccessCommand.Login _ -> response.Reply signedIn
             | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ | AccountAccessCommand.Logout _
-            | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ -> failtest "Unexpected command"
+            | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
+            | AccountAccessCommand.RenamePlayer _ -> failtest "Unexpected command"
         withHost id execute (fun http received -> task {
             use! created = post http "auth/register" {|
                 username = " PLAYER "; displayName = " e\u0301 "; password = password
@@ -118,7 +122,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
                 equal "é" (DisplayName.value displayName)
                 equal password actualPassword
             | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ | AccountAccessCommand.Logout _
-            | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ -> failwith "Wrong registration command."
+            | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
+            | AccountAccessCommand.RenamePlayer _ -> failwith "Wrong registration command."
 
             use! loggedIn = post http "auth/login" credentials
             status 200 loggedIn

@@ -29,12 +29,20 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player
 Аккаунт и профиль имеют отдельные ID; миграция уже позволяет развивать их отдельно.
 
 Конфигурация TOML читается до запуска listeners, неизвестные поля отклоняются.
-Секции: Server, Runtime, Database, Authentication, Logging. Миграции из `db/migrations`
+Секции: Server, Runtime, Database, Authentication, Admin, Logging. Миграции из `db/migrations`
 копируются в выходной каталог и применяются до допуска клиентов. Неизвестная версия,
 чужой application_id или повреждённая схема останавливают startup.
 [Схема и генерация SqlHydra](../db/README.md).
 
 ## HTTP-контракт и ограничения
+
+HTTP-адаптер живёт в `src/Dreamsleeve.Server.Web/Authentication/AuthRoutes.fs` (Falco-маршруты)
+на общей с веб-админкой обвязке `WebHost`: Kestrel-лимиты, rate limiter по адресу клиента,
+ошибка `{code, message}`, ограниченное чтение тела, заголовки `nosniff`/CSP/`no-store`.
+Обработчики зависят от порта `AuthPorts`, агент подключает `WebPorts.auth` в `Dreamsleeve.Server`.
+Переписан 30.09.2026 без изменения контракта: маршруты, поля JSON, коды и тексты ошибок, лимит
+тела, 415/413/429/499/503 и `Cache-Control: no-store` те же, прежние HTTP-тесты проходят с
+прежними ожиданиями. Добавились только общие заголовки безопасности ответа.
 
 | Маршрут | JSON | Успех |
 |---|---|---|
@@ -82,6 +90,10 @@ Authentication.ListenUrl, CertificatePath и при необходимости �
 стандартные настройки сертификата Kestrel. Клиент проверяет сертификат и не
 следует redirect при передаче credentials.
 
+За обратным прокси на этой же машине `Authentication.TrustForwardedHeaders = true` включает
+`X-Forwarded-For`/`X-Forwarded-Proto` (только от `127.0.0.1`/`::1`, один переход): rate limit
+считает адрес клиента, а не прокси. По умолчанию `false` — заголовки игнорируются.
+
 Билет не делает ENet зашифрованным транспортом: перехват игровых UDP-пакетов
 остаётся вне этой реализации. Для открытой сети потребуется отдельное решение
 защиты игрового канала. Реализованы сохранённый вход и административный сброс пароля; MFA,
@@ -111,13 +123,17 @@ Console/File sinks синхронны; неблокирующая очередь
 | Serilog | 4.4.0 | Structured logging |
 | Serilog.Extensions.Hosting | 10.0.0 | Интеграция ILogger/host |
 | Serilog.Sinks.Console / File | 6.1.1 / 7.0.0 | Консоль и rotating JSON files |
+| Falco | 5.2.0 | Маршруты и ответы обоих HTTP-хостов (Apache-2.0, net10.0) |
+| Falco.Markup | 1.4.0 | SSR-разметка админки (Apache-2.0) |
+| Falco.Htmx | 1.2.0 | Постоянные `hx-*` атрибуты таблицы онлайна (Apache-2.0) |
 
-ASP.NET Core входит в shared framework через Web SDK. Для двух JSON-маршрутов
-используются встроенные routing, Kestrel и rate limiting. yENet, protobuf, UMX,
-Expecto и Faqt сохраняют текущие версии; массового обновления несвязанных пакетов нет.
+ASP.NET Core входит в shared framework: `Dreamsleeve.Server.Web` и `Dreamsleeve.Server` используют
+`Microsoft.NET.Sdk` + `FrameworkReference Microsoft.AspNetCore.App` (Web SDK больше не нужен).
+Используются встроенные routing, Kestrel, forwarded headers и rate limiting. htmx 2.0.11 (0BSD)
+вендорен в `Resources/` как embedded resource. yENet, protobuf, UMX, Expecto и Faqt сохраняют
+текущие версии; массового обновления несвязанных пакетов нет.
 
 - Fling отложен до сложных связанных агрегатов; две строки регистрации не требуют ORM-слоя.
-- Falco/Markup/Htmx отложены до реальной SSR-админки.
 - FSharp.Logf не нужен для текущих именованных структурированных ILogger-шаблонов.
 - Serilog.Settings.Configuration не добавлен: logger уже настраивается валидируемой типизированной секцией TOML.
 - Tomlyn 2.10.1 читает и записывает файловую конфигурацию сервера в TOML.
@@ -214,10 +230,12 @@ Resume не продлевает срок и не меняет секрет, п�
 консоли; его нужно передать пользователю приватно. Произвольный пароль или токен
 администратор в БД/форму не записывает: генерация и хеширование принадлежат сервису.
 
-Операции `CreatePasswordReset` и `RevokeAccount` доступны доверенному серверному
-вызывающему коду. Публичных HTTP-маршрутов для них нет. Будущая админка после
-проверки прав вызывает эти команды и отображает результат; механизм credential
-reset не нужно дублировать. Нельзя напрямую маппить весь AccountAccessCommand из JSON.
+Операции `CreatePasswordReset`, `RevokeAccount` и `RenamePlayer` доступны доверенному
+серверному вызывающему коду. Публичных HTTP-маршрутов для них нет. Веб-админка
+([AdminPanelRu.md](AdminPanelRu.md)) после проверки сессии администратора вызывает эти команды
+через `AdminPorts.Account` и показывает результат (одноразовый код — один раз); механизм
+credential reset не дублируется, строка `admin_audit` пишется после успеха. Нельзя напрямую
+маппить весь AccountAccessCommand из JSON.
 
 Выдача нового reset-кода и успешная замена пароля отзывают все сохранённые токены,
 предыдущие коды и неиспользованные билеты аккаунта; runtime закрывает его соединение.

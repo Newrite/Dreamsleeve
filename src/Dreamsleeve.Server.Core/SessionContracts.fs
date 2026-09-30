@@ -59,6 +59,9 @@ type SessionHostCommand =
     /// Shows the reserved profile again or hides it; the pseudonym is new only
     /// when the names were shown everywhere before.
     | ChangeIdentity of Guid * HiddenIdentity * ReliableAgentRef<Pseudonym voption>
+    /// The moderated profile after an administrator renamed the player; the
+    /// names shown online (PseudonymBook) follow it.
+    | UpdateProfile of Guid * PlayerData
     | Activate of Guid * requestId: uint64 * SessionWelcome
     | Send of Guid * ServerResponse
     | Close of Guid * reason: string

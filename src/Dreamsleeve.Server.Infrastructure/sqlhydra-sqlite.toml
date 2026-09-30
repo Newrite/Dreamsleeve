@@ -12,5 +12,5 @@ table_declarations = true
 left_joined_views = false
 
 [filters]
-include = ["main/accounts", "main/profiles", "main/account_passwords", "main/account_identities", "main/auth_tokens", "main/ground_marks"]
+include = ["main/accounts", "main/profiles", "main/account_passwords", "main/account_identities", "main/auth_tokens", "main/ground_marks", "main/admin_accounts", "main/admin_sessions", "main/admin_api_tokens", "main/player_roles", "main/admin_audit"]
 exclude = []

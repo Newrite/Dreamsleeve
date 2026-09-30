@@ -42,7 +42,7 @@ let private createAuthentication () =
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
-        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok profile | None -> Error SessionAuthenticationError.InvalidTicket)
+        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player } | None -> Error SessionAuthenticationError.InvalidTicket)
     }
     Agent.Start(AgentOptions.create "fixture-authentication",
         AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
@@ -375,7 +375,7 @@ let tests = testList "ServerRuntime" [
                     (Dreamsleeve.Server.Domain.Username.create 32 "race" |> ok)
                     (Dreamsleeve.Server.Domain.DisplayName.create 64 "Race" |> ok)
             let respond (request: SessionAuthenticationRequest) =
-                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok profile }
+                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player } }
             equal AgentTryDeliveryResult.Closed (respond oldRequest)
             equal AgentTryDeliveryResult.Posted (respond newRequest)
             let! snapshot = welcome fixture replacement
@@ -526,7 +526,7 @@ let private namedAuthentication (accounts: (string * string * string) list) () =
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
-        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok profile | None -> Error SessionAuthenticationError.InvalidTicket)
+        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player } | None -> Error SessionAuthenticationError.InvalidTicket)
     }
     Agent.Start(AgentOptions.create "named-authentication",
         AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
@@ -658,6 +658,137 @@ let hiddenIdentityTests = testList "ServerRuntime hidden identity" [
             equal RequestRejectionCode.HiddenIdentityNotAllowed value.RequestRejected.Code
             let! closed = receive fixture.Closed
             equal alice closed
+        })
+    }
+]
+
+// Accounts with a stored role, as a consumed ticket carries it.
+let private roleAuthentication (accounts: (string * string * string * Dreamsleeve.Server.Domain.PlayerRole) list) () =
+    let identities =
+        accounts
+        |> List.mapi (fun index (name, username, display, role) ->
+            ticket name,
+            ({ Profile =
+                 Dreamsleeve.Server.Domain.PlayerData.create
+                     (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
+                     (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
+                     (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok)
+               Role = role } : AuthenticatedPlayer))
+        |> Map.ofList
+    let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
+        OperationId = request.OperationId
+        Result = (match Map.tryFind request.Ticket identities with Some player -> Ok player | None -> Error SessionAuthenticationError.InvalidTicket)
+    }
+    Agent.Start(AgentOptions.create "role-authentication",
+        AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
+
+let private playerId value = Dreamsleeve.Server.Domain.PlayerId.create value |> ok
+
+// The panel's path: list the sessions, then ask each one through the describer.
+let private describePlayer fixture (describer: Agent<DescribeRequest>) id = task {
+    let! rows = fixture.Runtime.AskAsync ServerRuntimeMessage.ListSessions |> awaitResult
+    let row = rows |> List.find (fun row -> row.PlayerId = Some id)
+    return! SessionDescriber.describe describer guard row.Session.Value
+}
+
+let private describeUntil fixture describer id (accept: Dreamsleeve.Server.Domain.AdminPlayerView -> bool) = task {
+    let mutable found = None
+    let mutable attempts = 0
+    while found.IsNone do
+        attempts <- attempts + 1
+        check (attempts < 200) "The session never showed the expected state."
+        match! describePlayer fixture describer id with
+        | Some view when accept view -> found <- Some view
+        | Some _ | None -> do! Task.Delay 10
+    return found.Value
+}
+
+let adminTests = testList "ServerRuntime admin panel" [
+    testTask "sessions list with phases and describe the real identity of a hidden player next to the pseudonym" {
+        let accounts = [ "alice", "alice.real", "Алиса Настоящая", Dreamsleeve.Server.Domain.PlayerRole.Moderator
+                         "bob", "bob", "Bob", Dreamsleeve.Server.Domain.PlayerRole.Player ]
+        do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (roleAuthentication accounts) (fun fixture -> task {
+            use describer = SessionDescriber.start 8
+            let bob = connect fixture "bob"
+            let! _ = welcome fixture bob
+            let alice = connectHidden fixture "alice"
+            let! opened = welcome fixture alice
+            fixture.Input.Enqueue(incoming(alice, beginCharacter 2UL "Секретная Героиня"))
+            let! rows = fixture.Runtime.AskAsync ServerRuntimeMessage.ListSessions |> awaitResult
+            equal 2 rows.Length
+            check (rows |> List.forall (fun row -> row.Phase = RuntimeSessionPhase.Ready && row.Session.IsSome)) "both sessions are ready"
+            let! view = describeUntil fixture describer (playerId opened.SelfPlayerId) (fun view -> view.CharacterName.IsSome)
+            equal "alice.real" (Dreamsleeve.Server.Domain.Username.value view.Username)
+            equal "Алиса Настоящая" (Dreamsleeve.Server.Domain.DisplayName.value view.DisplayName)
+            equal (ValueSome "Секретная Героиня") (view.CharacterName |> ValueOption.map Dreamsleeve.Server.Domain.CharacterName.value)
+            equal (ValueSome "Страж") (view.Pseudonym |> ValueOption.map Dreamsleeve.Server.Domain.Pseudonym.value)
+            equal Dreamsleeve.Server.Domain.HiddenIdentity.Everywhere view.Hiding
+            // The role comes with the consumed ticket.
+            equal Dreamsleeve.Server.Domain.PlayerRole.Moderator view.Role
+            equal Dreamsleeve.Server.Domain.AdminSessionPhase.Active view.Phase
+        })
+    }
+
+    testTask "a role change reaches the live session and a session that opens later" {
+        let accounts = [ "alice", "alice", "Alice", Dreamsleeve.Server.Domain.PlayerRole.Player
+                         "bob", "bob", "Bob", Dreamsleeve.Server.Domain.PlayerRole.Player ]
+        do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (roleAuthentication accounts) (fun fixture -> task {
+            use describer = SessionDescriber.start 8
+            let alice = connect fixture "alice"
+            let! opened = welcome fixture alice
+            let aliceId = playerId opened.SelfPlayerId
+            do! post fixture.Runtime (ServerRuntimeMessage.SetPlayerRole(aliceId, Dreamsleeve.Server.Domain.PlayerRole.Moderator))
+            let! live = describeUntil fixture describer aliceId (fun view -> view.Role = Dreamsleeve.Server.Domain.PlayerRole.Moderator)
+            equal Dreamsleeve.Server.Domain.PlayerRole.Moderator live.Role
+            // Bob's ticket still says Player: the change stored before his session wins.
+            let bobId = playerId 2UL
+            do! post fixture.Runtime (ServerRuntimeMessage.SetPlayerRole(bobId, Dreamsleeve.Server.Domain.PlayerRole.Moderator))
+            let bob = connect fixture "bob"
+            let! _ = welcome fixture bob
+            let! later = describeUntil fixture describer bobId (fun view -> view.Role = Dreamsleeve.Server.Domain.PlayerRole.Moderator)
+            equal Dreamsleeve.Server.Domain.PlayerRole.Moderator later.Role
+        })
+    }
+
+    testTask "a rename reaches the other players and never reveals the new name of a hidden player" {
+        let accounts = [ "alice", "alice", "Alice", Dreamsleeve.Server.Domain.PlayerRole.Player
+                         "bob", "bob", "Bob", Dreamsleeve.Server.Domain.PlayerRole.Player
+                         "carol", "carol", "Carol", Dreamsleeve.Server.Domain.PlayerRole.Player ]
+        do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (roleAuthentication accounts) (fun fixture -> task {
+            use describer = SessionDescriber.start 8
+            let carol = connect fixture "carol"
+            let! _ = welcome fixture carol
+            let bob = connect fixture "bob"
+            let! bobOpened = welcome fixture bob
+            let alice = connectHidden fixture "alice"
+            let! aliceOpened = welcome fixture alice
+            let renamed id username display =
+                Dreamsleeve.Server.Domain.PlayerData.create (playerId id) (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
+                    (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok)
+            // A shown player: the others get PlayerUpdated with the new name.
+            do! post fixture.Runtime (ServerRuntimeMessage.RenamePlayer(renamed bobOpened.SelfPlayerId "bob" "Боб Новый"))
+            let! _, updated = nextWhere fixture (fun target value ->
+                target = carol && value.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
+                && value.PlayerUpdated.Player.Profile.PlayerId = bobOpened.SelfPlayerId
+                && value.PlayerUpdated.Player.Profile.DisplayName = "Боб Новый")
+            equal "Боб Новый" updated.PlayerUpdated.Player.Profile.DisplayName
+            let! view = describeUntil fixture describer (playerId bobOpened.SelfPlayerId) (fun view -> Dreamsleeve.Server.Domain.DisplayName.value view.DisplayName = "Боб Новый")
+            equal "bob" (Dreamsleeve.Server.Domain.Username.value view.Username)
+            // A hidden player: the panel sees the new name, other players only the pseudonym.
+            do! post fixture.Runtime (ServerRuntimeMessage.RenamePlayer(renamed aliceOpened.SelfPlayerId "alice" "Тайное Новое Имя"))
+            let! hidden = describeUntil fixture describer (playerId aliceOpened.SelfPlayerId) (fun view -> Dreamsleeve.Server.Domain.DisplayName.value view.DisplayName = "Тайное Новое Имя")
+            equal (ValueSome "Страж") (hidden.Pseudonym |> ValueOption.map Dreamsleeve.Server.Domain.Pseudonym.value)
+            fixture.Input.Enqueue(incoming(alice, chat 3UL "after the rename"))
+            let mutable seen = false
+            while not seen do
+                let! target, value = receive fixture.Output
+                if target = carol then
+                    check (not (contains "Тайное Новое Имя" (value.ToByteArray()))) $"A packet to another player leaks the new name: {value}"
+                    match value.PayloadCase with
+                    | ServerPacket.PayloadOneofCase.ChatPublished when value.ChatPublished.Message.Text = "after the rename" ->
+                        equal "Страж" value.ChatPublished.Message.Author.DisplayName
+                        seen <- true
+                    | _ -> ()
         })
     }
 ]

@@ -13,7 +13,8 @@ dist/Client (copy into Skyrim Data or install as a mod):
 dist/Server (framework-dependent `dotnet publish` of Dreamsleeve.Server, Release):
   Dreamsleeve.Server.dll and dependencies, db/migrations, server.example.toml, README.md,
   moderation.example.toml and moderation.toml (word list, created only when absent),
-  pseudonyms.example.toml and pseudonyms.toml (hidden-name dictionary, created only when absent)
+  pseudonyms.example.toml and pseudonyms.toml (hidden-name dictionary, created only when absent),
+  THIRD_PARTY_NOTICES.md (the admin panel's htmx is embedded in Dreamsleeve.Server.Web.dll)
 
 The script never touches a game folder or a running server: installing is a copy,
 and an existing client.toml/ui.toml/server.toml must not be overwritten on update.
@@ -31,6 +32,9 @@ ROOT = Path(__file__).resolve().parent.parent
 UI = ROOT / "src" / "Dreamsleeve.Client.UI"
 CLIENT = ROOT / "src" / "Dreamsleeve.Client"
 SERVER = ROOT / "src" / "Dreamsleeve.Server"
+WEB = ROOT / "src" / "Dreamsleeve.Server.Web"
+# Test, dev and benchmark builds never ship with the server.
+SERVER_FORBIDDEN = ("Tests", "Benchmarks", "Client.Dev", "TraceReport", "Expecto", "Faqt")
 BUILD = ROOT / "build" / "windows" / "x64" / "releasedbg"
 FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data")
 FORBIDDEN_SUFFIXES = (".map", ".db", ".log")
@@ -157,6 +161,34 @@ def client_readme() -> str:
 """
 
 
+def server_notices() -> str:
+    htmx = (WEB / "Resources" / "htmx.LICENSE").read_text(encoding="utf-8").strip()
+    return ("# Third-party notices\n\n"
+            "The admin panel (Dreamsleeve.Server.Web.dll) embeds htmx 2.0.11 (https://htmx.org), "
+            "served from the assembly at /static/htmx.min.js; its license:\n\n"
+            f"```\n{htmx}\n```\n\n"
+            "Falco, Falco.Markup and Falco.Htmx (https://github.com/FalcoFramework) are licensed under Apache-2.0. "
+            "Other packages (Serilog, Tomlyn, SqlHydra, Migrondi, Microsoft.Data.Sqlite, yENet, Google.Protobuf, FSharp.Core) "
+            "keep their own licenses, listed in their NuGet packages.\n")
+
+
+def check_server(server: Path) -> None:
+    web = server / "Dreamsleeve.Server.Web.dll"
+    if not web.exists():
+        raise SystemExit(f"Missing {web}")
+    htmx = (WEB / "Resources" / "htmx.min.js").read_bytes()
+    if htmx not in web.read_bytes():
+        raise SystemExit("Dreamsleeve.Server.Web.dll does not embed the vendored htmx.min.js")
+    if "Zero-Clause BSD" not in (server / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"):
+        raise SystemExit("THIRD_PARTY_NOTICES.md lacks the htmx license")
+    for item in server.rglob("*"):
+        if any(marker in item.name for marker in SERVER_FORBIDDEN):
+            raise SystemExit(f"Test or dev file in dist/Server: {item}")
+    # User files are stashed while dist is rebuilt: a server.toml here came from the build.
+    if (server / "server.toml").exists():
+        raise SystemExit("dist/Server must not ship a server.toml")
+
+
 def server_readme() -> str:
     return """# Dreamsleeve Server
 
@@ -192,7 +224,18 @@ username/display name, сообщения и публикуемое имя пе�
 Объявления: `[Announcements]` — допуск объявлений клиентов (`TrustedClient`,
 `ThirdParty`, по умолчанию оба разрешены), их отдельный лимит частоты и расписание
 серверных объявлений `[[Announcements.Scheduled]]`. Разовое объявление администратора —
-команда консоли `announce <текст>`.
+команда консоли `announce <текст>` или страница «Объявление» веб-админки.
+
+Веб-админка: `[Admin]`, по умолчанию http://127.0.0.1:8780 — только loopback. Пока
+администраторов нет, сервер при запуске печатает в консоль одноразовый код настройки
+(`admin-setup` выдаёт новый); откройте `/setup`, введите код, имя и пароль. Забытый
+пароль администратора: команда `admin-reset <имя>` и страница `/reset`. Панель
+показывает онлайн (с настоящими именами скрытых игроков), игроков, роль, переименование,
+сброс пароля и отзыв доступа, объявления, аудит, токены REST API и конфигурацию только
+на чтение. Отключается `[Admin] Enabled = false`. Для удалённого доступа оставьте
+loopback и ходите через SSH-туннель (`ssh -L 8780:127.0.0.1:8780 host`) или обратный
+прокси с HTTPS (`TrustForwardedHeaders = true` только для прокси на этой же машине);
+HTTP без TLS наружу — только явным `AllowInsecureRemote`. Подробно — docs/AdminPanelRu.md.
 """
 
 
@@ -268,6 +311,8 @@ def main() -> int:
         shutil.copy2(SERVER / "pseudonyms.example.toml", server / "pseudonyms.example.toml")
         shutil.copy2(SERVER / "pseudonyms.example.toml", server / "pseudonyms.toml")
         (server / "README.md").write_text(server_readme(), encoding="utf-8")
+        (server / "THIRD_PARTY_NOTICES.md").write_text(server_notices(), encoding="utf-8")
+        check_server(server)
 
     for item in output.rglob("*"):
         relative = item.relative_to(output).parts

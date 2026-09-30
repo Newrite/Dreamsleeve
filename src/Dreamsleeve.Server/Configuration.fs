@@ -17,9 +17,32 @@ type AuthenticationSettings = {
     AllowInsecureLoopback: bool
     AllowRegistration: bool
     CertificatePath: string
+    /// X-Forwarded-For/Proto from a proxy on this machine only.
+    TrustForwardedHeaders: bool
     RequestsPerMinute: int
     RequestTimeoutSeconds: int
     Service: AccountServiceOptions
+}
+
+/// The web panel host. By default it listens on loopback only; see docs/AdminPanelRu.md.
+type AdminSettings = {
+    Enabled: bool
+    ListenUrl: string
+    AllowInsecureLoopback: bool
+    /// Passwords without TLS outside loopback only by explicit choice, like authentication.
+    AllowInsecureRemote: bool
+    /// Direct HTTPS without a reverse proxy.
+    CertificatePath: string
+    /// true only behind a proxy on loopback.
+    TrustForwardedHeaders: bool
+    SessionHours: int
+    CodeLifetimeMinutes: int
+    /// Sign-in, setup and reset attempts per client address and per name, each minute.
+    LoginAttemptsPerMinute: int
+    /// All other requests per client address and minute.
+    RequestsPerMinute: int
+    MaxConnections: int
+    RequestTimeoutSeconds: int
 }
 
 /// Word-list filtering of names and chat text. Anti-spam limits are in Runtime.Chat.
@@ -34,6 +57,7 @@ type ApplicationConfig = {
     Runtime: ServerRuntimeOptions
     Database: SqliteAccountStoreConfig
     Authentication: AuthenticationSettings
+    Admin: AdminSettings
     Logging: LoggingSettings
     Moderation: ModerationSettings
     Identity: IdentityOptions
@@ -55,8 +79,14 @@ module Configuration =
         Database = { DatabasePath = "data/dreamsleeve.db"; BusyTimeoutSeconds = 5 }
         Authentication = {
             ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; AllowRegistration = true
-            CertificatePath = ""; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
+            CertificatePath = ""; TrustForwardedHeaders = false; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
             Service = AuthService.defaults
+        }
+        Admin = {
+            Enabled = true; ListenUrl = "http://127.0.0.1:8780"; AllowInsecureLoopback = true; AllowInsecureRemote = false
+            CertificatePath = ""; TrustForwardedHeaders = false; SessionHours = AdminService.defaults.SessionHours
+            CodeLifetimeMinutes = AdminService.defaults.CodeLifetimeMinutes; LoginAttemptsPerMinute = AdminService.defaults.LoginAttemptsPerMinute
+            RequestsPerMinute = 600; MaxConnections = 64; RequestTimeoutSeconds = 15
         }
         Logging = ServerLogging.defaults
         Moderation = { Enabled = true; RulesPath = "moderation.toml" }
@@ -169,8 +199,48 @@ module Configuration =
         | :? IOException as error -> Error error.Message
         | :? UnauthorizedAccessException as error -> Error error.Message
 
+    /// The admin service takes the password cost of player accounts.
+    let adminService (config: ApplicationConfig) : AdminServiceOptions =
+        { AdminService.defaults with
+            PasswordIterations = config.Authentication.Service.PasswordIterations
+            SessionHours = config.Admin.SessionHours
+            CodeLifetimeMinutes = config.Admin.CodeLifetimeMinutes
+            LoginAttemptsPerMinute = config.Admin.LoginAttemptsPerMinute }
+
+    let private isLoopback (uri: Uri) = uri.Host = "127.0.0.1" || uri.Host = "[::1]" || uri.Host = "::1"
+
+    /// One rule for both hosts: an absolute URL of scheme, host and port only;
+    /// plain HTTP only on an explicitly enabled literal loopback or by explicit choice.
+    let private listenUrl (section: string) (url: string) allowLoopback allowRemote =
+        match Uri.TryCreate(url, UriKind.Absolute) with
+        | false, _ -> Error $"{section}.ListenUrl must be an absolute HTTP(S) URL."
+        | true, uri when not (String.IsNullOrEmpty uri.UserInfo) || uri.AbsolutePath <> "/"
+                         || not (String.IsNullOrEmpty uri.Query) || not (String.IsNullOrEmpty uri.Fragment) ->
+            Error $"{section} URL must contain only scheme, host and port."
+        | true, uri when uri.Scheme <> "http" && uri.Scheme <> "https" -> Error $"{section} requires HTTP(S)."
+        | true, uri when uri.Scheme = "http" && not (allowRemote || (allowLoopback && isLoopback uri)) ->
+            Error $"Remote HTTP {section} requires {section}.AllowInsecureRemote; otherwise use HTTPS or explicitly enabled literal loopback."
+        | true, uri -> Ok uri
+
+    let private validateAdmin (config: ApplicationConfig) =
+        let admin = config.Admin
+        if not admin.Enabled then Ok ()
+        elif admin.RequestsPerMinute < 1 || admin.RequestsPerMinute > 100000 || admin.MaxConnections < 1 || admin.MaxConnections > 10000
+             || admin.RequestTimeoutSeconds < 1 || admin.RequestTimeoutSeconds > 120 || isNull admin.CertificatePath then
+            Error "Invalid admin request limits or certificate path."
+        elif not (AdminService.validate (adminService config)).IsEmpty then
+            Error (String.concat " " (AdminService.validate (adminService config)))
+        else
+            match listenUrl "Admin" admin.ListenUrl admin.AllowInsecureLoopback admin.AllowInsecureRemote,
+                  Uri.TryCreate(config.Authentication.ListenUrl, UriKind.Absolute) with
+            | Error error, _ -> Error error
+            | Ok panel, (true, authentication) when panel.Port <> 0 && panel.Port = authentication.Port ->
+                Error "Admin.ListenUrl and Authentication.ListenUrl must use different ports."
+            | Ok _, _ -> Ok ()
+
     let private validate (config: ApplicationConfig) =
         if isNull (box config.Server) || isNull (box config.Runtime) || isNull (box config.Database) || isNull (box config.Authentication) || isNull (box config.Logging)
+           || isNull (box config.Admin) || isNull config.Admin.ListenUrl
            || isNull (box config.Server.ChatInput) || isNull (box config.Server.PlayerInput) || isNull (box config.Runtime.Player)
            || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
            || isNull (box config.Authentication.Service) || isNull (box config.Moderation) || isNull (box config.Announcements)
@@ -200,20 +270,14 @@ module Configuration =
         elif not (AuthService.validate config.Authentication.Service).IsEmpty then
             Error (String.concat " " (AuthService.validate config.Authentication.Service))
         else
-            match Uri.TryCreate(config.Authentication.ListenUrl, UriKind.Absolute) with
-            | false, _ -> Error "Authentication.ListenUrl must be an absolute HTTP(S) URL."
-            | true, uri when not (String.IsNullOrEmpty uri.UserInfo) || uri.AbsolutePath <> "/"
-                             || not (String.IsNullOrEmpty uri.Query) || not (String.IsNullOrEmpty uri.Fragment) ->
-                Error "Authentication URL must contain only scheme, host and port."
-            | true, uri when uri.Scheme <> "http" && uri.Scheme <> "https" ->
-                Error "Authentication requires HTTP(S)."
-            | true, uri when uri.Scheme = "http" && not (config.Authentication.AllowInsecureRemote || (config.Authentication.AllowInsecureLoopback
-                                  && (uri.Host = "127.0.0.1" || uri.Host = "[::1]" || uri.Host = "::1"))) ->
-                Error "Remote HTTP authentication requires Authentication.AllowInsecureRemote; otherwise use HTTPS or explicitly enabled literal loopback."
-            | true, _ ->
-                ServerLogging.validate config.Logging
-                |> Result.bind (fun () -> ServerConfig.validate config.Server |> Result.mapError (String.concat " "))
-                |> Result.map (fun _ -> config)
+            listenUrl "Authentication" config.Authentication.ListenUrl config.Authentication.AllowInsecureLoopback config.Authentication.AllowInsecureRemote
+            |> Result.bind (fun _ -> validateAdmin config)
+            |> Result.bind (fun () -> ServerLogging.validate config.Logging)
+            |> Result.bind (fun () -> ServerConfig.validate config.Server |> Result.mapError (String.concat " "))
+            |> Result.map (fun _ -> config)
+
+    /// The effective settings as TOML, for the read-only configuration page.
+    let render (config: ApplicationConfig) = TomlSerializer.Serialize(toTableValue (box config))
 
     [<Literal>]
     let private MaxRulesBytes = 1048576L

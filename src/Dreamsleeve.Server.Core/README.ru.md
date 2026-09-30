@@ -1,6 +1,6 @@
 # Сервер: владельцы состояния и сетевой runtime
 
-Сервер запускается через `Dreamsleeve.Server`: SQLite, HTTP(S) authentication,
+Сервер запускается через `Dreamsleeve.Server`: SQLite, HTTP(S) authentication, веб-админка,
 ServerRuntime, PlayerSession для каждого соединения, ChatRoomAgent и PresenceAgent.
 Общего прикладного маршрутизатора SessionRegistry больше нет.
 
@@ -14,7 +14,9 @@ ServerRuntime, PlayerSession для каждого соединения, ChatRoo
 | ChatRoomAgent | Членство конкретных соединений, авторство, ID/время сообщения, история и адресная рассылка |
 | PresenceAgent | Онлайн, последние полные снимки игроков, объединение изменений и периодическая репликация |
 | GroundMarksAgent | Все метки на земле, их пространственный индекс, видимые наборы наблюдателей, квоты, частота, срок жизни и запись в хранилище |
-| AuthService | Допуск account-операций и одноразовые билеты; bounded workers выполняют SQLite и проверку паролей |
+| AuthService | Допуск account-операций и одноразовые билеты с ролью игрока; bounded workers выполняют SQLite и проверку паролей |
+| AdminService | Администраторы, сессии панели, токены API, роли, аудит, поиск игроков; одноразовые коды и попытки входа в памяти, bounded workers `admin-storage` |
+| SessionDescriber | Ретранслятор запросов панели к сессиям: передаёт `ReplyChannel` вызывающего сессии, не дожидаясь ответа |
 | EnetTransport | Адаптер yENet на отдельном TransportOwner, bounded handoff с runtime |
 
 ```mermaid
@@ -224,6 +226,34 @@ Runtime после завершения сессии шлёт `Detach` и мет
 `GroundMarkPersistence` в `ServerRuntime.start`; писатель завершается после runtime.
 Общий модуль `RateLimit` обслуживает и каналы чата, и надписи.
 
+### Админка
+
+Веб-панель ([docs/AdminPanelRu.md](../../docs/AdminPanelRu.md)) обращается к runtime только
+сообщениями; своих правил у неё нет.
+
+- `ServerRuntimeMessage.ListSessions` отвечает строками `RuntimeSessionRow` (ConnectionId,
+  PlayerId, фаза `Waiting/Opening/Ready/Closing`, время подключения, адрес сессии) — без имён.
+- `PlayerSessionMessage.Describe` отвечает `AdminPlayerView` из состояния сессии (хранимый
+  профиль до заместителей модерации, имя персонажа, псевдоним и вариант, роль, место) или
+  `None` до получения профиля. HTTP-обработчик спрашивает все сессии параллельно через
+  `SessionDescriber` с таймаутом 1 с; неответившая строка остаётся «без данных». `Describe`
+  — обычное сообщение: переполненная сессия не отвечает, но и не закрывается.
+- Роль: `SessionAuthenticationReply` несёт `AuthenticatedPlayer { Profile; Role }` (роль читается
+  из `player_roles` при входе и resume и хранится в билете). `SetPlayerRole(playerId, role)` —
+  после записи в БД: runtime запоминает её в `SessionTable.Roles` и передаёт
+  `PlayerSessionMessage.RoleChanged` сессии, держащей резерв PlayerId; сессия, резервирующая
+  PlayerId позже, получает её сразу после `IdentityAdmission.Reserved` в своей FIFO.
+- Переименование: `AuthService.RenamePlayer` пишет БД, затем `RenamePlayer(profile)` —
+  `SessionTable.Profiles` и `ProfileChanged(stored)` сессии. Сессия применяет
+  `Moderation.publicProfile`, отправляет `SessionHostCommand.UpdateProfile` (runtime обновляет
+  книгу имён, сохраняя псевдоним) и `PresenceCommand.Update`; `identityEqual` превращает смену в
+  `PlayerUpdated`. У скрытого игрока публичная личность не меняется, новое имя никуда не уходит.
+  Новые сообщения чата несут новое имя; `GroundMarksAgent` берёт профиль автора из подписки,
+  поэтому метки без псевдонима покажут его после переподключения.
+- `RoleChanged`/`ProfileChanged` — служебные сообщения сессии (резерв mailbox);
+  `ListSessions`/`SetPlayerRole`/`RenamePlayer` — обычные сообщения runtime.
+- Объявление панели — тот же `ServerRuntimeMessage.Announce`, что у консоли.
+
 ## Очереди и перегрузка
 
 AgentMailbox.boundedWithControl задаёт общий FIFO и предел обычных сообщений.
@@ -301,13 +331,15 @@ dotnet run --project src/Dreamsleeve.Server -c Release -- --config server.toml -
 xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Player Name"   # --hide: скрытое имя с первого пакета
 ```
 
-По умолчанию ENet слушает 127.0.0.1:8778, auth HTTP — 127.0.0.1:8779.
+По умолчанию ENet слушает 127.0.0.1:8778, auth HTTP — 127.0.0.1:8779, веб-админка — 127.0.0.1:8780
+(`[Admin]`; HTTP-код обоих хостов — в `Dreamsleeve.Server.Web`). Консоль сервера также принимает
+`admin-setup` и `admin-reset <имя>` (одноразовые коды панели печатаются только в консоль).
 Пароль вводится скрыто; после регистрации запускайте без --register. В сетевом Client.Dev доступны
 `send <text>`, `announce <trusted|third> <kind> <signature|-> <text>`, `hide <on|off>`, `read`, команды наблюдений персонажа,
 `disconnect`, `connect`, `quit`; сервер завершается по `quit` или Ctrl+C, `announce <текст>` в его консоли публикует
 объявление администратора. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
 
-TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Logging/Moderation/Identity/Announcements/GroundMarks.
+TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Admin/Logging/Moderation/Identity/Announcements/GroundMarks.
 Горячей перезагрузки нет ни у `server.toml`, ни у `moderation.toml`, ни у `pseudonyms.toml`: изменения, включая `[Announcements]`, действуют после перезапуска.
 `[Identity]`: `AllowHiddenIdentity` (true), `ToggleIntervalMs` (30000, 0 — без лимита), `PseudonymsPath`
 (`pseudonyms.toml`; отсутствующий или повреждённый файл — встроенные 24 имени с предупреждением).

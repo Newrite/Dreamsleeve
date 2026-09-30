@@ -741,3 +741,39 @@ runtime с байтовой проверкой пакетов другому и�
 `package_dist.py --skip-build` кладёт `pseudonyms.example.toml` и `pseudonyms.toml` в `dist/Server`.
 В Skyrim не проверялось: переключатель в Ultralight, префикс на надписях, поведение при
 переподключении в игре.
+
+## Веб-админка и Server.Web (30.09.2026)
+
+Панель администратора работает в процессе игрового сервера. Подробности —
+[AdminPanelRu.md](AdminPanelRu.md).
+
+- Проект `src/Dreamsleeve.Server.Web` (F#, `FrameworkReference Microsoft.AspNetCore.App`):
+  `WebHost` — общая обвязка двух хостов (Kestrel-лимиты, rate limiter по адресу клиента с
+  доверенными только от loopback `X-Forwarded-*`, `{code, message}`, ограниченное чтение тела,
+  заголовки безопасности); `Authentication/AuthRoutes.fs` — прежний контракт `/auth/*`,
+  переписанный на Falco; `Admin/` — SSR на Falco.Markup + htmx 2.0.11 (вендорен, embedded) и
+  REST `/api/v1/*` только на чтение. Обработчики видят порты `AuthPorts`/`AdminPorts`;
+  `WebPorts` в `Dreamsleeve.Server` подключает агенты. `Dreamsleeve.Server` больше не содержит
+  HTTP-кода и собирается на `Microsoft.NET.Sdk`.
+- Два хоста: auth публичный (`[Authentication]`), панель по умолчанию только
+  `127.0.0.1:8780` (`[Admin]`, старый `server.toml` получает значения по умолчанию). Панель
+  стартует после auth и останавливается до рантайма. Консоль: `admin-setup`, `admin-reset <имя>`;
+  без администраторов сервер печатает код настройки при старте (только в консоль).
+- Домен (`Admin.fs`): `AdminId`, `PlayerRole = Player | Moderator`, `AdminAction` с ключами
+  аудита, `AdminCodes` и `PanelSession` как чистые правила, `AdminPlayerView` — единственная
+  сборка настоящей личности скрытого игрока для показа, `ApiTokenLabel`, `AdminAnnouncement`.
+- Инфраструктура: схема SQLite 5 (`admin_accounts`, `admin_sessions`, `admin_api_tokens`,
+  `player_roles`, `admin_audit`), `SqliteAdminStore`, агент `AdminService` (bounded workers
+  `admin-storage`, коды и попытки входа в памяти, `Busy`), `Secrets` (токены, SHA-256, правило
+  пароля и hasher для игроков и администраторов). `AuthService`: роль в билете,
+  `RenamePlayer` (исключительная, обновляет невыкупленные билеты).
+- Рантайм: `ListSessions`, `SetPlayerRole`, `RenamePlayer`; `PlayerSession`: `Describe`,
+  `RoleChanged`, `ProfileChanged` (+ `SessionHostCommand.UpdateProfile` для книги имён);
+  `SessionDescriber` опрашивает сессии параллельно с таймаутом 1 с. Игровой протокол не менялся.
+
+Проверки: 432 managed (Expecto `--summary`: 432 passed; новые — домен админки, SQLite схемы 5 и
+DOWN, `AdminService`, runtime-панель, `AdminHttpTests`, конфигурация `[Admin]`, роль и
+переименование в `AuthService`; прежние проверки auth-HTTP без изменения ожиданий),
+`smoke_chat.py` — 43 проверки прошли, `package_dist.py` собирает `dist/Server` с
+`Dreamsleeve.Server.Web.dll` (htmx встроен) и `THIRD_PARTY_NOTICES.md`. Живой прогон сервера:
+setup по коду из консоли, вход, страницы, объявление, токен API, `admin-reset`.

@@ -16,6 +16,8 @@ let private ok = function Ok value -> value | Error error -> failtestf "Unexpect
 let private username value = Username.create 32 value |> ok
 let private display = DisplayName.create 64 "Persistent Player" |> ok
 let private password = "password-with-spaces  "
+// A consumed ticket carries the stored role; nobody was given one here.
+let private player profile : AuthenticatedPlayer = { Profile = profile; Role = PlayerRole.Player }
 let private settings = { AuthService.defaults with MailboxCapacity = 8; MaxConcurrentOperations = 2; MaxTickets = 2; TicketLifetimeSeconds = 10 }
 
 // Expiry uses monotonic time. Advance never sleeps or changes machine time.
@@ -100,7 +102,7 @@ let tests = testList "Authentication service" [
         let! ticketDenied = consume second grant.SessionTicket
         equal (Error SessionAuthenticationError.InvalidTicket) ticketDenied
         let! otherTicket = consume second independent.SessionTicket
-        equal (Ok profile) otherTicket
+        equal (Ok (player profile)) otherTicket
         do! stop second
     })
 
@@ -196,7 +198,7 @@ let tests = testList "Authentication service" [
         let! profile = register service
         let! grant = login service
         let! results = [| consume service grant.SessionTicket; consume service grant.SessionTicket |] |> Task.WhenAll
-        equal 1 (results |> Array.filter ((=) (Ok profile)) |> Array.length)
+        equal 1 (results |> Array.filter ((=) (Ok (player profile))) |> Array.length)
         equal 1 (results |> Array.filter ((=) (Error SessionAuthenticationError.InvalidTicket)) |> Array.length)
         let! malformed = consume service "not-a-ticket"
         equal (Error SessionAuthenticationError.InvalidTicket) malformed
@@ -212,7 +214,7 @@ let tests = testList "Authentication service" [
         let! early = login service
         clock.Advance(TimeSpan.FromMilliseconds 9999.)
         let! accepted = consume service early.SessionTicket
-        equal (Ok profile) accepted
+        equal (Ok (player profile)) accepted
         let! expired = login service
         equal 10 expired.ExpiresInSeconds
         clock.Advance(TimeSpan.FromSeconds 10.)
@@ -231,7 +233,7 @@ let tests = testList "Authentication service" [
         let! saturated = access service (AccountAccessCommand.Login(username "player", password))
         equal (Error AccountAccessError.Busy) saturated
         let! consumed = consume service first.SessionTicket
-        equal (Ok profile) consumed
+        equal (Ok (player profile)) consumed
         let! second = login service
         check (first.SessionTicket <> second.SessionTicket) "Login must issue a fresh random ticket."
         clock.Advance(TimeSpan.FromSeconds 10.)
@@ -239,7 +241,7 @@ let tests = testList "Authentication service" [
         let! stale = consume service second.SessionTicket
         equal (Error SessionAuthenticationError.InvalidTicket) stale
         let! current = consume service third.SessionTicket
-        equal (Ok profile) current
+        equal (Ok (player profile)) current
         do! stop service
     })
 
@@ -259,7 +261,7 @@ let tests = testList "Authentication service" [
         equal profile fresh.Profile
         check (fresh.SessionTicket <> previous.SessionTicket) "A restarted service must not reissue the old ticket."
         let! accepted = consume restarted fresh.SessionTicket
-        equal (Ok profile) accepted
+        equal (Ok (player profile)) accepted
         do! stop restarted
     })
 
@@ -279,5 +281,22 @@ let tests = testList "Authentication service" [
             | other -> failtestf "Accepted operation was not settled during graceful stop: %A" other
         let! late = service.TryAskAsync(fun reply -> AuthMessage.Access(AccountAccessCommand.Login(username "player", password), reply))
         equal AgentAskResult.Closed late
+    })
+    case "a ticket carries the stored role and a rename refreshes outstanding tickets" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
+        let! profile = register service
+        database.Execute $"INSERT INTO player_roles(player_id, role, granted_by, granted_at) VALUES ({PlayerId.value profile.PlayerId}, 1, NULL, 0)"
+        let! outstanding = login service
+        let renamedTo = DisplayName.create 64 "Новое Имя" |> ok
+        let! renamed = access service (AccountAccessCommand.RenamePlayer(profile.PlayerId, renamedTo))
+        let expected = PlayerData.withDisplayName renamedTo profile
+        equal (Ok (AccountAccessResult.Renamed expected)) renamed
+        let! consumed = consume service outstanding.SessionTicket
+        equal (Ok ({ Profile = expected; Role = PlayerRole.Moderator } : AuthenticatedPlayer)) consumed
+        let! missing = access service (AccountAccessCommand.RenamePlayer(PlayerId.create 404UL |> ok, renamedTo))
+        equal (Error AccountAccessError.InvalidCredentials) missing
+        do! stop service
     })
 ]

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -8,7 +8,7 @@
     <ItemGroup>
         <Compile Include="Logging.fs" />
         <Compile Include="Configuration.fs" />
-        <Compile Include="AuthenticationHttp.fs" />
+        <Compile Include="WebPorts.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
@@ -16,6 +16,9 @@
         <PackageReference Include="Tomlyn" Version="2.10.1" />
       <ProjectReference Include="..\Dreamsleeve.Server.Core\Dreamsleeve.Server.Core.fsproj" />
       <ProjectReference Include="..\Dreamsleeve.Server.Infrastructure\Dreamsleeve.Server.Infrastructure.fsproj" />
+      <ProjectReference Include="..\Dreamsleeve.Server.Web\Dreamsleeve.Server.Web.fsproj" />
+        <!-- Kestrel for both HTTP hosts; the routes themselves live in Dreamsleeve.Server.Web. -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
         <PackageReference Include="Serilog" Version="4.4.0" />
         <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />

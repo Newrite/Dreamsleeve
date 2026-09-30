@@ -11,11 +11,14 @@ open Dreamsleeve.Server.Infrastructure.AccountSchema
 type StoredIdentity = {
     AccountId: int64
     Profile: PlayerData
+    /// Read with the profile (player_roles); a player without a row plays.
+    Role: PlayerRole
 }
 
 type StoredAccount = {
     AccountId: int64
     Profile: PlayerData
+    Role: PlayerRole
     PasswordHash: string
 }
 
@@ -60,6 +63,11 @@ module SqliteAccountStore =
                 Ok(PlayerData.create playerId username displayName)
             | _ -> invalidData "The stored profile contains an invalid identifier or display name."
 
+    let private toRole (value: int64) =
+        match PlayerRole.ofInt (int value) with
+        | ValueSome role when value >= 0L && value <= 1L -> Ok role
+        | ValueSome _ | ValueNone -> invalidData "The stored player role is unknown."
+
     let find config (username: Username) token =
         withContext config token (fun context ->
             let name = Username.value username
@@ -67,15 +75,18 @@ module SqliteAccountStore =
                 for account in main.accounts do
                 join profile in main.profiles on (account.id = profile.account_id)
                 join password in main.account_passwords on (account.id = password.account_id)
+                leftJoin role in main.player_roles on (profile.player_id = role.Value.player_id)
                 where (account.username = name)
-                select (account, profile, password)
+                select (account, profile, password, role)
             }
 
             match context.SelectOne query with
             | None -> Ok None
-            | Some (account, profile, password) ->
-                toProfile username profile
-                |> Result.map (fun data -> Some { AccountId = account.id; Profile = data; PasswordHash = password.password_hash }))
+            | Some (account, profile, password, role) ->
+                let role = role |> Option.map (fun row -> toRole row.role) |> Option.defaultValue (Ok PlayerRole.Player)
+                match toProfile username profile, role with
+                | Ok data, Ok role -> Ok (Some { AccountId = account.id; Profile = data; Role = role; PasswordHash = password.password_hash })
+                | Error error, _ | _, Error error -> Error error)
 
     let private insertAccount (context: QueryContext) username =
         let row: main.accounts = { id = 0L; username = Username.value username }
@@ -152,18 +163,26 @@ module SqliteAccountStore =
                 [ "@replacement", box replacementHash; "@expected", box expectedHash; "@name", box (Username.value username) ] |> ignore
             Ok ())
 
+    /// Every identity query selects these columns; the role row is optional.
+    [<Literal>]
+    let private IdentityColumns = "a.id, a.username, p.player_id, p.display_name, COALESCE(r.role, 0)"
+
+    [<Literal>]
+    let private RoleJoin = "LEFT JOIN player_roles r ON r.player_id=p.player_id"
+
     let private readIdentity (reader: System.Data.Common.DbDataReader) =
         if not (reader.Read()) then Ok None
         else
-            match Username.create Int32.MaxValue (reader.GetString 1), PlayerId.create (uint64 (reader.GetInt64 2)), DisplayName.create Int32.MaxValue (reader.GetString 3) with
-            | Ok username, Ok playerId, Ok displayName when reader.GetInt64 0 > 0L ->
-                Ok (Some { AccountId = reader.GetInt64 0; Profile = PlayerData.create playerId username displayName })
+            match Username.create Int32.MaxValue (reader.GetString 1), PlayerId.create (uint64 (reader.GetInt64 2)),
+                  DisplayName.create Int32.MaxValue (reader.GetString 3), toRole (reader.GetInt64 4) with
+            | Ok username, Ok playerId, Ok displayName, Ok role when reader.GetInt64 0 > 0L ->
+                Ok (Some { AccountId = reader.GetInt64 0; Profile = PlayerData.create playerId username displayName; Role = role })
             | _ -> invalidData "Invalid stored account identity."
 
     let findAccount config (username: Username) token =
         withContext config token (fun context ->
             use statement = command context
-                                "SELECT a.id, a.username, p.player_id, p.display_name FROM accounts a JOIN profiles p ON p.account_id=a.id WHERE a.username=@name"
+                                $"SELECT {IdentityColumns} FROM accounts a JOIN profiles p ON p.account_id=a.id {RoleJoin} WHERE a.username=@name"
                                 [ "@name", box (Username.value username) ]
             use reader = statement.ExecuteReader()
             readIdentity reader)
@@ -172,14 +191,14 @@ module SqliteAccountStore =
     let findIdentity config provider subject token =
         withContext config token (fun context ->
             use statement = command context
-                                "SELECT a.id, a.username, p.player_id, p.display_name FROM account_identities i JOIN accounts a ON a.id=i.account_id JOIN profiles p ON p.account_id=a.id WHERE i.provider=@provider AND i.subject=@subject"
+                                $"SELECT {IdentityColumns} FROM account_identities i JOIN accounts a ON a.id=i.account_id JOIN profiles p ON p.account_id=a.id {RoleJoin} WHERE i.provider=@provider AND i.subject=@subject"
                                 [ "@provider", box provider; "@subject", box subject ]
             use reader = statement.ExecuteReader()
             readIdentity reader)
 
     let private accountForToken context kind hash now =
         use statement = command context
-                            "SELECT a.id, a.username, p.player_id, p.display_name FROM auth_tokens t JOIN accounts a ON a.id=t.account_id JOIN profiles p ON p.account_id=a.id WHERE t.token_hash=@hash AND t.kind=@kind AND t.expires_at>@now"
+                            $"SELECT {IdentityColumns} FROM auth_tokens t JOIN accounts a ON a.id=t.account_id JOIN profiles p ON p.account_id=a.id {RoleJoin} WHERE t.token_hash=@hash AND t.kind=@kind AND t.expires_at>@now"
                             [ "@hash", box hash; "@kind", box kind; "@now", box now ]
         use reader = statement.ExecuteReader()
         readIdentity reader |> Result.bind (function Some account -> Ok account | None -> Error AccountStoreError.InvalidCredential)
@@ -236,3 +255,28 @@ module SqliteAccountStore =
                 execute context "DELETE FROM auth_tokens WHERE account_id=@id" [ "@id", box account.AccountId ] |> ignore
                 transaction.Commit()
                 Ok account.Profile)
+
+    /// Replaces the display name of an existing profile; the name was validated
+    /// and moderated by the caller. None when no such player is stored.
+    let rename config (playerId: PlayerId) (displayName: DisplayName) token =
+        withContext config token (fun context ->
+            let id = PlayerId.value playerId
+            if id > uint64 Int64.MaxValue then Ok None
+            else
+                use transaction = context.Connection.BeginTransaction()
+                context.Transaction <- Some transaction
+                let changed =
+                    execute context "UPDATE profiles SET display_name=@name WHERE player_id=@id"
+                        [ "@name", box (DisplayName.value displayName); "@id", box (int64 id) ]
+                if changed = 0 then Ok None
+                else
+                    use statement = command context
+                                        $"SELECT {IdentityColumns} FROM profiles p JOIN accounts a ON a.id=p.account_id {RoleJoin} WHERE p.player_id=@id"
+                                        [ "@id", box (int64 id) ]
+                    use reader = statement.ExecuteReader()
+                    let identity = readIdentity reader
+                    reader.Close()
+                    match identity with
+                    | Ok (Some _) -> transaction.Commit()
+                    | Ok None | Error _ -> ()
+                    identity)

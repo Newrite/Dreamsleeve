@@ -26,6 +26,7 @@
         <Compile Include="PlayerSession.fs" />
         <Compile Include="SessionTable.fs" />
         <Compile Include="ServerRuntime.fs" />
+        <Compile Include="SessionDescriber.fs" />
     </ItemGroup>
 
     <ItemGroup>

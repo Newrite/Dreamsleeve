@@ -9,11 +9,33 @@ open Serilog.Extensions.Logging
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
+open Dreamsleeve.Server.Web.Admin
+open Dreamsleeve.Server.Web.Authentication
+
+[<Literal>]
+let private Commands = "quit | reset-password <username> | revoke-access <username> | announce <text> | admin-setup | admin-reset <admin>"
 
 let private printHelp () =
     printfn "Dreamsleeve.Server [--config path.toml] [--port 8778]"
     printfn "Dreamsleeve.Server --write-config path.toml"
-    printfn "Configuration is read at startup. Commands: quit | reset-password <username> | revoke-access <username> | announce <text>."
+    printfn "Configuration is read at startup. Commands: %s." Commands
+
+// One-time panel codes go to the console only, like reset-password codes: never to the log.
+let private adminCode (admin: Agent<AdminMessage> option) command (lifetime: int) = task {
+    match admin with
+    | None -> printfn "The admin panel is disabled ([Admin] Enabled = false)."
+    | Some service ->
+        let! result = service.AskAsync(fun reply -> AdminMessage.Access(command, reply))
+        match command, result with
+        | AdminCommand.IssueSetupCode, Ok (AdminReply.Secret code) ->
+            printfn "Admin panel setup code (one-time, %d min; open /setup of the panel): %s" lifetime code
+        | AdminCommand.IssueResetCode _, Ok (AdminReply.Secret code) ->
+            printfn "Admin password reset code (one-time, %d min; open /reset of the panel): %s" lifetime code
+        | _, Error AdminServiceError.AlreadyConfigured -> printfn "An administrator already exists; use admin-reset <admin>."
+        | _, Error AdminServiceError.NotFound -> printfn "No such administrator."
+        | _, Error error -> printfn "Admin operation failed: %A" error
+        | _, Ok _ -> printfn "Unexpected admin result."
+}
 
 // Console.In may implement ReadLineAsync synchronously. One background reader
 // keeps console waiting separate from runtime failure/Ctrl+C observation.
@@ -29,7 +51,8 @@ let private readConsole (writer: ChannelWriter<string option>) (token: Cancellat
     | :? OperationCanceledException -> writer.TryComplete() |> ignore
     | error -> writer.TryComplete(error) |> ignore
 
-let private waitForStop (chatInput: ChatInputLimits) (authentication: Agent<AuthMessage>) (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) = task {
+let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Agent<AdminMessage> option) (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) = task {
+    let chatInput = settings.Server.ChatInput
     use inputCancellation = new CancellationTokenSource()
     let input = Channel.CreateBounded<string option>(BoundedChannelOptions(1, SingleReader = true, SingleWriter = true))
     let _reader = Task.Run(Action(readConsole input.Writer inputCancellation.Token))
@@ -65,9 +88,16 @@ let private waitForStop (chatInput: ChatInputLimits) (authentication: Agent<Auth
                             match result with
                             | Ok (AccountAccessResult.PasswordResetCreated code) -> printfn "One-time reset code (deliver privately): %s" code
                             | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
-                            | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) -> printfn "Unexpected administrative result."
+                            | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.Renamed _) ->
+                                printfn "Unexpected administrative result."
                             | Error error -> printfn "Administrative operation failed: %A" error
-                    else printfn "Commands: quit | reset-password <username> | revoke-access <username> | announce <text>"
+                    elif parts.Length = 1 && parts[0] = "admin-setup" then
+                        do! adminCode admin AdminCommand.IssueSetupCode settings.Admin.CodeLifetimeMinutes
+                    elif parts.Length = 2 && parts[0] = "admin-reset" then
+                        match Dreamsleeve.Server.Domain.Username.create chatInput.Username parts[1] with
+                        | Error _ -> printfn "Invalid administrator name."
+                        | Ok name -> do! adminCode admin (AdminCommand.IssueResetCode name) settings.Admin.CodeLifetimeMinutes
+                    else printfn "Commands: %s" Commands
                 | Some _ -> ()
             else
                 stopping <- true
@@ -93,8 +123,22 @@ let private stopRuntime settings (logger: ILogger) (runtime: Agent<ServerRuntime
         do! runtime.Completion
 }
 
-let private serve settings moderation pseudonyms marks authentication transport (logger: ILogger) (log: Serilog.ILogger) = task {
-    let web = AuthenticationHttp.build settings moderation authentication log
+let private stopHost (host: Microsoft.AspNetCore.Builder.WebApplication option) (name: string) (logger: ILogger) = task {
+    match host with
+    | None -> return true
+    | Some host ->
+        try
+            do! host.StopAsync()
+            return true
+        with error ->
+            logger.LogError(error, "{Listener} listener shutdown failed", box name)
+            return false
+}
+
+let private serve settings moderation configuration pseudonyms marks authentication admin transport (logger: ILogger) (log: Serilog.ILogger) = task {
+    let web = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth authentication) log
+    let describer = SessionDescriber.start 64
+    let mutable panel = None
     try
         match ServerRuntime.start settings.Runtime settings.Server moderation settings.Identity pseudonyms settings.Announcements settings.GroundMarks marks
                   (AuthService.authenticator authentication) transport logger with
@@ -114,19 +158,32 @@ let private serve settings moderation pseudonyms marks authentication transport 
                 try
                     let! _ = authentication.PostAsync(AuthMessage.SetRevocationTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.RevokePlayer))
                     do! web.StartAsync()
+                    // The panel starts after authentication and stops before the runtime.
+                    match admin with
+                    | Some service ->
+                        let ports = WebPorts.admin service authentication runtime describer configuration
+                        let host = AdminRoutes.build (WebPorts.adminListener settings) (WebPorts.adminRoutes settings moderation) ports log
+                        panel <- Some host
+                        do! host.StartAsync()
+                        logger.LogInformation("Admin panel: {AdminUrl}", settings.Admin.ListenUrl)
+                        let! status = service.AskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
+                        match status with
+                        | Ok (AdminReply.Configured false) -> do! adminCode admin AdminCommand.IssueSetupCode settings.Admin.CodeLifetimeMinutes
+                        | Ok _ -> ()
+                        | Error error -> logger.LogWarning("Admin panel status unavailable: {Error}", error)
+                    | None -> logger.LogInformation("Admin panel disabled")
                     logger.LogInformation("Listening on {Address}:{Port}. Authentication: {AuthenticationUrl}. Commands: quit",
                                           settings.Server.BindAddress, settings.Server.Port, settings.Authentication.ListenUrl)
-                    do! waitForStop settings.Server.ChatInput authentication runtime canceled.Task
+                    do! waitForStop settings authentication admin runtime canceled.Task
                 with error ->
                     logger.LogError(error, "Server listener failed")
                     exitCode <- 1
 
-                // Stop HTTP admission before stopping the account agent. Existing
-                // bounded requests may finish while the ENet runtime drains.
-                try do! web.StopAsync()
-                with error ->
-                    logger.LogError(error, "Authentication listener shutdown failed")
-                    exitCode <- 1
+                // Stop HTTP admission before stopping the account and admin agents.
+                // Existing bounded requests may finish while the ENet runtime drains.
+                let! panelStopped = stopHost panel "Admin" logger
+                let! authStopped = stopHost (Some web) "Authentication" logger
+                if not (panelStopped && authStopped) then exitCode <- 1
 
                 try do! stopRuntime settings logger runtime
                 with error ->
@@ -141,7 +198,10 @@ let private serve settings moderation pseudonyms marks authentication transport 
             finally
                 Console.CancelKeyPress.RemoveHandler handler
     finally
+        panel |> Option.iter (fun host -> host.DisposeAsync().AsTask().GetAwaiter().GetResult())
         web.DisposeAsync().AsTask().GetAwaiter().GetResult()
+        describer.Complete() |> ignore
+        describer.Completion.GetAwaiter().GetResult()
 }
 
 // Marks are moderated with the current word list when loaded: a text that the
@@ -179,6 +239,34 @@ let private stopAuthentication (authentication: Agent<AuthMessage>) = task {
     do! authentication.Completion
 }
 
+let private stopAdmin (admin: Agent<AdminMessage> option) = task {
+    match admin with
+    | Some service when not service.Completion.IsCompleted ->
+        let! admitted = service.PostAsync AdminMessage.Stop
+        match admitted with
+        | AgentPostResult.Posted | AgentPostResult.Closed -> ()
+        | AgentPostResult.Canceled | AgentPostResult.Full | AgentPostResult.Dropped -> service.Abort()
+        do! service.Completion
+    | Some service -> do! service.Completion
+    | None -> ()
+}
+
+// The read-only configuration page: effective settings and the word list as read at startup.
+let private configurationView (settings: ApplicationConfig) (pseudonyms: Dreamsleeve.Server.Domain.PseudonymDictionary) =
+    let moderation =
+        if not settings.Moderation.Enabled then "(словарь выключен: [Moderation] Enabled = false)"
+        else
+            try
+                let file = IO.FileInfo settings.Moderation.RulesPath
+                if not file.Exists then $"(файл не найден: {file.FullName})" else IO.File.ReadAllText file.FullName
+            with error -> $"(не прочитан: {error.Message})"
+    let sections = [
+        { Title = "server.toml — действующие значения"; Text = Configuration.render settings }
+        { Title = $"moderation.toml — {settings.Moderation.RulesPath}"; Text = moderation }
+        { Title = "Псевдонимы"; Text = $"{pseudonyms.Count} имён; файл {settings.Identity.PseudonymsPath}" }
+    ]
+    fun () -> sections
+
 let private run settings = task {
     use log = ServerLogging.create settings.Logging
     use factory = new SerilogLoggerFactory(log, dispose = false)
@@ -212,6 +300,15 @@ let private run settings = task {
                 logger.LogError("Authentication configuration failed: {Failure}", error)
                 return 1
             | Ok authentication ->
+            let admin =
+                if not settings.Admin.Enabled then Ok None
+                else AdminService.start (Configuration.adminService settings) settings.Database logger TimeProvider.System |> Result.map Some
+            match admin with
+            | Error error ->
+                logger.LogError("Admin configuration failed: {Failure}", error)
+                do! stopAuthentication authentication
+                return 1
+            | Ok admin ->
                 let! result = task {
                     try
                         let! loaded = loadGroundMarks settings moderation logger
@@ -228,7 +325,7 @@ let private run settings = task {
                                     logger.LogError("ENet startup failed: {Failure}", error)
                                     return 1
                                 | Ok transport ->
-                                    try return! serve settings moderation pseudonyms marks authentication transport logger log
+                                    try return! serve settings moderation (configurationView settings pseudonyms) pseudonyms marks authentication admin transport logger log
                                     finally transport.Dispose()
                             finally
                                 // The runtime has stopped: queued writes finish before the process exits.
@@ -238,11 +335,12 @@ let private run settings = task {
                         return 1
                 }
                 try
+                    do! stopAdmin admin
                     do! stopAuthentication authentication
                     logger.LogInformation("Server stopped with exit code {ExitCode}", result)
                     return result
                 with error ->
-                    logger.LogError(error, "Authentication agent shutdown failed")
+                    logger.LogError(error, "Authentication or admin agent shutdown failed")
                     return 1
     with error ->
         logger.LogError(error, "Server failed")

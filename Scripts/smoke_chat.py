@@ -184,6 +184,8 @@ def smoke(args, log, directory: Path):
         "Identity": {"AllowHiddenIdentity": True, "ToggleIntervalMs": 30000, "PseudonymsPath": str(pseudonyms)},
         "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
         "Authentication": {"ListenUrl": auth_url, "AllowInsecureLoopback": True, "AllowRegistration": True},
+        # The admin panel runs in the same process; a free port keeps it off the default 8780.
+        "Admin": {"ListenUrl": f"http://127.0.0.1:{free_tcp_port()}"},
         "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},
         # Own client disabled to see a type refusal; two mod announcements per minute.
         "Announcements": {

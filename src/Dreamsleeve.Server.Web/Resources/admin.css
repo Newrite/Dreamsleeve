@@ -1,0 +1,99 @@
+/* Dreamsleeve admin panel. Served from the assembly; no inline styles (CSP). */
+:root {
+    --bg: #f6f5f2;
+    --fg: #1d1c1a;
+    --muted: #6b6760;
+    --line: #d9d5cd;
+    --panel: #ffffff;
+    --accent: #3b5b8c;
+    --error: #a3261e;
+    --notice: #2f6b3a;
+    color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #17181a;
+        --fg: #e6e3dc;
+        --muted: #9a958c;
+        --line: #34363a;
+        --panel: #1f2124;
+        --accent: #8fb0e3;
+        --error: #f08a80;
+        --notice: #8fd19a;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+}
+
+nav { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+nav a { color: var(--accent); text-decoration: none; }
+nav a.current { font-weight: 600; text-decoration: underline; }
+
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 22px; margin: 4px 0 16px; }
+h2 { font-size: 17px; margin: 20px 0 8px; }
+a { color: var(--accent); }
+
+section { margin-bottom: 20px; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    display: block;
+    overflow-x: auto;
+}
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; white-space: nowrap; }
+th { font-weight: 600; color: var(--muted); }
+
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; background: var(--panel); padding: 12px; border: 1px solid var(--line); }
+dt { color: var(--muted); }
+dd { margin: 0; word-break: break-word; }
+
+form.stack { display: grid; gap: 10px; max-width: 520px; padding: 12px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 12px; }
+form.inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+form.logout { display: flex; gap: 8px; align-items: center; }
+label { display: grid; gap: 4px; }
+label.confirm { display: flex; gap: 6px; align-items: center; }
+
+input, select, textarea, button { font: inherit; color: inherit; }
+input[type=text], input[type=password], input[type=search], select, textarea {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+}
+button {
+    padding: 6px 14px;
+    background: var(--accent);
+    color: var(--panel);
+    border: 0;
+    cursor: pointer;
+}
+
+pre { white-space: pre-wrap; word-break: break-all; background: var(--panel); border: 1px solid var(--line); padding: 10px; }
+.secret pre { font-size: 17px; }
+.error { color: var(--error); }
+.notice { color: var(--notice); }
+.muted, .hint, small { color: var(--muted); }
+.pseudonym { font-style: italic; }
+.pager { display: flex; gap: 16px; }

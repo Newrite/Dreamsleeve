@@ -106,7 +106,7 @@ let private resolve fixture = task {
     equal fixture.Request.SessionTicket query.Ticket
     let profile = PlayerData.create (PlayerId.create 42UL |> ok)
                       (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok)
-    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok profile }
+    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = profile; Role = PlayerRole.Player } }
     let! command = receive fixture.Host
     match command with
     | SessionHostCommand.Reserve(connectionId, reserved, hidden, reply) ->
@@ -508,7 +508,7 @@ let tests = testList "PlayerSession" ([
             let! query = receive fixture.Authentication
             let stored = PlayerData.create (PlayerId.create 42UL |> ok)
                              (Username.create 32 "bad.word" |> ok) (DisplayName.create 64 "Sir Badword" |> ok)
-            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok stored }
+            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = stored; Role = PlayerRole.Player } }
             let! reserve = receive fixture.Host
             let reply =
                 match reserve with

@@ -28,6 +28,12 @@ type PlayerSessionMessage =
     | SetIdentityVisibility of requestId: uint64 * HiddenIdentity
     | SampleMovement of MovementSample
     | Read of ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
+    /// An administrator changed the role; applied without reconnecting.
+    | RoleChanged of PlayerRole
+    /// An administrator renamed the player: the stored profile, before moderation.
+    | ProfileChanged of PlayerData
+    /// The panel's view of this player; None before the profile is known.
+    | Describe of ReplyChannel<AdminPlayerView option>
     | Stop
 
 /// Owns one player's state, opening barrier and bounded request admission.
@@ -66,6 +72,10 @@ module PlayerSession =
         mutable IdentityRequest: struct (uint64 * HiddenIdentity) voption
         /// Environment.TickCount64 of the last accepted switch in this session.
         mutable LastIdentitySwitch: int64 voption
+        /// The stored profile before moderation placeholders; only Describe shows it.
+        mutable Account: PlayerData voption
+        mutable Role: PlayerRole
+        OpenedAt: DateTimeOffset
         Moderation: ModerationRules
         Identity: IdentityOptions
         Announcements: AnnouncementOptions
@@ -221,9 +231,11 @@ module PlayerSession =
         | Resolving operationId when reply.OperationId = operationId ->
             match reply.Result, reliable context with
             | Ok stored, Some address ->
+                state.Account <- ValueSome stored.Profile
+                state.Role <- stored.Role
                 // Accounts created under older rules keep their stored names;
                 // every copy leaving this session uses the moderated profile.
-                let profile = Moderation.publicProfile state.Moderation stored
+                let profile = Moderation.publicProfile state.Moderation stored.Profile
                 state.Phase <- Reserving(Player.create profile)
                 emit options request state context
                     (SessionHostCommand.Reserve(request.ConnectionId, profile, request.Hiding,
@@ -611,6 +623,41 @@ module PlayerSession =
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
             close request state context "Unexpected identity change."
 
+    /// Same path as a pseudonym switch: the host updates the names shown online,
+    /// presence spreads the new identity as PlayerUpdated.
+    let private profileChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (stored: PlayerData) =
+        let apply (player: Player) =
+            match Player.withProfile (Moderation.publicProfile state.Moderation stored) player with
+            | Error _ -> None
+            | Ok updated ->
+                state.Account <- ValueSome stored
+                if emit options request state context (SessionHostCommand.UpdateProfile(request.ConnectionId, updated.Data)) then
+                    if not (state.Presence.TrySend(context, PresenceCommand.Update(request.ConnectionId, publicSnapshot state updated))) then
+                        close request state context "Presence admission failed."
+                Some updated
+        match state.Phase with
+        | Opening opening when state.Account <> ValueSome stored ->
+            apply opening.Player |> Option.iter (fun updated ->
+                match state.Phase with
+                | Opening current -> state.Phase <- Opening { current with Player = updated }
+                | Starting | Resolving _ | Reserving _ | Active _ | Closing -> ())
+        | Active player when state.Account <> ValueSome stored ->
+            apply player |> Option.iter (fun updated ->
+                match state.Phase with
+                | Active _ -> state.Phase <- Active updated
+                | Starting | Resolving _ | Reserving _ | Opening _ | Closing -> ())
+        | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
+
+    let private describe state =
+        let view (player: Player) phase =
+            state.Account |> ValueOption.map (fun account ->
+                AdminPlayerView.create account player state.CharacterWithheld state.Pseudonym state.Hiding state.Role phase state.OpenedAt)
+            |> ValueOption.toOption
+        match state.Phase with
+        | Opening opening -> view opening.Player AdminSessionPhase.Opening
+        | Active player -> view player AdminSessionPhase.Active
+        | Starting | Resolving _ | Reserving _ | Closing -> None
+
     let private sampleMovement (options: PlayerSessionOptions) (request: SessionOpenRequest) state context sample =
         match state.Phase with
         | Active player when state.Presence.Count < options.MaxPendingUpdates ->
@@ -664,6 +711,12 @@ module PlayerSession =
             | Active player -> reply.Reply(Ok (publicSnapshot state player))
             | Closing -> reply.Reply(Error PlayerStateError.Closed)
             | Starting | Resolving _ | Reserving _ | Opening _ -> reply.Reply(Error PlayerStateError.NotReady)
+        | PlayerSessionMessage.RoleChanged role ->
+            match state.Phase with
+            | Opening _ | Active _ -> state.Role <- role
+            | Starting | Resolving _ | Reserving _ | Closing -> ()
+        | PlayerSessionMessage.ProfileChanged stored -> profileChanged options request state context stored
+        | PlayerSessionMessage.Describe reply -> reply.Reply(describe state)
         | PlayerSessionMessage.Stop -> stop request state context
     }
 
@@ -672,6 +725,8 @@ module PlayerSession =
         | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.IdentityChanged _
         | PlayerSessionMessage.ChatDetached _ | PlayerSessionMessage.SystemDetached _
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.Stop -> true
+        // Rare administrator changes use the reserve so a busy session still applies them.
+        | PlayerSessionMessage.RoleChanged _ | PlayerSessionMessage.ProfileChanged _ -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Placed _ | GroundMarkEvent.Removed _ | GroundMarkEvent.Rejected _) -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Changed _ | GroundMarkEvent.Own _) -> false
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Joined _)
@@ -684,7 +739,7 @@ module PlayerSession =
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.PostAnnouncement _
         | PlayerSessionMessage.PlaceGroundNote _ | PlayerSessionMessage.ReportDeath _ | PlayerSessionMessage.RemoveGroundMark _
         | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _ | PlayerSessionMessage.SetIdentityVisibility _
-        | PlayerSessionMessage.Read _ -> false
+        | PlayerSessionMessage.Read _ | PlayerSessionMessage.Describe _ -> false
 
     /// chat and system are the owners of the global and the system channel; marks owns the ground marks.
     /// identity says whether names may be hidden and how often the choice may change.
@@ -711,6 +766,9 @@ module PlayerSession =
                 Hiding = HiddenIdentity.Shown
                 IdentityRequest = ValueNone
                 LastIdentitySwitch = ValueNone
+                Account = ValueNone
+                Role = PlayerRole.Player
+                OpenedAt = DateTimeOffset.UtcNow
                 Moderation = moderation
                 Identity = identity
                 Announcements = announcements

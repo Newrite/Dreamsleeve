@@ -17,7 +17,8 @@
 7. `Chat.fs` — сообщения, участники, ограниченная история и каналы.
 8. `GroundMarks.fs` — метки на земле: вид и текст, положение, правила, срок жизни, видимость и хранилище с квотами.
 9. `Moderation.fs` — словарь `[block]`/`[flag]` и публичная проекция профиля.
-10. `Core.fs` — преобразование серверного времени в Unix milliseconds и обратно.
+10. `Admin.fs` — правила веб-админки: администраторы, роли игроков, действия аудита, одноразовые коды, сессии панели и проекция игрока для панели.
+11. `Core.fs` — преобразование серверного времени в Unix milliseconds и обратно.
 
 Production-зависимость домена: `FSharp.UMX 1.1.0`.
 
@@ -316,6 +317,34 @@ ID и `SentAt`; фабрика сообщения приводит время к
 (`DuplicateGroundMark` при повторе id), `remove`, `expired`, `evictionCandidate`,
 `countOf`, `snapshot`. Id монотонны, поэтому самая старая — наименьший id.
 Пространственный индекс и доставка принадлежат владельцу в Server.Core.
+
+## Админка
+
+`Admin.fs` ([docs/AdminPanelRu.md](../../docs/AdminPanelRu.md)) задаёт правила, хранилище и HTTP
+живут вне домена:
+
+- `AdminId` (положительный int64), `AdminAccount` (логин по правилам `Username`) — администратор
+  не игрок.
+- `PlayerRole = Player | Moderator` с `toInt`/`ofInt` (0/1, хранится в БД) и `key`/`ofKey`
+  (формы и API); `PlayerRole.assign` — роль только зарегистрированному игроку (`PlayerNotFound`).
+- `AdminAction` (`SetRole`, `RenamePlayer`, `ResetPlayerPassword`, `RevokePlayerAccess`,
+  `Announced`, `CreatedApiToken`, `RevokedApiToken`, `ResetAdminPassword`, `CreatedAdmin`) с
+  неизменяемыми ключами аудита, `AuditTarget` (`player:42`, `admin:3`, `token:…`, `server`),
+  `AuditRecord.create` (подробности до 512 символов, без секретов), `AuditEntry`.
+- `AdminCodes` — чистое состояние одноразовых кодов: по одному на назначение (`Setup` или
+  `ResetPassword adminId`), выпуск заменяет предыдущий и выбрасывает истёкшие, `redeem` тратит код
+  первой попыткой и отличает `CodeExpired`. Хранятся только хеши; I/O и время передаёт владелец.
+- `PanelSession` — срок и отзыв новой сменой пароля (`revokedBy`).
+- `ApiTokenLabel` (1–64 символа, одна строка), `AdminAnnouncement` (текст по лимиту чата и
+  ручные виды `admin`/`announcement`/`event`; `Periodic` — только расписание).
+- `AdminPlayerView.create` — единственная сборка настоящей личности скрытого игрока для показа:
+  хранимые username/display name, имя персонажа (и когда оно скрыто словарём), вариант скрытия и
+  псевдоним, роль, место, фаза и время открытия сессии. Её вызывает только `PlayerSession`
+  по запросу панели; в игровой протокол она не попадает (см. «Скрытое имя», абзац «Админка.» в
+  [ModerationAndNamesRu.md](../../docs/ModerationAndNamesRu.md)).
+
+`PseudonymBook.rename` сохраняет псевдоним и вариант скрытия переименованного игрока и меняет
+только учитываемые настоящие имена.
 
 ## Сборка и проверки
 

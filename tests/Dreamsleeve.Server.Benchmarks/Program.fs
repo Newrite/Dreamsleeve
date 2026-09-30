@@ -113,7 +113,7 @@ let private start count (probe: Probe) = task {
     let authenticate (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
         Result = match Map.tryFind request.Ticket identities with
-                 | Some profile -> Ok profile
+                 | Some profile -> Ok { Profile = profile; Role = PlayerRole.Player }
                  | None -> Error SessionAuthenticationError.InvalidTicket
     }
     let authentication = Agent.Start(AgentOptions.create "benchmark-authentication",

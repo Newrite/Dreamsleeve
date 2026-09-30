@@ -103,6 +103,13 @@ module PseudonymBook =
             book.players[profile.PlayerId] <- struct (profile, ValueSome current, hiding)
             ValueSome current
 
+    /// A renamed player keeps the pseudonym and the hiding choice; only the
+    /// real names counted as visible change.
+    let rename (profile: PlayerData) (book: PseudonymBook) =
+        match book.players.TryGetValue profile.PlayerId with
+        | true, struct (_, pseudonym, hiding) -> book.players[profile.PlayerId] <- struct (profile, pseudonym, hiding)
+        | false, _ -> ()
+
     /// The profile the online player was registered with.
     let tryProfile playerId (book: PseudonymBook) =
         match book.players.TryGetValue playerId with

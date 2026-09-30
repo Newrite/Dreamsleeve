@@ -20,6 +20,19 @@ type ServerRuntimeSnapshot = {
 }
 
 [<RequireQualifiedAccess>]
+type RuntimeSessionPhase = Waiting | Opening | Ready | Closing
+
+/// One connection for the panel's online table. Session is the address to ask
+/// for details (Describe); the row itself carries no names.
+type RuntimeSessionRow = {
+    ConnectionId: Guid
+    PlayerId: PlayerId option
+    Phase: RuntimeSessionPhase
+    ConnectedAt: DateTimeOffset
+    Session: AgentRef<PlayerSessionMessage> option
+}
+
+[<RequireQualifiedAccess>]
 type ServerRuntimeMessage =
     | Start
     | Tick of AgentTick
@@ -32,8 +45,14 @@ type ServerRuntimeMessage =
     | Read of ReplyChannel<ServerRuntimeSnapshot>
     | FindPlayer of Guid * ReplyChannel<AgentRef<PlayerSessionMessage> option>
     | RevokePlayer of PlayerId
-    /// One-off server announcement from the administrator console.
+    /// One-off server announcement from the administrator console or panel.
     | Announce of ServerAnnouncement
+    /// Every connection with its phase, for the panel.
+    | ListSessions of ReplyChannel<RuntimeSessionRow list>
+    /// The role is already stored; the live session applies it without reconnecting.
+    | SetPlayerRole of PlayerId * PlayerRole
+    /// The stored profile after an administrator renamed the player.
+    | RenamePlayer of PlayerData
     | Stop
 
 /// Routes managed transport events without waiting for domain agents.
@@ -161,6 +180,23 @@ module ServerRuntime =
             else ServerResponse.RequestRejected(requestId, rejection)
         send options state context entry response
 
+    // The session hears of panel changes after its reservation reply, in its own FIFO.
+    let private panelChanges state (entry: SessionTable.Entry) playerId =
+        match entry.Child with
+        | Some child ->
+            let deliver message =
+                match child.TryPost message with
+                | AgentPostResult.Posted -> ()
+                | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
+                    state.Logger.LogWarning("Session {ConnectionId} did not take an administrator change", entry.ConnectionId)
+            match state.Table.Roles.TryGetValue playerId with
+            | true, role -> deliver (PlayerSessionMessage.RoleChanged role)
+            | false, _ -> ()
+            match state.Table.Profiles.TryGetValue playerId with
+            | true, profile -> deliver (PlayerSessionMessage.ProfileChanged profile)
+            | false, _ -> ()
+        | None -> ()
+
     let private host (options: ServerRuntimeOptions) state context command =
         match command with
         | SessionHostCommand.Reserve(connectionId, profile, hiding, reply) ->
@@ -170,7 +206,10 @@ module ServerRuntime =
                 | Some _ | None -> IdentityAdmission.Closed
 
             match reply.TryPost answer with
-            | AgentTryDeliveryResult.Posted -> ()
+            | AgentTryDeliveryResult.Posted ->
+                match answer, SessionTable.find connectionId state.Table with
+                | IdentityAdmission.Reserved _, Some entry -> panelChanges state entry profile.PlayerId
+                | (IdentityAdmission.Reserved _ | IdentityAdmission.AlreadyInUse | IdentityAdmission.Closed), _ -> ()
             | AgentTryDeliveryResult.Full | AgentTryDeliveryResult.Closed ->
                 SessionTable.find connectionId state.Table |> Option.iter (close options state context)
 
@@ -184,6 +223,11 @@ module ServerRuntime =
                     | AgentTryDeliveryResult.Full | AgentTryDeliveryResult.Closed -> close options state context entry
                 // A session that is not ready cannot be told a new identity; it is closing already.
                 | None -> close options state context entry
+            | None -> ()
+
+        | SessionHostCommand.UpdateProfile(connectionId, profile) ->
+            match SessionTable.find connectionId state.Table with
+            | Some entry -> SessionTable.updateProfile profile entry state.Table |> ignore
             | None -> ()
 
         | SessionHostCommand.Activate(connectionId, requestId, welcome) ->
@@ -314,7 +358,7 @@ module ServerRuntime =
             if state.Stopping || state.Table.Connections.Count >= options.MaxSessions then
                 state.Transport.Close connectionId
             elif not (state.Table.Connections.ContainsKey connectionId) then
-                SessionTable.add connectionId (now () + int64 options.OpenTimeoutMs) state.Table |> ignore
+                SessionTable.add connectionId DateTimeOffset.UtcNow (now () + int64 options.OpenTimeoutMs) state.Table |> ignore
         | ServerTransportEvent.Received(connectionId, lane, bytes) ->
             match SessionTable.find connectionId state.Table with
             | Some entry when entry.Phase <> SessionTable.Closing -> receive options authenticator state context entry lane bytes
@@ -505,6 +549,27 @@ module ServerRuntime =
             let affected = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.PlayerId = Some playerId || entry.Phase = SessionTable.Opening) |> Seq.toArray
             for entry in affected do close options state context entry
         | ServerRuntimeMessage.Announce announcement -> announce state announcement
+        | ServerRuntimeMessage.SetPlayerRole(playerId, role) ->
+            state.Table.Roles[playerId] <- role
+            match state.Table.Players.TryGetValue playerId with
+            | true, connectionId -> SessionTable.find connectionId state.Table |> Option.iter (fun entry -> panelChanges state entry playerId)
+            | false, _ -> ()
+        | ServerRuntimeMessage.RenamePlayer profile ->
+            state.Table.Profiles[profile.PlayerId] <- profile
+            match state.Table.Players.TryGetValue profile.PlayerId with
+            | true, connectionId -> SessionTable.find connectionId state.Table |> Option.iter (fun entry -> panelChanges state entry profile.PlayerId)
+            | false, _ -> ()
+        | ServerRuntimeMessage.ListSessions reply ->
+            let phase = function
+                | SessionTable.Waiting -> RuntimeSessionPhase.Waiting
+                | SessionTable.Opening -> RuntimeSessionPhase.Opening
+                | SessionTable.Ready -> RuntimeSessionPhase.Ready
+                | SessionTable.Closing -> RuntimeSessionPhase.Closing
+            reply.Reply [
+                for entry in state.Table.Connections.Values do
+                    { ConnectionId = entry.ConnectionId; PlayerId = entry.PlayerId; Phase = phase entry.Phase
+                      ConnectedAt = entry.ConnectedAt; Session = entry.Child |> Option.map _.Ref }
+            ]
         | ServerRuntimeMessage.Stop -> stop options state context
         | ServerRuntimeMessage.Read reply ->
             reply.Reply {
@@ -525,7 +590,8 @@ module ServerRuntime =
 
     let private isControl = function
         | ServerRuntimeMessage.Host(SessionHostCommand.Send _) | ServerRuntimeMessage.Read _
-        | ServerRuntimeMessage.FindPlayer _ | ServerRuntimeMessage.TransportReady | ServerRuntimeMessage.Announce _ -> false
+        | ServerRuntimeMessage.FindPlayer _ | ServerRuntimeMessage.TransportReady | ServerRuntimeMessage.Announce _
+        | ServerRuntimeMessage.ListSessions _ | ServerRuntimeMessage.SetPlayerRole _ | ServerRuntimeMessage.RenamePlayer _ -> false
         | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick _ | ServerRuntimeMessage.Host _
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
         | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.RevokePlayer _ | ServerRuntimeMessage.Stop -> true

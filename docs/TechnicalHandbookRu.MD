@@ -786,6 +786,11 @@ TEST_CASE("client starts disconnected") {
 
 ## 13. Минимальная админка: Falco + Falco.Markup + Falco.Htmx
 
+> Статус на 30.09.2026: реализована в процессе сервера — `src/Dreamsleeve.Server.Web` (общая
+> HTTP-обвязка, `/auth/*`, SSR-панель на Falco.Markup + вендоренный htmx, REST только чтение),
+> `AdminService` и схема 5 в SQLite, консольные `admin-setup`/`admin-reset`. См.
+> [AdminPanelRu.md](AdminPanelRu.md).
+
 ### 13.1. Назначение админки
 - просмотр состояния сервера
 - просмотр игроков / guild / party / moderation state

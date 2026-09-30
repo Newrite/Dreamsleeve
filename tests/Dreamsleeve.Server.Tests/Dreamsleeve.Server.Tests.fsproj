@@ -11,6 +11,7 @@
     <Compile Include="ModerationTests.fs" />
     <Compile Include="PlayerDetailsTests.fs" />
     <Compile Include="AgentTests.fs" />
+    <Compile Include="AdminDomainTests.fs" />
     <Compile Include="CodecTests.fs" />
     <Compile Include="BackgroundTests.fs" />
     <Compile Include="OutboxTests.fs" />
@@ -23,6 +24,8 @@
     <Compile Include="ProfileStoreTests.fs" />
     <Compile Include="SqliteAccountStoreTests.fs" />
     <Compile Include="AuthServiceTests.fs" />
+    <Compile Include="AdminStoreTests.fs" />
+    <Compile Include="AdminServiceTests.fs" />
     <Compile Include="PlayerSessionTests.fs" />
     <Compile Include="ChatRoomAgentTests.fs" />
     <Compile Include="PresenceAgentTests.fs" />
@@ -33,6 +36,7 @@
     <Compile Include="AnnouncementTests.fs" />
     <Compile Include="GroundMarkTests.fs" />
     <Compile Include="AuthenticationHttpTests.fs" />
+    <Compile Include="AdminHttpTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
