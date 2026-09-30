@@ -42,13 +42,20 @@ public:
     using Marks   = std::map<Domain::GroundMarkId, Domain::GroundMark>;
 
     // One call per Drain. Posts RequestSnapshot itself when a view or a missed
-    // delta requires a fresh full state.
-    void Process(ClientExchange& exchange, const ClientOutput& output, const UiSettings& settings, Frame& frame)
+    // delta requires a fresh full state. hiding is the saved hide-my-name choice.
+    void Process(
+      ClientExchange&        exchange,
+      const ClientOutput&    output,
+      const UiSettings&      settings,
+      Domain::HiddenIdentity hiding,
+      Frame&                 frame)
     {
       const bool ready = output.status.Ready();
       serverName       = output.status.serverName;
       // The core drops the request with the session; the server may or may not have stored it.
-      if (!ready && std::erase_if(pending, [](const auto& entry) { return std::holds_alternative<PendingName>(entry.second.request); }) != 0)
+      if (!ready && std::erase_if(pending, [](const auto& entry) {
+                      return std::holds_alternative<PendingName>(entry.second.request);
+                    }) != 0)
         nameError = "Соединение прервано до ответа сервера";
       for (const auto& update : output.state.updates)
         std::visit([&](const auto& value) { Apply(value, settings, ready, frame); }, update);
@@ -63,7 +70,7 @@ public:
       if (frame.visibleMarksChanged && !frame.snapshot && Ready()) Emit(frame, Bridge::NearbyMarksEvent{.marks = NearbyMarkList(settings)});
 
       PublishStatus(output.status, settings, frame);
-      if (auto identity = Identity(frame.hideIdentity.value_or(Bridge::HidingOf(settings.hideIdentity))); identity != lastIdentity)
+      if (auto identity = Identity(frame.hideIdentity.value_or(hiding)); identity != lastIdentity)
       {
         Emit(frame, identity);
         lastIdentity = std::move(identity);
@@ -122,9 +129,8 @@ public:
     std::expected<void, std::string> SetIdentityVisibility(ClientExchange& exchange, Domain::HiddenIdentity hiding)
     {
       if (Waiting<PendingIdentity>()) return std::unexpected{"Ожидание ответа сервера"};
-      auto sent = Submit(exchange, PendingIdentity{hiding}, [&](std::uint64_t id) {
-        return Dreamsleeve::Client::SetIdentityVisibility{id, hiding};
-      });
+      auto sent =
+        Submit(exchange, PendingIdentity{hiding}, [&](std::uint64_t id) { return Dreamsleeve::Client::SetIdentityVisibility{id, hiding}; });
       if (!sent) return std::unexpected{std::string{Refusal(sent.error())}};
       identityError.reset();
       return {};
@@ -265,8 +271,14 @@ public:
       if (!system) return Announcements::Result::NotConnected;
       PendingAnnouncement waiting{*system, request.signature, request.text};
       const auto          sent = Submit(exchange, std::move(waiting), [&](std::uint64_t id) {
-        return Dreamsleeve::Client::
-          PostAnnouncement{id, *system, std::move(request.text), request.kind, request.source, std::move(request.signature)};
+        return Dreamsleeve::Client::PostAnnouncement{
+            id,
+            *system,
+            std::move(request.text),
+            request.kind,
+            request.source,
+            std::move(request.signature)
+        };
       });
       if (sent) return Announcements::Result::Queued;
       switch (sent.error())
@@ -751,8 +763,7 @@ private:
     {
       if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
         return rejection->code == RequestRejectionCode::RateLimited ? Announcements::Result::RateLimited : Announcements::Result::Rejected;
-      if (const auto* failure = std::get_if<CommandFailureCode>(&outcome))
-        switch (*failure)
+      if (const auto* failure = std::get_if<CommandFailureCode>(&outcome)) switch (*failure)
         {
           case CommandFailureCode::StaleGeneration:
           case CommandFailureCode::SessionNotReady:

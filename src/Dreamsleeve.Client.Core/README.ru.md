@@ -15,19 +15,24 @@ ClientExchange. После создания им владеет один сет�
 ## Общий запуск и конфигурационный файл
 
 `import Dreamsleeve.Client.Application;` экспортирует `ClientSettings`,
-`LoadClientSettings(path)`, `ClientApplication` и существующий Exchange/Runtime.
-[client.example.toml](client.example.toml) показывает все настройки файла версии 1.
+`LoadClientSettings(path)`, `ValidateClientSettings`, `EnsureClientSettings(path)`,
+`ClientApplication` и существующий Exchange/Runtime.
+[client.example.toml](client.example.toml) называет все ключи файла версии 1 с их
+умолчаниями (это проверяет тест) и встроен в библиотеку правилом xmake `dreamsleeve.embed`:
+`DefaultClientToml()` возвращает его текст, `EnsureClientSettings` пишет его, если файла нет.
 Путь типа `std::filesystem::path` выбирает конечный клиент или SKSE-плагин
 (плагин читает `Data/SKSE/Plugins/Dreamsleeve/client.toml`, см. docs/SkseClientRu.md):
-библиотека не ищет файл в cwd/Data/AppData и не создаёт его автоматически.
+библиотека не ищет файл в cwd/Data/AppData.
 Относительный путь имеет обычную семантику файловой системы вызывающей программы.
 
-Отсутствие/ошибка чтения файла, неизвестные поля, неверные типы и недопустимые
-значения возвращают `std::unexpected`. Размер файла ограничен 64 KiB.
+`LoadClientSettings` только разбирает файл: отсутствие/ошибка чтения, неизвестные поля,
+неверные типы, версия и `serverIp` возвращают `std::unexpected`. Размер файла ограничен 64 KiB.
+Значения проверяет один раз `ValidateClientSettings` (`Configuration::InvalidSetting` называет
+первый неверный ключ так, как он записан в файле); его вызывает `ClientApplication::TryCreate`,
+поэтому файл, аргументы Client.Dev и прямое создание `ClientSettings` проходят одну проверку.
 Частичный или пустой TOML дополняется defaults: 20 Гц, три канала,
 один peer, прежние лимиты и настройки интерполяции. `serverIp` — IPv4,
-`serverPort` — порт ENet; `authUrl` — HTTP(S) origin. Прямое создание
-`ClientSettings` проходит ту же проверку при запуске. Hot reload отсутствует.
+`serverPort` — порт ENet; `authUrl` — HTTP(S) origin. Hot reload отсутствует.
 Файл читается как UTF-8 через Glaze 7.0.2; имена ключей чувствительны к регистру.
 Перед чтением проверяется структура документа и повторные ключи/таблицы с помощью
 токенизатора Glaze: сам `read_toml` этой версии допускает повторные ключи и корневую
@@ -85,8 +90,8 @@ xmake run Dreamsleeve.Client.Dev --config "path/to/client.toml" player --registe
 
 ## Вход и завершение
 
-`ClientRuntime::TryCreate(config, exchange)` проверяет настройки codec, таймауты
-и ёмкость чата. `Connect(sessionTicket)` создаёт новый транспортный host
+`ClientRuntime::Create(config, exchange)` принимает уже проверенную конфигурацию, как и
+`ProtocolCodec` и `MovementView::Create`. `Connect(sessionTicket)` создаёт новый транспортный host
 из той же конфигурации и начинает подключение. При каждом новом входе вызывающий
 код передаёт новый одноразовый билет, полученный из HTTP login; ClientRuntime не знает пароль
 и не выполняет HTTP; общий ClientApplication получает билет через AuthHttp. `Poll(waitMs)` обслуживает ENet;

@@ -346,9 +346,7 @@ public:
       if (inputClosed) return std::unexpected{"Client input is closed"};
       const auto operation     = std::visit([](const auto& value) { return value.Operation; }, request);
       const bool activeAllowed = operation == AuthOperation::SignOut || operation == AuthOperation::ForgetSavedLogin;
-      if (
-        status.authenticating || disconnectRequested ||
-        (!activeAllowed && !SessionIdle(status.phase)))
+      if (status.authenticating || disconnectRequested || (!activeAllowed && !SessionIdle(status.phase)))
         return std::unexpected{"A connection operation or session is already active"};
 
       authenticationCanceled = false;

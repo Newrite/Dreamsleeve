@@ -13,9 +13,7 @@ namespace
 
   W::ProtocolCodec MakeCodec(Configuration settings = config)
   {
-    auto result = W::ProtocolCodec::TryCreate(std::move(settings));
-    REQUIRE(result);
-    return std::move(*result);
+    return W::ProtocolCodec{std::move(settings)};
   }
 
   template <class T>
@@ -309,35 +307,6 @@ TEST_CASE("Bootstrap counts come from configuration and zero retained messages i
   CHECK(MakeCodec(settings).Decode(Bytes(packet)));
 }
 
-TEST_CASE("Invalid protocol configuration prevents codec creation")
-{
-  for (int which = 0; which != 5; ++which)
-  {
-    Configuration settings;
-    switch (which)
-    {
-      case 0:
-        settings.network.maxPacketBytes = 0;
-        break;
-      case 1:
-        settings.network.maxPacketBytes = static_cast<std::size_t>(std::numeric_limits<int>::max()) + 1;
-        break;
-      case 2:
-        settings.network.maxWaitingData = settings.network.maxPacketBytes - 1;
-        break;
-      case 3:
-        settings.maxInitialPlayers = 0;
-        break;
-      case 4:
-        settings.maxRecentMessages = static_cast<std::size_t>(std::numeric_limits<int>::max()) + 1;
-        break;
-    }
-    auto result = W::ProtocolCodec::TryCreate(settings);
-    REQUIRE_FALSE(result);
-    CHECK(result.error().code == W::ErrorCode::InvalidConfig);
-  }
-}
-
 TEST_CASE("Rejection codes share protobuf names and retain future signed enum values")
 {
   const auto      codec = MakeCodec();
@@ -525,8 +494,6 @@ TEST_CASE("Actor value limits are configured for both outgoing samples and incom
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   settings.maxActorValues = 65;
   CHECK(MakeCodec(settings).Decode(Bytes(packet)));
-  settings.maxActorValues = 0;
-  CHECK_FALSE(W::ProtocolCodec::TryCreate(settings));
 }
 
 TEST_CASE("Player update correlation is distinct from uncorrelated full and compact replication")

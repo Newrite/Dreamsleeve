@@ -172,12 +172,12 @@ export namespace Dreamsleeve::Client::Wire
     IdentityVisibilityChanged,
     DisplayNameChanged>;
 
-  // One immutable configuration per network owner. Validate once at startup.
+  // One immutable configuration per network owner, checked by ValidateClientSettings.
   class ProtocolCodec
   {
 public:
 
-    static Result<ProtocolCodec> TryCreate(Configuration config);
+    explicit ProtocolCodec(Configuration config) : config(std::move(config)) {}
 
     // Serializes directly into the owning ENet packet; send with PushPacket/Send.
     Result<DreamNetPacket> Encode(const ClientRequest& request) const;
@@ -191,8 +191,6 @@ public:
     }
 
 private:
-
-    explicit ProtocolCodec(Configuration config) : config(std::move(config)) {}
 
     Configuration config;
   };

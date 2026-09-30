@@ -71,9 +71,7 @@ namespace
 
   W::ProtocolCodec Codec()
   {
-    auto result = W::ProtocolCodec::TryCreate(Configuration{});
-    REQUIRE(result);
-    return std::move(*result);
+    return W::ProtocolCodec{Configuration{}};
   }
 
   void WriteMark(P::GroundMark& target, Domain::GroundMarkId id, P::GroundMarkKind kind = P::GROUND_MARK_KIND_NOTE)

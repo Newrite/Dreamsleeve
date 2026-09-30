@@ -23,7 +23,7 @@ namespace
   {
     ClientModel model;
     ClientExchange::Ptr exchange = std::move(*ClientExchange::TryCreate(8, 8));
-    MovementView::Ptr view = std::move(*MovementView::TryCreate());
+    MovementView::Ptr view = MovementView::Create();
     ClientOutput output;
 
     MovementFixture()
@@ -175,7 +175,7 @@ TEST_CASE("History capacity bounds a long moving stream")
   MovementFixture fixture;
   MovementSettings settings;
   settings.historyCapacity = 3;
-  fixture.view = std::move(*MovementView::TryCreate(settings));
+  fixture.view = MovementView::Create(settings);
   REQUIRE(fixture.exchange->Publish(fixture.model, true));
   fixture.Drain(0);
 
@@ -255,18 +255,6 @@ TEST_CASE("Posting movement stamps before queue coalescing and retains adapter t
   CHECK(std::get<LocalMovement>(commands.front().command).location->sampledAtUs == 12345);
 }
 
-TEST_CASE("Invalid history configuration returns an error")
-{
-  MovementSettings settings;
-  SUBCASE("Capacity") { settings.historyCapacity = 1; }
-  SUBCASE("Negative delay") { settings.delay = -1ms; }
-  SUBCASE("Gap shorter than delay") { settings.maxGap = settings.delay; }
-  SUBCASE("Unbounded time conversion") { settings.maxGap = std::chrono::milliseconds::max(); }
-  SUBCASE("Infinite teleport threshold") { settings.teleportDistance = std::numeric_limits<double>::infinity(); }
-  SUBCASE("Zero teleport threshold") { settings.teleportDistance = 0; }
-  CHECK_FALSE(MovementView::TryCreate(settings));
-}
-
 TEST_CASE("Stationary samples retain the stop interval before movement resumes")
 {
   MovementFixture fixture;
@@ -280,15 +268,14 @@ TEST_CASE("Stationary samples retain the stop interval before movement resumes")
 
 TEST_CASE("Snapshot timeline starts at publication rather than delayed consumption")
 {
-  auto view = MovementView::TryCreate();
-  REQUIRE(view);
+  auto view = MovementView::Create();
   Domain::Player player{.data = {7, "player", "Player"}, .location = MovementLocation(0), .characterGeneration = 1};
   ClientSnapshot snapshot{.generation = 1, .revision = 1, .players = {player}, .observedAt = At(100)};
   ClientStateDelta delta{.generation = 1, .revision = 2};
   delta.movement.push_back({7, 1, At(240), MovementLocation(10, 1100000)});
   StateUpdateBatch batch{{snapshot, delta}};
-  (*view)->Apply(batch, At(300));
-  CHECK((*view)->Sample(7, At(300))->position.X == doctest::Approx(5));
+  view->Apply(batch, At(300));
+  CHECK(view->Sample(7, At(300))->position.X == doctest::Approx(5));
 }
 
 TEST_CASE("A missing new-session snapshot clears history and rejects old-session recovery")

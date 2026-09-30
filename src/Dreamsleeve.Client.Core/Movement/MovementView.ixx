@@ -16,13 +16,9 @@ public:
     using Clock = MovementClock;
     using Ptr   = std::unique_ptr<MovementView>;
 
-    static Domain::Result<Ptr> TryCreate(MovementSettings settings = {})
+    // The settings passed ValidateClientSettings.
+    static Ptr Create(MovementSettings settings = {})
     {
-      if (!settings.Valid())
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidConfig, "movement"}
-        };
-
       return Ptr{new MovementView{settings}};
     }
 

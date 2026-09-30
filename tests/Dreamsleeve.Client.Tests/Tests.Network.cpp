@@ -501,9 +501,8 @@ TEST_CASE("Invalid host packet budgets are rejected before creating a socket")
 TEST_CASE("Chat codec serializes directly into a transferable reliable ENet packet")
 {
   auto connected = CreateConnectedHosts();
-  auto codec = Dreamsleeve::Client::Wire::ProtocolCodec::TryCreate({});
-  REQUIRE(codec);
-  auto packet = codec->Encode(Dreamsleeve::Client::SendChat{42, 1, "Привет"});
+  const Dreamsleeve::Client::Wire::ProtocolCodec codec{Dreamsleeve::Client::Configuration{}};
+  auto packet = codec.Encode(Dreamsleeve::Client::SendChat{42, 1, "Привет"});
   REQUIRE(packet);
   CHECK(packet->Flags() == PacketFlag::Reliable);
   REQUIRE(connected.clientPeer.PushPacket(std::move(*packet), 0));

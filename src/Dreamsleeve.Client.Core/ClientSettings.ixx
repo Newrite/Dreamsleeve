@@ -10,6 +10,8 @@ export import Dreamsleeve.Client.Config;
 export namespace Dreamsleeve::Client
 {
 
+  constexpr int ClientSettingsVersion = 1;
+
   struct ClientSettings
   {
     Configuration client{};
@@ -58,14 +60,6 @@ struct glz::meta<Dreamsleeve::Client::Configuration>
     &T::fireflyPlugin,
     "fireflyFormId",
     &T::fireflyFormId,
-    "showFireflyNames",
-    &T::showFireflyNames,
-    "fireflyNameOcclusion",
-    &T::fireflyNameOcclusion,
-    "fireflyNameFontSize",
-    &T::fireflyNameFontSize,
-    "fireflyNameOffset",
-    &T::fireflyNameOffset,
     "captureKeyboard",
     &T::captureKeyboard,
     "fireflyScale",
@@ -163,7 +157,8 @@ namespace Dreamsleeve::Client
       }
     };
 
-    struct InterpolationFile
+    // The file shape: chrono values in milliseconds, the address as ip and port.
+    export struct InterpolationFile
     {
       std::int64_t delayMs{MovementSettings{}.delay.count()};
       std::int64_t maxGapMs{MovementSettings{}.maxGap.count()};
@@ -171,21 +166,23 @@ namespace Dreamsleeve::Client
       double       teleportDistance{MovementSettings{}.teleportDistance};
     };
 
-    struct SettingsFile
+    export struct SettingsFile
     {
-      int               version{1};
+      int               version{ClientSettingsVersion};
       std::string       serverIp{"127.0.0.1"};
-      std::uint16_t     serverPort{8778};
+      Port              serverPort{DefaultServerPort};
       std::string       authUrl{ClientSettings{}.authUrl};
       Configuration     client{};
       InterpolationFile interpolation{};
       std::size_t       commandCapacity{ClientSettings{}.commandCapacity};
       std::size_t       stateCapacity{ClientSettings{}.stateCapacity};
-      bool              allowInsecureRemoteAuth{false};
+      bool              allowInsecureRemoteAuth{ClientSettings{}.allowInsecureRemoteAuth};
     };
 
   }
 
+  // The one check of every client setting; ClientApplication::TryCreate runs it,
+  // and the runtime, codec and movement view trust what passed.
   export std::expected<void, std::string> ValidateClientSettings(const ClientSettings& settings)
   {
     if (auto field = settings.client.InvalidSetting()) return std::unexpected{"Invalid client setting: " + std::string{*field}};
@@ -193,7 +190,30 @@ namespace Dreamsleeve::Client
     return Auth::ValidateUrl(settings.authUrl, settings.allowInsecureRemoteAuth);
   }
 
-  // The caller chooses the path. Missing/invalid files never silently use defaults.
+  // client.example.toml, the documented defaults, as bytes from the xmake rule dreamsleeve.embed.
+  export std::string_view DefaultClientToml() noexcept
+  {
+    static constexpr unsigned char bytes[] = {
+#include "client.example.toml.h"
+    };
+    return {reinterpret_cast<const char*>(bytes), sizeof(bytes)};
+  }
+
+  // Writes the documented defaults when the file is absent, so the first run has a
+  // file to edit; an existing file is never rewritten.
+  export std::expected<void, std::string> EnsureClientSettings(const std::filesystem::path& path)
+  {
+    std::error_code error;
+    if (std::filesystem::exists(path, error)) return {};
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error) return std::unexpected{"Cannot create " + path.parent_path().string()};
+    std::ofstream output{path, std::ios::binary};
+    if (!output || !(output << DefaultClientToml())) return std::unexpected{"Cannot write " + path.string()};
+    return {};
+  }
+
+  // Parses the caller's file; values are checked by ValidateClientSettings.
+  // A missing or malformed file never silently yields defaults.
   export std::expected<ClientSettings, std::string> LoadClientSettings(const std::filesystem::path& path)
   {
     std::ifstream input{path, std::ios::binary | std::ios::ate};
@@ -213,7 +233,7 @@ namespace Dreamsleeve::Client
     SettingsDetail::SettingsFile file;
     if (auto error = glz::read_toml(file, source); !source.empty() && error)
       return std::unexpected{"Invalid client TOML: " + glz::format_error(error, source)};
-    if (file.version != 1) return std::unexpected{"Unsupported client configuration version"};
+    if (file.version != ClientSettingsVersion) return std::unexpected{"Unsupported client configuration version"};
     if (file.serverIp.find('\0') != std::string::npos) return std::unexpected{"Invalid serverIp"};
     auto address = DreamNetAddress::TryParseIp(file.serverIp, file.serverPort);
     if (!address) return std::unexpected{"Invalid serverIp; expected an IPv4 address"};
@@ -222,10 +242,13 @@ namespace Dreamsleeve::Client
     const auto& view          = file.interpolation;
     file.client.movement =
       {std::chrono::milliseconds{view.delayMs}, std::chrono::milliseconds{view.maxGapMs}, view.historyCapacity, view.teleportDistance};
-    ClientSettings
-      result{std::move(file.client), std::move(file.authUrl), file.commandCapacity, file.stateCapacity, file.allowInsecureRemoteAuth};
-    if (auto valid = ValidateClientSettings(result); !valid) return std::unexpected{valid.error()};
-    return result;
+    return ClientSettings{
+        std::move(file.client),
+        std::move(file.authUrl),
+        file.commandCapacity,
+        file.stateCapacity,
+        file.allowInsecureRemoteAuth
+    };
   }
 
 }

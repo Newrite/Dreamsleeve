@@ -26,11 +26,10 @@ public:
       if (!net) return std::unexpected{net.error().ToLogString()};
       auto exchange = ClientExchange::TryCreate(settings.commandCapacity, settings.stateCapacity);
       if (!exchange) return std::unexpected{"Cannot create client exchange"};
-      auto runtime = ClientRuntime::TryCreate(settings.client, **exchange);
-      if (!runtime) return std::unexpected{Describe(runtime.error())};
+      auto runtime = ClientRuntime::Create(settings.client, **exchange);
 
       auto app = std::unique_ptr<ClientApplication>{
-          new ClientApplication{std::move(settings), std::move(*net), std::move(*exchange), std::move(*runtime)}
+          new ClientApplication{std::move(settings), std::move(*net), std::move(*exchange), std::move(runtime)}
       };
       try
       {

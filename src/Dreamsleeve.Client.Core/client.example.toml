@@ -1,4 +1,7 @@
-# Omitted settings retain defaults. Keys are case-sensitive.
+# client.toml of the plugin (Data/SKSE/Plugins/Dreamsleeve) and of Client.Dev --config:
+# every key with its default. Omitted keys keep the default; keys are case-sensitive.
+# The plugin writes this file on first run; ranges are checked at start
+# (Configuration::InvalidSetting). Chat, name and mark looks live in ui.toml.
 version = 1
 serverIp = "127.0.0.1"
 serverPort = 8778
@@ -24,10 +27,6 @@ showFireflies = true
 fireflyPlugin = "Skyrim.esm"
 fireflyFormId = 0x02EB0F
 fireflyScale = 0.25 # 0.01..10.0; engine precision is 0.01
-showFireflyNames = true
-fireflyNameOcclusion = true # Hide names behind collision geometry
-fireflyNameFontSize = 18 # HUD units, 8..48
-fireflyNameOffset = 35 # Height above the firefly, 0..512 game units
 captureKeyboard = true # Keep keyboard events from the game and other SKSE mods while the chat is open
 # Ground marks: STAT base forms without collision, plugin-local IDs. Defaults are
 # flat vanilla glow discs (FXGlowFlatRndBrt / FXGlowFlatRndDim); a missing form

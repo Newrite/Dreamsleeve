@@ -79,11 +79,7 @@ public:
 
     using Clock = std::chrono::steady_clock;
 
-    constexpr Backoff(Clock::duration minimum, Clock::duration maximum) noexcept
-        : minimum(minimum),
-          maximum(maximum),
-          delay(minimum)
-    {}
+    constexpr Backoff(Clock::duration minimum, Clock::duration maximum) noexcept : minimum(minimum), maximum(maximum), delay(minimum) {}
 
     // True when an attempt may start now; the next one is then scheduled.
     bool Due(Clock::time_point now) noexcept

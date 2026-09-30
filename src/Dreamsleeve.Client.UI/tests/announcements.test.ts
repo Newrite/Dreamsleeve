@@ -6,7 +6,7 @@ import {
   PENDING_LIMIT,
   PENDING_TIMEOUT,
 } from "../src/state/chat";
-import { defaults, settingsFrom } from "../src/state/settings";
+import { defaults } from "../src/bridge/settings.generated";
 import type {
   Announcement,
   Channel,
@@ -174,42 +174,6 @@ describe("announcement bridge", () => {
       { ...event, error: "x".repeat(513) },
     ])
       expect(() => parse(broken)).toThrow();
-  });
-});
-
-describe("announcement settings", () => {
-  const keys = {
-    announcementChannels: "all",
-    announcementsServer: true,
-    announcementsTrustedClient: true,
-    announcementsThirdParty: true,
-    announcementsEvents: true,
-    announcementsPeriodic: true,
-  };
-  it("defaults apply to settings saved before announcements existed", () => {
-    expect(defaults).toMatchObject(keys);
-    const old = settingsFrom({ fontSize: 20, theme: "contrast" });
-    expect(old).toMatchObject({ ...keys, fontSize: 20, theme: "contrast" });
-  });
-  it("accepts known values only", () => {
-    expect(
-      settingsFrom({
-        announcementChannels: "current",
-        announcementsServer: false,
-        announcementsPeriodic: false,
-      }),
-    ).toMatchObject({
-      announcementChannels: "current",
-      announcementsServer: false,
-      announcementsPeriodic: false,
-    });
-    expect(
-      settingsFrom({
-        announcementChannels: "everywhere" as "all",
-        announcementsThirdParty: "no" as unknown as boolean,
-        announcementsEvents: 0 as unknown as boolean,
-      }),
-    ).toMatchObject(keys);
   });
 });
 

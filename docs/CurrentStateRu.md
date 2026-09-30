@@ -723,7 +723,7 @@ SKSE-плагин и веб-UI меток ([SkseClientRu.md](SkseClientRu.md#м�
   `ground_marks.author_pseudonym` — метка не раскрывает автора и после перезапуска.
 - Клиент: `PlayerData.pseudonymous`, команда `SetIdentityVisibility`, `IdentityConfirmation`,
   `ClientStatus::pseudonym`/`hiding`, выбор открытия `ClientExchange::SetHideIdentity`; host:
-  `hideIdentity = off|everywhere|exceptGroundMarks` в `[ui.chat]` (пишет только host после подтверждения), `NameFor` называет псевдонимный профиль
+  `hideIdentity = off|everywhere|exceptGroundMarks` в `[ui]` (пишет только host после подтверждения), `NameFor` называет псевдонимный профиль
   псевдонимом при любом `nameMode`, префикс `~` на надписях, событие `identity` для UI, остановка
   автопереподключения после отказа сервера. Client.Dev: `--hide`, `--hide-except-marks`, `hide on|except-marks|off`.
 - UI: блок «Режим стримера» с флажком и выбором из трёх вариантов, «Ожидание сервера…» и «Другие видят вас как

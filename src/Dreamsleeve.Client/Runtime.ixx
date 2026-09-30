@@ -245,29 +245,13 @@ export namespace Runtime
     return Host::SaveUiFile(state.uiPath, state.ui);
   }
 
-  // Writes the bundled defaults when the client file is absent, so the first run
-  // has a documented file to edit; an existing file is never rewritten.
-  std::expected<void, std::string> EnsureClientConfig(const std::filesystem::path& path)
-  {
-    std::error_code error;
-    if (std::filesystem::exists(path, error)) return {};
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) return std::unexpected{"Cannot create " + path.parent_path().string()};
-
-    std::ofstream output{path, std::ios::binary};
-    if (!output) return std::unexpected{"Cannot write " + path.string()};
-    output
-      << "# Dreamsleeve client. Omitted settings keep defaults; keys are case-sensitive.\n" "version = 1\n" "serverIp = \"127.0.0.1\"\n" "serverPort = 8778\n" "authUrl = \"http://127.0.0.1:8779\"\n" "\n" "[client]\n" "visibilityDistance = 8192\n" "showFireflies = true\n" "fireflyPlugin = \"Skyrim.esm\"\n" "fireflyFormId = 0x02EB0F\n" "fireflyScale = 0.25\n" "showFireflyNames = true\n" "fireflyNameOcclusion = true\n" "fireflyNameFontSize = 18\n" "fireflyNameOffset = 35\n" "captureKeyboard = true\n" "groundNotePlugin = \"Skyrim.esm\"\n" "groundNoteFormId = 0x075DDB\n" "groundNoteScale = 0.5\n" "deathMarkPlugin = \"Skyrim.esm\"\n" "deathMarkFormId = 0x075DD9\n" "deathMarkScale = 0.5\n";
-    return {};
-  }
-
   // Creates Core objects. Skyrim data is not needed; the network thread starts here.
   bool Initialize()
   {
     auto& state = Get();
     if (state.app) return true;
 
-    if (auto created = EnsureClientConfig(state.clientPath); !created) logger::warn("{}", created.error());
+    if (auto created = Dream::EnsureClientSettings(state.clientPath); !created) logger::warn("{}", created.error());
 
     auto settings = Dream::LoadClientSettings(state.clientPath);
     if (!settings)
@@ -276,13 +260,7 @@ export namespace Runtime
       return false;
     }
 
-    auto movement = Dream::MovementView::TryCreate(settings->client.movement);
-    if (!movement)
-    {
-      logger::error("Cannot create movement view: {}", movement.error().field);
-      return false;
-    }
-
+    // Validates every setting; the movement view below trusts them.
     auto app = Dream::ClientApplication::TryCreate(*settings);
     if (!app)
     {
@@ -290,11 +268,6 @@ export namespace Runtime
       return false;
     }
 
-    // client.toml supplies initial values; saved UI preferences override them.
-    state.ui.ui.chat.showFireflyNames     = settings->client.showFireflyNames;
-    state.ui.ui.chat.fireflyNameOcclusion = settings->client.fireflyNameOcclusion;
-    state.ui.ui.chat.fireflyNameFontSize  = settings->client.fireflyNameFontSize;
-    state.ui.ui.chat.fireflyNameOffset    = settings->client.fireflyNameOffset;
     if (auto ui = Host::LoadUiFile(state.uiPath, state.ui))
       state.ui = *ui;
     else
@@ -309,10 +282,10 @@ export namespace Runtime
       std::move(dictionary.names));
     names.Load(std::move(state.ui.names));
 
-    state.movement = std::move(*movement);
+    state.movement = Dream::MovementView::Create(settings->client.movement);
     state.app      = std::move(*app);
     // The first session already opens with the saved "hide my name" choice.
-    state.app->Exchange().SetHideIdentity(Host::Bridge::HidingOf(state.ui.ui.chat.hideIdentity));
+    state.app->Exchange().SetHideIdentity(Host::Bridge::HidingOf(state.ui.ui.hideIdentity));
     logger::info(
       "Client application started; server {}:{}",
       settings->client.serverAddress.ToIpString().value_or("?"),

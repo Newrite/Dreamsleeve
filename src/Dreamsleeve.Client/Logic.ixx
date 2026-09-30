@@ -192,13 +192,18 @@ namespace Logic
     runtime.movement->Apply(state.output.state);
 
     Dreamsleeve::Host::Session::Frame frame;
-    runtime.session.Process(runtime.app->Exchange(), state.output, runtime.ui.ui.chat, frame);
+    runtime.session.Process(
+      runtime.app->Exchange(),
+      state.output,
+      runtime.ui.ui.chat,
+      Dreamsleeve::Host::Bridge::HidingOf(runtime.ui.ui.hideIdentity),
+      frame);
     for (const auto& note : frame.notes)
       logger::warn("{}", note);
     // The server confirmed a switch of "hide my name": the next session opens so too.
-    if (frame.hideIdentity && *frame.hideIdentity != Dreamsleeve::Host::Bridge::HidingOf(runtime.ui.ui.chat.hideIdentity))
+    if (frame.hideIdentity && *frame.hideIdentity != Dreamsleeve::Host::Bridge::HidingOf(runtime.ui.ui.hideIdentity))
     {
-      runtime.ui.ui.chat.hideIdentity = std::string{Dreamsleeve::Host::Bridge::HidingName(*frame.hideIdentity)};
+      runtime.ui.ui.hideIdentity = std::string{Dreamsleeve::Host::Bridge::HidingName(*frame.hideIdentity)};
       runtime.app->Exchange().SetHideIdentity(*frame.hideIdentity);
       if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
     }

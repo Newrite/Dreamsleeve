@@ -16,7 +16,10 @@ import type {
   Settings,
 } from "../bridge/types";
 import { idleAuth } from "./auth";
-import { defaults, settingsFrom } from "./settings";
+import { defaults, instantKeys } from "../bridge/settings.generated";
+// The settings the host applies and saves at once (displaySettings).
+const instantOf = (settings: Settings) =>
+  Object.fromEntries(instantKeys.map((key) => [key, settings[key]]));
 // Lines kept per channel: a busy channel never pushes another one out.
 export const HISTORY_LIMIT = 500;
 // Message IDs are sequential within a channel; a line is named by the pair.
@@ -221,14 +224,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
             groundMarksSupported: event.groundMarksSupported ?? false,
             groundMarks: event.groundMarks ?? state.groundMarks,
             nearbyMarks: event.nearbyMarks ?? state.nearbyMarks,
+            // A local instant switch may be newer than the host copy.
             settings: event.settings
-              ? settingsFrom({
-                  ...event.settings,
-                  // A local switch may be newer than the host copy.
-                  nameMode: state.settings.nameMode,
-                  streamerMode: state.settings.streamerMode,
-                  textFilter: state.settings.textFilter,
-                })
+              ? { ...event.settings, ...instantOf(state.settings) }
               : state.settings,
           });
           break;
@@ -264,9 +262,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
           unread: {},
           filter: "all",
           target: channels.find((c) => c.writable)?.id ?? "",
-          settings: event.settings
-            ? settingsFrom(event.settings)
-            : state.settings,
+          settings: event.settings ?? state.settings,
           notice: "",
           scrolled: false,
         });
@@ -355,13 +351,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
       }
       case "identity": {
         const { type: _, ...identity } = event;
-        store.setState({
-          identity,
-          // The saved choice follows the server's answer, never the request.
-          settings: identity.pending
-            ? state.settings
-            : { ...state.settings, hideIdentity: identity.mode },
-        });
+        store.setState({ identity });
         break;
       }
       case "displayName": {
@@ -464,7 +454,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
         break;
       }
       case "settings":
-        store.setState({ settings: settingsFrom(event.settings) });
+        store.setState({ settings: event.settings });
         break;
       case "settingsResult":
         if (event.revision !== state.revision) break;
@@ -771,26 +761,15 @@ export function makeChat(send: Send, now = () => Date.now()) {
     },
     configure(patch: Partial<Settings>) {
       const current = store.getState();
-      const settings = settingsFrom({ ...current.settings, ...patch });
+      const settings = { ...current.settings, ...patch };
       store.setState({
         settings,
         revision: current.revision + 1,
         notice: "Настройки изменены. Нажмите «Сохранить настройки».",
       });
-      // Names and the text filter apply to every surface at once, the game included.
-      if (
-        settings.nameMode !== current.settings.nameMode ||
-        settings.streamerMode !== current.settings.streamerMode ||
-        settings.textFilter !== current.settings.textFilter
-      ) {
-        if (
-          !send({
-            type: "displaySettings",
-            nameMode: settings.nameMode,
-            streamerMode: settings.streamerMode,
-            textFilter: settings.textFilter,
-          })
-        )
+      // Names, the text filter and dates apply to every surface at once, the game included.
+      if (instantKeys.some((key) => settings[key] !== current.settings[key])) {
+        if (!send({ type: "displaySettings", settings }))
           store.setState({ notice: "Команда не принята приложением" });
         else store.setState({ notice: "Отображение применено" });
       }

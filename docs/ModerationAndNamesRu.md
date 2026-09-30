@@ -250,7 +250,7 @@ PlayerId метки такую связь с псевдонимом раскры
 | `pseudonyms.toml` рядом с сервером | Рабочий словарь; путь — `[Identity] PseudonymsPath` |
 | `[Identity] AllowHiddenIdentity` | `true` по умолчанию; `false` запрещает режим (`HIDDEN_IDENTITY_NOT_ALLOWED`) |
 | `[Identity] ToggleIntervalMs` | 30000: переключение не чаще одного раза за интервал в сессии (`RATE_LIMITED`); 0 снимает лимит |
-| `ui.toml`, `[ui.chat] hideIdentity` | Выбор игрока: `off`, `everywhere`, `exceptGroundMarks`; host отправляет его при открытии сессии |
+| `ui.toml`, `[ui] hideIdentity` | Выбор игрока: `off`, `everywhere`, `exceptGroundMarks`; host отправляет его при открытии сессии |
 
 Словарь читается при запуске, как `moderation.toml`, но никогда не останавливает сервер:
 отсутствующий, больше 64 КиБ, повреждённый или пустой файл заменяется встроенным

@@ -1,4 +1,15 @@
-# Proposed native host UI settings; not yet a ClientSettings section.
+# ui.toml of the plugin (Data/SKSE/Plugins/Dreamsleeve): the web UI and the SKSE
+# menu write it; every key with its default. Omitted keys and values out of range
+# fall back to the default; the limits live in Host/UiSettings.ixx.
+version = 1
+
+[ui]
+# Full opt-out of the interface; the network keeps running.
+hideUi = false
+# Where others see a server pseudonym instead of your names: off | everywhere |
+# exceptGroundMarks; written by the plugin only after the server confirmed it.
+hideIdentity = "off"
+
 [ui.chat]
 showFireflyNames = true
 fireflyNameOcclusion = true
@@ -11,6 +22,10 @@ bubbleFadeDuration = 1.0
 bubbleFontSize = 16
 bubbleMaxWidth = 320
 bubbleBackground = 0.65
+# Hidden while the player is in combat, each surface on its own.
+combatHideFireflies = false
+combatHideNames = false
+combatHideBubbles = false
 onlineView = "cards"
 fade = true
 delay = 12.0
@@ -27,9 +42,6 @@ fullColor = false
 nameMode = "display"
 # Local pseudonyms (aliases.toml) instead of every real name on every surface.
 streamerMode = false
-# Where others see a server pseudonym instead of your names: off | everywhere |
-# exceptGroundMarks; written by the host only after the server confirmed it.
-hideIdentity = "off"
 # Server-flagged ranges: off | mask (stars) | hide (whole message; own shown as a placeholder).
 textFilter = "off"
 locked = true

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { makeChat, HISTORY_LIMIT } from "../src/state/chat";
-import { frame, defaults, settingsFrom } from "../src/state/settings";
+import { frame } from "../src/state/settings";
+import { defaults } from "../src/bridge/settings.generated";
 import { accountActions, authStatus, idleAuth } from "../src/state/auth";
 import type {
   AuthEvent,
@@ -180,84 +181,14 @@ describe("chat boundary", () => {
   });
 });
 describe("settings", () => {
-  it("validates persisted values and clamps geometry to a small viewport", () => {
-    const s = settingsFrom({
-      scale: Infinity,
-      x: 1,
-      y: 1,
-      width: 1600,
-      height: 1200,
-      font: "invalid" as "serif",
-    });
-    expect(s.scale).toBe(1);
-    expect(s.font).toBe("sans");
+  it("clamps geometry to a small viewport", () => {
+    const s = { ...defaults, x: 1, y: 1, width: 1600, height: 1200 };
     expect(frame(s, 300, 180)).toEqual({
       left: 0,
       top: 0,
       width: 300,
       height: 180,
     });
-    expect(settingsFrom({})).toEqual(defaults);
-  });
-  it("combat hiding is off by default and accepts booleans only", () => {
-    expect(settingsFrom({ fontSize: 20 })).toMatchObject({
-      combatHideFireflies: false,
-      combatHideNames: false,
-      combatHideBubbles: false,
-    });
-    expect(
-      settingsFrom({
-        combatHideFireflies: true,
-        combatHideNames: "yes" as unknown as boolean,
-        combatHideBubbles: true,
-      }),
-    ).toMatchObject({
-      combatHideFireflies: true,
-      combatHideNames: false,
-      combatHideBubbles: true,
-    });
-  });
-  it("keeps bubble defaults for settings saved before bubbles existed and clamps new values", () => {
-    const old = settingsFrom({ fontSize: 20, showFireflyNames: false });
-    expect(old.showBubbles).toBe(true);
-    expect(old.bubbleDuration).toBe(8);
-    expect(old.bubbleFade).toBe(true);
-    expect(old.bubbleMaxWidth).toBe(320);
-    const edited = settingsFrom({
-      showBubbles: false,
-      bubbleDuration: 500,
-      bubbleFadeDuration: 0,
-      bubbleFontSize: 4,
-      bubbleMaxWidth: 5000,
-      bubbleBackground: -1,
-    });
-    expect(edited.showBubbles).toBe(false);
-    expect(edited.bubbleDuration).toBe(60);
-    expect(edited.bubbleFadeDuration).toBe(0.1);
-    expect(edited.bubbleFontSize).toBe(8);
-    expect(edited.bubbleMaxWidth).toBe(800);
-    expect(edited.bubbleBackground).toBe(0);
-  });
-  it("defaults the mark date header and refuses an unknown calendar or colour", () => {
-    const old = settingsFrom({ fontSize: 20 });
-    expect(old.markDateStyle).toBe("tamriel");
-    expect(old.deathDateHeader).toBe(true);
-    expect(old.noteDateHeader).toBe(false);
-    expect(old.markDateColor).toBe("#A9A69B");
-    const edited = settingsFrom({
-      markDateStyle: "earth",
-      noteDateHeader: true,
-      markDateColor: "#112233",
-    });
-    expect(edited.markDateStyle).toBe("earth");
-    expect(edited.noteDateHeader).toBe(true);
-    expect(edited.markDateColor).toBe("#112233");
-    const broken = settingsFrom({
-      markDateStyle: "gregorian" as never,
-      markDateColor: "grey",
-    });
-    expect(broken.markDateStyle).toBe("tamriel");
-    expect(broken.markDateColor).toBe("#A9A69B");
   });
 });
 
@@ -609,45 +540,6 @@ describe("ground marks", () => {
       },
     ],
   };
-  it("keeps bubble style, firefly height and ground mark defaults; colours are validated", () => {
-    const old = settingsFrom({ fontSize: 20 });
-    expect(old).toMatchObject({
-      bubbleBorder: true,
-      bubbleTextColor: "#EEECE5",
-      fireflyNameColor: "#EEECE5",
-      fireflyHeightOffset: 110,
-      showGroundNotes: true,
-      showDeathMarks: true,
-      maxVisibleNotes: 16,
-      groundDrawDistance: 4096,
-      groundNameDistance: 600,
-      groundTextDistance: 150,
-      deathTextColor: "#D9534F",
-      combatHideGroundMarks: false,
-    });
-    const edited = settingsFrom({
-      bubbleBorder: false,
-      bubbleTextColor: "#ff8800",
-      fireflyNameColor: "red",
-      groundTextColor: "#12345",
-      deathTextColor: "#ABCDEF",
-      fireflyHeightOffset: 1000,
-      maxVisibleNotes: 7.9,
-      maxVisibleDeaths: 0,
-      groundNoteOffset: -100,
-      groundTextDistance: 10,
-    });
-    expect(edited.bubbleBorder).toBe(false);
-    expect(edited.bubbleTextColor).toBe("#ff8800");
-    expect(edited.fireflyNameColor).toBe("#EEECE5");
-    expect(edited.groundTextColor).toBe("#EEECE5");
-    expect(edited.deathTextColor).toBe("#ABCDEF");
-    expect(edited.fireflyHeightOffset).toBe(512);
-    expect(edited.maxVisibleNotes).toBe(7);
-    expect(edited.maxVisibleDeaths).toBe(1);
-    expect(edited.groundNoteOffset).toBe(-64);
-    expect(edited.groundTextDistance).toBe(50);
-  });
   it("leaves the draft as a ground note and settles the row by markResult", () => {
     const send = vi.fn((_command: Command) => true);
     const chat = makeChat(send);

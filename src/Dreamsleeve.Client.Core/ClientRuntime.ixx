@@ -20,15 +20,11 @@ public:
     using Result = std::expected<T, Error>;
     using Ptr    = std::unique_ptr<ClientRuntime>;
 
-    static Result<Ptr> TryCreate(Configuration config, ClientExchange& exchange)
+    // The configuration passed ValidateClientSettings.
+    static Ptr Create(Configuration config, ClientExchange& exchange)
     {
-      if (auto field = config.InvalidSetting())
-        return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidConfig, std::string{*field})};
-
-      auto codec = Wire::ProtocolCodec::TryCreate(config);
-      if (!codec) return std::unexpected{codec.error()};
-
-      return Ptr{new ClientRuntime(std::move(config), std::move(*codec), exchange)};
+      Wire::ProtocolCodec codec{config};
+      return Ptr{new ClientRuntime(std::move(config), std::move(codec), exchange)};
     }
 
     ~ClientRuntime()
@@ -476,7 +472,11 @@ private:
 
     // Sends an admitted command; it stays pending until its reply.
     template <class Command>
-    Result<void> SendRequest(std::uint64_t generation, const Command& command, PendingRequest request, Wire::Channel channel = Wire::Channel::Control)
+    Result<void> SendRequest(
+      std::uint64_t  generation,
+      const Command& command,
+      PendingRequest request,
+      Wire::Channel  channel = Wire::Channel::Control)
     {
       auto packet = codec.Encode(command);
       if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
@@ -695,27 +695,27 @@ private:
       return firstError;
     }
 
-    Configuration                                            config;
-    Wire::ProtocolCodec                                      codec;
-    ClientExchange&                                          exchange;
-    DreamNetClient::Ptr                                      transport;
-    ClientModel                                              model;
-    SessionPhase                                             phase{SessionPhase::Disconnected};
-    Wire::OpenSession                                        opening;
-    std::string                                              serverName;
-    Domain::AnnouncementPolicy                               announcementPolicy;
-    std::uint64_t                                            lastRequest{};
-    std::unordered_map<std::uint64_t, PendingRequest>        pending;
-    std::vector<QueuedClientCommand>                         commands;
-    Clock::time_point                                        deadline{};
-    Clock::time_point                                        nextPlayerSample{};
-    std::optional<Domain::PlayerLocation>                    latestMovement;
-    std::uint64_t                                            contextRevision{};
-    std::uint64_t                                            movementSequence{};
-    std::uint64_t                                            pendingLocation{};
-    bool                                                     movementReady{};
-    std::vector<ChatMessagesReceived>                        earlyChat;
-    std::vector<ClientEvent>                                 events;
+    Configuration                                     config;
+    Wire::ProtocolCodec                               codec;
+    ClientExchange&                                   exchange;
+    DreamNetClient::Ptr                               transport;
+    ClientModel                                       model;
+    SessionPhase                                      phase{SessionPhase::Disconnected};
+    Wire::OpenSession                                 opening;
+    std::string                                       serverName;
+    Domain::AnnouncementPolicy                        announcementPolicy;
+    std::uint64_t                                     lastRequest{};
+    std::unordered_map<std::uint64_t, PendingRequest> pending;
+    std::vector<QueuedClientCommand>                  commands;
+    Clock::time_point                                 deadline{};
+    Clock::time_point                                 nextPlayerSample{};
+    std::optional<Domain::PlayerLocation>             latestMovement;
+    std::uint64_t                                     contextRevision{};
+    std::uint64_t                                     movementSequence{};
+    std::uint64_t                                     pendingLocation{};
+    bool                                              movementReady{};
+    std::vector<ChatMessagesReceived>                 earlyChat;
+    std::vector<ClientEvent>                          events;
   };
 
 }

@@ -96,7 +96,7 @@ namespace
     ClientOutput output;
     exchange.Drain(output);
     frame = {};
-    session.Process(exchange, output, settings, frame);
+    session.Process(exchange, output, settings, Domain::HiddenIdentity::None, frame);
   }
 
 }
@@ -226,7 +226,7 @@ TEST_CASE("Session reports every authentication completion, even an identical re
   ClientModel    model;
   Session        session;
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, Domain::HiddenIdentity::None, frame);
   // Connection, authentication and the initial state of "hide my name".
   REQUIRE(frame.events.size() == 3);
 
@@ -235,7 +235,7 @@ TEST_CASE("Session reports every authentication completion, even an identical re
     REQUIRE(exchange->PostLogin(Credentials{"user", "short"}));
     exchange->CompleteAuthentication("Password must be 12 to 128 UTF-8 bytes", Auth::FailureCode::InvalidCredentials);
     frame = {};
-    session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, frame);
+    session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, Domain::HiddenIdentity::None, frame);
     REQUIRE(frame.events.size() == 1);
     CHECK(Type(frame.events[0]) == "auth");
     auto auth = Parse(frame.events[0]);
@@ -270,7 +270,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   Session::Frame frame;
 
   // Initial publication while disconnected: state is tracked, UI gets status only.
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.events.size() == 3);
   CHECK(Type(frame.events[0]) == "connection");
   CHECK(Type(frame.events[1]) == "auth");
@@ -288,7 +288,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {MakeMessage(10, 1, "history")}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame);
   REQUIRE(frame.snapshot);
   CHECK(Type(frame.events[0]) == "snapshot");
@@ -315,7 +315,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
-  session.Process(*exchange, output, UiSettings{}, frame);
+  session.Process(*exchange, output, UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.events.size() == 2);
   CHECK(Type(frame.events[0]) == "messages");
   CHECK(Type(frame.events[1]) == "sendResult");
@@ -333,7 +333,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel"));
   exchange->Drain(output);
   frame = {};
-  session.Process(*exchange, output, UiSettings{}, frame);
+  session.Process(*exchange, output, UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.events.size() == 1);
   auto failure = Parse(frame.events[0]);
   CHECK(failure["requestId"].get<std::string>() == "u2");
@@ -343,7 +343,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   REQUIRE(model.Apply(model.Generation(), PlayerRemoved{2}));
   REQUIRE(model.Apply(model.Generation(), PlayerUpserted{MakePlayer(3, "Carol")}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.events.size() == 1);
   CHECK(Type(frame.events[0]) == "players");
   CHECK(Parse(frame.events[0])["players"].get_array().size() == 2);
@@ -359,7 +359,7 @@ TEST_CASE("Session view reset requests a fresh snapshot and drops stale correlat
   REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
   Session        session;
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.snapshot);
   REQUIRE(session.SendChat(*exchange, Bridge::UiCommand{.type = "sendChat", .requestId = "old", .channelId = "1", .text = "x"}));
   std::vector<QueuedClientCommand> commands;
@@ -369,7 +369,7 @@ TEST_CASE("Session view reset requests a fresh snapshot and drops stale correlat
   CHECK(session.NeedsSnapshot());
   CHECK(session.PendingChatCount() == 0);
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   // Status is republished for the new view and a snapshot was requested from Core.
   CHECK(std::ranges::any_of(frame.events, [](const auto& e) { return Type(e) == "connection"; }));
   exchange->TakeCommands(commands);
@@ -380,7 +380,7 @@ TEST_CASE("Session view reset requests a fresh snapshot and drops stale correlat
   frame = {};
   ClientOutput output;
   exchange->Drain(output);
-  session.Process(*exchange, output, UiSettings{}, frame);
+  session.Process(*exchange, output, UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK(frame.snapshot);
   CHECK_FALSE(session.NeedsSnapshot());
 }
@@ -393,12 +393,12 @@ TEST_CASE("Session reconnect: disconnect snapshot is silent and the new generati
   REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
   Session        session;
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   const auto generation = session.Generation();
 
   model.ClearOnlineState();
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected, ""), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected, ""), UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK_FALSE(frame.snapshot);
   CHECK(session.Generation() == generation + 1);
   auto connection = std::ranges::find_if(frame.events, [](const auto& e) { return Type(e) == "connection"; });
@@ -407,7 +407,7 @@ TEST_CASE("Session reconnect: disconnect snapshot is silent and the new generati
 
   REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready, "Tamriel"), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready, "Tamriel"), UiSettings{}, Domain::HiddenIdentity::None, frame);
   // Core publishes a delta after ClearOnlineState; the host must request a snapshot for the UI.
   Settle(session, *exchange, model, frame);
   CHECK(frame.snapshot);
@@ -528,7 +528,7 @@ TEST_CASE("Session admits only live global-channel publications of other players
   }));
   Session        session;
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame);
   REQUIRE(frame.snapshot);
   // Retained history in the snapshot never produces bubbles.
@@ -545,7 +545,7 @@ TEST_CASE("Session admits only live global-channel publications of other players
         {MakeMessage(12, 1, "live"), self, system}
   }));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.freshMessages.size() == 1);
   CHECK(frame.freshMessages[0].messageId == 12);
   CHECK(frame.freshMessages[0].author->playerId == 7);
@@ -561,13 +561,13 @@ TEST_CASE("Session admits only live global-channel publications of other players
         {MakeMessage(12, 1, "live"), MakeMessage(11, 1, "older")}
   }));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK(frame.freshMessages.empty());
 
   // A view reset replays the snapshot: still no bubbles from history.
   session.ResetView();
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame);
   REQUIRE(frame.snapshot);
   CHECK(frame.freshMessages.empty());
@@ -576,16 +576,16 @@ TEST_CASE("Session admits only live global-channel publications of other players
   REQUIRE(model.RegisterChannel(2, 16));
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{2, {MakeMessage(20, 2, "elsewhere")}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK(frame.freshMessages.empty());
   if (session.NeedsSnapshot()) Settle(session, *exchange, model, frame);
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{2, {MakeMessage(21, 2, "elsewhere")}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK(frame.freshMessages.empty());
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {MakeMessage(22, 1, "global again")}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.freshMessages.size() == 1);
   CHECK(frame.freshMessages[0].messageText == "global again");
 }
@@ -602,11 +602,11 @@ TEST_CASE("Name resolution follows the mode and falls back to checked names")
   CHECK(ModeOf("username") == NameMode::Username);
   CHECK(ModeOf("unknown") == NameMode::Display);
 
-  UiSettings legacy;
-  legacy.nameMode = "account";
-  CHECK(Dreamsleeve::Host::Normalize(legacy).nameMode == "username");
-  legacy.nameMode = "character";
-  CHECK(Dreamsleeve::Host::Normalize(legacy).nameMode == "character");
+  UiSettings chosen;
+  chosen.nameMode = "account";
+  CHECK(Dreamsleeve::Host::Normalize(chosen).nameMode == "display");
+  chosen.nameMode = "character";
+  CHECK(Dreamsleeve::Host::Normalize(chosen).nameMode == "character");
 }
 
 TEST_CASE("Pseudonyms are stable, scoped by server, numbered on collision and persisted")
@@ -733,7 +733,7 @@ TEST_CASE("Ignored authors disappear from history, deltas and bubbles; unignore 
   Session session;
   session.PlayerNames().Configure("srv:1", {});
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame);
   REQUIRE(frame.snapshot);
 
@@ -741,7 +741,7 @@ TEST_CASE("Ignored authors disappear from history, deltas and bubbles; unignore 
   CHECK(session.Ignore(7));
   session.Refresh();
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame);
   REQUIRE(frame.snapshot);
   auto snapshot = Parse(frame.events[0]);
@@ -759,7 +759,7 @@ TEST_CASE("Ignored authors disappear from history, deltas and bubbles; unignore 
         {MakeMessage(12, 1, "seven live"), system}
   }));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK(frame.freshMessages.empty());
   REQUIRE(frame.events.size() == 1);
   auto delta = Parse(frame.events[0]);
@@ -770,14 +770,14 @@ TEST_CASE("Ignored authors disappear from history, deltas and bubbles; unignore 
   CHECK(session.Unignore(7));
   session.Refresh();
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame);
   REQUIRE(frame.snapshot);
   CHECK(Parse(frame.events[0])["messages"].get_array().size() == 4);
   CHECK(frame.freshMessages.empty());
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {MakeMessage(14, 1, "seven again")}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.freshMessages.size() == 1);
   CHECK(frame.freshMessages[0].messageId == 14);
 }
@@ -807,7 +807,7 @@ TEST_CASE("Streamer mode projects only pseudonyms; messages keep their character
   Session session;
   session.PlayerNames().Configure("srv:1", {});
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), character, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), character, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame, character);
   REQUIRE(frame.snapshot);
   auto plain = Parse(frame.events[0]);
@@ -823,7 +823,7 @@ TEST_CASE("Streamer mode projects only pseudonyms; messages keep their character
   auto output                 = Drain(*exchange, model, SessionPhase::Ready);
   output.status.savedLogin    = true;
   output.status.savedUsername = "user1";
-  session.Process(*exchange, output, streamer, frame);
+  session.Process(*exchange, output, streamer, Domain::HiddenIdentity::None, frame);
   std::string all;
   for (const auto& event : frame.events)
     all += event;
@@ -911,7 +911,7 @@ TEST_CASE("Session applies the text filter to history, deltas and bubbles alike"
   Session session;
   session.PlayerNames().Configure("srv:1", {});
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), mask, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), mask, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame, mask);
   REQUIRE(frame.snapshot);
   auto masked = Parse(frame.events[0]);
@@ -925,7 +925,7 @@ TEST_CASE("Session applies the text filter to history, deltas and bubbles alike"
   };
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {live}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), mask, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), mask, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.freshMessages.size() == 1);
   CHECK(frame.freshMessages[0].messageText == "*********");
 
@@ -947,7 +947,7 @@ TEST_CASE("Session applies the text filter to history, deltas and bubbles alike"
         {again, own, MakeMessage(14, 1, "clean")}
   }));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), hide, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), hide, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.freshMessages.size() == 1);
   CHECK(frame.freshMessages[0].messageText == "clean");
   REQUIRE(frame.events.size() == 1);
@@ -1075,7 +1075,7 @@ TEST_CASE("Session projects visible marks for the game and the server's own list
   REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"), far}}));
   Session        session;
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame);
   REQUIRE(frame.snapshot);
   CHECK(frame.visibleMarksChanged);
@@ -1099,7 +1099,7 @@ TEST_CASE("Session projects visible marks for the game and the server's own list
   // A visible delta changes the nearby list only; the own list waits for the server.
   REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{2, {MakeMark(12, 7, Domain::GroundMarkKind::Death, "Wolf")}, {11}, false}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK(frame.visibleMarksChanged);
   CHECK(session.VisibleMarks().size() == 2);
   CHECK(session.VisibleMarks().contains(12));
@@ -1111,7 +1111,7 @@ TEST_CASE("Session projects visible marks for the game and the server's own list
   // The server's replacement is the only source of the own list.
   REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{far}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK(session.OwnMarks().size() == 1);
   CHECK_FALSE(session.OwnMarks().contains(10));
   REQUIRE(frame.events.size() == 1);
@@ -1127,7 +1127,7 @@ TEST_CASE("Session projects visible marks for the game and the server's own list
   UiSettings hide;
   hide.textFilter = "hide";
   frame           = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), hide, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), hide, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.events.size() == 1);
   auto nearby = Parse(frame.events[0])["marks"];
   REQUIRE(nearby.size() == 4);
@@ -1137,7 +1137,7 @@ TEST_CASE("Session projects visible marks for the game and the server's own list
   REQUIRE(session.Ignore(7));
   REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{4, {}, {14}, false}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   auto filtered = Parse(frame.events[0])["marks"];
   REQUIRE(filtered.size() == 2);
   CHECK(filtered[0]["id"].get<std::string>() == "10");
@@ -1152,7 +1152,7 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
   Session        session;
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame);
   REQUIRE(session.Ready());
 
@@ -1183,7 +1183,7 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
-  session.Process(*exchange, output, UiSettings{}, frame);
+  session.Process(*exchange, output, UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.events.size() == 1);
   auto placed = Parse(frame.events[0]);
   CHECK(placed["type"].get<std::string>() == "markResult");
@@ -1196,7 +1196,7 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), death->requestId, MarkPlaced{42}}));
   exchange->Drain(output);
   frame = {};
-  session.Process(*exchange, output, UiSettings{}, frame);
+  session.Process(*exchange, output, UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK(frame.events.empty());
   REQUIRE(frame.notes.size() == 1);
   CHECK(frame.notes[0].find("42") != std::string::npos);
@@ -1204,7 +1204,7 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   // A refused removal becomes a readable error for its UI row, never a chat sendResult.
   REQUIRE(exchange->PublishResult({model.Generation(), removal->requestId, ServerRejection{RequestRejectionCode::GroundMarkNotFound, "", ""}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.events.size() == 1);
   auto refused = Parse(frame.events[0]);
   CHECK(refused["type"].get<std::string>() == "markResult");
@@ -1302,7 +1302,7 @@ TEST_CASE("Pseudonymous players and authors reach the UI flagged and without rea
   Session session;
   session.PlayerNames().Configure("srv:1", {});
   Session::Frame frame;
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), username, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), username, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame, username);
   REQUIRE(frame.snapshot);
   auto        snapshot = Parse(frame.events[0]);
@@ -1345,8 +1345,9 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   };
 
   using Domain::HiddenIdentity;
+  auto hiding = HiddenIdentity::None;
   CHECK_FALSE(session.SetIdentityVisibility(*exchange, HiddenIdentity::Everywhere));
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, hiding, frame);
   Settle(session, *exchange, model, frame, settings);
   REQUIRE(session.Ready());
 
@@ -1357,7 +1358,7 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   REQUIRE(commands.size() == 1);
   const auto request = std::get<SetIdentityVisibility>(commands[0].command);
   CHECK(request.hiding == HiddenIdentity::ExceptGroundMarks);
-  auto pending = session.Identity(Bridge::HidingOf(settings.hideIdentity));
+  auto pending = session.Identity(hiding);
   CHECK(pending.pending);
   CHECK(pending.mode == "exceptGroundMarks");
   CHECK_FALSE(pending.pseudonym);
@@ -1368,7 +1369,7 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
-  session.Process(*exchange, output, settings, frame);
+  session.Process(*exchange, output, settings, hiding, frame);
   REQUIRE(frame.hideIdentity);
   CHECK(*frame.hideIdentity == HiddenIdentity::ExceptGroundMarks);
   auto settled = identityOf(frame);
@@ -1376,7 +1377,7 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   CHECK((*settled)["mode"].get<std::string>() == "exceptGroundMarks");
   CHECK_FALSE((*settled)["pending"].get<bool>());
   CHECK((*settled)["pseudonym"].get<std::string>() == "Страж");
-  settings.hideIdentity = "exceptGroundMarks";
+  hiding = HiddenIdentity::ExceptGroundMarks;
 
   // A refusal returns the choice to the server's state and names the reason.
   REQUIRE(session.SetIdentityVisibility(*exchange, HiddenIdentity::None));
@@ -1384,7 +1385,7 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   const auto second = std::get<SetIdentityVisibility>(commands[0].command).requestId;
   REQUIRE(exchange->PublishResult({model.Generation(), second, ServerRejection{RequestRejectionCode::RateLimited, "too soon", "hidden"}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, hiding, frame);
   CHECK_FALSE(frame.hideIdentity);
   auto refused = identityOf(frame);
   REQUIRE(refused);
@@ -1395,7 +1396,7 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   // An opening refused for hidden names stops automatic reconnects.
   REQUIRE(exchange->PublishResult({model.Generation(), 77, ServerRejection{RequestRejectionCode::HiddenIdentityNotAllowed, "", ""}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), settings, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), settings, hiding, frame);
   CHECK(frame.identityRefused);
   auto disallowed = identityOf(frame);
   REQUIRE(disallowed);
@@ -1407,20 +1408,20 @@ TEST_CASE("The hide-my-name preference round-trips through ui.toml and defaults 
 {
   TempPath file;
   UiFile   edited;
-  CHECK(edited.ui.chat.hideIdentity == "off");
-  edited.ui.chat.hideIdentity = "exceptGroundMarks";
+  CHECK(edited.ui.hideIdentity == "off");
+  edited.ui.hideIdentity = "exceptGroundMarks";
   REQUIRE(SaveUiFile(file.path, edited));
   auto loaded = LoadUiFile(file.path);
   REQUIRE(loaded);
-  CHECK(loaded->ui.chat.hideIdentity == "exceptGroundMarks");
+  CHECK(loaded->ui.hideIdentity == "exceptGroundMarks");
   {
     std::ofstream output{file.path, std::ios::binary | std::ios::trunc};
-    output << "version = 1\n[ui.chat]\nstreamerMode = true\nhideIdentity = \"sometimes\"\n";
+    output << "version = 1\n[ui]\nhideIdentity = \"sometimes\"\n[ui.chat]\nstreamerMode = true\n";
   }
-  auto older = LoadUiFile(file.path);
-  REQUIRE(older);
-  CHECK(older->ui.chat.streamerMode);
-  CHECK(older->ui.chat.hideIdentity == "off");
+  auto unknown = LoadUiFile(file.path);
+  REQUIRE(unknown);
+  CHECK(unknown->ui.chat.streamerMode);
+  CHECK(unknown->ui.hideIdentity == "off");
   const auto command = Bridge::ParseCommand(R"({"type":"setIdentityVisibility","hiding":"everywhere"})");
   REQUIRE(command);
   CHECK(Bridge::HidingOf(command->hiding) == Domain::HiddenIdentity::Everywhere);
@@ -1445,7 +1446,7 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   };
 
   CHECK_FALSE(session.ChangeDisplayName(*exchange, "Новое Имя"));
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
   Settle(session, *exchange, model, frame, settings);
   REQUIRE(session.Ready());
 
@@ -1457,7 +1458,7 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   const auto request = std::get<ChangeDisplayName>(commands[0].command);
   CHECK(request.displayName == "Новое Имя");
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
   auto pending = nameOf(frame);
   REQUIRE(pending);
   CHECK((*pending)["pending"].get<bool>());
@@ -1466,14 +1467,14 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
-  session.Process(*exchange, output, settings, frame);
+  session.Process(*exchange, output, settings, Domain::HiddenIdentity::None, frame);
   auto settled = nameOf(frame);
   REQUIRE(settled);
   CHECK_FALSE((*settled)["pending"].get<bool>());
   CHECK((*settled)["changed"].get<std::string>() == "Новое Имя");
   // The stored name is reported once.
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
   auto quiet = nameOf(frame);
   REQUIRE(quiet);
   CHECK_FALSE(quiet->contains("changed"));
@@ -1484,7 +1485,7 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   const auto second = std::get<ChangeDisplayName>(commands[0].command).requestId;
   REQUIRE(exchange->PublishResult({model.Generation(), second, ServerRejection{RequestRejectionCode::RateLimited, "The display name can be changed again in 90 min.", "display_name"}}));
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
   auto refused = nameOf(frame);
   REQUIRE(refused);
   CHECK_FALSE((*refused)["pending"].get<bool>());
@@ -1499,7 +1500,7 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   REQUIRE(session.ChangeDisplayName(*exchange, "Четвёртое"));
   exchange->TakeCommands(commands);
   frame = {};
-  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), settings, frame);
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), settings, Domain::HiddenIdentity::None, frame);
   auto dropped = nameOf(frame);
   REQUIRE(dropped);
   CHECK_FALSE((*dropped)["pending"].get<bool>());

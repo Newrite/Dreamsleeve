@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
+#include <glaze/glaze.hpp>
 import std;
 import Dreamsleeve.Client.Application;
+
+#include "Repository.h"
 
 using namespace Dreamsleeve::Client;
 
@@ -26,6 +29,13 @@ namespace
         file << source;
       }
       return LoadClientSettings(path);
+    }
+
+    // Parsed and valid, as the application starts only with such settings.
+    bool Accepts(std::string_view source)
+    {
+      const auto loaded = Load(source);
+      return loaded && ValidateClientSettings(*loaded);
     }
   };
 
@@ -91,27 +101,7 @@ TEST_CASE("Firefly base form settings use plugin-local IDs and preserve defaults
   CHECK(custom->client.fireflyFormId == 0xABC);
   CHECK(custom->client.fireflyScale == doctest::Approx(1.5f));
   for (auto bad : {"fireflyScale = 0", "fireflyScale = -1", "fireflyScale = 10.1", "fireflyScale = nan", "fireflyScale = inf", "fireflyFormId = 0", "fireflyFormId = 0xFE000ABC", "fireflyFormId = -1", "fireflyPlugin = ''", "fireflyPlugin = 'dir/MyGlow.esp'"})
-    CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad));
-}
-
-TEST_CASE("Firefly name settings have safe defaults and reject invalid rendering values")
-{
-  SettingsFixture fixture;
-  auto defaults = fixture.Load("version = 1\n");
-  REQUIRE(defaults);
-  CHECK(defaults->client.showFireflyNames);
-  CHECK(defaults->client.fireflyNameOcclusion);
-  CHECK(defaults->client.fireflyNameFontSize == doctest::Approx(18));
-  CHECK(defaults->client.fireflyNameOffset == doctest::Approx(35));
-  auto custom = fixture.Load("[client]\nshowFireflyNames = false\nfireflyNameOcclusion = false\nfireflyNameFontSize = 24\nfireflyNameOffset = 0\n");
-  REQUIRE(custom);
-  CHECK_FALSE(custom->client.showFireflyNames);
-  CHECK_FALSE(custom->client.fireflyNameOcclusion);
-  CHECK(custom->client.fireflyNameFontSize == doctest::Approx(24));
-  CHECK(custom->client.fireflyNameOffset == doctest::Approx(0));
-  for (auto bad : {"fireflyNameFontSize = 7", "fireflyNameFontSize = 49", "fireflyNameFontSize = nan",
-                   "fireflyNameOffset = -1", "fireflyNameOffset = 513", "fireflyNameOffset = inf"})
-    CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad));
+    CHECK_FALSE(fixture.Accepts(std::string{"[client]\n"} + bad));
 }
 
 TEST_CASE("Ground mark base forms default to vanilla flat glows and reject invalid values")
@@ -137,7 +127,7 @@ TEST_CASE("Ground mark base forms default to vanilla flat glows and reject inval
   for (auto bad : {"groundNoteScale = 0", "groundNoteScale = 10.1", "groundNoteFormId = 0", "groundNoteFormId = 0xFE000ABC",
                    "groundNotePlugin = ''", "groundNotePlugin = 'dir/Marks.esp'", "deathMarkScale = nan", "deathMarkFormId = -1",
                    "deathMarkPlugin = 'a:b'"})
-    CHECK_FALSE(fixture.Load(std::string{"[client]\n"} + bad + "\n"));
+    CHECK_FALSE(fixture.Accepts(std::string{"[client]\n"} + bad + "\n"));
 }
 
 TEST_CASE("Keyboard capture is on by default and can be switched off")
@@ -205,9 +195,9 @@ visibilityDistance = -1
 )"})
   {
     CAPTURE(std::string_view{source});
-    CHECK_FALSE(fixture.Load(source));
+    CHECK_FALSE(fixture.Accepts(source));
   }
-  CHECK_FALSE(fixture.Load(std::string(65537, ' ')));
+  CHECK_FALSE(fixture.Accepts(std::string(65537, ' ')));
 }
 
 TEST_CASE("TOML supports comments inline tables and rejects ambiguous scalar values")
@@ -233,7 +223,7 @@ TEST_CASE("TOML supports comments inline tables and rejects ambiguous scalar val
      "{}"})
   {
     CAPTURE(std::string_view{source});
-    CHECK_FALSE(fixture.Load(source));
+    CHECK_FALSE(fixture.Accepts(source));
   }
 }
 
@@ -277,6 +267,95 @@ TEST_CASE("Stop discards an admitted login and closes the exchange")
   CHECK((*app)->Exchange().Post({0, RequestSnapshot{}}) == CommandPostResult::Closed);
 }
 
+TEST_CASE("One check names the first invalid setting as client.toml spells it")
+{
+  const std::vector<std::pair<std::string_view, std::function<void(Configuration&)>>> cases{
+      {"network.maxPacketBytes", [](auto& c) { c.network.maxPacketBytes = 0; }},
+      {"network.maxPacketBytes", [](auto& c) { c.network.maxPacketBytes = MaxProtobufCount + 1; }},
+      {"network.maxWaitingData", [](auto& c) { c.network.maxWaitingData = c.network.maxPacketBytes - 1; }},
+      {"network.channelLimit", [](auto& c) { c.network.channelLimit = MaxChannels + 1; }},
+      {"maxInitialPlayers", [](auto& c) { c.maxInitialPlayers = 0; }},
+      {"maxRecentMessages", [](auto& c) { c.maxRecentMessages = MaxProtobufCount + 1; }},
+      {"maxActorValues", [](auto& c) { c.maxActorValues = 0; }},
+      {"chatCapacity", [](auto& c) { c.chatCapacity = 0; }},
+      {"maxPendingChatRequests", [](auto& c) { c.maxPendingChatRequests = 0; }},
+      {"sessionTimeoutMs", [](auto& c) { c.sessionTimeoutMs = 0; }},
+      {"visibilityDistance", [](auto& c) { c.visibilityDistance = -1; }},
+      {"visibilityDistance", [](auto& c) { c.visibilityDistance = std::numeric_limits<double>::infinity(); }},
+      {"visibilityDistance", [](auto& c) { c.visibilityDistance = std::numeric_limits<double>::quiet_NaN(); }},
+      {"interpolation.historyCapacity", [](auto& c) { c.movement.historyCapacity = MinMovementHistory - 1; }},
+      {"interpolation.delayMs", [](auto& c) { c.movement.delay = std::chrono::milliseconds{-1}; }},
+      {"interpolation.maxGapMs", [](auto& c) { c.movement.maxGap = c.movement.delay; }},
+      {"interpolation.maxGapMs", [](auto& c) { c.movement.maxGap = std::chrono::milliseconds::max(); }},
+      {"interpolation.teleportDistance", [](auto& c) { c.movement.teleportDistance = std::numeric_limits<double>::infinity(); }},
+      {"interpolation.teleportDistance", [](auto& c) { c.movement.teleportDistance = 0; }},
+  };
+  CHECK_FALSE(Configuration{}.InvalidSetting());
+  for (const auto& [field, spoil] : cases)
+  {
+    Configuration config;
+    spoil(config);
+    CHECK(config.InvalidSetting() == field);
+  }
+  // Exact co-location is a valid distance.
+  Configuration near;
+  near.visibilityDistance = 0;
+  CHECK_FALSE(near.InvalidSetting());
+}
+
+TEST_CASE("The bundled client.example.toml is the first-run file and holds every default")
+{
+  const auto path = RepositoryRoot() / "src" / "Dreamsleeve.Client.Core" / "client.example.toml";
+  const auto text = ReadText(path);
+  std::string embedded{DefaultClientToml()};
+  std::erase(embedded, '\r');
+  CHECK(embedded == text);
+
+  const auto loaded = LoadClientSettings(path);
+  REQUIRE(loaded);
+  const ClientSettings defaults;
+  CHECK(glz::write_json(loaded->client).value_or("") == glz::write_json(defaults.client).value_or(""));
+  CHECK(loaded->client.serverAddress.ToIpString().value_or("") == defaults.client.serverAddress.ToIpString().value_or(""));
+  CHECK(loaded->client.serverAddress.GetPort() == defaults.client.serverAddress.GetPort());
+  CHECK(glz::write_json(SettingsDetail::InterpolationFile{
+                            loaded->client.movement.delay.count(), loaded->client.movement.maxGap.count(),
+                            loaded->client.movement.historyCapacity, loaded->client.movement.teleportDistance})
+            .value_or("") == glz::write_json(SettingsDetail::InterpolationFile{}).value_or(""));
+  CHECK(loaded->authUrl == defaults.authUrl);
+  CHECK(loaded->commandCapacity == defaults.commandCapacity);
+  CHECK(loaded->stateCapacity == defaults.stateCapacity);
+  CHECK(loaded->allowInsecureRemoteAuth == defaults.allowInsecureRemoteAuth);
+
+  const auto named = [&](std::string_view key) {
+    CHECK_MESSAGE(text.contains(std::format("\n{} = ", key)), std::string{key});
+  };
+  for (const auto key : glz::reflect<SettingsDetail::SettingsFile>::keys)
+    if (key != "client" && key != "interpolation") named(key);
+  for (const auto key : glz::reflect<Configuration>::keys)
+    if (key != "network") named(key);
+  for (const auto key : glz::reflect<NetConfig>::keys)
+    named(key);
+  for (const auto key : glz::reflect<SettingsDetail::InterpolationFile>::keys)
+    named(key);
+}
+
+TEST_CASE("The first run writes the example and never rewrites an existing file")
+{
+  SettingsFixture fixture;
+  REQUIRE(EnsureClientSettings(fixture.path));
+  CHECK(ReadText(fixture.path) == [] {
+    std::string text{DefaultClientToml()};
+    std::erase(text, '\r');
+    return text;
+  }());
+  {
+    std::ofstream file{fixture.path, std::ios::binary | std::ios::trunc};
+    file << "serverPort = 9000\n";
+  }
+  REQUIRE(EnsureClientSettings(fixture.path));
+  CHECK(ReadText(fixture.path) == "serverPort = 9000\n");
+}
+
 TEST_CASE("Programmatic startup uses the same validation as file configuration")
 {
   ClientSettings settings;
@@ -292,10 +371,10 @@ TEST_SUITE_END();
 TEST_CASE("Remote HTTP opt-in loads from client TOML")
 {
   SettingsFixture fixture;
-  CHECK_FALSE(fixture.Load("authUrl='http://auth.example.test:8779'"));
+  CHECK_FALSE(fixture.Accepts("authUrl='http://auth.example.test:8779'"));
   auto settings = fixture.Load("authUrl='http://auth.example.test:8779'\nallowInsecureRemoteAuth=true");
   REQUIRE(settings);
   CHECK(settings->allowInsecureRemoteAuth);
   CHECK(ValidateClientSettings(*settings));
-  CHECK_FALSE(fixture.Load("allowInsecureRemoteAuth='true'"));
+  CHECK_FALSE(fixture.Accepts("allowInsecureRemoteAuth='true'"));
 }

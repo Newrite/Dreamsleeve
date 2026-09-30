@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { makeChat } from "../src/state/chat";
-import { defaults, settingsFrom } from "../src/state/settings";
+import { defaults } from "../src/bridge/settings.generated";
 import {
   characterLine,
   HIDDEN_NAME,
@@ -61,24 +61,12 @@ describe("names", () => {
     );
   });
 
-  it("reads the legacy account mode as username and keeps streamer mode boolean", () => {
-    expect(settingsFrom({ nameMode: "account" as never }).nameMode).toBe(
-      "username",
-    );
-    expect(settingsFrom({ nameMode: "character" }).nameMode).toBe("character");
-    expect(settingsFrom({ streamerMode: "yes" as never }).streamerMode).toBe(
-      false,
-    );
-  });
-
   it("sends name settings at once and keeps the local choice over a stale refresh", () => {
     const { chat, send } = ready();
     chat.configure({ streamerMode: true });
     expect(send).toHaveBeenLastCalledWith({
       type: "displaySettings",
-      nameMode: "display",
-      streamerMode: true,
-      textFilter: "off",
+      settings: { ...defaults, streamerMode: true },
     });
     chat.receive({
       ...snapshot,
@@ -212,13 +200,8 @@ describe("author menu and text filter", () => {
     chat.configure({ textFilter: "mask" });
     expect(send).toHaveBeenLastCalledWith({
       type: "displaySettings",
-      nameMode: "display",
-      streamerMode: false,
-      textFilter: "mask",
+      settings: { ...defaults, textFilter: "mask" },
     });
-    expect(settingsFrom({ textFilter: "stars" as never }).textFilter).toBe(
-      "off",
-    );
     const event = parseHostEvent(
       JSON.stringify({
         type: "messages",
@@ -317,7 +300,6 @@ describe("hidden identity", () => {
       mode: "exceptGroundMarks",
       pending: true,
     });
-    expect(chat.store.getState().settings.hideIdentity).toBe("off");
     // One switch at a time.
     chat.setHideIdentity("off");
     expect(send).toHaveBeenCalledTimes(1);
@@ -332,9 +314,6 @@ describe("hidden identity", () => {
       ),
     );
     expect(chat.store.getState().identity.pseudonym).toBe("Страж 2");
-    expect(chat.store.getState().settings.hideIdentity).toBe(
-      "exceptGroundMarks",
-    );
     // Choosing the current mode sends nothing.
     chat.setHideIdentity("exceptGroundMarks");
     expect(send).toHaveBeenCalledTimes(1);
@@ -370,13 +349,6 @@ describe("hidden identity", () => {
       type: "setIdentityVisibility",
       hiding: "everywhere",
     });
-    expect(
-      settingsFrom({ hideIdentity: "exceptGroundMarks" }).hideIdentity,
-    ).toBe("exceptGroundMarks");
-    expect(
-      settingsFrom({ hideIdentity: "sometimes" as never }).hideIdentity,
-    ).toBe("off");
-    expect(defaults.hideIdentity).toBe("off");
   });
 
   it("asks the server for a new display name, one at a time, and shows its answer", () => {

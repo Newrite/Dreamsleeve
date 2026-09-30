@@ -8,32 +8,42 @@ export import DreamNet.Core;
 export namespace Dreamsleeve::Client
 {
 
+  // Protobuf sizes and counts are int; larger limits could never be met.
+  constexpr std::size_t MaxProtobufCount = static_cast<std::size_t>(std::numeric_limits<int>::max());
+  // A plugin-local form ID: the low 24 bits, without the load-order byte.
+  constexpr std::uint32_t MaxLocalFormId = 0xFFFFFF;
+  // Reference scale of a placed static; the engine keeps two decimals.
+  constexpr float MinFormScale = 0.01f;
+  constexpr float MaxFormScale = 10.0f;
+  // One connection to one server, and at least the control, chat and movement channels.
+  constexpr std::size_t ClientPeers        = 1;
+  constexpr std::size_t MinChannels        = 3;
+  constexpr std::size_t MaxChannels        = 255;
+  constexpr auto        MaxMovementGap     = std::chrono::hours{1};
+  constexpr std::size_t MinMovementHistory = 2;
+  constexpr Port        DefaultServerPort  = 8778;
+
   struct MovementSettings
   {
     std::chrono::milliseconds delay{150};
     std::chrono::milliseconds maxGap{1000};
     std::size_t               historyCapacity{32};
     double                    teleportDistance{2048.0};
-
-    bool Valid() const noexcept
-    {
-      return delay.count() >= 0 && maxGap > delay && maxGap <= std::chrono::hours{1} && historyCapacity >= 2 &&
-             std::isfinite(teleportDistance) && teleportDistance > 0;
-    }
   };
 
-  // Load externally before creating the network owner; keep fixed for its lifetime.
+  // Load externally, validate once with ValidateClientSettings (ClientApplication does),
+  // then keep fixed for the network owner's lifetime; its parts trust the values.
   struct Configuration
   {
     NetConfig       network{[] {
       auto value         = NetConfig::Default();
-      value.maxPeers     = 1;
-      value.channelLimit = 3;
+      value.maxPeers     = ClientPeers;
+      value.channelLimit = MinChannels;
       return value;
     }()};
     std::size_t     maxInitialPlayers{4096};
     std::size_t     maxRecentMessages{512};
-    DreamNetAddress serverAddress{DreamNetAddress::Loopback(8778)};
+    DreamNetAddress serverAddress{DreamNetAddress::Loopback(DefaultServerPort)};
     TimeOutMs       connectTimeoutMs{5000};
     TimeOutMs       disconnectTimeoutMs{2000};
     TimeOutMs       sessionTimeoutMs{5000};
@@ -42,16 +52,12 @@ export namespace Dreamsleeve::Client
     std::size_t     maxPendingPlayerUpdates{32};
     std::size_t     maxActorValues{64};
     TimeOutMs       playerSampleIntervalMs{50};
-    // Future game-view preferences. They do not change server subscriptions.
+    // Local game view; it does not change server subscriptions.
     double        visibilityDistance{8192.0};
     bool          showFireflies{true};
     std::string   fireflyPlugin{"Skyrim.esm"};
     std::uint32_t fireflyFormId{0x02EB0F};
     float         fireflyScale{0.25f};
-    bool          showFireflyNames{true};
-    bool          fireflyNameOcclusion{true};
-    float         fireflyNameFontSize{18.0f};
-    float         fireflyNameOffset{35.0f};
     // Withhold keyboard events from the game and other SKSE mods while the chat is open.
     bool captureKeyboard{true};
     // Ground mark visuals: STAT base forms without collision (plugin-local IDs).
@@ -64,12 +70,30 @@ export namespace Dreamsleeve::Client
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{4096};
 
+    // The first invalid setting, named as in client.toml.
     std::optional<std::string_view> InvalidSetting() const noexcept
     {
-      if (auto field = InvalidProtocolSetting()) return field;
-      if (network.maxPeers != 1) return "network.maxPeers";
-      if (network.channelLimit > 255) return "network.channelLimit";
-      if (serverAddress.GetPort() == 0) return "serverAddress.port";
+      const auto plugin = [](std::string_view name) {
+        return !name.empty() && name.find_first_of(std::string_view{"/\\:\0", 4}) == std::string_view::npos;
+      };
+      const auto formId = [](std::uint32_t id) {
+        return id != 0 && id <= MaxLocalFormId;
+      };
+      const auto scale = [](float value) {
+        return std::isfinite(value) && value >= MinFormScale && value <= MaxFormScale;
+      };
+      const auto count = [](std::size_t value) {
+        return value != 0 && value <= MaxProtobufCount;
+      };
+
+      if (network.maxPeers != ClientPeers) return "network.maxPeers";
+      if (network.channelLimit < MinChannels || network.channelLimit > MaxChannels) return "network.channelLimit";
+      if (!count(network.maxPacketBytes)) return "network.maxPacketBytes";
+      if (network.maxWaitingData < network.maxPacketBytes) return "network.maxWaitingData";
+      if (serverAddress.GetPort() == 0) return "serverPort";
+      if (!count(maxInitialPlayers)) return "maxInitialPlayers";
+      if (maxRecentMessages > MaxProtobufCount) return "maxRecentMessages";
+      if (!count(maxActorValues)) return "maxActorValues";
       if (chatCapacity == 0) return "chatCapacity";
       if (maxPendingChatRequests == 0) return "maxPendingChatRequests";
       if (maxPendingPlayerUpdates == 0) return "maxPendingPlayerUpdates";
@@ -77,33 +101,21 @@ export namespace Dreamsleeve::Client
       if (sessionTimeoutMs == 0) return "sessionTimeoutMs";
       if (connectTimeoutMs == 0) return "connectTimeoutMs";
       if (disconnectTimeoutMs == 0) return "disconnectTimeoutMs";
-      if (fireflyPlugin.empty() || fireflyPlugin.find_first_of("/\\:\0", 0, 4) != std::string::npos) return "fireflyPlugin";
-      if (fireflyFormId == 0 || fireflyFormId > 0xFFFFFF) return "fireflyFormId";
-      if (!std::isfinite(fireflyScale) || fireflyScale < 0.01f || fireflyScale > 10.0f) return "fireflyScale";
-      if (!std::isfinite(fireflyNameFontSize) || fireflyNameFontSize < 8 || fireflyNameFontSize > 48) return "fireflyNameFontSize";
-      if (!std::isfinite(fireflyNameOffset) || fireflyNameOffset < 0 || fireflyNameOffset > 512) return "fireflyNameOffset";
-      if (groundNotePlugin.empty() || groundNotePlugin.find_first_of("/\\:\0", 0, 4) != std::string::npos) return "groundNotePlugin";
-      if (groundNoteFormId == 0 || groundNoteFormId > 0xFFFFFF) return "groundNoteFormId";
-      if (!std::isfinite(groundNoteScale) || groundNoteScale < 0.01f || groundNoteScale > 10.0f) return "groundNoteScale";
-      if (deathMarkPlugin.empty() || deathMarkPlugin.find_first_of("/\\:\0", 0, 4) != std::string::npos) return "deathMarkPlugin";
-      if (deathMarkFormId == 0 || deathMarkFormId > 0xFFFFFF) return "deathMarkFormId";
-      if (!std::isfinite(deathMarkScale) || deathMarkScale < 0.01f || deathMarkScale > 10.0f) return "deathMarkScale";
-      if (!movement.Valid()) return "movement";
-      if (maxPendingMovementSamples == 0) return "maxPendingMovementSamples";
       if (!std::isfinite(visibilityDistance) || visibilityDistance < 0) return "visibilityDistance";
-      return std::nullopt;
-    }
-
-    std::optional<std::string_view> InvalidProtocolSetting() const noexcept
-    {
-      if (network.channelLimit < 3) return "channelLimit";
-      if (network.maxPacketBytes == 0 || network.maxPacketBytes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-        return "maxPacketBytes";
-      if (network.maxWaitingData < network.maxPacketBytes) return "maxWaitingData";
-      if (maxInitialPlayers == 0 || maxInitialPlayers > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-        return "maxInitialPlayers";
-      if (maxActorValues == 0 || maxActorValues > static_cast<std::size_t>(std::numeric_limits<int>::max())) return "maxActorValues";
-      if (maxRecentMessages > static_cast<std::size_t>(std::numeric_limits<int>::max())) return "maxRecentMessages";
+      if (!plugin(fireflyPlugin)) return "fireflyPlugin";
+      if (!formId(fireflyFormId)) return "fireflyFormId";
+      if (!scale(fireflyScale)) return "fireflyScale";
+      if (!plugin(groundNotePlugin)) return "groundNotePlugin";
+      if (!formId(groundNoteFormId)) return "groundNoteFormId";
+      if (!scale(groundNoteScale)) return "groundNoteScale";
+      if (!plugin(deathMarkPlugin)) return "deathMarkPlugin";
+      if (!formId(deathMarkFormId)) return "deathMarkFormId";
+      if (!scale(deathMarkScale)) return "deathMarkScale";
+      if (maxPendingMovementSamples == 0) return "maxPendingMovementSamples";
+      if (movement.delay.count() < 0) return "interpolation.delayMs";
+      if (movement.maxGap <= movement.delay || movement.maxGap > MaxMovementGap) return "interpolation.maxGapMs";
+      if (movement.historyCapacity < MinMovementHistory) return "interpolation.historyCapacity";
+      if (!std::isfinite(movement.teleportDistance) || movement.teleportDistance <= 0) return "interpolation.teleportDistance";
       return std::nullopt;
     }
   };

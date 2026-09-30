@@ -252,9 +252,9 @@ namespace PrismaUI
     {
       // The note stands where the character stands now; without a ready
       // world there is nowhere to put it.
-      std::expected<void, std::string> placed = std::unexpected{"Персонаж не в игровом мире"};
-      const auto placement = GroundMarks::CurrentPlacement();
-      const auto gameDate  = GroundMarks::CurrentGameDate();
+      std::expected<void, std::string> placed    = std::unexpected{"Персонаж не в игровом мире"};
+      const auto                       placement = GroundMarks::CurrentPlacement();
+      const auto                       gameDate  = GroundMarks::CurrentGameDate();
       if (placement && gameDate)
         placed = runtime.session.PlaceGroundNote(app.Exchange(), command.requestId, std::move(command.text), *placement, *gameDate);
       if (!placed) Send(Bridge::MarkResultEvent{.requestId = command.requestId, .error = placed.error()});
@@ -286,10 +286,8 @@ namespace PrismaUI
     if (type == "displaySettings")
     {
       // Applied and saved at once: every surface switches without reconnecting.
-      auto& chat        = runtime.ui.ui.chat;
-      chat.nameMode     = command.nameMode;
-      chat.streamerMode = command.streamerMode;
-      chat.textFilter   = command.textFilter;
+      auto& chat = runtime.ui.ui.chat;
+      ApplyInstant(chat, *command.settings);
       // Visible bubbles were admitted under the old filter.
       runtime.bubbles.Clear();
       if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
@@ -301,8 +299,8 @@ namespace PrismaUI
     {
       // A ready session asks the server; with no session only the choice for
       // the next one changes. While a session is being opened it waits.
-      auto&      chat   = runtime.ui.ui.chat;
-      const auto status = app.Status();
+      auto&      chat    = runtime.ui.ui.chat;
+      const auto status  = app.Status();
       const bool idle    = status.Idle();
       auto&      session = runtime.session;
       if (session.Ready())
@@ -312,14 +310,14 @@ namespace PrismaUI
       }
       else if (idle)
       {
-        chat.hideIdentity = command.hiding;
+        runtime.ui.ui.hideIdentity = command.hiding;
         app.Exchange().SetHideIdentity(Bridge::HidingOf(command.hiding));
         if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
         session.SetIdentityError({});
       }
       else
         session.SetIdentityError("Дождитесь подключения к серверу");
-      Send(session.Identity(Bridge::HidingOf(chat.hideIdentity)));
+      Send(session.Identity(Bridge::HidingOf(runtime.ui.ui.hideIdentity)));
       return;
     }
     if (type == "changeDisplayName")
@@ -331,13 +329,8 @@ namespace PrismaUI
     }
     if (type == "saveSettings")
     {
-      const bool names = runtime.ui.ui.chat.nameMode != command.settings->nameMode ||
-                         runtime.ui.ui.chat.streamerMode != command.settings->streamerMode ||
-                         runtime.ui.ui.chat.textFilter != command.settings->textFilter ||
-                         runtime.ui.ui.chat.markDateStyle != command.settings->markDateStyle;
-      // "Hide my name" has its own command and changes only when the server agrees.
-      command.settings->hideIdentity = runtime.ui.ui.chat.hideIdentity;
-      runtime.ui.ui.chat             = *command.settings;
+      const bool names   = InstantChanged(runtime.ui.ui.chat, *command.settings);
+      runtime.ui.ui.chat = *command.settings;
       if (names)
       {
         runtime.session.Refresh();

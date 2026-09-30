@@ -268,7 +268,7 @@ export namespace Dreamsleeve::Host::Bridge
     UiSettings  settings;
   };
 
-  // UI -> host. Unknown keys are ignored so a newer UI does not break an older host.
+  // UI -> host. The UI ships with the plugin; unknown keys are ignored.
   struct UiCommand
   {
     std::string               type;
@@ -282,29 +282,24 @@ export namespace Dreamsleeve::Host::Bridge
     std::string               displayName;
     bool                      remember{};
     std::string               playerId;
-    std::string               nameMode;
-    bool                      streamerMode{};
-    std::string               textFilter;
     std::string               markId;
     std::string               hiding;
   };
 
-  // The ui.toml and bridge names of the choice; anything else is "off".
+  // The ui.toml and bridge names of the choice (HidingNames); anything else is "off".
   Domain::HiddenIdentity HidingOf(std::string_view name)
   {
-    if (name == "everywhere") return Domain::HiddenIdentity::Everywhere;
-    if (name == "exceptGroundMarks") return Domain::HiddenIdentity::ExceptGroundMarks;
-    return Domain::HiddenIdentity::None;
+    const auto found = std::ranges::find(HidingNames, name);
+    return found == HidingNames.end() ? Domain::HiddenIdentity::None : static_cast<Domain::HiddenIdentity>(found - HidingNames.begin());
   }
 
   std::string_view HidingName(Domain::HiddenIdentity value)
   {
-    if (value == Domain::HiddenIdentity::Everywhere) return "everywhere";
-    if (value == Domain::HiddenIdentity::ExceptGroundMarks) return "exceptGroundMarks";
-    return "off";
+    const auto index = static_cast<std::size_t>(value);
+    return index < HidingNames.size() ? HidingNames[index] : HidingNames.front();
   }
 
-  constexpr std::size_t MaxChatText     = 16000;
+  constexpr std::size_t MaxChatText = 16000;
   // Bytes of a requested display name; the server applies its own, smaller limit.
   constexpr std::size_t MaxDisplayName  = 1024;
   constexpr std::size_t MaxSnapshotRows = 500;
@@ -449,17 +444,14 @@ export namespace Dreamsleeve::Host::Bridge
     }
     if (type == "displaySettings")
     {
-      UiSettings display;
-      display.nameMode   = command.nameMode;
-      display.textFilter = command.textFilter;
-      display            = Normalize(display);
-      command.nameMode   = display.nameMode;
-      command.textFilter = display.textFilter;
+      // Only the InstantKeys settings are taken from it.
+      if (!command.settings) return std::unexpected{"displaySettings requires settings"};
+      command.settings = Normalize(*command.settings);
       return command;
     }
     if (type == "setIdentityVisibility")
     {
-      if (command.hiding != "off" && command.hiding != "everywhere" && command.hiding != "exceptGroundMarks")
+      if (!std::ranges::contains(HidingNames, command.hiding))
         return std::unexpected{"setIdentityVisibility requires hiding off, everywhere or exceptGroundMarks"};
       return command;
     }

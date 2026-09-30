@@ -24,6 +24,23 @@ includes(os.getenv("CommonLibSSE-NG"))
 -- Included projects may set their own name; restore the solution name afterwards.
 set_project("Dreamsleeve")
 
+-- utils.bin2c ordered before the module scanner, which already reads the header
+-- a module includes; the stock rule is ordered before the builder only.
+rule("dreamsleeve.embed")
+    set_extensions(".toml")
+    add_orders("dreamsleeve.embed", "c++.build.modules.scanner")
+    on_load(function (target)
+        target:add("includedirs", path.join(target:autogendir(), "rules", "utils", "bin2c"))
+    end)
+    on_preparecmd_file(function (target, batchcmds, sourcefile, opt)
+        import("rules.utils.bin2c.utils", {alias = "bin2c_utils", rootdir = os.programdir()})
+        local headerfile = bin2c_utils.generate_headerfile(target, batchcmds, sourcefile, {progress = opt.progress, zeroend = false})
+        batchcmds:add_depfiles(sourcefile)
+        batchcmds:set_depmtime(os.mtime(headerfile))
+        batchcmds:set_depcache(target:dependfile(headerfile))
+    end)
+rule_end()
+
 add_requires("enet 1.3.18")
 -- Keep CommonLib and Core on the same compiled spdlog configuration.
 add_requires("spdlog 1.17.0", {configs = {header_only = false, wchar = true, std_format = true}})
@@ -103,6 +120,9 @@ target("Dreamsleeve.Client.Core")
 
     add_deps("Dreamsleeve.Protocol.Native")
     add_syslinks("winhttp", "advapi32", {public = true})
+    -- The documented client.toml doubles as the file written on first run.
+    add_rules("dreamsleeve.embed")
+    add_files("src/Dreamsleeve.Client.Core/client.example.toml")
 
     add_packages("enet", {public = true})
     add_packages("spdlog", {public = true})

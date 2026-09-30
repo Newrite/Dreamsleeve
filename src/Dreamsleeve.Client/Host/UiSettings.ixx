@@ -13,7 +13,9 @@ import std;
 export namespace Dreamsleeve::Host
 {
 
-  // Mirrors bridge/types.ts Settings, including the same defaults and bounds.
+  // The one description of the UI settings: fields and defaults here, limits in
+  // the rule tables below. The web UI's Settings type, defaults and limits are
+  // generated from both (src/Dreamsleeve.Client.UI/src/bridge/settings.generated.ts).
   struct UiSettings
   {
     bool   showFireflyNames{true};
@@ -100,13 +102,82 @@ export namespace Dreamsleeve::Host
     bool        deathDateHeader{true};
     bool        noteDateHeader{false};
     std::string markDateColor{"#A9A69B"};
-    // Where others see a server pseudonym instead of this player's names:
-    // off | everywhere | exceptGroundMarks. Sent when a session opens; the host
-    // alone writes it, after the server confirmed a switch.
-    std::string hideIdentity{"off"};
 
     bool operator==(const UiSettings&) const = default;
   };
+
+  // A number within [min, max]; integer ones are floored.
+  struct NumberRule
+  {
+    std::string_view key;
+    double           min{};
+    double           max{};
+    bool             integer{};
+  };
+
+  // A word from a fixed list.
+  struct ChoiceRule
+  {
+    std::string_view              key;
+    std::vector<std::string_view> values;
+  };
+
+  // Every number of UiSettings: out of range is clamped, non-finite is the default.
+  constexpr auto NumberRules = std::to_array<NumberRule>({
+      {"fireflyNameFontSize", 8, 48},
+      {"fireflyNameOffset", 0, 512},
+      {"bubbleDuration", 1, 60},
+      {"bubbleFadeDuration", 0.1, 5},
+      {"bubbleFontSize", 8, 48},
+      {"bubbleMaxWidth", 120, 800},
+      {"bubbleBackground", 0, 1},
+      {"delay", 0, 120},
+      {"duration", 0, 5},
+      {"idleOpacity", 0, 1},
+      {"scale", 0.7, 1.5},
+      {"fontSize", 12, 26},
+      {"lineHeight", 1.1, 2},
+      {"background", 0, 1},
+      {"x", 0, 1},
+      {"y", 0, 1},
+      {"width", 320, 1600},
+      {"height", 220, 1200},
+      {"fireflyHeightOffset", 0, 512},
+      {"maxVisibleNotes", 1, 64, true},
+      {"maxVisibleDeaths", 1, 64, true},
+      {"groundDrawDistance", 0, 16384},
+      {"groundNoteOffset", -64, 256},
+      {"deathMarkOffset", -64, 256},
+      {"groundNameDistance", 50, 4096},
+      {"groundTextDistance", 50, 4096},
+      {"groundFontSize", 8, 48},
+      {"groundMaxWidth", 120, 800},
+      {"groundBackground", 0, 1},
+      {"deathBackground", 0, 1},
+  });
+
+  // Words the UI chooses from; anything else is the default.
+  const auto ChoiceRules = std::to_array<ChoiceRule>({
+      {"onlineView",           {"cards", "list"}                   },
+      {"font",                 {"serif", "sans"}                   },
+      {"nameMode",             {"username", "display", "character"}},
+      {"textFilter",           {"off", "mask", "hide"}             },
+      {"activationKey",        {"Enter", "F2"}                     },
+      {"theme",                {"skyrim", "contrast"}              },
+      {"announcementChannels", {"tab", "all", "current"}           },
+      {"markDateStyle",        {"tamriel", "earth"}                },
+  });
+
+  // "#RRGGBB"; anything else is the default.
+  constexpr auto ColorKeys =
+    std::to_array<std::string_view>({"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor"});
+
+  // How names, texts and dates are projected. These apply to every surface at
+  // once, without saving, and a change projects the session again.
+  constexpr auto InstantKeys = std::to_array<std::string_view>({"nameMode", "streamerMode", "textFilter", "markDateStyle"});
+
+  // The hide-my-name choices in the order of Domain::HiddenIdentity.
+  constexpr auto HidingNames = std::to_array<std::string_view>({"off", "everywhere", "exceptGroundMarks"});
 
   // "#RRGGBB" to 0xRRGGBB; anything else is absent.
   std::optional<std::uint32_t> ParseColor(std::string_view text)
@@ -155,8 +226,12 @@ export namespace Dreamsleeve::Host
   struct UiSection
   {
     // Full user opt-out: no view, no focus, no activation key. Network keeps running.
-    bool       hideUi{false};
-    UiSettings chat{};
+    bool hideUi{false};
+    // Where others see a server pseudonym instead of this player's names, one of
+    // HidingNames. Sent when a session opens; only the host writes it, once the
+    // server confirmed a switch, so the web UI never sends it.
+    std::string hideIdentity{"off"};
+    UiSettings  chat{};
 
     bool operator==(const UiSection&) const = default;
   };
@@ -170,85 +245,58 @@ export namespace Dreamsleeve::Host
     bool operator==(const UiFile&) const = default;
   };
 
-  namespace UiSettingsDetail
+  // Fields of two settings side by side, with their names.
+  template <class First, class Second, class Visit>
+  void ForEachSettingPair(First& first, Second& second, Visit&& visit)
   {
-
-    double Clamp(double value, double low, double high, double fallback)
-    {
-      if (!std::isfinite(value)) return fallback;
-      return std::min(high, std::max(low, value));
-    }
-
-    void Choose(std::string& value, std::initializer_list<std::string_view> allowed, std::string_view fallback)
-    {
-      for (auto option : allowed)
-        if (value == option) return;
-      value = fallback;
-    }
-
-    void Color(std::string& value, std::string_view fallback)
-    {
-      if (!ParseColor(value)) value = fallback;
-    }
-
+    constexpr auto& keys = glz::reflect<UiSettings>::keys;
+    [&]<std::size_t... I>(std::index_sequence<I...>) {
+      (visit(keys[I], glz::get<I>(glz::to_tie(first)), glz::get<I>(glz::to_tie(second))), ...);
+    }(std::make_index_sequence<keys.size()>{});
   }
 
-  // Same bounds as state/settings.ts; hand-edited files fall back per field.
+  // Hand-edited files and UI commands fall back per field, by the rule tables.
   UiSettings Normalize(UiSettings value)
   {
-    using UiSettingsDetail::Choose;
-    using UiSettingsDetail::Clamp;
-    using UiSettingsDetail::Color;
     const UiSettings defaults{};
-
-    Choose(value.onlineView, {"cards", "list"}, defaults.onlineView);
-    Choose(value.font, {"serif", "sans"}, defaults.font);
-    if (value.nameMode == "account") value.nameMode = "username";
-    Choose(value.nameMode, {"username", "display", "character"}, defaults.nameMode);
-    Choose(value.textFilter, {"off", "mask", "hide"}, defaults.textFilter);
-    Choose(value.activationKey, {"Enter", "F2"}, defaults.activationKey);
-    Choose(value.theme, {"skyrim", "contrast"}, defaults.theme);
-    Choose(value.announcementChannels, {"tab", "all", "current"}, defaults.announcementChannels);
-    Choose(value.hideIdentity, {"off", "everywhere", "exceptGroundMarks"}, defaults.hideIdentity);
-    Choose(value.markDateStyle, {"tamriel", "earth"}, defaults.markDateStyle);
-
-    value.fireflyNameFontSize = Clamp(value.fireflyNameFontSize, 8, 48, defaults.fireflyNameFontSize);
-    value.fireflyNameOffset   = Clamp(value.fireflyNameOffset, 0, 512, defaults.fireflyNameOffset);
-    value.bubbleDuration      = Clamp(value.bubbleDuration, 1, 60, defaults.bubbleDuration);
-    value.bubbleFadeDuration  = Clamp(value.bubbleFadeDuration, 0.1, 5, defaults.bubbleFadeDuration);
-    value.bubbleFontSize      = Clamp(value.bubbleFontSize, 8, 48, defaults.bubbleFontSize);
-    value.bubbleMaxWidth      = Clamp(value.bubbleMaxWidth, 120, 800, defaults.bubbleMaxWidth);
-    value.bubbleBackground    = Clamp(value.bubbleBackground, 0, 1, defaults.bubbleBackground);
-    value.delay               = Clamp(value.delay, 0, 120, defaults.delay);
-    value.duration            = Clamp(value.duration, 0, 5, defaults.duration);
-    value.idleOpacity         = Clamp(value.idleOpacity, 0, 1, defaults.idleOpacity);
-    value.scale               = Clamp(value.scale, 0.7, 1.5, defaults.scale);
-    value.fontSize            = Clamp(value.fontSize, 12, 26, defaults.fontSize);
-    value.lineHeight          = Clamp(value.lineHeight, 1.1, 2, defaults.lineHeight);
-    value.background          = Clamp(value.background, 0, 1, defaults.background);
-    value.x                   = Clamp(value.x, 0, 1, defaults.x);
-    value.y                   = Clamp(value.y, 0, 1, defaults.y);
-    value.width               = Clamp(value.width, 320, 1600, defaults.width);
-    value.height              = Clamp(value.height, 220, 1200, defaults.height);
-
-    Color(value.bubbleTextColor, defaults.bubbleTextColor);
-    Color(value.fireflyNameColor, defaults.fireflyNameColor);
-    Color(value.groundTextColor, defaults.groundTextColor);
-    Color(value.deathTextColor, defaults.deathTextColor);
-    Color(value.markDateColor, defaults.markDateColor);
-    value.fireflyHeightOffset = Clamp(value.fireflyHeightOffset, 0, 512, defaults.fireflyHeightOffset);
-    value.maxVisibleNotes     = std::floor(Clamp(value.maxVisibleNotes, 1, 64, defaults.maxVisibleNotes));
-    value.maxVisibleDeaths    = std::floor(Clamp(value.maxVisibleDeaths, 1, 64, defaults.maxVisibleDeaths));
-    value.groundDrawDistance  = Clamp(value.groundDrawDistance, 0, 16384, defaults.groundDrawDistance);
-    value.groundNoteOffset    = Clamp(value.groundNoteOffset, -64, 256, defaults.groundNoteOffset);
-    value.deathMarkOffset     = Clamp(value.deathMarkOffset, -64, 256, defaults.deathMarkOffset);
-    value.groundNameDistance  = Clamp(value.groundNameDistance, 50, 4096, defaults.groundNameDistance);
-    value.groundTextDistance  = Clamp(value.groundTextDistance, 50, 4096, defaults.groundTextDistance);
-    value.groundFontSize      = Clamp(value.groundFontSize, 8, 48, defaults.groundFontSize);
-    value.groundMaxWidth      = Clamp(value.groundMaxWidth, 120, 800, defaults.groundMaxWidth);
-    value.groundBackground    = Clamp(value.groundBackground, 0, 1, defaults.groundBackground);
-    value.deathBackground     = Clamp(value.deathBackground, 0, 1, defaults.deathBackground);
+    ForEachSettingPair(value, defaults, [](std::string_view key, auto& field, const auto& fallback) {
+      using Field = std::remove_cvref_t<decltype(field)>;
+      if constexpr (std::is_same_v<Field, double>)
+      {
+        const auto rule = std::ranges::find(NumberRules, key, &NumberRule::key);
+        if (!std::isfinite(field) || rule == NumberRules.end())
+          field = fallback;
+        else
+          field = rule->integer ? std::floor(std::clamp(field, rule->min, rule->max)) : std::clamp(field, rule->min, rule->max);
+      }
+      else if constexpr (std::is_same_v<Field, std::string>)
+      {
+        if (const auto rule = std::ranges::find(ChoiceRules, key, &ChoiceRule::key); rule != ChoiceRules.end())
+        {
+          if (!std::ranges::contains(rule->values, field)) field = fallback;
+        }
+        else if (std::ranges::contains(ColorKeys, key) && !ParseColor(field))
+          field = fallback;
+      }
+    });
     return value;
+  }
+
+  // Copies the InstantKeys settings of source into target.
+  void ApplyInstant(UiSettings& target, const UiSettings& source)
+  {
+    ForEachSettingPair(target, source, [](std::string_view key, auto& field, const auto& value) {
+      if (std::ranges::contains(InstantKeys, key)) field = value;
+    });
+  }
+
+  bool InstantChanged(const UiSettings& before, const UiSettings& after)
+  {
+    bool changed = false;
+    ForEachSettingPair(before, after, [&](std::string_view key, const auto& first, const auto& second) {
+      changed = changed || (std::ranges::contains(InstantKeys, key) && first != second);
+    });
+    return changed;
   }
 
   // Hand-edited records: drop incomplete or duplicate entries and keep the
@@ -296,7 +344,8 @@ export namespace Dreamsleeve::Host
     if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};
 
     file.ui.chat = Normalize(file.ui.chat);
-    file.names   = Normalize(std::move(file.names));
+    if (!std::ranges::contains(HidingNames, file.ui.hideIdentity)) file.ui.hideIdentity = HidingNames.front();
+    file.names = Normalize(std::move(file.names));
     return file;
   }
 

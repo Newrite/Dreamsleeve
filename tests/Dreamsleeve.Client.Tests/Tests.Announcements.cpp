@@ -104,7 +104,7 @@ namespace
       ClientOutput output;
       exchange->Drain(output);
       frame = {};
-      session.Process(*exchange, output, settings, frame);
+      session.Process(*exchange, output, settings, Domain::HiddenIdentity::None, frame);
     }
 
     void Publish(std::optional<CommandResult> result = std::nullopt)

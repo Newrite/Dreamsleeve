@@ -1,3 +1,5 @@
+import type { Settings } from "./settings.generated";
+export type { Settings };
 export type Id = string;
 export type ConnectionPhase =
   | "disconnected"
@@ -99,91 +101,9 @@ export type Message = {
   | { source: "player"; author: Player }
   | { source: "system"; announcement: Announcement; author?: Player }
 );
-export interface Settings {
-  showFireflyNames: boolean;
-  fireflyNameOcclusion: boolean;
-  fireflyNameFontSize: number;
-  fireflyNameOffset: number;
-  showBubbles: boolean;
-  bubbleDuration: number;
-  bubbleFade: boolean;
-  bubbleFadeDuration: number;
-  bubbleFontSize: number;
-  bubbleMaxWidth: number;
-  bubbleBackground: number;
-  combatHideFireflies: boolean;
-  combatHideNames: boolean;
-  combatHideBubbles: boolean;
-  onlineView: "cards" | "list";
-  fade: boolean;
-  delay: number;
-  duration: number;
-  idleOpacity: number;
-  scale: number;
-  fontSize: number;
-  font: "serif" | "sans";
-  lineHeight: number;
-  background: number;
-  timestamps: boolean;
-  fullColor: boolean;
-  nameMode: "username" | "display" | "character";
-  streamerMode: boolean;
-  textFilter: "off" | "mask" | "hide";
-  locked: boolean;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  activationKey: "Enter" | "F2";
-  theme: "skyrim" | "contrast";
-  // tab: only the announcements tab; all: also "Все"; current: every tab.
-  announcementChannels: "tab" | "all" | "current";
-  announcementsServer: boolean;
-  announcementsTrustedClient: boolean;
-  announcementsThirdParty: boolean;
-  announcementsEvents: boolean;
-  announcementsPeriodic: boolean;
-  // Bubble look above fireflies: fill opacity is bubbleBackground; the border
-  // and the text colour ("#RRGGBB") are separate. Native Scaleform render only.
-  bubbleBorder: boolean;
-  bubbleTextColor: string;
-  fireflyNameColor: string;
-  fireflyHeightOffset: number;
-  // Ground marks drawn by the SKSE DLL: which kinds, how many, how far, and
-  // the look of their labels. Stored and passed through only.
-  showGroundNotes: boolean;
-  showDeathMarks: boolean;
-  maxVisibleNotes: number;
-  maxVisibleDeaths: number;
-  groundDrawDistance: number;
-  groundNoteOffset: number;
-  deathMarkOffset: number;
-  groundNameDistance: number;
-  groundTextDistance: number;
-  groundFontSize: number;
-  groundMaxWidth: number;
-  groundBackground: number;
-  groundBorder: boolean;
-  groundTextColor: string;
-  deathTextColor: string;
-  deathBackground: number;
-  deathBorder: boolean;
-  combatHideGroundMarks: boolean;
-  combatHideGroundText: boolean;
-  // The in-game date of a mark: a header line in its bubble and a line in the
-  // marks lists. Weekday and month names of Tamriel or of our calendar.
-  markDateStyle: MarkDateStyle;
-  deathDateHeader: boolean;
-  noteDateHeader: boolean;
-  markDateColor: string;
-  // Where others see a server pseudonym instead of this player's names.
-  // Changed by setIdentityVisibility only; the host saves it once the server agrees.
-  hideIdentity: HideIdentity;
-}
 // off: the names are shown; everywhere: online, fireflies, chat and ground
 // marks; exceptGroundMarks: ground marks keep the real profile.
 export type HideIdentity = "off" | "everywhere" | "exceptGroundMarks";
-export type MarkDateStyle = "tamriel" | "earth";
 // "Hide my name from other players" as the host reports it: mode is the
 // choice (the requested one while pending), pending waits for the server,
 // pseudonym is what the others see now, error the last refusal.
@@ -233,13 +153,8 @@ export type Command =
     }
   | { type: "ignore"; playerId: Id }
   | { type: "unignore"; playerId: Id }
-  // Applied and saved by the host at once; it re-projects every surface.
-  | {
-      type: "displaySettings";
-      nameMode: Settings["nameMode"];
-      streamerMode: boolean;
-      textFilter: Settings["textFilter"];
-    }
+  // The host takes the instantKeys settings, saves them and re-projects every surface.
+  | { type: "displaySettings"; settings: Settings }
   | { type: "signInSaved" }
   | { type: "signOut" }
   | { type: "forgetLogin" }
@@ -260,7 +175,8 @@ export type HostEvent =
       players: Player[];
       selfId: Id;
       serverName: string;
-      settings?: Partial<Settings>;
+      // Normalized by the host; every key present.
+      settings?: Settings;
       // Same session projected again (names or ignore list changed).
       refresh?: boolean;
       // The session can place marks; the player's own marks as the server
@@ -294,7 +210,7 @@ export type HostEvent =
   | { type: "deactivate" }
   | { type: "connection"; connected: boolean; phase?: ConnectionPhase }
   // Sent when the page is (re)created: applies the saved window settings before any snapshot.
-  | { type: "settings"; settings: Partial<Settings> }
+  | { type: "settings"; settings: Settings }
   | AuthEvent
   | { type: "sendResult"; requestId: string; messageId: Id; error?: never }
   | { type: "sendResult"; requestId: string; error: string; messageId?: never }

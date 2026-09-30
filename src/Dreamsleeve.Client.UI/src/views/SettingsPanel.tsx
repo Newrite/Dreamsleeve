@@ -1,6 +1,7 @@
 import type { Chat } from "../state/chat";
 import type { ConnectionPhase, IdentityState, Settings } from "../bridge/types";
-import { defaults, isColor } from "../state/settings";
+import { isColor } from "../state/settings";
+import { defaults, limits } from "../bridge/settings.generated";
 import { identityStatus } from "../state/identity";
 import { Select } from "./Select";
 import { useEffect, useState } from "react";
@@ -54,14 +55,15 @@ function countOptions(current: number) {
     : [...ladder, current].sort((a, b) => a - b);
   return values.map((n) => ({ value: String(n), label: String(n) }));
 }
+// Sliders take their bounds from the host's limits; only the step is the panel's.
 const ranges = [
-  ["delay", "Тишина до затухания, с", 0, 60, 1],
-  ["duration", "Длительность fade, с", 0, 5, 0.1],
-  ["idleOpacity", "Видимость после fade", 0, 1, 0.05],
-  ["scale", "Масштаб", 0.7, 1.5, 0.05],
-  ["fontSize", "Размер шрифта", 12, 26, 1],
-  ["lineHeight", "Межстрочный интервал", 1.1, 2, 0.05],
-  ["background", "Непрозрачность фона", 0, 1, 0.05],
+  ["delay", "Тишина до затухания, с", 1],
+  ["duration", "Длительность fade, с", 0.1],
+  ["idleOpacity", "Видимость после fade", 0.05],
+  ["scale", "Масштаб", 0.05],
+  ["fontSize", "Размер шрифта", 1],
+  ["lineHeight", "Межстрочный интервал", 0.05],
+  ["background", "Непрозрачность фона", 0.05],
 ] as const;
 export function SettingsPanel({
   chat,
@@ -99,7 +101,7 @@ export function SettingsPanel({
           </label>
         ),
       )}
-      {ranges.map(([key, label, min, max, step]) => (
+      {ranges.map(([key, label, step]) => (
         <label key={key} className={styles.range}>
           <span>
             {label}
@@ -108,8 +110,8 @@ export function SettingsPanel({
           <input
             type="range"
             aria-label={label}
-            min={min}
-            max={max}
+            min={limits[key].min}
+            max={limits[key].max}
             step={step}
             value={s[key]}
             onChange={(e) => chat.configure({ [key]: Number(e.target.value) })}
@@ -352,11 +354,11 @@ export function SettingsPanel({
         />
         {(
           [
-            ["fireflyNameFontSize", "Размер шрифта имени", 8, 48],
-            ["fireflyNameOffset", "Высота имени над светлячком", 0, 512],
-            ["fireflyHeightOffset", "Высота светлячка над землёй", 0, 512],
+            ["fireflyNameFontSize", "Размер шрифта имени"],
+            ["fireflyNameOffset", "Высота имени над светлячком"],
+            ["fireflyHeightOffset", "Высота светлячка над землёй"],
           ] as const
-        ).map(([key, label, min, max]) => (
+        ).map(([key, label]) => (
           <label key={key} className={styles.range}>
             <span>
               {label}
@@ -365,8 +367,8 @@ export function SettingsPanel({
             <input
               type="range"
               aria-label={label}
-              min={min}
-              max={max}
+              min={limits[key].min}
+              max={limits[key].max}
               step={1}
               value={s[key]}
               onChange={(e) =>
@@ -400,13 +402,13 @@ export function SettingsPanel({
         ))}
         {(
           [
-            ["bubbleDuration", "Время показа, с", 1, 60, 1],
-            ["bubbleFadeDuration", "Длительность исчезновения, с", 0.1, 5, 0.1],
-            ["bubbleFontSize", "Размер шрифта сообщения", 8, 48, 1],
-            ["bubbleMaxWidth", "Максимальная ширина", 120, 800, 10],
-            ["bubbleBackground", "Непрозрачность фона сообщения", 0, 1, 0.05],
+            ["bubbleDuration", "Время показа, с", 1],
+            ["bubbleFadeDuration", "Длительность исчезновения, с", 0.1],
+            ["bubbleFontSize", "Размер шрифта сообщения", 1],
+            ["bubbleMaxWidth", "Максимальная ширина", 10],
+            ["bubbleBackground", "Непрозрачность фона сообщения", 0.05],
           ] as const
-        ).map(([key, label, min, max, step]) => (
+        ).map(([key, label, step]) => (
           <label key={key} className={styles.range}>
             <span>
               {label}
@@ -415,8 +417,8 @@ export function SettingsPanel({
             <input
               type="range"
               aria-label={label}
-              min={min}
-              max={max}
+              min={limits[key].min}
+              max={limits[key].max}
               step={step}
               value={s[key]}
               onChange={(e) =>
@@ -497,23 +499,17 @@ export function SettingsPanel({
         </label>
         {(
           [
-            ["groundDrawDistance", "Дальность прорисовки", 0, 16384, 128],
-            ["groundNameDistance", "Дальность имени автора", 50, 4096, 10],
-            ["groundTextDistance", "Дальность текста", 50, 4096, 10],
-            ["groundNoteOffset", "Высота надписи над полом", -64, 256, 1],
-            ["deathMarkOffset", "Высота места смерти над полом", -64, 256, 1],
-            ["groundFontSize", "Размер шрифта метки", 8, 48, 1],
-            [
-              "groundMaxWidth",
-              "Максимальная ширина текста метки",
-              120,
-              800,
-              10,
-            ],
-            ["groundBackground", "Непрозрачность фона надписи", 0, 1, 0.05],
-            ["deathBackground", "Непрозрачность фона места смерти", 0, 1, 0.05],
+            ["groundDrawDistance", "Дальность прорисовки", 128],
+            ["groundNameDistance", "Дальность имени автора", 10],
+            ["groundTextDistance", "Дальность текста", 10],
+            ["groundNoteOffset", "Высота надписи над полом", 1],
+            ["deathMarkOffset", "Высота места смерти над полом", 1],
+            ["groundFontSize", "Размер шрифта метки", 1],
+            ["groundMaxWidth", "Максимальная ширина текста метки", 10],
+            ["groundBackground", "Непрозрачность фона надписи", 0.05],
+            ["deathBackground", "Непрозрачность фона места смерти", 0.05],
           ] as const
-        ).map(([key, label, min, max, step]) => (
+        ).map(([key, label, step]) => (
           <label key={key} className={styles.range}>
             <span>
               {label}
@@ -522,8 +518,8 @@ export function SettingsPanel({
             <input
               type="range"
               aria-label={label}
-              min={min}
-              max={max}
+              min={limits[key].min}
+              max={limits[key].max}
               step={step}
               value={s[key]}
               onChange={(e) =>

@@ -161,7 +161,7 @@ View `Data/PrismaUI/views/Dreamsleeve/index.html` создаётся на kDataL
 Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIdentityVisibility{requestId, hiding}`
 (одна за раз); результат — `IdentityChanged` (вариант; псевдоним — в статусе) или отказ. Только
 подтверждение меняет `hideIdentity` и сохраняет `ui.toml` (`Session::Frame::hideIdentity`,
-`Logic::Drain`); в `saveSettings` значение этого поля host заменяет своим. Без сессии UI
+`Logic::Drain`); поле лежит в `[ui]`, вне настроек UI, и `saveSettings` его не касается. Без сессии UI
 меняет только выбор для следующего входа; пока сессия открывается, переключение
 отклоняется. `ClientStatus::pseudonym` — текущий псевдоним (из `SessionOpened.own_pseudonym` и
 подтверждений; `ClientStatus::hiding` — применённый вариант); host шлёт UI событие `identity`
@@ -285,8 +285,8 @@ reliable-снятие позиции; после загрузки отправл
 
 | Файл | Кто пишет | Содержимое |
 |---|---|---|
-| `Data/SKSE/Plugins/Dreamsleeve/client.toml` | пользователь (при отсутствии плагин создаёт минимальный файл) | сервер, auth URL, интервалы, радиус, формы светлячка и меток — формат `LoadClientSettings` |
-| `Data/SKSE/Plugins/Dreamsleeve/ui.toml` | плагин, атомарно | `[ui] hideUi`, `[ui.chat]` — положение, размер, оформление, клавиша активации, имена и облачки над светлячками (в том числе цвета и рамка), высота светлячка, метки на земле, `nameMode`/`streamerMode`, `hideIdentity` (скрытое имя: `off`/`everywhere`/`exceptGroundMarks`; пишет только host после подтверждения сервера); `[[names.aliases]]` и `[[names.ignored]]` — псевдонимы и игнор по адресу сервера (до 1 MiB) |
+| `Data/SKSE/Plugins/Dreamsleeve/client.toml` | пользователь; без файла плагин пишет встроенный [client.example.toml](../src/Dreamsleeve.Client.Core/client.example.toml) (правило xmake `dreamsleeve.embed`), dist кладёт тот же файл | сервер, auth URL, интервалы, радиус, формы светлячка и меток; `LoadClientSettings` только разбирает, `ValidateClientSettings` в `ClientApplication::TryCreate` проверяет один раз, runtime, codec и `MovementView` доверяют проверенному |
+| `Data/SKSE/Plugins/Dreamsleeve/ui.toml` | плагин, атомарно | `[ui] hideUi` и `hideIdentity` (скрытое имя: `off`/`everywhere`/`exceptGroundMarks`; пишет только host после подтверждения сервера), `[ui.chat]` — положение, размер, оформление, клавиша активации, имена и облачки над светлячками (в том числе цвета и рамка), высота светлячка, метки на земле, `nameMode`/`streamerMode`; пределы и варианты — таблицы правил `Host/UiSettings.ixx`, все ключи — [ui.example.toml](../src/Dreamsleeve.Client.UI/ui.example.toml); `[[names.aliases]]` и `[[names.ignored]]` — псевдонимы и игнор по адресу сервера (до 1 MiB) |
 | `Data/SKSE/Plugins/Dreamsleeve/aliases.toml` | пользователь (поставляется в dist) | словарь псевдонимов режима стримера; при ошибке — встроенный список |
 
 Разделение выбрано, чтобы запись настроек UI никогда не переписывала пользовательский
@@ -427,14 +427,9 @@ HUD меняется только внутри `HUDMenu::AdvanceMovie`, а не 
 граница UI, она не добавляет блокировок в ClientApplication. Проекция может
 отставать от основного кадра на один UI-проход.
 
-Начальные настройки `[client]` в `client.toml`:
-```toml
-showFireflyNames = true
-fireflyNameOcclusion = true
-fireflyNameFontSize = 18 # единицы HUD, диапазон 8..48
-fireflyNameOffset = 35 # выше центра светлячка, игровые единицы 0..512
-```
-Дистанция ограничивается существующей `visibilityDistance`. Имена скрываются при
+Настройки имён — `[ui.chat]` в `ui.toml`: `showFireflyNames`, `fireflyNameOcclusion`,
+`fireflyNameFontSize` (единицы HUD, 8..48), `fireflyNameOffset` (выше центра светлячка,
+игровые единицы 0..512). Дистанция ограничивается существующей `visibilityDistance`. Имена скрываются при
 паузе и выключенном HUD. Настройка скрытия Prisma-чата не выключает имена.
 
 Пока реализован **SE/AE HUD-рендерер**. DLL продолжает поддерживать VR, но имена
@@ -453,8 +448,7 @@ TES::Pick ID 13221/13371. Проверено по исходникам CommonLib
 
 Настройки → «Имена над светлячками» содержит переключатели показа/LOS и ползунки
 шрифта/высоты. Кнопка «Сохранить настройки» применяет их без перезапуска и сохраняет
-в `ui.toml`, секция `[ui.chat]`. Сохранённые значения имеют приоритет над
-`client.toml`; старый `ui.toml` без новых полей наследует их из `client.toml`.
+в `ui.toml`, секция `[ui.chat]`.
 
 ## Облачка чат-сообщений над светлячками
 
@@ -515,7 +509,6 @@ fade окна чата), применяются кнопкой сохранен�
 | `bubbleTextColor` | `#EEECE5` | `#RRGGBB`; иная строка → умолчание |
 
 Старый `ui.toml` без этих ключей получает значения по умолчанию (проверено тестом).
-В `client.toml` начальных значений для облачков нет.
 
 Настройки → «В бою» (`[ui.chat]`): `combatHideFireflies`, `combatHideNames`,
 `combatHideBubbles`, `combatHideGroundMarks`, `combatHideGroundText`, по умолчанию `false`. Пока `PlayerCharacter::IsInCombat()`,
@@ -526,7 +519,7 @@ fade окна чата), применяются кнопкой сохранен�
 
 Проверено без игры: `Client.Host` — фильтр свежих сообщений (история, повтор, другой
 канал, объявление без автора, self, reset view), таймеры/замена/fade/без fade/prune, TOML
-совместимость и границы; vitest — defaults и clamp; Playwright — сохранение и
+совместимость и границы; `Host.UiSettings` — правила и нормализация; Playwright — сохранение и
 восстановление настроек блока. Ручная проверка в Skyrim остаётся обязательной:
 появление один раз, замена, истечение с fade и без, длинный текст/кириллица/HTML-подобный
 текст, ник на месте при росте облачка, включённые/выключенные имена, уход игрока,
@@ -668,8 +661,8 @@ host берёт положение из `GroundMarks::CurrentPlacement()` и д�
 
 Без игры: `Client.Host` — `ui.toml` (умолчания, round-trip, цвета, границы), проекция
 видимых и своих меток, корреляция надписи/удаления/смерти с `markResult` и заметками лога,
-разбор команд; `Client.Application` — формы меток в `client.toml`; vitest — умолчания и
-границы, `placeNote`/`removeMark`, разбор событий; Playwright — настройки меток и облачков,
+разбор команд; `Client.Application` — формы меток в `client.toml`; `Host.UiSettings` — умолчания и
+границы; vitest — `placeNote`/`removeMark`, разбор событий; Playwright — настройки меток и облачков,
 «Оставить здесь» с отказом и повтором, «Мои метки» с удалением. В Skyrim не проверялось:
 статики и их вид/масштаб, снап на пол, дальности и гистерезис, отправка смерти (убийца,
 утопление, падение, повтор после воскрешения), окклюзия, VR, шапка с датой и чтение

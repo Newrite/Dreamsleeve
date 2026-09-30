@@ -352,15 +352,16 @@ namespace Nameplates
         textHeight = Number(bubble.text, "textHeight");
       }
       const double textWidth = content.empty() ? 0 : Number(bubble.text, "textWidth");
-      bubble.width = std::min(static_cast<double>(bubble.style.maxWidth), std::max(textWidth, headWidth) + 2 * BubblePadding + 2 * TextGutter);
+      bubble.width =
+        std::min(static_cast<double>(bubble.style.maxWidth), std::max(textWidth, headWidth) + 2 * BubblePadding + 2 * TextGutter);
       // Header on top, the text under it; each field keeps its 2px gutters.
       const bool   both  = !header.empty() && !content.empty();
       const double top   = BubblePadding - TextGutter;
       const double textY = header.empty() ? top : top + headHeight + 2 * TextGutter + (both ? HeaderGap : 0);
-      bubble.height      = (content.empty() ? textY - (both ? HeaderGap : 0) : textY + textHeight + 2 * TextGutter) + BubblePadding + TextGutter;
+      bubble.height = (content.empty() ? textY - (both ? HeaderGap : 0) : textY + textHeight + 2 * TextGutter) + BubblePadding + TextGutter;
       // Shrink the fields to the measured lines so centred text sits in the box,
       // not in the wide field it wrapped in; the extra pixel keeps the wrap.
-      const double shown = bubble.width - 2 * BubblePadding + 2 * TextGutter + 1;
+      const double              shown = bubble.width - 2 * BubblePadding + 2 * TextGutter + 1;
       RE::GFxValue::DisplayInfo head;
       head.SetPosition(top, top);
       bubble.head.SetDisplayInfo(head);

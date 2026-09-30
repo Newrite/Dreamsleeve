@@ -20,11 +20,6 @@ namespace
     std::osyncstream(std::cerr) << error.ToLogString() << '\n';
   }
 
-  void PrintError(const Domain::Error& error)
-  {
-    std::osyncstream(std::cerr) << "Model error " << static_cast<int>(error.code) << ": " << error.field << '\n';
-  }
-
   std::string_view PhaseName(SessionPhase phase)
   {
     switch (phase)
@@ -134,8 +129,8 @@ namespace
   {
     output << "own-marks " << marks.size() << '\n';
     for (const auto& mark : marks)
-      output << "own " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " date=" << DateText(mark.gameDate) << " text=" << mark.text
-             << '\n';
+      output << "own " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " date=" << DateText(mark.gameDate)
+             << " text=" << mark.text << '\n';
   }
 
   // The last position sent by move/location; marks are placed where the player stands.
@@ -461,12 +456,6 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     settings.client.serverAddress = *address;
   }
-  if (auto valid = ValidateClientSettings(settings); !valid)
-  {
-    std::cerr << valid.error() << '\n';
-    return 2;
-  }
-
   Credentials credentials;
   if (!saved)
   {
@@ -478,19 +467,14 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     credentials = {argv[usernameIndex], std::move(*password)};
   }
-  auto movement = MovementView::TryCreate(settings.client.movement);
-  if (!movement)
-  {
-    PrintError(movement.error());
-    return 1;
-  }
-
   auto application = ClientApplication::TryCreate(std::move(settings));
   if (!application)
   {
     std::cerr << application.error() << '\n';
     return 1;
   }
+  // Validated by TryCreate; the view trusts it.
+  auto  movement = MovementView::Create((*application)->Settings().client.movement);
   auto& exchange = (*application)->Exchange();
   // Others see a server pseudonym from the very first packet of the session.
   exchange.SetHideIdentity(hiding);
@@ -508,10 +492,10 @@ int RunNetworkConsole(int argc, char* argv[])
   while (std::getline(std::cin, line) && line != "quit")
   {
     if (line == "read")
-      Print(exchange, generation, channel, **movement);
+      Print(exchange, generation, channel, *movement);
     else if (line.starts_with("pose ") || line.starts_with("watch "))
     {
-      if (!ReadMovement(line, exchange, generation, channel, **movement)) std::cout << Commands;
+      if (!ReadMovement(line, exchange, generation, channel, *movement)) std::cout << Commands;
     }
     else if (line == "connect" || line == "disconnect")
     {
@@ -537,7 +521,7 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     else if (line.starts_with("send ") || line.starts_with("chat "))
     {
-      Print(exchange, generation, channel, **movement);
+      Print(exchange, generation, channel, *movement);
       const auto requestId = exchange.NextRequestId();
       if (!requestId)
         std::cout << "Request IDs exhausted\n";
@@ -555,12 +539,12 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     else if (line.starts_with("note ") || line.starts_with("death") || line.starts_with("unmark "))
     {
-      Print(exchange, generation, channel, **movement);
+      Print(exchange, generation, channel, *movement);
       PostMarkCommand(line, exchange, generation);
     }
     else if (line == "hide on" || line == "hide except-marks" || line == "hide off")
     {
-      Print(exchange, generation, channel, **movement);
+      Print(exchange, generation, channel, *movement);
       const auto requestId = exchange.NextRequestId();
       const auto requested = line == "hide on"           ? Domain::HiddenIdentity::Everywhere
                            : line == "hide except-marks" ? Domain::HiddenIdentity::ExceptGroundMarks
@@ -583,7 +567,7 @@ int RunNetworkConsole(int argc, char* argv[])
     else if (line.starts_with("name "))
     {
       // The own display name; the username and PlayerId stay.
-      Print(exchange, generation, channel, **movement);
+      Print(exchange, generation, channel, *movement);
       const auto requestId = exchange.NextRequestId();
       if (!requestId)
         std::cout << "Request IDs exhausted\n";
@@ -599,11 +583,11 @@ int RunNetworkConsole(int argc, char* argv[])
     else if (line == "marks")
     {
       exchange.Post({generation, RequestSnapshot{}});
-      Print(exchange, generation, channel, **movement);
+      Print(exchange, generation, channel, *movement);
     }
     else if (line.starts_with("announce "))
     {
-      Print(exchange, generation, channel, **movement);
+      Print(exchange, generation, channel, *movement);
       const auto requestId = exchange.NextRequestId();
       auto       command   = requestId ? ParseAnnouncement(line, *requestId, channel.system) : std::nullopt;
       if (!command)
@@ -615,12 +599,12 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     else
     {
-      Print(exchange, generation, channel, **movement);
+      Print(exchange, generation, channel, *movement);
       if (!PostPlayerCommand(line, exchange, generation)) std::cout << Commands;
     }
   }
 
   (*application)->Stop();
-  Print(exchange, generation, channel, **movement);
+  Print(exchange, generation, channel, *movement);
   return (*application)->Status().error.empty() ? 0 : 1;
 }

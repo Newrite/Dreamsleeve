@@ -21,8 +21,8 @@ namespace
   bool RunCase(int players, bool stalled)
   {
     auto exchange = ClientExchange::TryCreate(8, 8);
-    auto view     = MovementView::TryCreate();
-    if (!exchange || !view) return false;
+    auto view     = MovementView::Create();
+    if (!exchange) return false;
 
     ClientModel                 model;
     ClientOutput                output;
@@ -35,7 +35,7 @@ namespace
     if (!model.Apply(1, OnlinePlayersReplaced{initial}) || !(*exchange)->Publish(model)) return false;
     (*exchange)->Drain(output);
     const auto epoch = MovementClock::now();
-    (*view)->Apply(output.state, epoch);
+    view->Apply(output.state, epoch);
 
     std::vector<double> updateMs, frameMs;
     std::size_t         recoveries{};
@@ -77,10 +77,10 @@ namespace
             snapshot->observedAt = epoch + std::chrono::microseconds{stamp - 1000000};
           }
         }
-        (*view)->Apply(output.state, frameTime);
+        view->Apply(output.state, frameTime);
         for (int index = 0; index < players; ++index)
         {
-          const auto pose = (*view)->Sample(static_cast<std::uint64_t>(index + 1), frameTime);
+          const auto pose = view->Sample(static_cast<std::uint64_t>(index + 1), frameTime);
           if (!pose) return false;
           checksum += pose->position.X;
           ++poses;
@@ -88,7 +88,7 @@ namespace
         frameMs.push_back(Elapsed(before));
       }
     }
-    const auto last  = (*view)->Sample(1, epoch + std::chrono::seconds{11});
+    const auto last  = view->Sample(1, epoch + std::chrono::seconds{11});
     const bool valid = last && last->position.X == 1000.f && (stalled ? recoveries > 0 : recoveries == 0);
     std::cout << "{\"players\":" << players << ",\"stalledConsumer\":" << (stalled ? "true" : "false")
               << ",\"success\":" << (valid ? "true" : "false") << ",\"wallMs\":" << Elapsed(started)

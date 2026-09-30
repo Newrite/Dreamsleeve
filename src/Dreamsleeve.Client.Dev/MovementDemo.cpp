@@ -10,8 +10,8 @@ int RunMovementDemo()
   using namespace std::chrono_literals;
   const auto epoch    = MovementClock::time_point{};
   auto       exchange = ClientExchange::TryCreate(8, 8);
-  auto       movement = MovementView::TryCreate();
-  if (!exchange || !movement) return 1;
+  auto       movement = MovementView::Create();
+  if (!exchange) return 1;
 
   ClientModel    model;
   Domain::Player player{
@@ -22,7 +22,7 @@ int RunMovementDemo()
 
   ClientOutput output;
   (*exchange)->Drain(output);
-  (*movement)->Apply(output.state, epoch);
+  movement->Apply(output.state, epoch);
 
   struct Delivery
   {
@@ -59,9 +59,9 @@ int RunMovementDemo()
     }
     if (!(*exchange)->Publish(model)) return 1;
     (*exchange)->Drain(output);
-    (*movement)->Apply(output.state, epoch + std::chrono::milliseconds{frame});
-    const auto pose = (*movement)->Sample(7, epoch + std::chrono::milliseconds{frame});
-    if (pose) std::cout << frame << ',' << pose->position.X << ',' << (*movement)->HistorySize(7) << '\n';
+    movement->Apply(output.state, epoch + std::chrono::milliseconds{frame});
+    const auto pose = movement->Sample(7, epoch + std::chrono::milliseconds{frame});
+    if (pose) std::cout << frame << ',' << pose->position.X << ',' << movement->HistorySize(7) << '\n';
   }
   return 0;
 }

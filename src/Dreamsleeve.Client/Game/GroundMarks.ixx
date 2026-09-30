@@ -114,10 +114,11 @@ namespace GroundMarks
     const auto hours = std::clamp(calendar->GetHour(), 0.0f, 24.0f);
     const auto hour  = std::min(static_cast<std::uint32_t>(hours), 23u);
     return Domain::GameDate{
-        .era       = 4,
-        .year      = std::clamp<std::uint32_t>(calendar->GetYear(), 1, 99999),
-        .month     = month + 1,
-        .day       = std::clamp<std::uint32_t>(static_cast<std::uint32_t>(std::max(calendar->GetDay(), 1.0f)), 1, RE::Calendar::DAYS_IN_MONTH[month]),
+        .era   = 4,
+        .year  = std::clamp<std::uint32_t>(calendar->GetYear(), 1, 99999),
+        .month = month + 1,
+        .day =
+          std::clamp<std::uint32_t>(static_cast<std::uint32_t>(std::max(calendar->GetDay(), 1.0f)), 1, RE::Calendar::DAYS_IN_MONTH[month]),
         .dayOfWeek = calendar->GetDayOfWeek() % 7,
         .hour      = hour,
         .minute    = std::min(static_cast<std::uint32_t>((hours - static_cast<float>(hour)) * 60.0f), 59u)

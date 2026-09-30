@@ -3,7 +3,7 @@
 
 dist/Client (copy into Skyrim Data or install as a mod):
   SKSE/Plugins/Dreamsleeve.Client.dll (+ .pdb)
-  SKSE/Plugins/Dreamsleeve/client.toml            defaults; edited by the user
+  SKSE/Plugins/Dreamsleeve/client.toml            client.example.toml; edited by the user
   SKSE/Plugins/Dreamsleeve/aliases.toml           streamer-mode pseudonym dictionary
   PrismaUI/views/Dreamsleeve/                     production web UI (index.html, assets, theme.user.css)
   Scripts/DreamsleeveClient.pex, Scripts/Source/DreamsleeveClient.psc   Papyrus API for other mods
@@ -50,34 +50,8 @@ PRESERVED = (
     "Server/logs",
 )
 
-CLIENT_TOML = """# Dreamsleeve client. Omitted settings keep defaults; keys are case-sensitive.
-# Full reference: src/Dreamsleeve.Client.Core/client.example.toml in the repository.
-version = 1
-serverIp = "127.0.0.1"
-serverPort = 8778
-authUrl = "http://127.0.0.1:8779"
-allowInsecureRemoteAuth = false
-
-[client]
-visibilityDistance = 8192
-showFireflies = true
-# STAT base form: plugin-local ID, without the load-order prefix.
-fireflyPlugin = "Skyrim.esm"
-fireflyFormId = 0x02EB0F
-fireflyScale = 0.25 # 0.01..10.0; engine precision is 0.01
-showFireflyNames = true
-fireflyNameOcclusion = true # Hide names behind collision geometry
-fireflyNameFontSize = 18 # HUD units, 8..48
-fireflyNameOffset = 35 # Height above the firefly, 0..512 game units
-captureKeyboard = true # Keep keyboard events from the game and other SKSE mods while the chat is open
-# Ground marks: STAT base forms without collision, plugin-local IDs (flat vanilla glow discs).
-groundNotePlugin = "Skyrim.esm"
-groundNoteFormId = 0x075DDB
-groundNoteScale = 0.5 # 0.01..10.0
-deathMarkPlugin = "Skyrim.esm"
-deathMarkFormId = 0x075DD9
-deathMarkScale = 0.5 # 0.01..10.0
-"""
+# The documented defaults, also embedded in the plugin as its first-run file.
+CLIENT_TOML = ROOT / "src" / "Dreamsleeve.Client.Core" / "client.example.toml"
 
 
 def run(command: list[str], cwd: Path) -> None:
@@ -282,7 +256,7 @@ def main() -> int:
         shutil.copy2(pdb, plugins / pdb.name)
     config = plugins / "Dreamsleeve"
     config.mkdir()
-    (config / "client.toml").write_text(CLIENT_TOML, encoding="utf-8")
+    shutil.copy2(CLIENT_TOML, config / "client.toml")
     shutil.copy2(CLIENT / "aliases.toml", config / "aliases.toml")
 
     views = client / "PrismaUI" / "views" / "Dreamsleeve"

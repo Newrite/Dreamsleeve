@@ -12,7 +12,7 @@ import type {
   Player,
   Settings,
 } from "../bridge/types";
-import { defaults, settingsFrom } from "../state/settings";
+import { defaults } from "../bridge/settings.generated";
 import { App } from "../views/App";
 import {
   SYSTEM_CHANNEL,
@@ -90,11 +90,10 @@ const identity = {
   allowed: true,
   switches: 0,
 };
+const hidings: HideIdentity[] = ["off", "everywhere", "exceptGroundMarks"];
 try {
-  identity.mode = settingsFrom({
-    hideIdentity: (localStorage.getItem("dreamsleeve.ui.hideIdentity") ??
-      "off") as HideIdentity,
-  }).hideIdentity;
+  const saved = localStorage.getItem("dreamsleeve.ui.hideIdentity");
+  identity.mode = hidings.find((hiding) => hiding === saved) ?? "off";
 } catch {
   /* Local preview only. */
 }
@@ -326,12 +325,7 @@ function command(c: Command) {
   }
   if (c.type === "displaySettings") {
     setTimeout(() => {
-      const settings = {
-        ...chat.store.getState().settings,
-        nameMode: c.nameMode,
-        streamerMode: c.streamerMode,
-        textFilter: c.textFilter,
-      };
+      const settings = c.settings;
       ignoredEvent(settings);
       snapshot(settings, true);
     }, 50);
@@ -460,15 +454,17 @@ function command(c: Command) {
 }
 const chat = makeChat(command);
 installVisibility(chat);
+// The host normalizes real settings; the preview trusts its own saved copy.
 let settings = defaults;
 try {
-  settings = settingsFrom(
-    JSON.parse(localStorage.getItem("dreamsleeve.ui.settings") ?? "{}"),
-  );
+  settings = {
+    ...defaults,
+    ...JSON.parse(localStorage.getItem("dreamsleeve.ui.settings") ?? "{}"),
+  };
 } catch {
   /* Local preview only. */
 }
-snapshot({ ...settings, hideIdentity: identity.mode });
+snapshot(settings);
 emitAuth({}, "connected");
 identityEvent();
 window.addEventListener("keydown", (e) => {

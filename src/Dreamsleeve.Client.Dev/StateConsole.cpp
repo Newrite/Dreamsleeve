@@ -63,7 +63,11 @@ public:
       const auto requestId = awaitingServer.front().requestId;
       awaitingServer.pop_front();
 
-      return exchange.PublishResult({model.Generation(), requestId, ServerRejection{RequestRejectionCode::InvalidRequest, std::move(reason), "text"}});
+      return exchange.PublishResult({
+          model.Generation(),
+          requestId,
+          ServerRejection{RequestRejectionCode::InvalidRequest, std::move(reason), "text"}
+      });
     }
 
     bool Reset(ClientModel& model)
