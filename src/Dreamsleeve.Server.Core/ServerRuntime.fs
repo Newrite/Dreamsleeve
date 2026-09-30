@@ -169,19 +169,8 @@ module ServerRuntime =
                         close options state context entry
 
     let private send options state context (entry: SessionTable.Entry) response =
-        let encoded =
-            match response with
-            | ServerResponse.PlayersMoved movements ->
-                let budget = state.Transport.MaxUnfragmentedPayloadBytes entry.ConnectionId
-                ProtocolCodec.encodeMovementPackets state.Codec budget movements
-            | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
-            | ServerResponse.ChatRejected _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
-            | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
-            | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
-            | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-            | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ | ServerResponse.DisplayNameChanged _ ->
-                ProtocolCodec.encodeServer state.Codec response |> Result.map List.singleton
-        transmit options state context entry (ProtocolCodec.responseLane response) encoded
+        let budget = state.Transport.MaxUnfragmentedPayloadBytes entry.ConnectionId
+        transmit options state context entry (ProtocolCodec.delivery response).Lane (ProtocolCodec.encode state.Codec budget response)
 
     // The rejection goes back on the lane of the request it answers.
     let private refuse options state context (entry: SessionTable.Entry) lane requestId (rejection: RequestRejection) =
@@ -277,14 +266,8 @@ module ServerRuntime =
             match SessionTable.find connectionId state.Table with
             | Some entry when entry.Phase = RuntimeSessionPhase.Ready -> send options state context entry response
             | Some entry when entry.Phase = RuntimeSessionPhase.Opening ->
-                match response with
-                | ServerResponse.RequestRejected _ -> send options state context entry response
-                | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
-                | ServerResponse.PlayerJoined _ | ServerResponse.PlayerUpdated _ | ServerResponse.PlayersMoved _ | ServerResponse.PlayerMetadataChanged _
-                | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
-                | ServerResponse.ChatRejected _ | ServerResponse.PlayerVisibilityChanged _
-                | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-                | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ | ServerResponse.DisplayNameChanged _ -> ()
+                if (ProtocolCodec.delivery response).WhileOpening then send options state context entry response
+                else state.Logger.LogWarning("Session {ConnectionId} sent {Response} before it opened; dropped", connectionId, response.GetType().Name)
             | Some _ | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->

@@ -206,11 +206,9 @@ namespace Dreamsleeve::Client::Wire
         const auto& rejection = packet.request_rejected();
         if (rejection.code() == P::REQUEST_REJECTION_CODE_UNSPECIFIED) return Invalid("code");
 
-        return ServerRejection{
+        return RequestRejected{
             packet.request_id(),
-            static_cast<RequestRejectionCode>(rejection.code()),
-            rejection.message(),
-            rejection.field()
+            {static_cast<RequestRejectionCode>(rejection.code()), rejection.message(), rejection.field()}
         };
       }
       case P::ServerPacket::kPlayerJoined: {

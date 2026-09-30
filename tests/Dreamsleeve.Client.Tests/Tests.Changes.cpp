@@ -286,7 +286,7 @@ TEST_CASE("ClientModel full player replacement absorbs individual invalidations"
   CheckSinglePlayerChange(changes, 3);
 }
 
-TEST_CASE("ClientModel session resets replace pending invalidations and preserve rejection events")
+TEST_CASE("ClientModel session resets replace pending invalidations")
 {
   ClientModel model;
   const auto generation = model.Generation();
@@ -296,7 +296,6 @@ TEST_CASE("ClientModel session resets replace pending invalidations and preserve
   REQUIRE(model.Apply(generation, ChatMessagesReceived{1, {ChangeTestMessage()}}));
   auto round = model.BeginHistory(1);
   REQUIRE(round);
-  REQUIRE(model.Apply(generation, ServerRejection{42, RequestRejectionCode::InvalidRequest, "Rejected", "displayName"}));
   bool retainsChats{};
 
   SUBCASE("disconnect clears online state and keeps chat")
@@ -330,20 +329,9 @@ TEST_CASE("ClientModel session resets replace pending invalidations and preserve
     CHECK(chat->messages.size() == 1);
     CHECK(chat->history.round == 0);
   }
-  const auto rejections = model.TakeServerRejections();
-  REQUIRE(rejections.size() == 1);
-  CHECK(rejections.front().generation == generation);
-  CHECK(rejections.front().rejection.requestId == 42);
-  CHECK(model.TakeServerRejections().empty());
   CHECK_FALSE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   model.TakeChanges(changes);
   CHECK(changes.Empty());
-
-  REQUIRE(model.Apply(model.Generation(), ServerRejection{43, RequestRejectionCode::InvalidRequest, "Another rejection", ""}));
-  model.TakeChanges(changes);
-  CHECK(changes.Empty());
-  CHECK(changes.revision == model.Snapshot().revision);
-  CHECK(model.TakeServerRejections().size() == 1);
 }
 
 TEST_CASE("ClientModel emits ordered chat deltas instead of invalidating full chat contents")

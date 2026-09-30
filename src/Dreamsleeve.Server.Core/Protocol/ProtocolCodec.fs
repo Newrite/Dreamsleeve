@@ -103,14 +103,24 @@ module ProtocolCodec =
         if lane = DeliveryLane.Chat then ServerResponse.ChatRejected(requestId, rejection)
         else ServerResponse.RequestRejected(requestId, rejection)
 
-    let responseLane = function
-        | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _ | ServerResponse.ChatRejected _ -> DeliveryLane.Chat
-        | ServerResponse.PlayersMoved _ -> DeliveryLane.Realtime
-        | ServerResponse.SessionOpened _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
-        | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
-        | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
-        | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-        | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ | ServerResponse.DisplayNameChanged _ -> DeliveryLane.Control
+    let private settles lane requestId = { Lane = lane; RequestId = ValueSome requestId; WhileOpening = false }
+    let private notifies lane = { Lane = lane; RequestId = ValueNone; WhileOpening = false }
+
+    /// The one table of how each response travels. Only the refusal of the
+    /// opening request may leave before SessionOpened.
+    let delivery response : ResponseDelivery =
+        match response with
+        | ServerResponse.SessionOpened(requestId, _) | ServerResponse.PlayerUpdateAccepted requestId
+        | ServerResponse.GroundMarkPlaced(requestId, _, _) | ServerResponse.GroundMarkRemoved(requestId, _)
+        | ServerResponse.IdentityVisibilityChanged(requestId, _, _) | ServerResponse.DisplayNameChanged(requestId, _) ->
+            settles DeliveryLane.Control requestId
+        | ServerResponse.RequestRejected(requestId, _) -> { settles DeliveryLane.Control requestId with WhileOpening = true }
+        | ServerResponse.ChatAccepted(requestId, _) | ServerResponse.ChatRejected(requestId, _) -> settles DeliveryLane.Chat requestId
+        | ServerResponse.ChatPublished _ -> notifies DeliveryLane.Chat
+        | ServerResponse.PlayersMoved _ -> notifies DeliveryLane.Realtime
+        | ServerResponse.PlayerJoined _ | ServerResponse.PlayerLeft _ | ServerResponse.PlayerUpdated _
+        | ServerResponse.PlayerVisibilityChanged _ | ServerResponse.PlayerMetadataChanged _
+        | ServerResponse.GroundMarksChanged _ | ServerResponse.OwnGroundMarks _ -> notifies DeliveryLane.Control
 
     let decodeMovement (codec: ProtocolCodec) (bytes: byte array) =
         if isNull bytes || bytes.Length = 0 then fail None ProtocolCodecFailure.EmptyPacket
@@ -122,136 +132,9 @@ module ProtocolCodec =
                 else PlayerCodec.decodeMovement packet.Sample |> Result.mapError (fun error -> { RequestId = None; Failure = error })
             with :? InvalidProtocolBufferException -> fail None ProtocolCodecFailure.MalformedPacket
 
-    // Optional only at the wire/error boundary; response cases carry their own
-    // required correlation, while notifications cannot be given a request ID.
-    let private responseRequestId = function
-        | ServerResponse.SessionOpened(requestId, _)
-        | ServerResponse.ChatAccepted(requestId, _)
-        | ServerResponse.PlayerUpdateAccepted requestId
-        | ServerResponse.RequestRejected(requestId, _)
-        | ServerResponse.ChatRejected(requestId, _)
-        | ServerResponse.GroundMarkPlaced(requestId, _, _)
-        | ServerResponse.GroundMarkRemoved(requestId, _)
-        | ServerResponse.IdentityVisibilityChanged(requestId, _, _)
-        | ServerResponse.DisplayNameChanged(requestId, _) -> Some requestId
-        | ServerResponse.ChatPublished _
-        | ServerResponse.PlayerJoined _
-        | ServerResponse.PlayerUpdated _
-        | ServerResponse.PlayerMetadataChanged _
-        | ServerResponse.PlayerVisibilityChanged _
-        | ServerResponse.PlayersMoved _
-        | ServerResponse.GroundMarksChanged _
-        | ServerResponse.OwnGroundMarks _
-        | ServerResponse.PlayerLeft _ -> None
-
-    let private validateResponse config response =
-        if responseRequestId response = Some 0UL then
-            Some(ProtocolCodecFailure.InvalidEnvelope "request_id")
-        else
-            match response with
-            | ServerResponse.SessionOpened(_, value) ->
-                if SessionCodec.validWelcome config value then None
-                else Some(ProtocolCodecFailure.InvalidPayload "session_opened")
-
-            | ServerResponse.RequestRejected(_, value)
-            | ServerResponse.ChatRejected(_, value) ->
-                if value.Code = RequestRejectionCode.Unspecified || not (Enum.IsDefined value.Code) then
-                    Some(ProtocolCodecFailure.InvalidPayload "code")
-                elif isNull value.Message || isNull value.Field then
-                    Some(ProtocolCodecFailure.InvalidPayload "rejection")
-                else None
-
-            | ServerResponse.PlayerVisibilityChanged value ->
-                if value.ViewRevision = 0UL then Some(ProtocolCodecFailure.InvalidPayload "view_revision") else None
-
-            | ServerResponse.PlayerMetadataChanged(_, values, details) ->
-                if values.IsNone && details.IsNone then Some(ProtocolCodecFailure.InvalidPayload "player_metadata_changed")
-                else None
-
-            | ServerResponse.PlayersMoved [||] -> Some(ProtocolCodecFailure.InvalidPayload "players_moved")
-            | ServerResponse.GroundMarksChanged view ->
-                if GroundMarkCodec.validView view then None else Some(ProtocolCodecFailure.InvalidPayload "ground_marks_changed")
-            | ServerResponse.GroundMarkPlaced(_, record, _) ->
-                if record.Author.PlayerId = record.Mark.Author then None else Some(ProtocolCodecFailure.InvalidPayload "ground_mark_placed")
-            | ServerResponse.GroundMarkRemoved _ -> None
-            | ServerResponse.OwnGroundMarks records ->
-                if GroundMarkCodec.validOwn records then None else Some(ProtocolCodecFailure.InvalidPayload "own_ground_marks")
-            | ServerResponse.ChatAccepted _
-            | ServerResponse.ChatPublished _
-            | ServerResponse.PlayerJoined _
-            | ServerResponse.PlayerUpdated _
-            | ServerResponse.PlayersMoved _
-            | ServerResponse.PlayerUpdateAccepted _
-            | ServerResponse.IdentityVisibilityChanged _
-            | ServerResponse.DisplayNameChanged _
-            | ServerResponse.PlayerLeft _ -> None
-
-    // Inputs are validated domain values. The owner decides IDs, times, recipient
-    // correlation, membership and session ordering; the codec does none of these.
-    let encodeServer (codec: ProtocolCodec) (response: ServerResponse) : Result<byte array, ProtocolCodecError> =
-        let config = codec.Config
-        let requestId = responseRequestId response
-
-        match validateResponse config response with
-        | Some failure -> fail requestId failure
-        | None ->
-            let packet = Dreamsleeve.Protocol.Chat.ServerPacket(ProtocolVersion = Version)
-            requestId |> Option.iter (fun id -> packet.RequestId <- id)
-
-            match response with
-            | ServerResponse.SessionOpened(_, value) ->
-                packet.SessionOpened <- SessionCodec.welcome codec.Config value
-
-            | ServerResponse.ChatAccepted(_, value)
-            | ServerResponse.ChatPublished value ->
-                packet.ChatPublished <- Dreamsleeve.Protocol.Chat.ChatPublished(Message = ChatCodec.message value)
-            | ServerResponse.PlayerJoined value ->
-                packet.PlayerJoined <- Dreamsleeve.Protocol.Chat.PlayerJoined(Player = PlayerCodec.player value)
-            | ServerResponse.PlayerUpdated value ->
-                packet.PlayerUpdated <- Dreamsleeve.Protocol.Chat.PlayerUpdated(Player = PlayerCodec.player value)
-            | ServerResponse.PlayerMetadataChanged(playerId, values, metadata) ->
-                packet.PlayerMetadataChanged <- PlayerCodec.metadataChanged playerId values metadata
-            | ServerResponse.PlayersMoved _ -> ()
-            | ServerResponse.PlayerVisibilityChanged value ->
-                packet.PlayerVisibilityChanged <- PlayerCodec.visibility value
-            | ServerResponse.PlayerUpdateAccepted _ ->
-                packet.PlayerUpdateAccepted <- Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted()
-            | ServerResponse.PlayerLeft value ->
-                packet.PlayerLeft <- Dreamsleeve.Protocol.Chat.PlayerLeft(PlayerId = PlayerId.value value)
-            | ServerResponse.GroundMarksChanged view -> packet.GroundMarksChanged <- GroundMarkCodec.changed view
-            | ServerResponse.GroundMarkPlaced(_, record, evicted) -> packet.GroundMarkPlaced <- GroundMarkCodec.placed record evicted
-            | ServerResponse.GroundMarkRemoved(_, id) -> packet.GroundMarkRemoved <- GroundMarkCodec.removed id
-            | ServerResponse.OwnGroundMarks records -> packet.OwnGroundMarks <- GroundMarkCodec.own records
-            | ServerResponse.IdentityVisibilityChanged(_, pseudonym, hiding) ->
-                let changed = Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged(Hidden = SessionCodec.hiding hiding)
-                pseudonym |> ValueOption.iter (fun name -> changed.Pseudonym <- Pseudonym.value name)
-                packet.IdentityVisibilityChanged <- changed
-            | ServerResponse.DisplayNameChanged(_, name) ->
-                packet.DisplayNameChanged <- Dreamsleeve.Protocol.Chat.DisplayNameChanged(DisplayName = DisplayName.value name)
-
-            | ServerResponse.RequestRejected(_, value)
-            | ServerResponse.ChatRejected(_, value) ->
-                packet.RequestRejected <- Dreamsleeve.Protocol.Chat.RequestRejected(Code = value.Code, Message = value.Message, Field = value.Field)
-
-            let encoded: IMessage =
-                match response with
-                | ServerResponse.PlayersMoved movements ->
-                    let batch = Dreamsleeve.Protocol.Chat.PlayersMoved()
-                    for movement in movements do batch.Players.Add(PlayerCodec.moved movement)
-                    Dreamsleeve.Protocol.Chat.ServerMovementPacket(ProtocolVersion = Version, Movements = batch)
-                | ServerResponse.SessionOpened _ | ServerResponse.ChatAccepted _ | ServerResponse.ChatPublished _
-                | ServerResponse.ChatRejected _ | ServerResponse.RequestRejected _ | ServerResponse.PlayerJoined _
-                | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
-                | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
-                | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-                | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ | ServerResponse.DisplayNameChanged _ -> packet
-
-            if encoded.CalculateSize() > config.MaxPacketBytes then fail requestId ProtocolCodecFailure.PacketTooLarge
-            else Ok(encoded.ToByteArray())
-
     /// Each realtime packet fits the negotiated payload budget. Entries are
     /// independent; loss of one part never prevents applying the other parts.
-    let encodeMovementPackets (codec: ProtocolCodec) maxUnfragmentedPayloadBytes (movements: MovementChange array) =
+    let private encodeMovementPackets (codec: ProtocolCodec) maxUnfragmentedPayloadBytes (movements: MovementChange array) =
         let target =
             if codec.Config.MovementPacketTargetBytes = 0 then min codec.Config.MaxPacketBytes maxUnfragmentedPayloadBytes
             else min codec.Config.MaxPacketBytes (min codec.Config.MovementPacketTargetBytes maxUnfragmentedPayloadBytes)
@@ -287,3 +170,89 @@ module ProtocolCodec =
         elif tooLarge then fail None ProtocolCodecFailure.PacketTooLarge
         elif packets.Count = 0 then fail None (ProtocolCodecFailure.InvalidPayload "players_moved")
         else Ok (List.ofSeq packets)
+
+    let private packed (config: ServerConfig) requestId (message: IMessage) =
+        if message.CalculateSize() > config.MaxPacketBytes then fail requestId ProtocolCodecFailure.PacketTooLarge
+        else Ok [ message.ToByteArray() ]
+
+    /// The packets that carry a response to one peer. Inputs are validated
+    /// domain values; the owner decides IDs, times, recipient correlation,
+    /// membership and session ordering, the codec none of these. One branch per
+    /// response checks and encodes it; movement alone is split, to fit the
+    /// peer's unfragmented payload.
+    let encode (codec: ProtocolCodec) maxUnfragmentedPayloadBytes (response: ServerResponse) : Result<byte array list, ProtocolCodecError> =
+        let config = codec.Config
+        let requestId = (delivery response).RequestId |> ValueOption.toOption
+        let invalid field = fail requestId (ProtocolCodecFailure.InvalidPayload field)
+        let packet = Dreamsleeve.Protocol.Chat.ServerPacket(ProtocolVersion = Version)
+        let envelope () = packed config requestId packet
+
+        if requestId = Some 0UL then fail requestId (ProtocolCodecFailure.InvalidEnvelope "request_id")
+        else
+            requestId |> Option.iter (fun id -> packet.RequestId <- id)
+            match response with
+            | ServerResponse.SessionOpened(_, value) ->
+                if not (SessionCodec.validWelcome config value) then invalid "session_opened"
+                else
+                    packet.SessionOpened <- SessionCodec.welcome config value
+                    envelope ()
+            | ServerResponse.ChatAccepted(_, value)
+            | ServerResponse.ChatPublished value ->
+                packet.ChatPublished <- Dreamsleeve.Protocol.Chat.ChatPublished(Message = ChatCodec.message value)
+                envelope ()
+            | ServerResponse.RequestRejected(_, value)
+            | ServerResponse.ChatRejected(_, value) ->
+                if value.Code = RequestRejectionCode.Unspecified || not (Enum.IsDefined value.Code) then invalid "code"
+                elif isNull value.Message || isNull value.Field then invalid "rejection"
+                else
+                    packet.RequestRejected <- Dreamsleeve.Protocol.Chat.RequestRejected(Code = value.Code, Message = value.Message, Field = value.Field)
+                    envelope ()
+            | ServerResponse.PlayerJoined value ->
+                packet.PlayerJoined <- Dreamsleeve.Protocol.Chat.PlayerJoined(Player = PlayerCodec.player value)
+                envelope ()
+            | ServerResponse.PlayerUpdated value ->
+                packet.PlayerUpdated <- Dreamsleeve.Protocol.Chat.PlayerUpdated(Player = PlayerCodec.player value)
+                envelope ()
+            | ServerResponse.PlayerMetadataChanged(playerId, values, details) ->
+                if values.IsNone && details.IsNone then invalid "player_metadata_changed"
+                else
+                    packet.PlayerMetadataChanged <- PlayerCodec.metadataChanged playerId values details
+                    envelope ()
+            | ServerResponse.PlayerVisibilityChanged value ->
+                if value.ViewRevision = 0UL then invalid "view_revision"
+                else
+                    packet.PlayerVisibilityChanged <- PlayerCodec.visibility value
+                    envelope ()
+            | ServerResponse.PlayerUpdateAccepted _ ->
+                packet.PlayerUpdateAccepted <- Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted()
+                envelope ()
+            | ServerResponse.PlayerLeft value ->
+                packet.PlayerLeft <- Dreamsleeve.Protocol.Chat.PlayerLeft(PlayerId = PlayerId.value value)
+                envelope ()
+            | ServerResponse.PlayersMoved movements -> encodeMovementPackets codec maxUnfragmentedPayloadBytes movements
+            | ServerResponse.GroundMarksChanged view ->
+                if not (GroundMarkCodec.validView view) then invalid "ground_marks_changed"
+                else
+                    packet.GroundMarksChanged <- GroundMarkCodec.changed view
+                    envelope ()
+            | ServerResponse.GroundMarkPlaced(_, record, evicted) ->
+                if record.Author.PlayerId <> record.Mark.Author then invalid "ground_mark_placed"
+                else
+                    packet.GroundMarkPlaced <- GroundMarkCodec.placed record evicted
+                    envelope ()
+            | ServerResponse.GroundMarkRemoved(_, id) ->
+                packet.GroundMarkRemoved <- GroundMarkCodec.removed id
+                envelope ()
+            | ServerResponse.OwnGroundMarks records ->
+                if not (GroundMarkCodec.validOwn records) then invalid "own_ground_marks"
+                else
+                    packet.OwnGroundMarks <- GroundMarkCodec.own records
+                    envelope ()
+            | ServerResponse.IdentityVisibilityChanged(_, pseudonym, hiding) ->
+                let changed = Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged(Hidden = SessionCodec.hiding hiding)
+                pseudonym |> ValueOption.iter (fun name -> changed.Pseudonym <- Pseudonym.value name)
+                packet.IdentityVisibilityChanged <- changed
+                envelope ()
+            | ServerResponse.DisplayNameChanged(_, name) ->
+                packet.DisplayNameChanged <- Dreamsleeve.Protocol.Chat.DisplayNameChanged(DisplayName = DisplayName.value name)
+                envelope ()

@@ -14,8 +14,7 @@ export namespace Dreamsleeve::Client
     std::string           text;
   };
 
-  // Published into a system channel. Settled like SendChat: a
-  // ChatConfirmation, a ServerRejection or a CommandFailure.
+  // Published into a system channel; settled like SendChat.
   struct PostAnnouncement
   {
     std::uint64_t                    requestId{};
@@ -26,8 +25,7 @@ export namespace Dreamsleeve::Client
     std::string                      signature;  // Required for ThirdParty.
   };
 
-  // A note where the player stands. Settled like SendChat: a
-  // GroundMarkConfirmation, a ServerRejection or a CommandFailure.
+  // A note where the player stands.
   struct PlaceGroundNote
   {
     std::uint64_t               requestId{};
@@ -53,8 +51,7 @@ export namespace Dreamsleeve::Client
     Domain::GroundMarkId markId{};
   };
 
-  // Hide or show this player's names for the others; the server picks the
-  // pseudonym. Settled by an IdentityConfirmation, a ServerRejection or a CommandFailure.
+  // Hide or show this player's names for the others; the server picks the pseudonym.
   struct SetIdentityVisibility
   {
     std::uint64_t          requestId{};
@@ -63,8 +60,7 @@ export namespace Dreamsleeve::Client
 
   // A new display name for this player's own account; the username and
   // PlayerId never change. The server applies its word list and how often the
-  // name may change. Settled by a DisplayNameConfirmation, a ServerRejection
-  // or a CommandFailure; the own profile itself changes through PlayerUpdated.
+  // name may change; the own profile itself changes through PlayerUpdated.
   struct ChangeDisplayName
   {
     std::uint64_t requestId{};
@@ -166,11 +162,58 @@ export namespace Dreamsleeve::Client
     EncodingFailed
   };
 
-  struct CommandFailure
+  using RequestRejectionCode = ::Protocol::Chat::RequestRejectionCode;
+
+  // The server refused a request. The code decides; the message explains, and
+  // an unknown nonzero code from a newer server keeps its message.
+  struct ServerRejection
   {
-    std::uint64_t      generation{};
-    std::uint64_t      requestId{};
-    CommandFailureCode code{};
+    RequestRejectionCode code{};
+    std::string          message;
+    std::string          field;
+  };
+
+  // How the server settled a command. The visible state itself changes through
+  // the ordinary deltas, so the author sees it the way everyone does.
+  struct MessagePublished  // SendChat or PostAnnouncement
+  {
+    Domain::ChatMessageId messageId{};
+  };
+
+  struct MarkPlaced  // PlaceGroundNote or ReportDeath
+  {
+    Domain::GroundMarkId markId{};
+    // The author's oldest mark of the same kind that gave way to this one.
+    std::optional<Domain::GroundMarkId> evictedId;
+  };
+
+  struct MarkRemoved
+  {
+    Domain::GroundMarkId markId{};
+  };
+
+  // Where the names are hidden now; the pseudonym is in ClientStatus.
+  struct IdentityChanged
+  {
+    Domain::HiddenIdentity hiding{Domain::HiddenIdentity::None};
+  };
+
+  // The display name as the server stored it.
+  struct NameChanged
+  {
+    std::string displayName;
+  };
+
+  // Exactly one result settles every command with a request ID: the server's
+  // answer, its refusal or a local failure, with the command's generation.
+  struct CommandResult
+  {
+    using Outcome =
+      std::variant<MessagePublished, MarkPlaced, MarkRemoved, IdentityChanged, NameChanged, ServerRejection, CommandFailureCode>;
+
+    std::uint64_t generation{};
+    std::uint64_t requestId{};
+    Outcome       outcome;
   };
 
   using Credentials = Auth::Credentials;
@@ -183,43 +226,6 @@ export namespace Dreamsleeve::Client
     SignOut,
     ForgetSavedLogin,
     ResetPassword
-  };
-
-  struct ChatConfirmation
-  {
-    std::uint64_t         generation{};
-    std::uint64_t         requestId{};
-    Domain::ChatMessageId messageId{};
-  };
-
-  // Settles PlaceGroundNote, ReportDeath or RemoveGroundMark. The visible set
-  // itself changes through the ordinary GroundMarksChanged delta.
-  struct GroundMarkConfirmation
-  {
-    std::uint64_t        generation{};
-    std::uint64_t        requestId{};
-    Domain::GroundMarkId markId{};
-    // The author's oldest mark of the same kind that gave way to this one.
-    std::optional<Domain::GroundMarkId> evictedId;
-    bool                                removed{};
-  };
-
-  // Settles SetIdentityVisibility: where the names are hidden now and the
-  // pseudonym the others see there.
-  struct IdentityConfirmation
-  {
-    std::uint64_t              generation{};
-    std::uint64_t              requestId{};
-    std::optional<std::string> pseudonym;
-    Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
-  };
-
-  // Settles ChangeDisplayName with the name as the server stored it.
-  struct DisplayNameConfirmation
-  {
-    std::uint64_t generation{};
-    std::uint64_t requestId{};
-    std::string   displayName;
   };
 
   struct ClientStatus
@@ -293,13 +299,8 @@ export namespace Dreamsleeve::Client
   {
     StateUpdateBatch state;
     ClientStatus     status;
-    // Not reconstructible from a snapshot. Original generation is retained.
-    std::vector<ServerRejectionEvent>   rejections;
-    std::vector<CommandFailure>         commandFailures;
-    std::vector<ChatConfirmation>       chatConfirmations;
-    std::vector<GroundMarkConfirmation> groundMarkConfirmations;
-    std::vector<IdentityConfirmation>   identityConfirmations;
-    std::vector<DisplayNameConfirmation> displayNameConfirmations;
+    // Not reconstructible from a snapshot; in the order the owner settled them.
+    std::vector<CommandResult> results;
   };
 
   // One network owner and one application main thread (also the UI consumer).
@@ -543,35 +544,31 @@ public:
       return count <= maxCommands - Settled();
     }
 
-    // Owner only, once per command obtained in the latest TakeCommands batch.
-    bool PublishCommandFailure(CommandFailure failure)
+    // Owner only: a result that changes no state, such as a local failure of
+    // a command from the latest TakeCommands batch.
+    bool PublishResult(CommandResult result)
     {
       std::lock_guard lock{mutex};
       if (Settled() >= maxCommands) return false;
 
-      pendingFailures.push_back(failure);
+      pendingResults.push_back(std::move(result));
       return true;
     }
 
     // Owner only, after decoded events. Exactly one exchange drains a model.
-    // A requested snapshot consumes the pending changes that it includes.
-    // False preserves model rejections for retry after Drain. State and phase
-    // still publish so terminal failure can clear the UI. Only this owner adds
-    // results; a concurrent Drain can only free room between check and insertion.
+    // A requested snapshot consumes the pending changes that it includes; a
+    // result travels with the state it settles. False means the result did not
+    // fit; state and phase still publish so terminal failure can clear the UI.
+    // Only this owner adds results; a concurrent Drain can only free room
+    // between check and insertion.
     [[nodiscard]] bool Publish(
-      ClientModel&                           model,
-      bool                                   requestSnapshot  = false,
-      std::optional<SessionPhase>            nextPhase        = std::nullopt,
-      std::string_view                       serverName       = {},
-      std::optional<ChatConfirmation>        confirmation     = std::nullopt,
-      std::optional<GroundMarkConfirmation>  markConfirmation = std::nullopt,
-      std::optional<IdentityConfirmation>    identity         = std::nullopt,
-      std::optional<DisplayNameConfirmation> displayName      = std::nullopt)
+      ClientModel&                 model,
+      bool                         requestSnapshot = false,
+      std::optional<SessionPhase>  nextPhase       = std::nullopt,
+      std::string_view             serverName      = {},
+      std::optional<CommandResult> result          = std::nullopt)
     {
-      const bool accepted = CanAcceptReplies(
-        model.PendingServerRejectionCount() + (confirmation ? 1 : 0) + (markConfirmation ? 1 : 0) + (identity ? 1 : 0) +
-        (displayName ? 1 : 0));
-      auto                             rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
+      const bool                       accepted = !result || CanAcceptReplies();
       std::optional<ClientStateUpdate> update;
 
       if (requestSnapshot || needsInitialSnapshot)
@@ -586,16 +583,8 @@ public:
       std::lock_guard lock{mutex};
       if (nextPhase) status.phase = *nextPhase;
       status.serverName = serverName;
-      if (accepted && confirmation) pendingConfirmations.push_back(*confirmation);
-      if (accepted && markConfirmation) pendingMarkConfirmations.push_back(*markConfirmation);
-      if (accepted && identity) pendingIdentityConfirmations.push_back(std::move(*identity));
-      if (accepted && displayName) pendingNameConfirmations.push_back(std::move(*displayName));
+      if (accepted && result) pendingResults.push_back(std::move(*result));
       if (update && state->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired) state->Publish(model.Snapshot());
-
-      pendingRejections.insert(
-        pendingRejections.end(),
-        std::make_move_iterator(rejections.begin()),
-        std::make_move_iterator(rejections.end()));
       return accepted;
     }
 
@@ -609,21 +598,11 @@ public:
     // Consumer side: drain once per frame, then route locally to UI/presence.
     void Drain(ClientOutput& output)
     {
-      output.rejections.clear();
-      output.commandFailures.clear();
-      output.chatConfirmations.clear();
-      output.groundMarkConfirmations.clear();
-      output.identityConfirmations.clear();
-      output.displayNameConfirmations.clear();
+      output.results.clear();
 
       std::lock_guard lock{mutex};
       state->TakeAll(output.state);
-      pendingRejections.swap(output.rejections);
-      pendingFailures.swap(output.commandFailures);
-      pendingConfirmations.swap(output.chatConfirmations);
-      pendingMarkConfirmations.swap(output.groundMarkConfirmations);
-      pendingIdentityConfirmations.swap(output.identityConfirmations);
-      pendingNameConfirmations.swap(output.displayNameConfirmations);
+      pendingResults.swap(output.results);
       output.status = status;
     }
 
@@ -654,11 +633,10 @@ private:
 
     ClientExchange(std::size_t capacity, StateUpdateQueue::Ptr queue) : maxCommands{capacity}, state{std::move(queue)} {}
 
-    // Results waiting for Drain; every kind shares the one command budget.
+    // Results waiting for Drain share the one command budget.
     std::size_t Settled() const noexcept
     {
-      return pendingFailures.size() + pendingRejections.size() + pendingConfirmations.size() + pendingMarkConfirmations.size() +
-             pendingIdentityConfirmations.size() + pendingNameConfirmations.size();
+      return pendingResults.size();
     }
 
     mutable std::mutex                   mutex;
@@ -667,11 +645,7 @@ private:
     std::vector<QueuedClientCommand>     commands;
     bool                                 inputClosed{};
     std::uint64_t                        nextRequestId{1};
-    std::vector<CommandFailure>          pendingFailures;
-    std::vector<ChatConfirmation>        pendingConfirmations;
-    std::vector<GroundMarkConfirmation>  pendingMarkConfirmations;
-    std::vector<IdentityConfirmation>    pendingIdentityConfirmations;
-    std::vector<DisplayNameConfirmation> pendingNameConfirmations;
+    std::vector<CommandResult>           pendingResults;
     ClientStatus                         status;
     Domain::HiddenIdentity               hideIdentity{Domain::HiddenIdentity::None};
     std::optional<AuthenticationRequest> pendingAuthentication;
@@ -679,7 +653,6 @@ private:
     bool                                 authenticationCanceled{};
     bool                                 stopRequested{};
     StateUpdateQueue::Ptr                state;
-    std::vector<ServerRejectionEvent>    pendingRejections;
     ChangeBatch                          scratch;                     // Owner only.
     bool                                 needsInitialSnapshot{true};  // Owner only.
   };

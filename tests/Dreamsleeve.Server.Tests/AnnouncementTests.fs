@@ -133,14 +133,14 @@ let tests = testList "Announcements" [
             ChatMessage.create (ChatMessageId.create 3UL |> ok) channel (PublicIdentity.Profile profile) ValueNone (text "event") DateTimeOffset.UnixEpoch
             |> ChatMessage.withAnnouncement (Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event
                                                  (ValueSome(AnnouncementSignature.create 64 "DeathMod" |> ok)))
-        let wire = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
+        let wire = Packets.single codec (ServerResponse.ChatPublished message) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         let announcement = wire.ChatPublished.Message.Announcement
         Expect.equal announcement.Source Dreamsleeve.Protocol.Chat.AnnouncementSource.ThirdParty "origin"
         Expect.equal announcement.Kind WireKind.Event "kind"
         Expect.equal announcement.Signature "DeathMod" "label"
         Expect.equal wire.ChatPublished.Message.Author.PlayerId 7UL "the posting player"
         let server = ChatMessage.serverAnnouncement (ChatMessageId.create 4UL |> ok) channel AnnouncementKind.Admin (text "notice") DateTimeOffset.UnixEpoch
-        let serverWire = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished server) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
+        let serverWire = Packets.single codec (ServerResponse.ChatPublished server) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         Expect.isNull serverWire.ChatPublished.Message.Author "no fictitious player"
         Expect.equal serverWire.ChatPublished.Message.Announcement.Source Dreamsleeve.Protocol.Chat.AnnouncementSource.Server "server origin"
 
@@ -151,7 +151,7 @@ let tests = testList "Announcements" [
             OwnPseudonym = ValueNone
             Hiding = HiddenIdentity.Shown
         }
-        let opened = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
+        let opened = Packets.single codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         let policy = opened.SessionOpened.Announcements
         Expect.sequenceEqual policy.AllowedSources [WireClientSource.TrustedClient] "admitted origins"
         Expect.equal policy.MaxTextLength (uint32 config.ChatInput.AnnouncementText) "text limit"

@@ -111,8 +111,8 @@ Connecting он отменяет попытку. Поздние данные п�
 Закрытие сервера очищает модель. Протокольный сбой и уничтожение runtime используют
 немедленное завершение с best-effort уведомлением peer через Abort(reason).
 
-`ClientOutput.status.phase` содержит актуальную фазу; snapshots/deltas и rejections
-забираются прежним Drain. Ошибки из Result обрабатывает владелец. После остановки
+`ClientOutput.status.phase` содержит актуальную фазу; snapshots/deltas и результаты
+команд (`ClientOutput.results`) забираются прежним Drain. Ошибки из Result обрабатывает владелец. После остановки
 цикла владелец вызывает Exchange.Finish, вызывающая сторона делает join.
 Необработанные ошибки выделения памяти не преобразуются в ошибки протокола.
 
@@ -136,11 +136,11 @@ ChatMessagesReceived, что и публикации остальных игро
 Автоматических повторов и отдельного таймера чата нет: запрос завершается ответом
 либо сбросом сессии.
 
-Локальные отказы находятся отдельно в ClientOutput.commandFailures:
-StaleGeneration, SessionNotReady, Busy, InvalidRequest, EncodingFailed.
-Они сохраняют исходные generation/requestId и не выдаются за ServerRejection.
-Общий бюджет commandCapacity охватывает накопленные локальные и серверные отказы,
-а также места для возможных отказов ожидаемых SendChat, UpdatePlayer и OpenSession. TakeCommands
+Локальный отказ — исход `CommandFailureCode` в том же `CommandResult`, что и ответ
+сервера: StaleGeneration, SessionNotReady, Busy, InvalidRequest, EncodingFailed. Он
+сохраняет исходные generation/requestId и не выдаётся за ServerRejection.
+Общий бюджет commandCapacity охватывает невыданные результаты, а также места для
+результатов ожидаемых SendChat, UpdatePlayer и OpenSession. TakeCommands
 берёт команды с учётом этих резервов; Connect требует свободное место до начала входа.
 Если UI не вызывает Drain, команды остаются в ограниченной очереди, а Poll продолжает
 обслуживать сеть. Успешный ChatAccepted освобождает резерв: сообщение восстанавливается

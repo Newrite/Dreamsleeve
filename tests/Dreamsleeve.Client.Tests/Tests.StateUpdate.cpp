@@ -38,17 +38,11 @@ namespace
 
 TEST_SUITE_BEGIN("Client.StateUpdate");
 
-TEST_CASE("State publication omits empty changes and leaves rejection notifications available")
+TEST_CASE("State publication omits empty changes")
 {
   ClientModel model;
   ChangeBatch scratch;
   CHECK_FALSE(TakeStateUpdate(model, scratch));
-  REQUIRE(model.Apply(model.Generation(), ServerRejection{42, RequestRejectionCode::InvalidRequest, "Rejected", "text"}));
-
-  CHECK_FALSE(TakeStateUpdate(model, scratch));
-  const auto rejections = model.TakeServerRejections();
-  REQUIRE(rejections.size() == 1);
-  CHECK(rejections.front().rejection.message == "Rejected");
 }
 
 TEST_CASE("State publication owns player data and distinguishes self removal from no change")

@@ -486,7 +486,7 @@ let private codecTests = testList "GroundMarkCodec" [
 
     testCase "visible deltas, placements and removals encode on the control lane with correlation where required" <| fun _ ->
         let view = { ViewRevision = 3UL; Added = [ record 1UL 1.0f; record 2UL 2.0f ]; Removed = [ markId 5UL ]; Clear = true }
-        let packet = ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged view) |> ok |> parse
+        let packet = Packets.single codec (ServerResponse.GroundMarksChanged view) |> ok |> parse
         Expect.isFalse packet.HasRequestId "notification"
         equal 3UL packet.GroundMarksChanged.ViewRevision
         Expect.isTrue packet.GroundMarksChanged.Clear "baseline"
@@ -502,30 +502,30 @@ let private codecTests = testList "GroundMarkCodec" [
         // A mark stored before dates were kept goes out without one.
         Expect.isNull first.GameDate "no game date"
         let datedRecord = { record 6UL 0.0f with Mark = (record 6UL 0.0f).Mark |> GroundMark.withGameDate (ValueSome gameDate) }
-        let datedPacket = ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ datedRecord ]) |> ok |> parse
+        let datedPacket = Packets.single codec (ServerResponse.OwnGroundMarks [ datedRecord ]) |> ok |> parse
         equal (wireDate ()) datedPacket.OwnGroundMarks.Marks[0].GameDate
-        equal DeliveryLane.Control (ProtocolCodec.responseLane (ServerResponse.GroundMarksChanged view))
-        let placed = ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkPlaced(11UL, record 4UL 0.0f, ValueSome (markId 1UL))) |> ok |> parse
+        equal DeliveryLane.Control (ProtocolCodec.delivery (ServerResponse.GroundMarksChanged view)).Lane
+        let placed = Packets.single codec (ServerResponse.GroundMarkPlaced(11UL, record 4UL 0.0f, ValueSome (markId 1UL))) |> ok |> parse
         equal 11UL placed.RequestId
         equal 4UL placed.GroundMarkPlaced.Mark.MarkId
         equal 1UL placed.GroundMarkPlaced.EvictedId
-        let bare = ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkPlaced(12UL, record 4UL 0.0f, ValueNone)) |> ok |> parse
+        let bare = Packets.single codec (ServerResponse.GroundMarkPlaced(12UL, record 4UL 0.0f, ValueNone)) |> ok |> parse
         equal 0UL bare.GroundMarkPlaced.EvictedId
-        let removed = ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkRemoved(13UL, markId 4UL)) |> ok |> parse
+        let removed = Packets.single codec (ServerResponse.GroundMarkRemoved(13UL, markId 4UL)) |> ok |> parse
         equal 13UL removed.RequestId
         equal 4UL removed.GroundMarkRemoved.MarkId
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkRemoved(0UL, markId 4UL))) "correlation required"
-        let ownList = ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; record 5UL 1.0f ]) |> ok |> parse
+        Expect.isError (Packets.single codec (ServerResponse.GroundMarkRemoved(0UL, markId 4UL))) "correlation required"
+        let ownList = Packets.single codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; record 5UL 1.0f ]) |> ok |> parse
         equal 0UL ownList.RequestId
         equal [4UL; 5UL] (ownList.OwnGroundMarks.Marks |> Seq.map _.MarkId |> List.ofSeq)
-        equal DeliveryLane.Control (ProtocolCodec.responseLane (ServerResponse.OwnGroundMarks []))
-        Expect.isOk (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [])) "an empty own list encodes"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; record 4UL 1.0f ])) "duplicate id"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; { record 5UL 1.0f with Author = PublicIdentity.Profile (profile 8UL) } ])) "author mismatch"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with ViewRevision = 0UL })) "revision required"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with Added = []; Removed = []; Clear = false })) "empty delta"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarksChanged { view with Added = [ record 1UL 1.0f; record 1UL 2.0f ]; Clear = false })) "duplicate id"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkPlaced(1UL, { record 1UL 1.0f with Author = PublicIdentity.Profile (profile 8UL) }, ValueNone))) "author mismatch"
+        equal DeliveryLane.Control (ProtocolCodec.delivery (ServerResponse.OwnGroundMarks [])).Lane
+        Expect.isOk (Packets.single codec (ServerResponse.OwnGroundMarks [])) "an empty own list encodes"
+        Expect.isError (Packets.single codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; record 4UL 1.0f ])) "duplicate id"
+        Expect.isError (Packets.single codec (ServerResponse.OwnGroundMarks [ record 4UL 0.0f; { record 5UL 1.0f with Author = PublicIdentity.Profile (profile 8UL) } ])) "author mismatch"
+        Expect.isError (Packets.single codec (ServerResponse.GroundMarksChanged { view with ViewRevision = 0UL })) "revision required"
+        Expect.isError (Packets.single codec (ServerResponse.GroundMarksChanged { view with Added = []; Removed = []; Clear = false })) "empty delta"
+        Expect.isError (Packets.single codec (ServerResponse.GroundMarksChanged { view with Added = [ record 1UL 1.0f; record 1UL 2.0f ]; Clear = false })) "duplicate id"
+        Expect.isError (Packets.single codec (ServerResponse.GroundMarkPlaced(1UL, { record 1UL 1.0f with Author = PublicIdentity.Profile (profile 8UL) }, ValueNone))) "author mismatch"
 ]
 
 let private withFile (text: string) action =

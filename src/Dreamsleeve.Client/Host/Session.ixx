@@ -47,51 +47,16 @@ public:
     {
       const bool ready = output.status.Ready();
       serverName       = output.status.serverName;
-      if (!ready && pendingName)
-      {
-        // The core drops the request with the session; the server may or may not have stored it.
-        pendingName.reset();
+      // The core drops the request with the session; the server may or may not have stored it.
+      if (!ready && std::erase_if(pending, [](const auto& entry) { return std::holds_alternative<PendingName>(entry.second.request); }) != 0)
         nameError = "Соединение прервано до ответа сервера";
-      }
       for (const auto& update : output.state.updates)
         std::visit([&](const auto& value) { Apply(value, settings, ready, frame); }, update);
 
       if (frame.playersChanged && !frame.snapshot) Emit(frame, Bridge::PlayersEvent{.players = PlayerList(settings)});
 
-      for (const auto& confirmation : output.chatConfirmations)
-        if (!Settle(frame, confirmation.requestId, Announcements::Result::Published, {}))
-          Complete(frame, confirmation.requestId, Bridge::Id(confirmation.messageId), {});
-      for (const auto& confirmation : output.groundMarkConfirmations)
-        SettleMark(frame, confirmation);
-      for (const auto& confirmation : output.identityConfirmations)
-        SettleIdentity(frame, confirmation);
-      for (const auto& confirmation : output.displayNameConfirmations)
-        SettleName(confirmation);
-      for (const auto& event : output.rejections)
-      {
-        if (FailName(event.rejection.requestId, Bridge::DisplayNameRejectionText(event.rejection.code, event.rejection.message))) continue;
-        auto reason = Bridge::RejectionText(event.rejection.code, event.rejection.message);
-        if (
-          Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason) ||
-          FailMark(frame, event.rejection.requestId, reason) || FailIdentity(event.rejection.requestId, reason))
-          continue;
-        if (event.rejection.code == Dreamsleeve::Client::RequestRejectionCode::HiddenIdentityNotAllowed)
-        {
-          // Only an opening carries the flag without a pending switch.
-          identityError         = Bridge::ClipError(reason);
-          frame.identityRefused = true;
-          continue;
-        }
-        Complete(frame, event.rejection.requestId, {}, std::move(reason));
-      }
-      for (const auto& failure : output.commandFailures)
-      {
-        std::string reason{Bridge::FailureText(failure.code)};
-        if (
-          !Settle(frame, failure.requestId, ResultOf(failure.code), reason) && !FailMark(frame, failure.requestId, reason) &&
-          !FailIdentity(failure.requestId, reason) && !FailName(failure.requestId, reason))
-          Complete(frame, failure.requestId, {}, std::move(reason));
-      }
+      for (const auto& result : output.results)
+        Resolve(frame, result);
       pseudonym = output.status.pseudonym;
       if (ownMarksChanged && !frame.snapshot) Emit(frame, Bridge::GroundMarksEvent{.marks = OwnMarkList(settings)});
       ownMarksChanged = false;
@@ -115,25 +80,20 @@ public:
     // The state of an own display name change as the UI shows it.
     Bridge::DisplayNameEvent NameEvent() const
     {
-      return Bridge::DisplayNameEvent{.pending = pendingName.has_value(), .changed = nameChanged, .error = nameError};
+      return Bridge::DisplayNameEvent{.pending = Waiting<PendingName>() != nullptr, .changed = nameChanged, .error = nameError};
     }
 
     // A ready session asks the server; one change at a time. The own profile
     // changes through the players list once the server applies it.
     std::expected<void, std::string> ChangeDisplayName(ClientExchange& exchange, std::string displayName)
     {
-      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
-      if (pendingName) return std::unexpected{"Ожидание ответа сервера"};
-      const auto requestId = exchange.NextRequestId();
-      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
-      const auto posted = exchange.Post({
-          generation,
-          Dreamsleeve::Client::ChangeDisplayName{*requestId, std::move(displayName)}
+      if (Waiting<PendingName>()) return std::unexpected{"Ожидание ответа сервера"};
+      auto sent = Submit(exchange, PendingName{}, [&](std::uint64_t id) {
+        return Dreamsleeve::Client::ChangeDisplayName{id, std::move(displayName)};
       });
-      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
+      if (!sent) return std::unexpected{std::string{Refusal(sent.error())}};
       nameError.reset();
       nameChanged.reset();
-      pendingName = PendingName{*requestId, generation};
       return {};
     }
 
@@ -149,8 +109,9 @@ public:
     Bridge::IdentityEvent Identity(Domain::HiddenIdentity preference) const
     {
       Bridge::IdentityEvent event;
-      event.pending = !pendingIdentity.empty();
-      event.mode    = std::string{Bridge::HidingName(event.pending ? pendingIdentity.begin()->second.hiding : preference)};
+      const auto*           waiting = Waiting<PendingIdentity>();
+      event.pending                 = waiting != nullptr;
+      event.mode                    = std::string{Bridge::HidingName(waiting ? waiting->hiding : preference)};
       if (Ready()) event.pseudonym = pseudonym;
       event.error = identityError;
       return event;
@@ -160,17 +121,12 @@ public:
     // server confirms (Frame::hideIdentity). One switch at a time.
     std::expected<void, std::string> SetIdentityVisibility(ClientExchange& exchange, Domain::HiddenIdentity hiding)
     {
-      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
-      if (!pendingIdentity.empty()) return std::unexpected{"Ожидание ответа сервера"};
-      const auto requestId = exchange.NextRequestId();
-      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
-      const auto posted = exchange.Post({
-          generation,
-          Dreamsleeve::Client::SetIdentityVisibility{*requestId, hiding}
+      if (Waiting<PendingIdentity>()) return std::unexpected{"Ожидание ответа сервера"};
+      auto sent = Submit(exchange, PendingIdentity{hiding}, [&](std::uint64_t id) {
+        return Dreamsleeve::Client::SetIdentityVisibility{id, hiding};
       });
-      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
+      if (!sent) return std::unexpected{std::string{Refusal(sent.error())}};
       identityError.reset();
-      pendingIdentity.emplace(*requestId, PendingIdentity{hiding, generation});
       return {};
     }
 
@@ -201,16 +157,9 @@ public:
       const Domain::GroundMarkPlacement& placement,
       const Domain::GameDate&            gameDate)
     {
-      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
-      const auto requestId = exchange.NextRequestId();
-      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
-      const auto posted = exchange.Post({
-          generation,
-          Dreamsleeve::Client::PlaceGroundNote{*requestId, std::move(text), placement, gameDate}
-      });
-      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
-      pendingMarks.emplace(*requestId, PendingMark{std::move(uiRequestId), MarkRequest::Note, generation});
-      return {};
+      return Posted(Submit(exchange, PendingMark{std::move(uiRequestId), MarkRequest::Note}, [&](std::uint64_t id) {
+        return Dreamsleeve::Client::PlaceGroundNote{id, std::move(text), placement, gameDate};
+      }));
     }
 
     // The place the character died, reported by the game once per death.
@@ -220,35 +169,21 @@ public:
       const Domain::GroundMarkPlacement& placement,
       const Domain::GameDate&            gameDate)
     {
-      if (!Ready()) return std::unexpected{"session not ready"};
-      const auto requestId = exchange.NextRequestId();
-      if (!requestId) return std::unexpected{"request ids exhausted"};
-      const auto posted = exchange.Post({
-          generation,
-          Dreamsleeve::Client::ReportDeath{*requestId, std::move(label), placement, gameDate}
-      });
-      if (posted != CommandPostResult::Queued) return std::unexpected{"command queue full"};
-      pendingMarks.emplace(*requestId, PendingMark{{}, MarkRequest::Death, generation});
-      return {};
+      return Posted(Submit(exchange, PendingMark{{}, MarkRequest::Death}, [&](std::uint64_t id) {
+        return Dreamsleeve::Client::ReportDeath{id, std::move(label), placement, gameDate};
+      }));
     }
 
     std::expected<void, std::string> RemoveGroundMark(ClientExchange& exchange, std::string uiRequestId, Domain::GroundMarkId markId)
     {
-      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
-      const auto requestId = exchange.NextRequestId();
-      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
-      const auto posted = exchange.Post({
-          generation,
-          Dreamsleeve::Client::RemoveGroundMark{*requestId, markId}
-      });
-      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
-      pendingMarks.emplace(*requestId, PendingMark{std::move(uiRequestId), MarkRequest::Remove, generation});
-      return {};
+      return Posted(Submit(exchange, PendingMark{std::move(uiRequestId), MarkRequest::Remove}, [&](std::uint64_t id) {
+        return Dreamsleeve::Client::RemoveGroundMark{id, markId};
+      }));
     }
 
     std::size_t PendingMarkCount() const noexcept
     {
-      return pendingMarks.size();
+      return Count<PendingMark>();
     }
 
     // The next Process must deliver a full snapshot; old correlations are dropped
@@ -258,9 +193,12 @@ public:
       needsSnapshot     = true;
       snapshotRequested = false;
       refreshing        = false;
-      pendingChats.clear();
-      // Death reports have no UI correlation and settle silently either way.
-      std::erase_if(pendingMarks, [](const auto& entry) { return entry.second.request != MarkRequest::Death; });
+      // Chat sends and mark requests lose their view. Death reports have no UI
+      // correlation and settle silently either way.
+      std::erase_if(pending, [](const auto& entry) {
+        const auto* mark = std::get_if<PendingMark>(&entry.second.request);
+        return std::holds_alternative<PendingChat>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
+      });
       lastStatus.reset();
       lastIdentity.reset();
       // The UI starts with nothing pending; only a difference is sent.
@@ -309,20 +247,14 @@ public:
 
     std::expected<void, std::string> SendChat(ClientExchange& exchange, const Bridge::UiCommand& command)
     {
-      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
+      // Without a session the missing connection is the reason, not the channel.
       const auto channel = Bridge::ParseId(command.channelId);
       const auto found   = channel ? channels.find(*channel) : channels.end();
-      if (found == channels.end() || found->second != Domain::ChatChannelKind::Global) return std::unexpected{"Канал недоступен"};
-      const auto requestId = exchange.NextRequestId();
-      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
-
-      const auto posted = exchange.Post({
-          generation,
-          Dreamsleeve::Client::SendChat{*requestId, *channel, command.text}
-      });
-      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
-      pendingChats.emplace(*requestId, PendingChat{command.requestId, generation});
-      return {};
+      if (Ready() && (found == channels.end() || found->second != Domain::ChatChannelKind::Global))
+        return std::unexpected{"Канал недоступен"};
+      return Posted(Submit(exchange, PendingChat{command.requestId}, [&](std::uint64_t id) {
+        return Dreamsleeve::Client::SendChat{id, *channel, command.text};
+      }));
     }
 
     // Main thread. The plugin API already checked the text encoding and the
@@ -330,20 +262,24 @@ public:
     Announcements::Result PostAnnouncement(ClientExchange& exchange, Announcements::Request request)
     {
       const auto system = ChannelOf(Domain::ChatChannelKind::System);
-      if (!Ready() || !system) return Announcements::Result::NotConnected;
-      const auto requestId = exchange.NextRequestId();
-      if (!requestId) return Announcements::Result::Failed;
-
-      PendingAnnouncement pending{*system, request.signature, request.text, generation};
-      const auto          posted = exchange.Post({
-          generation,
-          Dreamsleeve::Client::
-            PostAnnouncement{*requestId, *system, std::move(request.text), request.kind, request.source, std::move(request.signature)}
+      if (!system) return Announcements::Result::NotConnected;
+      PendingAnnouncement waiting{*system, request.signature, request.text};
+      const auto          sent = Submit(exchange, std::move(waiting), [&](std::uint64_t id) {
+        return Dreamsleeve::Client::
+          PostAnnouncement{id, *system, std::move(request.text), request.kind, request.source, std::move(request.signature)};
       });
-      if (posted == CommandPostResult::Closed) return Announcements::Result::NotConnected;
-      if (posted != CommandPostResult::Queued) return Announcements::Result::Busy;
-      pendingAnnouncements.emplace(*requestId, std::move(pending));
-      return Announcements::Result::Queued;
+      if (sent) return Announcements::Result::Queued;
+      switch (sent.error())
+      {
+        case PostError::NotReady:
+        case PostError::Closed:
+          return Announcements::Result::NotConnected;
+        case PostError::Full:
+          return Announcements::Result::Busy;
+        case PostError::NoRequestId:
+          break;
+      }
+      return Announcements::Result::Failed;
     }
 
     bool Ready() const noexcept
@@ -378,15 +314,16 @@ public:
 
     std::size_t PendingChatCount() const noexcept
     {
-      return pendingChats.size();
+      return Count<PendingChat>();
     }
 
 private:
 
+    // What a request of the UI, the game or a mod waits for. Each kind reads
+    // its own success from the result and shows a refusal its own way.
     struct PendingChat
     {
-      std::string   uiRequestId;
-      std::uint64_t generation{};
+      std::string uiRequestId;
     };
 
     struct PendingAnnouncement
@@ -394,7 +331,6 @@ private:
       Domain::ChatChannelId channelId{};
       std::string           signature;
       std::string           text;
-      std::uint64_t         generation{};
     };
 
     enum class MarkRequest
@@ -406,52 +342,179 @@ private:
 
     struct PendingMark
     {
-      std::string   uiRequestId;  // Empty for a death report.
-      MarkRequest   request{};
-      std::uint64_t generation{};
+      std::string uiRequestId;  // Empty for a death report.
+      MarkRequest request{};
     };
 
     struct PendingIdentity
     {
       Domain::HiddenIdentity hiding{Domain::HiddenIdentity::None};
-      std::uint64_t          generation{};
     };
 
     struct PendingName
+    {};
+
+    using PendingRequest = std::variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName>;
+
+    struct Pending
     {
-      std::uint64_t requestId{};
-      std::uint64_t generation{};
+      std::uint64_t  generation{};
+      PendingRequest request;
     };
 
-    void SettleName(const DisplayNameConfirmation& confirmation)
+    enum class PostError
     {
-      if (!pendingName || pendingName->requestId != confirmation.requestId) return;
-      pendingName.reset();
-      nameError.reset();
-      nameChanged = confirmation.displayName;
+      NotReady,
+      NoRequestId,
+      Full,
+      Closed
+    };
+
+    static std::string_view Refusal(PostError error)
+    {
+      switch (error)
+      {
+        case PostError::NotReady:
+          return "Нет соединения с сервером";
+        case PostError::NoRequestId:
+          return "Идентификаторы запросов исчерпаны";
+        case PostError::Full:
+        case PostError::Closed:
+          break;
+      }
+      return "Очередь команд заполнена";
     }
 
-    bool FailName(std::uint64_t requestId, const std::string& reason)
+    static std::expected<void, std::string> Posted(std::expected<void, PostError> sent)
     {
-      if (!pendingName || pendingName->requestId != requestId) return false;
-      pendingName.reset();
-      nameError = Bridge::ClipError(reason);
-      return true;
+      if (!sent) return std::unexpected{std::string{Refusal(sent.error())}};
+      return {};
     }
 
-    void SettleIdentity(Frame& frame, const IdentityConfirmation& confirmation)
+    // Posts the command make builds for a fresh request ID in a ready session;
+    // its result is routed back to request.
+    template <class Make>
+    std::expected<void, PostError> Submit(ClientExchange& exchange, PendingRequest request, Make&& make)
     {
-      if (pendingIdentity.erase(confirmation.requestId) == 0) return;
-      identityError.reset();
-      frame.hideIdentity = confirmation.hiding;
+      if (!Ready()) return std::unexpected{PostError::NotReady};
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return std::unexpected{PostError::NoRequestId};
+      const auto posted = exchange.Post({generation, make(*requestId)});
+      if (posted == CommandPostResult::Closed) return std::unexpected{PostError::Closed};
+      if (posted != CommandPostResult::Queued) return std::unexpected{PostError::Full};
+      pending.emplace(*requestId, Pending{generation, std::move(request)});
+      return {};
     }
 
-    // The switch returns to the server's state; the reason stays under it.
-    bool FailIdentity(std::uint64_t requestId, const std::string& reason)
+    // The first waiting request of a kind; identity and name wait one at a time.
+    template <class Kind>
+    const Kind* Waiting() const
     {
-      if (pendingIdentity.erase(requestId) == 0) return false;
-      identityError = Bridge::ClipError(reason);
-      return true;
+      for (const auto& [id, entry] : pending)
+        if (const auto* request = std::get_if<Kind>(&entry.request)) return request;
+      return nullptr;
+    }
+
+    template <class Kind>
+    std::size_t Count() const
+    {
+      return static_cast<std::size_t>(
+        std::ranges::count_if(pending, [](const auto& entry) { return std::holds_alternative<Kind>(entry.second.request); }));
+    }
+
+    // Routes a result to the request that waits for it. An opening refused for
+    // hidden names has none: the preference itself is refused. Game updates
+    // carry their own IDs and settle silently.
+    void Resolve(Frame& frame, const CommandResult& result)
+    {
+      const auto found = pending.find(result.requestId);
+      if (found == pending.end())
+      {
+        const auto* rejection = std::get_if<ServerRejection>(&result.outcome);
+        if (rejection && rejection->code == RequestRejectionCode::HiddenIdentityNotAllowed)
+        {
+          identityError         = Bridge::ClipError(Reason(result.outcome));
+          frame.identityRefused = true;
+        }
+        return;
+      }
+      auto request = std::move(found->second.request);
+      pending.erase(found);
+      std::visit([&](auto& value) { Resolve(frame, value, result.outcome); }, request);
+    }
+
+    // The text a refusal shows; a success of another kind would be a Core fault.
+    static std::string Reason(const CommandResult::Outcome& outcome)
+    {
+      if (const auto* rejection = std::get_if<ServerRejection>(&outcome)) return Bridge::RejectionText(rejection->code, rejection->message);
+      if (const auto* failure = std::get_if<CommandFailureCode>(&outcome)) return std::string{Bridge::FailureText(*failure)};
+      return "Неожиданный ответ";
+    }
+
+    void Resolve(Frame& frame, PendingChat& chat, const CommandResult::Outcome& outcome)
+    {
+      Bridge::SendResultEvent event;
+      event.requestId = std::move(chat.uiRequestId);
+      if (const auto* published = std::get_if<MessagePublished>(&outcome))
+        event.messageId = Bridge::Id(published->messageId);
+      else
+        event.error = Reason(outcome);
+      Emit(frame, event);
+    }
+
+    void Resolve(Frame& frame, PendingAnnouncement& announcement, const CommandResult::Outcome& outcome)
+    {
+      if (std::holds_alternative<MessagePublished>(outcome))
+        Finish(frame, std::move(announcement), Announcements::Result::Published, {});
+      else
+        Finish(frame, std::move(announcement), ResultOf(outcome), Reason(outcome));
+    }
+
+    void Resolve(Frame& frame, PendingMark& mark, const CommandResult::Outcome& outcome)
+    {
+      const auto* placed = std::get_if<MarkPlaced>(&outcome);
+      if (mark.request == MarkRequest::Death)
+      {
+        frame.notes.push_back(placed ? std::format("Death mark {} placed", placed->markId) : "Death mark refused: " + Reason(outcome));
+        return;
+      }
+      Bridge::MarkResultEvent event;
+      event.requestId = std::move(mark.uiRequestId);
+      if (std::holds_alternative<MarkRemoved>(outcome))
+        event.removed = true;
+      else if (placed)
+      {
+        event.markId = Bridge::Id(placed->markId);
+        if (placed->evictedId) event.evictedId = Bridge::Id(*placed->evictedId);
+      }
+      else
+        event.error = Bridge::ClipError(Reason(outcome));
+      Emit(frame, event);
+    }
+
+    // A refused switch returns to the server's state; the reason stays under it.
+    void Resolve(Frame& frame, PendingIdentity&, const CommandResult::Outcome& outcome)
+    {
+      if (const auto* changed = std::get_if<IdentityChanged>(&outcome))
+      {
+        identityError.reset();
+        frame.hideIdentity = changed->hiding;
+      }
+      else
+        identityError = Bridge::ClipError(Reason(outcome));
+    }
+
+    void Resolve(Frame&, PendingName&, const CommandResult::Outcome& outcome)
+    {
+      if (const auto* changed = std::get_if<NameChanged>(&outcome))
+      {
+        nameError.reset();
+        nameChanged = changed->displayName;
+      }
+      else if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
+        nameError = Bridge::ClipError(Bridge::DisplayNameRejectionText(rejection->code, rejection->message));
+      else
+        nameError = Bridge::ClipError(Reason(outcome));
     }
 
     std::vector<Bridge::UiGroundMark> OwnMarkList(const UiSettings& settings) const
@@ -486,44 +549,6 @@ private:
       for (const auto& mark : marks)
         ownMarks.insert_or_assign(mark.markId, mark);
       ownMarksChanged = true;
-    }
-
-    void SettleMark(Frame& frame, const GroundMarkConfirmation& confirmation)
-    {
-      const auto found = pendingMarks.find(confirmation.requestId);
-      if (found == pendingMarks.end()) return;
-      auto pending = std::move(found->second);
-      pendingMarks.erase(found);
-      if (pending.request == MarkRequest::Death)
-      {
-        frame.notes.push_back(std::format("Death mark {} placed", confirmation.markId));
-        return;
-      }
-      Bridge::MarkResultEvent event;
-      event.requestId = std::move(pending.uiRequestId);
-      if (confirmation.removed)
-        event.removed = true;
-      else
-      {
-        event.markId = Bridge::Id(confirmation.markId);
-        if (confirmation.evictedId) event.evictedId = Bridge::Id(*confirmation.evictedId);
-      }
-      Emit(frame, event);
-    }
-
-    bool FailMark(Frame& frame, std::uint64_t requestId, std::string reason)
-    {
-      const auto found = pendingMarks.find(requestId);
-      if (found == pendingMarks.end()) return false;
-      auto pending = std::move(found->second);
-      pendingMarks.erase(found);
-      if (pending.request == MarkRequest::Death)
-      {
-        frame.notes.push_back("Death mark refused: " + reason);
-        return true;
-      }
-      Emit(frame, Bridge::MarkResultEvent{.requestId = std::move(pending.uiRequestId), .error = Bridge::ClipError(reason)});
-      return true;
     }
 
     template <class Event>
@@ -599,13 +624,10 @@ private:
       frame.visibleMarksChanged = true;
 
       // A new generation cannot complete requests of the previous session.
-      std::erase_if(pendingChats, [&](const auto& entry) { return entry.second.generation != generation; });
-      std::erase_if(pendingMarks, [&](const auto& entry) { return entry.second.generation != generation; });
-      std::erase_if(pendingIdentity, [&](const auto& entry) { return entry.second.generation != generation; });
-      if (pendingName && pendingName->generation != generation) pendingName.reset();
-      std::erase_if(pendingAnnouncements, [&](const auto& entry) {
+      std::erase_if(pending, [&](const auto& entry) {
         if (entry.second.generation == generation) return false;
-        Finish(frame, entry.second, Announcements::Result::Failed, "Доставка неизвестна: сессия сменилась");
+        if (const auto* announcement = std::get_if<PendingAnnouncement>(&entry.second.request))
+          Finish(frame, *announcement, Announcements::Result::Failed, "Доставка неизвестна: сессия сменилась");
         return true;
       });
       frame.playersChanged = false;
@@ -725,65 +747,39 @@ private:
       return message.author && message.author->playerId != selfId;
     }
 
-    static Announcements::Result ResultOf(const ServerRejection& rejection)
+    static Announcements::Result ResultOf(const CommandResult::Outcome& outcome)
     {
-      using Code = Dreamsleeve::Client::RequestRejectionCode;
-      return rejection.code == Code::RateLimited ? Announcements::Result::RateLimited : Announcements::Result::Rejected;
-    }
-
-    static Announcements::Result ResultOf(CommandFailureCode code)
-    {
-      switch (code)
-      {
-        case CommandFailureCode::StaleGeneration:
-        case CommandFailureCode::SessionNotReady:
-          return Announcements::Result::NotConnected;
-        case CommandFailureCode::Busy:
-          return Announcements::Result::Busy;
-        case CommandFailureCode::InvalidRequest:
-          return Announcements::Result::Rejected;
-        case CommandFailureCode::EncodingFailed:
-          break;
-      }
+      if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
+        return rejection->code == RequestRejectionCode::RateLimited ? Announcements::Result::RateLimited : Announcements::Result::Rejected;
+      if (const auto* failure = std::get_if<CommandFailureCode>(&outcome))
+        switch (*failure)
+        {
+          case CommandFailureCode::StaleGeneration:
+          case CommandFailureCode::SessionNotReady:
+            return Announcements::Result::NotConnected;
+          case CommandFailureCode::Busy:
+            return Announcements::Result::Busy;
+          case CommandFailureCode::InvalidRequest:
+            return Announcements::Result::Rejected;
+          case CommandFailureCode::EncodingFailed:
+            break;
+        }
       return Announcements::Result::Failed;
     }
 
     // Reports a plugin API request; a refusal also becomes a failed UI row.
-    void Finish(Frame& frame, PendingAnnouncement pending, Announcements::Result result, std::string reason)
+    void Finish(Frame& frame, PendingAnnouncement announcement, Announcements::Result result, std::string reason)
     {
       if (result != Announcements::Result::Published)
         Emit(
           frame,
           Bridge::AnnouncementResultEvent{
-              .channelId = Bridge::Id(pending.channelId),
-              .source    = Bridge::ModLabel(pending.signature),
-              .text      = pending.text,
+              .channelId = Bridge::Id(announcement.channelId),
+              .source    = Bridge::ModLabel(announcement.signature),
+              .text      = announcement.text,
               .error     = Bridge::ClipError(reason)
           });
-      frame.announcementResults.push_back({std::move(pending.signature), std::move(pending.text), result, std::move(reason)});
-    }
-
-    bool Settle(Frame& frame, std::uint64_t requestId, Announcements::Result result, std::string reason)
-    {
-      const auto found = pendingAnnouncements.find(requestId);
-      if (found == pendingAnnouncements.end()) return false;
-      auto pending = std::move(found->second);
-      pendingAnnouncements.erase(found);
-      Finish(frame, std::move(pending), result, std::move(reason));
-      return true;
-    }
-
-    void Complete(Frame& frame, std::uint64_t requestId, std::optional<std::string> messageId, std::optional<std::string> error)
-    {
-      const auto found = pendingChats.find(requestId);
-      if (found == pendingChats.end()) return;  // Game updates carry their own IDs.
-
-      Bridge::SendResultEvent event;
-      event.requestId = found->second.uiRequestId;
-      event.messageId = std::move(messageId);
-      event.error     = std::move(error);
-      Emit(frame, event);
-      pendingChats.erase(found);
+      frame.announcementResults.push_back({std::move(announcement.signature), std::move(announcement.text), result, std::move(reason)});
     }
 
     void PublishStatus(const ClientStatus& status, const UiSettings& settings, Frame& frame)
@@ -821,14 +817,10 @@ private:
     Marks                                                              visibleMarks;
     Marks                                                              ownMarks;
     bool                                                               ownMarksChanged{};
-    std::unordered_map<std::uint64_t, PendingChat>                     pendingChats;
-    std::unordered_map<std::uint64_t, PendingMark>                     pendingMarks;
-    std::unordered_map<std::uint64_t, PendingAnnouncement>             pendingAnnouncements;
-    std::unordered_map<std::uint64_t, PendingIdentity>                 pendingIdentity;
+    std::unordered_map<std::uint64_t, Pending>                         pending;
     std::optional<std::string>                                         pseudonym;
     std::optional<std::string>                                         identityError;
     std::optional<Bridge::IdentityEvent>                               lastIdentity;
-    std::optional<PendingName>                                         pendingName;
     std::optional<std::string>                                         nameError;
     std::optional<std::string>                                         nameChanged;
     Bridge::DisplayNameEvent                                           lastName;

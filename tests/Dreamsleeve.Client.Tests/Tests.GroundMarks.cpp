@@ -4,6 +4,8 @@ import std;
 import Dreamsleeve.Client.ProtocolCodec;
 import Dreamsleeve.Client.StateUpdate;
 
+#include "Results.h"
+
 namespace
 {
 
@@ -217,19 +219,19 @@ TEST_CASE("Mark commands queue like chat and confirmations share the bounded res
   CHECK(std::get<PlaceGroundNote>(commands[0].command).requestId == first);
   CHECK(std::holds_alternative<ReportDeath>(commands[1].command));
 
-  REQUIRE(exchange.Publish(model, false, SessionPhase::Ready, "Tamriel", std::nullopt, GroundMarkConfirmation{1, first, 9, 3, false}));
-  REQUIRE(exchange.Publish(model, false, SessionPhase::Ready, "Tamriel", std::nullopt, GroundMarkConfirmation{1, first + 1, 10, std::nullopt, true}));
+  REQUIRE(exchange.Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{1, first, MarkPlaced{9, 3}}));
+  REQUIRE(exchange.Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{1, first + 1, MarkRemoved{10}}));
   // Two results fill the budget of two; the third waits for a drain.
-  CHECK_FALSE(exchange.PublishCommandFailure({1, first + 2, CommandFailureCode::Busy}));
+  CHECK_FALSE(exchange.PublishResult({1, first + 2, CommandFailureCode::Busy}));
   exchange.Drain(output);
-  REQUIRE(output.groundMarkConfirmations.size() == 2);
-  CHECK(output.groundMarkConfirmations[0].markId == 9);
-  CHECK(output.groundMarkConfirmations[0].evictedId == 3);
-  CHECK_FALSE(output.groundMarkConfirmations[0].removed);
-  CHECK(output.groundMarkConfirmations[1].removed);
-  CHECK(output.chatConfirmations.empty());
+  REQUIRE(output.results.size() == 2);
+  REQUIRE(ResultsOf<MarkPlaced>(output).size() == 1);
+  CHECK(ResultsOf<MarkPlaced>(output)[0].value.markId == 9);
+  CHECK(ResultsOf<MarkPlaced>(output)[0].value.evictedId == 3);
+  CHECK(ResultsOf<MarkRemoved>(output)[0].requestId == first + 1);
+  CHECK(ResultsOf<MessagePublished>(output).empty());
   exchange.Drain(output);
-  CHECK(output.groundMarkConfirmations.empty());
+  CHECK(output.results.empty());
 }
 
 TEST_CASE("Mark requests encode on the control lane and refuse an empty note, a zero id or a bad placement")

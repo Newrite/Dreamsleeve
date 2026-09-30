@@ -207,10 +207,10 @@ TEST_CASE("Rejections retain unknown codes and correlation while presence events
   rejected->set_field("text");
   auto result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
-  const auto& rejection = std::get<ServerRejection>(*result);
-  CHECK(rejection.requestId == 9);
-  CHECK(static_cast<std::int32_t>(rejection.code) == 0x7FFF0001);
-  CHECK(rejection.message == "Отказ");
+  const auto& rejected9 = std::get<W::RequestRejected>(*result);
+  CHECK(rejected9.requestId == 9);
+  CHECK(static_cast<std::int32_t>(rejected9.rejection.code) == 0x7FFF0001);
+  CHECK(rejected9.rejection.message == "Отказ");
   packet.mutable_player_left()->set_player_id(7);
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.clear_request_id();
@@ -350,24 +350,24 @@ TEST_CASE("Rejection codes share protobuf names and retain future signed enum va
   rejected->set_field("username");
   auto decoded = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(decoded);
-  CHECK(std::get<ServerRejection>(*decoded).code == RequestRejectionCode::UsernameTaken);
+  CHECK(std::get<W::RequestRejected>(*decoded).rejection.code == RequestRejectionCode::UsernameTaken);
 
   rejected->set_code(P::REQUEST_REJECTION_CODE_OVERLOADED);
   auto overloaded = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(overloaded);
-  CHECK(std::get<ServerRejection>(*overloaded).code == RequestRejectionCode::Overloaded);
+  CHECK(std::get<W::RequestRejected>(*overloaded).rejection.code == RequestRejectionCode::Overloaded);
 
   rejected->set_code(P::REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED);
   auto unauthenticated = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(unauthenticated);
-  CHECK(std::get<ServerRejection>(*unauthenticated).code == RequestRejectionCode::AuthenticationFailed);
+  CHECK(std::get<W::RequestRejected>(*unauthenticated).rejection.code == RequestRejectionCode::AuthenticationFailed);
 
   for (const auto code : {0x7FFF0001, -1})
   {
     rejected->set_code(static_cast<P::RequestRejectionCode>(code));
     auto future = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
     REQUIRE(future);
-    const auto& value = std::get<ServerRejection>(*future);
+    const auto& value = std::get<W::RequestRejected>(*future).rejection;
     CHECK(static_cast<std::int32_t>(value.code) == code);
     CHECK(value.message == "Имя занято");
     CHECK(value.field == "username");

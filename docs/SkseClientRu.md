@@ -140,8 +140,10 @@ View `Data/PrismaUI/views/Dreamsleeve/index.html` создаётся на kDataL
 Снимок UI посылается только для Ready-сессии (UI трактует любой снимок как
 «подключено»); снимки отключения обновляют состояние host молча, а UI получает
 `connection`. Чат: `sendChat` → `Session::SendChat` (`NextRequestId`, `Post`);
-`chatConfirmations`/`rejections`/`commandFailures` с известным RequestId → `sendResult`,
-чужие RequestId (команды телеметрии) игнорируются. Авторизация: `signIn`
+результат команды с известным RequestId → `sendResult`, чужие RequestId (команды
+телеметрии) игнорируются. `Session` держит один реестр ожидающих запросов (чат, объявление
+мода, метка, скрытое имя, отображаемое имя) и по его виду решает, что показать; команду
+отправляет одна функция `Submit`. Авторизация: `signIn`
 (с `displayName` — регистрация), `signInSaved`, `signOut`, `forgetLogin`, `disconnect`;
 пароль передаётся в `Connect` и затирается, в TOML/логи/JS не возвращается.
 Событие `auth` посылается при любом изменении статуса и при каждом завершении операции
@@ -157,7 +159,7 @@ View `Data/PrismaUI/views/Dreamsleeve/index.html` создаётся на kDataL
 `Domain::HiddenIdentity` через `Bridge::HidingOf`/`HidingName`); ClientRuntime кладёт его в
 `OpenSession.hidden_identity` при открытии сессии. Команда UI `setIdentityVisibility{hiding}` в
 Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIdentityVisibility{requestId, hiding}`
-(одна за раз); результат — `IdentityConfirmation` (вариант и псевдоним) или отказ. Только
+(одна за раз); результат — `IdentityChanged` (вариант; псевдоним — в статусе) или отказ. Только
 подтверждение меняет `hideIdentity` и сохраняет `ui.toml` (`Session::Frame::hideIdentity`,
 `Logic::Drain`); в `saveSettings` значение этого поля host заменяет своим. Без сессии UI
 меняет только выбор для следующего входа; пока сессия открывается, переключение
@@ -171,7 +173,7 @@ Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIde
 
 Смена отображаемого имени ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#смена-отображаемого-имени)).
 Команда UI `changeDisplayName{displayName}` в Ready-сессии идёт в `Session::ChangeDisplayName` →
-Core `ChangeDisplayName{requestId, displayName}` (одна за раз). Итог — `DisplayNameConfirmation`
+Core `ChangeDisplayName{requestId, displayName}` (одна за раз). Итог — `NameChanged`
 или отказ; host шлёт UI событие `displayName` (`pending`, `changed` — сохранённое имя, один раз,
 `error` — текст отказа на русском из `Bridge::DisplayNameRejectionText`, с минутами до следующей
 смены). Обрыв соединения до ответа снимает ожидание с ошибкой. Свой профиль с новым именем

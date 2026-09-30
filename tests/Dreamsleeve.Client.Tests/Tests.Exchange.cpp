@@ -2,6 +2,8 @@
 import std;
 import Dreamsleeve.Client.Exchange;
 
+#include "Results.h"
+
 namespace
 {
 
@@ -146,13 +148,13 @@ TEST_CASE("Explicit snapshot consumes included changes and an idle pump emits no
   CHECK(output.state.updates.empty());
 }
 
-TEST_CASE("State overflow and reset preserve rejections while recovering bounded chat history")
+TEST_CASE("State overflow and reset preserve results while recovering bounded chat history")
 {
   auto        exchange = Exchange(4, 1);
   ClientModel model;
   Initialize(*exchange, model);
   const auto generation = model.Generation();
-  REQUIRE(model.Apply(generation, ServerRejection{42, RequestRejectionCode::InvalidRequest, "Rejected", "text"}));
+  REQUIRE(exchange->PublishResult({generation, 42, ServerRejection{RequestRejectionCode::InvalidRequest, "Rejected", "text"}}));
   for (Domain::ChatMessageId id = 1; id <= 4; ++id)
   {
     Receive(model, id);
@@ -164,17 +166,17 @@ TEST_CASE("State overflow and reset preserve rejections while recovering bounded
   REQUIRE(std::holds_alternative<ClientSnapshot>(output.state.updates[0]));
   const auto& snapshot = std::get<ClientSnapshot>(output.state.updates[0]);
   CHECK(snapshot.chats[0].messages == model.FindChat(1)->messages);
-  REQUIRE(output.rejections.size() == 1);
-  CHECK(output.rejections[0].rejection.requestId == 42);
-  REQUIRE(model.Apply(generation, ServerRejection{43, RequestRejectionCode::InvalidRequest, "Old session", ""}));
+  REQUIRE(ResultsOf<ServerRejection>(output).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(output)[0].requestId == 42);
+  REQUIRE(exchange->PublishResult({generation, 43, ServerRejection{RequestRejectionCode::InvalidRequest, "Old session", ""}}));
   model.ResetSession();
   REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
-  REQUIRE(output.rejections.size() == 1);
-  CHECK(output.rejections[0].generation == generation);
+  REQUIRE(ResultsOf<ServerRejection>(output).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(output)[0].generation == generation);
   CHECK(std::get<ClientSnapshot>(output.state.updates[0]).generation == model.Generation());
   exchange->Drain(output);
-  CHECK(output.rejections.empty());
+  CHECK(ResultsOf<ServerRejection>(output).empty());
 }
 
 TEST_CASE("Owner receives commands and publishes final output before joined shutdown")
@@ -261,9 +263,9 @@ TEST_CASE("Undrained local failures backpressure commands within the configured 
   std::vector<QueuedClientCommand> commands;
   REQUIRE(exchange->TakeCommands(commands));
   REQUIRE(commands.size() == 2);
-  CHECK(exchange->PublishCommandFailure({1, 1, CommandFailureCode::SessionNotReady}));
-  CHECK(exchange->PublishCommandFailure({1, 2, CommandFailureCode::SessionNotReady}));
-  CHECK_FALSE(exchange->PublishCommandFailure({1, 3, CommandFailureCode::SessionNotReady}));
+  CHECK(exchange->PublishResult({1, 1, CommandFailureCode::SessionNotReady}));
+  CHECK(exchange->PublishResult({1, 2, CommandFailureCode::SessionNotReady}));
+  CHECK_FALSE(exchange->PublishResult({1, 3, CommandFailureCode::SessionNotReady}));
 
   REQUIRE(exchange->Post({1, SendChat{3, 1, "third"}}) == CommandPostResult::Queued);
   exchange->CloseInput();
@@ -272,7 +274,7 @@ TEST_CASE("Undrained local failures backpressure commands within the configured 
 
   ClientOutput output;
   exchange->Drain(output);
-  REQUIRE(output.commandFailures.size() == 2);
+  REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 2);
   CHECK(exchange->TakeCommands(commands));
   REQUIRE(commands.size() == 1);
   CHECK(std::get<SendChat>(commands.front().command).requestId == 3);
@@ -289,53 +291,45 @@ TEST_CASE("In-flight replies and both outcome kinds share one bounded budget")
   std::vector<QueuedClientCommand> commands;
   REQUIRE(exchange->TakeCommands(commands, 1));
   REQUIRE(commands.size() == 1);
-  REQUIRE(exchange->PublishCommandFailure({1, 2, CommandFailureCode::InvalidRequest}));
+  REQUIRE(exchange->PublishResult({1, 2, CommandFailureCode::InvalidRequest}));
   REQUIRE(exchange->TakeCommands(commands, 1));
   CHECK(commands.empty());
 
-  REQUIRE(model.Apply(model.Generation(), ServerRejection{1, RequestRejectionCode::Overloaded, "Busy", ""}));
-  REQUIRE(exchange->Publish(model));
+  const CommandResult busy{model.Generation(), 1, ServerRejection{RequestRejectionCode::Overloaded, "Busy", ""}};
+  REQUIRE(exchange->Publish(model, false, std::nullopt, {}, busy));
   CHECK_FALSE(exchange->CanAcceptReplies());
-  CHECK_FALSE(exchange->PublishCommandFailure({1, 3, CommandFailureCode::Busy}));
+  CHECK_FALSE(exchange->PublishResult({1, 3, CommandFailureCode::Busy}));
   REQUIRE(exchange->TakeCommands(commands));
   CHECK(commands.empty());
 
   ClientOutput output;
   exchange->Drain(output);
-  REQUIRE(output.commandFailures.size() == 1);
-  REQUIRE(output.rejections.size() == 1);
-  CHECK(output.rejections.front().rejection.requestId == 1);
+  REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 1);
+  REQUIRE(ResultsOf<ServerRejection>(output).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(output).front().requestId == 1);
   REQUIRE(exchange->TakeCommands(commands));
   REQUIRE(commands.size() == 1);
   CHECK(std::get<SendChat>(commands.front().command).requestId == 3);
 }
 
-TEST_CASE("Rejection overflow is explicit and retry preserves correlation and terminal state")
+TEST_CASE("Result overflow is explicit while the terminal state still publishes")
 {
   auto exchange = Exchange(1);
   ClientModel model;
   Initialize(*exchange, model);
   const auto generation = model.Generation();
-  REQUIRE(exchange->PublishCommandFailure({generation, 1, CommandFailureCode::Busy}));
-  REQUIRE(model.Apply(generation, ServerRejection{2, RequestRejectionCode::Overloaded, "Busy", ""}));
+  REQUIRE(exchange->PublishResult({generation, 1, CommandFailureCode::Busy}));
   model.ResetSession();
 
-  CHECK_FALSE(exchange->Publish(model, true, SessionPhase::Faulted));
-  CHECK(model.PendingServerRejectionCount() == 1);
+  const CommandResult late{generation, 2, ServerRejection{RequestRejectionCode::Overloaded, "Busy", ""}};
+  CHECK_FALSE(exchange->Publish(model, true, SessionPhase::Faulted, {}, late));
   ClientOutput output;
   exchange->Drain(output);
   CHECK(output.status.phase == SessionPhase::Faulted);
   REQUIRE(output.state.updates.size() == 1);
   CHECK(std::get<ClientSnapshot>(output.state.updates.front()).players.empty());
-  REQUIRE(output.commandFailures.size() == 1);
-  CHECK(output.rejections.empty());
-
-  REQUIRE(exchange->Publish(model));
-  CHECK(model.PendingServerRejectionCount() == 0);
-  exchange->Drain(output);
-  REQUIRE(output.rejections.size() == 1);
-  CHECK(output.rejections.front().generation == generation);
-  CHECK(output.rejections.front().rejection.requestId == 2);
+  REQUIRE(output.results.size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().requestId == 1);
 }
 
 
@@ -364,7 +358,7 @@ TEST_CASE("Lifecycle admission and cancellation are independent of full game and
 {
   auto exchange = Exchange(1, 1);
   REQUIRE(exchange->Post({0, RequestSnapshot{}}) == CommandPostResult::Queued);
-  REQUIRE(exchange->PublishCommandFailure({0, 1, CommandFailureCode::SessionNotReady}));
+  REQUIRE(exchange->PublishResult({0, 1, CommandFailureCode::SessionNotReady}));
   REQUIRE(exchange->PostLogin({"player", "password-value"}));
   CHECK_FALSE(exchange->PostLogin({"other", "password-value"}));
   auto control = exchange->TakeControl();
@@ -390,7 +384,7 @@ TEST_CASE("Lifecycle admission and cancellation are independent of full game and
   exchange->Drain(output);
   CHECK(output.status.stopped);
   CHECK_FALSE(output.status.authenticating);
-  CHECK(output.commandFailures.size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(output).size() == 1);
 }
 
 TEST_CASE("Network status and drained status are one shared publication")
@@ -442,22 +436,22 @@ TEST_CASE("Main thread drains coherent phase and snapshots during concurrent own
   CHECK(accepted);
 }
 
-TEST_CASE("Chat confirmations reserve bounded reply slots until the main thread drains")
+TEST_CASE("Results reserve bounded reply slots until the main thread drains")
 {
   auto exchange = Exchange(1, 1);
   ClientModel model;
-  REQUIRE(exchange->Publish(model, true, SessionPhase::Ready, "Test", ChatConfirmation{model.Generation(), 1, 42}));
+  REQUIRE(exchange->Publish(model, true, SessionPhase::Ready, "Test", CommandResult{model.Generation(), 1, MessagePublished{42}}));
   CHECK_FALSE(exchange->CanAcceptReplies());
-  CHECK_FALSE(exchange->PublishCommandFailure({model.Generation(), 2, CommandFailureCode::Busy}));
+  CHECK_FALSE(exchange->PublishResult({model.Generation(), 2, CommandFailureCode::Busy}));
 
   ClientOutput output;
   exchange->Drain(output);
-  REQUIRE(output.chatConfirmations.size() == 1);
-  CHECK(output.chatConfirmations[0].messageId == 42);
+  REQUIRE(ResultsOf<MessagePublished>(output).size() == 1);
+  CHECK(ResultsOf<MessagePublished>(output)[0].value.messageId == 42);
   CHECK(output.status.serverName == "Test");
   CHECK(exchange->CanAcceptReplies());
   exchange->Drain(output);
-  CHECK(output.chatConfirmations.empty());
+  CHECK(ResultsOf<MessagePublished>(output).empty());
 }
 
 TEST_SUITE_END();

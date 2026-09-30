@@ -5,6 +5,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Fixtures/Packets.fs" />
     <Compile Include="DomainTests.fs" />
     <Compile Include="IdentityTests.fs" />
     <Compile Include="GroundMarkDomainTests.fs" />

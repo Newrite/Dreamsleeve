@@ -41,7 +41,6 @@ export namespace Dreamsleeve::Client
 
   // Owner-only: drain and resolve without interleaving another model operation.
   // The returned value owns its data; cross-thread delivery still needs a queue.
-  // Rejections remain available through TakeServerRejections().
   // Allocation failures propagate; do not continue this session after one.
   std::optional<ClientStateUpdate> TakeStateUpdate(ClientModel& model, ChangeBatch& scratch)
   {

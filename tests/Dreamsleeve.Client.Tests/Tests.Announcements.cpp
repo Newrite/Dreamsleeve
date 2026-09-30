@@ -107,9 +107,9 @@ namespace
       session.Process(*exchange, output, settings, frame);
     }
 
-    void Publish(std::optional<ChatConfirmation> confirmation = std::nullopt)
+    void Publish(std::optional<CommandResult> result = std::nullopt)
     {
-      REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", confirmation));
+      REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", std::move(result)));
       Process();
     }
 
@@ -222,7 +222,7 @@ TEST_CASE("Plugin API announcements settle by request ID and refusals reach the 
   auto accepted   = MakeAnnouncement(20, Domain::AnnouncementSource::ThirdParty, Domain::AnnouncementKind::Event, "DeathMod");
   accepted.author = Domain::PlayerData{1, "user1", "Alice"};
   REQUIRE(fixture.model.Apply(fixture.model.Generation(), ChatMessagesReceived{SystemChannel, {accepted}}));
-  fixture.Publish(ChatConfirmation{fixture.model.Generation(), published, 20});
+  fixture.Publish(CommandResult{fixture.model.Generation(), published, MessagePublished{20}});
   REQUIRE(fixture.frame.announcementResults.size() == 1);
   CHECK(fixture.frame.announcementResults[0].result == Result::Published);
   CHECK(fixture.frame.announcementResults[0].signature == "DeathMod");
@@ -231,15 +231,11 @@ TEST_CASE("Plugin API announcements settle by request ID and refusals reach the 
 
   CHECK(fixture.session.PostAnnouncement(*fixture.exchange, Request("Второе")) == Result::Queued);
   const auto refused = fixture.TakeRequest();
-  REQUIRE(fixture.model.Apply(
-    fixture.model.Generation(),
-    ServerRejection{
-        refused,
-        RequestRejectionCode::AnnouncementNotAllowed,
-        "This server does not accept announcements from this source.",
-        "source"
-    }));
-  fixture.Publish();
+  fixture.Publish(CommandResult{
+      fixture.model.Generation(),
+      refused,
+      ServerRejection{RequestRejectionCode::AnnouncementNotAllowed, "This server does not accept announcements from this source.", "source"}
+  });
   REQUIRE(fixture.frame.announcementResults.size() == 1);
   CHECK(fixture.frame.announcementResults[0].result == Result::Rejected);
   auto rows = fixture.Events("announcementResult");
@@ -251,14 +247,13 @@ TEST_CASE("Plugin API announcements settle by request ID and refusals reach the 
 
   CHECK(fixture.session.PostAnnouncement(*fixture.exchange, Request("Слишком часто")) == Result::Queued);
   const auto limited = fixture.TakeRequest();
-  REQUIRE(fixture.model.Apply(fixture.model.Generation(), ServerRejection{limited, RequestRejectionCode::RateLimited, "Too many", "text"}));
-  fixture.Publish();
+  fixture.Publish(CommandResult{fixture.model.Generation(), limited, ServerRejection{RequestRejectionCode::RateLimited, "Too many", "text"}});
   REQUIRE(fixture.frame.announcementResults.size() == 1);
   CHECK(fixture.frame.announcementResults[0].result == Result::RateLimited);
 
   CHECK(fixture.session.PostAnnouncement(*fixture.exchange, Request("Очередь")) == Result::Queued);
   const auto busy = fixture.TakeRequest();
-  REQUIRE(fixture.exchange->PublishCommandFailure({fixture.model.Generation(), busy, CommandFailureCode::Busy}));
+  REQUIRE(fixture.exchange->PublishResult({fixture.model.Generation(), busy, CommandFailureCode::Busy}));
   fixture.Publish();
   REQUIRE(fixture.frame.announcementResults.size() == 1);
   CHECK(fixture.frame.announcementResults[0].result == Result::Busy);
@@ -276,7 +271,7 @@ TEST_CASE("Plugin API announcements settle by request ID and refusals reach the 
   REQUIRE(fixture.frame.announcementResults.size() == 1);
   CHECK(fixture.frame.announcementResults[0].result == Result::Failed);
   CHECK(fixture.Events("announcementResult").size() == 1);
-  REQUIRE(fixture.exchange->PublishCommandFailure({fixture.model.Generation(), lost, CommandFailureCode::Busy}));
+  REQUIRE(fixture.exchange->PublishResult({fixture.model.Generation(), lost, CommandFailureCode::Busy}));
   fixture.Publish();
   CHECK(fixture.frame.announcementResults.empty());
 

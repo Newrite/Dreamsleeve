@@ -49,12 +49,6 @@ public:
       if (!SessionIdle(phase))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "A session is already active")};
 
-      if (model.PendingServerRejectionCount() != 0)
-      {
-        auto published = Publish();
-        if (!published) return published;
-      }
-
       if (!exchange.CanAcceptReplies())
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Drain command results before opening a session")};
 
@@ -174,34 +168,28 @@ private:
       exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
     }
 
-    Result<void> Clear(SessionPhase value)
+    // result: the terminal answer that ends the session, published with its end.
+    Result<void> Clear(SessionPhase value, std::optional<CommandResult> result = std::nullopt)
     {
       ResetSession();
       phase          = value;
-      auto published = Publish(true);
+      auto published = Publish(true, std::move(result));
       if (!published) SetPhase(SessionPhase::Faulted);
       return published;
     }
 
-    Result<void> Publish(
-      bool                                   requestSnapshot  = false,
-      std::optional<ChatConfirmation>        confirmation     = std::nullopt,
-      std::optional<GroundMarkConfirmation>  markConfirmation = std::nullopt,
-      std::optional<IdentityConfirmation>    identity         = std::nullopt,
-      std::optional<DisplayNameConfirmation> displayName      = std::nullopt)
+    Result<void> Publish(bool requestSnapshot = false, std::optional<CommandResult> result = std::nullopt)
     {
-      if (!exchange.Publish(
-            model,
-            requestSnapshot,
-            phase,
-            serverName,
-            confirmation,
-            markConfirmation,
-            std::move(identity),
-            std::move(displayName)))
+      if (!exchange.Publish(model, requestSnapshot, phase, serverName, std::move(result)))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
 
       return {};
+    }
+
+    // The server's answer to a request, after the state it changed.
+    Result<void> Settle(std::uint64_t requestId, CommandResult::Outcome outcome)
+    {
+      return Publish(false, CommandResult{model.Generation(), requestId, std::move(outcome)});
     }
 
     Result<void> Fail(Error error)
@@ -259,9 +247,9 @@ private:
       auto response = codec.Decode(received.packet.DataBytesView(), channel);
       if (!response) return std::unexpected{response.error()};
 
-      if (auto* rejection = std::get_if<ServerRejection>(&*response))
+      if (auto* rejected = std::get_if<Wire::RequestRejected>(&*response))
       {
-        const auto found    = pending.find(rejection->requestId);
+        const auto found    = pending.find(rejected->requestId);
         const bool chat     = found != pending.end() && found->second.kind == PendingKind::Chat;
         const auto expected = chat ? Wire::Channel::Chat : Wire::Channel::Control;
         if (channel != expected) return Unexpected("rejection_channel");
@@ -307,25 +295,23 @@ private:
       return Publish(true);
     }
 
-    Result<void> Receive(ServerRejection& rejection)
+    Result<void> Receive(Wire::RequestRejected& rejected)
     {
       if (phase == SessionPhase::Opening)
       {
-        if (rejection.requestId != opening.requestId) return Unexpected("request_id");
-
-        auto applied = model.Apply(model.Generation(), rejection);
-        if (!applied) return std::unexpected{applied.error()};
+        if (rejected.requestId != opening.requestId) return Unexpected("request_id");
 
         // Opening was refused: the full terminal reply is already received.
         // Notify the peer best-effort, without racing its own graceful close.
+        CommandResult result{model.Generation(), rejected.requestId, std::move(rejected.rejection)};
         transport->Abort(DisconnectReason::ClientShutdown);
-        return Clear(SessionPhase::Disconnected);
+        return Clear(SessionPhase::Disconnected, std::move(result));
       }
 
-      if (phase != SessionPhase::Ready || pending.erase(rejection.requestId) == 0) return Unexpected("request_id");
+      if (phase != SessionPhase::Ready || pending.erase(rejected.requestId) == 0) return Unexpected("request_id");
 
-      if (rejection.requestId == pendingLocation) ResetMovement();
-      return Apply(rejection);
+      if (rejected.requestId == pendingLocation) ResetMovement();
+      return Settle(rejected.requestId, std::move(rejected.rejection));
     }
 
     Result<void> Receive(Wire::ChatAccepted& accepted)
@@ -338,11 +324,11 @@ private:
 
       // The server's publication is the only source of accepted chat content.
       // Correlation settles the command; the model path is shared with broadcasts.
-      const ChatConfirmation confirmation{model.Generation(), accepted.requestId, accepted.changes.messages.front().messageId};
-      auto                   applied = model.Apply(model.Generation(), accepted.changes);
+      const auto messageId = accepted.changes.messages.front().messageId;
+      auto       applied   = model.Apply(model.Generation(), accepted.changes);
       if (!applied) return std::unexpected{applied.error()};
 
-      return Publish(false, confirmation);
+      return Settle(accepted.requestId, MessagePublished{messageId});
     }
 
     Result<void> Receive(Wire::PlayerUpdateAccepted& accepted)
@@ -368,43 +354,28 @@ private:
     {
       if (!TakePending(placed.requestId, PendingKind::Mark)) return Unexpected("request_id");
       if (placed.mark.author.playerId != model.SelfPlayerId()) return Unexpected("author");
-      return Publish(
-        false,
-        std::nullopt,
-        GroundMarkConfirmation{model.Generation(), placed.requestId, placed.mark.markId, placed.evictedId, false});
+      return Settle(placed.requestId, MarkPlaced{placed.mark.markId, placed.evictedId});
     }
 
     Result<void> Receive(Wire::GroundMarkRemoved& removed)
     {
       if (!TakePending(removed.requestId, PendingKind::Mark)) return Unexpected("request_id");
-      return Publish(
-        false,
-        std::nullopt,
-        GroundMarkConfirmation{model.Generation(), removed.requestId, removed.markId, std::nullopt, true});
+      return Settle(removed.requestId, MarkRemoved{removed.markId});
     }
 
     // The self entry keeps the real profile; the status carries what the others see.
     Result<void> Receive(Wire::IdentityVisibilityChanged& changed)
     {
       if (!TakePending(changed.requestId, PendingKind::Identity)) return Unexpected("request_id");
-      exchange.PublishIdentity(changed.pseudonym, changed.hiding);
-      return Publish(
-        false,
-        std::nullopt,
-        std::nullopt,
-        IdentityConfirmation{model.Generation(), changed.requestId, std::move(changed.pseudonym), changed.hiding});
+      exchange.PublishIdentity(std::move(changed.pseudonym), changed.hiding);
+      return Settle(changed.requestId, IdentityChanged{changed.hiding});
     }
 
     // The own profile changes through the PlayerUpdated that follows; this only settles the request.
     Result<void> Receive(Wire::DisplayNameChanged& changed)
     {
       if (!TakePending(changed.requestId, PendingKind::Name)) return Unexpected("request_id");
-      return Publish(
-        false,
-        std::nullopt,
-        std::nullopt,
-        std::nullopt,
-        DisplayNameConfirmation{model.Generation(), changed.requestId, std::move(changed.displayName)});
+      return Settle(changed.requestId, NameChanged{std::move(changed.displayName)});
     }
 
     Result<void> Receive(GroundMarksChanged& value)
@@ -471,7 +442,7 @@ private:
 
     Result<void> RejectCommand(std::uint64_t generation, std::uint64_t requestId, CommandFailureCode code)
     {
-      if (!exchange.PublishCommandFailure({generation, requestId, code}))
+      if (!exchange.PublishResult({generation, requestId, code}))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
 
       return {};
@@ -711,7 +682,7 @@ private:
     Result<void> ProcessCommands()
     {
       const auto openingReply = phase == SessionPhase::Connecting || phase == SessionPhase::Opening ? 1u : 0u;
-      exchange.TakeCommands(commands, pending.size() + openingReply + model.PendingServerRejectionCount());
+      exchange.TakeCommands(commands, pending.size() + openingReply);
       Result<void> firstError;
 
       for (auto& queued : commands)

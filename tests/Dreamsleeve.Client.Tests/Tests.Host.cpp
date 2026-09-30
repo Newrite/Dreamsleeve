@@ -311,7 +311,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   CHECK(session.PendingChatCount() == 1);
 
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {MakeMessage(11, 1, "hello")}}));
-  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", ChatConfirmation{model.Generation(), requestId, 11}));
+  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), requestId, MessagePublished{11}}));
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
@@ -328,8 +328,8 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   REQUIRE(session.SendChat(*exchange, Bridge::UiCommand{.type = "sendChat", .requestId = "u2", .channelId = "1", .text = "again"}));
   exchange->TakeCommands(commands);
   const auto second = std::get<SendChat>(commands[0].command).requestId;
-  REQUIRE(exchange->PublishCommandFailure({model.Generation(), 999, CommandFailureCode::Busy}));
-  REQUIRE(exchange->PublishCommandFailure({model.Generation(), second, CommandFailureCode::SessionNotReady}));
+  REQUIRE(exchange->PublishResult({model.Generation(), 999, CommandFailureCode::Busy}));
+  REQUIRE(exchange->PublishResult({model.Generation(), second, CommandFailureCode::SessionNotReady}));
   REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel"));
   exchange->Drain(output);
   frame = {};
@@ -1179,8 +1179,7 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   CHECK(removal->markId == 77);
 
   // Placed with an eviction: the UI row settles and learns the evicted id.
-  REQUIRE(exchange->Publish(
-    model, false, SessionPhase::Ready, "Tamriel", std::nullopt, GroundMarkConfirmation{model.Generation(), note->requestId, 41, 40, false}));
+  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), note->requestId, MarkPlaced{41, 40}}));
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
@@ -1194,8 +1193,7 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   CHECK(session.PendingMarkCount() == 2);
 
   // A death report settles without any UI event, a note in the log only.
-  REQUIRE(exchange->Publish(
-    model, false, SessionPhase::Ready, "Tamriel", std::nullopt, GroundMarkConfirmation{model.Generation(), death->requestId, 42, std::nullopt, false}));
+  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), death->requestId, MarkPlaced{42}}));
   exchange->Drain(output);
   frame = {};
   session.Process(*exchange, output, UiSettings{}, frame);
@@ -1204,7 +1202,7 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   CHECK(frame.notes[0].find("42") != std::string::npos);
 
   // A refused removal becomes a readable error for its UI row, never a chat sendResult.
-  REQUIRE(model.Apply(model.Generation(), ServerRejection{removal->requestId, RequestRejectionCode::GroundMarkNotFound, "", ""}));
+  REQUIRE(exchange->PublishResult({model.Generation(), removal->requestId, ServerRejection{RequestRejectionCode::GroundMarkNotFound, "", ""}}));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, frame);
   REQUIRE(frame.events.size() == 1);
@@ -1366,13 +1364,7 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
 
   exchange->PublishIdentity("Страж", HiddenIdentity::ExceptGroundMarks);
   REQUIRE(exchange->Publish(
-    model,
-    false,
-    SessionPhase::Ready,
-    "Tamriel",
-    std::nullopt,
-    std::nullopt,
-    IdentityConfirmation{model.Generation(), request.requestId, "Страж", HiddenIdentity::ExceptGroundMarks}));
+    model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), request.requestId, IdentityChanged{HiddenIdentity::ExceptGroundMarks}}));
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
@@ -1390,7 +1382,7 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   REQUIRE(session.SetIdentityVisibility(*exchange, HiddenIdentity::None));
   exchange->TakeCommands(commands);
   const auto second = std::get<SetIdentityVisibility>(commands[0].command).requestId;
-  REQUIRE(model.Apply(model.Generation(), ServerRejection{second, RequestRejectionCode::RateLimited, "too soon", "hidden"}));
+  REQUIRE(exchange->PublishResult({model.Generation(), second, ServerRejection{RequestRejectionCode::RateLimited, "too soon", "hidden"}}));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
   CHECK_FALSE(frame.hideIdentity);
@@ -1401,7 +1393,7 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   CHECK((*refused)["error"].get<std::string>().starts_with("Слишком часто"));
 
   // An opening refused for hidden names stops automatic reconnects.
-  REQUIRE(model.Apply(model.Generation(), ServerRejection{77, RequestRejectionCode::HiddenIdentityNotAllowed, "", ""}));
+  REQUIRE(exchange->PublishResult({model.Generation(), 77, ServerRejection{RequestRejectionCode::HiddenIdentityNotAllowed, "", ""}}));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), settings, frame);
   CHECK(frame.identityRefused);
@@ -1470,15 +1462,7 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   REQUIRE(pending);
   CHECK((*pending)["pending"].get<bool>());
 
-  REQUIRE(exchange->Publish(
-    model,
-    false,
-    SessionPhase::Ready,
-    "Tamriel",
-    std::nullopt,
-    std::nullopt,
-    std::nullopt,
-    DisplayNameConfirmation{model.Generation(), request.requestId, "Новое Имя"}));
+  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), request.requestId, NameChanged{"Новое Имя"}}));
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
@@ -1498,9 +1482,7 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   REQUIRE(session.ChangeDisplayName(*exchange, "Третье"));
   exchange->TakeCommands(commands);
   const auto second = std::get<ChangeDisplayName>(commands[0].command).requestId;
-  REQUIRE(model.Apply(
-    model.Generation(),
-    ServerRejection{second, RequestRejectionCode::RateLimited, "The display name can be changed again in 90 min.", "display_name"}));
+  REQUIRE(exchange->PublishResult({model.Generation(), second, ServerRejection{RequestRejectionCode::RateLimited, "The display name can be changed again in 90 min.", "display_name"}}));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
   auto refused = nameOf(frame);

@@ -118,3 +118,12 @@ type ServerResponse =
     /// Settles ChangeDisplayName with the stored name.
     | DisplayNameChanged of requestId: uint64 * DisplayName
 
+/// How a response travels: its lane, the request it settles (none for a
+/// notification) and whether it may leave while the session is still opening.
+[<Struct>]
+type ResponseDelivery = {
+    Lane: DeliveryLane
+    RequestId: uint64 voption
+    WhileOpening: bool
+}
+

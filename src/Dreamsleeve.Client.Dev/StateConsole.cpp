@@ -63,8 +63,7 @@ public:
       const auto requestId = awaitingServer.front().requestId;
       awaitingServer.pop_front();
 
-      return model.Apply(model.Generation(), ServerRejection{requestId, RequestRejectionCode::InvalidRequest, std::move(reason), "text"})
-        .has_value();
+      return exchange.PublishResult({model.Generation(), requestId, ServerRejection{RequestRejectionCode::InvalidRequest, std::move(reason), "text"}});
     }
 
     bool Reset(ClientModel& model)
@@ -92,7 +91,7 @@ private:
 
     bool Pump(ClientModel& model)
     {
-      exchange.TakeCommands(commands, awaitingServer.size() + model.PendingServerRejectionCount());
+      exchange.TakeCommands(commands, awaitingServer.size());
 
       bool ok = true;
       for (auto& queued : commands)
@@ -107,12 +106,8 @@ private:
         {
           if (const auto* chat = std::get_if<SendChat>(&queued.command))
           {
-            ok = model
-                   .Apply(
-                     model.Generation(),
-                     ServerRejection{chat->requestId, RequestRejectionCode::SessionNotReady, "Stale outgoing generation", "generation"})
-                   .has_value() &&
-                 ok;
+            const ServerRejection stale{RequestRejectionCode::SessionNotReady, "Stale outgoing generation", "generation"};
+            ok = exchange.PublishResult({model.Generation(), chat->requestId, stale}) && ok;
           }
           else
           {
@@ -176,9 +171,9 @@ private:
       }
     }
 
-    for (const auto& event : output.rejections)
-      std::cout << " rejection generation=" << event.generation << " request=" << event.rejection.requestId << ": "
-                << event.rejection.message << '\n';
+    for (const auto& result : output.results)
+      if (const auto* rejection = std::get_if<ServerRejection>(&result.outcome))
+        std::cout << " rejection generation=" << result.generation << " request=" << result.requestId << ": " << rejection->message << '\n';
 
     if (output.status.stopped) std::cout << "owner stopped\n";
   }

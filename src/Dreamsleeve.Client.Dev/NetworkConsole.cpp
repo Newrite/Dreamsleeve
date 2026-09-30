@@ -259,10 +259,7 @@ namespace
     ClientOutput output;
     exchange.Drain(output);
     movement.Apply(output.state);
-    if (
-      !verbose && output.state.updates.empty() && output.rejections.empty() && output.commandFailures.empty() &&
-      output.groundMarkConfirmations.empty() && output.identityConfirmations.empty() && output.displayNameConfirmations.empty())
-      return;
+    if (!verbose && output.state.updates.empty() && output.results.empty()) return;
 
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.status.phase) << '\n';
@@ -326,28 +323,35 @@ namespace
       }
     }
 
-    for (const auto& confirmation : output.groundMarkConfirmations)
+    for (const auto& result : output.results)
     {
-      console << "request " << confirmation.requestId << (confirmation.removed ? " removed mark " : " placed mark ") << confirmation.markId;
-      if (confirmation.evictedId) console << " evicted " << *confirmation.evictedId;
+      console << "request " << result.requestId << ' ';
+      std::visit(
+        [&](const auto& value) {
+          using Outcome = std::decay_t<decltype(value)>;
+          if constexpr (std::is_same_v<Outcome, MessagePublished>)
+            console << "published message " << value.messageId;
+          else if constexpr (std::is_same_v<Outcome, MarkPlaced>)
+          {
+            console << "placed mark " << value.markId;
+            if (value.evictedId) console << " evicted " << *value.evictedId;
+          }
+          else if constexpr (std::is_same_v<Outcome, MarkRemoved>)
+            console << "removed mark " << value.markId;
+          else if constexpr (std::is_same_v<Outcome, IdentityChanged>)
+            console << "identity "
+                    << (output.status.pseudonym ? "hidden as " + *output.status.pseudonym + " " + std::string{HidingName(value.hiding)}
+                                                : std::string{"shown"});
+          else if constexpr (std::is_same_v<Outcome, NameChanged>)
+            console << "display name " << value.displayName;
+          else if constexpr (std::is_same_v<Outcome, ServerRejection>)
+            console << "rejected (" << static_cast<int>(value.code) << "): " << value.message;
+          else
+            console << "not sent (local " << static_cast<int>(value) << ')';
+        },
+        result.outcome);
       console << '\n';
     }
-
-    for (const auto& confirmation : output.identityConfirmations)
-      console << "request " << confirmation.requestId << " identity "
-              << (confirmation.pseudonym ? "hidden as " + *confirmation.pseudonym + " " + std::string{HidingName(confirmation.hiding)}
-                                         : "shown")
-              << '\n';
-
-    for (const auto& confirmation : output.displayNameConfirmations)
-      console << "request " << confirmation.requestId << " display name " << confirmation.displayName << '\n';
-
-    for (const auto& event : output.rejections)
-      console << "request " << event.rejection.requestId << " rejected (" << static_cast<int>(event.rejection.code)
-              << "): " << event.rejection.message << '\n';
-
-    for (const auto& failure : output.commandFailures)
-      console << "request " << failure.requestId << " not sent (local " << static_cast<int>(failure.code) << ")\n";
   }
 
   void PrintPose(const MovementView& movement, Domain::PlayerId id)

@@ -6,6 +6,8 @@ import DreamNet.Runtime;
 import DreamNet.Event;
 import DreamNet.Peer;
 
+#include "Results.h"
+
 namespace
 {
 
@@ -145,9 +147,9 @@ namespace
     {
       ClientOutput result;
       Until([&] {
-        if (!result.state.updates.empty() || !result.rejections.empty() || !result.commandFailures.empty()) return true;
+        if (!result.state.updates.empty() || !ResultsOf<ServerRejection>(result).empty() || !ResultsOf<CommandFailureCode>(result).empty()) return true;
         exchange->Drain(result);
-        return !result.state.updates.empty() || !result.rejections.empty() || !result.commandFailures.empty();
+        return !result.state.updates.empty() || !ResultsOf<ServerRejection>(result).empty() || !ResultsOf<CommandFailureCode>(result).empty();
       });
       return result;
     }
@@ -308,9 +310,9 @@ TEST_CASE("Session rejection retains correlation and permits another connection"
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected && fixture.closed; });
   const auto output = fixture.Drain();
   Empty(output);
-  REQUIRE(output.rejections.size() == 1);
-  CHECK(output.rejections[0].rejection.requestId == id);
-  CHECK(output.rejections[0].rejection.code == RequestRejectionCode::UsernameTaken);
+  REQUIRE(ResultsOf<ServerRejection>(output).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(output)[0].requestId == id);
+  CHECK(ResultsOf<ServerRejection>(output)[0].value.code == RequestRejectionCode::UsernameTaken);
   const auto next = fixture.Open();
   fixture.Send(Welcome(next));
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
@@ -333,9 +335,9 @@ TEST_CASE("Terminal opening rejection does not start a competing graceful discon
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
   const auto output = fixture.Drain();
   Empty(output);
-  REQUIRE(output.rejections.size() == 1);
-  CHECK(output.rejections.front().rejection.requestId == id);
-  CHECK(output.rejections.front().rejection.code == RequestRejectionCode::SessionAlreadyOpen);
+  REQUIRE(ResultsOf<ServerRejection>(output).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(output).front().requestId == id);
+  CHECK(ResultsOf<ServerRejection>(output).front().value.code == RequestRejectionCode::SessionAlreadyOpen);
   CHECK(fixture.errors.empty());
 }
 
@@ -517,11 +519,11 @@ TEST_CASE("SendChat has no local echo and own publications use the broadcast del
 
   fixture.Send(Publication(requestId, 3));
   const auto confirmed = fixture.ReceiveOutput();
-  REQUIRE(confirmed.chatConfirmations.size() == 1);
-  CHECK(confirmed.chatConfirmations[0].requestId == requestId);
-  CHECK(confirmed.chatConfirmations[0].messageId == 3);
-  CHECK(confirmed.chatConfirmations[0].generation == generation);
-  CHECK(fixture.Drain().chatConfirmations.empty());
+  REQUIRE(ResultsOf<MessagePublished>(confirmed).size() == 1);
+  CHECK(ResultsOf<MessagePublished>(confirmed)[0].requestId == requestId);
+  CHECK(ResultsOf<MessagePublished>(confirmed)[0].value.messageId == 3);
+  CHECK(ResultsOf<MessagePublished>(confirmed)[0].generation == generation);
+  CHECK(ResultsOf<MessagePublished>(fixture.Drain()).empty());
   const auto own = Added(confirmed);
   REQUIRE(own.size() == 1);
   CHECK(own.front().messageId == 3);
@@ -547,10 +549,10 @@ TEST_CASE("Pending chat is bounded and a correlated server rejection frees only 
   fixture.Until([&] { return fixture.requests.size() == 3; });
 
   const auto busy = fixture.Drain();
-  REQUIRE(busy.commandFailures.size() == 1);
-  CHECK(busy.commandFailures.front().requestId == excess);
-  CHECK(busy.commandFailures.front().code == CommandFailureCode::Busy);
-  CHECK(busy.rejections.empty());
+  REQUIRE(ResultsOf<CommandFailureCode>(busy).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(busy).front().requestId == excess);
+  CHECK(ResultsOf<CommandFailureCode>(busy).front().value == CommandFailureCode::Busy);
+  CHECK(ResultsOf<ServerRejection>(busy).empty());
   CHECK(busy.state.updates.empty());
 
   P::ServerPacket rejected;
@@ -560,9 +562,9 @@ TEST_CASE("Pending chat is bounded and a correlated server rejection frees only 
   rejected.mutable_request_rejected()->set_message("Channel busy");
   fixture.Send(rejected);
   const auto output = fixture.ReceiveOutput();
-  REQUIRE(output.rejections.size() == 1);
-  CHECK(output.rejections.front().rejection.requestId == second);
-  CHECK(output.rejections.front().rejection.code == RequestRejectionCode::Overloaded);
+  REQUIRE(ResultsOf<ServerRejection>(output).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(output).front().requestId == second);
+  CHECK(ResultsOf<ServerRejection>(output).front().value.code == RequestRejectionCode::Overloaded);
   CHECK(output.status.phase == SessionPhase::Ready);
   CHECK(output.state.updates.empty());
 
@@ -594,10 +596,10 @@ TEST_CASE("Old queued commands and correlations cannot enter a replacement sessi
   CHECK(fixture.requests.back().request_id() == current);
 
   const auto output = fixture.Drain();
-  REQUIRE(output.commandFailures.size() == 1);
-  CHECK(output.commandFailures.front().requestId == stale);
-  CHECK(output.commandFailures.front().generation == oldGeneration);
-  CHECK(output.commandFailures.front().code == CommandFailureCode::StaleGeneration);
+  REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().requestId == stale);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().generation == oldGeneration);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().value == CommandFailureCode::StaleGeneration);
 
   SUBCASE("new request works after old pending state was cleared")
   {
@@ -623,9 +625,9 @@ TEST_CASE("Chat commands while opening are refused locally without reaching the 
   const auto generation = std::get<ClientSnapshot>(initial.state.updates.front()).generation;
   const auto requestId = Queue(fixture, generation);
   const auto output = fixture.ReceiveOutput();
-  REQUIRE(output.commandFailures.size() == 1);
-  CHECK(output.commandFailures.front().requestId == requestId);
-  CHECK(output.commandFailures.front().code == CommandFailureCode::SessionNotReady);
+  REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().requestId == requestId);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().value == CommandFailureCode::SessionNotReady);
   CHECK(fixture.requests.size() == 1);
 
   fixture.Send(Welcome(opening));
@@ -641,8 +643,8 @@ TEST_CASE("Reusing a request ID cannot replace an outstanding chat command")
   REQUIRE(fixture.exchange->Post({generation, SendChat{requestId, 1, "duplicate"}}) == CommandPostResult::Queued);
   fixture.Until([&] { return fixture.requests.size() == 2; });
   const auto output = fixture.Drain();
-  REQUIRE(output.commandFailures.size() == 1);
-  CHECK(output.commandFailures.front().code == CommandFailureCode::InvalidRequest);
+  REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().value == CommandFailureCode::InvalidRequest);
   CHECK(output.state.updates.empty());
 
   fixture.Send(Publication(requestId, 3));
@@ -672,9 +674,9 @@ TEST_CASE("Oversized outgoing chat stays local and does not occupy the pending s
   const auto generation = Ready(fixture);
   const auto tooLarge = Queue(fixture, generation, std::string(512, 'x'));
   const auto output = fixture.ReceiveOutput();
-  REQUIRE(output.commandFailures.size() == 1);
-  CHECK(output.commandFailures.front().requestId == tooLarge);
-  CHECK(output.commandFailures.front().code == CommandFailureCode::EncodingFailed);
+  REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().requestId == tooLarge);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().value == CommandFailureCode::EncodingFailed);
   CHECK(fixture.requests.size() == 1);
   CHECK(fixture.client->Phase() == SessionPhase::Ready);
 
@@ -706,17 +708,17 @@ TEST_CASE("Undrained server rejections stop outgoing commands while network clos
   CHECK_FALSE(fixture.client->Connect(std::string(43, 'A')));
   CHECK(fixture.client->Phase() == SessionPhase::Disconnected);
   const auto rejected = fixture.Drain();
-  REQUIRE(rejected.rejections.size() == 2);
-  CHECK(rejected.rejections[0].rejection.requestId == first);
-  CHECK(rejected.rejections[1].rejection.requestId == second);
-  CHECK(rejected.commandFailures.empty());
+  REQUIRE(ResultsOf<ServerRejection>(rejected).size() == 2);
+  CHECK(ResultsOf<ServerRejection>(rejected)[0].requestId == first);
+  CHECK(ResultsOf<ServerRejection>(rejected)[1].requestId == second);
+  CHECK(ResultsOf<CommandFailureCode>(rejected).empty());
 
   REQUIRE(fixture.client->Poll());
   const auto stale = fixture.Drain();
-  REQUIRE(stale.commandFailures.size() == 2);
-  CHECK(stale.commandFailures[0].requestId == waiting);
-  CHECK(stale.commandFailures[1].requestId == otherWaiting);
-  CHECK(stale.commandFailures[0].code == CommandFailureCode::StaleGeneration);
+  REQUIRE(ResultsOf<CommandFailureCode>(stale).size() == 2);
+  CHECK(ResultsOf<CommandFailureCode>(stale)[0].requestId == waiting);
+  CHECK(ResultsOf<CommandFailureCode>(stale)[1].requestId == otherWaiting);
+  CHECK(ResultsOf<CommandFailureCode>(stale)[0].value == CommandFailureCode::StaleGeneration);
 
   const auto fresh = Queue(fixture, Ready(fixture));
   fixture.Until([&] { return fixture.requests.size() == 5; });
@@ -738,15 +740,15 @@ TEST_CASE("Opening reserves its terminal rejection slot before queued commands o
 
   CHECK_FALSE(fixture.client->Connect(std::string(43, 'A')));
   const auto rejected = fixture.Drain();
-  REQUIRE(rejected.rejections.size() == 1);
-  CHECK(rejected.rejections.front().rejection.requestId == opening);
-  CHECK(rejected.commandFailures.empty());
+  REQUIRE(ResultsOf<ServerRejection>(rejected).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(rejected).front().requestId == opening);
+  CHECK(ResultsOf<CommandFailureCode>(rejected).empty());
 
   REQUIRE(fixture.client->Poll());
   const auto stale = fixture.Drain();
-  REQUIRE(stale.commandFailures.size() == 1);
-  CHECK(stale.commandFailures.front().requestId == queued);
-  CHECK(stale.commandFailures.front().code == CommandFailureCode::StaleGeneration);
+  REQUIRE(ResultsOf<CommandFailureCode>(stale).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(stale).front().requestId == queued);
+  CHECK(ResultsOf<CommandFailureCode>(stale).front().value == CommandFailureCode::StaleGeneration);
   REQUIRE(fixture.client->Connect(std::string(43, 'A')));
   CHECK(fixture.client->Phase() == SessionPhase::Connecting);
   CHECK(fixture.errors.empty());
@@ -802,11 +804,11 @@ TEST_CASE("Player rejection settles only its bounded request and keeps the sessi
   REQUIRE(fixture.exchange->Post({generation, CharacterRenamed{"Later"}}) == CommandPostResult::Queued);
   fixture.Until([&] { return fixture.requests.size() == 2; });
   const auto failed = fixture.Drain();
-  REQUIRE(failed.commandFailures.size() == 1);
-  CHECK(failed.commandFailures[0].code == CommandFailureCode::Busy);
+  REQUIRE(ResultsOf<CommandFailureCode>(failed).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(failed)[0].value == CommandFailureCode::Busy);
   fixture.Send(Rejection(fixture.requests.back().request_id()));
   const auto rejected = fixture.ReceiveOutput();
-  REQUIRE(rejected.rejections.size() == 1);
+  REQUIRE(ResultsOf<ServerRejection>(rejected).size() == 1);
   CHECK(fixture.client->Phase() == SessionPhase::Ready);
 
   REQUIRE(fixture.exchange->Post({generation, GameExited{}}) == CommandPostResult::Queued);
@@ -856,10 +858,10 @@ TEST_CASE("Undrained player rejections share the outcome bound and stale samples
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
   CHECK(fixture.requests.size() == 2);
   const auto rejected = fixture.Drain();
-  REQUIRE(rejected.rejections.size() == 1);
+  REQUIRE(ResultsOf<ServerRejection>(rejected).size() == 1);
   REQUIRE(fixture.client->Poll());
   const auto stale = fixture.Drain();
-  CHECK(stale.commandFailures.empty()); // Stale measurements have no request outcome.
+  CHECK(ResultsOf<CommandFailureCode>(stale).empty()); // Stale measurements have no request outcome.
   CHECK(fixture.errors.empty());
 }
 
@@ -971,9 +973,9 @@ TEST_CASE("Explicit location transitions report invalid session generation while
   REQUIRE(fixture.exchange->Post({generation - 1, LocalMovement{}}) == CommandPostResult::Queued);
   REQUIRE(fixture.client->Poll());
   const auto output = fixture.Drain();
-  REQUIRE(output.commandFailures.size() == 1);
-  CHECK(output.commandFailures[0].code == CommandFailureCode::StaleGeneration);
-  CHECK(output.commandFailures[0].requestId != 0);
+  REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(output)[0].value == CommandFailureCode::StaleGeneration);
+  CHECK(ResultsOf<CommandFailureCode>(output)[0].requestId != 0);
   CHECK(fixture.requests.size() == 1);
   CHECK(fixture.samples.empty());
 }
@@ -1016,9 +1018,9 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
   {
     const auto id     = announce(generation, text, label, static_cast<Domain::ChatChannelId>(channel));
     const auto output = fixture.ReceiveOutput();
-    REQUIRE(output.commandFailures.size() == 1);
-    CHECK(output.commandFailures[0].requestId == id);
-    CHECK(output.commandFailures[0].code == CommandFailureCode::InvalidRequest);
+    REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 1);
+    CHECK(ResultsOf<CommandFailureCode>(output)[0].requestId == id);
+    CHECK(ResultsOf<CommandFailureCode>(output)[0].value == CommandFailureCode::InvalidRequest);
   }
 
   // A source the welcome does not allow stays local as well.
@@ -1034,9 +1036,9 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
         }
   }) == CommandPostResult::Queued);
   const auto untrusted = fixture.ReceiveOutput();
-  REQUIRE(untrusted.commandFailures.size() == 1);
-  CHECK(untrusted.commandFailures[0].requestId == trusted);
-  CHECK(untrusted.commandFailures[0].code == CommandFailureCode::InvalidRequest);
+  REQUIRE(ResultsOf<CommandFailureCode>(untrusted).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(untrusted)[0].requestId == trusted);
+  CHECK(ResultsOf<CommandFailureCode>(untrusted)[0].value == CommandFailureCode::InvalidRequest);
   CHECK(fixture.requests.size() == 1);
 
   const auto id = announce(generation, "Пал в бою", "Мод");
@@ -1057,8 +1059,8 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
   announcement->set_signature("Мод");
   fixture.Send(published);
   const auto confirmed = fixture.ReceiveOutput();
-  REQUIRE(confirmed.chatConfirmations.size() == 1);
-  CHECK(confirmed.chatConfirmations[0].requestId == id);
+  REQUIRE(ResultsOf<MessagePublished>(confirmed).size() == 1);
+  CHECK(ResultsOf<MessagePublished>(confirmed)[0].requestId == id);
   const auto added = Added(confirmed);
   REQUIRE(added.size() == 1);
   REQUIRE(added[0].announcement);
@@ -1073,8 +1075,8 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
   rejection.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED);
   fixture.Send(rejection);
   const auto output = fixture.ReceiveOutput();
-  REQUIRE(output.rejections.size() == 1);
-  CHECK(output.rejections[0].rejection.code == RequestRejectionCode::AnnouncementNotAllowed);
+  REQUIRE(ResultsOf<ServerRejection>(output).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(output)[0].value.code == RequestRejectionCode::AnnouncementNotAllowed);
   CHECK(fixture.client->Phase() == SessionPhase::Ready);
 
   REQUIRE(fixture.client->Disconnect());
@@ -1108,9 +1110,9 @@ TEST_CASE("Ground mark commands settle by request ID on the control lane and vis
   const auto confirmations = [&] {
     ClientOutput found;
     fixture.Until([&] {
-      if (!found.groundMarkConfirmations.empty() || !found.rejections.empty()) return true;
+      if (!found.results.empty()) return true;
       fixture.exchange->Drain(found);
-      return !found.groundMarkConfirmations.empty() || !found.rejections.empty();
+      return !found.results.empty();
     });
     return found;
   };
@@ -1123,11 +1125,11 @@ TEST_CASE("Ground mark commands settle by request ID on the control lane and vis
   placed.mutable_ground_mark_placed()->set_evicted_id(2);
   fixture.Send(placed);
   const auto confirmed = confirmations();
-  REQUIRE(confirmed.groundMarkConfirmations.size() == 1);
-  CHECK(confirmed.groundMarkConfirmations[0].requestId == noteId);
-  CHECK(confirmed.groundMarkConfirmations[0].markId == 9);
-  CHECK(confirmed.groundMarkConfirmations[0].evictedId == 2);
-  CHECK(confirmed.groundMarkConfirmations[0].generation == generation);
+  REQUIRE(ResultsOf<MarkPlaced>(confirmed).size() == 1);
+  CHECK(ResultsOf<MarkPlaced>(confirmed)[0].requestId == noteId);
+  CHECK(ResultsOf<MarkPlaced>(confirmed)[0].value.markId == 9);
+  CHECK(ResultsOf<MarkPlaced>(confirmed)[0].value.evictedId == 2);
+  CHECK(ResultsOf<MarkPlaced>(confirmed)[0].generation == generation);
   CHECK(confirmed.state.updates.empty());
 
   P::ServerPacket changed;
@@ -1154,9 +1156,8 @@ TEST_CASE("Ground mark commands settle by request ID on the control lane and vis
   removed.mutable_ground_mark_removed()->set_mark_id(9);
   fixture.Send(removed);
   const auto settled = confirmations();
-  REQUIRE(settled.groundMarkConfirmations.size() == 1);
-  CHECK(settled.groundMarkConfirmations[0].removed);
-  CHECK(settled.groundMarkConfirmations[0].markId == 9);
+  REQUIRE(ResultsOf<MarkRemoved>(settled).size() == 1);
+  CHECK(ResultsOf<MarkRemoved>(settled)[0].value.markId == 9);
 
   // A refusal on the control lane settles a death report without a fault.
   const auto deathId = Value(fixture.exchange->NextRequestId());
@@ -1167,8 +1168,8 @@ TEST_CASE("Ground mark commands settle by request ID on the control lane and vis
   rejection.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL);
   fixture.Send(rejection);
   const auto refused = confirmations();
-  REQUIRE(refused.rejections.size() == 1);
-  CHECK(refused.rejections[0].rejection.code == RequestRejectionCode::GroundMarkAreaFull);
+  REQUIRE(ResultsOf<ServerRejection>(refused).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(refused)[0].value.code == RequestRejectionCode::GroundMarkAreaFull);
   CHECK(fixture.client->Phase() == SessionPhase::Ready);
   CHECK(fixture.errors.empty());
 
@@ -1197,9 +1198,9 @@ TEST_CASE("Hidden identity opens from the first packet and a switch settles with
   const auto confirmations = [&] {
     ClientOutput found;
     fixture.Until([&] {
-      if (!found.identityConfirmations.empty() || !found.rejections.empty()) return true;
+      if (!ResultsOf<IdentityChanged>(found).empty() || !ResultsOf<ServerRejection>(found).empty()) return true;
       fixture.exchange->Drain(found);
-      return !found.identityConfirmations.empty() || !found.rejections.empty();
+      return !ResultsOf<IdentityChanged>(found).empty() || !ResultsOf<ServerRejection>(found).empty();
     });
     return found;
   };
@@ -1216,10 +1217,9 @@ TEST_CASE("Hidden identity opens from the first packet and a switch settles with
   shown.mutable_identity_visibility_changed();
   fixture.Send(shown);
   const auto settled = confirmations();
-  REQUIRE(settled.identityConfirmations.size() == 1);
-  CHECK(settled.identityConfirmations[0].requestId == showId);
-  CHECK_FALSE(settled.identityConfirmations[0].pseudonym);
-  CHECK(settled.identityConfirmations[0].hiding == Domain::HiddenIdentity::None);
+  REQUIRE(ResultsOf<IdentityChanged>(settled).size() == 1);
+  CHECK(ResultsOf<IdentityChanged>(settled)[0].requestId == showId);
+  CHECK(ResultsOf<IdentityChanged>(settled)[0].value.hiding == Domain::HiddenIdentity::None);
   CHECK_FALSE(settled.status.pseudonym);
   CHECK(settled.status.hiding == Domain::HiddenIdentity::None);
 
@@ -1231,8 +1231,8 @@ TEST_CASE("Hidden identity opens from the first packet and a switch settles with
   limited.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_RATE_LIMITED);
   fixture.Send(limited);
   const auto refused = confirmations();
-  REQUIRE(refused.rejections.size() == 1);
-  CHECK(refused.rejections[0].rejection.code == RequestRejectionCode::RateLimited);
+  REQUIRE(ResultsOf<ServerRejection>(refused).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(refused)[0].value.code == RequestRejectionCode::RateLimited);
   CHECK(fixture.client->Phase() == SessionPhase::Ready);
 
   // An unknown settlement is a protocol fault, and a new session starts without a pseudonym.
@@ -1254,7 +1254,7 @@ TEST_CASE("A display name change settles once, one at a time, and a refusal keep
   const auto results = [&] {
     ClientOutput found;
     const auto   any = [&] {
-      return !found.displayNameConfirmations.empty() || !found.rejections.empty() || !found.commandFailures.empty();
+      return !ResultsOf<NameChanged>(found).empty() || !ResultsOf<ServerRejection>(found).empty() || !ResultsOf<CommandFailureCode>(found).empty();
     };
     fixture.Until([&] {
       if (any()) return true;
@@ -1282,9 +1282,9 @@ TEST_CASE("A display name change settles once, one at a time, and a refusal keep
         ChangeDisplayName{busyId, "Другое"}
   }) == CommandPostResult::Queued);
   const auto busy = results();
-  REQUIRE(busy.commandFailures.size() == 1);
-  CHECK(busy.commandFailures[0].requestId == busyId);
-  CHECK(busy.commandFailures[0].code == CommandFailureCode::Busy);
+  REQUIRE(ResultsOf<CommandFailureCode>(busy).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(busy)[0].requestId == busyId);
+  CHECK(ResultsOf<CommandFailureCode>(busy)[0].value == CommandFailureCode::Busy);
 
   P::ServerPacket changed;
   changed.set_protocol_version(Wire::Version);
@@ -1292,9 +1292,9 @@ TEST_CASE("A display name change settles once, one at a time, and a refusal keep
   changed.mutable_display_name_changed()->set_display_name("Новое Имя");
   fixture.Send(changed);
   const auto settled = results();
-  REQUIRE(settled.displayNameConfirmations.size() == 1);
-  CHECK(settled.displayNameConfirmations[0].requestId == changeId);
-  CHECK(settled.displayNameConfirmations[0].displayName == "Новое Имя");
+  REQUIRE(ResultsOf<NameChanged>(settled).size() == 1);
+  CHECK(ResultsOf<NameChanged>(settled)[0].requestId == changeId);
+  CHECK(ResultsOf<NameChanged>(settled)[0].value.displayName == "Новое Имя");
 
   // A blank name or control characters are refused locally.
   const auto blankId = Value(fixture.exchange->NextRequestId());
@@ -1304,8 +1304,8 @@ TEST_CASE("A display name change settles once, one at a time, and a refusal keep
         ChangeDisplayName{blankId, "   "}
   }) == CommandPostResult::Queued);
   const auto blank = results();
-  REQUIRE(blank.commandFailures.size() == 1);
-  CHECK(blank.commandFailures[0].code == CommandFailureCode::InvalidRequest);
+  REQUIRE(ResultsOf<CommandFailureCode>(blank).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(blank)[0].value == CommandFailureCode::InvalidRequest);
   CHECK(fixture.requests.size() == 2);
 
   // A server refusal settles the change; the session stays ready.
@@ -1320,8 +1320,8 @@ TEST_CASE("A display name change settles once, one at a time, and a refusal keep
   limited.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_RATE_LIMITED);
   fixture.Send(limited);
   const auto refused = results();
-  REQUIRE(refused.rejections.size() == 1);
-  CHECK(refused.rejections[0].rejection.code == RequestRejectionCode::RateLimited);
+  REQUIRE(ResultsOf<ServerRejection>(refused).size() == 1);
+  CHECK(ResultsOf<ServerRejection>(refused)[0].value.code == RequestRejectionCode::RateLimited);
   CHECK(fixture.client->Phase() == SessionPhase::Ready);
 
   // An unknown settlement is a protocol fault.

@@ -385,7 +385,10 @@ DreamNetPacket проверяет представимость длины в ENe
 параметров: `ServerConfig.validate config`, затем `ServerConfig.applyPacketLimits
 config host` после создания yENet host и **до первого Service/Connect**.
 Из этого же config один раз создаётся `ProtocolCodec.create config`; затем используются
-`ProtocolCodec.decodeClient codec bytes` / `ProtocolCodec.encodeServer codec response`.
+`ProtocolCodec.decodeClient codec bytes` / `ProtocolCodec.encode codec payloadBudget response`
+(пакеты одного ответа: движение делится по бюджету peer, остальное — один пакет).
+`ProtocolCodec.delivery response` — единственная таблица свойств ответа: канал, RequestId
+для ответа на команду (нет у уведомления) и можно ли слать его до SessionOpened.
 EnetTransport применяет лимиты к реальному yENet host; все native операции
 Host/Peer выполняет один владелец транспорта.
 
@@ -502,7 +505,7 @@ fallback. Новая альтернатива требует перегрузк�
 - C++: [ProtocolCodec.ixx](../src/Dreamsleeve.Client.Core/Protocol/ProtocolCodec.ixx),
   Codec::TryCreate(config), Encode(OpenSession | SendChat) → DreamNetPacket, Decode(bytes) → ServerResponse.
 - F#: [ProtocolCodec.fs](../src/Dreamsleeve.Server.Core/Protocol/ProtocolCodec.fs),
-  create config → codec, decodeClient codec → проверенная команда, encodeServer codec → bytes.
+  create config → codec, decodeClient codec → проверенная команда, encode codec budget → пакеты.
 - C++ protobuf headers подключаются только в .cpp реализации. Они не попадают
   в интерфейс модуля: [C1001 воспроизведён на MSVC 19.51.36260](../docs/MsvcProtobufModulesRu.md)
   после обновления Visual Studio 18.10.2. Переименование интерфейса в .cpp

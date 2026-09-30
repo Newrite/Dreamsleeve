@@ -12,7 +12,6 @@ export namespace Dreamsleeve::Client
 {
 
   using namespace Domain;
-  using RequestRejectionCode = ::Protocol::Chat::RequestRejectionCode;
 
   // Application updates after decoding. These are not protobuf or ENet events.
   struct SelfPlayerAssigned
@@ -99,22 +98,6 @@ export namespace Dreamsleeve::Client
     ChatHistoryPage page;
   };
 
-  // A rejection of a specific request after decoding, not a transport error.
-  // Codes come from protocol.proto; unknown nonzero values retain their message.
-  struct ServerRejection
-  {
-    std::uint64_t        requestId;
-    RequestRejectionCode code{};
-    std::string          message;
-    std::string          field;
-  };
-
-  struct ServerRejectionEvent
-  {
-    std::uint64_t   generation{};
-    ServerRejection rejection;
-  };
-
   using ClientUpdate = std::variant<
     SelfPlayerAssigned,
     OnlinePlayersReplaced,
@@ -131,8 +114,7 @@ export namespace Dreamsleeve::Client
     ChatMessagesReceived,
     ChatHistoryReceived,
     GroundMarksChanged,
-    OwnGroundMarksReplaced,
-    ServerRejection>;
+    OwnGroundMarksReplaced>;
 
   struct ClientSnapshot
   {
@@ -355,22 +337,6 @@ public:
       output.revision   = revision;
     }
 
-    // Owner-only drain. Forward these owning events through the application's
-    // exchange separately from replaceable state snapshots.
-    // Already accepted events survive either reset until explicitly taken.
-    std::size_t PendingServerRejectionCount() const noexcept
-    {
-      return serverRejections.size();
-    }
-
-    std::vector<ServerRejectionEvent> TakeServerRejections()
-    {
-      std::vector<ServerRejectionEvent> result;
-      result.swap(serverRejections);
-
-      return result;
-    }
-
     ClientSnapshot Snapshot() const
     {
       ClientSnapshot
@@ -405,8 +371,7 @@ private:
         std::is_same_v<Update, PlayerProfileUpdated> || std::is_same_v<Update, PlayerMetadataUpdated> ||
         std::is_same_v<Update, PlayerCharacterRenamed> || std::is_same_v<Update, PlayerActorValuesUpdated> ||
         std::is_same_v<Update, ChatMessagesReceived> || std::is_same_v<Update, ChatHistoryReceived> ||
-        std::is_same_v<Update, GroundMarksChanged> || std::is_same_v<Update, OwnGroundMarksReplaced> ||
-        std::is_same_v<Update, ServerRejection>)
+        std::is_same_v<Update, GroundMarksChanged> || std::is_same_v<Update, OwnGroundMarksReplaced>)
       {
         // No new motion, or a complete online replacement already supersedes it.
       }
@@ -543,8 +508,7 @@ private:
       }
       else if constexpr (
         !std::is_same_v<Update, ChatMessagesReceived> && !std::is_same_v<Update, ChatHistoryReceived> &&
-        !std::is_same_v<Update, GroundMarksChanged> && !std::is_same_v<Update, OwnGroundMarksReplaced> &&
-        !std::is_same_v<Update, ServerRejection>)
+        !std::is_same_v<Update, GroundMarksChanged> && !std::is_same_v<Update, OwnGroundMarksReplaced>)
       {
         MarkPlayer(update.playerId);
       }
@@ -671,20 +635,10 @@ private:
       return {};
     }
 
-    Domain::OperationResult ApplyOne(const ServerRejection& update)
-    {
-      serverRejections.push_back(ServerRejectionEvent{generation, update});
-
-      // Success means the notification was handled, not that the server
-      // accepted the originating request. Accepted game/chat state is intact.
-      return {};
-    }
-
     std::size_t                        maxMovementObservations;
     PlayerStore                        players;
     std::map<ChatChannelId, ChatCache> chats;
     GroundMarkStore                    groundMarks;
-    std::vector<ServerRejectionEvent>  serverRejections;
     std::optional<PlayerId>            selfPlayerId;
     ChangeBatch                        pendingChanges;
     std::uint64_t                      generation{1};

@@ -146,13 +146,19 @@ export namespace Dreamsleeve::Client::Wire
     std::string   displayName;
   };
 
+  struct RequestRejected
+  {
+    std::uint64_t   requestId;
+    ServerRejection rejection;
+  };
+
   // Replies carry required correlation; notifications have no request ID.
   // Own and broadcast chat both apply the same ChatMessagesReceived update.
   using ServerResponse = std::variant<
     SessionOpened,
     ChatAccepted,
     ChatMessagesReceived,
-    ServerRejection,
+    RequestRejected,
     PlayerUpserted,
     PlayerRemoved,
     PlayersMoved,

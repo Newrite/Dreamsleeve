@@ -148,9 +148,8 @@ ClientStateDelta.movement; новый снимок сбрасывает их и�
 - История использует отдельный локальный `round` и курсор; live-сообщения не
   двигают курсор загрузки. `hasGap` сообщает сервер, клиент не выводит его из
   пропущенных числовых ID. Gap сохраняется до начала нового раунда.
-- `ServerRejection` содержит обязательный RequestId отклонённой команды и забирается
-  через `TakeServerRejections()`. Ошибки транспорта без команды не входят в этот тип. Принятые отказы
-  переживают reset и содержат исходную generation; потребитель учитывает её.
+- Модель не хранит итоги команд: отказ сервера, как и подтверждение, идёт в
+  `ClientExchange` результатом команды (см. «Результаты команд»).
 - `generation/revision` batch фиксируются при `TakeChanges`, в том числе для
   пустого batch. Revision не является последовательностью будущих UI-пакетов.
 
@@ -198,7 +197,7 @@ Post возвращает Queued, Replaced, Full или Closed. Queued не оз
 CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot.
 
 PostAnnouncement (системный канал, текст, вид, заявленный источник, подпись) идёт по
-пути SendChat: Chat-канал ENet, общий лимит ожидающих чат-запросов, `ChatConfirmation`
+пути SendChat: Chat-канал ENet, общий лимит ожидающих чат-запросов, `MessagePublished`
 при публикации, `ServerRejection` при отказе. Канал команды должен быть известен и
 подходящего вида: SendChat — `Global`, PostAnnouncement — `System`, иначе локальный
 `InvalidRequest`. Разрешён ли источник и укладываются ли текст и подпись в лимиты, Core
@@ -225,15 +224,28 @@ Publish первый раз выдаёт снимок, затем вычитыв
 Added/Removed. Снимок используется при явном запросе, смене сессии и переполнении.
 Запрошенный снимок сразу поглощает накопленные изменения, исключая их повторную выдачу.
 
-Один Drain возвращает StateUpdateBatch, отдельные ServerRejectionEvent, локальные
-commandFailures и ClientStatus (phase/authenticating/stopped/error). Локальный отказ SendChat сохраняет generation/requestId.
-Общий бюджет commandCapacity покрывает commandFailures, серверные отказы и
-pendingReplies — ожидаемые владельцем ответы, включая OpenSession. TakeCommands
-резервирует место для каждого выданного запроса, оставляя остальные в очереди до Drain.
-CanAcceptReplies проверяет место перед запросом, запускаемым вне очереди команд.
-Publish возвращает false при превышении бюджета: отказы остаются в модели для повторной
-публикации после Drain, а состояние и phase всё равно публикуются, чтобы показать сбой.
-Владелец обязан обрабатывать этот результат. Это не блокирует сетевой Poll.
+Один Drain возвращает StateUpdateBatch, результаты команд и ClientStatus
+(phase/authenticating/stopped/error).
+
+### Результаты команд
+
+Каждую команду с RequestId закрывает ровно один `CommandResult{generation, requestId, outcome}`
+в `ClientOutput.results`, в порядке, в котором владелец их выдал. `outcome` —
+`MessagePublished` (SendChat, PostAnnouncement), `MarkPlaced` / `MarkRemoved` (метки),
+`IdentityChanged` (скрытое имя; псевдоним — в `ClientStatus`), `NameChanged` (отображаемое
+имя), `ServerRejection{code, message, field}` или локальный `CommandFailureCode`. `generation` —
+поколение команды: результат переживает reset, потребитель сверяет его сам. Новая команда
+добавляет один вариант исхода, а не поле `ClientOutput` и параметр `Publish`.
+
+Общий бюджет commandCapacity покрывает невыданные результаты и pendingReplies — ожидаемые
+владельцем ответы, включая OpenSession. TakeCommands резервирует место для каждого
+выданного запроса, оставляя остальные в очереди до Drain; CanAcceptReplies проверяет место
+перед запросом вне очереди команд. Поэтому результат, для которого место зарезервировано,
+всегда помещается. Результат вместе с состоянием, которое он подтверждает, публикует
+`Publish(model, …, result)`; результат без состояния (локальный отказ) — `PublishResult`.
+Если результат не поместился, Publish возвращает false, а состояние и phase всё равно
+публикуются, чтобы показать сбой; владелец завершает сессию с ошибкой. Это не блокирует
+сетевой Poll.
 Отказы сохраняются при замене состояния снимком и смене сессии; потребитель учитывает
 их исходную generation. Лимиты задаются для числа команд, результатов и пакетов
 состояния, не для байтов: размер отдельного текста или снимка этим не ограничен.
@@ -258,20 +270,17 @@ MovementView хранит их историю со сбросами на гра�
 `ExceptGroundMarks`) задаёт выбор, который владелец читает при открытии следующей сессии
 (`OpenSession.hidden_identity`); идущую сессию меняет только
 `SetIdentityVisibility{requestId, hiding}` — по пути команд меток: Control-канал ENet, свой
-набор ожидания, одна команда за раз (вторая — `CommandFailure::Busy`). Итог —
-`IdentityConfirmation{generation, requestId, pseudonym, hiding}` в
-`ClientOutput.identityConfirmations`, `ServerRejection` или `CommandFailure`; бюджет
-результатов общий. `ClientStatus::pseudonym` и `ClientStatus::hiding` — псевдоним текущей
-сессии, который видят другие, и где (из `SessionOpened` и подтверждений; очищаются при
-завершении сессии). Модель не меняется: своя запись всегда приходит с настоящим профилем, а
+набор ожидания, одна команда за раз (вторая — `CommandFailureCode::Busy`). Итог —
+`IdentityChanged{hiding}`, `ServerRejection` или `CommandFailureCode`. `ClientStatus::pseudonym`
+и `ClientStatus::hiding` — псевдоним текущей сессии, который видят другие, и где (из
+`SessionOpened` и подтверждений; очищаются при завершении сессии). Модель не меняется: своя запись всегда приходит с настоящим профилем, а
 `Domain::PlayerData::pseudonymous` отмечает чужие псевдонимные профили (username пуст).
 
 `ChangeDisplayName{requestId, displayName}` — тот же путь: Control-канал, свой набор ожидания,
-одна смена за раз (вторая — `CommandFailure::Busy`); пустое имя, управляющие символы и
-некорректный UTF-8 отклоняются локально (`InvalidRequest`). Итог —
-`DisplayNameConfirmation{generation, requestId, displayName}` в
-`ClientOutput.displayNameConfirmations`, `ServerRejection` или `CommandFailure`. Модель
-подтверждение не меняет: своя запись с новым именем приходит `PlayerUpserted`.
+одна смена за раз (вторая — `CommandFailureCode::Busy`); пустое имя, управляющие символы и
+некорректный UTF-8 отклоняются локально (`InvalidRequest`). Итог — `NameChanged{displayName}`,
+`ServerRejection` или `CommandFailureCode`. Модель подтверждение не меняет: своя запись с
+новым именем приходит `PlayerUpserted`.
 
 ## Метки на земле
 
@@ -280,9 +289,8 @@ MovementView хранит их историю со сбросами на гра�
 собственным набором ожидающих запросов в ClientRuntime (бюджет `maxPendingChatRequests`).
 Локально проверяются только форма (непустая надпись, корректный UTF-8, подпись без
 управляющих, конечное положение, ненулевой id); положение, слова, квоты и частоту судит
-сервер. Результат — `GroundMarkConfirmation` (`ClientOutput.groundMarkConfirmations`:
-id метки, id вытесненной, признак удаления), `ServerRejection` или `CommandFailure`; все
-делят один ограниченный бюджет результатов.
+сервер. Результат — `MarkPlaced{markId, evictedId}` или `MarkRemoved{markId}`,
+`ServerRejection` или `CommandFailureCode`.
 
 Видимые метки живут в `GroundMarkStore` модели (`ClientSnapshot.groundMarks` с
 `viewRevision`). Обновление `GroundMarksChanged{viewRevision, added, removedIds, clear}`
@@ -337,9 +345,7 @@ movement.Apply(output.state), затем Sample(playerId, frameTime) кажды�
 Полный снимок/playersReplaced переустанавливает базу истории. Старые generation/revision
 не возвращают исчезнувшие треки. [Подробности](../../../docs/MovementInterpolationRu.md).
 
-`ClientOutput.chatConfirmations` отдаёт `(generation, requestId, messageId)` для
-собственных подтверждённых сообщений. Эти результаты занимают тот же ограниченный
-бюджет, что локальные отказы и серверные rejections, до Drain основного потока.
-UI-host связывает pending-строки по ID, не по тексту; контент по-прежнему приходит
+`MessagePublished{messageId}` подтверждает собственное сообщение; UI-host связывает
+pending-строки по RequestId, не по тексту; контент по-прежнему приходит
 через обычные chatContent/snapshot. Статус содержит serverName из welcome;
 при завершении сессии имя очищается вместе с моделью.

@@ -86,23 +86,23 @@ let private apply update = Player.create profile |> Player.applyUpdate update |>
 let tests = testList "Dreamsleeve.Server.Codec" [
     testCase "movement batches split exactly within configured packet limits" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
-        let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved movements) |> ok
+        let packet = Packets.single codec (ServerResponse.PlayersMoved movements) |> ok
         for limit in [32; 127; 128; packet.Length - 1; packet.Length] do
             let small = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = limit } |> ok
-            let packets = ProtocolCodec.encodeMovementPackets small Int32.MaxValue movements |> ok
+            let packets = ProtocolCodec.encode small Int32.MaxValue (ServerResponse.PlayersMoved movements) |> ok
             let decoded = packets |> List.collect (fun bytes ->
                 Expect.isLessThanOrEqual bytes.Length limit "Application limit includes the whole envelope."
                 let value = parseMovement bytes
                 value.Movements.Players |> Seq.map _.PlayerId |> List.ofSeq)
             Expect.equal decoded [1UL .. 130UL] "Every entry exactly once and in order."
         let tiny = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = 1 } |> ok
-        Expect.isError (ProtocolCodec.encodeMovementPackets tiny Int32.MaxValue movements) "An unsplittable entry fails before any send."
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch []))) "Empty batch is invalid."
+        Expect.isError (ProtocolCodec.encode tiny Int32.MaxValue (ServerResponse.PlayersMoved movements)) "An unsplittable entry fails before any send."
+        Expect.isError (Packets.single codec (ServerResponse.PlayersMoved (movementBatch []))) "Empty batch is invalid."
 
     testCase "default batching splits realtime below the transport fragmentation threshold" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 200UL -> pid id, ValueNone]
-        let expected = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved movements) |> ok
-        let packets = ProtocolCodec.encodeMovementPackets codec 548 movements |> ok
+        let expected = Packets.single codec (ServerResponse.PlayersMoved movements) |> ok
+        let packets = ProtocolCodec.encode codec 548 (ServerResponse.PlayersMoved movements) |> ok
         Expect.isGreaterThan expected.Length 548 "Fixture crosses the transport fragmentation threshold."
         Expect.isGreaterThan packets.Length 1 "Realtime splits at MTU even without an explicit target."
         for bytes in packets do Expect.isLessThanOrEqual bytes.Length 548 "No reliable fragmentation fallback."
@@ -111,22 +111,22 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
         for target, transport, application in [64, 128, 1024; 128, 64, 1024; 128, 1024, 64] do
             let configured = configured { config with MovementPacketTargetBytes = target; MaxPacketBytes = application }
-            let packets = ProtocolCodec.encodeMovementPackets configured transport movements |> ok
+            let packets = ProtocolCodec.encode configured transport (ServerResponse.PlayersMoved movements) |> ok
             let budget = min target (min transport application)
             let ids = packets |> List.collect (fun bytes ->
                 Expect.isLessThanOrEqual bytes.Length budget "Whole protobuf envelope fits."
                 (parseMovement bytes).Movements.Players |> Seq.map _.PlayerId |> Seq.toList)
             Expect.isGreaterThan packets.Length 1 "Fixture requires splitting."
             Expect.equal ids [1UL .. 130UL] "Splitting preserves every entry and order."
-        Expect.isError (ProtocolCodec.encodeMovementPackets codec 0 movements) "Unavailable peer cannot encode movement."
+        Expect.isError (ProtocolCodec.encode codec 0 (ServerResponse.PlayersMoved movements)) "Unavailable peer cannot encode movement."
 
     testCase "indivisible realtime never falls back to fragmentation" <| fun _ ->
         let single = movementBatch [pid UInt64.MaxValue, ValueNone]
-        let size = (ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved single) |> ok).Length
-        Expect.isOk (ProtocolCodec.encodeMovementPackets codec size single) "Exact MTU boundary fits."
-        Expect.isError (ProtocolCodec.encodeMovementPackets codec (size - 1) single) "Oversized entry rejects the entire batch."
+        let size = (Packets.single codec (ServerResponse.PlayersMoved single) |> ok).Length
+        Expect.isOk (ProtocolCodec.encode codec size (ServerResponse.PlayersMoved single)) "Exact MTU boundary fits."
+        Expect.isError (ProtocolCodec.encode codec (size - 1) (ServerResponse.PlayersMoved single)) "Oversized entry rejects the entire batch."
         let strict = configured { config with MaxPacketBytes = size - 1 }
-        Expect.isError (ProtocolCodec.encodeMovementPackets strict 548 single) "Application cap also applies."
+        Expect.isError (ProtocolCodec.encode strict 548 (ServerResponse.PlayersMoved single)) "Application cap also applies."
 
     testCase "source movement timestamp survives domain and both replication shapes" <| fun _ ->
         for stamp in [0UL; 123456789UL; UInt64.MaxValue] do
@@ -136,19 +136,19 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             let location = state.Location |> ValueOption.get
             Expect.equal location.SampledAtUs stamp "No clock conversion on the server."
 
-            let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, state.Location])) |> ok |> parseMovement
+            let moved = Packets.single codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, state.Location])) |> ok |> parseMovement
             Expect.equal moved.Movements.Players[0].Pose.SampledAtUs stamp "Compact movement retains time."
-            let full = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+            let full = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             Expect.equal full.PlayerUpdated.Player.Location.SampledAtUs stamp "Snapshots retain the same measurement."
 
     testCase "metadata replication encodes omitted and empty components independently" <| fun _ ->
-        let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueSome Map.empty, ValueNone)) |> ok |> parse
+        let packet = Packets.single codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueSome Map.empty, ValueNone)) |> ok |> parse
         Expect.isNotNull packet.PlayerMetadataChanged.ActorValues "Present empty means clear."
         Expect.isNull packet.PlayerMetadataChanged.Details "Absent details means preserve."
-        let packet = ProtocolCodec.encodeServer codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueSome PlayerDetails.empty)) |> ok |> parse
+        let packet = Packets.single codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueSome PlayerDetails.empty)) |> ok |> parse
         Expect.isNull packet.PlayerMetadataChanged.ActorValues "Absent values mean preserve."
         Expect.isNotNull packet.PlayerMetadataChanged.Details "Details reset is explicit."
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueNone))) "Empty patch is not an update."
+        Expect.isError (Packets.single codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueNone))) "Empty patch is not an update."
 
 
     testCase "open session carries only an opaque ticket without changing it" <| fun _ ->
@@ -212,8 +212,8 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isOk (ProtocolCodec.decodeClient codec additiveField) "unknown additive field preserves a known command"
 
     testCase "accepted chat differs only in recipient correlation and includes no history" <| fun _ ->
-        let broadcast = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok |> parse
-        let own = ProtocolCodec.encodeServer codec (ServerResponse.ChatAccepted(42UL, message)) |> ok |> parse
+        let broadcast = Packets.single codec (ServerResponse.ChatPublished message) |> ok |> parse
+        let own = Packets.single codec (ServerResponse.ChatAccepted(42UL, message)) |> ok |> parse
         Expect.isFalse broadcast.HasRequestId "others have no request ID"
         Expect.equal own.RequestId 42UL "author correlation"
         Expect.equal own.ChatPublished broadcast.ChatPublished "same accepted event"
@@ -223,18 +223,18 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isNull own.SessionOpened "no history in normal publication"
 
     testCase "character snapshots and withheld names are encoded without leaking the game name" <| fun _ ->
-        let plain = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok |> parse
+        let plain = Packets.single codec (ServerResponse.ChatPublished message) |> ok |> parse
         Expect.isFalse plain.ChatPublished.Message.HasCharacterName "no snapshot outside a character"
         let lydia = CharacterName.create 128 "Lydia" |> ok
         let named = ChatMessage.create (ChatMessageId.create 5UL |> ok) channel (PublicIdentity.Profile profile) (ValueSome lydia)
                         (ChatMessageText.create 2000 "hi" |> ok) DateTimeOffset.UnixEpoch
-        let packet = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished named) |> ok |> parse
+        let packet = Packets.single codec (ServerResponse.ChatPublished named) |> ok |> parse
         Expect.equal packet.ChatPublished.Message.CharacterName "Lydia" "snapshot at sending"
-        let marked = ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished(ChatMessage.withFlagged [{ Start = 1; Length = 2 }] named)) |> ok |> parse
+        let marked = Packets.single codec (ServerResponse.ChatPublished(ChatMessage.withFlagged [{ Start = 1; Length = 2 }] named)) |> ok |> parse
         Expect.equal marked.ChatPublished.Message.Flagged.Count 1 "flag ranges"
         Expect.equal (marked.ChatPublished.Message.Flagged[0].Start, marked.ChatPublished.Message.Flagged[0].Length) (1u, 2u) "byte range"
         let withheld = { snapshot with CharacterName = ValueNone; CharacterNameWithheld = true }
-        let player = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined withheld) |> ok |> parse
+        let player = Packets.single codec (ServerResponse.PlayerJoined withheld) |> ok |> parse
         Expect.isTrue player.PlayerJoined.Player.CharacterNameWithheld "withheld flag"
         Expect.isFalse player.PlayerJoined.Player.HasCharacterName "withheld name absent"
         let tooLong = send 3UL (String('x', config.ChatInput.MessageText + 1))
@@ -244,11 +244,11 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         | other -> failtestf "Expected length failure: %A" other
 
     testCase "welcome requires unique online IDs self membership and ordered channel history" <| fun _ ->
-        let encode value = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, value))
+        let encode value = Packets.single codec (ServerResponse.SessionOpened(1UL, value))
         let packet = encode welcome |> ok |> parse
         Expect.equal packet.SessionOpened.ServerName config.ServerName "configured server name"
         let named = configured { config with ServerName = "Голоса Тамриэля" }
-        let namedPacket = ProtocolCodec.encodeServer named (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> parse
+        let namedPacket = Packets.single named (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> parse
         Expect.equal namedPacket.SessionOpened.ServerName "Голоса Тамриэля" "name comes from this server configuration"
         Expect.equal packet.SessionOpened.Players.Count 1 "online"
         Expect.equal packet.SessionOpened.Channels.Count 2 "global and system channels"
@@ -261,17 +261,17 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (encode { welcome with Channels = [ systemChannel; systemChannel ] }) "duplicate channel"
         Expect.isError (encode { welcome with Channels = [ { systemChannel with Messages = [message] } ] }) "chat in the system channel"
         Expect.isError (encode { welcome with Players = List.replicate (config.MaxInitialPlayers + 1) snapshot }) "count bound"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(0UL, welcome))) "zero correlation"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.ChatAccepted(0UL, message))) "zero chat correlation"
+        Expect.isError (Packets.single codec (ServerResponse.SessionOpened(0UL, welcome))) "zero correlation"
+        Expect.isError (Packets.single codec (ServerResponse.ChatAccepted(0UL, message))) "zero chat correlation"
 
     testCase "replies require an ID while presence notifications have no correlation" <| fun _ ->
         let rejection = { Code = RequestRejectionCode.AuthenticationFailed; Message = "Отказ"; Field = "text" }
-        let packet = ProtocolCodec.encodeServer codec (ServerResponse.RequestRejected(9UL, rejection)) |> ok |> parse
+        let packet = Packets.single codec (ServerResponse.RequestRejected(9UL, rejection)) |> ok |> parse
         Expect.equal packet.RequestRejected.Code RequestRejectionCode.AuthenticationFailed "shared protobuf code"
         Expect.equal packet.RequestId 9UL "required correlation"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.RequestRejected(0UL, rejection))) "zero ID"
+        Expect.isError (Packets.single codec (ServerResponse.RequestRejected(0UL, rejection))) "zero ID"
         for response in [ServerResponse.PlayerJoined snapshot; ServerResponse.PlayerLeft (pid 7UL)] do
-            let packet = ProtocolCodec.encodeServer codec response |> ok |> parse
+            let packet = Packets.single codec response |> ok |> parse
             Expect.isFalse packet.HasRequestId "notifications cannot carry a request ID"
 
     testCase "configured byte limits apply at the exact boundary in both directions" <| fun _ ->
@@ -281,21 +281,21 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let small = { exact with MaxPacketBytes = bytes.Length - 1 }
         Expect.equal (ProtocolCodec.decodeClient (configured small) bytes |> error).Failure ProtocolCodecFailure.PacketTooLarge "one byte too large"
         let response = (ServerResponse.ChatPublished message)
-        let encoded = ProtocolCodec.encodeServer codec response |> ok
+        let encoded = Packets.single codec response |> ok
         let exact = { config with MaxPacketBytes = encoded.Length }
-        Expect.isOk (ProtocolCodec.encodeServer (configured exact) response) "exact output limit"
+        Expect.isOk (Packets.single (configured exact) response) "exact output limit"
         let small = { exact with MaxPacketBytes = encoded.Length - 1 }
-        Expect.equal (ProtocolCodec.encodeServer (configured small) response |> error).Failure ProtocolCodecFailure.PacketTooLarge "output above configured limit"
+        Expect.equal (Packets.single (configured small) response |> error).Failure ProtocolCodecFailure.PacketTooLarge "output above configured limit"
 
     testCase "bootstrap counts and empty initial history are configurable" <| fun _ ->
         let second = PlayerData.create (pid 8UL) profile.Username profile.DisplayName |> Player.create |> Player.snapshot
         let response = ServerResponse.SessionOpened(1UL, { welcome with Players = [snapshot; second] })
-        Expect.isOk (ProtocolCodec.encodeServer (configured { config with MaxInitialPlayers = 2 }) response) "two unique players"
-        Expect.isError (ProtocolCodec.encodeServer (configured { config with MaxInitialPlayers = 1 }) response) "configured count"
+        Expect.isOk (Packets.single (configured { config with MaxInitialPlayers = 2 }) response) "two unique players"
+        Expect.isError (Packets.single (configured { config with MaxInitialPlayers = 1 }) response) "configured count"
         let noHistory = { config with MaxRecentMessages = 0 }
-        Expect.isError (ProtocolCodec.encodeServer (configured noHistory) response) "history disabled"
+        Expect.isError (Packets.single (configured noHistory) response) "history disabled"
         let response = ServerResponse.SessionOpened(1UL, welcomeWith [])
-        Expect.isOk (ProtocolCodec.encodeServer (configured noHistory) response) "empty history allowed"
+        Expect.isOk (Packets.single (configured noHistory) response) "empty history allowed"
 
     testCase "invalid config prevents codec creation" <| fun _ ->
         for invalid in [
@@ -335,7 +335,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
 
     testCase "server emits only defined nonzero rejection codes" <| fun _ ->
         let encode code =
-            ProtocolCodec.encodeServer codec
+            Packets.single codec
                 (ServerResponse.RequestRejected(9UL, { Code = code; Message = "Rejected"; Field = "text" }))
         for code in Enum.GetValues<RequestRejectionCode>() do
             if code <> RequestRejectionCode.Unspecified then
@@ -456,9 +456,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let started = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Nerevar" |> ok)
         let sampled = valuesPacket [scalarEntry "skyrim:health" 0.0f] |> update |> playerUpdate
         let state = started |> Player.applyUpdate sampled |> Player.snapshot
-        let joined = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined state) |> ok |> parse
-        let changed = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
-        let boot = ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, {welcome with Players = [state]})) |> ok |> parse
+        let joined = Packets.single codec (ServerResponse.PlayerJoined state) |> ok |> parse
+        let changed = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+        let boot = Packets.single codec (ServerResponse.SessionOpened(1UL, {welcome with Players = [state]})) |> ok |> parse
         Expect.equal joined.PlayerJoined.Player changed.PlayerUpdated.Player "same complete state"
         Expect.equal boot.SessionOpened.Players[0] joined.PlayerJoined.Player "bootstrap agrees with replication"
         Expect.equal changed.PlayerUpdated.Player.CharacterGeneration 1UL "save generation retained"
@@ -466,15 +466,15 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal changed.PlayerUpdated.Player.ActorValues[0].ValueCase Dreamsleeve.Protocol.Chat.ActorValueEntry.ValueOneofCase.Scalar "zero is a present scalar"
         Expect.isFalse changed.HasRequestId "periodic replication is a notification"
 
-        let ack = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdateAccepted 91UL) |> ok |> parse
+        let ack = Packets.single codec (ServerResponse.PlayerUpdateAccepted 91UL) |> ok |> parse
         Expect.equal ack.RequestId 91UL "admitted command has its own acknowledgement"
         Expect.isNotNull ack.PlayerUpdateAccepted "empty but present acknowledgement"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdateAccepted 0UL)) "zero acknowledgement ID rejected"
+        Expect.isError (Packets.single codec (ServerResponse.PlayerUpdateAccepted 0UL)) "zero acknowledgement ID rejected"
 
-        let moved = ProtocolCodec.encodeServer codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone])) |> ok |> parseMovement
+        let moved = Packets.single codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone])) |> ok |> parseMovement
         Expect.equal moved.Movements.Players[0].PlayerId 7UL "Realtime identity."
         Expect.equal moved.Movements.Players[0].ViewRevision 1UL "Visibility revision."
-        let clear = ProtocolCodec.encodeServer codec (ServerResponse.PlayerVisibilityChanged {
+        let clear = Packets.single codec (ServerResponse.PlayerVisibilityChanged {
             PlayerId = pid 7UL; ViewRevision = 2UL; Sequence = 0UL; Location = ValueNone }) |> ok |> parse
         Expect.isNull clear.PlayerVisibilityChanged.Location "Visibility clears are reliable control."
 
@@ -489,7 +489,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 NearbyMarkerName = "", MarkerKind = "CITY", IsInterior = true),
             GameStartedAtUnixMs = 0L)
         let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-        let encoded = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+        let encoded = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
 
         let actual = encoded.PlayerUpdated.Player.Details
         Expect.equal actual.Race.Form.PluginName "skyrim.esm" "race key is canonical"
@@ -511,13 +511,13 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             if kind = Dreamsleeve.Protocol.Chat.ActivityKind.Menu then activity.MenuKey <- "InventoryMenu"
             let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = activity)
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-            let encoded = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+            let encoded = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             Expect.equal encoded.PlayerUpdated.Player.Details.Activity.Kind kind "activity mapping"
         for difficulty in Enum.GetValues<Dreamsleeve.Protocol.Chat.LockDifficulty>() do
             let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity(
                 Kind = Dreamsleeve.Protocol.Chat.ActivityKind.Lockpicking, LockDifficulty = difficulty))
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-            let encoded = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+            let encoded = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             Expect.equal encoded.PlayerUpdated.Player.Details.Activity.LockDifficulty difficulty "difficulty mapping"
 
     testCase "zero and absent level survive client command and server replication" <| fun _ ->
@@ -526,7 +526,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             level |> ValueOption.iter (fun value -> source.Level <- value)
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
             Expect.equal state.Details.Level level "Client-reported level is preserved."
-            let encoded = ProtocolCodec.encodeServer codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+            let encoded = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
             let actual = encoded.PlayerUpdated.Player.Details
             Expect.equal actual.HasLevel level.IsSome "Presence survives replication."
             level |> ValueOption.iter (fun value -> Expect.equal actual.Level value "Level survives replication.")
@@ -586,15 +586,15 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (ProtocolCodec.requestLane location) DeliveryLane.Control "Location is reliable control."
         let rejection = { Code = RequestRejectionCode.Overloaded; Message = "busy"; Field = "" }
         for response in [ServerResponse.ChatPublished message; ServerResponse.ChatAccepted(1UL, message); ServerResponse.ChatRejected(1UL, rejection)] do
-            Expect.equal (ProtocolCodec.responseLane response) DeliveryLane.Chat "Chat response remains on chat channel."
+            Expect.equal (ProtocolCodec.delivery response).Lane DeliveryLane.Chat "Chat response remains on chat channel."
         for response in [ServerResponse.PlayerJoined snapshot; ServerResponse.PlayerUpdateAccepted 1UL; ServerResponse.RequestRejected(1UL, rejection)] do
-            Expect.equal (ProtocolCodec.responseLane response) DeliveryLane.Control "Lifecycle and command replies."
-        Expect.equal (ProtocolCodec.responseLane (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone]))) DeliveryLane.Realtime "Movement envelope is independent."
+            Expect.equal (ProtocolCodec.delivery response).Lane DeliveryLane.Control "Lifecycle and command replies."
+        Expect.equal (ProtocolCodec.delivery (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone]))).Lane DeliveryLane.Realtime "Movement envelope is independent."
     testCase "a pseudonymous identity leaves with no username or character and a flag" <| fun _ ->
         let pseudonym = Pseudonym.create "Страж" |> ok |> Pseudonym.numbered 2
         let character = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Lydia" |> ok)
         let hidden = PlayerSnapshot.withPseudonym pseudonym (Player.snapshot character)
-        let joined = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined hidden) |> ok
+        let joined = Packets.single codec (ServerResponse.PlayerJoined hidden) |> ok
         let player = (parse joined).PlayerJoined.Player
         Expect.isTrue player.Profile.Pseudonymous "flagged"
         Expect.equal player.Profile.Username "" "no username"
@@ -604,7 +604,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         for secret in [ "player"; "Игрок"; "Lydia" ] do
             let bytes = Text.Encoding.UTF8.GetBytes secret
             Expect.isFalse (Seq.windowed bytes.Length joined |> Seq.exists (fun window -> window = bytes)) $"no {secret} in the packet"
-        let shown = ProtocolCodec.encodeServer codec (ServerResponse.PlayerJoined snapshot) |> ok |> parse
+        let shown = Packets.single codec (ServerResponse.PlayerJoined snapshot) |> ok |> parse
         Expect.isFalse shown.PlayerJoined.Player.Profile.Pseudonymous "a shown profile is not flagged"
 
     testCase "hidden identity travels in OpenSession, SetIdentityVisibility and its settlement" <| fun _ ->
@@ -625,21 +625,21 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (ProtocolCodec.requestLane request) DeliveryLane.Control "control lane"
         let pseudonym = Pseudonym.create "Страж" |> ok
         let settled =
-            ProtocolCodec.encodeServer codec (ServerResponse.IdentityVisibilityChanged(4UL, ValueSome pseudonym, HiddenIdentity.ExceptGroundMarks))
+            Packets.single codec (ServerResponse.IdentityVisibilityChanged(4UL, ValueSome pseudonym, HiddenIdentity.ExceptGroundMarks))
             |> ok |> parse
         Expect.equal settled.RequestId 4UL "correlated"
         Expect.equal settled.IdentityVisibilityChanged.Pseudonym "Страж" "pseudonym for the owner"
         Expect.equal settled.IdentityVisibilityChanged.Hidden Dreamsleeve.Protocol.Chat.HiddenIdentity.ExceptGroundMarks "the applied choice"
-        let shown = ProtocolCodec.encodeServer codec (ServerResponse.IdentityVisibilityChanged(5UL, ValueNone, HiddenIdentity.Shown)) |> ok |> parse
+        let shown = Packets.single codec (ServerResponse.IdentityVisibilityChanged(5UL, ValueNone, HiddenIdentity.Shown)) |> ok |> parse
         Expect.isFalse shown.IdentityVisibilityChanged.HasPseudonym "absent while shown"
         let welcomed =
-            ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, { welcome with OwnPseudonym = ValueSome pseudonym; Hiding = HiddenIdentity.Everywhere }))
+            Packets.single codec (ServerResponse.SessionOpened(1UL, { welcome with OwnPseudonym = ValueSome pseudonym; Hiding = HiddenIdentity.Everywhere }))
             |> ok |> parse
         Expect.equal welcomed.SessionOpened.HiddenIdentity Dreamsleeve.Protocol.Chat.HiddenIdentity.Everywhere "the owner learns where it is hidden"
         let selfHidden = { welcome with Players = [ PlayerSnapshot.withPseudonym pseudonym snapshot ] }
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, selfHidden))) "the self entry keeps the real profile"
+        Expect.isError (Packets.single codec (ServerResponse.SessionOpened(1UL, selfHidden))) "the self entry keeps the real profile"
         Expect.equal welcomed.SessionOpened.OwnPseudonym "Страж" "the owner learns its pseudonym at opening"
-        Expect.isFalse (parse (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok)).SessionOpened.HasOwnPseudonym "absent when shown"
+        Expect.isFalse (parse (Packets.single codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok)).SessionOpened.HasOwnPseudonym "absent when shown"
     testCase "a display name change decodes through the domain limit and its answer carries the correlation" <| fun _ ->
         let change name =
             Dreamsleeve.Protocol.Chat.ClientPacket(
@@ -657,9 +657,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 Expect.equal actual expected "domain refusal keeps the correlation"
             | other -> failtestf "%A" other
         let name = DisplayName.create 64 "Новое Имя" |> ok
-        let packet = ProtocolCodec.encodeServer codec (ServerResponse.DisplayNameChanged(78UL, name)) |> ok |> parse
+        let packet = Packets.single codec (ServerResponse.DisplayNameChanged(78UL, name)) |> ok |> parse
         Expect.equal packet.RequestId 78UL "correlated"
         Expect.equal packet.DisplayNameChanged.DisplayName "Новое Имя" "stored name"
-        Expect.equal (ProtocolCodec.responseLane (ServerResponse.DisplayNameChanged(78UL, name))) DeliveryLane.Control "control lane"
-        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.DisplayNameChanged(0UL, name))) "zero correlation is invalid"
+        Expect.equal (ProtocolCodec.delivery (ServerResponse.DisplayNameChanged(78UL, name))).Lane DeliveryLane.Control "control lane"
+        Expect.isError (Packets.single codec (ServerResponse.DisplayNameChanged(0UL, name))) "zero correlation is invalid"
 ]

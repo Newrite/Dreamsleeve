@@ -136,9 +136,9 @@ oneof 14–16 и 21–24 и коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_
 ## Ядро клиента
 
 - Команды `PlaceGroundNote`, `ReportDeath`, `RemoveGroundMark` в `ClientExchange`
-  (с `RequestId`, как `SendChat`); результат — `GroundMarkConfirmation`
-  (`ClientOutput.groundMarkConfirmations`: id метки, id вытесненной, признак удаления),
-  `ServerRejection` или `CommandFailure`; общий ограниченный бюджет результатов.
+  (с `RequestId`, как `SendChat`); результат — `CommandResult` с исходом `MarkPlaced{markId,
+  evictedId}` или `MarkRemoved{markId}`, `ServerRejection` или `CommandFailureCode`; общий
+  ограниченный бюджет результатов.
 - `GroundMarkStore` (видимые метки, `viewRevision`, и список своих меток `own` из
   `OwnGroundMarksReplaced` — замена целиком, `ClientStateDelta.ownGroundMarks`,
   `ClientSnapshot.groundMarks.own`), обновление модели `GroundMarksChanged`; `ChangeBatch.groundMarks` / `ClientStateDelta.groundMarks` —

@@ -285,12 +285,12 @@ localStorage ни в одной сборке; поле очищается сра
 До welcome показывается Dreamsleeve. Пустое имя от старого сервера допустимо;
 поле protobuf добавлено без смены версии wire-протокола.
 
-`ClientOutput.chatConfirmations` сохраняет generation, requestId и messageId из
-авторитетной собственной публикации. В одном Drain host сначала обрабатывает смену
+Исход `MessagePublished` результата команды несёт messageId авторитетной собственной
+публикации, результат — её generation и requestId. В одном Drain host сначала обрабатывает смену
 сессии/снимок, затем подтверждения (с переводом native requestId в UI requestId),
 затем дельты сообщений. Идентификаторы uint64 в JS передаются строками.
 Снимок тоже может уже содержать подтверждённое сообщение; оба порядка поддержаны.
-Ошибки `commandFailures` и `rejections` преобразуются в `sendResult.error`.
+Отказы (`ServerRejection`, `CommandFailureCode`) преобразуются в `sendResult.error`.
 Обрыв транспорта означает неизвестную доставку, а не подтверждённый отказ.
 
 Pending — только представление UI, не запись в ClientModel или серверной истории.
