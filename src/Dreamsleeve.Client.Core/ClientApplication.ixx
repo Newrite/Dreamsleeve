@@ -270,9 +270,12 @@ private:
         auto control = exchange->TakeControl();
         if (control.authentication)
         {
+          // A new sign-in: the notice of how the last one ended is spent.
+          exchange->PublishSessionEnd(std::nullopt);
           auto result = exchange->AuthenticationCanceled()
                         ? AuthResult{}
                         : std::visit([this](const auto& request) { return Authenticate(request); }, *control.authentication);
+          if (!result && result.error().ban) exchange->PublishSessionEnd(result.error().ban);
           exchange->CompleteAuthentication(
             result ? std::string{} : std::move(result.error().message),
             result ? Auth::FailureCode::None : result.error().code);

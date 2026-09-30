@@ -78,8 +78,11 @@ module AdminRoutes =
     let private accountFailure admin error : HttpHandler =
         match error with
         | AccountAccessError.Busy -> errorPage 503 "Сервис аккаунтов занят (выполняется другая операция), повторите." admin
-        | AccountAccessError.InvalidCredentials -> errorPage 404 "Игрок не найден." admin
-        | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ -> errorPage 503 "Сервис аккаунтов недоступен." admin
+        | AccountAccessError.InvalidCredentials | AccountAccessError.SanctionRefused SanctionError.PlayerNotFound -> errorPage 404 "Игрок не найден." admin
+        | AccountAccessError.SanctionRefused SanctionError.NotActive -> errorPage 409 "У игрока нет такого действующего наказания." admin
+        | AccountAccessError.SanctionRefused SanctionError.NotAllowed -> errorPage 403 "Это наказание нельзя выдать или снять." admin
+        | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ | AccountAccessError.Banned _ ->
+            errorPage 503 "Сервис аккаунтов недоступен." admin
 
     // --- Ports -----------------------------------------------------------
 
@@ -380,7 +383,9 @@ module AdminRoutes =
         let! described = describe routes own
         let! names = ask routes context (AdminCommand.NameHistory record.Profile.PlayerId)
         let names = match names with Ok (AdminReply.Names changes) -> changes |> List.map AdminModels.nameChange | Ok _ | Error _ -> []
-        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names }
+        let! sanctions = ask routes context (AdminCommand.PlayerSanctions record.Profile.PlayerId)
+        let sanctions = match sanctions with Ok (AdminReply.Sanctions active) -> active |> List.map AdminModels.sanction | Ok _ | Error _ -> []
+        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names; Sanctions = sanctions }
     }
 
     let private notices =
@@ -388,6 +393,9 @@ module AdminRoutes =
             "role", "Роль сохранена."
             "renamed", "Display name изменено."
             "revoked", "Доступ отозван."
+            "sanctioned", "Наказание выдано."
+            "lifted", "Наказание снято."
+            "kicked", "Сессия игрока закрыта."
             "announced", "Объявление отправлено."
             "token-revoked", "Токен отозван."
         ]
@@ -480,6 +488,80 @@ module AdminRoutes =
                 | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
                 | Error error -> return! accountFailure (Some admin) error context
         })
+
+    // Term field "" is until lifted, "custom" takes minutes, a preset is its minutes.
+    let private sanctionTerm (form: IFormCollection) =
+        let minutes (text: string) =
+            match Int32.TryParse text with
+            | true, minutes -> SanctionTerm.create (ValueSome minutes)
+            | false, _ -> Error(DomainError.InvalidLimit("SanctionTerm", 0))
+        match value form "term" with
+        | "" -> SanctionTerm.create ValueNone
+        | "custom" -> minutes (value form "minutes")
+        | preset -> minutes preset
+
+    let private reasonHint = $"Причина обязательна: одна строка до {SanctionReason.MaxLength} символов."
+
+    /// A mute or a ban from the panel: the account service stores it and the
+    /// runtime applies it to a live session, as for a moderator's.
+    let private sanction routes =
+        playerAction routes (fun admin playerId form context -> task {
+            let refuse message = showCard routes admin 400 (Some message) None playerId context
+            match SanctionKind.ofKey (value form "kind"), sanctionTerm form, SanctionReason.create (value form "reason") with
+            | None, _, _ -> return! refuse "Неизвестный вид наказания."
+            | _, Error _, _ -> return! refuse $"Срок: от 1 до {SanctionTerm.MaxMinutes} минут или бессрочно."
+            | _, _, Error _ -> return! refuse reasonHint
+            | Some kind, Ok term, Ok reason ->
+                let order = { Target = playerId; Kind = kind; Term = term; Reason = reason; IssuedBy = SanctionIssuer.Admin admin.Id }
+                match! account routes context (AccountAccessCommand.Sanction order) with
+                | Ok (AccountAccessResult.Sanctioned issued) ->
+                    let! audited = record routes context admin AdminAction.SanctionedPlayer (AuditTarget.Player playerId) (AdminModels.sanctionDetails issued)
+                    if audited then return! redirect $"/players/{PlayerId.value playerId}?done=sanctioned" context
+                    else return! errorPage 503 "Наказание выдано, но строка аудита не записана; см. лог сервера." (Some admin) context
+                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                | Error error -> return! accountFailure (Some admin) error context
+        })
+
+    let private lift routes =
+        playerAction routes (fun admin playerId form context -> task {
+            match SanctionKind.ofKey (value form "kind") with
+            | None -> return! showCard routes admin 400 (Some "Неизвестный вид наказания.") None playerId context
+            | Some kind ->
+                match! account routes context (AccountAccessCommand.LiftSanction(playerId, kind, SanctionIssuer.Admin admin.Id)) with
+                | Ok (AccountAccessResult.SanctionLifted lifted) ->
+                    let! audited = record routes context admin AdminAction.LiftedSanction (AuditTarget.Player playerId) (SanctionKind.key lifted.Kind)
+                    if audited then return! redirect $"/players/{PlayerId.value playerId}?done=lifted" context
+                    else return! errorPage 503 "Наказание снято, но строка аудита не записана; см. лог сервера." (Some admin) context
+                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                | Error error -> return! accountFailure (Some admin) error context
+        })
+
+    /// Ends the live session now; the player may sign in again at once.
+    let private kick routes =
+        playerAction routes (fun admin playerId form context -> task {
+            match SanctionReason.create (value form "reason") with
+            | Error _ -> return! showCard routes admin 400 (Some reasonHint) None playerId context
+            | Ok reason ->
+                if not (routes.Ports.Kick playerId reason) then
+                    return! errorPage 503 "Рантайм занят; сессия не закрыта." (Some admin) context
+                else
+                    let! audited = record routes context admin AdminAction.KickedPlayer (AuditTarget.Player playerId) (SanctionReason.value reason)
+                    if audited then return! redirect $"/players/{PlayerId.value playerId}?done=kicked" context
+                    else return! errorPage 503 "Сессия закрыта, но строка аудита не записана; см. лог сервера." (Some admin) context
+        })
+
+    let private activeSanctions routes context = task {
+        match! ask routes context AdminCommand.ActiveSanctions with
+        | Ok (AdminReply.ActiveSanctions records) -> return Ok (records |> List.map AdminModels.sanctionEntry)
+        | Ok _ -> return Error AdminServiceError.Unavailable
+        | Error error -> return Error error
+    }
+
+    let private sanctionsPage routes admin : HttpHandler = fun context -> task {
+        match! activeSanctions routes context with
+        | Ok entries -> return! html 200 (AdminViews.sanctions admin entries) context
+        | Error error -> return! serviceFailure (Some admin) error context
+    }
 
     // --- Announcements, audit, tokens, configuration -----------------------
 
@@ -629,6 +711,12 @@ module AdminRoutes =
             | Error error -> return! apiFailure error context
     }
 
+    let private apiSanctions routes (_: AdminAccount) : HttpHandler = fun context -> task {
+        match! activeSanctions routes context with
+        | Ok entries -> return! apiJson entries context
+        | Error error -> return! apiFailure error context
+    }
+
     // --- Host --------------------------------------------------------------
 
     let private endpoints routes = [
@@ -648,6 +736,10 @@ module AdminRoutes =
         post "/players/{id}/rename" (rename routes)
         post "/players/{id}/reset-password" (administer routes true)
         post "/players/{id}/revoke" (administer routes false)
+        post "/players/{id}/sanction" (sanction routes)
+        post "/players/{id}/lift" (lift routes)
+        post "/players/{id}/kick" (kick routes)
+        get "/sanctions" (withAdmin routes (sanctionsPage routes))
         get "/announce" (withAdmin routes (announcePage routes))
         post "/announce" (announce routes)
         get "/audit" (withAdmin routes (auditPage routes))
@@ -659,6 +751,7 @@ module AdminRoutes =
         get "/api/v1/online" (withApi routes (apiOnline routes))
         get "/api/v1/players" (withApi routes (apiPlayers routes))
         get "/api/v1/players/{id}" (withApi routes (apiPlayer routes))
+        get "/api/v1/sanctions" (withApi routes (apiSanctions routes))
     ]
 
     let private isApi (context: HttpContext) = context.Request.Path.StartsWithSegments(PathString "/api")

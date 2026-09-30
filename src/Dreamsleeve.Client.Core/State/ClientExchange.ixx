@@ -244,6 +244,12 @@ export namespace Dreamsleeve::Client
     // while the names are shown or outside a session.
     std::optional<std::string> pseudonym;
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
+    // The player's mute in this session, as the server reported it.
+    std::optional<Domain::MuteState> mute;
+    // Why the last session ended or a sign-in was refused by a ban; kept until
+    // the next sign-in. The sequence tells a repeat of the same notice apart.
+    std::optional<Domain::SessionEnd> sessionEnd;
+    std::uint32_t                     sessionEndSequence{};
 
     // Nothing runs: no sign-in in flight and no session.
     bool Idle() const noexcept
@@ -436,6 +442,21 @@ public:
     {
       std::lock_guard lock{mutex};
       status.error = std::move(error);
+    }
+
+    void PublishMute(std::optional<Domain::MuteState> mute)
+    {
+      std::lock_guard lock{mutex};
+      status.mute = std::move(mute);
+    }
+
+    // A kick, a ban or a revocation from the server, or a ban refusing sign-in;
+    // std::nullopt when the next sign-in starts.
+    void PublishSessionEnd(std::optional<Domain::SessionEnd> end)
+    {
+      std::lock_guard lock{mutex};
+      if (end) ++status.sessionEndSequence;
+      status.sessionEnd = std::move(end);
     }
 
     void WaitForControl()

@@ -151,7 +151,7 @@ let private serve settings game moderation configuration pseudonyms marks authen
         try
             let mutable exitCode = 0
             try
-                let! _ = authentication.PostAsync(AuthMessage.SetRevocationTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.RevokePlayer))
+                let! _ = authentication.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.AccountChanged))
                 do! web.StartAsync()
                 // The panel starts after authentication and stops before the runtime.
                 match admin with

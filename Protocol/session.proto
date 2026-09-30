@@ -44,6 +44,35 @@ message SessionOpened {
   optional string own_pseudonym = 9;
   // Where the receiver's names are hidden in this session.
   HiddenIdentity hidden_identity = 10;
+  // The receiver's mute in force when the session opened; absent: not muted.
+  MuteState mute = 11;
+}
+
+// A mute in force on the receiver: chat, notes, client announcements and the
+// display name are refused (MUTED) until it ends. Reading is not limited.
+message MuteState {
+  string reason = 1; // The moderator's words, one line.
+  optional int64 until_unix_ms = 2; // Absent: until lifted.
+}
+
+// The receiver's own mute changed. Control lane, no request_id.
+message MuteChanged {
+  MuteState mute = 1; // Absent: lifted.
+}
+
+enum SessionEndReason {
+  SESSION_END_REASON_UNSPECIFIED = 0;
+  SESSION_END_REASON_ACCESS_REVOKED = 1; // An administrator revoked the saved logins.
+  SESSION_END_REASON_BANNED = 2;
+  SESSION_END_REASON_KICKED = 3;
+}
+
+// Why the server ends the session; the connection closes right after. Control
+// lane, no request_id. A banned player may still connect as a guest.
+message SessionEnded {
+  SessionEndReason reason = 1;
+  string text = 2; // The moderator's reason; empty when access was revoked.
+  optional int64 until_unix_ms = 3; // A ban with an end.
 }
 
 // Choose where the sender's names are hidden from other players. Control lane;

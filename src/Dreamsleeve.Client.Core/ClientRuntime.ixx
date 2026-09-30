@@ -195,6 +195,7 @@ private:
       earlyChat.clear();
       model.ResetSession();
       exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
+      exchange.PublishMute(std::nullopt);
     }
 
     // result: the terminal answer that ends the session, published with its end.
@@ -370,6 +371,7 @@ private:
       serverName         = std::move(opened.serverName);
       announcementPolicy = std::move(opened.announcements);
       exchange.PublishIdentity(std::move(opened.ownPseudonym), opened.hiding);
+      exchange.PublishMute(std::move(opened.mute));
       phase = SessionPhase::Ready;
       for (const auto& message : earlyChat)
       {
@@ -378,6 +380,21 @@ private:
       }
       earlyChat.clear();
       return Publish(true);
+    }
+
+    Result<void> Receive(Wire::MuteChanged& changed)
+    {
+      if (phase != SessionPhase::Ready) return Unexpected("mute_changed");
+      exchange.PublishMute(std::move(changed.mute));
+      return {};
+    }
+
+    // The server closes the connection next; ClientClosed ends the session.
+    Result<void> Receive(Wire::SessionEnded& ended)
+    {
+      if (phase != SessionPhase::Opening && phase != SessionPhase::Ready) return Unexpected("session_ended");
+      exchange.PublishSessionEnd(std::move(ended.end));
+      return {};
     }
 
     Result<void> Receive(Wire::RequestRejected& rejected)

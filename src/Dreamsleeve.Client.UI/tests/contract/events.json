@@ -14,6 +14,8 @@
 {"type":"nearbyMarks","marks":[{"id":"4","kind":"death","text":"Волк","time":1700000000000,"author":"Seven","character":"Nerevar","location":"skyrim.esm:01A26F","x":100,"y":200,"z":300,"gameDate":"Тирдас, 17 Последнего зерна 4Э 201, 10:30"}]},
 {"type":"identity","mode":"everywhere","pending":false,"pseudonym":"Страж 2"},
 {"type":"displayName","pending":false,"changed":"Seven"},
+{"type":"mute","muted":true,"reason":"Флуд","until":1700000900000},
+{"type":"sessionEnded","reason":"banned","text":"Читы","until":1700086400000},
 {"type":"show"},
 {"type":"hide"},
 {"type":"activate"},

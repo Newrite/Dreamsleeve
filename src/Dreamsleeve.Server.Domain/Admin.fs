@@ -37,8 +37,8 @@ type AdminError =
     | CodeInvalid
     | CodeExpired
 
-/// What a player may do beyond playing. Stored as a number; the game protocol
-/// does not carry it yet: moderator powers come with the moderation work.
+/// What a player may do beyond playing. Stored as a number. A moderator
+/// disciplines players (Sanctions.fs); moderators are equal to each other.
 [<RequireQualifiedAccess>]
 type PlayerRole =
     | Player
@@ -72,6 +72,14 @@ module PlayerRole =
 
     let ofKey (text: string) = all |> List.tryFind (fun role -> key role = text)
 
+    /// Whether actor may discipline target: a moderator acts on players only,
+    /// never on another moderator or on themselves. Administrators act from
+    /// the panel and are not ranked here.
+    let outranks actor target =
+        match actor, target with
+        | PlayerRole.Moderator, PlayerRole.Player -> true
+        | (PlayerRole.Player | PlayerRole.Moderator), (PlayerRole.Player | PlayerRole.Moderator) -> false
+
     /// A role belongs to a registered player: the stored profile must exist.
     let assign (profile: PlayerData voption) role =
         match profile with
@@ -91,6 +99,9 @@ type AdminAction =
     | RevokedApiToken
     | ResetAdminPassword
     | CreatedAdmin
+    | SanctionedPlayer
+    | LiftedSanction
+    | KickedPlayer
 
 [<RequireQualifiedAccess>]
 module AdminAction =
@@ -98,6 +109,7 @@ module AdminAction =
         AdminAction.SetRole; AdminAction.RenamePlayer; AdminAction.ResetPlayerPassword; AdminAction.RevokePlayerAccess
         AdminAction.Announced; AdminAction.CreatedApiToken; AdminAction.RevokedApiToken
         AdminAction.ResetAdminPassword; AdminAction.CreatedAdmin
+        AdminAction.SanctionedPlayer; AdminAction.LiftedSanction; AdminAction.KickedPlayer
     ]
 
     let key action =
@@ -111,6 +123,9 @@ module AdminAction =
         | AdminAction.RevokedApiToken -> "revoked_api_token"
         | AdminAction.ResetAdminPassword -> "reset_admin_password"
         | AdminAction.CreatedAdmin -> "created_admin"
+        | AdminAction.SanctionedPlayer -> "sanction_player"
+        | AdminAction.LiftedSanction -> "lift_sanction"
+        | AdminAction.KickedPlayer -> "kick_player"
 
     let ofKey (text: string) = all |> List.tryFind (fun action -> key action = text)
 

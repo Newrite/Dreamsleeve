@@ -60,6 +60,10 @@ type AdminCommand =
     | FindPlayer of PlayerId
     /// The latest display name changes of a player, newest first.
     | NameHistory of PlayerId
+    /// The sanctions in force on a player.
+    | PlayerSanctions of PlayerId
+    /// Every sanction in force, newest first.
+    | ActiveSanctions
 
 [<RequireQualifiedAccess>]
 type AdminReply =
@@ -74,6 +78,8 @@ type AdminReply =
     | Players of PlayerPage
     | Audit of AuditEntry list
     | Names of NameChange list
+    | Sanctions of Sanction list
+    | ActiveSanctions of SanctionRecord list
 
 [<RequireQualifiedAccess>]
 type AdminWorkResult =
@@ -242,6 +248,10 @@ module AdminService =
                     SqliteAdminStore.findPlayer database playerId token |> stored (AdminReply.Player >> reply)
                 | AdminCommand.NameHistory playerId, _ ->
                     SqliteAdminStore.nameHistory database playerId 50 token |> stored (AdminReply.Names >> reply)
+                | AdminCommand.PlayerSanctions playerId, _ ->
+                    SqliteSanctionStore.active database playerId now token |> stored (AdminReply.Sanctions >> reply)
+                | AdminCommand.ActiveSanctions, _ ->
+                    SqliteSanctionStore.listActive database now token |> stored (AdminReply.ActiveSanctions >> reply)
             with
             | :? OperationCanceledException -> Error AdminServiceError.Unavailable
             | error ->
@@ -262,7 +272,8 @@ module AdminService =
         | AdminCommand.Status | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.Login _
         | AdminCommand.Logout _ | AdminCommand.Authenticate _ | AdminCommand.AuthenticateApi _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.RevokeApiToken _ | AdminCommand.SetRole _ | AdminCommand.Record _
-        | AdminCommand.RecentAudit _ | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ -> false
+        | AdminCommand.RecentAudit _ | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _
+        | AdminCommand.PlayerSanctions _ | AdminCommand.ActiveSanctions -> false
 
     // Fixed one-minute window per canonical name, counted when an attempt is admitted.
     let private admitLogin options state (now: DateTimeOffset) (username: Username) =
@@ -310,7 +321,8 @@ module AdminService =
             if not (isNull hash) && hash.Length = 64 && hash |> Seq.forall Uri.IsHexDigit then Ok ValueNone else Error AdminServiceError.NotFound
         | AdminCommand.Status | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.SetRole _ | AdminCommand.Record _ | AdminCommand.RecentAudit _
-        | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ -> Ok ValueNone
+        | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _
+        | AdminCommand.PlayerSanctions _ | AdminCommand.ActiveSanctions -> Ok ValueNone
 
     let private access options clock state (context: AgentContext<AdminMessage>) command (reply: ReplyChannel<Result<AdminReply, AdminServiceError>>) =
         if state.Stopping then reply.Reply(Error AdminServiceError.Unavailable)

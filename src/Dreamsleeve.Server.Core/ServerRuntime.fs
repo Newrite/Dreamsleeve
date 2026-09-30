@@ -43,7 +43,10 @@ type ServerRuntimeMessage =
     | CleanupFailed of AgentSendFailure
     | Read of ReplyChannel<ServerRuntimeSnapshot>
     | FindPlayer of Guid * ReplyChannel<AgentRef<PlayerSessionMessage> option>
-    | RevokePlayer of PlayerId
+    /// From the account service: revocations and sanctions live sessions follow.
+    | AccountChanged of AccountChange
+    /// Ends the player's session now; nothing stops the next one.
+    | KickPlayer of PlayerId * SanctionReason
     /// One-off server announcement from the administrator console or panel.
     | Announce of ServerAnnouncement
     /// Every connection with its phase, for the panel.
@@ -178,22 +181,31 @@ module ServerRuntime =
     let private reject options state context entry lane requestId code message =
         refuse options state context entry lane requestId { Code = code; Message = message; Field = "" }
 
-    // The session hears of panel changes after its reservation reply, in its own FIFO.
-    let private panelChanges state (entry: SessionTable.Entry) playerId =
+    let private tell state (entry: SessionTable.Entry) message =
         match entry.Child with
         | Some child ->
-            let deliver message =
-                match child.TryPost message with
-                | AgentPostResult.Posted -> ()
-                | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
-                    state.Logger.LogWarning("Session {ConnectionId} did not take an administrator change", entry.ConnectionId)
-            match state.Table.Roles.TryGetValue playerId with
-            | true, role -> deliver (PlayerSessionMessage.RoleChanged role)
-            | false, _ -> ()
-            match state.Table.Profiles.TryGetValue playerId with
-            | true, profile -> deliver (PlayerSessionMessage.ProfileChanged profile)
-            | false, _ -> ()
+            match child.TryPost message with
+            | AgentPostResult.Posted -> ()
+            | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
+                state.Logger.LogWarning("Session {ConnectionId} did not take an account change", entry.ConnectionId)
         | None -> ()
+
+    // The session hears of account changes after its reservation reply, in its own FIFO.
+    let private panelChanges state (entry: SessionTable.Entry) playerId =
+        match state.Table.Roles.TryGetValue playerId with
+        | true, role -> tell state entry (PlayerSessionMessage.RoleChanged role)
+        | false, _ -> ()
+        match state.Table.Profiles.TryGetValue playerId with
+        | true, profile -> tell state entry (PlayerSessionMessage.ProfileChanged profile)
+        | false, _ -> ()
+        match state.Table.Mutes.TryGetValue playerId with
+        | true, mute -> tell state entry (PlayerSessionMessage.MuteChanged mute)
+        | false, _ -> ()
+
+    let private online state playerId =
+        match state.Table.Players.TryGetValue playerId with
+        | true, connectionId -> SessionTable.find connectionId state.Table
+        | false, _ -> None
 
     let private host (options: ServerRuntimeOptions) state context command =
         match command with
@@ -504,6 +516,25 @@ module ServerRuntime =
         | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening
         | RuntimeSessionPhase.Closing -> ()
 
+    /// Ends the player's sessions, telling each why before the close. A
+    /// revocation or a ban also closes every opening session: a ticket consumed
+    /// just before may still be on its way. A kick ends only the player's own.
+    let private endSessions (options: ServerRuntimeOptions) state context playerId reason =
+        let tickets =
+            match reason with
+            | SessionEnd.AccessRevoked | SessionEnd.Banned _ -> true
+            | SessionEnd.Kicked _ -> false
+        let affected =
+            state.Table.Connections.Values
+            |> Seq.filter (fun entry -> entry.PlayerId = Some playerId || (tickets && entry.Phase = RuntimeSessionPhase.Opening))
+            |> Seq.toArray
+        state.Logger.LogInformation("Ending the sessions of player {PlayerId} ({Reason}): closing {Count} connections, sessions still opening included",
+                                    PlayerId.value playerId, reason, affected.Length)
+        for entry in affected do
+            if entry.PlayerId = Some playerId && entry.Phase <> RuntimeSessionPhase.Closing then
+                send options state context entry (ServerResponse.SessionEnded reason)
+            close options state context entry
+
     let private stop (options: ServerRuntimeOptions) state context =
         if not state.Stopping then
             state.Logger.LogInformation("Server runtime stopping: closing {Connections} connections", state.Table.Connections.Count)
@@ -592,26 +623,24 @@ module ServerRuntime =
         | ServerRuntimeMessage.SourceStopped(source, outcome) -> sourceStopped state context source outcome
         | ServerRuntimeMessage.Detached(source, connectionId) -> detached state source connectionId
         | ServerRuntimeMessage.CleanupFailed failure -> fail state context $"Session cleanup delivery failed: {failure}"
-        | ServerRuntimeMessage.RevokePlayer playerId ->
-            // Close pending authentication too: a consumed ticket's reply may still be in flight.
-            let affected = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.PlayerId = Some playerId || entry.Phase = RuntimeSessionPhase.Opening) |> Seq.toArray
-            state.Logger.LogInformation("Access of player {PlayerId} revoked: closing {Count} connections, sessions still opening included",
-                                        PlayerId.value playerId, affected.Length)
-            for entry in affected do close options state context entry
+        | ServerRuntimeMessage.AccountChanged change ->
+            match change with
+            | AccountChange.AccessRevoked playerId -> endSessions options state context playerId SessionEnd.AccessRevoked
+            | AccountChange.Banned ban -> endSessions options state context ban.Target (SessionEnd.Banned ban)
+            | AccountChange.MuteChanged(playerId, mute) ->
+                state.Table.Mutes[playerId] <- mute
+                online state playerId |> Option.iter (fun entry -> tell state entry (PlayerSessionMessage.MuteChanged mute))
+        | ServerRuntimeMessage.KickPlayer(playerId, reason) -> endSessions options state context playerId (SessionEnd.Kicked reason)
         | ServerRuntimeMessage.Announce announcement -> announce state announcement
         | ServerRuntimeMessage.SetPlayerRole(playerId, role) ->
             state.Logger.LogDebug("Role of player {PlayerId} is now {Role}; online: {Online}", PlayerId.value playerId, role, state.Table.Players.ContainsKey playerId)
             state.Table.Roles[playerId] <- role
-            match state.Table.Players.TryGetValue playerId with
-            | true, connectionId -> SessionTable.find connectionId state.Table |> Option.iter (fun entry -> panelChanges state entry playerId)
-            | false, _ -> ()
+            online state playerId |> Option.iter (fun entry -> panelChanges state entry playerId)
         | ServerRuntimeMessage.RenamePlayer profile ->
             state.Logger.LogDebug("Player {PlayerId} renamed by an administrator; online: {Online}",
                                   PlayerId.value profile.PlayerId, state.Table.Players.ContainsKey profile.PlayerId)
             state.Table.Profiles[profile.PlayerId] <- profile
-            match state.Table.Players.TryGetValue profile.PlayerId with
-            | true, connectionId -> SessionTable.find connectionId state.Table |> Option.iter (fun entry -> panelChanges state entry profile.PlayerId)
-            | false, _ -> ()
+            online state profile.PlayerId |> Option.iter (fun entry -> panelChanges state entry profile.PlayerId)
         | ServerRuntimeMessage.ListSessions reply ->
             reply.Reply [
                 for entry in state.Table.Connections.Values do
@@ -644,7 +673,8 @@ module ServerRuntime =
         | ServerRuntimeMessage.ListSessions _ | ServerRuntimeMessage.SetPlayerRole _ | ServerRuntimeMessage.RenamePlayer _ -> false
         | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick _ | ServerRuntimeMessage.Host _
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
-        | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.RevokePlayer _ | ServerRuntimeMessage.Stop -> true
+        | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.AccountChanged _
+        | ServerRuntimeMessage.KickPlayer _ | ServerRuntimeMessage.Stop -> true
 
     /// The caller owns authentication separately and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.

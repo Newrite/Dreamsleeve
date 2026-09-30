@@ -17,7 +17,7 @@ let private username value = Username.create 32 value |> ok
 let private display = DisplayName.create 64 "Persistent Player" |> ok
 let private password = "password-with-spaces  "
 // A consumed ticket carries the stored role; nobody was given one here.
-let private player profile : AuthenticatedPlayer = { Profile = profile; Role = PlayerRole.Player }
+let private player profile : AuthenticatedPlayer = { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone }
 let private settings = { AuthService.defaults with MailboxCapacity = 8; MaxConcurrentOperations = 2; MaxTickets = 2; TicketLifetimeSeconds = 10 }
 
 // Expiry uses monotonic time. Advance never sleeps or changes machine time.
@@ -296,7 +296,7 @@ let tests = testList "Authentication service" [
         let expected = PlayerData.withDisplayName renamedTo profile
         equal (Ok (AccountAccessResult.Renamed expected)) renamed
         let! consumed = consume service outstanding.SessionTicket
-        equal (Ok ({ Profile = expected; Role = PlayerRole.Moderator } : AuthenticatedPlayer)) consumed
+        equal (Ok ({ Profile = expected; Role = PlayerRole.Moderator; Mute = ValueNone } : AuthenticatedPlayer)) consumed
         let! missing = access service (AccountAccessCommand.RenamePlayer(PlayerId.create 404UL |> ok, renamedTo, admin))
         equal (Error AccountAccessError.InvalidCredentials) missing
         do! stop service

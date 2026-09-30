@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 13;
+  inline constexpr std::uint32_t Version = 14;
 
   enum class ErrorCode
   {
@@ -105,6 +105,20 @@ export namespace Dreamsleeve::Client::Wire
     // in players keeps the real profile.
     std::optional<std::string> ownPseudonym;
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
+    // The receiver's mute when the session opened.
+    std::optional<Domain::MuteState> mute;
+  };
+
+  // The receiver's own mute changed; absent when lifted.
+  struct MuteChanged
+  {
+    std::optional<Domain::MuteState> mute;
+  };
+
+  // The server ends the session; the connection closes right after.
+  struct SessionEnded
+  {
+    Domain::SessionEnd end;
   };
 
   struct ChatAccepted
@@ -178,7 +192,9 @@ export namespace Dreamsleeve::Client::Wire
     GroundMarkRemoved,
     OwnGroundMarksReplaced,
     IdentityVisibilityChanged,
-    DisplayNameChanged>;
+    DisplayNameChanged,
+    MuteChanged,
+    SessionEnded>;
 
   // One immutable configuration per network owner, checked by ValidateClientSettings.
   class ProtocolCodec

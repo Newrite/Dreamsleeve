@@ -31,6 +31,7 @@ module AdminViews =
     type Navigation =
         | Overview
         | Players
+        | Sanctions
         | Announce
         | Audit
         | Tokens
@@ -48,6 +49,7 @@ module AdminViews =
                     Elem.strong [] [ text "Dreamsleeve" ]
                     link "/" "Обзор" Overview
                     link "/players" "Игроки" Players
+                    link "/sanctions" "Наказания" Sanctions
                     link "/announce" "Объявление" Announce
                     link "/audit" "Аудит" Audit
                     link "/tokens" "Токены API" Tokens
@@ -88,6 +90,15 @@ module AdminViews =
         ]
 
     let private submit label = Elem.button [ attr "type" "submit" ] [ text label ]
+
+    let private sanctionKind key =
+        match SanctionKind.ofKey key with
+        | Some SanctionKind.Mute -> "мут"
+        | Some SanctionKind.Ban -> "бан"
+        | None -> key
+
+    let private until (sanction: SanctionModel) =
+        if sanction.Expires.HasValue then time sanction.Expires.Value else "бессрочно"
 
     /// A dangerous action is sent only with the box ticked; the server checks it too.
     let private confirm label =
@@ -267,6 +278,30 @@ module AdminViews =
             ]
             if not card.Sessions.IsEmpty then online card.Sessions true
             Elem.section [] [
+                Elem.h2 [] [ text "Наказания" ]
+                if card.Sanctions.IsEmpty then Elem.p [ css "muted" ] [ text "Действующих наказаний нет." ]
+                else
+                    Elem.table [] [
+                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Вид"; "До"; "Причина"; "Выдал"; "" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.tbody [] [
+                            for sanction in card.Sanctions do
+                                Elem.tr [] [
+                                    Elem.td [] [ text (sanctionKind sanction.Kind) ]
+                                    Elem.td [] [ text (until sanction) ]
+                                    Elem.td [] [ text sanction.Reason ]
+                                    Elem.td [] [ text (if isNull sanction.IssuedBy then "—" else sanction.IssuedBy) ]
+                                    Elem.td [] [
+                                        Elem.form [ attr "method" "post"; action "lift"; css "inline" ] [
+                                            Elem.input [ attr "type" "hidden"; attr "name" "kind"; attr "value" sanction.Kind ]
+                                            confirm "Подтверждаю"
+                                            submit "Снять"
+                                        ]
+                                    ]
+                                ]
+                        ]
+                    ]
+            ]
+            Elem.section [] [
                 Elem.h2 [] [ text "История имён" ]
                 if card.Names.IsEmpty then Elem.p [ css "muted" ] [ text "Display name не менялось." ]
                 else
@@ -312,7 +347,63 @@ module AdminViews =
                     confirm "Подтверждаю отзыв доступа"
                     submit "Отозвать доступ"
                 ]
+                Elem.form [ attr "method" "post"; action "sanction"; css "stack" ] [
+                    Elem.p [ css "hint" ] [
+                        text "Мут запрещает писать в чат, оставлять надписи, публиковать объявления модов и менять имя; бан закрывает сессию и вход. "
+                        text "Новое наказание того же вида заменяет действующее."
+                    ]
+                    Elem.label [] [
+                        Elem.span [] [ text "Вид" ]
+                        Elem.select [ attr "name" "kind" ] [
+                            for kind in SanctionKind.all do
+                                let key = SanctionKind.key kind
+                                Elem.option [ attr "value" key ] [ text (sanctionKind key) ]
+                        ]
+                    ]
+                    Elem.label [] [
+                        Elem.span [] [ text "Срок" ]
+                        Elem.select [ attr "name" "term" ] [
+                            for label, minutes in AdminModels.sanctionTerms do
+                                Elem.option [ attr "value" (match minutes with ValueSome minutes -> string minutes | ValueNone -> "") ] [ text label ]
+                            Elem.option [ attr "value" "custom" ] [ text "Своё число минут" ]
+                        ]
+                    ]
+                    field "Минут (для своего срока)" "minutes" "number" "" [ attr "min" "1"; attr "max" (string SanctionTerm.MaxMinutes) ]
+                    field "Причина (видна игроку)" "reason" "text" "" [ flag "required"; attr "maxlength" (string SanctionReason.MaxLength) ]
+                    confirm "Подтверждаю наказание"
+                    submit "Наказать"
+                ]
+                if card.Player.Online then
+                    Elem.form [ attr "method" "post"; action "kick"; css "stack" ] [
+                        Elem.p [ css "hint" ] [ text "Закрывает текущую сессию; войти снова можно сразу." ]
+                        field "Причина (видна игроку)" "reason" "text" "" [ flag "required"; attr "maxlength" (string SanctionReason.MaxLength) ]
+                        confirm "Подтверждаю кик"
+                        submit "Кикнуть"
+                    ]
             ]
+        ]
+
+    let sanctions admin (entries: SanctionEntryModel list) =
+        page "Наказания" Sanctions (Some admin) None [
+            Elem.p [ css "muted" ] [ text "Действующие муты и баны; снять наказание можно в карточке игрока." ]
+            if entries.IsEmpty then Elem.p [ css "muted" ] [ text "Действующих наказаний нет." ]
+            else
+                Elem.table [] [
+                    Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Display name"; "Вид"; "До"; "Причина"; "Выдано"; "Выдал" ] do Elem.th [] [ text heading ] ] ]
+                    Elem.tbody [] [
+                        for entry in entries do
+                            Elem.tr [] [
+                                Elem.td [] [ Elem.a [ attr "href" $"/players/{entry.PlayerId}" ] [ text (string entry.PlayerId) ] ]
+                                Elem.td [] [ text entry.Username ]
+                                Elem.td [] [ text entry.DisplayName ]
+                                Elem.td [] [ text (sanctionKind entry.Sanction.Kind) ]
+                                Elem.td [] [ text (until entry.Sanction) ]
+                                Elem.td [] [ text entry.Sanction.Reason ]
+                                Elem.td [] [ text (time entry.Sanction.IssuedAt) ]
+                                Elem.td [] [ text (if isNull entry.Sanction.IssuedBy then "—" else entry.Sanction.IssuedBy) ]
+                            ]
+                    ]
+                ]
         ]
 
     let announce admin (notice: string option) (failure: string option) (maxLength: int) =

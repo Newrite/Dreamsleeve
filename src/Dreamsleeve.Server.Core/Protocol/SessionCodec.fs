@@ -62,12 +62,34 @@ module internal SessionCodec =
         |> Result.map ClientCommand.ChangeDisplayName
         |> Result.mapError ProtocolCodecFailure.InvalidDomain
 
+    let private untilMs (expires: DateTimeOffset voption) = expires |> ValueOption.map _.ToUnixTimeMilliseconds()
+
+    /// A mute as its player reads it: the reason and when it ends.
+    let mute (sanction: Sanction) =
+        let state = Dreamsleeve.Protocol.Chat.MuteState(Reason = SanctionReason.value sanction.Reason)
+        untilMs sanction.Expires |> ValueOption.iter (fun until -> state.UntilUnixMs <- until)
+        state
+
+    let ended (value: SessionEnd) =
+        let result = Dreamsleeve.Protocol.Chat.SessionEnded()
+        match value with
+        | SessionEnd.AccessRevoked -> result.Reason <- Dreamsleeve.Protocol.Chat.SessionEndReason.AccessRevoked
+        | SessionEnd.Banned ban ->
+            result.Reason <- Dreamsleeve.Protocol.Chat.SessionEndReason.Banned
+            result.Text <- SanctionReason.value ban.Reason
+            untilMs ban.Expires |> ValueOption.iter (fun until -> result.UntilUnixMs <- until)
+        | SessionEnd.Kicked reason ->
+            result.Reason <- Dreamsleeve.Protocol.Chat.SessionEndReason.Kicked
+            result.Text <- SanctionReason.value reason
+        result
+
     let welcome (config: ServerConfig) (value: SessionWelcome) =
         let result = Dreamsleeve.Protocol.Chat.SessionOpened(
             ServerName = config.ServerName,
             SelfPlayerId = PlayerId.value value.SelfPlayerId,
             Announcements = ChatCodec.policy config.ChatInput value.AnnouncementSources)
         value.OwnPseudonym |> ValueOption.iter (fun name -> result.OwnPseudonym <- Pseudonym.value name)
+        value.Mute |> ValueOption.iter (fun sanction -> result.Mute <- mute sanction)
         result.HiddenIdentity <- hiding value.Hiding
         result.Players.AddRange(value.Players |> Seq.map PlayerCodec.player)
         result.Channels.AddRange(value.Channels |> Seq.map ChatCodec.channel)

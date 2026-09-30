@@ -10,6 +10,7 @@ export const failureLabels: Record<Exclude<AuthFailure, "none">, string> = {
   credentialStorage: "Ошибка хранилища учётных данных Windows",
   canceled: "Операция отменена",
   nameNotAllowed: "Имя содержит недопустимые слова",
+  banned: "Аккаунт заблокирован",
 };
 export const operationLabels: Record<Exclude<AuthOperation, "none">, string> = {
   passwordLogin: "Вход по паролю…",

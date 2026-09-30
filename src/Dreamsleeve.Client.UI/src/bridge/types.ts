@@ -10,6 +10,7 @@ import type {
   eventTypes,
   groundMarkKinds,
   hidingModes,
+  sessionEndReasons,
 } from "./bridge.generated";
 export type { Settings };
 export type Id = string;
@@ -108,6 +109,21 @@ export interface DisplayNameState {
   changed?: string;
   error?: string;
 }
+// The player's own mute as the host reports it: the moderator's reason and
+// when it ends (Unix ms; absent: until lifted). muted is false without one.
+export interface MuteState {
+  muted: boolean;
+  reason: string;
+  until?: number;
+}
+export type SessionEndReason = (typeof sessionEndReasons)[number];
+// Why the server ended the session or refused sign-in: the moderator's reason
+// and the end of a ban (Unix ms; absent: until lifted).
+export interface SessionEndState {
+  reason: SessionEndReason;
+  text: string;
+  until?: number;
+}
 // A ground mark for the lists: own marks (the server's complete list) and
 // marks the server shows nearby. `author` is the host-resolved name of a
 // nearby mark, `character` the snapshot at placement (absent in streamer
@@ -188,6 +204,8 @@ export type HostEvent =
     }
   | ({ type: "identity" } & IdentityState)
   | ({ type: "displayName" } & DisplayNameState)
+  | ({ type: "mute" } & MuteState)
+  | ({ type: "sessionEnded" } & SessionEndState)
   // Personal ignore list of this server, already named for current settings.
   | { type: "ignored"; players: { id: Id; name: string }[] }
   | { type: "messages"; messages: Message[] }

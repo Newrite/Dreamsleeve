@@ -58,7 +58,10 @@ HTTP-адаптер живёт в `src/Dreamsleeve.Server.Web/Authentication/Aut
 аккаунтов. Вход имена не проверяет. См. [ModerationAndNamesRu.md](ModerationAndNamesRu.md).
 
 Ошибка возвращает `{code,message}`. Неверный пароль или отсутствующий аккаунт —
-одинаковый 401, занятый Username — 409, перегрузка — 503, rate limit — 429.
+одинаковый 401, занятый Username — 409, перегрузка — 503, rate limit — 429. Вход и resume
+забаненного аккаунта — 403 `banned` с полями `reason` и `untilUnixMs` (`null` — бессрочно);
+клиент показывает «Аккаунт заблокирован» с причиной и сроком и сам больше не пытается войти
+(`Auth::FailureCode::Banned` входит в `NeedsUser`), сохранённый вход не удаляется.
 Регистрацию можно выключить `Authentication.AllowRegistration=false`.
 Username нормализуется доменной фабрикой, DisplayName — Trim/NFC.
 Пароль не обрезается и не нормализуется: 12..128 UTF-8 байт.

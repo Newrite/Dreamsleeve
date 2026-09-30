@@ -11,6 +11,7 @@ import {
   maxError,
   maxSnapshotRows,
   maxText,
+  sessionEndReasons,
 } from "./bridge.generated";
 type ObjectValue = Record<string, unknown>;
 const object = (v: unknown): v is ObjectValue =>
@@ -183,6 +184,11 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     optional(error)(v.error),
   displayName: (v) =>
     flag(v.pending) && optional(label)(v.changed) && optional(error)(v.error),
+  mute: (v) => flag(v.muted) && label(v.reason) && optional(time)(v.until),
+  sessionEnded: (v) =>
+    oneOf(sessionEndReasons)(v.reason) &&
+    label(v.text) &&
+    optional(time)(v.until),
   show: bare,
   hide: bare,
   activate: bare,

@@ -35,6 +35,9 @@ type AccountAccessError =
     | Unavailable
     /// A player's own display name change sooner than the interval allows.
     | TooSoon of retryAfter: TimeSpan
+    /// Sign-in and resume while a ban holds.
+    | Banned of Sanction
+    | SanctionRefused of SanctionError
 
 type SessionGrant = {
     Profile: PlayerData
@@ -58,6 +61,10 @@ type AccountAccessCommand =
     | RenamePlayer of PlayerId * DisplayName * changedBy: AdminId
     /// The player's own change from the game session, limited by minInterval.
     | ChangeOwnDisplayName of PlayerId * DisplayName * minInterval: TimeSpan
+    /// An administrator's or a moderator's order, validated by the caller.
+    | Sanction of SanctionOrder
+    /// Lifts the sanction of a kind in force on a player.
+    | LiftSanction of PlayerId * SanctionKind * SanctionIssuer
 
 [<RequireQualifiedAccess>]
 type AccountAccessResult =
@@ -66,6 +73,8 @@ type AccountAccessResult =
     | Completed
     | PasswordResetCreated of code: string
     | Renamed of PlayerData
+    | Sanctioned of Sanction
+    | SanctionLifted of Sanction
 
 [<RequireQualifiedAccess>]
 type AccountWorkResult =
@@ -74,6 +83,8 @@ type AccountWorkResult =
     | LoggedOut of tokenHash: string
     | Revoked of PlayerData * resetCode: string
     | Renamed of previous: DisplayName * PlayerData * changedBy: AdminId voption
+    | Sanctioned of Sanction
+    | SanctionLifted of Sanction
 
 type AccountWorkReply = {
     OperationId: Guid
@@ -93,8 +104,9 @@ type AuthMessage =
     | Finished of AccountWorkReply
     | ConsumeTicket of SessionAuthenticationRequest
     | WorkersStopped of Result<unit, exn>
-    | SetRevocationTarget of ReliableAgentRef<PlayerId>
-    | RevocationFailed of AgentSendFailure
+    /// Where live sessions learn of revocations and sanctions: the game runtime.
+    | SetChangeTarget of ReliableAgentRef<AccountChange>
+    | ChangeFailed of AgentSendFailure
     /// From a game session; settled by a DisplayNameChangeReply.
     | ChangeDisplayName of DisplayNameChangeRequest
     | Stop
@@ -119,7 +131,7 @@ module AuthService =
         Workers: Agent<AccountWorkRequest>
         Outbox: AgentOutbox<AccountWorkRequest>
         mutable Exclusive: bool
-        mutable Revocations: AgentOutbox<PlayerId> option
+        mutable Changes: AgentOutbox<AccountChange> option
         mutable Stopping: bool
         mutable WorkersStopped: bool
     }
@@ -158,8 +170,15 @@ module AuthService =
     let private identity (account: StoredAccount) : StoredIdentity =
         { AccountId = account.AccountId; Profile = account.Profile; Role = account.Role }
 
-    let private player (account: StoredIdentity) : AuthenticatedPlayer =
-        { Profile = account.Profile; Role = account.Role }
+    // No ticket while a ban holds; the mute in force goes into the ticket.
+    let private admit database (clock: TimeProvider) logger token (account: StoredIdentity) =
+        let now = clock.GetUtcNow()
+        match SqliteSanctionStore.active database account.Profile.PlayerId now token with
+        | Error error -> Error (storageError logger error)
+        | Ok sanctions ->
+            match Sanction.find SanctionKind.Ban now sanctions with
+            | ValueSome ban -> Error (AccountAccessError.Banned ban)
+            | ValueNone -> Ok { Profile = account.Profile; Role = account.Role; Mute = Sanction.find SanctionKind.Mute now sanctions }
 
     let private verify options database dummyHash logger token username password =
         match SqliteAccountStore.find database username token with
@@ -183,11 +202,11 @@ module AuthService =
 
     let validToken value = Secrets.validToken value
 
-    let private savedLogin options database now logger token (account: StoredIdentity) =
+    let private savedLogin options database now logger token (account: StoredIdentity) (player: AuthenticatedPlayer) =
         let secret = newToken ()
         let expires = now + int64 options.SavedLoginDays * 86400L
         SqliteAccountStore.remember database account.AccountId (ticketKey secret) now expires options.MaxSavedLogins token
-        |> Result.map (fun () -> AccountWorkResult.Verified(player account, secret))
+        |> Result.map (fun () -> AccountWorkResult.Verified(player, secret))
         |> Result.mapError (storageError logger)
 
     let private administer options database now logger token username reset =
@@ -208,6 +227,12 @@ module AuthService =
         | Ok (RenameOutcome.TooSoon wait) -> Error (AccountAccessError.TooSoon wait)
         | Error error -> Error (storageError logger error)
 
+    let private sanctioned logger result outcome =
+        match outcome with
+        | Ok (SanctionOutcome.Applied sanction) -> Ok (result sanction)
+        | Ok (SanctionOutcome.Refused refused) -> Error (AccountAccessError.SanctionRefused refused)
+        | Error error -> Error (storageError logger error)
+
     let private execute options database dummyHash (clock: TimeProvider) (logger: ILogger) (token: CancellationToken) (request: AccountWorkRequest) = task {
         // createAsyncHandler invokes even this synchronous prefix in tracked work.
         let result =
@@ -225,16 +250,19 @@ module AuthService =
                 | AccountAccessCommand.Login(username, password) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else verify options database dummyHash logger token username password
-                         |> Result.map (fun account -> AccountWorkResult.Verified(player account, ""))
+                         |> Result.bind (admit database clock logger token)
+                         |> Result.map (fun player -> AccountWorkResult.Verified(player, ""))
                 | AccountAccessCommand.RememberLogin(username, password) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else verify options database dummyHash logger token username password
-                         |> Result.bind (savedLogin options database now logger token)
+                         |> Result.bind (fun account ->
+                             admit database clock logger token account |> Result.bind (savedLogin options database now logger token account))
                 | AccountAccessCommand.Resume secret ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
                     else SqliteAccountStore.resume database (ticketKey secret) now token
-                         |> Result.map (fun account -> AccountWorkResult.Verified(player account, secret))
                          |> Result.mapError (storageError logger)
+                         |> Result.bind (admit database clock logger token)
+                         |> Result.map (fun player -> AccountWorkResult.Verified(player, secret))
                 | AccountAccessCommand.Logout secret ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
                     else SqliteAccountStore.logout database (ticketKey secret) token
@@ -253,6 +281,11 @@ module AuthService =
                     rename options database logger token clock playerId displayName (ValueSome admin) TimeSpan.Zero
                 | AccountAccessCommand.ChangeOwnDisplayName(playerId, displayName, interval) ->
                     rename options database logger token clock playerId displayName ValueNone interval
+                | AccountAccessCommand.Sanction order ->
+                    SqliteSanctionStore.issue database order (clock.GetUtcNow()) token |> sanctioned logger AccountWorkResult.Sanctioned
+                | AccountAccessCommand.LiftSanction(target, kind, issuer) ->
+                    SqliteSanctionStore.lift database target kind issuer (clock.GetUtcNow()) token
+                    |> sanctioned logger AccountWorkResult.SanctionLifted
             with
             | :? OperationCanceledException -> Error AccountAccessError.Unavailable
             | error ->
@@ -296,9 +329,11 @@ module AuthService =
             if state.WorkersStopped then context.Complete() |> ignore
             else state.Workers.Complete() |> ignore
 
+    // A sanction runs alone: no sign-in in flight can issue a ticket that misses it.
     let private exclusive = function
         | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _
-        | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.Logout _ | AccountAccessCommand.RenamePlayer _ -> true
+        | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.Logout _ | AccountAccessCommand.RenamePlayer _
+        | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ -> true
         // The player is online: no second session of theirs can open with a stale
         // ticket, and outstanding tickets are updated when the change settles.
         | AccountAccessCommand.Register _ | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _
@@ -347,11 +382,27 @@ module AuthService =
         | AccountAccessCommand.Resume _ -> "saved login"
         | AccountAccessCommand.Register _ | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _
         | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _
-        | AccountAccessCommand.ChangeOwnDisplayName _ -> "other"
+        | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ -> "other"
+
+    let private until (sanction: Sanction) =
+        match sanction.Expires with
+        | ValueSome expires -> expires.ToString("u")
+        | ValueNone -> "lifted"
+
+    let private issuerName = function
+        | ValueSome (SanctionIssuer.Admin admin) -> $"admin {AdminId.value admin}"
+        | ValueSome (SanctionIssuer.Moderator moderator) -> $"moderator {PlayerId.value moderator}"
+        | ValueNone -> "a removed account"
 
     // Names are logged, secrets never: no password, token, code or ticket.
     let private logOutcome (logger: ILogger) (command: AccountAccessCommand) (result: Result<AccountWorkResult, AccountAccessError>) =
         match command, result with
+        | (AccountAccessCommand.Login(username, _) | AccountAccessCommand.RememberLogin(username, _)), Error (AccountAccessError.Banned ban) ->
+            logger.LogInformation("Sign-in refused for {Username}: banned until {Until}", Username.value username, until ban)
+        | AccountAccessCommand.Resume _, Error (AccountAccessError.Banned ban) ->
+            logger.LogInformation("Saved login of player {PlayerId} refused: banned until {Until}", PlayerId.value ban.Target, until ban)
+        | (AccountAccessCommand.Sanction { Target = target } | AccountAccessCommand.LiftSanction(target, _, _)), Error (AccountAccessError.SanctionRefused refused) ->
+            logger.LogInformation("Sanction on player {PlayerId} refused: {Refusal}", PlayerId.value target, refused)
         | (AccountAccessCommand.Login(username, _) | AccountAccessCommand.RememberLogin(username, _)), Error AccountAccessError.InvalidCredentials ->
             logger.LogInformation("Sign-in refused for {Username}: wrong username or password", Username.value username)
         | AccountAccessCommand.Resume _, Error AccountAccessError.InvalidCredentials ->
@@ -364,6 +415,25 @@ module AuthService =
             logger.LogInformation("Display name change of player {PlayerId} to {DisplayName} refused: allowed again in {Minutes} min",
                                   PlayerId.value playerId, DisplayName.value displayName, int (ceil wait.TotalMinutes))
         | _, (Ok _ | Error _) -> ()
+
+    let private ticketsOf state playerId =
+        state.Tickets |> Seq.filter (fun entry -> entry.Value.Player.Profile.PlayerId = playerId) |> Seq.map _.Key |> Seq.toArray
+
+    let private withMute mute state playerId =
+        for key in ticketsOf state playerId do
+            state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Mute = mute } }
+
+    // Live sessions must follow: an undelivered change stops the service rather
+    // than leave a banned or muted player playing.
+    let private delivered state (context: AgentContext<AuthMessage>) change result =
+        let posted =
+            match state.Changes with
+            | None -> true // Service can run without a game runtime (tools/tests).
+            | Some outbox -> outbox.TrySend(context, change, AuthMessage.ChangeFailed)
+        if posted then result
+        else
+            context.Abort()
+            Error AccountAccessError.Unavailable
 
     let private finished options clock (logger: ILogger) state (context: AgentContext<AuthMessage>) (completion: AccountWorkReply) =
         match state.Pending.TryGetValue completion.OperationId with
@@ -385,8 +455,7 @@ module AuthService =
                     issue options clock state player rememberToken
                 | Ok (AccountWorkResult.Renamed(previous, profile, changedBy)) ->
                     // Outstanding tickets would open a session with the old name.
-                    let keys = state.Tickets |> Seq.filter (fun entry -> entry.Value.Player.Profile.PlayerId = profile.PlayerId) |> Seq.map _.Key |> Seq.toArray
-                    for key in keys do state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Profile = profile } }
+                    for key in ticketsOf state profile.PlayerId do state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Profile = profile } }
                     if previous <> profile.DisplayName then
                         match changedBy with
                         | ValueSome admin ->
@@ -404,27 +473,38 @@ module AuthService =
                     for key in keys do state.Tickets.Remove key |> ignore
                     Ok AccountAccessResult.Completed
                 | Ok (AccountWorkResult.Revoked(profile, code)) ->
-                    let keys = state.Tickets |> Seq.filter (fun entry -> entry.Value.Player.Profile.PlayerId = profile.PlayerId) |> Seq.map _.Key |> Seq.toArray
-                    for key in keys do state.Tickets.Remove key |> ignore
+                    for key in ticketsOf state profile.PlayerId do state.Tickets.Remove key |> ignore
                     logger.LogInformation("Account access revoked for player {PlayerId}", PlayerId.value profile.PlayerId)
-                    let delivered =
-                        match state.Revocations with
-                        | None -> true // Service can run without a game runtime (tools/tests).
-                        | Some outbox -> outbox.TrySend(context, profile.PlayerId, AuthMessage.RevocationFailed)
-                    if not delivered then
-                        context.Abort()
-                        Error AccountAccessError.Unavailable
-                    elif code.Length = 0 then Ok AccountAccessResult.Completed
-                    else Ok (AccountAccessResult.PasswordResetCreated code)
+                    delivered state context (AccountChange.AccessRevoked profile.PlayerId)
+                        (if code.Length = 0 then Ok AccountAccessResult.Completed else Ok (AccountAccessResult.PasswordResetCreated code))
+                | Ok (AccountWorkResult.Sanctioned sanction) ->
+                    logger.LogInformation("Player {PlayerId} got a {Kind} until {Until} from {Issuer}: {Reason}", PlayerId.value sanction.Target,
+                                          SanctionKind.key sanction.Kind, until sanction, issuerName sanction.IssuedBy, SanctionReason.value sanction.Reason)
+                    let change =
+                        match sanction.Kind with
+                        | SanctionKind.Ban ->
+                            for key in ticketsOf state sanction.Target do state.Tickets.Remove key |> ignore
+                            AccountChange.Banned sanction
+                        | SanctionKind.Mute ->
+                            withMute (ValueSome sanction) state sanction.Target
+                            AccountChange.MuteChanged(sanction.Target, ValueSome sanction)
+                    delivered state context change (Ok (AccountAccessResult.Sanctioned sanction))
+                | Ok (AccountWorkResult.SanctionLifted sanction) ->
+                    logger.LogInformation("The {Kind} of player {PlayerId} was lifted", SanctionKind.key sanction.Kind, PlayerId.value sanction.Target)
+                    match sanction.Kind with
+                    | SanctionKind.Ban -> Ok (AccountAccessResult.SanctionLifted sanction)
+                    | SanctionKind.Mute ->
+                        withMute ValueNone state sanction.Target
+                        delivered state context (AccountChange.MuteChanged(sanction.Target, ValueNone)) (Ok (AccountAccessResult.SanctionLifted sanction))
                 | Error error -> Error error
             settle logger pending.Requester result
             completeIfStopped state context
 
     let private handle options clock (logger: ILogger) state consumeRequest (context: AgentContext<AuthMessage>) message = task {
         match message with
-        | AuthMessage.SetRevocationTarget target -> state.Revocations <- Some (AgentOutbox(options.MailboxCapacity, target))
-        | AuthMessage.RevocationFailed failure ->
-            logger.LogError("Session revocation delivery failed: {Failure}", failure)
+        | AuthMessage.SetChangeTarget target -> state.Changes <- Some (AgentOutbox(options.MailboxCapacity, target))
+        | AuthMessage.ChangeFailed failure ->
+            logger.LogError("Account change delivery failed: {Failure}", failure)
             context.Abort()
         | AuthMessage.Start -> context.Own(state.Workers, AuthMessage.WorkersStopped)
         | AuthMessage.Access(command, reply) -> access options logger state context command (Requester.Caller reply)
@@ -451,7 +531,7 @@ module AuthService =
 
     let private isControl = function
         | AuthMessage.Start | AuthMessage.Finished _ | AuthMessage.WorkersStopped _ | AuthMessage.Stop
-        | AuthMessage.SetRevocationTarget _ | AuthMessage.RevocationFailed _ -> true
+        | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ -> true
         | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeDisplayName _ -> false
 
     /// The options come checked with the configuration.
@@ -464,7 +544,7 @@ module AuthService =
         let state = {
             Tickets = Dictionary(); Pending = Dictionary(); Workers = workers
             Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
-            Exclusive = false; Revocations = None; Stopping = false; WorkersStopped = false
+            Exclusive = false; Changes = None; Stopping = false; WorkersStopped = false
         }
         let consumeRequest = AgentReplyDispatcher.createHandler options.MailboxCapacity
                                  (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) (consume options clock state)

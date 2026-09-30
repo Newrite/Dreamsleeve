@@ -36,6 +36,8 @@ public:
       // The server refused to open a session with hidden names; reconnecting
       // with the same preference would be refused again.
       bool identityRefused{};
+      // How the server ended the session in this Process call, if it did.
+      std::optional<Domain::SessionEndReason> sessionEnded;
     };
 
     using Players = std::unordered_map<Domain::PlayerId, Domain::Player>;
@@ -791,6 +793,13 @@ private:
                                lastStatus->savedLogin != status.savedLogin || lastStatus->savedUsername != status.savedUsername;
       if (connectionChanged) Emit(frame, Bridge::ConnectionState(status));
       if (authChanged || connectionChanged) Emit(frame, Bridge::AuthState(status, settings.streamerMode));
+      // The page starts unmuted: only a mute or its change is news.
+      if ((first ? std::nullopt : lastStatus->mute) != status.mute) Emit(frame, Bridge::MuteState(status));
+      if (status.sessionEnd && (first || lastStatus->sessionEndSequence != status.sessionEndSequence))
+      {
+        Emit(frame, Bridge::Ended(*status.sessionEnd));
+        frame.sessionEnded = status.sessionEnd->reason;
+      }
       lastStatus = status;
     }
 

@@ -1,5 +1,6 @@
 import { controlKey } from "../features/keyboard";
 import { connectionLabels } from "../state/connection";
+import { muted, muteText } from "../state/moderation";
 import { useRef, type CSSProperties, type FormEvent } from "react";
 import type { Chat } from "../state/chat";
 import { frame } from "../state/settings";
@@ -12,6 +13,7 @@ import { Select } from "../views/Select";
 import styles from "../styles/Chat.module.css";
 export function SkyrimLayout({ chat }: { chat: Chat }) {
   const { state: s, input } = useChat(chat);
+  const silenced = muted(s.mute, Date.now());
   const frameRef = useRef<HTMLElement>(null);
   const { viewport, start } = useFrame(chat, frameRef);
   const settings = s.settings;
@@ -134,12 +136,19 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
               <input
                 ref={input}
                 aria-label="Сообщение"
-                placeholder={s.connected ? "Ваше сообщение…" : "Нет соединения"}
+                placeholder={
+                  !s.connected
+                    ? "Нет соединения"
+                    : silenced
+                      ? muteText(s.mute)
+                      : "Ваше сообщение…"
+                }
                 value={s.drafts[s.target] ?? ""}
                 maxLength={2000}
-                disabled={Object.values(s.pending).some(
-                  (p) => p.status === "sending",
-                )}
+                disabled={
+                  silenced ||
+                  Object.values(s.pending).some((p) => p.status === "sending")
+                }
                 onChange={(e) => chat.setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (controlKey(e.nativeEvent) !== "Enter") return;
@@ -159,6 +168,7 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
                 disabled={
                   !s.connected ||
                   !s.target ||
+                  silenced ||
                   Object.values(s.pending).some((p) => p.status === "sending")
                 }
               >
@@ -171,6 +181,7 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
                 disabled={
                   !s.connected ||
                   !s.groundMarksSupported ||
+                  silenced ||
                   !(s.drafts[s.target] ?? "").trim() ||
                   Object.values(s.pending).some((p) => p.status === "sending")
                 }

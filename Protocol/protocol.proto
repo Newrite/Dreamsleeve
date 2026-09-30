@@ -7,8 +7,9 @@ import "session.proto";
 import "player.proto";
 import "ground.proto";
 
-// Control/chat envelope. Version 13 keeps a client connected as a guest before
-// it signs in; version 12 dates marks with the in-game calendar;
+// Control/chat envelope. Version 14 mutes, bans and kicks players; version 13
+// keeps a client connected as a guest before it signs in; version 12 dates
+// marks with the in-game calendar;
 // version 11 lets a player change the display name; version 10 lets a player hide their names behind a
 // server pseudonym; version 9 sends a player's own marks after opening; version 8 adds marks on the ground; version 7 opens a session with a list of channels; version 6
 // separated repeated realtime poses from reliable commands. Opens sessions
@@ -55,6 +56,8 @@ message ServerPacket {
     OwnGroundMarks own_ground_marks = 24; // Control lane, no request_id.
     IdentityVisibilityChanged identity_visibility_changed = 25; // Control lane, request_id required.
     DisplayNameChanged display_name_changed = 26; // Control lane, request_id required.
+    MuteChanged mute_changed = 27; // Control lane, no request_id.
+    SessionEnded session_ended = 28; // Control lane, no request_id; the connection closes next.
   }
 }
 
@@ -80,6 +83,7 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND = 13; // No such mark of this author.
   REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED = 14; // The server does not let players hide their names.
   REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15; // The server does not let players change their display name.
+  REQUEST_REJECTION_CODE_MUTED = 16; // The sender is muted (see MuteState).
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

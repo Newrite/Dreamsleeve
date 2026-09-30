@@ -52,11 +52,14 @@ export namespace Dreamsleeve::Host::Bridge
       "credentialStorage",
       "canceled",
       "nameNotAllowed",
+      "banned",
   });
   constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
   constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
   constexpr auto MarkKindNames    = std::to_array<std::string_view>({"note", "death"});
   constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "system"});
+  // Domain::SessionEndReason from AccessRevoked.
+  constexpr auto EndNames = std::to_array<std::string_view>({"revoked", "banned", "kicked"});
 
   // names[value - first]; a value outside the table (Unspecified, a newer
   // server value) takes fallback.
@@ -448,6 +451,28 @@ export namespace Dreamsleeve::Host::Bridge
     bool operator==(const DisplayNameEvent&) const = default;
   };
 
+  // The player's own mute: the moderator's reason and when it ends (absent:
+  // until lifted). muted is false when there is none.
+  struct MuteEvent
+  {
+    bool                        muted{};
+    std::string                 reason;
+    std::optional<std::int64_t> until;
+
+    bool operator==(const MuteEvent&) const = default;
+  };
+
+  // Why the server ended the session, or refused sign-in: revoked, banned or
+  // kicked, the moderator's reason and the end of a ban (absent: until lifted).
+  struct SessionEndedEvent
+  {
+    std::string                 reason{EndNames.front()};
+    std::string                 text;
+    std::optional<std::int64_t> until;
+
+    bool operator==(const SessionEndedEvent&) const = default;
+  };
+
   // View visibility and chat focus, decided by the host.
   struct ShowEvent
   {};
@@ -477,6 +502,8 @@ export namespace Dreamsleeve::Host::Bridge
     NearbyMarksEvent,
     IdentityEvent,
     DisplayNameEvent,
+    MuteEvent,
+    SessionEndedEvent,
     ShowEvent,
     HideEvent,
     ActivateEvent,
@@ -499,6 +526,8 @@ export namespace Dreamsleeve::Host::Bridge
       "nearbyMarks",
       "identity",
       "displayName",
+      "mute",
+      "sessionEnded",
       "show",
       "hide",
       "activate",
@@ -1062,6 +1091,21 @@ export namespace Dreamsleeve::Host::Bridge
     return event;
   }
 
+  MuteEvent MuteState(const ClientStatus& status)
+  {
+    if (!status.mute) return {};
+    return {.muted = true, .reason = status.mute->reason, .until = status.mute->untilUnixMs};
+  }
+
+  SessionEndedEvent Ended(const Domain::SessionEnd& end)
+  {
+    return {
+        .reason = std::string{NameOf(EndNames, end.reason, Domain::SessionEndReason::AccessRevoked, EndNames.back())},
+        .text   = end.text,
+        .until  = end.untilUnixMs
+    };
+  }
+
   // Known server refusals in the UI language; unknown codes keep the server text.
   std::string RejectionText(Dreamsleeve::Client::RequestRejectionCode code, std::string_view message)
   {
@@ -1070,6 +1114,8 @@ export namespace Dreamsleeve::Host::Bridge
     {
       case Code::TextNotAllowed:
         return "Сообщение содержит запрещённые слова";
+      case Code::Muted:
+        return "Вы в муте: писать сейчас нельзя";
       case Code::RateLimited:
         return "Слишком часто или повтор того же сообщения. Подождите немного";
       case Code::AnnouncementNotAllowed:

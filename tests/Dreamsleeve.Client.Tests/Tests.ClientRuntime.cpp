@@ -974,6 +974,35 @@ TEST_CASE("Leaving closes the guest link gracefully and nothing connects again")
   CHECK(fixture.errors.empty());
 }
 
+TEST_CASE("A mute and the end of a session reach the exchange status; the end of the session takes the mute along")
+{
+  Fixture fixture;
+  Ready(fixture);
+  P::ServerPacket muted;
+  muted.set_protocol_version(Wire::Version);
+  muted.mutable_mute_changed()->mutable_mute()->set_reason("Флуд");
+  fixture.Send(muted);
+  fixture.Until([&] { return fixture.exchange->Status().mute.has_value(); });
+  CHECK(fixture.exchange->Status().mute->reason == "Флуд");
+  CHECK_FALSE(fixture.exchange->Status().mute->untilUnixMs);
+
+  P::ServerPacket ended;
+  ended.set_protocol_version(Wire::Version);
+  ended.mutable_session_ended()->set_reason(P::SESSION_END_REASON_KICKED);
+  ended.mutable_session_ended()->set_text("Остынь");
+  fixture.Send(ended);
+  fixture.Until([&] { return fixture.exchange->Status().sessionEnd.has_value(); });
+  CHECK(fixture.exchange->Status().sessionEnd == Domain::SessionEnd{Domain::SessionEndReason::Kicked, "Остынь", std::nullopt});
+  CHECK(fixture.exchange->Status().sessionEndSequence == 1);
+
+  REQUIRE(fixture.client->Disconnect());
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
+  CHECK_FALSE(fixture.exchange->Status().mute);
+  // Kept for the page until the next sign-in.
+  CHECK(fixture.exchange->Status().sessionEnd);
+  CHECK(fixture.errors.empty());
+}
+
 TEST_CASE("Chat can arrive before bootstrap on its independent reliable channel")
 {
   Fixture fixture;

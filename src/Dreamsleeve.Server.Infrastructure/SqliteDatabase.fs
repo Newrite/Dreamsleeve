@@ -5,6 +5,7 @@ open System.IO
 open Microsoft.Data.Sqlite
 open Microsoft.Extensions.Logging.Abstractions
 open Migrondi.Core
+open SqlHydra.Query
 
 type SqliteAccountStoreConfig = {
     DatabasePath: string
@@ -29,7 +30,7 @@ module SqliteAccountStoreConfig =
 [<RequireQualifiedAccess>]
 module internal SqliteDatabase =
     [<Literal>]
-    let SchemaVersion = 7L
+    let SchemaVersion = 8L
 
     [<Literal>]
     let ApplicationId = 1146309718L
@@ -70,6 +71,9 @@ module internal SqliteDatabase =
             admins.Close()
             command.CommandText <- "SELECT t.token_hash, t.admin_id, t.label, t.created_at, r.player_id, r.role, r.granted_by, r.granted_at, u.id, u.admin_id, u.action, u.target, u.details, u.at, n.id, n.player_id, n.old_name, n.new_name, n.changed_by, n.at FROM admin_api_tokens t, player_roles r, admin_audit u, display_name_changes n LIMIT 0"
             use panel = command.ExecuteReader()
+            panel.Close()
+            command.CommandText <- "SELECT s.id, s.player_id, s.kind, s.reason, s.issued_by_admin, s.issued_by_player, s.issued_at, s.expires_at, s.lifted_at FROM sanctions s LIMIT 0"
+            use sanctions = command.ExecuteReader()
             Ok ()
 
     /// Called before listeners start. SQLite and Migrondi execute synchronously;
@@ -108,3 +112,31 @@ module internal SqliteDatabase =
                     else Error $"SQLite did not enable WAL mode (returned {mode})."
         with error ->
             Error $"Could not initialize the account database: {error}"
+
+/// Raw statements of the stores, where SqlHydra's typed queries do not fit:
+/// every value is a parameter, and a statement joins the context's transaction.
+module internal SqliteStatements =
+    let command (context: QueryContext) sql (parameters: (string * obj) list) =
+        let command = context.Connection.CreateCommand()
+        context.Transaction |> Option.iter (fun transaction -> command.Transaction <- transaction)
+        command.CommandText <- sql
+        for name, value in parameters do command.Parameters.Add(SqliteParameter(name, value)) |> ignore
+        command
+
+    let execute context sql parameters =
+        use statement = command context sql parameters
+        statement.ExecuteNonQuery()
+
+    let scalar context sql parameters =
+        use statement = command context sql parameters
+        statement.ExecuteScalar()
+
+    /// Commits when action succeeds; an error or an exception rolls back.
+    let transaction (context: QueryContext) action =
+        use transaction = context.Connection.BeginTransaction()
+        context.Transaction <- Some transaction
+        let result = action ()
+        match result with
+        | Ok _ -> transaction.Commit()
+        | Error _ -> ()
+        result

@@ -86,7 +86,16 @@ type SessionWelcome = {
     OwnPseudonym: Pseudonym voption
     /// Where this player's names are hidden in the session.
     Hiding: HiddenIdentity
+    /// This player's mute in force when the session opens.
+    Mute: Sanction voption
 }
+
+/// Why the server ends a session; the connection closes right after.
+[<RequireQualifiedAccess>]
+type SessionEnd =
+    | AccessRevoked
+    | Banned of Sanction
+    | Kicked of SanctionReason
 
 type RequestRejectionCode = Dreamsleeve.Protocol.Chat.RequestRejectionCode
 
@@ -119,6 +128,9 @@ type ServerResponse =
     | IdentityVisibilityChanged of requestId: uint64 * Pseudonym voption * HiddenIdentity
     /// Settles ChangeDisplayName with the stored name.
     | DisplayNameChanged of requestId: uint64 * DisplayName
+    /// The player's own mute now, if any.
+    | MuteChanged of Sanction voption
+    | SessionEnded of SessionEnd
 
 /// How a response travels: its lane, the request it settles (none for a
 /// notification) and whether it may leave while the session is still opening.

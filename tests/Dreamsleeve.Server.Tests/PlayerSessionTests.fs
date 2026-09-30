@@ -111,7 +111,7 @@ let private resolve fixture = task {
     equal fixture.Request.SessionTicket query.Ticket
     let profile = PlayerData.create (PlayerId.create 42UL |> ok)
                       (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok)
-    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = profile; Role = PlayerRole.Player } }
+    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone } }
     let! command = receive fixture.Host
     match command with
     | SessionHostCommand.Reserve(connectionId, reserved, hidden, reply) ->
@@ -515,7 +515,7 @@ let tests = testList "PlayerSession" ([
             let! query = receive fixture.Authentication
             let stored = PlayerData.create (PlayerId.create 42UL |> ok)
                              (Username.create 32 "bad.word" |> ok) (DisplayName.create 64 "Sir Badword" |> ok)
-            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = stored; Role = PlayerRole.Player } }
+            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = stored; Role = PlayerRole.Player; Mute = ValueNone } }
             let! reserve = receive fixture.Host
             let reply =
                 match reserve with
@@ -1031,6 +1031,52 @@ let tests = testList "PlayerSession" ([
                 equal RequestRejectionCode.DisplayNameChangeNotAllowed rejection.Code
             | other -> failwithf "Expected a refusal: %A" other
             equal 0 fixture.Names.Reader.Count
+        }))
+
+    case "a muted player reads but does not write; a death mark still goes and a lifted mute writes again" (fun () ->
+        withIdentity IdentityOptions.defaults HiddenIdentity.Shown (fun fixture -> task {
+            let! profile, _, _ = ready fixture
+            let order = { Target = profile.PlayerId; Kind = SanctionKind.Mute; Term = SanctionTerm.UntilLifted
+                          Reason = SanctionReason.create "Флуд" |> ok; IssuedBy = SanctionIssuer.Moderator(PlayerId.create 99UL |> ok) }
+            let mute = Sanction.issue (SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
+            do! post fixture.Player (PlayerSessionMessage.MuteChanged(ValueSome mute))
+            let! told = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.MuteChanged(ValueSome mute))) told
+            let muted requestId = task {
+                let! answer = receive fixture.Host
+                match answer with
+                | SessionHostCommand.Send(_, (ServerResponse.ChatRejected(id, rejection) | ServerResponse.RequestRejected(id, rejection))) ->
+                    equal requestId id
+                    equal RequestRejectionCode.Muted rejection.Code
+                | other -> failwithf "Expected MUTED: %A" other
+            }
+            do! post fixture.Player (PlayerSessionMessage.SendChat(2UL, globalId, ChatMessageText.create 2000 "hello" |> ok))
+            do! muted 2UL
+            do! post fixture.Player (PlayerSessionMessage.PostAnnouncement(3UL, announcementRequest "event" "Mod"))
+            do! muted 3UL
+            do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(4UL, DisplayName.create 64 "Другое" |> ok))
+            do! muted 4UL
+            let location =
+                PlayerLocation.create (Location.create (FormKey.create (PluginName.create 64 "Skyrim.esm" |> ok) (LocalFormId.create 60u |> ok))
+                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero Rotation.zero
+            let! _ = applyUpdate fixture 5UL (PlayerUpdate.BeginCharacter(CharacterName.create 128 "Indoril" |> ok))
+            let! _ = applyUpdate fixture 6UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
+            let placement = GroundMarkPlacement.create location.Location.LocationId Position.zero (Radian.create 0.0f |> ok)
+            let date = GameDate.create 4 201 8 17 2 14 5 |> ok
+            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(7UL, GroundNoteText.create 200 "note" |> ok, placement, date))
+            do! muted 7UL
+            // The game writes a death label, not the player.
+            do! post fixture.Player (PlayerSessionMessage.ReportDeath(8UL, DeathMarkText.create 64 "Убийца: волк" |> ok, placement, date))
+            let! death = nextMarkPlacement fixture
+            equal GroundMarkKind.Death (GroundMarkBody.kind death.Body)
+            equal 0 fixture.Chat.Reader.Count
+            equal 0 fixture.System.Reader.Count
+            equal 0 fixture.Names.Reader.Count
+            do! post fixture.Player (PlayerSessionMessage.MuteChanged ValueNone)
+            let! lifted = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.MuteChanged ValueNone)) lifted
+            let! message = submitted fixture 9UL "again"
+            equal "again" (ChatMessageText.value message.Text)
         }))
 
 ] @ identityTests)

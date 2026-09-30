@@ -200,6 +200,20 @@ namespace Dreamsleeve::Client::Wire
 
         return std::move(*welcome);
       }
+      case P::ServerPacket::kMuteChanged: {
+        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+
+        const auto& changed = packet.mute_changed();
+        return MuteChanged{changed.has_mute() ? std::optional{Mute(changed.mute())} : std::nullopt};
+      }
+      case P::ServerPacket::kSessionEnded: {
+        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+
+        auto ended = Ended(packet.session_ended());
+        if (!ended) return std::unexpected{ended.error()};
+
+        return std::move(*ended);
+      }
       case P::ServerPacket::kChatPublished: {
         auto message = Message(packet.chat_published().message());
         if (!message) return std::unexpected{message.error()};

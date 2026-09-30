@@ -61,6 +61,12 @@ Pinned packages: Microsoft.Data.Sqlite **10.0.12**, Migrondi.Core **1.3.0**,
 SqlHydra.Query and SqlHydra.Cli **5.0.0**. The CLI version was verified by actual
 NuGet restore; some NuGet web search results still show the older CLI 4.1.0.
 
+Schema 8 (`1791072000000_sanctions.sql`) adds `sanctions`: mutes (kind 0) and
+bans (kind 1) with a required reason, the issuing administrator or moderator,
+`issued_at`, an optional `expires_at` and `lifted_at` (Unix milliseconds). A row
+is in force while it is not lifted and not expired; issuing lifts the one of its
+kind in force. `SqliteSanctionStore` owns the SQL; the rules are the domain's.
+
 ## Verification
 
 ```powershell

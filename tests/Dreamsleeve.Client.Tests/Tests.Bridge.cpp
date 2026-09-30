@@ -57,6 +57,7 @@ namespace
            List("authFailures", Bridge::FailureNames) + List("announcementOrigins", Bridge::OriginNames) +
            List("announcementKinds", Bridge::KindNames) + List("groundMarkKinds", Bridge::MarkKindNames) +
            List("channelKinds", Bridge::ChannelKindNames) + List("hidingModes", HidingNames) +
+           List("sessionEndReasons", Bridge::EndNames) +
            std::format(
              "\n// Bounds of text the host sends: chat and mark text, snapshot lines per\n"
              "// channel, error strings (UTF-8 bytes, never more UTF-16 units).\n"
@@ -170,6 +171,8 @@ namespace
         Bridge::NearbyMarksEvent{.marks = {nearby}},
         Bridge::IdentityEvent{.mode = "everywhere", .pseudonym = "Страж 2"},
         Bridge::DisplayNameEvent{.changed = "Seven"},
+        Bridge::MuteEvent{.muted = true, .reason = "Флуд", .until = 1700000900000},
+        Bridge::Ended({Domain::SessionEndReason::Banned, "Читы", 1700086400000}),
         Bridge::ShowEvent{},
         Bridge::HideEvent{},
         Bridge::ActivateEvent{},

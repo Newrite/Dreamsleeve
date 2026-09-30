@@ -11,11 +11,14 @@ import type {
   HostEvent,
   IdentityState,
   Message,
+  MuteState,
   Player,
   Send,
+  SessionEndState,
   Settings,
 } from "../bridge/types";
 import { idleAuth } from "./auth";
+import { muted, muteText, sessionEndText } from "./moderation";
 import { defaults, instantKeys } from "../bridge/settings.generated";
 // The settings the host applies and saves at once (displaySettings).
 const instantOf = (settings: Settings) =>
@@ -116,6 +119,10 @@ export interface ChatState {
   identity: IdentityState;
   // A change of the own display name, as the host reports it.
   displayName: DisplayNameState;
+  // The player's own mute, as the host reports it.
+  mute: MuteState;
+  // Why the last session ended or sign-in was refused by a ban; cleared by the next session.
+  sessionEnd: SessionEndState | null;
   // Ground marks: whether the session can place them, the server's list of
   // the player's own marks and the marks it shows nearby.
   groundMarksSupported: boolean;
@@ -195,6 +202,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
     authorMenu: null,
     identity: { mode: "off", pending: false },
     displayName: { pending: false },
+    mute: { muted: false, reason: "" },
+    sessionEnd: null,
     groundMarksSupported: false,
     groundMarks: [],
     nearbyMarks: [],
@@ -204,6 +213,28 @@ export function makeChat(send: Send, now = () => Date.now()) {
   // Removal requests in flight: request id -> mark id, for the result notice.
   const removals = new Map<string, string>();
   const touch = () => store.setState({ activity: now(), faded: false });
+  // The server does not announce a term ending: the page redraws then. A term
+  // beyond the timer's range is checked again when that range runs out.
+  let muteTimer: ReturnType<typeof setTimeout> | undefined;
+  function unmuteAt(until?: number) {
+    clearTimeout(muteTimer);
+    if (until === undefined) return;
+    muteTimer = setTimeout(
+      () => {
+        const mute = store.getState().mute;
+        store.setState({ mute: { ...mute } });
+        if (muted(mute, now())) unmuteAt(mute.until);
+      },
+      Math.min(Math.max(until - now(), 0), 2 ** 31 - 1),
+    );
+  }
+  // Writing while muted is refused by the server anyway; say why at once.
+  function silenced() {
+    const mute = store.getState().mute;
+    if (!muted(mute, now())) return false;
+    store.setState({ notice: muteText(mute) });
+    return true;
+  }
   function receive(event: HostEvent) {
     const state = store.getState();
     switch (event.type) {
@@ -264,6 +295,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
           target: channels.find((c) => c.writable)?.id ?? "",
           settings: event.settings ?? state.settings,
           notice: "",
+          sessionEnd: null,
           scrolled: false,
         });
         touch();
@@ -357,6 +389,17 @@ export function makeChat(send: Send, now = () => Date.now()) {
       case "displayName": {
         const { type: _, ...displayName } = event;
         store.setState({ displayName });
+        break;
+      }
+      case "mute": {
+        const { type: _, ...mute } = event;
+        store.setState({ mute });
+        unmuteAt(mute.muted ? mute.until : undefined);
+        break;
+      }
+      case "sessionEnded": {
+        const { type: _, ...sessionEnd } = event;
+        store.setState({ sessionEnd, notice: sessionEndText(sessionEnd) });
         break;
       }
       case "ignored":
@@ -500,6 +543,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     if (!s.visible || sending(s)) return;
     const text = s.drafts[s.target] ?? "";
     if (!text.trim() || !s.connected || !s.groundMarksSupported) return;
+    if (silenced()) return;
     const room = makeRoom(s.pending);
     if (Object.keys(room).length >= PENDING_LIMIT) {
       store.setState({
@@ -552,6 +596,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
       !s.channels.some((c) => c.id === s.target && c.writable)
     )
       return;
+    if (silenced()) return;
     const room = makeRoom(s.pending);
     if (Object.keys(room).length >= PENDING_LIMIT) {
       store.setState({

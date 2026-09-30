@@ -61,6 +61,8 @@ namespace Protocol {
 namespace Chat {
 enum HiddenIdentity : int;
 extern const uint32_t HiddenIdentity_internal_data_[];
+enum SessionEndReason : int;
+extern const uint32_t SessionEndReason_internal_data_[];
 class ChangeDisplayName;
 struct ChangeDisplayNameDefaultTypeInternal;
 extern ChangeDisplayNameDefaultTypeInternal _ChangeDisplayName_default_instance_;
@@ -77,10 +79,22 @@ class JoinAsGuest;
 struct JoinAsGuestDefaultTypeInternal;
 extern JoinAsGuestDefaultTypeInternal _JoinAsGuest_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull JoinAsGuest_class_data_;
+class MuteChanged;
+struct MuteChangedDefaultTypeInternal;
+extern MuteChangedDefaultTypeInternal _MuteChanged_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull MuteChanged_class_data_;
+class MuteState;
+struct MuteStateDefaultTypeInternal;
+extern MuteStateDefaultTypeInternal _MuteState_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull MuteState_class_data_;
 class OpenSession;
 struct OpenSessionDefaultTypeInternal;
 extern OpenSessionDefaultTypeInternal _OpenSession_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull OpenSession_class_data_;
+class SessionEnded;
+struct SessionEndedDefaultTypeInternal;
+extern SessionEndedDefaultTypeInternal _SessionEnded_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SessionEnded_class_data_;
 class SessionOpened;
 struct SessionOpenedDefaultTypeInternal;
 extern SessionOpenedDefaultTypeInternal _SessionOpened_default_instance_;
@@ -97,6 +111,9 @@ namespace protobuf {
 template <>
 internal::EnumTraitsT<::Dreamsleeve::Protocol::Chat::HiddenIdentity_internal_data_>
     internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Chat::HiddenIdentity>;
+template <>
+internal::EnumTraitsT<::Dreamsleeve::Protocol::Chat::SessionEndReason_internal_data_>
+    internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Chat::SessionEndReason>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -138,6 +155,44 @@ inline const ::std::string& HiddenIdentity_Name(HiddenIdentity value) {
 inline bool HiddenIdentity_Parse(
     ::absl::string_view name, HiddenIdentity* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<HiddenIdentity>(HiddenIdentity_descriptor(), name,
+                                           value);
+}
+enum SessionEndReason : int {
+  SESSION_END_REASON_UNSPECIFIED = 0,
+  SESSION_END_REASON_ACCESS_REVOKED = 1,
+  SESSION_END_REASON_BANNED = 2,
+  SESSION_END_REASON_KICKED = 3,
+  SessionEndReason_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  SessionEndReason_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t SessionEndReason_internal_data_[];
+inline constexpr SessionEndReason SessionEndReason_MIN =
+    static_cast<SessionEndReason>(0);
+inline constexpr SessionEndReason SessionEndReason_MAX =
+    static_cast<SessionEndReason>(3);
+inline bool SessionEndReason_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int SessionEndReason_ARRAYSIZE = 3 + 1;
+const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL SessionEndReason_descriptor();
+template <typename T>
+const ::std::string& SessionEndReason_Name(T value) {
+  static_assert(::std::is_same<T, SessionEndReason>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to SessionEndReason_Name().");
+  return SessionEndReason_Name(static_cast<SessionEndReason>(value));
+}
+template <>
+inline const ::std::string& SessionEndReason_Name(SessionEndReason value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<SessionEndReason_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+inline bool SessionEndReason_Parse(
+    ::absl::string_view name, SessionEndReason* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<SessionEndReason>(SessionEndReason_descriptor(), name,
                                            value);
 }
 
@@ -201,7 +256,7 @@ class SetIdentityVisibility final : public ::google::protobuf::Message
     return *reinterpret_cast<const SetIdentityVisibility*>(
         &_SetIdentityVisibility_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(SetIdentityVisibility& a, SetIdentityVisibility& b) { a.Swap(&b); }
   inline void Swap(SetIdentityVisibility* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -334,6 +389,226 @@ class SetIdentityVisibility final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull SetIdentityVisibility_class_data_;
+// -------------------------------------------------------------------
+
+class SessionEnded final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.SessionEnded) */ {
+ public:
+  inline SessionEnded() : SessionEnded(nullptr) {}
+  ~SessionEnded() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SessionEnded* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SessionEnded));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR SessionEnded(::google::protobuf::internal::ConstantInitialized);
+
+  inline SessionEnded(const SessionEnded& from) : SessionEnded(nullptr, from) {}
+  inline SessionEnded(SessionEnded&& from) noexcept
+      : SessionEnded(nullptr, ::std::move(from)) {}
+  inline SessionEnded& operator=(const SessionEnded& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SessionEnded& operator=(SessionEnded&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const SessionEnded& default_instance() {
+    return *reinterpret_cast<const SessionEnded*>(
+        &_SessionEnded_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 5;
+  friend void swap(SessionEnded& a, SessionEnded& b) { a.Swap(&b); }
+  inline void Swap(SessionEnded* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SessionEnded* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SessionEnded* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SessionEnded>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SessionEnded& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SessionEnded& from) { SessionEnded::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SessionEnded* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.SessionEnded"; }
+
+  explicit SessionEnded(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SessionEnded(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SessionEnded& from);
+  SessionEnded(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SessionEnded&& from) noexcept
+      : SessionEnded(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTextFieldNumber = 2,
+    kUntilUnixMsFieldNumber = 3,
+    kReasonFieldNumber = 1,
+  };
+  // string text = 2;
+  void clear_text() ;
+  const ::std::string& text() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_text(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_text();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_text();
+  void set_allocated_text(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_text() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_text(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_text();
+
+  public:
+  // optional int64 until_unix_ms = 3;
+  bool has_until_unix_ms() const;
+  void clear_until_unix_ms() ;
+  ::int64_t until_unix_ms() const;
+  void set_until_unix_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_until_unix_ms() const;
+  void _internal_set_until_unix_ms(::int64_t value);
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.SessionEndReason reason = 1;
+  void clear_reason() ;
+  ::Dreamsleeve::Protocol::Chat::SessionEndReason reason() const;
+  void set_reason(::Dreamsleeve::Protocol::Chat::SessionEndReason value);
+
+  private:
+  ::Dreamsleeve::Protocol::Chat::SessionEndReason _internal_reason() const;
+  void _internal_set_reason(::Dreamsleeve::Protocol::Chat::SessionEndReason value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SessionEnded)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   0, 51,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SessionEnded& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr text_;
+    ::int64_t until_unix_ms_;
+    int reason_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_session_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SessionEnded_class_data_;
 // -------------------------------------------------------------------
 
 class OpenSession final : public ::google::protobuf::Message
@@ -543,6 +818,214 @@ class OpenSession final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull OpenSession_class_data_;
 // -------------------------------------------------------------------
 
+class MuteState final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.MuteState) */ {
+ public:
+  inline MuteState() : MuteState(nullptr) {}
+  ~MuteState() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MuteState* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MuteState));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR MuteState(::google::protobuf::internal::ConstantInitialized);
+
+  inline MuteState(const MuteState& from) : MuteState(nullptr, from) {}
+  inline MuteState(MuteState&& from) noexcept
+      : MuteState(nullptr, ::std::move(from)) {}
+  inline MuteState& operator=(const MuteState& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MuteState& operator=(MuteState&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const MuteState& default_instance() {
+    return *reinterpret_cast<const MuteState*>(
+        &_MuteState_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(MuteState& a, MuteState& b) { a.Swap(&b); }
+  inline void Swap(MuteState* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MuteState* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  MuteState* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MuteState>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MuteState& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MuteState& from) { MuteState::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MuteState* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.MuteState"; }
+
+  explicit MuteState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MuteState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MuteState& from);
+  MuteState(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MuteState&& from) noexcept
+      : MuteState(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kReasonFieldNumber = 1,
+    kUntilUnixMsFieldNumber = 2,
+  };
+  // string reason = 1;
+  void clear_reason() ;
+  const ::std::string& reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reason();
+  void set_allocated_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reason();
+
+  public:
+  // optional int64 until_unix_ms = 2;
+  bool has_until_unix_ms() const;
+  void clear_until_unix_ms() ;
+  ::int64_t until_unix_ms() const;
+  void set_until_unix_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_until_unix_ms() const;
+  void _internal_set_until_unix_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.MuteState)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 50,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MuteState& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr reason_;
+    ::int64_t until_unix_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_session_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull MuteState_class_data_;
+// -------------------------------------------------------------------
+
 class JoinAsGuest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.JoinAsGuest) */ {
  public:
@@ -732,7 +1215,7 @@ class IdentityVisibilityChanged final : public ::google::protobuf::Message
     return *reinterpret_cast<const IdentityVisibilityChanged*>(
         &_IdentityVisibilityChanged_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(IdentityVisibilityChanged& a, IdentityVisibilityChanged& b) { a.Swap(&b); }
   inline void Swap(IdentityVisibilityChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -940,7 +1423,7 @@ class DisplayNameChanged final : public ::google::protobuf::Message
     return *reinterpret_cast<const DisplayNameChanged*>(
         &_DisplayNameChanged_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(DisplayNameChanged& a, DisplayNameChanged& b) { a.Swap(&b); }
   inline void Swap(DisplayNameChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1135,7 +1618,7 @@ class ChangeDisplayName final : public ::google::protobuf::Message
     return *reinterpret_cast<const ChangeDisplayName*>(
         &_ChangeDisplayName_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(ChangeDisplayName& a, ChangeDisplayName& b) { a.Swap(&b); }
   inline void Swap(ChangeDisplayName* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1273,6 +1756,201 @@ class ChangeDisplayName final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull ChangeDisplayName_class_data_;
+// -------------------------------------------------------------------
+
+class MuteChanged final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.MuteChanged) */ {
+ public:
+  inline MuteChanged() : MuteChanged(nullptr) {}
+  ~MuteChanged() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MuteChanged* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MuteChanged));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR MuteChanged(::google::protobuf::internal::ConstantInitialized);
+
+  inline MuteChanged(const MuteChanged& from) : MuteChanged(nullptr, from) {}
+  inline MuteChanged(MuteChanged&& from) noexcept
+      : MuteChanged(nullptr, ::std::move(from)) {}
+  inline MuteChanged& operator=(const MuteChanged& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MuteChanged& operator=(MuteChanged&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const MuteChanged& default_instance() {
+    return *reinterpret_cast<const MuteChanged*>(
+        &_MuteChanged_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(MuteChanged& a, MuteChanged& b) { a.Swap(&b); }
+  inline void Swap(MuteChanged* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MuteChanged* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  MuteChanged* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MuteChanged>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MuteChanged& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MuteChanged& from) { MuteChanged::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MuteChanged* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.MuteChanged"; }
+
+  explicit MuteChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MuteChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MuteChanged& from);
+  MuteChanged(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MuteChanged&& from) noexcept
+      : MuteChanged(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMuteFieldNumber = 1,
+  };
+  // .Dreamsleeve.Protocol.Chat.MuteState mute = 1;
+  bool has_mute() const;
+  void clear_mute() ;
+  const ::Dreamsleeve::Protocol::Chat::MuteState& mute() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE release_mute();
+  ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL mutable_mute();
+  void set_allocated_mute(::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_mute(::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE unsafe_arena_release_mute();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::MuteState& _internal_mute() const;
+  ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL _internal_mutable_mute();
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.MuteChanged)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   1, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MuteChanged& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE mute_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_session_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull MuteChanged_class_data_;
 // -------------------------------------------------------------------
 
 class SessionOpened final : public ::google::protobuf::Message
@@ -1422,6 +2100,7 @@ class SessionOpened final : public ::google::protobuf::Message
     kServerNameFieldNumber = 6,
     kOwnPseudonymFieldNumber = 9,
     kAnnouncementsFieldNumber = 7,
+    kMuteFieldNumber = 11,
     kSelfPlayerIdFieldNumber = 1,
     kHiddenIdentityFieldNumber = 10,
   };
@@ -1505,6 +2184,21 @@ class SessionOpened final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL _internal_mutable_announcements();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.MuteState mute = 11;
+  bool has_mute() const;
+  void clear_mute() ;
+  const ::Dreamsleeve::Protocol::Chat::MuteState& mute() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE release_mute();
+  ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL mutable_mute();
+  void set_allocated_mute(::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_mute(::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE unsafe_arena_release_mute();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::MuteState& _internal_mute() const;
+  ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL _internal_mutable_mute();
+
+  public:
   // uint64 self_player_id = 1;
   void clear_self_player_id() ;
   ::uint64_t self_player_id() const;
@@ -1529,8 +2223,8 @@ class SessionOpened final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 7,
-                                   3, 72,
+  static const ::google::protobuf::internal::TcParseTable<4, 8,
+                                   4, 80,
                                    2>
       _table_;
 
@@ -1556,6 +2250,7 @@ class SessionOpened final : public ::google::protobuf::Message
     ::google::protobuf::internal::ArenaStringPtr server_name_;
     ::google::protobuf::internal::ArenaStringPtr own_pseudonym_;
     ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE announcements_;
+    ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE mute_;
     ::uint64_t self_player_id_;
     int hidden_identity_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1750,7 +2445,7 @@ inline void SessionOpened::clear_self_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.self_player_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000040U);
 }
 inline ::uint64_t SessionOpened::self_player_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.self_player_id)
@@ -1758,7 +2453,7 @@ inline ::uint64_t SessionOpened::self_player_id() const {
 }
 inline void SessionOpened::set_self_player_id(::uint64_t value) {
   _internal_set_self_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.self_player_id)
 }
 inline ::uint64_t SessionOpened::_internal_self_player_id() const {
@@ -2037,7 +2732,7 @@ inline void SessionOpened::clear_hidden_identity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hidden_identity_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
+                  0x00000080U);
 }
 inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::hidden_identity() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.hidden_identity)
@@ -2045,7 +2740,7 @@ inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::hidden_ident
 }
 inline void SessionOpened::set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
   _internal_set_hidden_identity(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.hidden_identity)
 }
 inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::_internal_hidden_identity() const {
@@ -2055,6 +2750,429 @@ inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::_internal_hi
 inline void SessionOpened::_internal_set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hidden_identity_ = value;
+}
+
+// .Dreamsleeve.Protocol.Chat.MuteState mute = 11;
+inline bool SessionOpened::has_mute() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.mute_ != nullptr);
+  return value;
+}
+inline void SessionOpened::clear_mute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.mute_ != nullptr) _impl_.mute_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MuteState& SessionOpened::_internal_mute() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::MuteState* p = _impl_.mute_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::MuteState&>(::Dreamsleeve::Protocol::Chat::_MuteState_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MuteState& SessionOpened::mute() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
+  return _internal_mute();
+}
+inline void SessionOpened::unsafe_arena_set_allocated_mute(
+    ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.mute_);
+  }
+  _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE SessionOpened::release_mute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::Dreamsleeve::Protocol::Chat::MuteState* released = _impl_.mute_;
+  _impl_.mute_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE SessionOpened::unsafe_arena_release_mute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::Dreamsleeve::Protocol::Chat::MuteState* temp = _impl_.mute_;
+  _impl_.mute_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL SessionOpened::_internal_mutable_mute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.mute_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::MuteState>(GetArena());
+    _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(p);
+  }
+  return _impl_.mute_;
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL SessionOpened::mutable_mute()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::Dreamsleeve::Protocol::Chat::MuteState* _msg = _internal_mutable_mute();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
+  return _msg;
+}
+inline void SessionOpened::set_allocated_mute(::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.mute_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
+}
+
+// -------------------------------------------------------------------
+
+// MuteState
+
+// string reason = 1;
+inline void MuteState::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& MuteState::reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MuteState.reason)
+  return _internal_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MuteState::set_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.MuteState.reason)
+}
+inline ::std::string* PROTOBUF_NONNULL MuteState::mutable_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_reason();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.MuteState.reason)
+  return _s;
+}
+inline const ::std::string& MuteState::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_.Get();
+}
+inline void MuteState::_internal_set_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MuteState::_internal_mutable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MuteState::release_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.MuteState.reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MuteState::set_allocated_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reason_.IsDefault()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.MuteState.reason)
+}
+
+// optional int64 until_unix_ms = 2;
+inline bool MuteState::has_until_unix_ms() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  return value;
+}
+inline void MuteState::clear_until_unix_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.until_unix_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::int64_t MuteState::until_unix_ms() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MuteState.until_unix_ms)
+  return _internal_until_unix_ms();
+}
+inline void MuteState::set_until_unix_ms(::int64_t value) {
+  _internal_set_until_unix_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.MuteState.until_unix_ms)
+}
+inline ::int64_t MuteState::_internal_until_unix_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.until_unix_ms_;
+}
+inline void MuteState::_internal_set_until_unix_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.until_unix_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MuteChanged
+
+// .Dreamsleeve.Protocol.Chat.MuteState mute = 1;
+inline bool MuteChanged::has_mute() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.mute_ != nullptr);
+  return value;
+}
+inline void MuteChanged::clear_mute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.mute_ != nullptr) _impl_.mute_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MuteState& MuteChanged::_internal_mute() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::MuteState* p = _impl_.mute_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::MuteState&>(::Dreamsleeve::Protocol::Chat::_MuteState_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MuteState& MuteChanged::mute() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MuteChanged.mute)
+  return _internal_mute();
+}
+inline void MuteChanged::unsafe_arena_set_allocated_mute(
+    ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.mute_);
+  }
+  _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.MuteChanged.mute)
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE MuteChanged::release_mute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MuteState* released = _impl_.mute_;
+  _impl_.mute_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE MuteChanged::unsafe_arena_release_mute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.MuteChanged.mute)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MuteState* temp = _impl_.mute_;
+  _impl_.mute_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL MuteChanged::_internal_mutable_mute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.mute_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::MuteState>(GetArena());
+    _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(p);
+  }
+  return _impl_.mute_;
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL MuteChanged::mutable_mute()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::Dreamsleeve::Protocol::Chat::MuteState* _msg = _internal_mutable_mute();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.MuteChanged.mute)
+  return _msg;
+}
+inline void MuteChanged::set_allocated_mute(::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.mute_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.MuteChanged.mute)
+}
+
+// -------------------------------------------------------------------
+
+// SessionEnded
+
+// .Dreamsleeve.Protocol.Chat.SessionEndReason reason = 1;
+inline void SessionEnded::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::Dreamsleeve::Protocol::Chat::SessionEndReason SessionEnded::reason() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionEnded.reason)
+  return _internal_reason();
+}
+inline void SessionEnded::set_reason(::Dreamsleeve::Protocol::Chat::SessionEndReason value) {
+  _internal_set_reason(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionEnded.reason)
+}
+inline ::Dreamsleeve::Protocol::Chat::SessionEndReason SessionEnded::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::Dreamsleeve::Protocol::Chat::SessionEndReason>(_impl_.reason_);
+}
+inline void SessionEnded::_internal_set_reason(::Dreamsleeve::Protocol::Chat::SessionEndReason value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_ = value;
+}
+
+// string text = 2;
+inline void SessionEnded::clear_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.text_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& SessionEnded::text() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionEnded.text)
+  return _internal_text();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SessionEnded::set_text(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.text_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionEnded.text)
+}
+inline ::std::string* PROTOBUF_NONNULL SessionEnded::mutable_text()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_text();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionEnded.text)
+  return _s;
+}
+inline const ::std::string& SessionEnded::_internal_text() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.text_.Get();
+}
+inline void SessionEnded::_internal_set_text(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.text_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SessionEnded::_internal_mutable_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.text_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SessionEnded::release_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionEnded.text)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.text_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.text_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SessionEnded::set_allocated_text(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.text_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.text_.IsDefault()) {
+    _impl_.text_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SessionEnded.text)
+}
+
+// optional int64 until_unix_ms = 3;
+inline bool SessionEnded::has_until_unix_ms() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  return value;
+}
+inline void SessionEnded::clear_until_unix_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.until_unix_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::int64_t SessionEnded::until_unix_ms() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionEnded.until_unix_ms)
+  return _internal_until_unix_ms();
+}
+inline void SessionEnded::set_until_unix_ms(::int64_t value) {
+  _internal_set_until_unix_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionEnded.until_unix_ms)
+}
+inline ::int64_t SessionEnded::_internal_until_unix_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.until_unix_ms_;
+}
+inline void SessionEnded::_internal_set_until_unix_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.until_unix_ms_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -2340,6 +3458,12 @@ struct is_proto_enum<::Dreamsleeve::Protocol::Chat::HiddenIdentity> : std::true_
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::Dreamsleeve::Protocol::Chat::HiddenIdentity>() {
   return ::Dreamsleeve::Protocol::Chat::HiddenIdentity_descriptor();
+}
+template <>
+struct is_proto_enum<::Dreamsleeve::Protocol::Chat::SessionEndReason> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::Dreamsleeve::Protocol::Chat::SessionEndReason>() {
+  return ::Dreamsleeve::Protocol::Chat::SessionEndReason_descriptor();
 }
 
 }  // namespace protobuf

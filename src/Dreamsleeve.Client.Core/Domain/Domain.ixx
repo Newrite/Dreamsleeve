@@ -246,6 +246,28 @@ export namespace Domain
   // or in presence and chat while ground marks keep the real profile.
   using HiddenIdentity = ::Protocol::Chat::HiddenIdentity;
 
+  // A mute on this player: chat, notes, mod announcements and the display name
+  // are refused until it ends. Reading is not limited.
+  struct MuteState
+  {
+    std::string                 reason;
+    std::optional<std::int64_t> untilUnixMs;  // Absent: until lifted.
+
+    bool operator==(const MuteState&) const = default;
+  };
+
+  using SessionEndReason = ::Protocol::Chat::SessionEndReason;
+
+  // Why the server ended this player's session, or refused a sign-in (a ban).
+  struct SessionEnd
+  {
+    SessionEndReason            reason{SessionEndReason::Kicked};
+    std::string                 text;         // The moderator's reason; empty when access was revoked.
+    std::optional<std::int64_t> untilUnixMs;  // A ban with an end.
+
+    bool operator==(const SessionEnd&) const = default;
+  };
+
   // Where a mark stands: the space, the point and the author's heading (Z
   // angle, radians) so the visual can face the way the author looked.
   struct GroundMarkPlacement

@@ -3,6 +3,7 @@ import type { Chat, ChatState } from "../state/chat";
 import { accountActions, authStatus } from "../state/auth";
 import { connectionLabels } from "../state/connection";
 import { identityStatus } from "../state/identity";
+import { sessionEndText } from "../state/moderation";
 import styles from "../styles/Account.module.css";
 export function AccountPanel({
   chat,
@@ -76,6 +77,11 @@ export function AccountPanel({
         {s.identity.error && (
           <span className={styles.error} role="alert">
             {s.identity.error}
+          </span>
+        )}
+        {s.sessionEnd && (
+          <span className={styles.error} role="alert" data-part="session-end">
+            {sessionEndText(s.sessionEnd)}
           </span>
         )}
       </p>

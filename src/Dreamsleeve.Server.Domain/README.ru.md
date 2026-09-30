@@ -326,11 +326,17 @@ ID и `SentAt`; фабрика сообщения приводит время к
 - `AdminId` (положительный int64), `AdminAccount` (логин по правилам `Username`) — администратор
   не игрок.
 - `PlayerRole = Player | Moderator` с `toInt`/`ofInt` (0/1, хранится в БД) и `key`/`ofKey`
-  (формы и API); `PlayerRole.assign` — роль только зарегистрированному игроку (`PlayerNotFound`).
+  (формы и API); `PlayerRole.assign` — роль только зарегистрированному игроку (`PlayerNotFound`);
+  `PlayerRole.outranks` — кого роль может наказать (модератор — только игроков).
 - `AdminAction` (`SetRole`, `RenamePlayer`, `ResetPlayerPassword`, `RevokePlayerAccess`,
-  `Announced`, `CreatedApiToken`, `RevokedApiToken`, `ResetAdminPassword`, `CreatedAdmin`) с
+  `Announced`, `CreatedApiToken`, `RevokedApiToken`, `ResetAdminPassword`, `CreatedAdmin`,
+  `SanctionedPlayer`, `LiftedSanction`, `KickedPlayer`) с
   неизменяемыми ключами аудита, `AuditTarget` (`player:42`, `admin:3`, `token:…`, `server`),
   `AuditRecord.create` (подробности до 512 символов, без секретов), `AuditEntry`.
+- `Sanctions.fs`: `SanctionKind` (`Mute`/`Ban`), `SanctionScope` (сейчас `Server`), `SanctionTerm`
+  (от минуты до десяти лет или `UntilLifted`), `SanctionReason` (обязательна, одна строка до 200
+  символов), `SanctionIssuer` (администратор или модератор), `Sanction.issue`/`expiry`/`activeAt`/
+  `find`; `SanctionError` (`PlayerNotFound`, `NotAllowed`, `NotActive`).
 - `AdminCodes` — чистое состояние одноразовых кодов: по одному на назначение (`Setup` или
   `ResetPassword adminId`), выпуск заменяет предыдущий и выбрасывает истёкшие, `redeem` тратит код
   первой попыткой и отличает `CodeExpired`. Хранятся только хеши; I/O и время передаёт владелец.

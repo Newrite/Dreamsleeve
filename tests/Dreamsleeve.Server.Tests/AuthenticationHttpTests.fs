@@ -36,7 +36,7 @@ let private withHost customize execute run = task {
             received.Enqueue command
             execute command reply
         | AuthMessage.Start | AuthMessage.Finished _ | AuthMessage.ConsumeTicket _
-        | AuthMessage.WorkersStopped _ | AuthMessage.SetRevocationTarget _ | AuthMessage.RevocationFailed _ | AuthMessage.Stop
+        | AuthMessage.WorkersStopped _ | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ | AuthMessage.Stop
         | AuthMessage.ChangeDisplayName _ -> failwith "Unexpected test authentication control."
     }
     use auth = Agent.Start(AgentOptions.create "http-test-auth", handle)
@@ -82,7 +82,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _ -> response.Reply (Ok AccountAccessResult.Completed)
             | AccountAccessCommand.Register _ | AccountAccessCommand.Login _
             | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
-            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _ -> failtest "Unexpected public command"
+            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
+            | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ -> failtest "Unexpected public command"
         withHost id execute (fun http received -> task {
             use! remembered = post http "auth/login" {| username = "player"; password = password; rememberMe = true |}
             status 200 remembered
@@ -108,7 +109,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Login _ -> response.Reply signedIn
             | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ | AccountAccessCommand.Logout _
             | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
-            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _ -> failtest "Unexpected command"
+            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
+            | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ -> failtest "Unexpected command"
         withHost id execute (fun http received -> task {
             use! created = post http "auth/register" {|
                 username = " PLAYER "; displayName = " e\u0301 "; password = password
@@ -125,7 +127,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
                 equal password actualPassword
             | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ | AccountAccessCommand.Logout _
             | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
-            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _ -> failwith "Wrong registration command."
+            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
+            | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ -> failwith "Wrong registration command."
 
             use! loggedIn = post http "auth/login" credentials
             status 200 loggedIn

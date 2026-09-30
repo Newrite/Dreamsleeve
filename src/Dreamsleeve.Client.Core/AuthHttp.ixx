@@ -28,13 +28,16 @@ export namespace Dreamsleeve::Client::Auth
     InvalidResponse,
     CredentialStorage,
     Canceled,
-    NameNotAllowed  // Registration: the server word list refused a name.
+    NameNotAllowed,  // Registration: the server word list refused a name.
+    Banned           // Sign-in and resume while a ban holds; see Failure::ban.
   };
 
   struct Failure
   {
     FailureCode code{};
     std::string message;
+    // The ban that refused sign-in: its reason and end.
+    std::optional<Domain::SessionEnd> ban;
   };
 
   struct Grant
@@ -85,6 +88,14 @@ namespace Dreamsleeve::Client::Auth
   struct ErrorResponse
   {
     std::string code;
+  };
+
+  // 403 "banned" of /auth/login and /auth/resume.
+  struct BanResponse
+  {
+    std::string                 code;
+    std::string                 reason;
+    std::optional<std::int64_t> untilUnixMs;
   };
 
   struct LoginResponse
@@ -251,7 +262,7 @@ namespace Dreamsleeve::Client::Auth
   export bool NeedsUser(FailureCode code)
   {
     return code == FailureCode::InvalidCredentials || code == FailureCode::CredentialStorage || code == FailureCode::InvalidRequest ||
-           code == FailureCode::RegistrationDisabled;
+           code == FailureCode::RegistrationDisabled || code == FailureCode::Banned;
   }
 
   export Result<void> ValidatePassword(std::string_view password)
@@ -361,6 +372,14 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::Unavailable, response.error()}
       };
+    if (response->status == 403)
+    {
+      BanResponse ban;
+      if (!glz::read<glz::opts{.error_on_unknown_keys = false}>(ban, response->body) && ban.code == "banned")
+        return std::unexpected{
+            Failure{FailureCode::Banned, ban.reason, Domain::SessionEnd{Domain::SessionEndReason::Banned, ban.reason, ban.untilUnixMs}}
+        };
+    }
     if (response->status != 200) return std::unexpected{HttpFailure(response->status)};
 
     LoginResponse decoded;

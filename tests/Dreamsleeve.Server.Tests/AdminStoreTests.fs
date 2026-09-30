@@ -39,20 +39,23 @@ let private downSql file =
     text.Substring(text.IndexOf("MIGRONDI:DOWN", StringComparison.Ordinal)).Split('\n', 2)[1]
 
 let tests = testList "SQLite admin" [
-    testCase "migrations 5 to 7 apply over schema 4, keep players and roll back" (fun () ->
+    testCase "migrations 5 to 8 apply over schema 4, keep players and roll back" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = player database "alice" "Alice"
-        database.Execute ((downSql "1790985600000_ground_mark_game_date.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%game_date%';"
+        database.Execute ((downSql "1791072000000_sanctions.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%';"
+                          + (downSql "1790985600000_ground_mark_game_date.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%game_date%';"
                           + "DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%';"
                           + "DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts;"
                           + "DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; PRAGMA user_version = 4")
         equal 0L (tableCount database)
         SqliteAccountStore.initialize database.Config |> ok
-        equal 7L (database.Scalar "PRAGMA user_version")
+        equal 8L (database.Scalar "PRAGMA user_version")
         equal 5L (tableCount database)
         equal (Some alice.PlayerId) (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.map _.Profile.PlayerId)
-        // The DOWN sections return to schemas 6, 5 and 4 without touching player data.
+        // The DOWN sections return to schemas 7, 6, 5 and 4 without touching player data.
+        database.Execute (downSql "1791072000000_sanctions.sql")
+        equal 7L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1790985600000_ground_mark_game_date.sql")
         equal 6L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1790899200000_display_names.sql")

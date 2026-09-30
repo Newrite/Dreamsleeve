@@ -90,5 +90,7 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   void                  WriteSession(P::OpenSession&, const OpenSession&);
   Result<SessionOpened> Welcome(const Configuration&, std::uint64_t, const P::SessionOpened&);
+  Domain::MuteState     Mute(const P::MuteState&);
+  Result<SessionEnded>  Ended(const P::SessionEnded&);
 
 }

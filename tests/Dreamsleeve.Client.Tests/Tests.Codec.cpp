@@ -162,6 +162,43 @@ TEST_CASE("Flagged ranges decode only inside the text, ascending and on code poi
   CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Chat));
 }
 
+TEST_CASE("A mute and the end of a session decode without correlation, with the reason and the end")
+{
+  const auto      codec = MakeCodec();
+  P::ServerPacket muted;
+  muted.set_protocol_version(W::Version);
+  auto* mute = muted.mutable_mute_changed()->mutable_mute();
+  mute->set_reason("Флуд");
+  mute->set_until_unix_ms(1700000900000);
+  auto decoded = codec.Decode(Bytes(muted));
+  REQUIRE(decoded);
+  CHECK(std::get<W::MuteChanged>(*decoded).mute == Domain::MuteState{"Флуд", 1700000900000});
+  muted.mutable_mute_changed()->clear_mute();
+  decoded = codec.Decode(Bytes(muted));
+  REQUIRE(decoded);
+  CHECK_FALSE(std::get<W::MuteChanged>(*decoded).mute);
+  muted.set_request_id(3);
+  CHECK_FALSE(codec.Decode(Bytes(muted)));
+
+  P::ServerPacket ended;
+  ended.set_protocol_version(W::Version);
+  ended.mutable_session_ended()->set_reason(P::SESSION_END_REASON_BANNED);
+  ended.mutable_session_ended()->set_text("Читы");
+  decoded = codec.Decode(Bytes(ended));
+  REQUIRE(decoded);
+  CHECK(std::get<W::SessionEnded>(*decoded).end == Domain::SessionEnd{Domain::SessionEndReason::Banned, "Читы", std::nullopt});
+  ended.mutable_session_ended()->set_reason(P::SESSION_END_REASON_UNSPECIFIED);
+  CHECK_FALSE(codec.Decode(Bytes(ended)));
+  ended.mutable_session_ended()->set_reason(static_cast<P::SessionEndReason>(9));
+  CHECK_FALSE(codec.Decode(Bytes(ended)));
+
+  auto welcome = Welcome();
+  welcome.mutable_session_opened()->mutable_mute()->set_reason("Флуд");
+  decoded = codec.Decode(Bytes(welcome));
+  REQUIRE(decoded);
+  CHECK(std::get<W::SessionOpened>(*decoded).mute == Domain::MuteState{"Флуд", std::nullopt});
+}
+
 TEST_CASE("Welcome decoding returns ordinary player and chat data without applying model policy")
 {
   const auto codec  = MakeCodec();

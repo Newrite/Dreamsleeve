@@ -114,12 +114,17 @@ module AuthRoutes =
                                 expiresInSeconds = grant.ExpiresInSeconds; rememberToken = grant.RememberToken |}
         | Ok AccountAccessResult.Completed -> Results.NoContent()
         // Trusted results never come from a public route.
-        | Ok (AccountAccessResult.PasswordResetCreated _) | Ok (AccountAccessResult.Renamed _) -> unavailable ()
+        | Ok (AccountAccessResult.PasswordResetCreated _) | Ok (AccountAccessResult.Renamed _)
+        | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) -> unavailable ()
+        // 403, not 401: a saved login stays saved and works again once the ban ends.
+        | Error (AccountAccessError.Banned ban) ->
+            WebHost.json 403 {| code = "banned"; message = "The account is banned."; reason = SanctionReason.value ban.Reason
+                                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
         | Error AccountAccessError.InvalidCredentials -> WebHost.error 401 "invalid_credentials" "Invalid or expired credentials."
         | Error AccountAccessError.UsernameTaken -> WebHost.error 409 "username_taken" "Username is already registered."
         | Error AccountAccessError.Busy -> busy ()
-        // Only a game session can be refused as too soon; never a public route.
-        | Error AccountAccessError.Unavailable | Error (AccountAccessError.TooSoon _) -> unavailable ()
+        // Only a game session can be refused as too soon, only a trusted caller's sanction; never a public route.
+        | Error AccountAccessError.Unavailable | Error (AccountAccessError.TooSoon _) | Error (AccountAccessError.SanctionRefused _) -> unavailable ()
 
     let private handle settings moderation ports (logger: ILogger) operation : HttpHandler = fun context -> task {
         WebHost.noStore context

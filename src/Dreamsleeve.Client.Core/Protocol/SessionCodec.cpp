@@ -10,6 +10,23 @@ module Dreamsleeve.Client.ProtocolCodec;
 namespace Dreamsleeve::Client::Wire::Detail
 {
 
+  Domain::MuteState Mute(const P::MuteState& source)
+  {
+    Domain::MuteState result{source.reason()};
+    if (source.has_until_unix_ms()) result.untilUnixMs = source.until_unix_ms();
+    return result;
+  }
+
+  Result<SessionEnded> Ended(const P::SessionEnded& source)
+  {
+    if (!P::SessionEndReason_IsValid(source.reason()) || source.reason() == P::SESSION_END_REASON_UNSPECIFIED) return Invalid("reason");
+    SessionEnded result{
+        {static_cast<Domain::SessionEndReason>(source.reason()), source.text()}
+    };
+    if (source.has_until_unix_ms()) result.end.untilUnixMs = source.until_unix_ms();
+    return result;
+  }
+
   Result<SessionOpened> Welcome(const Configuration& config, std::uint64_t requestId, const P::SessionOpened& source)
   {
     if (source.self_player_id() == Domain::InvalidId || source.channels().empty() || !source.has_announcements())
@@ -25,6 +42,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       return Invalid("hidden_identity");
     if (source.has_own_pseudonym()) result.ownPseudonym = source.own_pseudonym();
     result.hiding = static_cast<Domain::HiddenIdentity>(source.hidden_identity());
+    if (source.has_mute()) result.mute = Mute(source.mute());
     for (const auto& player : source.players())
     {
       auto decoded = Player(config, player);

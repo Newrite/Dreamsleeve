@@ -7,6 +7,7 @@ open Microsoft.Data.Sqlite
 open SqlHydra.Query
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure.AccountSchema
+open Dreamsleeve.Server.Infrastructure.SqliteStatements
 
 type StoredIdentity = {
     AccountId: int64
@@ -149,19 +150,6 @@ module SqliteAccountStore =
                         identity.ExecuteNonQuery() |> ignore
                         transaction.Commit()
                         Ok profile)
-
-    // These statements express transactional credential checks/deletes directly.
-    // All values are parameters; each operation runs on an admitted account worker.
-    let private command (context: QueryContext) sql (parameters: (string * obj) list) =
-        let command = context.Connection.CreateCommand()
-        context.Transaction |> Option.iter (fun transaction -> command.Transaction <- transaction)
-        command.CommandText <- sql
-        for name, value in parameters do command.Parameters.Add(SqliteParameter(name, value)) |> ignore
-        command
-
-    let private execute context sql parameters =
-        use statement = command context sql parameters
-        statement.ExecuteNonQuery()
 
     /// Compare-and-swap prevents a stale rehash from overwriting changed credentials.
     let rehash config (username: Username) expectedHash replacementHash token =

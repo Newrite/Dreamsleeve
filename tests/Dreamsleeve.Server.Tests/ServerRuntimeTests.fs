@@ -43,7 +43,7 @@ let private createAuthentication () =
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
-        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player } | None -> Error SessionAuthenticationError.InvalidTicket)
+        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone } | None -> Error SessionAuthenticationError.InvalidTicket)
     }
     Agent.Start(AgentOptions.create "fixture-authentication",
         AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
@@ -211,13 +211,59 @@ let tests = testList "ServerRuntime" [
             do! post fixture.Runtime (tick ())
             let! _ = welcome fixture bob
             let playerId = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
-            do! post fixture.Runtime (ServerRuntimeMessage.RevokePlayer playerId)
+            do! post fixture.Runtime (ServerRuntimeMessage.AccountChanged(AccountChange.AccessRevoked playerId))
             let! closed = receive fixture.Closed
             equal alice closed
             let! state = stats fixture
             equal 1 state.Ready
             do! post fixture.Runtime ServerRuntimeMessage.Stop
             do! awaitUnit fixture.Runtime.Completion
+        })
+    }
+
+    testTask "a ban and a kick end only their player's session and say why; a mute reaches the live session and the next one" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
+            let pid value = Dreamsleeve.Server.Domain.PlayerId.create value |> ok
+            let reason text = Dreamsleeve.Server.Domain.SanctionReason.create text |> ok
+            let issue target kind term text =
+                let order : Dreamsleeve.Server.Domain.SanctionOrder =
+                    { Target = pid target; Kind = kind; Term = term; Reason = reason text
+                      IssuedBy = Dreamsleeve.Server.Domain.SanctionIssuer.Moderator(pid 9UL) }
+                Dreamsleeve.Server.Domain.Sanction.issue (Dreamsleeve.Server.Domain.SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
+            let alice = connect fixture "alice"
+            let! _ = welcome fixture alice
+            let bob = connect fixture "bob"
+            let! _ = welcome fixture bob
+            let mute = issue 2UL Dreamsleeve.Server.Domain.SanctionKind.Mute Dreamsleeve.Server.Domain.SanctionTerm.UntilLifted "Флуд"
+            do! post fixture.Runtime (ServerRuntimeMessage.AccountChanged(AccountChange.MuteChanged(pid 2UL, ValueSome mute)))
+            let! _, muted = nextWhere fixture (fun id packet -> id = bob && packet.PayloadCase = ServerPacket.PayloadOneofCase.MuteChanged)
+            equal "Флуд" muted.MuteChanged.Mute.Reason
+            check (not muted.MuteChanged.Mute.HasUntilUnixMs) "A mute until lifted has no end."
+            let ban = issue 1UL Dreamsleeve.Server.Domain.SanctionKind.Ban (Dreamsleeve.Server.Domain.SanctionTerm.For(TimeSpan.FromDays 1.)) "Читы"
+            do! post fixture.Runtime (ServerRuntimeMessage.AccountChanged(AccountChange.Banned ban))
+            let! _, banned = nextWhere fixture (fun id packet -> id = alice && packet.PayloadCase = ServerPacket.PayloadOneofCase.SessionEnded)
+            equal SessionEndReason.Banned banned.SessionEnded.Reason
+            equal "Читы" banned.SessionEnded.Text
+            equal (ban.Expires.Value.ToUnixTimeMilliseconds()) banned.SessionEnded.UntilUnixMs
+            let! closed = receive fixture.Closed
+            equal alice closed
+            let! state = stats fixture
+            equal 1 state.Ready
+            do! post fixture.Runtime (ServerRuntimeMessage.KickPlayer(pid 2UL, reason "Остынь"))
+            let! _, kicked = nextWhere fixture (fun id packet -> id = bob && packet.PayloadCase = ServerPacket.PayloadOneofCase.SessionEnded)
+            equal SessionEndReason.Kicked kicked.SessionEnded.Reason
+            equal "Остынь" kicked.SessionEnded.Text
+            let! closedBob = receive fixture.Closed
+            equal bob closedBob
+            do! empty fixture
+            // The mute stays with the account: the next session is muted, in its welcome
+            // or right after it when the change reaches the session once it has opened.
+            let again = connect fixture "bob"
+            let! _ = welcome fixture again
+            fixture.Input.Enqueue(incoming(again, chat 5UL "hi"))
+            fixture.Notify() |> ignore
+            let! _, refused = nextWhere fixture (fun id packet -> id = again && packet.PayloadCase = ServerPacket.PayloadOneofCase.RequestRejected)
+            equal RequestRejectionCode.Muted refused.RequestRejected.Code
         })
     }
 
@@ -430,7 +476,7 @@ let tests = testList "ServerRuntime" [
                     (Dreamsleeve.Server.Domain.Username.create 32 "race" |> ok)
                     (Dreamsleeve.Server.Domain.DisplayName.create 64 "Race" |> ok)
             let respond (request: SessionAuthenticationRequest) =
-                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player } }
+                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone } }
             equal AgentTryDeliveryResult.Closed (respond oldRequest)
             equal AgentTryDeliveryResult.Posted (respond newRequest)
             let! snapshot = welcome fixture replacement
@@ -571,7 +617,7 @@ let private namedAuthentication (accounts: (string * string * string) list) () =
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
-        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player } | None -> Error SessionAuthenticationError.InvalidTicket)
+        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone } | None -> Error SessionAuthenticationError.InvalidTicket)
     }
     Agent.Start(AgentOptions.create "named-authentication",
         AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
@@ -719,7 +765,7 @@ let private roleAuthentication (accounts: (string * string * string * Dreamsleev
                      (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
                      (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
                      (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok)
-               Role = role } : AuthenticatedPlayer))
+               Role = role; Mute = ValueNone } : AuthenticatedPlayer))
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId

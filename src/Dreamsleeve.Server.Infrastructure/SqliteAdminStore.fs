@@ -7,6 +7,7 @@ open Microsoft.Data.Sqlite
 open SqlHydra.Query
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure.AccountSchema
+open Dreamsleeve.Server.Infrastructure.SqliteStatements
 
 type StoredAdmin = {
     Account: AdminAccount
@@ -55,30 +56,6 @@ module SqliteAdminStore =
         Error(AccountStoreError.Failed(InvalidDataException message))
 
     let private milliseconds (time: DateTimeOffset) = time.ToUnixTimeMilliseconds()
-
-    let private command (context: QueryContext) sql (parameters: (string * obj) list) =
-        let command = context.Connection.CreateCommand()
-        context.Transaction |> Option.iter (fun transaction -> command.Transaction <- transaction)
-        command.CommandText <- sql
-        for name, value in parameters do command.Parameters.Add(SqliteParameter(name, value)) |> ignore
-        command
-
-    let private execute context sql parameters =
-        use statement = command context sql parameters
-        statement.ExecuteNonQuery()
-
-    let private scalar context sql parameters =
-        use statement = command context sql parameters
-        statement.ExecuteScalar()
-
-    let private transaction (context: QueryContext) action =
-        use transaction = context.Connection.BeginTransaction()
-        context.Transaction <- Some transaction
-        let result = action ()
-        match result with
-        | Ok _ -> transaction.Commit()
-        | Error _ -> ()
-        result
 
     let private admin (id: int64) (name: string) =
         match AdminId.create id, Username.create Int32.MaxValue name with

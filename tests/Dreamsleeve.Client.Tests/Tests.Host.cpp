@@ -207,6 +207,51 @@ TEST_CASE("Session reports every authentication completion, even an identical re
   }
 }
 
+TEST_CASE("Session tells the page of a mute and its lift, and of each end of a session once")
+{
+  auto           exchange = MakeExchange();
+  ClientModel    model;
+  Session        session;
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  // Not muted is where the page starts: no event for it.
+  CHECK(std::ranges::none_of(frame.events, [](const auto& event) { return Type(event) == "mute"; }));
+
+  const auto next = [&] {
+    frame = {};
+    session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  };
+  exchange->PublishMute(Domain::MuteState{"Флуд", 1700000900000});
+  next();
+  REQUIRE(frame.events.size() == 1);
+  auto mute = Parse(frame.events[0]);
+  CHECK(mute["type"].get<std::string>() == "mute");
+  CHECK(mute["muted"].get<bool>());
+  CHECK(mute["reason"].get<std::string>() == "Флуд");
+  CHECK(mute["until"].get<double>() == 1700000900000.0);
+  exchange->PublishMute(std::nullopt);
+  next();
+  REQUIRE(frame.events.size() == 1);
+  CHECK_FALSE(Parse(frame.events[0])["muted"].get<bool>());
+
+  const Domain::SessionEnd kicked{Domain::SessionEndReason::Kicked, "Остынь", std::nullopt};
+  for (int repeat = 0; repeat < 2; ++repeat)
+  {
+    exchange->PublishSessionEnd(kicked);
+    next();
+    REQUIRE(frame.events.size() == 1);
+    auto ended = Parse(frame.events[0]);
+    CHECK(ended["type"].get<std::string>() == "sessionEnded");
+    CHECK(ended["reason"].get<std::string>() == "kicked");
+    CHECK(ended["text"].get<std::string>() == "Остынь");
+    CHECK(frame.sessionEnded == Domain::SessionEndReason::Kicked);
+  }
+  next();
+  CHECK(frame.events.empty());
+  CHECK_FALSE(frame.sessionEnded);
+  CHECK(Bridge::RejectionText(RequestRejectionCode::Muted, "The player is muted.") == "Вы в муте: писать сейчас нельзя");
+}
+
 TEST_CASE("Bridge parses each command into its own checked type")
 {
   const auto chat = CommandOf<Bridge::Commands::SendChat>(R"({"type":"sendChat","requestId":"3","channelId":"1","text":"Привет","extra":1})");

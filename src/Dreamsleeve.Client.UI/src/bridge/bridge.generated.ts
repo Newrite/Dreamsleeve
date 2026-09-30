@@ -19,6 +19,8 @@ export const eventTypes = [
   "nearbyMarks",
   "identity",
   "displayName",
+  "mute",
+  "sessionEnded",
   "show",
   "hide",
   "activate",
@@ -72,6 +74,7 @@ export const authFailures = [
   "credentialStorage",
   "canceled",
   "nameNotAllowed",
+  "banned",
 ] as const;
 export const announcementOrigins = [
   "server",
@@ -96,6 +99,11 @@ export const hidingModes = [
   "off",
   "everywhere",
   "exceptGroundMarks",
+] as const;
+export const sessionEndReasons = [
+  "revoked",
+  "banned",
+  "kicked",
 ] as const;
 
 // Bounds of text the host sends: chat and mark text, snapshot lines per

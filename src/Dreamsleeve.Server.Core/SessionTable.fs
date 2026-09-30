@@ -41,11 +41,14 @@ module internal SessionTable =
         /// the number of administrator actions.
         Roles: Dictionary<PlayerId, PlayerRole>
         Profiles: Dictionary<PlayerId, PlayerData>
+        /// Mutes issued or lifted since the runtime started, like Roles: a ticket
+        /// issued before the change still opens a session that follows it.
+        Mutes: Dictionary<PlayerId, Sanction voption>
     }
 
     let create dictionary =
         { Connections = Dictionary(); Players = Dictionary(); Names = PseudonymBook.create dictionary
-          Roles = Dictionary(); Profiles = Dictionary() }
+          Roles = Dictionary(); Profiles = Dictionary(); Mutes = Dictionary() }
 
     let add connectionId connectedAt deadline state =
         let entry = {

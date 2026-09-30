@@ -16,6 +16,7 @@
         <Compile Include="GroundMarks.fs" />
         <Compile Include="Moderation.fs" />
         <Compile Include="Admin.fs" />
+        <Compile Include="Sanctions.fs" />
         <Compile Include="Core.fs" />
     </ItemGroup>
 

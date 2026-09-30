@@ -29,31 +29,45 @@ namespace Dreamsleeve.Protocol.Chat {
             "c3Npb25fdGlja2V0GAMgASgJEkIKD2hpZGRlbl9pZGVudGl0eRgEIAEoDjIp",
             "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuSGlkZGVuSWRlbnRpdHlKBAgB",
             "EAJKBAgCEANSCHVzZXJuYW1lUgxkaXNwbGF5X25hbWUiDQoLSm9pbkFzR3Vl",
-            "c3QinAMKDVNlc3Npb25PcGVuZWQSEwoLc2VydmVyX25hbWUYBiABKAkSFgoO",
+            "c3Qi0AMKDVNlc3Npb25PcGVuZWQSEwoLc2VydmVyX25hbWUYBiABKAkSFgoO",
             "c2VsZl9wbGF5ZXJfaWQYASABKAQSNgoHcGxheWVycxgFIAMoCzIlLkRyZWFt",
             "c2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVySW5mbxJECg1hbm5vdW5jZW1l",
             "bnRzGAcgASgLMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Bbm5vdW5j",
             "ZW1lbnRQb2xpY3kSOAoIY2hhbm5lbHMYCCADKAsyJi5EcmVhbXNsZWV2ZS5Q",
             "cm90b2NvbC5DaGF0LkNoYXRDaGFubmVsEhoKDW93bl9wc2V1ZG9ueW0YCSAB",
             "KAlIAIgBARJCCg9oaWRkZW5faWRlbnRpdHkYCiABKA4yKS5EcmVhbXNsZWV2",
-            "ZS5Qcm90b2NvbC5DaGF0LkhpZGRlbklkZW50aXR5QhAKDl9vd25fcHNldWRv",
-            "bnltSgQIAhADSgQIAxAESgQIBBAFUhFnbG9iYWxfY2hhbm5lbF9pZFIPcmVj",
-            "ZW50X21lc3NhZ2VzIlIKFVNldElkZW50aXR5VmlzaWJpbGl0eRI5CgZoaWRk",
-            "ZW4YASABKA4yKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkhpZGRlbklk",
-            "ZW50aXR5InwKGUlkZW50aXR5VmlzaWJpbGl0eUNoYW5nZWQSFgoJcHNldWRv",
-            "bnltGAEgASgJSACIAQESOQoGaGlkZGVuGAIgASgOMikuRHJlYW1zbGVldmUu",
-            "UHJvdG9jb2wuQ2hhdC5IaWRkZW5JZGVudGl0eUIMCgpfcHNldWRvbnltIikK",
-            "EUNoYW5nZURpc3BsYXlOYW1lEhQKDGRpc3BsYXlfbmFtZRgBIAEoCSIqChJE",
-            "aXNwbGF5TmFtZUNoYW5nZWQSFAoMZGlzcGxheV9uYW1lGAEgASgJKnMKDkhp",
-            "ZGRlbklkZW50aXR5EhgKFEhJRERFTl9JREVOVElUWV9OT05FEAASHgoaSElE",
-            "REVOX0lERU5USVRZX0VWRVJZV0hFUkUQARInCiNISURERU5fSURFTlRJVFlf",
-            "RVhDRVBUX0dST1VORF9NQVJLUxACYgZwcm90bzM="));
+            "ZS5Qcm90b2NvbC5DaGF0LkhpZGRlbklkZW50aXR5EjIKBG11dGUYCyABKAsy",
+            "JC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk11dGVTdGF0ZUIQCg5fb3du",
+            "X3BzZXVkb255bUoECAIQA0oECAMQBEoECAQQBVIRZ2xvYmFsX2NoYW5uZWxf",
+            "aWRSD3JlY2VudF9tZXNzYWdlcyJJCglNdXRlU3RhdGUSDgoGcmVhc29uGAEg",
+            "ASgJEhoKDXVudGlsX3VuaXhfbXMYAiABKANIAIgBAUIQCg5fdW50aWxfdW5p",
+            "eF9tcyJBCgtNdXRlQ2hhbmdlZBIyCgRtdXRlGAEgASgLMiQuRHJlYW1zbGVl",
+            "dmUuUHJvdG9jb2wuQ2hhdC5NdXRlU3RhdGUihwEKDFNlc3Npb25FbmRlZBI7",
+            "CgZyZWFzb24YASABKA4yKy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlNl",
+            "c3Npb25FbmRSZWFzb24SDAoEdGV4dBgCIAEoCRIaCg11bnRpbF91bml4X21z",
+            "GAMgASgDSACIAQFCEAoOX3VudGlsX3VuaXhfbXMiUgoVU2V0SWRlbnRpdHlW",
+            "aXNpYmlsaXR5EjkKBmhpZGRlbhgBIAEoDjIpLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLkNoYXQuSGlkZGVuSWRlbnRpdHkifAoZSWRlbnRpdHlWaXNpYmlsaXR5",
+            "Q2hhbmdlZBIWCglwc2V1ZG9ueW0YASABKAlIAIgBARI5CgZoaWRkZW4YAiAB",
+            "KA4yKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkhpZGRlbklkZW50aXR5",
+            "QgwKCl9wc2V1ZG9ueW0iKQoRQ2hhbmdlRGlzcGxheU5hbWUSFAoMZGlzcGxh",
+            "eV9uYW1lGAEgASgJIioKEkRpc3BsYXlOYW1lQ2hhbmdlZBIUCgxkaXNwbGF5",
+            "X25hbWUYASABKAkqcwoOSGlkZGVuSWRlbnRpdHkSGAoUSElEREVOX0lERU5U",
+            "SVRZX05PTkUQABIeChpISURERU5fSURFTlRJVFlfRVZFUllXSEVSRRABEicK",
+            "I0hJRERFTl9JREVOVElUWV9FWENFUFRfR1JPVU5EX01BUktTEAIqmwEKEFNl",
+            "c3Npb25FbmRSZWFzb24SIgoeU0VTU0lPTl9FTkRfUkVBU09OX1VOU1BFQ0lG",
+            "SUVEEAASJQohU0VTU0lPTl9FTkRfUkVBU09OX0FDQ0VTU19SRVZPS0VEEAES",
+            "HQoZU0VTU0lPTl9FTkRfUkVBU09OX0JBTk5FRBACEh0KGVNFU1NJT05fRU5E",
+            "X1JFQVNPTl9LSUNLRUQQA2IGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.HiddenIdentity), }, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.HiddenIdentity), typeof(global::Dreamsleeve.Protocol.Chat.SessionEndReason), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.OpenSession), global::Dreamsleeve.Protocol.Chat.OpenSession.Parser, new[]{ "SessionTicket", "HiddenIdentity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.JoinAsGuest), global::Dreamsleeve.Protocol.Chat.JoinAsGuest.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "Players", "Announcements", "Channels", "OwnPseudonym", "HiddenIdentity" }, new[]{ "OwnPseudonym" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionOpened), global::Dreamsleeve.Protocol.Chat.SessionOpened.Parser, new[]{ "ServerName", "SelfPlayerId", "Players", "Announcements", "Channels", "OwnPseudonym", "HiddenIdentity", "Mute" }, new[]{ "OwnPseudonym" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.MuteState), global::Dreamsleeve.Protocol.Chat.MuteState.Parser, new[]{ "Reason", "UntilUnixMs" }, new[]{ "UntilUnixMs" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.MuteChanged), global::Dreamsleeve.Protocol.Chat.MuteChanged.Parser, new[]{ "Mute" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SessionEnded), global::Dreamsleeve.Protocol.Chat.SessionEnded.Parser, new[]{ "Reason", "Text", "UntilUnixMs" }, new[]{ "UntilUnixMs" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SetIdentityVisibility), global::Dreamsleeve.Protocol.Chat.SetIdentityVisibility.Parser, new[]{ "Hidden" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged), global::Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.Parser, new[]{ "Pseudonym", "Hidden" }, new[]{ "Pseudonym" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChangeDisplayName), global::Dreamsleeve.Protocol.Chat.ChangeDisplayName.Parser, new[]{ "DisplayName" }, null, null, null, null),
@@ -82,6 +96,16 @@ namespace Dreamsleeve.Protocol.Chat {
     /// Presence and chat; marks show the real profile.
     /// </summary>
     [pbr::OriginalName("HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS")] ExceptGroundMarks = 2,
+  }
+
+  public enum SessionEndReason {
+    [pbr::OriginalName("SESSION_END_REASON_UNSPECIFIED")] Unspecified = 0,
+    /// <summary>
+    /// An administrator revoked the saved logins.
+    /// </summary>
+    [pbr::OriginalName("SESSION_END_REASON_ACCESS_REVOKED")] AccessRevoked = 1,
+    [pbr::OriginalName("SESSION_END_REASON_BANNED")] Banned = 2,
+    [pbr::OriginalName("SESSION_END_REASON_KICKED")] Kicked = 3,
   }
 
   #endregion
@@ -537,6 +561,7 @@ namespace Dreamsleeve.Protocol.Chat {
       channels_ = other.channels_.Clone();
       ownPseudonym_ = other.ownPseudonym_;
       hiddenIdentity_ = other.hiddenIdentity_;
+      mute_ = other.mute_ != null ? other.mute_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -655,6 +680,21 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "mute" field.</summary>
+    public const int MuteFieldNumber = 11;
+    private global::Dreamsleeve.Protocol.Chat.MuteState mute_;
+    /// <summary>
+    /// The receiver's mute in force when the session opened; absent: not muted.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.MuteState Mute {
+      get { return mute_; }
+      set {
+        mute_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -677,6 +717,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if(!channels_.Equals(other.channels_)) return false;
       if (OwnPseudonym != other.OwnPseudonym) return false;
       if (HiddenIdentity != other.HiddenIdentity) return false;
+      if (!object.Equals(Mute, other.Mute)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -691,6 +732,7 @@ namespace Dreamsleeve.Protocol.Chat {
       hash ^= channels_.GetHashCode();
       if (HasOwnPseudonym) hash ^= OwnPseudonym.GetHashCode();
       if (HiddenIdentity != global::Dreamsleeve.Protocol.Chat.HiddenIdentity.None) hash ^= HiddenIdentity.GetHashCode();
+      if (mute_ != null) hash ^= Mute.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -731,6 +773,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(80);
         output.WriteEnum((int) HiddenIdentity);
       }
+      if (mute_ != null) {
+        output.WriteRawTag(90);
+        output.WriteMessage(Mute);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -763,6 +809,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(80);
         output.WriteEnum((int) HiddenIdentity);
       }
+      if (mute_ != null) {
+        output.WriteRawTag(90);
+        output.WriteMessage(Mute);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -789,6 +839,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (HiddenIdentity != global::Dreamsleeve.Protocol.Chat.HiddenIdentity.None) {
         size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) HiddenIdentity);
+      }
+      if (mute_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Mute);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -821,6 +874,12 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (other.HiddenIdentity != global::Dreamsleeve.Protocol.Chat.HiddenIdentity.None) {
         HiddenIdentity = other.HiddenIdentity;
+      }
+      if (other.mute_ != null) {
+        if (mute_ == null) {
+          Mute = new global::Dreamsleeve.Protocol.Chat.MuteState();
+        }
+        Mute.MergeFrom(other.Mute);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -870,6 +929,13 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 80: {
             HiddenIdentity = (global::Dreamsleeve.Protocol.Chat.HiddenIdentity) input.ReadEnum();
+            break;
+          }
+          case 90: {
+            if (mute_ == null) {
+              Mute = new global::Dreamsleeve.Protocol.Chat.MuteState();
+            }
+            input.ReadMessage(Mute);
             break;
           }
         }
@@ -922,6 +988,787 @@ namespace Dreamsleeve.Protocol.Chat {
             HiddenIdentity = (global::Dreamsleeve.Protocol.Chat.HiddenIdentity) input.ReadEnum();
             break;
           }
+          case 90: {
+            if (mute_ == null) {
+              Mute = new global::Dreamsleeve.Protocol.Chat.MuteState();
+            }
+            input.ReadMessage(Mute);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A mute in force on the receiver: chat, notes, client announcements and the
+  /// display name are refused (MUTED) until it ends. Reading is not limited.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class MuteState : pb::IMessage<MuteState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<MuteState> _parser = new pb::MessageParser<MuteState>(() => new MuteState());
+    private pb::UnknownFieldSet _unknownFields;
+    private int _hasBits0;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<MuteState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[3]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public MuteState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public MuteState(MuteState other) : this() {
+      _hasBits0 = other._hasBits0;
+      reason_ = other.reason_;
+      untilUnixMs_ = other.untilUnixMs_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public MuteState Clone() {
+      return new MuteState(this);
+    }
+
+    /// <summary>Field number for the "reason" field.</summary>
+    public const int ReasonFieldNumber = 1;
+    private string reason_ = "";
+    /// <summary>
+    /// The moderator's words, one line.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Reason {
+      get { return reason_; }
+      set {
+        reason_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "until_unix_ms" field.</summary>
+    public const int UntilUnixMsFieldNumber = 2;
+    private readonly static long UntilUnixMsDefaultValue = 0L;
+
+    private long untilUnixMs_;
+    /// <summary>
+    /// Absent: until lifted.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long UntilUnixMs {
+      get { if ((_hasBits0 & 1) != 0) { return untilUnixMs_; } else { return UntilUnixMsDefaultValue; } }
+      set {
+        _hasBits0 |= 1;
+        untilUnixMs_ = value;
+      }
+    }
+    /// <summary>Gets whether the "until_unix_ms" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasUntilUnixMs {
+      get { return (_hasBits0 & 1) != 0; }
+    }
+    /// <summary>Clears the value of the "until_unix_ms" field</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearUntilUnixMs() {
+      _hasBits0 &= ~1;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as MuteState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(MuteState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Reason != other.Reason) return false;
+      if (UntilUnixMs != other.UntilUnixMs) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Reason.Length != 0) hash ^= Reason.GetHashCode();
+      if (HasUntilUnixMs) hash ^= UntilUnixMs.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Reason.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Reason);
+      }
+      if (HasUntilUnixMs) {
+        output.WriteRawTag(16);
+        output.WriteInt64(UntilUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Reason.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Reason);
+      }
+      if (HasUntilUnixMs) {
+        output.WriteRawTag(16);
+        output.WriteInt64(UntilUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Reason.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Reason);
+      }
+      if (HasUntilUnixMs) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(UntilUnixMs);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(MuteState other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Reason.Length != 0) {
+        Reason = other.Reason;
+      }
+      if (other.HasUntilUnixMs) {
+        UntilUnixMs = other.UntilUnixMs;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            Reason = input.ReadString();
+            break;
+          }
+          case 16: {
+            UntilUnixMs = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            Reason = input.ReadString();
+            break;
+          }
+          case 16: {
+            UntilUnixMs = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// The receiver's own mute changed. Control lane, no request_id.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class MuteChanged : pb::IMessage<MuteChanged>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<MuteChanged> _parser = new pb::MessageParser<MuteChanged>(() => new MuteChanged());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<MuteChanged> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[4]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public MuteChanged() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public MuteChanged(MuteChanged other) : this() {
+      mute_ = other.mute_ != null ? other.mute_.Clone() : null;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public MuteChanged Clone() {
+      return new MuteChanged(this);
+    }
+
+    /// <summary>Field number for the "mute" field.</summary>
+    public const int MuteFieldNumber = 1;
+    private global::Dreamsleeve.Protocol.Chat.MuteState mute_;
+    /// <summary>
+    /// Absent: lifted.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.MuteState Mute {
+      get { return mute_; }
+      set {
+        mute_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as MuteChanged);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(MuteChanged other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (!object.Equals(Mute, other.Mute)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (mute_ != null) hash ^= Mute.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (mute_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Mute);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (mute_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Mute);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (mute_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Mute);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(MuteChanged other) {
+      if (other == null) {
+        return;
+      }
+      if (other.mute_ != null) {
+        if (mute_ == null) {
+          Mute = new global::Dreamsleeve.Protocol.Chat.MuteState();
+        }
+        Mute.MergeFrom(other.Mute);
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            if (mute_ == null) {
+              Mute = new global::Dreamsleeve.Protocol.Chat.MuteState();
+            }
+            input.ReadMessage(Mute);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            if (mute_ == null) {
+              Mute = new global::Dreamsleeve.Protocol.Chat.MuteState();
+            }
+            input.ReadMessage(Mute);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Why the server ends the session; the connection closes right after. Control
+  /// lane, no request_id. A banned player may still connect as a guest.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class SessionEnded : pb::IMessage<SessionEnded>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<SessionEnded> _parser = new pb::MessageParser<SessionEnded>(() => new SessionEnded());
+    private pb::UnknownFieldSet _unknownFields;
+    private int _hasBits0;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<SessionEnded> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[5]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SessionEnded() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SessionEnded(SessionEnded other) : this() {
+      _hasBits0 = other._hasBits0;
+      reason_ = other.reason_;
+      text_ = other.text_;
+      untilUnixMs_ = other.untilUnixMs_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SessionEnded Clone() {
+      return new SessionEnded(this);
+    }
+
+    /// <summary>Field number for the "reason" field.</summary>
+    public const int ReasonFieldNumber = 1;
+    private global::Dreamsleeve.Protocol.Chat.SessionEndReason reason_ = global::Dreamsleeve.Protocol.Chat.SessionEndReason.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.SessionEndReason Reason {
+      get { return reason_; }
+      set {
+        reason_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "text" field.</summary>
+    public const int TextFieldNumber = 2;
+    private string text_ = "";
+    /// <summary>
+    /// The moderator's reason; empty when access was revoked.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Text {
+      get { return text_; }
+      set {
+        text_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "until_unix_ms" field.</summary>
+    public const int UntilUnixMsFieldNumber = 3;
+    private readonly static long UntilUnixMsDefaultValue = 0L;
+
+    private long untilUnixMs_;
+    /// <summary>
+    /// A ban with an end.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long UntilUnixMs {
+      get { if ((_hasBits0 & 1) != 0) { return untilUnixMs_; } else { return UntilUnixMsDefaultValue; } }
+      set {
+        _hasBits0 |= 1;
+        untilUnixMs_ = value;
+      }
+    }
+    /// <summary>Gets whether the "until_unix_ms" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasUntilUnixMs {
+      get { return (_hasBits0 & 1) != 0; }
+    }
+    /// <summary>Clears the value of the "until_unix_ms" field</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearUntilUnixMs() {
+      _hasBits0 &= ~1;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as SessionEnded);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(SessionEnded other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Reason != other.Reason) return false;
+      if (Text != other.Text) return false;
+      if (UntilUnixMs != other.UntilUnixMs) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Reason != global::Dreamsleeve.Protocol.Chat.SessionEndReason.Unspecified) hash ^= Reason.GetHashCode();
+      if (Text.Length != 0) hash ^= Text.GetHashCode();
+      if (HasUntilUnixMs) hash ^= UntilUnixMs.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Reason != global::Dreamsleeve.Protocol.Chat.SessionEndReason.Unspecified) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Reason);
+      }
+      if (Text.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Text);
+      }
+      if (HasUntilUnixMs) {
+        output.WriteRawTag(24);
+        output.WriteInt64(UntilUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Reason != global::Dreamsleeve.Protocol.Chat.SessionEndReason.Unspecified) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Reason);
+      }
+      if (Text.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Text);
+      }
+      if (HasUntilUnixMs) {
+        output.WriteRawTag(24);
+        output.WriteInt64(UntilUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Reason != global::Dreamsleeve.Protocol.Chat.SessionEndReason.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Reason);
+      }
+      if (Text.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Text);
+      }
+      if (HasUntilUnixMs) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(UntilUnixMs);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(SessionEnded other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Reason != global::Dreamsleeve.Protocol.Chat.SessionEndReason.Unspecified) {
+        Reason = other.Reason;
+      }
+      if (other.Text.Length != 0) {
+        Text = other.Text;
+      }
+      if (other.HasUntilUnixMs) {
+        UntilUnixMs = other.UntilUnixMs;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Reason = (global::Dreamsleeve.Protocol.Chat.SessionEndReason) input.ReadEnum();
+            break;
+          }
+          case 18: {
+            Text = input.ReadString();
+            break;
+          }
+          case 24: {
+            UntilUnixMs = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Reason = (global::Dreamsleeve.Protocol.Chat.SessionEndReason) input.ReadEnum();
+            break;
+          }
+          case 18: {
+            Text = input.ReadString();
+            break;
+          }
+          case 24: {
+            UntilUnixMs = input.ReadInt64();
+            break;
+          }
         }
       }
     }
@@ -949,7 +1796,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[3]; }
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1151,7 +1998,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[4]; }
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1406,7 +2253,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[5]; }
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[8]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1609,7 +2456,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[6]; }
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

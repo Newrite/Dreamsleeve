@@ -10,11 +10,24 @@ type SessionAuthenticationError =
     | InvalidTicket
     | Unavailable
 
-/// The stored profile and role behind a consumed ticket.
+/// The stored profile, role and mute behind a consumed ticket.
 type AuthenticatedPlayer = {
     Profile: PlayerData
     Role: PlayerRole
+    /// The mute in force when the ticket was issued; later changes come as AccountChange.
+    Mute: Sanction voption
 }
+
+/// What the account service changed that live sessions must follow. The
+/// service knows accounts, the runtime connections: it applies these.
+[<RequireQualifiedAccess>]
+type AccountChange =
+    /// Saved logins are revoked: the player's sessions end.
+    | AccessRevoked of PlayerId
+    /// The player's sessions end; none opens while the ban holds.
+    | Banned of Sanction
+    /// The mute now in force, if any.
+    | MuteChanged of PlayerId * Sanction voption
 
 type SessionAuthenticationReply = {
     OperationId: Guid

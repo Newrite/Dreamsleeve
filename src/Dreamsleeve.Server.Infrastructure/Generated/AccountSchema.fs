@@ -219,6 +219,31 @@ module main =
 
     let profiles = table<profiles>
 
+    type sanctions =
+        { id: int64
+          player_id: int64
+          kind: int64
+          reason: string
+          issued_by_admin: Option<int64>
+          issued_by_player: Option<int64>
+          issued_at: int64
+          expires_at: Option<int64>
+          lifted_at: Option<int64> }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "id"; Value = box this.id; ProviderDbType = None }
+                  { WriteColumn.Name = "player_id"; Value = box this.player_id; ProviderDbType = None }
+                  { WriteColumn.Name = "kind"; Value = box this.kind; ProviderDbType = None }
+                  { WriteColumn.Name = "reason"; Value = box this.reason; ProviderDbType = None }
+                  { WriteColumn.Name = "issued_by_admin"; Value = box this.issued_by_admin; ProviderDbType = None }
+                  { WriteColumn.Name = "issued_by_player"; Value = box this.issued_by_player; ProviderDbType = None }
+                  { WriteColumn.Name = "issued_at"; Value = box this.issued_at; ProviderDbType = None }
+                  { WriteColumn.Name = "expires_at"; Value = box this.expires_at; ProviderDbType = None }
+                  { WriteColumn.Name = "lifted_at"; Value = box this.lifted_at; ProviderDbType = None } ]
+
+    let sanctions = table<sanctions>
+
 
 
 type QueryContextFactory =

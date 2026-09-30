@@ -150,6 +150,7 @@ let tests = testList "Announcements" [
             AnnouncementSources = [ClientAnnouncementSource.TrustedClient]
             OwnPseudonym = ValueNone
             Hiding = HiddenIdentity.Shown
+            Mute = ValueNone
         }
         let opened = Packets.single codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         let policy = opened.SessionOpened.Announcements

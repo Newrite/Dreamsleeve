@@ -118,6 +118,7 @@ enum RequestRejectionCode : int {
   REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND = 13,
   REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED = 14,
   REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15,
+  REQUEST_REJECTION_CODE_MUTED = 16,
   RequestRejectionCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   RequestRejectionCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -128,11 +129,11 @@ extern const uint32_t RequestRejectionCode_internal_data_[];
 inline constexpr RequestRejectionCode RequestRejectionCode_MIN =
     static_cast<RequestRejectionCode>(0);
 inline constexpr RequestRejectionCode RequestRejectionCode_MAX =
-    static_cast<RequestRejectionCode>(15);
+    static_cast<RequestRejectionCode>(16);
 inline bool RequestRejectionCode_IsValid(int value) {
-  return 0 <= value && value <= 15;
+  return 0 <= value && value <= 16;
 }
-inline constexpr int RequestRejectionCode_ARRAYSIZE = 15 + 1;
+inline constexpr int RequestRejectionCode_ARRAYSIZE = 16 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_descriptor();
 template <typename T>
 const ::std::string& RequestRejectionCode_Name(T value) {
@@ -143,7 +144,7 @@ const ::std::string& RequestRejectionCode_Name(T value) {
 }
 template <>
 inline const ::std::string& RequestRejectionCode_Name(RequestRejectionCode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 15>(
+  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 16>(
       static_cast<int>(value));
 }
 inline bool RequestRejectionCode_Parse(
@@ -1000,6 +1001,8 @@ class ServerPacket final : public ::google::protobuf::Message
     kOwnGroundMarks = 24,
     kIdentityVisibilityChanged = 25,
     kDisplayNameChanged = 26,
+    kMuteChanged = 27,
+    kSessionEnded = 28,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 1;
@@ -1106,6 +1109,8 @@ class ServerPacket final : public ::google::protobuf::Message
     kOwnGroundMarksFieldNumber = 24,
     kIdentityVisibilityChangedFieldNumber = 25,
     kDisplayNameChangedFieldNumber = 26,
+    kMuteChangedFieldNumber = 27,
+    kSessionEndedFieldNumber = 28,
   };
   // optional uint64 request_id = 2;
   bool has_request_id() const;
@@ -1413,6 +1418,44 @@ class ServerPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::DisplayNameChanged* PROTOBUF_NONNULL _internal_mutable_display_name_changed();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.MuteChanged mute_changed = 27;
+  bool has_mute_changed() const;
+  private:
+  bool _internal_has_mute_changed() const;
+
+  public:
+  void clear_mute_changed() ;
+  const ::Dreamsleeve::Protocol::Chat::MuteChanged& mute_changed() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NULLABLE release_mute_changed();
+  ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NONNULL mutable_mute_changed();
+  void set_allocated_mute_changed(::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_mute_changed(::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NULLABLE unsafe_arena_release_mute_changed();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::MuteChanged& _internal_mute_changed() const;
+  ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NONNULL _internal_mutable_mute_changed();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.SessionEnded session_ended = 28;
+  bool has_session_ended() const;
+  private:
+  bool _internal_has_session_ended() const;
+
+  public:
+  void clear_session_ended() ;
+  const ::Dreamsleeve::Protocol::Chat::SessionEnded& session_ended() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NULLABLE release_session_ended();
+  ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NONNULL mutable_session_ended();
+  void set_allocated_session_ended(::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_session_ended(::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NULLABLE unsafe_arena_release_session_ended();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::SessionEnded& _internal_session_ended() const;
+  ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NONNULL _internal_mutable_session_ended();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ServerPacket)
@@ -1433,11 +1476,13 @@ class ServerPacket final : public ::google::protobuf::Message
   void set_has_own_ground_marks();
   void set_has_identity_visibility_changed();
   void set_has_display_name_changed();
+  void set_has_mute_changed();
+  void set_has_session_ended();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 17,
-                                   15, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 19,
+                                   17, 0,
                                    2>
       _table_;
 
@@ -1478,6 +1523,8 @@ class ServerPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE own_ground_marks_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE identity_visibility_changed_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE display_name_changed_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE mute_changed_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE session_ended_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3859,6 +3906,148 @@ inline ::Dreamsleeve::Protocol::Chat::DisplayNameChanged* PROTOBUF_NONNULL Serve
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::DisplayNameChanged* _msg = _internal_mutable_display_name_changed();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.display_name_changed)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.MuteChanged mute_changed = 27;
+inline bool ServerPacket::has_mute_changed() const {
+  return payload_case() == kMuteChanged;
+}
+inline bool ServerPacket::_internal_has_mute_changed() const {
+  return payload_case() == kMuteChanged;
+}
+inline void ServerPacket::set_has_mute_changed() {
+  _impl_._oneof_case_[0] = kMuteChanged;
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NULLABLE ServerPacket::release_mute_changed() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.mute_changed)
+  if (payload_case() == kMuteChanged) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteChanged*>(_impl_.payload_.mute_changed_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.mute_changed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::MuteChanged& ServerPacket::_internal_mute_changed() const {
+  return payload_case() == kMuteChanged ? static_cast<const ::Dreamsleeve::Protocol::Chat::MuteChanged&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteChanged*>(_impl_.payload_.mute_changed_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::MuteChanged&>(::Dreamsleeve::Protocol::Chat::_MuteChanged_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::MuteChanged& ServerPacket::mute_changed() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.mute_changed)
+  return _internal_mute_changed();
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_mute_changed() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.mute_changed)
+  if (payload_case() == kMuteChanged) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteChanged*>(_impl_.payload_.mute_changed_);
+    _impl_.payload_.mute_changed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_mute_changed(
+    ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_mute_changed();
+    _impl_.payload_.mute_changed_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.mute_changed)
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NONNULL ServerPacket::_internal_mutable_mute_changed() {
+  if (payload_case() != kMuteChanged) {
+    clear_payload();
+    set_has_mute_changed();
+    _impl_.payload_.mute_changed_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::MuteChanged>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteChanged*>(_impl_.payload_.mute_changed_);
+}
+inline ::Dreamsleeve::Protocol::Chat::MuteChanged* PROTOBUF_NONNULL ServerPacket::mutable_mute_changed()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::MuteChanged* _msg = _internal_mutable_mute_changed();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.mute_changed)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.SessionEnded session_ended = 28;
+inline bool ServerPacket::has_session_ended() const {
+  return payload_case() == kSessionEnded;
+}
+inline bool ServerPacket::_internal_has_session_ended() const {
+  return payload_case() == kSessionEnded;
+}
+inline void ServerPacket::set_has_session_ended() {
+  _impl_._oneof_case_[0] = kSessionEnded;
+}
+inline ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NULLABLE ServerPacket::release_session_ended() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.session_ended)
+  if (payload_case() == kSessionEnded) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SessionEnded*>(_impl_.payload_.session_ended_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.session_ended_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::SessionEnded& ServerPacket::_internal_session_ended() const {
+  return payload_case() == kSessionEnded ? static_cast<const ::Dreamsleeve::Protocol::Chat::SessionEnded&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SessionEnded*>(_impl_.payload_.session_ended_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SessionEnded&>(::Dreamsleeve::Protocol::Chat::_SessionEnded_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::SessionEnded& ServerPacket::session_ended() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.session_ended)
+  return _internal_session_ended();
+}
+inline ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_session_ended() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.session_ended)
+  if (payload_case() == kSessionEnded) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SessionEnded*>(_impl_.payload_.session_ended_);
+    _impl_.payload_.session_ended_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_session_ended(
+    ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_session_ended();
+    _impl_.payload_.session_ended_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.session_ended)
+}
+inline ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NONNULL ServerPacket::_internal_mutable_session_ended() {
+  if (payload_case() != kSessionEnded) {
+    clear_payload();
+    set_has_session_ended();
+    _impl_.payload_.session_ended_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SessionEnded>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SessionEnded*>(_impl_.payload_.session_ended_);
+}
+inline ::Dreamsleeve::Protocol::Chat::SessionEnded* PROTOBUF_NONNULL ServerPacket::mutable_session_ended()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::SessionEnded* _msg = _internal_mutable_session_ended();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.session_ended)
   return _msg;
 }
 

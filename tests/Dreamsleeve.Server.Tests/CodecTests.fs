@@ -47,6 +47,7 @@ let private welcomeWith messages = {
     AnnouncementSources = [ClientAnnouncementSource.ThirdParty]
     OwnPseudonym = ValueNone
     Hiding = HiddenIdentity.Shown
+    Mute = ValueNone
 }
 let private welcome = welcomeWith [message]
 
@@ -176,6 +177,29 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let result = decode packet |> ok
         Expect.equal result.Command ClientCommand.JoinAsGuest "guest command"
         Expect.equal (ProtocolCodec.requestLane result) DeliveryLane.Control "control lane"
+
+    testCase "a mute and the end of a session reach the player with the reason and when they end" <| fun _ ->
+        let now = DateTimeOffset.FromUnixTimeMilliseconds 1_000_000L
+        let issue id kind term =
+            Sanction.issue (SanctionId.create id |> ok) now
+                { Target = pid 7UL; Kind = kind; Term = term; Reason = SanctionReason.create " Флуд " |> ok
+                  IssuedBy = SanctionIssuer.Admin(AdminId.create 1L |> ok) }
+        let packet response = Packets.single codec response |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
+        let mute = issue 1L SanctionKind.Mute (SanctionTerm.For(TimeSpan.FromMinutes 15.))
+        let muted = (packet (ServerResponse.MuteChanged(ValueSome mute))).MuteChanged.Mute
+        Expect.equal muted.Reason "Флуд" "the trimmed reason"
+        Expect.equal muted.UntilUnixMs 1_900_000L "fifteen minutes later"
+        Expect.isNull (packet (ServerResponse.MuteChanged ValueNone)).MuteChanged.Mute "a lift carries no mute"
+        let welcome = (packet (ServerResponse.SessionOpened(1UL, { welcomeWith [] with Mute = ValueSome mute }))).SessionOpened
+        Expect.equal welcome.Mute.Reason "Флуд" "the welcome carries the mute"
+        Expect.isNull (packet (ServerResponse.SessionOpened(1UL, welcomeWith []))).SessionOpened.Mute "not muted"
+        let banned = (packet (ServerResponse.SessionEnded(SessionEnd.Banned(issue 2L SanctionKind.Ban SanctionTerm.UntilLifted)))).SessionEnded
+        Expect.equal banned.Reason Dreamsleeve.Protocol.Chat.SessionEndReason.Banned "banned"
+        Expect.isFalse banned.HasUntilUnixMs "until lifted"
+        let kicked = (packet (ServerResponse.SessionEnded(SessionEnd.Kicked(SanctionReason.create "Остынь" |> ok)))).SessionEnded
+        Expect.equal (kicked.Reason, kicked.Text) (Dreamsleeve.Protocol.Chat.SessionEndReason.Kicked, "Остынь") "kicked with the reason"
+        let revoked = (packet (ServerResponse.SessionEnded SessionEnd.AccessRevoked)).SessionEnded
+        Expect.equal (revoked.Reason, revoked.Text) (Dreamsleeve.Protocol.Chat.SessionEndReason.AccessRevoked, "") "revoked without words"
 
     testCase "send chat preserves text and full uint64 request IDs" <| fun _ ->
         let result = send UInt64.MaxValue "Привет\nworld" |> decode |> ok

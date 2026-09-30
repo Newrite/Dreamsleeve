@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 13u
+    let Version = 14u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -120,7 +120,9 @@ module ProtocolCodec =
         | ServerResponse.PlayersMoved _ -> notifies DeliveryLane.Realtime
         | ServerResponse.PlayerJoined _ | ServerResponse.PlayerLeft _ | ServerResponse.PlayerUpdated _
         | ServerResponse.PlayerVisibilityChanged _ | ServerResponse.PlayerMetadataChanged _
-        | ServerResponse.GroundMarksChanged _ | ServerResponse.OwnGroundMarks _ -> notifies DeliveryLane.Control
+        | ServerResponse.GroundMarksChanged _ | ServerResponse.OwnGroundMarks _ | ServerResponse.MuteChanged _ -> notifies DeliveryLane.Control
+        // The last packet before the runtime closes the connection, whatever the phase.
+        | ServerResponse.SessionEnded _ -> { notifies DeliveryLane.Control with WhileOpening = true }
 
     let decodeMovement (codec: ProtocolCodec) (bytes: byte array) =
         if isNull bytes || bytes.Length = 0 then fail None ProtocolCodecFailure.EmptyPacket
@@ -255,4 +257,12 @@ module ProtocolCodec =
                 envelope ()
             | ServerResponse.DisplayNameChanged(_, name) ->
                 packet.DisplayNameChanged <- Dreamsleeve.Protocol.Chat.DisplayNameChanged(DisplayName = DisplayName.value name)
+                envelope ()
+            | ServerResponse.MuteChanged mute ->
+                let changed = Dreamsleeve.Protocol.Chat.MuteChanged()
+                mute |> ValueOption.iter (fun sanction -> changed.Mute <- SessionCodec.mute sanction)
+                packet.MuteChanged <- changed
+                envelope ()
+            | ServerResponse.SessionEnded value ->
+                packet.SessionEnded <- SessionCodec.ended value
                 envelope ()

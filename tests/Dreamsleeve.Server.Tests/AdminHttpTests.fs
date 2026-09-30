@@ -59,7 +59,8 @@ type private FakeAdmin() =
         | AdminCommand.RecentAudit _ -> Ok (AdminReply.Audit [])
         | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.ResetPassword _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.RevokeApiToken _ | AdminCommand.SetRole _ | AdminCommand.SearchPlayers _
-        | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ -> Error AdminServiceError.Unavailable
+        | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ | AdminCommand.PlayerSanctions _ -> Error AdminServiceError.Unavailable
+        | AdminCommand.ActiveSanctions -> Ok (AdminReply.ActiveSanctions [])
 
 // One hidden player online; its real names only the panel may show.
 let private hiddenRow = {
@@ -92,6 +93,7 @@ let private withPanel customize run = task {
         Announce = fun announcement -> announcements.Enqueue announcement; true
         ApplyRole = fun _ _ -> true
         ApplyProfile = fun _ -> true
+        Kick = fun _ _ -> true
         Configuration = fun () -> []
     }
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()

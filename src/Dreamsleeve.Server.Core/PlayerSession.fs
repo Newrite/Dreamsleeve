@@ -35,6 +35,8 @@ type PlayerSessionMessage =
     | Read of ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
     /// An administrator changed the role; applied without reconnecting.
     | RoleChanged of PlayerRole
+    /// The player's mute now, if any; applied without reconnecting.
+    | MuteChanged of Sanction voption
     /// An administrator renamed the player: the stored profile, before moderation.
     | ProfileChanged of PlayerData
     /// The panel's view of this player; None before the profile is known.
@@ -80,6 +82,8 @@ module PlayerSession =
         /// The stored profile before moderation placeholders; only Describe shows it.
         mutable Account: PlayerData voption
         mutable Role: PlayerRole
+        /// It ends by itself once its term passes (Sanction.activeAt).
+        mutable Mute: Sanction voption
         OpenedAt: DateTimeOffset
         /// The one own display name change waiting for the account service.
         mutable NameRequest: struct (uint64 * Guid) voption
@@ -223,6 +227,11 @@ module PlayerSession =
     let private reject (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
         sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "" }
 
+    let private muted state = state.Mute |> ValueOption.exists (Sanction.activeAt DateTimeOffset.UtcNow)
+
+    // A muted player's writing is refused whole; the client shows the mute it was told.
+    let private mutedRejection = { Code = RequestRejectionCode.Muted; Message = "The player is muted."; Field = "" }
+
     let private rejectChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
         sendRefusal options request state context DeliveryLane.Chat requestId { Code = code; Message = message; Field = "" }
 
@@ -254,6 +263,7 @@ module PlayerSession =
             | Ok stored, Some address ->
                 state.Account <- ValueSome stored.Profile
                 state.Role <- stored.Role
+                state.Mute <- stored.Mute
                 state.Logger.LogDebug("Session {ConnectionId} authenticated as player {PlayerId} ({Role})",
                                       request.ConnectionId, PlayerId.value stored.Profile.PlayerId, stored.Role)
                 // Accounts created under older rules keep their stored names;
@@ -323,6 +333,7 @@ module PlayerSession =
                     AnnouncementSources = AnnouncementOptions.allowedSources state.Settings.Announcements
                     OwnPseudonym = state.Pseudonym
                     Hiding = state.Hiding
+                    Mute = state.Mute |> ValueOption.filter (Sanction.activeAt DateTimeOffset.UtcNow)
                 }
                 if emit options request state context (SessionHostCommand.Activate(request.ConnectionId, request.RequestId, welcome)) then
                     state.Phase <- Active opening.Player
@@ -435,6 +446,9 @@ module PlayerSession =
             let text = GroundMarkBody.text body
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
+            // A death mark is the game's own text: a mute does not stop it.
+            elif GroundMarkBody.kind body = GroundMarkKind.Note && muted state then
+                sendRefusal options request state context DeliveryLane.Control requestId mutedRejection
             elif state.Pending.Count >= options.MaxPendingChat then
                 refuse RequestRejectionCode.Overloaded "Too many pending requests." ""
             elif not (GroundMarkPlacement.isNear state.Settings.GroundMarkRules.MaxPlacementDistance player.Location placement) then
@@ -483,6 +497,8 @@ module PlayerSession =
             if requestId = 0UL || state.Pending.Contains requestId then
                 // A second reply with this ID could settle the original request.
                 close request state context "Request ID is invalid or already pending."
+            elif muted state then
+                sendRefusal options request state context DeliveryLane.Chat requestId mutedRejection
             elif kind.IsNone then
                 rejectChat options request state context requestId RequestRejectionCode.ChannelNotFound "Channel does not exist."
             elif ChatChannelKind.carriesAnnouncements kind.Value then
@@ -524,6 +540,8 @@ module PlayerSession =
             let signature = announcement.Signature |> ValueOption.map AnnouncementSignature.value
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
+            elif muted state then
+                sendRefusal options request state context DeliveryLane.Chat requestId mutedRejection
             elif ChatChannelKind.tryOfChannelId announcement.ChannelId <> Some ChatChannelKind.System then
                 refuse RequestRejectionCode.InvalidRequest "Announcements are published only in the system channel." "channel_id"
             else
@@ -692,6 +710,8 @@ module PlayerSession =
         | Active player, Some address ->
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
+            elif muted state then
+                sendRefusal options request state context DeliveryLane.Control requestId mutedRejection
             elif not state.Settings.Identity.AllowDisplayNameChange then
                 refuse RequestRejectionCode.DisplayNameChangeNotAllowed "The server does not let players change their display name."
             elif state.NameRequest.IsSome then
@@ -811,6 +831,15 @@ module PlayerSession =
                 state.Logger.LogDebug("Player {PlayerId} (session {ConnectionId}) now has role {Role}", accountId state, request.ConnectionId, role)
                 state.Role <- role
             | Starting | Resolving _ | Reserving _ | Closing -> ()
+        | PlayerSessionMessage.MuteChanged mute ->
+            state.Logger.LogDebug("Player {PlayerId} (session {ConnectionId}) is muted: {Muted}", accountId state, request.ConnectionId, mute.IsSome)
+            match state.Phase with
+            // The welcome carries the mute of an opening session.
+            | Resolving _ | Reserving _ | Opening _ -> state.Mute <- mute
+            | Active _ ->
+                state.Mute <- mute
+                send options request state context (ServerResponse.MuteChanged mute)
+            | Starting | Closing -> ()
         | PlayerSessionMessage.ProfileChanged stored -> profileChanged options request state context false stored
         | PlayerSessionMessage.ChangeDisplayName(requestId, name) -> changeDisplayName options request state context requestId name
         | PlayerSessionMessage.DisplayNameReplied reply -> displayNameReplied options request state context reply
@@ -824,7 +853,7 @@ module PlayerSession =
         | PlayerSessionMessage.ChatDetached _ | PlayerSessionMessage.SystemDetached _
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.Stop -> true
         // Rare administrator changes use the reserve so a busy session still applies them.
-        | PlayerSessionMessage.RoleChanged _ | PlayerSessionMessage.ProfileChanged _ -> true
+        | PlayerSessionMessage.RoleChanged _ | PlayerSessionMessage.ProfileChanged _ | PlayerSessionMessage.MuteChanged _ -> true
         // The account service must be able to settle a pending change.
         | PlayerSessionMessage.DisplayNameReplied _ -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Placed _ | GroundMarkEvent.Removed _ | GroundMarkEvent.Rejected _) -> true
@@ -859,6 +888,7 @@ module PlayerSession =
             LastIdentitySwitch = ValueNone
             Account = ValueNone
             Role = PlayerRole.Player
+            Mute = ValueNone
             OpenedAt = DateTimeOffset.UtcNow
             NameRequest = ValueNone
             Moderation = moderation

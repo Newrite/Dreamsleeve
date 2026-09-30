@@ -3,6 +3,7 @@ import { makeChat, HISTORY_LIMIT } from "../src/state/chat";
 import { frame } from "../src/state/settings";
 import { defaults } from "../src/bridge/settings.generated";
 import { accountActions, authStatus, idleAuth } from "../src/state/auth";
+import { sessionEndText } from "../src/state/moderation";
 import type {
   AuthEvent,
   HostEvent,
@@ -423,6 +424,9 @@ describe("account", () => {
       authStatus({ ...idleAuth, authenticating: true, operation: "resume" }),
     ).toBe("Вход сохранённой сессией…");
     expect(authStatus(idleAuth)).toBe("");
+    expect(authStatus({ ...idleAuth, failure: "banned", error: "Читы" })).toBe(
+      "Аккаунт заблокирован: Читы",
+    );
   });
   it("disables every account button while authenticating and gates the rest", () => {
     const form = { username: "northern", password: "x", displayName: "Дов" };
@@ -651,5 +655,62 @@ describe("ground marks", () => {
     expect(chat.store.getState().groundMarksSupported).toBe(false);
     expect(chat.store.getState().groundMarks).toEqual([]);
     expect(chat.store.getState().nearbyMarks).toEqual([]);
+  });
+});
+describe("moderation", () => {
+  it("a mute keeps the draft, says why and lets the player write once it is over", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { chat, send } = ready();
+      const chats = () =>
+        send.mock.calls.filter(([command]) => command.type === "sendChat")
+          .length;
+      chat.receive({
+        type: "mute",
+        muted: true,
+        reason: "Флуд",
+        until: 1_700_000_060_000,
+      });
+      chat.setDraft("Привет");
+      chat.submit();
+      chat.placeNote();
+      expect(chats()).toBe(0);
+      expect(chat.store.getState().notice).toMatch(/^Мут до .+: Флуд$/);
+      expect(chat.store.getState().drafts["1"]).toBe("Привет");
+      vi.advanceTimersByTime(60_000);
+      chat.submit();
+      expect(chats()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("a lifted mute unlocks at once; a mute without an end holds", () => {
+    const { chat, send } = ready();
+    const chats = () =>
+      send.mock.calls.filter(([command]) => command.type === "sendChat").length;
+    chat.receive({ type: "mute", muted: true, reason: "Флуд" });
+    chat.setDraft("Привет");
+    chat.submit();
+    expect(chat.store.getState().notice).toBe("Мут бессрочно: Флуд");
+    chat.receive({ type: "mute", muted: false, reason: "" });
+    chat.submit();
+    expect(chats()).toBe(1);
+  });
+  it("names how the session ended until the next one opens", () => {
+    const { chat } = ready();
+    chat.receive({ type: "sessionEnded", reason: "kicked", text: "Остынь" });
+    expect(chat.store.getState().notice).toBe(
+      "Модератор закрыл сессию: Остынь",
+    );
+    expect(chat.store.getState().sessionEnd?.reason).toBe("kicked");
+    chat.receive(snapshot);
+    expect(chat.store.getState().sessionEnd).toBeNull();
+    expect(sessionEndText({ reason: "banned", text: "Читы" })).toBe(
+      "Аккаунт заблокирован бессрочно: Читы",
+    );
+    expect(sessionEndText({ reason: "revoked", text: "" })).toBe(
+      "Администратор отозвал доступ; войдите заново",
+    );
   });
 });

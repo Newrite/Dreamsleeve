@@ -63,10 +63,29 @@ type NameChangeModel = {
     At: DateTimeOffset
 }
 
+/// A sanction in force: mute or ban, the reason, when it ends (null: until
+/// lifted) and who issued it ("admin:3", "player:42"; null once that account is gone).
+type SanctionModel = {
+    Kind: string
+    Reason: string
+    IssuedAt: DateTimeOffset
+    Expires: Nullable<DateTimeOffset>
+    IssuedBy: string
+}
+
+/// A sanction in force with its player, for the sanctions page and REST.
+type SanctionEntryModel = {
+    PlayerId: uint64
+    Username: string
+    DisplayName: string
+    Sanction: SanctionModel
+}
+
 type PlayerCardModel = {
     Player: PlayerModel
     Sessions: OnlineModel list
     Names: NameChangeModel list
+    Sanctions: SanctionModel list
 }
 
 type AuditModel = {
@@ -101,6 +120,36 @@ module AdminModels =
 
     /// The phase of a connection that has not signed in; its row has no names.
     let guestPhase = phase RuntimeSessionPhase.Guest
+
+    /// Terms the panel offers, in minutes; absent: until lifted.
+    let sanctionTerms = [
+        "15 минут", ValueSome 15
+        "1 час", ValueSome 60
+        "1 день", ValueSome 1440
+        "7 дней", ValueSome 10080
+        "Бессрочно", ValueNone
+    ]
+
+    let sanction (value: Sanction) : SanctionModel =
+        { Kind = SanctionKind.key value.Kind; Reason = SanctionReason.value value.Reason; IssuedAt = value.IssuedAt
+          Expires = value.Expires |> ValueOption.toNullable
+          IssuedBy =
+            match value.IssuedBy with
+            | ValueSome(SanctionIssuer.Admin admin) -> AuditTarget.key (AuditTarget.Admin admin)
+            | ValueSome(SanctionIssuer.Moderator moderator) -> AuditTarget.key (AuditTarget.Player moderator)
+            | ValueNone -> null }
+
+    let sanctionEntry (record: SanctionRecord) : SanctionEntryModel =
+        { PlayerId = PlayerId.value record.Target.PlayerId; Username = Username.value record.Target.Username
+          DisplayName = DisplayName.value record.Target.DisplayName; Sanction = sanction record.Sanction }
+
+    /// The audit line of an issued sanction: public facts only.
+    let sanctionDetails (value: Sanction) =
+        let until =
+            match value.Expires with
+            | ValueSome expires -> expires.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'")
+            | ValueNone -> "lifted"
+        $"{SanctionKind.key value.Kind} until {until}: {SanctionReason.value value.Reason}"
 
     let hidden = function
         | HiddenIdentity.Shown -> "none"
