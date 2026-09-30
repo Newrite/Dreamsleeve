@@ -499,11 +499,7 @@ public:
         auto&       last     = commands.back();
         const auto* previous = std::get_if<LocalMovement>(&last.command);
         const auto& next     = std::get<LocalMovement>(command.command);
-        const bool  sameContext =
-          previous &&
-          ((!previous->location && !next.location) ||
-           (previous->location && next.location && previous->location->location.locationId == next.location->location.locationId));
-        if (last.generation == command.generation && sameContext)
+        if (last.generation == command.generation && previous && Domain::Motion::SameContext(previous->location, next.location))
         {
           last = std::move(command);
           return CommandPostResult::Replaced;

@@ -35,14 +35,14 @@ export namespace ModApi
       return std::nullopt;
     }
 
-    // The one check of what a mod hands over: bytes become text only as
-    // well-formed UTF-8, and the label is one line. Emptiness and lengths are
-    // Core's check against the server policy; words and blank text the server's.
+    // What a mod hands over becomes text only as well-formed UTF-8, refused at
+    // once so the mod learns it synchronously. Lengths and sources are Core's
+    // check against the server policy; words, blank text and one-line labels the server's.
     Api::Result Post(std::string text, std::int32_t kind, std::string source)
     {
-      using namespace Dreamsleeve::Utils::Text;
+      using Dreamsleeve::Utils::Text::ValidUtf8;
       const auto mapped = Kind(kind);
-      if (!mapped || !ValidUtf8(text) || !ValidUtf8(source) || HasControl(source))
+      if (!mapped || !ValidUtf8(text) || !ValidUtf8(source))
       {
         logger::warn("Announcement refused locally: invalid kind, text or source label");
         return Api::Result::Rejected;

@@ -6,11 +6,12 @@ export module Dreamsleeve.Game.GroundMarks;
 
 import std;
 import Dreamsleeve.Runtime;
-import Dreamsleeve.Game.Telemetry;
+import Dreamsleeve.Game.World;
 import Dreamsleeve.Game.PlacedReferences;
 import Dreamsleeve.Game.Raycast;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Host.Bridge;
+import Dreamsleeve.Host.Hud;
 import Dreamsleeve.Client.Utils;
 
 // Ground marks in the world: a placed reference per visible note or death
@@ -88,43 +89,6 @@ namespace GroundMarks
     return Get().refs.Count();
   }
 
-  // Where the player stands now, as a mark placement; absent outside a ready world.
-  export std::optional<Domain::GroundMarkPlacement> CurrentPlacement()
-  {
-    auto* player = RE::PlayerCharacter::GetSingleton();
-    if (!player || !Telemetry::PlayerReady()) return std::nullopt;
-    const auto space = Telemetry::SpaceKey(player);
-    if (!space) return std::nullopt;
-    const auto position = player->GetPosition();
-    return Domain::GroundMarkPlacement{
-        *space,
-        {position.x, position.y, position.z},
-        player->GetAngleZ()
-    };
-  }
-
-  // The game calendar now, as a mark's date. The vanilla calendar has no era
-  // variable (its date line prints "4E"), so the era is the Fourth. Values a
-  // mod pushed out of range are clamped rather than refused: the date is flavour.
-  export std::optional<Domain::GameDate> CurrentGameDate()
-  {
-    auto* calendar = RE::Calendar::GetSingleton();
-    if (!calendar) return std::nullopt;
-    const auto month = std::min<std::uint32_t>(calendar->GetMonth(), 11);
-    const auto hours = std::clamp(calendar->GetHour(), 0.0f, 24.0f);
-    const auto hour  = std::min(static_cast<std::uint32_t>(hours), 23u);
-    return Domain::GameDate{
-        .era   = 4,
-        .year  = std::clamp<std::uint32_t>(calendar->GetYear(), 1, 99999),
-        .month = month + 1,
-        .day =
-          std::clamp<std::uint32_t>(static_cast<std::uint32_t>(std::max(calendar->GetDay(), 1.0f)), 1, RE::Calendar::DAYS_IN_MONTH[month]),
-        .dayOfWeek = calendar->GetDayOfWeek() % 7,
-        .hour      = hour,
-        .minute    = std::min(static_cast<std::uint32_t>((hours - static_cast<float>(hour)) * 60.0f), 59u)
-    };
-  }
-
   // One word for a death without a killer: drowning while swimming, a fall
   // otherwise. The author's client localizes the label; the server only checks
   // its length and dictionary.
@@ -150,21 +114,20 @@ namespace GroundMarks
     if (state.deathReported) return;
     auto* player = RE::PlayerCharacter::GetSingleton();
     if (!runtime.app || runtime.context != Runtime::GameContext::Playing || !player) return;
-    const auto placement = CurrentPlacement();
-    const auto gameDate  = CurrentGameDate();
-    if (!placement || !gameDate) return;
+    const auto spot = World::Spot();
+    if (!spot) return;
     state.deathReported = true;
 
     using Dreamsleeve::Utils::Text::CodePoints;
     using Dreamsleeve::Utils::Text::Prefix;
     std::string label;
     if (auto ref = killer.get())
-      if (auto name = Telemetry::RefName(ref.get()))
+      if (auto name = World::RefName(ref.get()))
         // Untrusted text: the name is cut so the whole label fits the server limit.
         label = std::string{KillerPrefix} + std::string{Prefix(*name, DeathLabelLimit - CodePoints(KillerPrefix))};
     if (label.empty()) label = CauseLabel(player);
 
-    if (auto sent = runtime.session.ReportDeath(runtime.app->Exchange(), label, *placement, *gameDate))
+    if (auto sent = runtime.session.ReportDeath(runtime.app->Exchange(), label, *spot))
       logger::info("Death reported (dead={}) with label of {} bytes", dead, label.size());
     else
       logger::warn("Death not reported: {}", sent.error());
@@ -175,24 +138,6 @@ namespace GroundMarks
     const Domain::GroundMark* mark{};
     double                    distance{};
   };
-
-  // Shown within `limit`, hidden again only past limit * Hysteresis.
-  bool Within(double distance, double limit, bool shown)
-  {
-    return distance <= (shown ? limit * Hysteresis : limit);
-  }
-
-  Nameplates::BubbleStyle Style(const Host::UiSettings& ui, bool death)
-  {
-    return {
-        static_cast<float>(ui.groundFontSize),
-        static_cast<float>(ui.groundMaxWidth),
-        static_cast<float>(death ? ui.deathBackground : ui.groundBackground),
-        death ? ui.deathBorder : ui.groundBorder,
-        Host::ParseColor(death ? ui.deathTextColor : ui.groundTextColor).value_or(Nameplates::DefaultTextColor),
-        Host::ParseColor(ui.markDateColor).value_or(Nameplates::DefaultHeaderColor)
-    };
-  }
 
   void Draw(const Candidate& candidate, bool combat, Nameplates::Frame& names, std::unordered_set<Domain::GroundMarkId>& visible)
   {
@@ -227,16 +172,17 @@ namespace GroundMarks
     visible.insert(mark.markId);
     if (combat && ui.combatHideGroundText) return;
 
-    visual.nameShown = Within(candidate.distance, ui.groundNameDistance, visual.nameShown);
-    visual.textShown = Within(candidate.distance, ui.groundTextDistance, visual.textShown);
+    using Domain::Spatial::ShownWithin;
+    visual.nameShown = ShownWithin(candidate.distance, ui.groundNameDistance, visual.nameShown, Hysteresis);
+    visual.textShown = ShownWithin(candidate.distance, ui.groundTextDistance, visual.textShown, Hysteresis);
     if (!visual.nameShown && !visual.textShown) return;
 
     const bool        own = runtime.session.SelfId() == mark.author.playerId;
     Nameplates::Label label{
         .key       = {death ? Nameplates::LabelKind::Death : Nameplates::LabelKind::Note, mark.markId},
         .nameSize  = static_cast<float>(ui.groundFontSize),
-        .nameColor = Host::ParseColor(death ? ui.deathTextColor : ui.fireflyNameColor).value_or(Nameplates::DefaultTextColor),
-        .style     = Style(ui, death)
+        .nameColor = Host::Hud::NameColor(ui, death),
+        .style     = Host::Hud::MarkBubble(ui, death)
     };
     if (visual.nameShown)
       label.name = Host::Names::PlateName(
@@ -261,7 +207,7 @@ namespace GroundMarks
     auto& state   = Get();
     if (!runtime.app) return;
     auto* player = RE::PlayerCharacter::GetSingleton();
-    if (runtime.context != Runtime::GameContext::Playing || !Telemetry::PlayerReady() || !player)
+    if (runtime.context != Runtime::GameContext::Playing || !World::PlayerReady() || !player)
     {
       ClearAll();
       return;
@@ -276,33 +222,30 @@ namespace GroundMarks
       ClearAll();
       return;
     }
-    const auto space = Telemetry::SpaceKey(player);
-    if (!space || (state.space && *state.space != *space)) ClearAll();
-    if (!space) return;
-    state.space = space;
+    const auto observer = World::Observe(player);
+    if (!observer || (state.space && *state.space != observer->space)) ClearAll();
+    if (!observer) return;
+    state.space        = observer->space;
+    const auto& space  = observer->space;
+    const auto& origin = observer->position;
 
-    const auto             self = player->GetPosition();
-    const Domain::Position origin{self.x, self.y, self.z};
     std::vector<Candidate> notes;
     std::vector<Candidate> deaths;
-    auto&                  book = runtime.session.PlayerNames();
+    const auto&            book = runtime.session.PlayerNames();
+    const auto             self = runtime.session.SelfId();
     for (const auto& [id, mark] : runtime.session.VisibleMarks())
     {
       const bool death = mark.kind == Domain::GroundMarkKind::Death;
       if (death ? !ui.showDeathMarks : !ui.showGroundNotes) continue;
-      if (mark.placement.locationId != *space) continue;
       // Marks of ignored players are not drawn at all.
-      if (runtime.session.SelfId() != mark.author.playerId && book.Ignored(mark.author.playerId)) continue;
-      const auto distance = Domain::Spatial::Distance(origin, mark.placement.position);
-      if (distance > ui.groundDrawDistance) continue;
-      (death ? deaths : notes).push_back({&mark, distance});
+      if (book.Hides(mark.author.playerId, self)) continue;
+      const auto distance =
+        Domain::Spatial::Reach(space, origin, mark.placement.locationId, mark.placement.position, ui.groundDrawDistance);
+      if (!distance) continue;
+      (death ? deaths : notes).push_back({&mark, *distance});
     }
-    const auto nearest = [](std::vector<Candidate>& list, double limit) {
-      std::ranges::sort(list, {}, &Candidate::distance);
-      if (list.size() > static_cast<std::size_t>(limit)) list.resize(static_cast<std::size_t>(limit));
-    };
-    nearest(notes, ui.maxVisibleNotes);
-    nearest(deaths, ui.maxVisibleDeaths);
+    Domain::Spatial::KeepNearest(notes, static_cast<std::size_t>(ui.maxVisibleNotes), &Candidate::distance);
+    Domain::Spatial::KeepNearest(deaths, static_cast<std::size_t>(ui.maxVisibleDeaths), &Candidate::distance);
 
     std::unordered_set<Domain::GroundMarkId> visible;
     for (const auto& candidate : notes)

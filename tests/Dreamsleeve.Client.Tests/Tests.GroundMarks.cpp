@@ -216,7 +216,7 @@ TEST_CASE("Mark commands queue like chat and confirmations share the bounded res
   CHECK(output.results.empty());
 }
 
-TEST_CASE("Mark requests encode on the control lane and refuse an empty note, a zero id or a bad placement")
+TEST_CASE("Mark requests encode on the control lane and leave their content to the server")
 {
   const auto codec = Codec();
   auto       note  = codec.Encode(PlaceGroundNote{5, "praise\nthe sun", Placement(42), Date});
@@ -250,17 +250,12 @@ TEST_CASE("Mark requests encode on the control lane and refuse an empty note, a 
   REQUIRE(packet.ParseFromArray(removal->DataBytesView().data(), static_cast<int>(removal->Size())));
   CHECK(packet.remove_ground_mark().mark_id() == 9);
 
-  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "", Placement(0), Date}));
-  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "x", Placement(std::numeric_limits<float>::quiet_NaN()), Date}));
-  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", {{"", 0}, {}, 0}, Date}));
-  // The game date is required and must be a calendar date: no leap day, no hour 24.
-  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "x", Placement(0)}));
-  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0), {4, 201, 2, 29, 0, 0, 0}}));
-  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0), {4, 201, 8, 17, 7, 0, 0}}));
-  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0), {4, 201, 8, 17, 2, 24, 0}}));
-  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0), {0, 201, 8, 17, 2, 0, 0}}));
-  CHECK(codec.Encode(ReportDeath{8, "x", Placement(0), {99, 99999, 12, 31, 6, 23, 59}}));
-  CHECK_FALSE(codec.Encode(RemoveGroundMark{8, 0}));
+  // Text, place and calendar are the server's to judge; only a zero request
+  // ID and text that is not UTF-8 stay local, as they would close the connection.
+  CHECK(codec.Encode(PlaceGroundNote{8, "", Placement(std::numeric_limits<float>::quiet_NaN()), {4, 201, 2, 29, 7, 24, 0}}));
+  CHECK(codec.Encode(RemoveGroundMark{8, 0}));
+  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "\xFF", Placement(0), Date}));
+  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0, {"\xC3", 1}), Date}));
   CHECK_FALSE(codec.Encode(RemoveGroundMark{0, 9}));
 }
 

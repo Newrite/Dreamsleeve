@@ -246,6 +246,14 @@ namespace Dreamsleeve::Client::Auth
            });
   }
 
+  // Failures only the player can resolve: retrying with the same saved login
+  // cannot succeed. Transport and server trouble may pass and are retried.
+  export bool NeedsUser(FailureCode code)
+  {
+    return code == FailureCode::InvalidCredentials || code == FailureCode::CredentialStorage || code == FailureCode::InvalidRequest ||
+           code == FailureCode::RegistrationDisabled;
+  }
+
   export Result<void> ValidatePassword(std::string_view password)
   {
     if (password.size() < 12 || password.size() > 128) return std::unexpected{"Password must be 12 to 128 UTF-8 bytes"};

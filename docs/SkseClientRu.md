@@ -16,7 +16,8 @@
 | `Logic.ixx` | Кадр: уведомления → Drain (события UI, свежие сообщения → облачки) → политика сессии → готовность мира → телеметрия → один HUD-кадр надписей (светлячки + метки) → focus |
 | `Hooks.ixx` | Все патчи игры: ID Address Library, смещения callsite, проверка байтов и thunks для `Main::Update`, `HUDMenu::AdvanceMovie` (имена над светлячками) и рассылки `InputEvent` (захват клавиатуры) |
 | `Events.ixx` | Sinks: меню, ввод, `TESDeathEvent` (флаг `dead` и handle убийцы, без резолва), `TESActivateEvent`; только `Runtime::Post` |
-| `Game/Telemetry.ixx` | Персонаж, пространство, позиция, activity, place, actor values |
+| `Game/World.ixx` | Чтение мира без состояния: имена форм и ссылок (`Text` чинит кодировку), ключ формы и плагина, пространство и точка наблюдателя, место и дата для метки, ближайший маркер карты и его вид, activity по открытому меню, ресурсы персонажа. Здесь же кодировки движка (имена `MARKER_TYPE`, сырой календарь, имена файлов плагинов): в `Domain.Logic` их нет |
+| `Game/Telemetry.ixx` | Отправка персонажа, пространства, позиции, activity, place и actor values: интервалы, память последней активации, что уже отправлено |
 | `Game/PlacedReferences.ixx` | Временные placed reference плагина: резолв STAT, `Spawn` (`SetTemporary`, масштаб, поворот), проверка присоединённости ячейки, удаление, набор `Set<Key>` по ключу |
 | `Game/Raycast.ixx` | Один havok pick по слою line-of-sight: видимость (`Clear`) и пол под точкой (`GroundBelow`) |
 | `Game/Fireflies.ixx` | Placed reference на каждого видимого игрока из `MovementView` |
@@ -25,7 +26,7 @@
 | `UI/PrismaUI.ixx` | View, listener, разбор команды и передача её `Host::Handle`, доставка событий, focus/visibility |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
 | `API/ModApi.ixx`, `API/DreamsleeveAPI.h` | API для других модов: интерфейс `IVDreamsleeve1` через экспорт `RequestPluginAPI` из `ModApi.ixx` (как PrismaUI и TrueFlasksNG), Papyrus `DreamsleeveClient`, callbacks итогов объявлений ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)) |
-| `Host/Bridge.ixx`, `Host/Commands.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI (варианты команд и событий), исполнение команд UI через порты плагина (`CommandPorts`: запись `ui.toml`, выход из фокуса, клавиша активации, место персонажа для заметки), TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры, типы запроса и итога объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
+| `Host/Bridge.ixx`, `Host/Commands.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/Hud.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI (варианты команд и событий), исполнение команд UI через порты плагина (`CommandPorts`: запись `ui.toml`, выход из фокуса, клавиша активации, место персонажа для заметки), TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, вид надписей HUD из настроек (`Hud::PlayerBubble`, `MarkBubble`, `NameColor`), политика захвата клавиатуры, типы запроса и итога объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
 
 `Runtime::Get()` хранит единственный экземпляр приложения; getter не перемещает
 владение (прежний вариант возвращал `std::move` статического `unique_ptr` и
@@ -541,7 +542,7 @@ fade окна чата), применяются кнопкой сохранен�
 `ClientSnapshot.groundMarks.own` и `ClientStateDelta.ownGroundMarks`). Метка, оставленная в
 прошлой сессии далеко отсюда, видна в «Моих метках» сразу после подключения.
 
-`GroundMarks::Tick` в кадре: пространство игрока (`Telemetry::SpaceKey`) должно совпасть с
+`GroundMarks::Tick` в кадре: пространство игрока (`World::Observe`) должно совпасть с
 `LocationId` метки; метки игнорируемых игроков не рисуются; из остальных берутся ближайшие
 `maxVisibleNotes` надписей и `maxVisibleDeaths` мест смерти в пределах `groundDrawDistance`.
 Лишние ссылки удаляются набором `visible`, как у светлячков. Смена пространства, загрузка,
@@ -603,9 +604,9 @@ housecarl); это та же семья, что светлячок `FXGlowFillRo
 
 `DeathEventHandler` кладёт в уведомление `dead` и `ObjectRefHandle` убийцы, ничего не
 резолвя: событие может прийти не из главного потока. В кадре `GroundMarks::NoteDeath` по
-первому уведомлению (`dead=false`) фиксирует положение и курс игрока, игровую дату
-(`GroundMarks::CurrentGameDate()`) и подпись:
-`handle.get()` → имя как у цели боя (`Telemetry::RefName`) в виде «Убийца: <имя>»; без
+первому уведомлению (`dead=false`) фиксирует положение и курс игрока с игровой датой
+(`World::Spot()`) и подпись:
+`handle.get()` → имя как у цели боя (`World::RefName`) в виде «Убийца: <имя>»; без
 убийцы — «Причина смерти: Утопление», если персонаж плывёт, иначе «Причина смерти: Падение»
 (так же читается смерть через консоль: убийцы и воды нет). Подпись локализуется на стороне
 автора; сервер проверяет только длину и словарь; имя убийцы обрезается так, чтобы вся
@@ -618,8 +619,7 @@ housecarl); это та же семья, что светлячок `FXGlowFillRo
 ### Веб-UI
 
 Кнопка «Оставить здесь» рядом с «Отправить» посылает черновик командой `placeGroundNote`;
-host берёт положение из `GroundMarks::CurrentPlacement()` и дату из
-`GroundMarks::CurrentGameDate()` и коррелирует ответ в
+host берёт положение и дату из `World::Spot()` (порт `noteSpot`) и коррелирует ответ в
 `markResult` (id метки, id вытесненной, ошибка) — строка ожидания «[Метка] Вы: …» с «Не
 оставлено: …», `GROUND_MARK_AREA_FULL` → «Здесь уже слишком много меток». Кнопка недоступна
 без соединения, без `snapshot.groundMarksSupported` и при пустом черновике. Панель «Метки»
@@ -670,7 +670,7 @@ host берёт положение из `GroundMarks::CurrentPlacement()` и д�
 
 ### Игровая дата
 
-`GroundMarks::CurrentGameDate()` читает `RE::Calendar` в кадре: год `GetYear()`, месяц
+`World::GameDate()` читает `RE::Calendar` в кадре: год `GetYear()`, месяц
 `GetMonth()` + 1, день `GetDay()`, день недели `GetDayOfWeek()` (0 — Сандас), час и минуты из
 `GetHour()`. Переменной эры в ванильном календаре нет (строка даты игры печатает «4E»),
 поэтому эра всегда 4. Значения, выбитые модом за пределы, обрезаются до диапазонов, а не

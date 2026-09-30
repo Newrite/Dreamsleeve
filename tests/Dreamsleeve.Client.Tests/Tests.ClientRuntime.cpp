@@ -979,11 +979,10 @@ TEST_CASE("Announcements go to the system channel within the welcome policy and 
   CHECK(std::ranges::count(snapshot.chats, Domain::ChatChannelKind::System, &ChatCacheSnapshot::kind) == 1);
   const auto generation = snapshot.generation;
 
-  // Too long, missing label, too long label, and the global channel stay local.
+  // Beyond the announced lengths and the global channel stay local.
   for (
     const auto& [text, label, channel] : {
         std::tuple{"Одиннадцать", "Mod",          2},
-        std::tuple{"event",       "",             2},
         std::tuple{"event",       "TooLongLabel", 2},
         std::tuple{"event",       "Mod",          1}
   })
@@ -1268,12 +1267,12 @@ TEST_CASE("A display name change settles once, one at a time, and a refusal keep
   CHECK(ResultsOf<NameChanged>(settled)[0].requestId == changeId);
   CHECK(ResultsOf<NameChanged>(settled)[0].value.displayName == "Новое Имя");
 
-  // A blank name or control characters are refused locally.
+  // A name that is not UTF-8 never leaves: the server would close the connection.
   const auto blankId = Value(fixture.exchange->NextRequestId());
   REQUIRE(
     fixture.exchange->Post({
         generation,
-        ChangeDisplayName{blankId, "   "}
+        ChangeDisplayName{blankId, "\xFF\xFE"}
   }) == CommandPostResult::Queued);
   const auto blank = results();
   REQUIRE(ResultsOf<CommandFailureCode>(blank).size() == 1);

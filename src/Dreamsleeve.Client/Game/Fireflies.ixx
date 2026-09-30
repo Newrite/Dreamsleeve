@@ -6,8 +6,9 @@ export module Dreamsleeve.Game.Fireflies;
 
 import std;
 import Dreamsleeve.Runtime;
-import Dreamsleeve.Game.Telemetry;
+import Dreamsleeve.Game.World;
 import Dreamsleeve.Game.PlacedReferences;
+import Dreamsleeve.Host.Hud;
 import Dreamsleeve.UI.Nameplates;
 
 // Presence of other players as a glowing placed reference per visible player.
@@ -56,18 +57,6 @@ namespace Fireflies
     return Get().refs.Count();
   }
 
-  // The bubble look of players, from the live UI settings.
-  export Nameplates::BubbleStyle BubbleStyle(const Dreamsleeve::Host::UiSettings& ui)
-  {
-    return {
-        static_cast<float>(ui.bubbleFontSize),
-        static_cast<float>(ui.bubbleMaxWidth),
-        static_cast<float>(ui.bubbleBackground),
-        ui.bubbleBorder,
-        Dreamsleeve::Host::ParseColor(ui.bubbleTextColor).value_or(Nameplates::DefaultTextColor)
-    };
-  }
-
   // Adds the labels of visible players to the frame the caller publishes.
   export void Tick(Clock::time_point now, Nameplates::Frame& names)
   {
@@ -83,22 +72,23 @@ namespace Fireflies
     const bool combat = player && player->IsInCombat();
     if (
       !settings.showFireflies || (combat && ui.combatHideFireflies) || runtime.context != Runtime::GameContext::Playing ||
-      !Telemetry::PlayerReady() || !player)
+      !World::PlayerReady() || !player)
     {
       ClearAll();
       return;
     }
 
-    const auto space = Telemetry::SpaceKey(player);
-    if (!space || (state.space && *state.space != *space)) ClearAll();
-    if (!space) return;
-    state.space = space;
+    const auto observer = World::Observe(player);
+    if (!observer || (state.space && *state.space != observer->space)) ClearAll();
+    if (!observer) return;
+    state.space        = observer->space;
+    const auto& space  = observer->space;
+    const auto& origin = observer->position;
 
-    const auto             self = player->GetPosition();
-    const Domain::Position origin{self.x, self.y, self.z};
-    const float            height    = static_cast<float>(ui.fireflyHeightOffset);
-    const auto             style     = BubbleStyle(ui);
-    const auto             nameColor = Dreamsleeve::Host::ParseColor(ui.fireflyNameColor).value_or(Nameplates::DefaultTextColor);
+    const float height    = static_cast<float>(ui.fireflyHeightOffset);
+    const auto  style     = Dreamsleeve::Host::Hud::PlayerBubble(ui);
+    const auto  nameColor = Dreamsleeve::Host::Hud::NameColor(ui);
+
     std::unordered_set<Domain::PlayerId> visible;
     // Expired texts and those of players who left are dropped here, once per
     // frame; a message is never kept waiting for its author to appear.
@@ -107,8 +97,7 @@ namespace Fireflies
     {
       if (runtime.session.SelfId() == id) continue;
       const auto pose = runtime.movement->Sample(id, now);
-      if (!pose || pose->location.locationId != *space) continue;
-      if (Domain::Spatial::Distance(origin, pose->position) > settings.visibilityDistance) continue;
+      if (!pose || !Domain::Spatial::Reach(space, origin, pose->location.locationId, pose->position, settings.visibilityDistance)) continue;
 
       const RE::NiPoint3 position{pose->position.X, pose->position.Y, pose->position.Z + height};
       auto               ref = state.refs.Resolve(id);

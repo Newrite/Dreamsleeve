@@ -25,6 +25,38 @@ TEST_CASE("UTF-8 is validated once and then measured and cut on code point bound
   CHECK(ClipBytes("ЖЖ", 4) == "ЖЖ");
 }
 
+TEST_CASE("Text is shortened on code points with an ellipsis and searched with ASCII case folded")
+{
+  using namespace Dreamsleeve::Utils::Text;
+
+  CHECK(Ellipsize("Привет, мир", 7) == "Привет,\xE2\x80\xA6");
+  CHECK(Ellipsize("Привет  мир", 8) == "Привет\xE2\x80\xA6");
+  CHECK(Ellipsize("Ж😀a", 2) == "Ж😀\xE2\x80\xA6");
+
+  CHECK(AsciiLower('Q') == 'q');
+  CHECK(AsciiLower('1') == '1');
+  CHECK(ContainsAsciiInsensitive("Meshes\\PickaxeMiningMarker.nif", "marker"));
+  CHECK(ContainsAsciiInsensitive("This Should Not Be Visible", "should not be visible"));
+  CHECK_FALSE(ContainsAsciiInsensitive("Кирка", "marker"));
+  // Only ASCII folds: Cyrillic case stays apart.
+  CHECK_FALSE(ContainsAsciiInsensitive("ЖУК", "жук"));
+}
+
+TEST_CASE("Text of unknown encoding is repaired into valid UTF-8, valid text kept as it is")
+{
+  using namespace Dreamsleeve::Utils::Text;
+
+  CHECK(Repair("Игрок пал в бою 😀") == "Игрок пал в бою 😀");
+  CHECK(Repair("") == "");
+  // "Волк" in Windows-1251: every byte is invalid UTF-8 and becomes U+FFFD.
+  CHECK(Repair("\xC2\xEE\xEB\xEA") == "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD");
+  const auto truncated = Repair("Ж\xE2\x80");
+  CHECK(ValidUtf8(truncated));
+  CHECK(truncated.starts_with("Ж"));
+  for (std::string_view invalid : {"\xC0\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xFF"})
+    CHECK(ValidUtf8(Repair(invalid)));
+}
+
 TEST_CASE("Backoff doubles the wait after each attempt up to the maximum and starts over after a reset")
 {
   using namespace std::chrono_literals;

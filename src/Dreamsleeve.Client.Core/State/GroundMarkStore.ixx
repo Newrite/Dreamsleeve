@@ -84,10 +84,10 @@ public:
     }
 
     // The server's complete list of the player's own marks replaces the previous one.
-    void ReplaceOwn(std::vector<Domain::GroundMark> marks)
+    void ReplaceOwn(std::vector<Domain::GroundMark> list)
     {
-      std::ranges::sort(marks, {}, &Domain::GroundMark::markId);
-      own = std::move(marks);
+      std::ranges::sort(list, {}, &Domain::GroundMark::markId);
+      own = std::move(list);
     }
 
     const std::vector<Domain::GroundMark>& Own() const noexcept

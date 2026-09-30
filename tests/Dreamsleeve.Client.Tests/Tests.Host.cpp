@@ -653,6 +653,11 @@ TEST_CASE("Ignore list is per server, refuses self and system, and survives a re
   CHECK(names.Ignore(7, 1, &bob));
   CHECK_FALSE(names.Ignore(7, 1, &bob));
   CHECK(names.Ignored(7));
+  // Surfaces hide the ignored author, never self, even without a self id yet.
+  CHECK(names.Hides(7, 1));
+  CHECK(names.Hides(7, std::nullopt));
+  CHECK_FALSE(names.Hides(7, 7));
+  CHECK_FALSE(names.Hides(8, 1));
   REQUIRE(names.IgnoredList(UiSettings{}).size() == 1);
   CHECK(names.IgnoredList(UiSettings{})[0].name == "Bob");
 
@@ -1126,10 +1131,12 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   Settle(session, *exchange, model, frame);
   REQUIRE(session.Ready());
 
-  const Domain::GroundMarkPlacement here{{"skyrim.esm", 0x1A26F}, {1, 2, 3}, 0.5f};
-  const Domain::GameDate            today{4, 201, 8, 17, 2, 14, 5};
-  REQUIRE(session.PlaceGroundNote(*exchange, "ui-1", "hello", here, today));
-  REQUIRE(session.ReportDeath(*exchange, "Bear", here, today));
+  const Domain::MarkSpot here{
+      {{"skyrim.esm", 0x1A26F}, {1, 2, 3}, 0.5f},
+      {4, 201, 8, 17, 2, 14, 5}
+  };
+  REQUIRE(session.PlaceGroundNote(*exchange, "ui-1", "hello", here));
+  REQUIRE(session.ReportDeath(*exchange, "Bear", here));
   REQUIRE(session.RemoveGroundMark(*exchange, "ui-2", 77));
   CHECK(session.PendingMarkCount() == 3);
   std::vector<QueuedClientCommand> commands;
@@ -1138,12 +1145,12 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   const auto* note = std::get_if<PlaceGroundNote>(&commands[0].command);
   REQUIRE(note);
   CHECK(note->text == "hello");
-  CHECK(note->placement == here);
-  CHECK(note->gameDate == today);
+  CHECK(note->placement == here.placement);
+  CHECK(note->gameDate == here.gameDate);
   const auto* death = std::get_if<ReportDeath>(&commands[1].command);
   REQUIRE(death);
   CHECK(death->label == "Bear");
-  CHECK(death->gameDate == today);
+  CHECK(death->gameDate == here.gameDate);
   const auto* removal = std::get_if<RemoveGroundMark>(&commands[2].command);
   REQUIRE(removal);
   CHECK(removal->markId == 77);

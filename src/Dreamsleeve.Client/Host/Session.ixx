@@ -157,26 +157,21 @@ public:
 
     // A note where the player stands, requested by the web UI.
     std::expected<void, std::string> PlaceGroundNote(
-      ClientExchange&                    exchange,
-      std::string                        uiRequestId,
-      std::string                        text,
-      const Domain::GroundMarkPlacement& placement,
-      const Domain::GameDate&            gameDate)
+      ClientExchange&         exchange,
+      std::string             uiRequestId,
+      std::string             text,
+      const Domain::MarkSpot& spot)
     {
       return Posted(Submit(exchange, PendingMark{std::move(uiRequestId), MarkRequest::Note}, [&](std::uint64_t id) {
-        return Dreamsleeve::Client::PlaceGroundNote{id, std::move(text), placement, gameDate};
+        return Dreamsleeve::Client::PlaceGroundNote{id, std::move(text), spot.placement, spot.gameDate};
       }));
     }
 
     // The place the character died, reported by the game once per death.
-    std::expected<void, std::string> ReportDeath(
-      ClientExchange&                    exchange,
-      std::string                        label,
-      const Domain::GroundMarkPlacement& placement,
-      const Domain::GameDate&            gameDate)
+    std::expected<void, std::string> ReportDeath(ClientExchange& exchange, std::string label, const Domain::MarkSpot& spot)
     {
       return Posted(Submit(exchange, PendingMark{{}, MarkRequest::Death}, [&](std::uint64_t id) {
-        return Dreamsleeve::Client::ReportDeath{id, std::move(label), placement, gameDate};
+        return Dreamsleeve::Client::ReportDeath{id, std::move(label), spot.placement, spot.gameDate};
       }));
     }
 
@@ -542,10 +537,10 @@ private:
       list.reserve(visibleMarks.size());
       for (const auto& [id, mark] : visibleMarks)
       {
-        const bool own = selfId && mark.author.playerId == *selfId;
-        if (!own && names.Ignored(mark.author.playerId)) continue;
-        auto entry   = Bridge::ToUiGroundMark(mark, settings, own);
-        entry.author = names.NameFor(mark.author.playerId, mark.author, mark.characterName, settings);
+        if (names.Hides(mark.author.playerId, selfId)) continue;
+        const bool own   = mark.author.playerId == selfId;
+        auto       entry = Bridge::ToUiGroundMark(mark, settings, own);
+        entry.author     = names.NameFor(mark.author.playerId, mark.author, mark.characterName, settings);
         list.push_back(std::move(entry));
       }
       return list;
@@ -578,7 +573,7 @@ private:
     // clients' announcements; self and the server are never filtered.
     bool Hidden(const Domain::ChatMessage& message) const
     {
-      return message.author && message.author->playerId != selfId && names.Ignored(message.author->playerId);
+      return message.author && names.Hides(message.author->playerId, selfId);
     }
 
     void Remember(const Domain::ChatMessage& message)

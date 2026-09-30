@@ -33,7 +33,7 @@ namespace
     std::optional<std::string> saveError;
     int                        closes{};
     std::vector<std::string>   keys;
-    std::optional<NoteSpot>    spot;
+    std::optional<Domain::MarkSpot> spot;
 
     CommandOutput Run(std::string_view json)
     {
@@ -117,7 +117,7 @@ TEST_CASE("A ground note needs the character in the world")
   CHECK(Parse(nowhere.events[0])["error"].get<std::string>() == "Персонаж не в игровом мире");
   CHECK(fixture.session.PendingMarkCount() == 0);
 
-  fixture.spot = NoteSpot{
+  fixture.spot = Domain::MarkSpot{
       {{"skyrim.esm", 0x3C}, {1, 2, 3}, 0},
       {4, 201, 8, 17, 2, 10, 30}
   };

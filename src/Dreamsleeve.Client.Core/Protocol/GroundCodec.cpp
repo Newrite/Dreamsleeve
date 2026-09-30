@@ -17,19 +17,6 @@ namespace Dreamsleeve::Client::Wire::Detail
     target.set_heading(value.heading);
   }
 
-  bool ValidPlacement(const Domain::GroundMarkPlacement& value)
-  {
-    return ValidKey(value.locationId) && Finite(value.position) && Finite(value.heading);
-  }
-
-  // The same calendar ranges as the server's GameDate.create; no leap years.
-  bool ValidGameDate(const Domain::GameDate& value)
-  {
-    constexpr std::array<std::uint32_t, 12> MonthLengths{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    return value.era >= 1 && value.era <= 99 && value.year >= 1 && value.year <= 99999 && value.month >= 1 && value.month <= 12 &&
-           value.day >= 1 && value.day <= MonthLengths[value.month - 1] && value.dayOfWeek <= 6 && value.hour <= 23 && value.minute <= 59;
-  }
-
   void WriteGameDate(P::GameDate& target, const Domain::GameDate& value)
   {
     target.set_era(value.era);

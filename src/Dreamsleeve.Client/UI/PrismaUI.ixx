@@ -10,7 +10,7 @@ import Dreamsleeve.Runtime;
 import Dreamsleeve.Host.Commands;
 import Dreamsleeve.Events;
 import Dreamsleeve.Game.Input;
-import Dreamsleeve.Game.GroundMarks;
+import Dreamsleeve.Game.World;
 
 // PrismaUI host of the production web UI. PrismaUI 1.5.1 wraps every callback
 // (DOM ready, JS listener, console) in SKSE::GetTaskInterface()->AddTask, so
@@ -219,15 +219,6 @@ namespace PrismaUI
     }
   }
 
-  // The character's spot for a ground note; empty outside a ready world.
-  std::optional<Dreamsleeve::Host::NoteSpot> CurrentNoteSpot()
-  {
-    auto placement = GroundMarks::CurrentPlacement();
-    auto gameDate  = GroundMarks::CurrentGameDate();
-    if (!placement || !gameDate) return std::nullopt;
-    return Dreamsleeve::Host::NoteSpot{*placement, *gameDate};
-  }
-
   void OnCommand(const char* json)
   {
     if (!json) return;
@@ -245,7 +236,7 @@ namespace PrismaUI
         .ui               = runtime.ui,
         .bubbles          = runtime.bubbles,
         .manualDisconnect = runtime.manualDisconnect,
-        .ports = {.saveUi = Runtime::SaveUi, .close = Deactivate, .activationKey = Events::SetActivationKey, .noteSpot = CurrentNoteSpot}
+        .ports = {.saveUi = Runtime::SaveUi, .close = Deactivate, .activationKey = Events::SetActivationKey, .noteSpot = World::Spot}
     };
     const auto output = Dreamsleeve::Host::Handle(context, std::move(*command));
     for (const auto& note : output.notes)

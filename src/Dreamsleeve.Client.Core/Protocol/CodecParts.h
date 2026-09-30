@@ -27,26 +27,10 @@ namespace Dreamsleeve::Client::Wire::Detail
     return value >= MinUnixMs && value <= MaxUnixMs;
   }
 
-  inline bool Finite(std::floating_point auto... values)
-  {
-    return (std::isfinite(values) && ...);
-  }
-
-  inline bool Finite(const Domain::Position& value)
-  {
-    return Finite(value.X, value.Y, value.Z);
-  }
-
-  inline bool Finite(const Domain::Rotation& value)
-  {
-    return Finite(value.X, value.Y, value.Z);
-  }
-
-  // A form of a named plugin; the same rule for every WRLD, CELL and race key.
-  inline bool ValidKey(const Domain::FormKey& value)
-  {
-    return !value.pluginName.empty() && value.localFormId != Domain::InvalidId;
-  }
+  using Domain::Checks::Finite;
+  using Domain::Checks::ValidGameDate;
+  using Domain::Checks::ValidKey;
+  using Domain::Checks::ValidPlacement;
 
   inline Domain::FormKey KeyOf(const P::FormKey& source)
   {
@@ -98,8 +82,6 @@ namespace Dreamsleeve::Client::Wire::Detail
   // Ranges inside the text, ascending, disjoint, on code point boundaries.
   Result<std::vector<Domain::TextSpan>> ReadFlagged(const std::string&, const google::protobuf::RepeatedPtrField<P::TextSpan>&);
 
-  bool                           ValidPlacement(const Domain::GroundMarkPlacement&);
-  bool                           ValidGameDate(const Domain::GameDate&);
   void                           WriteNote(P::PlaceGroundNote&, const PlaceGroundNote&);
   void                           WriteDeath(P::ReportDeath&, const ReportDeath&);
   Result<Domain::GroundMark>     Mark(const P::GroundMark&);

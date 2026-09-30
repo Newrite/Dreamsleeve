@@ -23,6 +23,23 @@ export namespace Dreamsleeve::Utils::Text
     return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0) > 0;
   }
 
+  // Well-formed UTF-8 of any bytes: each invalid sequence becomes U+FFFD, as
+  // Windows decodes it. Text of unknown encoding (the game's) passes here once.
+  std::string Repair(std::string_view text)
+  {
+    if (ValidUtf8(text)) return std::string{text};
+    if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) return {};
+    const auto   size = static_cast<int>(text.size());
+    std::wstring wide(static_cast<std::size_t>(MultiByteToWideChar(CP_UTF8, 0, text.data(), size, nullptr, 0)), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), size, wide.data(), static_cast<int>(wide.size()));
+    const auto  wideSize = static_cast<int>(wide.size());
+    std::string result(
+      static_cast<std::size_t>(WideCharToMultiByte(CP_UTF8, 0, wide.data(), wideSize, nullptr, 0, nullptr, nullptr)),
+      '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.data(), wideSize, result.data(), static_cast<int>(result.size()), nullptr, nullptr);
+    return result;
+  }
+
   // C0 and C1 control characters and DEL, line breaks included, in
   // well-formed UTF-8 (C1 is encoded as C2 80..C2 9F).
   bool HasControl(std::string_view text)
@@ -65,6 +82,26 @@ export namespace Dreamsleeve::Utils::Text
       ++seen;
     }
     return text.substr(0, end);
+  }
+
+  // The first `count` code points without trailing spaces, then an ellipsis.
+  std::string Ellipsize(std::string_view text, std::size_t count)
+  {
+    auto kept = Prefix(text, count);
+    while (kept.ends_with(' '))
+      kept.remove_suffix(1);
+    return std::string{kept} + "\xE2\x80\xA6";
+  }
+
+  // Identifiers fold ASCII case only; other bytes stay as they are.
+  constexpr char AsciiLower(char value) noexcept
+  {
+    return value >= 'A' && value <= 'Z' ? static_cast<char>(value + ('a' - 'A')) : value;
+  }
+
+  bool ContainsAsciiInsensitive(std::string_view text, std::string_view needle)
+  {
+    return !std::ranges::search(text, needle, {}, AsciiLower, AsciiLower).empty();
   }
 
   // At most `maxBytes` bytes, cut on a code point boundary.

@@ -76,75 +76,32 @@ private:
 
     explicit MovementView(MovementSettings value) : settings{value} {}
 
-    static float Angle(float first, float second, double alpha)
-    {
-      constexpr auto turn       = 2.0 * std::numbers::pi;
-      const auto     difference = std::remainder(static_cast<double>(second) - first, turn);
-      return static_cast<float>(std::remainder(first + difference * alpha, turn));
-    }
-
     static Domain::PlayerLocation Interpolate(const SamplePoint& first, const SamplePoint& second, Clock::time_point target)
     {
       const double alpha =
         std::chrono::duration<double>(target - first.time).count() / std::chrono::duration<double>(second.time - first.time).count();
-      auto        result = second.location;
-      const auto& a      = first.location;
-      const auto& b      = second.location;
-      result.position    = {
-          static_cast<float>(std::lerp(static_cast<double>(a.position.X), static_cast<double>(b.position.X), alpha)),
-          static_cast<float>(std::lerp(static_cast<double>(a.position.Y), static_cast<double>(b.position.Y), alpha)),
-          static_cast<float>(std::lerp(static_cast<double>(a.position.Z), static_cast<double>(b.position.Z), alpha))
-      };
-      result.rotation =
-        {Angle(a.rotation.X, b.rotation.X, alpha), Angle(a.rotation.Y, b.rotation.Y, alpha), Angle(a.rotation.Z, b.rotation.Z, alpha)};
-      result.sampledAtUs = 0;  // A rendered pose is not a new source measurement.
-      return result;
+      return Domain::Motion::Blend(first.location, second.location, alpha);
     }
 
+    // Another view, character or space, a pause beyond maxGap or a teleport: snap.
     bool Discontinuous(const Track& track, const MovementObservation& observation) const
     {
-      const auto& previous = track.samples.back().location;
-      const auto& next     = *observation.location;
-      if (
-        track.viewRevision != observation.viewRevision || track.characterGeneration != observation.characterGeneration ||
-        previous.location.locationId != next.location.locationId)
-        return true;
-
-      if (observation.receivedAt - track.receivedAt > settings.maxGap) return true;
-
-      const double x = static_cast<double>(next.position.X) - previous.position.X;
-      const double y = static_cast<double>(next.position.Y) - previous.position.Y;
-      const double z = static_cast<double>(next.position.Z) - previous.position.Z;
-      return x * x + y * y + z * z > settings.teleportDistance * settings.teleportDistance;
+      return track.viewRevision != observation.viewRevision || track.characterGeneration != observation.characterGeneration ||
+             observation.receivedAt - track.receivedAt > settings.maxGap ||
+             Domain::Spatial::Jumped(track.samples.back().location, *observation.location, settings.teleportDistance);
     }
 
     std::optional<Clock::time_point> MapTime(const Track& track, const MovementObservation& observation) const
     {
+      // The model has already checked context and sample sequence.
       const auto& previous = track.samples.back();
-      const auto  stamp    = observation.location->sampledAtUs;
-      const auto  oldStamp = previous.location.sampledAtUs;
-      auto        time     = observation.receivedAt;
-      if (stamp != 0 && oldStamp != 0)
-      {
-        // The model has already checked context and sample sequence.
-        // A source clock restart is a discontinuity, never unsigned wraparound.
-        if (stamp < oldStamp) return std::nullopt;
-
-        const auto elapsed = stamp - oldStamp;
-        const auto maxUs   = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(settings.maxGap).count());
-        if (elapsed > maxUs) return std::nullopt;
-
-        time = previous.time + std::chrono::microseconds{elapsed};
-      }
-      else if ((stamp == 0) != (oldStamp == 0))
-        return std::nullopt;
-
-      // A visibility entry/snapshot can seed an old source measurement at a
-      // recent receive time. Do not stretch its next segment into the future
-      // beyond our interpolation budget. Ordinary jitter within delay is kept.
-      if (time - observation.receivedAt > settings.delay || observation.receivedAt - time > settings.maxGap) return std::nullopt;
-
-      return time;
+      return Domain::Motion::SourceTime<Clock>(
+        previous.time,
+        previous.location.sampledAtUs,
+        observation.location->sampledAtUs,
+        observation.receivedAt,
+        settings.delay,
+        settings.maxGap);
     }
 
     void Observe(const MovementObservation& observation)

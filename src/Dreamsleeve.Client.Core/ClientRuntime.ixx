@@ -524,9 +524,7 @@ private:
     // welcome announced (sources and lengths), so no doomed packet is sent.
     Result<void> Process(std::uint64_t generation, PostAnnouncement& command)
     {
-      using Utils::Text::CodePoints;
-      const bool allowed = announcementPolicy.Allows(command.source) && CodePoints(command.text) <= announcementPolicy.maxTextLength &&
-                           CodePoints(command.signature) <= announcementPolicy.maxSignatureLength;
+      const bool allowed = Domain::Announcements::Admits(announcementPolicy, command.source, command.text, command.signature);
       return SendToChannel(generation, command, Domain::ChatChannelKind::System, allowed);
     }
 
@@ -624,7 +622,7 @@ private:
     Result<void> Process(std::uint64_t generation, LocalMovement& command)
     {
       if (phase != SessionPhase::Ready || generation != model.Generation()) return {};
-      if (!command.location || !latestMovement || command.location->location.locationId != latestMovement->location.locationId)
+      if (!command.location || !latestMovement || !Domain::Spatial::SameSpace(*command.location, *latestMovement))
       {
         LocalLocation transition{command.location};
         return Process(generation, transition);

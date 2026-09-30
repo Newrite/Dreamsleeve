@@ -10,13 +10,6 @@ export import Dreamsleeve.Host.Bubbles;
 export namespace Dreamsleeve::Host
 {
 
-  // Where a ground note would stand now, with the in-game date.
-  struct NoteSpot
-  {
-    Domain::GroundMarkPlacement placement;
-    Domain::GameDate            gameDate;
-  };
-
   // The plugin around the host state, as UI commands need it.
   struct CommandPorts
   {
@@ -27,7 +20,7 @@ export namespace Dreamsleeve::Host
     // Applies the chat activation key of saved settings.
     std::function<void(std::string_view)> activationKey;
     // The character's spot in the world; empty outside it.
-    std::function<std::optional<NoteSpot>()> noteSpot;
+    std::function<std::optional<Domain::MarkSpot>()> noteSpot;
   };
 
   struct CommandContext
@@ -179,8 +172,7 @@ export namespace Dreamsleeve::Host
         // world there is nowhere to put it.
         std::expected<void, std::string> placed = std::unexpected{"Персонаж не в игровом мире"};
         if (const auto spot = context.ports.noteSpot())
-          placed =
-            context.session.PlaceGroundNote(context.exchange, command.requestId, std::move(command.text), spot->placement, spot->gameDate);
+          placed = context.session.PlaceGroundNote(context.exchange, command.requestId, std::move(command.text), *spot);
         if (!placed) Emit(Bridge::MarkResultEvent{.requestId = command.requestId, .error = placed.error()});
       }
 

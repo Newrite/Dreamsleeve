@@ -5,8 +5,9 @@ module;
 export module Dreamsleeve.UI.Nameplates;
 
 import std;
-import Dreamsleeve.Client.Domain;
+import Dreamsleeve.Client.Domain.Logic;
 import Dreamsleeve.Client.Utils;
+import Dreamsleeve.Host.Hud;
 import Dreamsleeve.Game.Raycast;
 
 // A small Scaleform HUD layer: a name and, optionally, one text bubble above
@@ -16,21 +17,7 @@ import Dreamsleeve.Game.Raycast;
 namespace Nameplates
 {
 
-  export constexpr std::uint32_t DefaultTextColor   = 0xEEECE5;
-  export constexpr std::uint32_t DefaultHeaderColor = 0xA9A69B;
-
-  // Bubble look of one label; a change rebuilds that bubble.
-  export struct BubbleStyle
-  {
-    float         fontSize{16};
-    float         maxWidth{320};  // HUD units, including padding.
-    float         background{0.65f};
-    bool          border{true};
-    std::uint32_t textColor{DefaultTextColor};
-    std::uint32_t headerColor{DefaultHeaderColor};  // The smaller line on top, when a label has one.
-
-    bool operator==(const BubbleStyle&) const = default;
-  };
+  using Dreamsleeve::Host::Hud::BubbleStyle;
 
   // What a label stands for; the GFx object names derive from it, so a player
   // and a mark with the same numeric ID never share a text field.
@@ -65,7 +52,7 @@ namespace Nameplates
     LabelKey      key{};
     std::string   name;
     float         nameSize{};
-    std::uint32_t nameColor{DefaultTextColor};
+    std::uint32_t nameColor{Dreamsleeve::Host::Hud::DefaultTextColor};
     std::string   header;
     std::string   bubble;
     float         bubbleAlpha{1.0f};
@@ -101,8 +88,7 @@ namespace Nameplates
     if (!camera) return;
     float x{}, y{}, z{};
     if (
-      !camera->WorldPtToScreenPt3(anchor, x, y, z, 1e-5f) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || z <= 0 ||
-      x < 0 || x > 1 || y < 0 || y > 1)
+      !camera->WorldPtToScreenPt3(anchor, x, y, z, 1e-5f) || !Domain::Checks::Finite(x, y, z) || z <= 0 || x < 0 || x > 1 || y < 0 || y > 1)
       return;
     if (occlusion && !Raycast::Clear(camera->world.translate, anchor)) return;
     label.x = x;
@@ -134,15 +120,6 @@ namespace Nameplates
   double NameBlock(float nameSize)
   {
     return static_cast<double>(nameSize) + 8;
-  }
-
-  // Keeps the first `count` code points and appends an ellipsis.
-  std::string TrimUtf8(std::string_view text, std::size_t count)
-  {
-    auto kept = Dreamsleeve::Utils::Text::Prefix(text, count);
-    while (kept.ends_with(' '))
-      kept.remove_suffix(1);
-    return std::string{kept} + "\xE2\x80\xA6";
   }
 
   struct NameField
@@ -336,18 +313,19 @@ namespace Nameplates
       bubble.head.SetMember("_width", RE::GFxValue(wrapWidth));
       bubble.text.SetMember("_width", RE::GFxValue(wrapWidth));
       using Dreamsleeve::Utils::Text::CodePoints;
+      using Dreamsleeve::Utils::Text::Ellipsize;
       // Plain UTF-8 text, never HTML or ActionScript from the network.
       bubble.head.SetText(header.c_str());
       const double headHeight = header.empty() ? 0 : Number(bubble.head, "textHeight");
       const double headWidth  = header.empty() ? 0 : Number(bubble.head, "textWidth");
-      std::string  text       = CodePoints(content) > BubbleMaxChars ? TrimUtf8(content, BubbleMaxChars) : content;
+      std::string  text       = CodePoints(content) > BubbleMaxChars ? Ellipsize(content, BubbleMaxChars) : content;
       bubble.text.SetText(text.c_str());
       double textHeight = content.empty() ? 0 : Number(bubble.text, "textHeight");
       for (int step = 0; textHeight > maxHeight && step < 24; ++step)
       {
         const auto length = CodePoints(text);
         if (length <= 8) break;
-        text = TrimUtf8(text, length - std::max<std::size_t>(4, length / 8));
+        text = Ellipsize(text, length - std::max<std::size_t>(4, length / 8));
         bubble.text.SetText(text.c_str());
         textHeight = Number(bubble.text, "textHeight");
       }

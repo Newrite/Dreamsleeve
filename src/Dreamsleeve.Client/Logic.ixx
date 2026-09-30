@@ -10,6 +10,7 @@ import Dreamsleeve.PrismaUI;
 import Dreamsleeve.Game.Telemetry;
 import Dreamsleeve.Game.Fireflies;
 import Dreamsleeve.Game.GroundMarks;
+import Dreamsleeve.Game.World;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
 import Dreamsleeve.Host.Bridge;
@@ -140,7 +141,7 @@ namespace Logic
     auto& runtime = Runtime::Get();
     auto& state   = Get();
     if (runtime.context == Runtime::GameContext::Playing || !runtime.dataLoaded) return;
-    if (!Telemetry::PlayerReady())
+    if (!World::PlayerReady())
     {
       state.readySince = {};
       return;
@@ -175,11 +176,7 @@ namespace Logic
       return;
     }
     // Credential and request errors need the user; transport errors retry.
-    using Failure = Dream::Auth::FailureCode;
-    if (
-      status.authFailure == Failure::InvalidCredentials || status.authFailure == Failure::CredentialStorage ||
-      status.authFailure == Failure::InvalidRequest || status.authFailure == Failure::RegistrationDisabled)
-      return;
+    if (Dream::Auth::NeedsUser(status.authFailure)) return;
     if (!state.reconnect.Due(now)) return;
     if (runtime.app->ConnectSaved()) logger::info("Reconnecting with saved login");
   }
@@ -263,7 +260,7 @@ namespace Logic
     Runtime::MenuSnapshot snapshot;
     snapshot.phase          = std::string{Dreamsleeve::Host::Bridge::PhaseName(status)};
     snapshot.serverName     = status.serverName;
-    snapshot.savedUsername  = runtime.ui.ui.chat.streamerMode ? std::string{} : status.savedUsername;
+    snapshot.savedUsername  = Dreamsleeve::Host::Bridge::ShownUsername(status, runtime.ui.ui.chat.streamerMode);
     snapshot.error          = status.error;
     snapshot.activationKey  = runtime.ui.ui.chat.activationKey;
     snapshot.online         = runtime.session.OnlinePlayers().size();

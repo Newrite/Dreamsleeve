@@ -108,8 +108,7 @@ public:
               Domain::Error{Domain::ErrorCode::ChannelMismatch, "channelId"}
           };
         }
-        // A system channel carries only announcements, other kinds never do.
-        if (message.announcement.has_value() != (kind == Domain::ChatChannelKind::System))
+        if (!Domain::Chat::FitsChannel(kind, message))
         {
           return std::unexpected{
               Domain::Error{Domain::ErrorCode::ChannelMismatch, "announcement"}

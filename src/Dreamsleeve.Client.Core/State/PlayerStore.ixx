@@ -29,16 +29,7 @@ public:
     {
       const auto id       = player.data.playerId;
       const auto previous = players.find(id);
-      if (
-        previous != players.end() && previous->second.characterGeneration == player.characterGeneration &&
-        previous->second.viewRevision != 0 &&
-        (player.viewRevision == 0 ||
-         (player.viewRevision == previous->second.viewRevision && player.movementSequence < previous->second.movementSequence)))
-      {
-        player.viewRevision     = previous->second.viewRevision;
-        player.location         = previous->second.location;
-        player.movementSequence = previous->second.movementSequence;
-      }
+      if (previous != players.end()) player = Domain::Players::Merge(previous->second, std::move(player));
       return players.insert_or_assign(id, std::move(player)).second;
     }
 
@@ -142,17 +133,14 @@ public:
     bool CanApplyMovement(PlayerId id, std::uint64_t viewRevision, std::uint64_t sequence) const
     {
       const auto found = players.find(id);
-      return found != players.end() && found->second.location && viewRevision != 0 && found->second.viewRevision == viewRevision &&
-             sequence > found->second.movementSequence;
+      return found != players.end() && Domain::Players::AcceptsMovement(found->second, viewRevision, sequence);
     }
 
     void ApplyMovement(PlayerId id, std::uint64_t sequence, const MovementPose& pose)
     {
-      auto& player                 = players.at(id);
-      player.location->position    = pose.position;
-      player.location->rotation    = pose.rotation;
-      player.location->sampledAtUs = pose.sampledAtUs;
-      player.movementSequence      = sequence;
+      auto& player = players.at(id);
+      Domain::Motion::Apply(*player.location, pose);
+      player.movementSequence = sequence;
     }
 
 private:

@@ -71,15 +71,14 @@ TEST_CASE("Client encoding preserves raw input and full width correlation for se
   CHECK(packet.protocol_version() == W::Version);
   CHECK(packet.request_id() == 42);
   CHECK(packet.open_session().session_ticket() == std::string(43, 'A'));
-  CHECK_FALSE(codec.Encode(W::OpenSession{1, ""}));
-  CHECK_FALSE(codec.Encode(W::OpenSession{1, std::string(43, '/')}));
+  // The ticket's shape is the server's to judge, like every content rule.
+  CHECK(codec.Encode(W::OpenSession{1, std::string(43, '/')}));
   auto chat = codec.Encode(SendChat{std::numeric_limits<std::uint64_t>::max(), 1, "Привет\nworld"});
   REQUIRE(chat);
   REQUIRE(packet.ParseFromArray(chat->DataBytesView().data(), static_cast<int>(chat->Size())));
   CHECK(packet.request_id() == std::numeric_limits<std::uint64_t>::max());
   CHECK(packet.send_chat().text() == "Привет\nworld");
   CHECK_FALSE(codec.Encode(SendChat{0, 1, "text"}));
-  CHECK_FALSE(codec.Encode(SendChat{1, 0, "text"}));
   CHECK_FALSE(codec.Encode(SendChat{1, 1, std::string(config.network.maxPacketBytes, 'x')}));
 }
 
@@ -482,7 +481,8 @@ TEST_CASE("Actor value limits are configured for both outgoing samples and incom
   LocalActorValues sample;
   sample.actorValues.emplace("skyrim:health", Domain::ActorValueInfo{"Health", Domain::ScalarActorValue{0}});
   sample.actorValues.emplace("skyrim:stamina", Domain::ActorValueInfo{"Stamina", Domain::ScalarActorValue{1}});
-  CHECK_FALSE(codec.Encode(W::UpdatePlayer{1, sample}));
+  // Outgoing, the server applies its own limit and refuses the update.
+  CHECK(codec.Encode(W::UpdatePlayer{1, sample}));
   auto  packet = Welcome();
   auto* player = packet.mutable_session_opened()->mutable_players(0);
   for (const auto* key : {"skyrim:health", "skyrim:stamina"})
@@ -567,7 +567,8 @@ TEST_CASE("Movement uses a separate unreliable envelope bounded by negotiated pa
   CHECK(packet.sample().pose().sampled_at_us() == 12345);
   CHECK(codec.Encode(source, encoded->Size()));
   CHECK_FALSE(codec.Encode(source, encoded->Size() - 1));
-  CHECK_FALSE(codec.Encode(W::MovementSample{0, 1, {}}, 1200));
+  // The server skips a sample it cannot use.
+  CHECK(codec.Encode(W::MovementSample{0, 1, {}}, 1200));
 }
 
 TEST_CASE("Movement batch validates sequence context finite pose and selected channel")
@@ -770,7 +771,7 @@ TEST_CASE("A display name change and its answer round-trip with the correlation"
   CHECK(sent.change_display_name().display_name() == "Новое Имя");
   CHECK_FALSE(codec.Encode(
     W::ClientRequest{
-        ChangeDisplayName{6, ""}
+        ChangeDisplayName{6, "\xC3"}
   }));
 
   P::ServerPacket changed;
@@ -790,7 +791,7 @@ TEST_CASE("A display name change and its answer round-trip with the correlation"
   CHECK_FALSE(codec.Decode(Bytes(changed)));
 }
 
-TEST_CASE("The codec owns a request's shape and names the field that is wrong")
+TEST_CASE("The codec refuses only what would close the connection: a zero request ID or text that is not UTF-8")
 {
   const auto                        codec = MakeCodec();
   const Domain::GroundMarkPlacement place{
@@ -798,31 +799,29 @@ TEST_CASE("The codec owns a request's shape and names the field that is wrong")
       {1, 2, 3},
       0.5f
   };
-  const Domain::GameDate    date{4, 201, 8, 17, 2, 14, 5};
-  const auto                nan = std::numeric_limits<float>::quiet_NaN();
-  Domain::ActorValueStorage values;
-  for (std::size_t index = 0; index <= config.maxActorValues; ++index)
-    values.emplace("skyrim:value" + std::to_string(index), Domain::ActorValueInfo{"Value", Domain::ScalarActorValue{1}});
+  const Domain::GameDate date{4, 201, 8, 17, 2, 14, 5};
   using Kind   = Domain::AnnouncementKind;
   using Source = Domain::ClientAnnouncementSource;
+  const std::string broken{"\xFF"};
 
+  // Every string field is checked, nested and map ones included, by its protobuf name.
+  Domain::PlayerDetails details;
+  details.place = Domain::PlaceDescription{"Tamriel", broken, "", "", false};
+  Domain::ActorValueStorage badKey;
+  badKey.emplace(broken, Domain::ActorValueInfo{"Health", Domain::ScalarActorValue{1}});
+  Domain::ActorValueStorage badName;
+  badName.emplace("skyrim:health", Domain::ActorValueInfo{broken, Domain::ScalarActorValue{1}});
   const std::vector<std::pair<std::string_view, W::ClientRequest>> cases{
-      {"session_ticket", W::OpenSession{1, std::string(42, 'A')}},
-      {"channel_id", SendChat{1, Domain::InvalidId, "text"}},
-      {"text", SendChat{1, 1, ""}},
-      {"text", SendChat{1, 1, "\xFF"}},
-      {"actor_values", W::UpdatePlayer{1, LocalActorValues{values}}},
-      {"text", PostAnnouncement{1, 2, "", Kind::Event, Source::ThirdParty, "Mod"}},
-      {"signature", PostAnnouncement{1, 2, "notice", Kind::Event, Source::ThirdParty, ""}},
-      {"signature", PostAnnouncement{1, 2, "notice", Kind::Event, Source::TrustedClient, "Mod\n"}},
-      {"text", PlaceGroundNote{1, "", place, date}},
-      {"placement", PlaceGroundNote{1, "note", {{"", 0x1A26F}, {1, 2, 3}, 0.5f}, date}},
-      {"placement", PlaceGroundNote{1, "note", {{"skyrim.esm", 0x1A26F}, {nan, 2, 3}, 0.5f}, date}},
-      {"game_date", PlaceGroundNote{1, "note", place, {4, 201, 2, 30, 2, 14, 5}}},
-      {"label", ReportDeath{1, "Wolf\x01", place, date}},
-      {"mark_id", RemoveGroundMark{1, Domain::InvalidId}},
-      {"display_name", ChangeDisplayName{1, " \t "}},
-      {"display_name", ChangeDisplayName{1, "Line\nbreak"}},
+      {"text",          SendChat{1, 1, broken}                                                   },
+      {"signature",     PostAnnouncement{1, 2, "notice", Kind::Event, Source::ThirdParty, broken}},
+      {"text",          PlaceGroundNote{1, broken, place, date}                                  },
+      {"plugin_name",   PlaceGroundNote{1, "note", {{broken, 0x1A26F}, {1, 2, 3}, 0.5f}, date}   },
+      {"label",         ReportDeath{1, "Wolf" + broken, place, date}                             },
+      {"display_name",  ChangeDisplayName{1, broken}                                             },
+      {"name",          W::UpdatePlayer{1, CharacterStarted{broken}}                             },
+      {"location_name", W::UpdatePlayer{1, PlayerDetailsChanged{details}}                        },
+      {"key",           W::UpdatePlayer{1, LocalActorValues{badKey}}                             },
+      {"display_name",  W::UpdatePlayer{1, LocalActorValues{badName}}                            },
   };
   for (const auto& [field, request] : cases)
   {
@@ -834,9 +833,19 @@ TEST_CASE("The codec owns a request's shape and names the field that is wrong")
   const auto unnumbered = codec.Encode(ChangeDisplayName{Domain::InvalidId, "Name"});
   REQUIRE_FALSE(unnumbered);
   CHECK(unnumbered.error().code == W::ErrorCode::InvalidEnvelope);
-  // A death may carry no label; a trusted client need not sign.
-  CHECK(codec.Encode(ReportDeath{1, "", place, date}));
-  CHECK(codec.Encode(PostAnnouncement{1, 2, "notice", Kind::Event, Source::TrustedClient, ""}));
+
+  // The content is the server's to judge; it answers with a refusal of the request.
+  const std::vector<W::ClientRequest> judgedByServer{
+      W::OpenSession{1, ""},
+      SendChat{1, Domain::InvalidId, ""},
+      PostAnnouncement{1, 2, "", Kind::Event, Source::ThirdParty, ""},
+      PlaceGroundNote{1, "", {{"", 0}, {std::numeric_limits<float>::quiet_NaN(), 0, 0}, 0}, {4, 201, 2, 30, 7, 24, 0}},
+      ReportDeath{1, "Wolf\n", place, date},
+      RemoveGroundMark{1, Domain::InvalidId},
+      ChangeDisplayName{1, " \t "},
+  };
+  for (const auto& request : judgedByServer)
+    CHECK(codec.Encode(request));
 }
 
 TEST_SUITE_END();

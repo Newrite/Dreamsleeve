@@ -233,6 +233,12 @@ public:
       return id != Domain::InvalidId && ignoredIndex.contains(Key(scope, std::to_string(id)));
     }
 
+    // Whether the surfaces leave out what this author wrote; self is never hidden.
+    bool Hides(Domain::PlayerId author, std::optional<Domain::PlayerId> self) const
+    {
+      return author != self && Ignored(author);
+    }
+
     // A personal filter: system messages (no author) and self cannot be ignored.
     bool Ignore(Domain::PlayerId id, std::optional<Domain::PlayerId> self, const Domain::PlayerData* known)
     {

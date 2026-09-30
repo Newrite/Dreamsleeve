@@ -720,27 +720,25 @@ export namespace Dreamsleeve::Host::Bridge
   std::string_view MenuLabel(std::string_view key)
   {
     static const std::pair<std::string_view, std::string_view> labels[] = {
-        {"main",          "Главное меню"    },
-        {"inventory",     "Инвентарь"       },
-        {"magic",         "Магия"           },
-        {"map",           "Карта"           },
-        {"journal",       "Журнал"          },
-        {"stats",         "Навыки"          },
-        {"tween",         "Меню персонажа"  },
-        {"sleepwait",     "Сон и ожидание"  },
-        {"favorites",     "Избранное"       },
-        {"levelup",       "Повышение уровня"},
-        {"console",       "Консоль"         },
-        {"messagebox",    "Сообщение"       },
-        {"racesex",       "Внешность"       },
-        {"container",     "Контейнер"       },
-        {"tutorial",      "Обучение"        },
-        {"creationclub",  "Creation Club"   },
-        {"modmanager",    "Модификации"     },
-        {"credits",       "Титры"           },
-        {"loading",       "Загрузка"        },
-        {"titlesequence", "Заставка"        },
-        {"dialogue",      "Диалог"          },
+        {"main",         "Главное меню"    },
+        {"inventory",    "Инвентарь"       },
+        {"magic",        "Магия"           },
+        {"map",          "Карта"           },
+        {"journal",      "Журнал"          },
+        {"stats",        "Навыки"          },
+        {"tween",        "Меню персонажа"  },
+        {"sleepwait",    "Сон и ожидание"  },
+        {"favorites",    "Избранное"       },
+        {"levelup",      "Повышение уровня"},
+        {"console",      "Консоль"         },
+        {"messagebox",   "Сообщение"       },
+        {"racesex",      "Внешность"       },
+        {"container",    "Контейнер"       },
+        {"gift",         "Подарок"         },
+        {"tutorial",     "Обучение"        },
+        {"creationclub", "Creation Club"   },
+        {"modmanager",   "Модификации"     },
+        {"credits",      "Титры"           },
     };
     for (const auto& [name, label] : labels)
       if (name == key) return label;
@@ -1045,7 +1043,12 @@ export namespace Dreamsleeve::Host::Bridge
     return {.connected = PhaseOf(status) == ConnectionPhase::Connected, .phase = std::string{PhaseName(status)}};
   }
 
-  // Streamer mode hides the saved account name as well.
+  // The saved account name a surface may show: streamer mode hides it.
+  std::string ShownUsername(const ClientStatus& status, bool streamerMode)
+  {
+    return streamerMode ? std::string{} : status.savedUsername;
+  }
+
   AuthEvent AuthState(const ClientStatus& status, bool streamerMode = false)
   {
     AuthEvent event;
@@ -1054,7 +1057,7 @@ export namespace Dreamsleeve::Host::Bridge
     event.failure        = NameOf(FailureNames, status.authFailure, ClientAuth::FailureCode::None, FailureNames.front());
     event.error          = ClipError(status.error);
     event.savedLogin     = status.savedLogin;
-    event.savedUsername  = streamerMode ? std::string{} : status.savedUsername;
+    event.savedUsername  = ShownUsername(status, streamerMode);
     event.phase          = PhaseName(status);
     return event;
   }

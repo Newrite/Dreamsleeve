@@ -274,6 +274,13 @@ export namespace Domain
     bool operator==(const GameDate&) const = default;
   };
 
+  // Where the character stands and when: a mark placed there now.
+  struct MarkSpot
+  {
+    GroundMarkPlacement placement;
+    GameDate            gameDate;
+  };
+
   // Persistent server data shown near the player: a note a player left or the
   // place a character died. Not a chat message: never in history or bubbles.
   struct GroundMark final

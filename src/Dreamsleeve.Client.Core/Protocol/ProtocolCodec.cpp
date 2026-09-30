@@ -80,105 +80,49 @@ namespace Dreamsleeve::Client::Wire
       }
     };
 
-    // The one check of a request's shape before it leaves: IDs, the text the
-    // protocol requires, finite numbers, the calendar. What depends on the
-    // session (channel, pending slots, the announced policy) is the runtime's.
-    // Returns the invalid field. No catch-all overload.
-    struct RequestShape
+    // The first string field, nested ones included, that is not well-formed
+    // UTF-8. The server's parser refuses such a packet whole and closes the
+    // connection, so it never leaves; a new string field is covered as it is.
+    std::optional<std::string> InvalidText(const google::protobuf::Message& message)
     {
-      const Configuration& config;
-
-      using Field = std::optional<std::string_view>;
-
-      // Non-empty well-formed UTF-8.
-      static bool Text(std::string_view text)
+      using Field                          = google::protobuf::FieldDescriptor;
+      const auto* const         reflection = message.GetReflection();
+      std::vector<const Field*> fields;
+      reflection->ListFields(message, &fields);
+      for (const auto* field : fields)
       {
-        return !text.empty() && Utils::Text::ValidUtf8(text);
+        const bool repeated = field->is_repeated();
+        const int  count    = repeated ? reflection->FieldSize(message, field) : 1;
+        for (int index = 0; index < count; ++index)
+          if (field->type() == Field::TYPE_STRING)
+          {
+            const auto text = repeated ? reflection->GetRepeatedString(message, field, index) : reflection->GetString(message, field);
+            if (!Utils::Text::ValidUtf8(text)) return std::string{field->name()};
+          }
+          else if (field->cpp_type() == Field::CPPTYPE_MESSAGE)
+          {
+            const auto& nested = repeated ? reflection->GetRepeatedMessage(message, field, index) : reflection->GetMessage(message, field);
+            if (auto invalid = InvalidText(nested)) return invalid;
+          }
       }
-
-      // One line of well-formed UTF-8, possibly empty.
-      static bool Line(std::string_view text)
-      {
-        return Utils::Text::ValidUtf8(text) && !Utils::Text::HasControl(text);
-      }
-
-      Field operator()(const OpenSession& value) const
-      {
-        if (!Auth::ValidToken(value.sessionTicket)) return "session_ticket";
-        return std::nullopt;
-      }
-
-      Field operator()(const SendChat& value) const
-      {
-        if (value.channelId == Domain::InvalidId) return "channel_id";
-        if (!Text(value.text)) return "text";
-        return std::nullopt;
-      }
-
-      Field operator()(const UpdatePlayer& value) const
-      {
-        const auto* values = std::get_if<LocalActorValues>(&value.update);
-        if (values && values->actorValues.size() > config.maxActorValues) return "actor_values";
-        return std::nullopt;
-      }
-
-      // A third-party mod signs its announcements; the server and trusted clients need not.
-      Field operator()(const PostAnnouncement& value) const
-      {
-        if (value.channelId == Domain::InvalidId) return "channel_id";
-        if (!Text(value.text)) return "text";
-        if (!Line(value.signature)) return "signature";
-        if (value.source == Domain::ClientAnnouncementSource::ThirdParty && value.signature.empty()) return "signature";
-        return std::nullopt;
-      }
-
-      Field operator()(const PlaceGroundNote& value) const
-      {
-        if (!Text(value.text)) return "text";
-        if (!ValidPlacement(value.placement)) return "placement";
-        if (!ValidGameDate(value.gameDate)) return "game_date";
-        return std::nullopt;
-      }
-
-      // A death may carry no label at all.
-      Field operator()(const ReportDeath& value) const
-      {
-        if (!Line(value.label)) return "label";
-        if (!ValidPlacement(value.placement)) return "placement";
-        if (!ValidGameDate(value.gameDate)) return "game_date";
-        return std::nullopt;
-      }
-
-      Field operator()(const RemoveGroundMark& value) const
-      {
-        if (value.markId == Domain::InvalidId) return "mark_id";
-        return std::nullopt;
-      }
-
-      Field operator()(const SetIdentityVisibility&) const
-      {
-        return std::nullopt;
-      }
-
-      Field operator()(const ChangeDisplayName& value) const
-      {
-        const bool blank = std::ranges::all_of(value.displayName, [](char c) { return c == ' ' || c == '\t'; });
-        if (blank || !Line(value.displayName)) return "display_name";
-        return std::nullopt;
-      }
-    };
+      return std::nullopt;
+    }
 
   }
 
   Result<DreamNetPacket> ProtocolCodec::Encode(const ClientRequest& request) const
   {
+    // Only what would make the server close the connection is checked here:
+    // the correlation ID, text that is not UTF-8 and the size. The content
+    // (empty or blank text, IDs, places, dates, lengths) is the server's to
+    // judge; it answers with a refusal of this request.
     if (std::visit([](const auto& value) { return value.requestId; }, request) == Domain::InvalidId)
       return Failure(ErrorCode::InvalidEnvelope, "request_id");
-    if (const auto field = std::visit(RequestShape{config}, request)) return Invalid(std::string{*field});
 
     P::ClientPacket packet;
     packet.set_protocol_version(Version);
     std::visit(RequestWriter{packet}, request);
+    if (auto field = InvalidText(packet)) return Invalid(std::move(*field));
 
     const auto size = packet.ByteSizeLong();
     if (size > config.network.maxPacketBytes) return Failure(ErrorCode::PacketTooLarge, "packet");
@@ -193,8 +137,7 @@ namespace Dreamsleeve::Client::Wire
 
   Result<DreamNetPacket> ProtocolCodec::Encode(const MovementSample& sample, std::size_t maxPayloadBytes) const
   {
-    if (sample.contextRevision == 0 || sample.sequence == 0) return Invalid("movement");
-    if (!Finite(sample.pose.position) || !Finite(sample.pose.rotation)) return Invalid("pose");
+    // The server skips a sample it cannot use; nothing here can close the connection.
     P::ClientMovementPacket packet;
     packet.set_protocol_version(Version);
     packet.mutable_sample()->set_context_revision(sample.contextRevision);
