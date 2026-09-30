@@ -14,6 +14,7 @@ export import Dreamsleeve.Host.GameDates;
 // In-process JSON contract with the web UI (src/Dreamsleeve.Client.UI/src/bridge/types.ts).
 // Host -> UI payloads are handed to InteropCall as a string argument and parsed
 // with JSON.parse; they are never evaluated as JavaScript. uint64 IDs are strings.
+// The type names and enum strings below are generated into bridge.generated.ts.
 export namespace Dreamsleeve::Host::Bridge
 {
 
@@ -22,6 +23,200 @@ export namespace Dreamsleeve::Host::Bridge
   using Dreamsleeve::Client::CommandFailureCode;
   using Dreamsleeve::Client::SessionPhase;
   namespace ClientAuth = Dreamsleeve::Client::Auth;
+
+  // Wire names of the enums the UI switches on, in enumerator order from the
+  // first named value (Tests.Bridge checks them against the enumerators).
+  enum class ConnectionPhase
+  {
+    Disconnected,
+    Authenticating,
+    Connecting,
+    Opening,
+    Connected,
+    Disconnecting,
+    Faulted
+  };
+  constexpr auto PhaseNames =
+    std::to_array<std::string_view>({"disconnected", "authenticating", "connecting", "opening", "connected", "disconnecting", "faulted"});
+  constexpr auto OperationNames =
+    std::to_array<std::string_view>({"none", "passwordLogin", "resume", "signOut", "forgetSavedLogin", "resetPassword"});
+  constexpr auto FailureNames     = std::to_array<std::string_view>({
+      "none",
+      "invalidCredentials",
+      "usernameTaken",
+      "invalidRequest",
+      "registrationDisabled",
+      "busy",
+      "unavailable",
+      "invalidResponse",
+      "credentialStorage",
+      "canceled",
+      "nameNotAllowed",
+  });
+  constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
+  constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
+  constexpr auto MarkKindNames    = std::to_array<std::string_view>({"note", "death"});
+  constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "system"});
+
+  // names[value - first]; a value outside the table (Unspecified, a newer
+  // server value) takes fallback.
+  template <class Enum, std::size_t Size>
+  constexpr std::string_view NameOf(const std::array<std::string_view, Size>& names, Enum value, Enum first, std::string_view fallback)
+  {
+    const auto index = static_cast<std::int64_t>(value) - static_cast<std::int64_t>(first);
+    return index >= 0 && index < static_cast<std::int64_t>(Size) ? names[static_cast<std::size_t>(index)] : fallback;
+  }
+
+  // The ui.toml and bridge names of the choice (HidingNames); anything else is "off".
+  Domain::HiddenIdentity HidingOf(std::string_view name)
+  {
+    const auto found = std::ranges::find(HidingNames, name);
+    return found == HidingNames.end() ? Domain::HiddenIdentity::None : static_cast<Domain::HiddenIdentity>(found - HidingNames.begin());
+  }
+
+  std::string_view HidingName(Domain::HiddenIdentity value)
+  {
+    return NameOf(HidingNames, value, Domain::HiddenIdentity::None, HidingNames.front());
+  }
+
+  constexpr std::size_t MaxChatText = 16000;
+  // Bytes of a requested display name; the server applies its own, smaller limit.
+  constexpr std::size_t MaxDisplayName  = 1024;
+  constexpr std::size_t MaxSnapshotRows = 500;
+  constexpr std::size_t MaxCommandBytes = 1 << 20;
+  // parse.ts drops an event whose error exceeds 512 UTF-16 units; a UTF-8 byte
+  // bound is never looser, and the cut stays on a code point boundary.
+  constexpr std::size_t MaxErrorBytes = 512;
+
+  // ---- UI -> host ----------------------------------------------------------
+
+  // A uint64 ID as the UI writes it: a decimal string, never 0 in a valid command.
+  struct UiId
+  {
+    std::uint64_t value{};
+  };
+
+  // One struct per command; ParseCommand reads the one named by "type", ignores
+  // unknown keys and admits the values, so handlers get checked commands.
+  namespace Commands
+  {
+
+    struct SendChat
+    {
+      std::string requestId;
+      UiId        channelId;
+      std::string text;
+    };
+
+    struct Close
+    {};
+
+    struct SaveSettings
+    {
+      UiSettings   settings;
+      std::int64_t revision{};
+    };
+
+    // displayName present: register first, then sign in.
+    struct SignIn
+    {
+      std::string                username;
+      std::string                password;
+      bool                       remember{};
+      std::optional<std::string> displayName;
+    };
+
+    struct Ignore
+    {
+      UiId playerId;
+    };
+
+    struct Unignore
+    {
+      UiId playerId;
+    };
+
+    // Only the InstantKeys settings are taken from it.
+    struct DisplaySettings
+    {
+      UiSettings settings;
+    };
+
+    struct SignInSaved
+    {};
+
+    struct SignOut
+    {};
+
+    struct ForgetLogin
+    {};
+
+    struct Disconnect
+    {};
+
+    // A note where the character stands; the host fills the placement.
+    struct PlaceGroundNote
+    {
+      std::string requestId;
+      std::string text;
+    };
+
+    struct RemoveGroundMark
+    {
+      std::string requestId;
+      UiId        markId;
+    };
+
+    struct SetIdentityVisibility
+    {
+      std::string hiding;
+    };
+
+    struct ChangeDisplayName
+    {
+      std::string displayName;
+    };
+
+  }
+
+  using UiCommand = std::variant<
+    Commands::SendChat,
+    Commands::Close,
+    Commands::SaveSettings,
+    Commands::SignIn,
+    Commands::Ignore,
+    Commands::Unignore,
+    Commands::DisplaySettings,
+    Commands::SignInSaved,
+    Commands::SignOut,
+    Commands::ForgetLogin,
+    Commands::Disconnect,
+    Commands::PlaceGroundNote,
+    Commands::RemoveGroundMark,
+    Commands::SetIdentityVisibility,
+    Commands::ChangeDisplayName>;
+
+  // The "type" of each UiCommand alternative, in variant order.
+  constexpr auto CommandNames = std::to_array<std::string_view>({
+      "sendChat",
+      "close",
+      "saveSettings",
+      "signIn",
+      "ignore",
+      "unignore",
+      "displaySettings",
+      "signInSaved",
+      "signOut",
+      "forgetLogin",
+      "disconnect",
+      "placeGroundNote",
+      "removeGroundMark",
+      "setIdentityVisibility",
+      "changeDisplayName",
+  });
+  static_assert(CommandNames.size() == std::variant_size_v<UiCommand>);
+
+  // ---- host -> UI ----------------------------------------------------------
 
   struct UiResource
   {
@@ -66,6 +261,7 @@ export namespace Dreamsleeve::Host::Bridge
     bool                                     pseudonymous{};
   };
 
+  // kind: ChannelKindNames.
   struct UiChannel
   {
     std::string id;
@@ -74,7 +270,7 @@ export namespace Dreamsleeve::Host::Bridge
     bool        writable{};
   };
 
-  // origin: server | trustedClient | thirdParty; kind: announcement | event | admin | periodic.
+  // origin: OriginNames; kind: KindNames.
   struct UiAnnouncement
   {
     std::string                origin;
@@ -96,7 +292,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<UiAnnouncement> announcement;
   };
 
-  // A ground mark for the UI lists: kind is "note" or "death"; the text is
+  // A ground mark for the UI lists: kind is MarkKindNames; the text is
   // already filtered like chat. author is the host-resolved name (nearby
   // marks only), character the snapshot at placement; location is the WRLD or
   // CELL key "plugin:formid" with the position in game units.
@@ -114,9 +310,14 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<std::string> gameDate;
   };
 
+  struct UiIgnored
+  {
+    std::string id;
+    std::string name;
+  };
+
   struct SnapshotEvent
   {
-    std::string               type{"snapshot"};
     std::vector<UiChannel>    channels;
     std::vector<UiMessage>    messages;
     std::vector<UiPlayer>     players;
@@ -133,65 +334,31 @@ export namespace Dreamsleeve::Host::Bridge
     std::vector<UiGroundMark> nearbyMarks;
   };
 
-  // The marks the server shows near the player changed.
-  struct NearbyMarksEvent
-  {
-    std::string               type{"nearbyMarks"};
-    std::vector<UiGroundMark> marks;
-  };
-
-  // The own marks changed: placed, removed, evicted or seen again.
-  struct GroundMarksEvent
-  {
-    std::string               type{"groundMarks"};
-    std::vector<UiGroundMark> marks;
-  };
-
-  // Outcome of placeGroundNote or removeGroundMark; not a delta of the visible set.
-  struct MarkResultEvent
-  {
-    std::string                type{"markResult"};
-    std::string                requestId;
-    std::optional<std::string> markId;
-    std::optional<std::string> evictedId;
-    std::optional<bool>        removed;
-    std::optional<std::string> error;
-  };
-
   struct MessagesEvent
   {
-    std::string            type{"messages"};
     std::vector<UiMessage> messages;
   };
 
   struct PlayersEvent
   {
-    std::string           type{"players"};
     std::vector<UiPlayer> players;
   };
 
+  // phase: PhaseNames.
   struct ConnectionEvent
   {
-    std::string type{"connection"};
     bool        connected{};
-    std::string phase{"disconnected"};
+    std::string phase{PhaseNames.front()};
   };
 
-  struct UiIgnored
-  {
-    std::string id;
-    std::string name;
-  };
-
+  // Personal ignore list of this server, already named for the current settings.
   struct IgnoredEvent
   {
-    std::string            type{"ignored"};
     std::vector<UiIgnored> players;
   };
 
   struct SendResultEvent
   {
-    std::string                type{"sendResult"};
     std::string                requestId;
     std::optional<std::string> messageId;
     std::optional<std::string> error;
@@ -200,7 +367,6 @@ export namespace Dreamsleeve::Host::Bridge
   // An announcement another mod requested through the plugin API was not published.
   struct AnnouncementResultEvent
   {
-    std::string type{"announcementResult"};
     std::string channelId;
     std::string source;
     std::string text;
@@ -209,7 +375,6 @@ export namespace Dreamsleeve::Host::Bridge
 
   struct SettingsResultEvent
   {
-    std::string                type{"settingsResult"};
     std::int64_t               revision{};
     std::optional<std::string> error;
   };
@@ -217,29 +382,51 @@ export namespace Dreamsleeve::Host::Bridge
   // Typed authentication state; no password or token ever crosses this boundary.
   struct AuthEvent
   {
-    std::string type{"auth"};
     bool        authenticating{};
-    std::string operation{"none"};
-    std::string failure{"none"};
+    std::string operation{OperationNames.front()};
+    std::string failure{FailureNames.front()};
     std::string error;
     bool        savedLogin{};
     std::string savedUsername;
-    std::string phase{"disconnected"};
+    std::string phase{PhaseNames.front()};
   };
 
-  struct SimpleEvent
+  // Sent when a page is (re)created so window position and options apply
+  // before any snapshot; a snapshot repeats them.
+  struct SettingsEvent
   {
-    std::string type;
+    UiSettings settings;
   };
 
-  // "Hide my name from other players": mode is the choice (off | everywhere |
-  // exceptGroundMarks; the requested one while pending), pending waits for the
-  // server, pseudonym is what the others see now, error the last refusal (the
-  // choice is back to the server's state).
+  // The own marks changed: placed, removed, evicted or seen again.
+  struct GroundMarksEvent
+  {
+    std::vector<UiGroundMark> marks;
+  };
+
+  // Outcome of placeGroundNote or removeGroundMark; not a delta of the visible set.
+  struct MarkResultEvent
+  {
+    std::string                requestId;
+    std::optional<std::string> markId;
+    std::optional<std::string> evictedId;
+    std::optional<bool>        removed;
+    std::optional<std::string> error;
+  };
+
+  // The marks the server shows near the player changed.
+  struct NearbyMarksEvent
+  {
+    std::vector<UiGroundMark> marks;
+  };
+
+  // "Hide my name from other players": mode is the choice (HidingNames; the
+  // requested one while pending), pending waits for the server, pseudonym is
+  // what the others see now, error the last refusal (the choice is back to
+  // the server's state).
   struct IdentityEvent
   {
-    std::string                type{"identity"};
-    std::string                mode{"off"};
+    std::string                mode{HidingNames.front()};
     bool                       pending{};
     std::optional<std::string> pseudonym;
     std::optional<std::string> error;
@@ -252,7 +439,6 @@ export namespace Dreamsleeve::Host::Bridge
   // The own profile itself arrives with the players list.
   struct DisplayNameEvent
   {
-    std::string                type{"displayName"};
     bool                       pending{};
     std::optional<std::string> changed;
     std::optional<std::string> error;
@@ -260,222 +446,213 @@ export namespace Dreamsleeve::Host::Bridge
     bool operator==(const DisplayNameEvent&) const = default;
   };
 
-  // Sent when a page is (re)created so window position and options apply
-  // before any snapshot; a snapshot repeats them.
-  struct SettingsEvent
-  {
-    std::string type{"settings"};
-    UiSettings  settings;
-  };
+  // View visibility and chat focus, decided by the host.
+  struct ShowEvent
+  {};
 
-  // UI -> host. The UI ships with the plugin; unknown keys are ignored.
-  struct UiCommand
-  {
-    std::string               type;
-    std::string               requestId;
-    std::string               channelId;
-    std::string               text;
-    std::optional<UiSettings> settings;
-    std::int64_t              revision{};
-    std::string               username;
-    std::string               password;
-    std::string               displayName;
-    bool                      remember{};
-    std::string               playerId;
-    std::string               markId;
-    std::string               hiding;
-  };
+  struct HideEvent
+  {};
 
-  // The ui.toml and bridge names of the choice (HidingNames); anything else is "off".
-  Domain::HiddenIdentity HidingOf(std::string_view name)
-  {
-    const auto found = std::ranges::find(HidingNames, name);
-    return found == HidingNames.end() ? Domain::HiddenIdentity::None : static_cast<Domain::HiddenIdentity>(found - HidingNames.begin());
-  }
+  struct ActivateEvent
+  {};
 
-  std::string_view HidingName(Domain::HiddenIdentity value)
-  {
-    const auto index = static_cast<std::size_t>(value);
-    return index < HidingNames.size() ? HidingNames[index] : HidingNames.front();
-  }
+  struct DeactivateEvent
+  {};
 
-  constexpr std::size_t MaxChatText = 16000;
-  // Bytes of a requested display name; the server applies its own, smaller limit.
-  constexpr std::size_t MaxDisplayName  = 1024;
-  constexpr std::size_t MaxSnapshotRows = 500;
+  using HostEvent = std::variant<
+    SnapshotEvent,
+    MessagesEvent,
+    PlayersEvent,
+    ConnectionEvent,
+    IgnoredEvent,
+    SendResultEvent,
+    AnnouncementResultEvent,
+    SettingsResultEvent,
+    AuthEvent,
+    SettingsEvent,
+    GroundMarksEvent,
+    MarkResultEvent,
+    NearbyMarksEvent,
+    IdentityEvent,
+    DisplayNameEvent,
+    ShowEvent,
+    HideEvent,
+    ActivateEvent,
+    DeactivateEvent>;
+
+  // The "type" of each HostEvent alternative, in variant order.
+  constexpr auto EventNames = std::to_array<std::string_view>({
+      "snapshot",
+      "messages",
+      "players",
+      "connection",
+      "ignored",
+      "sendResult",
+      "announcementResult",
+      "settingsResult",
+      "auth",
+      "settings",
+      "groundMarks",
+      "markResult",
+      "nearbyMarks",
+      "identity",
+      "displayName",
+      "show",
+      "hide",
+      "activate",
+      "deactivate",
+  });
+  static_assert(EventNames.size() == std::variant_size_v<HostEvent>);
+
+}
+
+// A command ID is a quoted decimal; the variants carry their name in "type".
+template <>
+struct glz::meta<Dreamsleeve::Host::Bridge::UiId>
+{
+  static constexpr auto value = glz::quoted_num<&Dreamsleeve::Host::Bridge::UiId::value>;
+};
+
+template <>
+struct glz::meta<Dreamsleeve::Host::Bridge::HostEvent>
+{
+  static constexpr std::string_view tag = "type";
+  static constexpr auto             ids = Dreamsleeve::Host::Bridge::EventNames;
+};
+
+export namespace Dreamsleeve::Host::Bridge
+{
 
   using Encoded = std::expected<std::string, std::string>;
 
   namespace Detail
   {
 
-    // Instantiated only inside this module: glaze internals live in its global
-    // module fragment and are not reachable from importers' template instantiations.
-    template <class Event>
-    Encoded Write(const Event& event)
+    struct CommandHead
     {
-      auto json = glz::write_json(event);
-      if (!json) return std::unexpected{"Cannot encode UI event"};
-      return std::move(*json);
+      std::string type;
+    };
+
+    constexpr auto Lenient = glz::opts{.error_on_unknown_keys = false};
+
+    std::expected<void, std::string> Admit(Commands::SendChat& command)
+    {
+      if (command.requestId.empty() || command.channelId.value == 0) return std::unexpected{"sendChat requires requestId and channelId"};
+      if (command.text.empty() || command.text.size() > MaxChatText) return std::unexpected{"sendChat text is empty or too long"};
+      return {};
     }
 
-  }
+    std::expected<void, std::string> Admit(Commands::SaveSettings& command)
+    {
+      command.settings = Normalize(command.settings);
+      return {};
+    }
 
-  Encoded Encode(const SnapshotEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    std::expected<void, std::string> Admit(Commands::SignIn& command)
+    {
+      if (command.username.empty() || command.password.empty()) return std::unexpected{"signIn requires username and password"};
+      if (command.displayName && command.displayName->empty()) command.displayName.reset();
+      return {};
+    }
 
-  Encoded Encode(const MessagesEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    std::expected<void, std::string> Admit(Commands::Ignore& command)
+    {
+      if (command.playerId.value == 0) return std::unexpected{"ignore requires playerId"};
+      return {};
+    }
 
-  Encoded Encode(const PlayersEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    std::expected<void, std::string> Admit(Commands::Unignore& command)
+    {
+      if (command.playerId.value == 0) return std::unexpected{"unignore requires playerId"};
+      return {};
+    }
 
-  Encoded Encode(const ConnectionEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    std::expected<void, std::string> Admit(Commands::DisplaySettings& command)
+    {
+      command.settings = Normalize(command.settings);
+      return {};
+    }
 
-  Encoded Encode(const IgnoredEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    std::expected<void, std::string> Admit(Commands::PlaceGroundNote& command)
+    {
+      if (command.requestId.empty()) return std::unexpected{"placeGroundNote requires requestId"};
+      if (command.text.empty() || command.text.size() > MaxChatText) return std::unexpected{"placeGroundNote text is empty or too long"};
+      return {};
+    }
 
-  Encoded Encode(const SendResultEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    std::expected<void, std::string> Admit(Commands::RemoveGroundMark& command)
+    {
+      if (command.requestId.empty() || command.markId.value == 0) return std::unexpected{"removeGroundMark requires requestId and markId"};
+      return {};
+    }
 
-  Encoded Encode(const AnnouncementResultEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    std::expected<void, std::string> Admit(Commands::SetIdentityVisibility& command)
+    {
+      if (!std::ranges::contains(HidingNames, command.hiding))
+        return std::unexpected{"setIdentityVisibility requires hiding off, everywhere or exceptGroundMarks"};
+      return {};
+    }
 
-  Encoded Encode(const SettingsResultEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    std::expected<void, std::string> Admit(Commands::ChangeDisplayName& command)
+    {
+      if (command.displayName.empty() || command.displayName.size() > MaxDisplayName)
+        return std::unexpected{"changeDisplayName displayName is empty or too long"};
+      return {};
+    }
 
-  Encoded Encode(const AuthEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    // Commands without values have nothing to admit.
+    template <class Command>
+    std::expected<void, std::string> Admit(Command&)
+    {
+      return {};
+    }
 
-  Encoded Encode(const SimpleEvent& event)
-  {
-    return Detail::Write(event);
-  }
+    template <std::size_t Index = 0>
+    std::expected<UiCommand, std::string> Read(std::size_t index, std::string_view json)
+    {
+      if constexpr (Index == std::variant_size_v<UiCommand>)
+        return std::unexpected{"Unknown UI command"};
+      else
+      {
+        if (index != Index) return Read<Index + 1>(index, json);
+        std::variant_alternative_t<Index, UiCommand> command;
+        if (auto error = glz::read<Lenient>(command, json))
+          return std::unexpected{std::format("Invalid {} command: {}", CommandNames[Index], glz::format_error(error, json))};
+        if (auto admitted = Admit(command); !admitted) return std::unexpected{admitted.error()};
+        return UiCommand{std::move(command)};
+      }
+    }
 
-  Encoded Encode(const SettingsEvent& event)
-  {
-    return Detail::Write(event);
-  }
-
-  Encoded Encode(const GroundMarksEvent& event)
-  {
-    return Detail::Write(event);
-  }
-
-  Encoded Encode(const MarkResultEvent& event)
-  {
-    return Detail::Write(event);
-  }
-
-  Encoded Encode(const NearbyMarksEvent& event)
-  {
-    return Detail::Write(event);
-  }
-
-  Encoded Encode(const IdentityEvent& event)
-  {
-    return Detail::Write(event);
-  }
-
-  Encoded Encode(const DisplayNameEvent& event)
-  {
-    return Detail::Write(event);
   }
 
   std::expected<UiCommand, std::string> ParseCommand(std::string_view json)
   {
-    if (json.size() > 1 << 20) return std::unexpected{"UI command exceeds limit"};
-    UiCommand command;
-    if (auto error = glz::read<glz::opts{.error_on_unknown_keys = false}>(command, json))
+    if (json.size() > MaxCommandBytes) return std::unexpected{"UI command exceeds limit"};
+    Detail::CommandHead head;
+    if (auto error = glz::read<Detail::Lenient>(head, json))
       return std::unexpected{"Invalid UI command: " + glz::format_error(error, json)};
+    const auto found = std::ranges::find(CommandNames, head.type);
+    if (found == CommandNames.end()) return std::unexpected{"Unknown UI command: " + head.type};
+    return Detail::Read(static_cast<std::size_t>(found - CommandNames.begin()), json);
+  }
 
-    const auto& type = command.type;
-    if (type == "sendChat")
-    {
-      if (command.requestId.empty() || command.channelId.empty()) return std::unexpected{"sendChat requires requestId and channelId"};
-      if (command.text.empty() || command.text.size() > MaxChatText) return std::unexpected{"sendChat text is empty or too long"};
-      return command;
-    }
-    if (type == "saveSettings")
-    {
-      if (!command.settings) return std::unexpected{"saveSettings requires settings"};
-      command.settings = Normalize(*command.settings);
-      return command;
-    }
-    if (type == "signIn")
-    {
-      if (command.username.empty() || command.password.empty()) return std::unexpected{"signIn requires username and password"};
-      return command;
-    }
-    if (type == "ignore" || type == "unignore")
-    {
-      if (command.playerId.empty()) return std::unexpected{type + " requires playerId"};
-      return command;
-    }
-    if (type == "placeGroundNote")
-    {
-      if (command.requestId.empty()) return std::unexpected{"placeGroundNote requires requestId"};
-      if (command.text.empty() || command.text.size() > MaxChatText) return std::unexpected{"placeGroundNote text is empty or too long"};
-      return command;
-    }
-    if (type == "removeGroundMark")
-    {
-      if (command.requestId.empty() || command.markId.empty()) return std::unexpected{"removeGroundMark requires requestId and markId"};
-      return command;
-    }
-    if (type == "displaySettings")
-    {
-      // Only the InstantKeys settings are taken from it.
-      if (!command.settings) return std::unexpected{"displaySettings requires settings"};
-      command.settings = Normalize(*command.settings);
-      return command;
-    }
-    if (type == "setIdentityVisibility")
-    {
-      if (!std::ranges::contains(HidingNames, command.hiding))
-        return std::unexpected{"setIdentityVisibility requires hiding off, everywhere or exceptGroundMarks"};
-      return command;
-    }
-    if (type == "changeDisplayName")
-    {
-      if (command.displayName.empty() || command.displayName.size() > MaxDisplayName)
-        return std::unexpected{"changeDisplayName displayName is empty or too long"};
-      return command;
-    }
-    if (type == "close" || type == "signInSaved" || type == "signOut" || type == "forgetLogin" || type == "disconnect") return command;
-    return std::unexpected{"Unknown UI command: " + type};
+  // Instantiated only inside this module: glaze internals live in its global
+  // module fragment and are not reachable from importers' template instantiations.
+  Encoded Encode(const HostEvent& event)
+  {
+    auto json = glz::write_json(event);
+    if (!json) return std::unexpected{"Cannot encode UI event"};
+    return std::move(*json);
+  }
+
+  std::string_view TypeOf(const HostEvent& event)
+  {
+    return EventNames[event.index()];
   }
 
   std::string Id(std::uint64_t value)
   {
     return std::to_string(value);
-  }
-
-  std::optional<std::uint64_t> ParseId(std::string_view text)
-  {
-    std::uint64_t value{};
-    const auto    parsed = std::from_chars(text.data(), text.data() + text.size(), value);
-    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || value == 0) return std::nullopt;
-    return value;
   }
 
   // Labels are display text for the Russian UI; keys stay in the protocol.
@@ -642,10 +819,6 @@ export namespace Dreamsleeve::Host::Bridge
     return std::string{value};
   }
 
-  // parse.ts drops an event whose error exceeds 512 UTF-16 units; a UTF-8 byte
-  // bound is never looser, and the cut stays on a code point boundary.
-  constexpr std::size_t MaxErrorBytes = 512;
-
   std::string ClipError(std::string_view value)
   {
     return std::string{Dreamsleeve::Utils::Text::ClipBytes(value, MaxErrorBytes)};
@@ -678,26 +851,19 @@ export namespace Dreamsleeve::Host::Bridge
   // The UI description of a channel entity; the UI's "all" view is its own aggregate.
   UiChannel ToUiChannel(Domain::ChatChannelId id, Domain::ChatChannelKind kind)
   {
-    if (kind == Domain::ChatChannelKind::System) return {Id(id), "system", "Объявления", false};
-    return {Id(id), "global", "Общий", true};
+    if (kind == Domain::ChatChannelKind::System) return {Id(id), std::string{ChannelKindNames[1]}, "Объявления", false};
+    return {Id(id), std::string{ChannelKindNames[0]}, "Общий", true};
   }
 
   // An unknown source is shown with the least trust.
   std::string_view OriginName(Domain::AnnouncementSource source)
   {
-    using Source = Domain::AnnouncementSource;
-    if (source == Source::Server) return "server";
-    if (source == Source::TrustedClient) return "trustedClient";
-    return "thirdParty";
+    return NameOf(OriginNames, source, Domain::AnnouncementSource::Server, OriginNames.back());
   }
 
   std::string_view KindName(Domain::AnnouncementKind kind)
   {
-    using Kind = Domain::AnnouncementKind;
-    if (kind == Kind::Event) return "event";
-    if (kind == Kind::Admin) return "admin";
-    if (kind == Kind::Periodic) return "periodic";
-    return "announcement";
+    return NameOf(KindNames, kind, Domain::AnnouncementKind::Announcement, KindNames.front());
   }
 
   // A mod label is already one checked line (by the server, or by the plugin
@@ -798,7 +964,7 @@ export namespace Dreamsleeve::Host::Bridge
 
   std::string_view MarkKindName(Domain::GroundMarkKind kind)
   {
-    return kind == Domain::GroundMarkKind::Death ? "death" : "note";
+    return NameOf(MarkKindNames, kind, Domain::GroundMarkKind::Note, MarkKindNames.front());
   }
 
   // A mark for the UI lists; a hidden own text shows the placeholder, a
@@ -857,84 +1023,37 @@ export namespace Dreamsleeve::Host::Bridge
     return result;
   }
 
-  std::string_view PhaseName(const ClientStatus& status)
+  // The UI phase: a stopped application is disconnected, and a disconnected
+  // one that signs in is authenticating.
+  ConnectionPhase PhaseOf(const ClientStatus& status)
   {
-    if (status.stopped) return "disconnected";
+    if (status.stopped) return ConnectionPhase::Disconnected;
     switch (status.phase)
     {
       case SessionPhase::Disconnected:
-        return status.authenticating ? "authenticating" : "disconnected";
+        return status.authenticating ? ConnectionPhase::Authenticating : ConnectionPhase::Disconnected;
       case SessionPhase::Connecting:
-        return "connecting";
+        return ConnectionPhase::Connecting;
       case SessionPhase::Opening:
-        return "opening";
+        return ConnectionPhase::Opening;
       case SessionPhase::Ready:
-        return "connected";
+        return ConnectionPhase::Connected;
       case SessionPhase::Disconnecting:
-        return "disconnecting";
+        return ConnectionPhase::Disconnecting;
       case SessionPhase::Faulted:
-        return "faulted";
+        return ConnectionPhase::Faulted;
     }
-    return "disconnected";
+    return ConnectionPhase::Disconnected;
   }
 
-  std::string_view OperationName(AuthOperation operation)
+  std::string_view PhaseName(const ClientStatus& status)
   {
-    switch (operation)
-    {
-      case AuthOperation::PasswordLogin:
-        return "passwordLogin";
-      case AuthOperation::Resume:
-        return "resume";
-      case AuthOperation::SignOut:
-        return "signOut";
-      case AuthOperation::ForgetSavedLogin:
-        return "forgetSavedLogin";
-      case AuthOperation::ResetPassword:
-        return "resetPassword";
-      case AuthOperation::None:
-        break;
-    }
-    return "none";
-  }
-
-  std::string_view FailureName(ClientAuth::FailureCode code)
-  {
-    using ClientAuth::FailureCode;
-    switch (code)
-    {
-      case FailureCode::InvalidCredentials:
-        return "invalidCredentials";
-      case FailureCode::UsernameTaken:
-        return "usernameTaken";
-      case FailureCode::InvalidRequest:
-        return "invalidRequest";
-      case FailureCode::RegistrationDisabled:
-        return "registrationDisabled";
-      case FailureCode::Busy:
-        return "busy";
-      case FailureCode::Unavailable:
-        return "unavailable";
-      case FailureCode::InvalidResponse:
-        return "invalidResponse";
-      case FailureCode::CredentialStorage:
-        return "credentialStorage";
-      case FailureCode::Canceled:
-        return "canceled";
-      case FailureCode::NameNotAllowed:
-        return "nameNotAllowed";
-      case FailureCode::None:
-        break;
-    }
-    return "none";
+    return NameOf(PhaseNames, PhaseOf(status), ConnectionPhase::Disconnected, PhaseNames.front());
   }
 
   ConnectionEvent ConnectionState(const ClientStatus& status)
   {
-    ConnectionEvent event;
-    event.phase     = PhaseName(status);
-    event.connected = event.phase == "connected";
-    return event;
+    return {.connected = PhaseOf(status) == ConnectionPhase::Connected, .phase = std::string{PhaseName(status)}};
   }
 
   // Streamer mode hides the saved account name as well.
@@ -942,8 +1061,8 @@ export namespace Dreamsleeve::Host::Bridge
   {
     AuthEvent event;
     event.authenticating = status.authenticating;
-    event.operation      = OperationName(status.authOperation);
-    event.failure        = FailureName(status.authFailure);
+    event.operation      = NameOf(OperationNames, status.authOperation, AuthOperation::None, OperationNames.front());
+    event.failure        = NameOf(FailureNames, status.authFailure, ClientAuth::FailureCode::None, FailureNames.front());
     event.error          = ClipError(status.error);
     event.savedLogin     = status.savedLogin;
     event.savedUsername  = streamerMode ? std::string{} : status.savedUsername;

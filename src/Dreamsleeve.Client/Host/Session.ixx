@@ -19,8 +19,8 @@ public:
 
     struct Frame
     {
-      std::vector<std::string> events;  // Encoded JSON, in delivery order.
-      std::vector<std::string> notes;   // Diagnostics for the host logger.
+      std::vector<Bridge::HostEvent> events;  // In delivery order; the adapter encodes them.
+      std::vector<std::string>       notes;   // Diagnostics for the host logger.
       // Live publications of other players in the global channel, confirmed by
       // the server in this Process call: never snapshot history, replays or
       // announcements. Consumed by the firefly chat bubbles.
@@ -251,15 +251,15 @@ public:
       return event;
     }
 
-    std::expected<void, std::string> SendChat(ClientExchange& exchange, const Bridge::UiCommand& command)
+    std::expected<void, std::string> SendChat(ClientExchange& exchange, const Bridge::Commands::SendChat& command)
     {
       // Without a session the missing connection is the reason, not the channel.
-      const auto channel = Bridge::ParseId(command.channelId);
-      const auto found   = channel ? channels.find(*channel) : channels.end();
+      const auto channel = command.channelId.value;
+      const auto found   = channels.find(channel);
       if (Ready() && (found == channels.end() || found->second != Domain::ChatChannelKind::Global))
         return std::unexpected{"Канал недоступен"};
       return Posted(Submit(exchange, PendingChat{command.requestId}, [&](std::uint64_t id) {
-        return Dreamsleeve::Client::SendChat{id, *channel, command.text};
+        return Dreamsleeve::Client::SendChat{id, channel, command.text};
       }));
     }
 
@@ -563,13 +563,9 @@ private:
       ownMarksChanged = true;
     }
 
-    template <class Event>
-    void Emit(Frame& frame, const Event& event)
+    static void Emit(Frame& frame, Bridge::HostEvent event)
     {
-      if (auto json = Bridge::Encode(event))
-        frame.events.push_back(std::move(*json));
-      else
-        frame.notes.push_back(json.error());
+      frame.events.push_back(std::move(event));
     }
 
     std::vector<Bridge::UiPlayer> PlayerList(const UiSettings& settings)
@@ -797,7 +793,7 @@ private:
     {
       const bool first = !lastStatus;
       const bool connectionChanged =
-        first || Bridge::PhaseName(*lastStatus) != Bridge::PhaseName(status) || lastStatus->serverName != status.serverName;
+        first || Bridge::PhaseOf(*lastStatus) != Bridge::PhaseOf(status) || lastStatus->serverName != status.serverName;
       const bool authChanged = first || lastStatus->authSequence != status.authSequence ||
                                lastStatus->authenticating != status.authenticating || lastStatus->authOperation != status.authOperation ||
                                lastStatus->authFailure != status.authFailure || lastStatus->error != status.error ||

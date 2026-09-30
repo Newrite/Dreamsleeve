@@ -7,7 +7,7 @@ export module Dreamsleeve.PrismaUI;
 
 import std;
 import Dreamsleeve.Runtime;
-import Dreamsleeve.Host.Bridge;
+import Dreamsleeve.Host.Commands;
 import Dreamsleeve.Events;
 import Dreamsleeve.Game.Input;
 import Dreamsleeve.Game.GroundMarks;
@@ -119,21 +119,18 @@ namespace PrismaUI
     state.api->InteropCall(state.view, Receiver, json.c_str());
   }
 
-  // The overload set of Bridge::Encode is closed: only bridge event types encode.
-  template <class Event>
-  requires requires(const Event& event) { Bridge::Encode(event); }
-  void Send(const Event& event)
+  void Send(const Bridge::HostEvent& event)
   {
     if (auto json = Bridge::Encode(event))
       Send(*json);
     else
-      logger::error("{}", json.error());
+      logger::error("{}: {}", Bridge::TypeOf(event), json.error());
   }
 
-  export void Dispatch(const std::vector<std::string>& events)
+  export void Dispatch(const std::vector<Bridge::HostEvent>& events)
   {
-    for (const auto& json : events)
-      Send(json);
+    for (const auto& event : events)
+      Send(event);
   }
 
   export void Deactivate()
@@ -142,7 +139,7 @@ namespace PrismaUI
     if (!state.active) return;
     SetActive(false);
     if (state.api && state.view) state.api->Unfocus(state.view);
-    Send(Bridge::SimpleEvent{"deactivate"});
+    Send(Bridge::DeactivateEvent{});
   }
 
   // Full visibility policy: user opt-out, hiding menus, view readiness.
@@ -154,13 +151,13 @@ namespace PrismaUI
     {
       if (state.nativeHidden) state.api->Show(state.view);
       state.nativeHidden = false;
-      if (state.jsHidden) Send(Bridge::SimpleEvent{"show"});
+      if (state.jsHidden) Send(Bridge::ShowEvent{});
       state.jsHidden = false;
       return;
     }
 
     Deactivate();
-    if (!state.jsHidden) Send(Bridge::SimpleEvent{"hide"});
+    if (!state.jsHidden) Send(Bridge::HideEvent{});
     state.jsHidden = true;
     if (!state.nativeHidden) state.api->Hide(state.view);
     state.nativeHidden = true;
@@ -206,7 +203,7 @@ namespace PrismaUI
     }
     SetActive(true);
     state.focusGrace = Clock::now() + FocusGrace;
-    Send(Bridge::SimpleEvent{"activate"});
+    Send(Bridge::ActivateEvent{});
   }
 
   // The game can drop Prisma focus on its own (Escape closes the focus menu):
@@ -218,162 +215,17 @@ namespace PrismaUI
     if (!state.api->HasFocus(state.view))
     {
       SetActive(false);
-      Send(Bridge::SimpleEvent{"deactivate"});
+      Send(Bridge::DeactivateEvent{});
     }
   }
 
-  void SendAuthError(std::string error)
+  // The character's spot for a ground note; empty outside a ready world.
+  std::optional<Dreamsleeve::Host::NoteSpot> CurrentNoteSpot()
   {
-    auto& runtime = Runtime::Get();
-    auto  event   = Bridge::AuthState(runtime.app->Status(), runtime.ui.ui.chat.streamerMode);
-    event.error   = std::move(error);
-    Send(event);
-  }
-
-  void HandleCommand(Bridge::UiCommand command)
-  {
-    auto& runtime = Runtime::Get();
-    if (!runtime.app) return;
-    auto& app  = *runtime.app;
-    auto& type = command.type;
-
-    if (type == "sendChat")
-    {
-      if (auto sent = runtime.session.SendChat(app.Exchange(), command); !sent)
-        Send(Bridge::SendResultEvent{.requestId = command.requestId, .error = sent.error()});
-      return;
-    }
-    if (type == "close")
-    {
-      Deactivate();
-      return;
-    }
-    if (type == "placeGroundNote")
-    {
-      // The note stands where the character stands now; without a ready
-      // world there is nowhere to put it.
-      std::expected<void, std::string> placed    = std::unexpected{"Персонаж не в игровом мире"};
-      const auto                       placement = GroundMarks::CurrentPlacement();
-      const auto                       gameDate  = GroundMarks::CurrentGameDate();
-      if (placement && gameDate)
-        placed = runtime.session.PlaceGroundNote(app.Exchange(), command.requestId, std::move(command.text), *placement, *gameDate);
-      if (!placed) Send(Bridge::MarkResultEvent{.requestId = command.requestId, .error = placed.error()});
-      return;
-    }
-    if (type == "removeGroundMark")
-    {
-      const auto                       markId  = Bridge::ParseId(command.markId);
-      std::expected<void, std::string> removed = std::unexpected{"Некорректный идентификатор метки"};
-      if (markId) removed = runtime.session.RemoveGroundMark(app.Exchange(), command.requestId, *markId);
-      if (!removed) Send(Bridge::MarkResultEvent{.requestId = command.requestId, .error = removed.error()});
-      return;
-    }
-    if (type == "ignore" || type == "unignore")
-    {
-      const auto id = Bridge::ParseId(command.playerId);
-      if (!id) return;
-      auto& session = runtime.session;
-      if (type == "ignore" ? session.Ignore(*id) : session.Unignore(*id))
-      {
-        // A visible bubble goes at once; history is re-projected without it.
-        if (type == "ignore") runtime.bubbles.Erase(*id);
-        if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
-        session.Refresh();
-      }
-      Send(session.IgnoredList(runtime.ui.ui.chat));
-      return;
-    }
-    if (type == "displaySettings")
-    {
-      // Applied and saved at once: every surface switches without reconnecting.
-      auto& chat = runtime.ui.ui.chat;
-      ApplyInstant(chat, *command.settings);
-      // Visible bubbles were admitted under the old filter.
-      runtime.bubbles.Clear();
-      if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
-      runtime.session.Refresh();
-      Send(runtime.session.IgnoredList(chat));
-      return;
-    }
-    if (type == "setIdentityVisibility")
-    {
-      // A ready session asks the server; with no session only the choice for
-      // the next one changes. While a session is being opened it waits.
-      auto&      chat    = runtime.ui.ui.chat;
-      const auto status  = app.Status();
-      const bool idle    = status.Idle();
-      auto&      session = runtime.session;
-      if (session.Ready())
-      {
-        if (auto posted = session.SetIdentityVisibility(app.Exchange(), Bridge::HidingOf(command.hiding)); !posted)
-          session.SetIdentityError(posted.error());
-      }
-      else if (idle)
-      {
-        runtime.ui.ui.hideIdentity = command.hiding;
-        app.Exchange().SetHideIdentity(Bridge::HidingOf(command.hiding));
-        if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
-        session.SetIdentityError({});
-      }
-      else
-        session.SetIdentityError("Дождитесь подключения к серверу");
-      Send(session.Identity(Bridge::HidingOf(runtime.ui.ui.hideIdentity)));
-      return;
-    }
-    if (type == "changeDisplayName")
-    {
-      auto& session = runtime.session;
-      if (auto posted = session.ChangeDisplayName(app.Exchange(), command.displayName); !posted) session.SetNameError(posted.error());
-      Send(session.NameEvent());
-      return;
-    }
-    if (type == "saveSettings")
-    {
-      const bool names   = InstantChanged(runtime.ui.ui.chat, *command.settings);
-      runtime.ui.ui.chat = *command.settings;
-      if (names)
-      {
-        runtime.session.Refresh();
-        Send(runtime.session.IgnoredList(runtime.ui.ui.chat));
-      }
-      Events::SetActivationKey(runtime.ui.ui.chat.activationKey);
-      auto                        saved = Runtime::SaveUi();
-      Bridge::SettingsResultEvent result{.revision = command.revision};
-      if (!saved) result.error = saved.error();
-      Send(result);
-      return;
-    }
-
-    std::expected<void, std::string> admitted;
-    if (type == "signIn")
-    {
-      std::optional<std::string> registerName;
-      if (!command.displayName.empty()) registerName = command.displayName;
-      admitted = app.Connect({command.username, std::move(command.password)}, std::move(registerName), command.remember);
-    }
-    else if (type == "signInSaved")
-    {
-      runtime.manualDisconnect = false;
-      admitted                 = app.ConnectSaved();
-    }
-    else if (type == "signOut")
-    {
-      runtime.manualDisconnect = true;
-      admitted                 = app.SignOut();
-    }
-    else if (type == "forgetLogin")
-    {
-      runtime.manualDisconnect = true;
-      admitted                 = app.ForgetSavedLogin();
-    }
-    else if (type == "disconnect")
-    {
-      runtime.manualDisconnect = true;
-      app.Disconnect();
-    }
-    if (type == "signIn") runtime.manualDisconnect = false;
-    std::ranges::fill(command.password, '\0');
-    if (!admitted) SendAuthError(admitted.error());
+    auto placement = GroundMarks::CurrentPlacement();
+    auto gameDate  = GroundMarks::CurrentGameDate();
+    if (!placement || !gameDate) return std::nullopt;
+    return Dreamsleeve::Host::NoteSpot{*placement, *gameDate};
   }
 
   void OnCommand(const char* json)
@@ -385,7 +237,20 @@ namespace PrismaUI
       logger::warn("UI command rejected: {}", command.error());
       return;
     }
-    HandleCommand(std::move(*command));
+    auto& runtime = Runtime::Get();
+    if (!runtime.app) return;
+    Dreamsleeve::Host::CommandContext context{
+        .exchange         = runtime.app->Exchange(),
+        .session          = runtime.session,
+        .ui               = runtime.ui,
+        .bubbles          = runtime.bubbles,
+        .manualDisconnect = runtime.manualDisconnect,
+        .ports            = {.saveUi = Runtime::SaveUi, .close = Deactivate, .activationKey = Events::SetActivationKey, .noteSpot = CurrentNoteSpot}
+    };
+    const auto output = Dreamsleeve::Host::Handle(context, std::move(*command));
+    for (const auto& note : output.notes)
+      logger::warn("{}", note);
+    Dispatch(output.events);
   }
 
   void OnConsole(PrismaView, PRISMA_UI_API::ConsoleMessageLevel level, const char* message)

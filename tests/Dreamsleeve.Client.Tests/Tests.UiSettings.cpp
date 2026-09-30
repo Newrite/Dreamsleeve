@@ -40,7 +40,7 @@ namespace
       return glz::write_json(value).value_or("\"\"");
   }
 
-  // The web UI's view of UiSettings, formatted as prettier formats it.
+  // The web UI's view of UiSettings.
   std::string SettingsModule()
   {
     const UiSettings defaults{};

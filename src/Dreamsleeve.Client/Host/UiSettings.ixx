@@ -323,10 +323,10 @@ export namespace Dreamsleeve::Host
 
   // A missing file is the ordinary first run and yields defaults. A present but
   // unreadable file is an error: the caller keeps its current values and reports it.
-  std::expected<UiFile, std::string> LoadUiFile(const std::filesystem::path& path, UiFile defaults = {})
+  std::expected<UiFile, std::string> LoadUiFile(const std::filesystem::path& path)
   {
     std::error_code probe;
-    if (!std::filesystem::exists(path, probe)) return defaults;
+    if (!std::filesystem::exists(path, probe)) return UiFile{};
 
     std::ifstream input{path, std::ios::binary | std::ios::ate};
     if (!input) return std::unexpected{"Cannot open UI settings"};
@@ -338,7 +338,7 @@ export namespace Dreamsleeve::Host
     input.seekg(0);
     if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read UI settings"};
 
-    UiFile file = std::move(defaults);
+    UiFile file;
     if (auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(file, source); !source.empty() && error)
       return std::unexpected{"Invalid UI TOML: " + glz::format_error(error, source)};
     if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};

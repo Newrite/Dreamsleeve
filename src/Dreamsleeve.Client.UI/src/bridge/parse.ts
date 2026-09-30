@@ -1,54 +1,44 @@
 import type { HostEvent } from "./types";
+import {
+  announcementKinds,
+  announcementOrigins,
+  authFailures,
+  authOperations,
+  channelKinds,
+  connectionPhases,
+  groundMarkKinds,
+  hidingModes,
+  maxError,
+  maxSnapshotRows,
+  maxText,
+} from "./bridge.generated";
 type ObjectValue = Record<string, unknown>;
 const object = (v: unknown): v is ObjectValue =>
   v !== null && typeof v === "object" && !Array.isArray(v);
 const text = (v: unknown): v is string => typeof v === "string";
+const flag = (v: unknown) => typeof v === "boolean";
 const finite = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+const time = (v: unknown) =>
+  finite(v) && Math.abs(v as number) <= 8640000000000000;
 const id = (v: unknown) => text(v) && v.length > 0 && v.length <= 128;
 const list = (v: unknown, check: (x: unknown) => boolean, limit: number) =>
   Array.isArray(v) && v.length <= limit && v.every(check);
 const label = (v: unknown) => text(v) && v.length <= 512;
-const phases = [
-  "disconnected",
-  "authenticating",
-  "connecting",
-  "opening",
-  "connected",
-  "disconnecting",
-  "faulted",
-];
-const operations = [
-  "none",
-  "passwordLogin",
-  "resume",
-  "signOut",
-  "forgetSavedLogin",
-  "resetPassword",
-];
-const failures = [
-  "none",
-  "invalidCredentials",
-  "usernameTaken",
-  "invalidRequest",
-  "registrationDisabled",
-  "busy",
-  "unavailable",
-  "invalidResponse",
-  "credentialStorage",
-  "canceled",
-  "nameNotAllowed",
-];
-const origins = ["server", "trustedClient", "thirdParty"];
-const kinds = ["announcement", "event", "admin", "periodic"];
+const error = (v: unknown) => text(v) && v.length <= maxError;
+const body = (v: unknown) => text(v) && v.length <= maxText;
+const oneOf = (values: readonly string[]) => (v: unknown) =>
+  text(v) && values.includes(v);
+const optional = (check: (x: unknown) => boolean) => (v: unknown) =>
+  v === undefined || check(v);
 // A mod label as received: short, one line, shown as plain text.
 const signature = (v: unknown) =>
   text(v) && v.length <= 128 && !/[\u0000-\u001f\u007f-\u009f]/.test(v);
 function announcement(v: unknown): boolean {
   return (
     object(v) &&
-    origins.includes(String(v.origin)) &&
-    kinds.includes(String(v.kind)) &&
-    (v.signature === undefined || signature(v.signature))
+    oneOf(announcementOrigins)(v.origin) &&
+    oneOf(announcementKinds)(v.kind) &&
+    optional(signature)(v.signature)
   );
 }
 function actorValue(v: unknown): boolean {
@@ -65,13 +55,13 @@ function player(v: unknown): boolean {
     object(v) &&
     id(v.id) &&
     text(v.name) &&
-    (v.alias === undefined || text(v.alias)) &&
-    typeof v.inCharacter === "boolean" &&
+    optional(text)(v.alias) &&
+    flag(v.inCharacter) &&
     text(v.displayName) &&
     text(v.username) &&
-    (v.character === undefined || text(v.character)) &&
-    (v.location === undefined || text(v.location)) &&
-    (v.level === undefined || finite(v.level)) &&
+    optional(text)(v.character) &&
+    optional(text)(v.location) &&
+    optional(finite)(v.level) &&
     [
       "zone",
       "race",
@@ -81,13 +71,11 @@ function player(v: unknown): boolean {
       "activityTarget",
       "lockDifficulty",
       "menu",
-    ].every((key) => v[key] === undefined || text(v[key])) &&
-    (v.interior === undefined || typeof v.interior === "boolean") &&
-    (v.gameStartedAt === undefined ||
-      (finite(v.gameStartedAt) &&
-        Math.abs(v.gameStartedAt as number) <= 8640000000000000)) &&
-    (v.actorValues === undefined || list(v.actorValues, actorValue, 64)) &&
-    (v.pseudonymous === undefined || typeof v.pseudonymous === "boolean") &&
+    ].every((key) => optional(text)(v[key])) &&
+    optional(flag)(v.interior) &&
+    optional(time)(v.gameStartedAt) &&
+    optional((x) => list(x, actorValue, 64))(v.actorValues) &&
+    optional(flag)(v.pseudonymous) &&
     // The server sends no username or character of a pseudonymous player.
     (!v.pseudonymous || (v.username === "" && v.character === undefined))
   );
@@ -96,18 +84,16 @@ function groundMark(v: unknown): boolean {
   return (
     object(v) &&
     id(v.id) &&
-    ["note", "death"].includes(String(v.kind)) &&
-    text(v.text) &&
-    v.text.length <= 16000 &&
-    finite(v.time) &&
-    Math.abs(v.time as number) <= 8640000000000000 &&
-    (v.author === undefined || label(v.author)) &&
-    (v.character === undefined || label(v.character)) &&
+    oneOf(groundMarkKinds)(v.kind) &&
+    body(v.text) &&
+    time(v.time) &&
+    optional(label)(v.author) &&
+    optional(label)(v.character) &&
     label(v.location) &&
     finite(v.x) &&
     finite(v.y) &&
     finite(v.z) &&
-    (v.gameDate === undefined || label(v.gameDate))
+    optional(label)(v.gameDate)
   );
 }
 function channel(v: unknown): boolean {
@@ -115,10 +101,8 @@ function channel(v: unknown): boolean {
     object(v) &&
     id(v.id) &&
     text(v.name) &&
-    typeof v.writable === "boolean" &&
-    ["global", "local", "party", "guild", "whisper", "system"].includes(
-      String(v.kind),
-    ) &&
+    flag(v.writable) &&
+    oneOf(channelKinds)(v.kind) &&
     (v.kind !== "system" || !v.writable)
   );
 }
@@ -127,129 +111,92 @@ function message(v: unknown): boolean {
     object(v) &&
     id(v.id) &&
     id(v.channelId) &&
-    text(v.text) &&
-    v.text.length <= 16000 &&
-    finite(v.time) &&
-    Math.abs(v.time as number) <= 8640000000000000 &&
-    (v.filtered === undefined || typeof v.filtered === "boolean") &&
+    body(v.text) &&
+    time(v.time) &&
+    optional(flag)(v.filtered) &&
     ((v.source === "system" &&
       announcement(v.announcement) &&
-      (v.author === undefined || player(v.author))) ||
+      optional(player)(v.author)) ||
       (v.source === "player" &&
         v.announcement === undefined &&
         player(v.author)))
   );
 }
+const marks = (limit: number) => (v: unknown) => list(v, groundMark, limit);
+const bare = () => true;
+// One check per host event: a new event type does not compile until it has one.
+const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
+  snapshot: (v) =>
+    list(v.channels, channel, 128) &&
+    list(
+      v.messages,
+      message,
+      maxSnapshotRows * (v.channels as unknown[]).length,
+    ) &&
+    list(v.players, player, 4096) &&
+    id(v.selfId) &&
+    label(v.serverName) &&
+    optional(object)(v.settings) &&
+    optional(flag)(v.refresh) &&
+    optional(flag)(v.groundMarksSupported) &&
+    optional(marks(256))(v.groundMarks) &&
+    optional(marks(4096))(v.nearbyMarks),
+  messages: (v) => list(v.messages, message, maxSnapshotRows),
+  players: (v) => list(v.players, player, 4096),
+  connection: (v) =>
+    flag(v.connected) &&
+    optional(oneOf(connectionPhases))(v.phase) &&
+    (v.phase === undefined || v.connected === (v.phase === "connected")),
+  ignored: (v) =>
+    list(v.players, (p) => object(p) && id(p.id) && text(p.name), 1000),
+  sendResult: (v) =>
+    id(v.requestId) &&
+    (v.error === undefined
+      ? id(v.messageId)
+      : text(v.error) && v.messageId === undefined),
+  announcementResult: (v) =>
+    id(v.channelId) && signature(v.source) && body(v.text) && error(v.error),
+  settingsResult: (v) =>
+    Number.isSafeInteger(v.revision) && optional(text)(v.error),
+  auth: (v) =>
+    flag(v.authenticating) &&
+    oneOf(authOperations)(v.operation) &&
+    oneOf(authFailures)(v.failure) &&
+    error(v.error) &&
+    flag(v.savedLogin) &&
+    label(v.savedUsername) &&
+    oneOf(connectionPhases)(v.phase),
+  settings: (v) => object(v.settings),
+  groundMarks: (v) => marks(256)(v.marks),
+  markResult: (v) =>
+    id(v.requestId) &&
+    optional(id)(v.markId) &&
+    optional(id)(v.evictedId) &&
+    optional(flag)(v.removed) &&
+    optional(error)(v.error) &&
+    (v.error === undefined) !== (v.markId === undefined && !v.removed),
+  nearbyMarks: (v) => marks(4096)(v.marks),
+  identity: (v) =>
+    oneOf(hidingModes)(v.mode) &&
+    flag(v.pending) &&
+    optional(label)(v.pseudonym) &&
+    optional(error)(v.error),
+  displayName: (v) =>
+    flag(v.pending) && optional(label)(v.changed) && optional(error)(v.error),
+  show: bare,
+  hide: bare,
+  activate: bare,
+  deactivate: bare,
+};
 export function parseHostEvent(source: string): HostEvent {
   if (source.length > 8 * 1024 * 1024)
     throw new Error("UI payload exceeds limit");
   const v: unknown = JSON.parse(source);
   if (!object(v)) throw new Error("Expected UI event");
-  let valid = false;
-  switch (v.type) {
-    case "snapshot":
-      valid =
-        list(v.channels, channel, 128) &&
-        // The host sends up to 500 lines of every channel.
-        list(v.messages, message, 500 * (v.channels as unknown[]).length) &&
-        list(v.players, player, 4096) &&
-        id(v.selfId) &&
-        text(v.serverName) &&
-        v.serverName.length <= 512 &&
-        (v.settings === undefined || object(v.settings)) &&
-        (v.refresh === undefined || typeof v.refresh === "boolean") &&
-        (v.groundMarksSupported === undefined ||
-          typeof v.groundMarksSupported === "boolean") &&
-        (v.groundMarks === undefined || list(v.groundMarks, groundMark, 256)) &&
-        (v.nearbyMarks === undefined || list(v.nearbyMarks, groundMark, 4096));
-      break;
-    case "groundMarks":
-      valid = list(v.marks, groundMark, 256);
-      break;
-    case "nearbyMarks":
-      valid = list(v.marks, groundMark, 4096);
-      break;
-    case "markResult":
-      valid =
-        id(v.requestId) &&
-        (v.markId === undefined || id(v.markId)) &&
-        (v.evictedId === undefined || id(v.evictedId)) &&
-        (v.removed === undefined || typeof v.removed === "boolean") &&
-        (v.error === undefined || label(v.error)) &&
-        (v.error === undefined) !== (v.markId === undefined && !v.removed);
-      break;
-    case "identity":
-      valid =
-        ["off", "everywhere", "exceptGroundMarks"].includes(String(v.mode)) &&
-        typeof v.pending === "boolean" &&
-        (v.pseudonym === undefined || label(v.pseudonym)) &&
-        (v.error === undefined || label(v.error));
-      break;
-    case "displayName":
-      valid =
-        typeof v.pending === "boolean" &&
-        (v.changed === undefined || label(v.changed)) &&
-        (v.error === undefined || label(v.error));
-      break;
-    case "ignored":
-      valid = list(
-        v.players,
-        (p) => object(p) && id(p.id) && text(p.name),
-        1000,
-      );
-      break;
-    case "messages":
-      valid = list(v.messages, message, 500);
-      break;
-    case "players":
-      valid = list(v.players, player, 4096);
-      break;
-    case "show":
-    case "hide":
-    case "activate":
-    case "deactivate":
-      valid = true;
-      break;
-    case "connection":
-      valid =
-        typeof v.connected === "boolean" &&
-        (v.phase === undefined || phases.includes(String(v.phase))) &&
-        (v.phase === undefined || v.connected === (v.phase === "connected"));
-      break;
-    case "auth":
-      valid =
-        typeof v.authenticating === "boolean" &&
-        operations.includes(String(v.operation)) &&
-        failures.includes(String(v.failure)) &&
-        label(v.error) &&
-        typeof v.savedLogin === "boolean" &&
-        label(v.savedUsername) &&
-        phases.includes(String(v.phase));
-      break;
-    case "sendResult":
-      valid =
-        id(v.requestId) &&
-        (v.error === undefined
-          ? id(v.messageId)
-          : text(v.error) && v.messageId === undefined);
-      break;
-    case "settingsResult":
-      valid =
-        Number.isSafeInteger(v.revision) &&
-        (v.error === undefined || text(v.error));
-      break;
-    case "settings":
-      valid = object(v.settings);
-      break;
-    case "announcementResult":
-      valid =
-        id(v.channelId) &&
-        signature(v.source) &&
-        text(v.text) &&
-        v.text.length <= 16000 &&
-        label(v.error);
-      break;
-  }
-  if (!valid) throw new Error("Invalid UI event");
+  const type = String(v.type);
+  const check = Object.hasOwn(events, type)
+    ? events[type as HostEvent["type"]]
+    : undefined;
+  if (!check || !check(v)) throw new Error("Invalid UI event");
   return v as unknown as HostEvent;
 }

@@ -268,7 +268,7 @@ export namespace Runtime
       return false;
     }
 
-    if (auto ui = Host::LoadUiFile(state.uiPath, state.ui))
+    if (auto ui = Host::LoadUiFile(state.uiPath))
       state.ui = *ui;
     else
       logger::warn("UI settings ignored: {}", ui.error());

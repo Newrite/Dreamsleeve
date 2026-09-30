@@ -1,0 +1,4 @@
+# Written by the native tests (bridge.generated.ts, settings.generated.ts, contract/events.json)
+# and by tests/contract.test.ts (contract/commands.json): compared byte for byte.
+src/bridge/*.generated.ts
+tests/contract/

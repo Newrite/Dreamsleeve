@@ -64,9 +64,6 @@ export const nearbyMarks: GroundMark[] = [
 export const SYSTEM_CHANNEL = "5";
 export const channels: Channel[] = [
   { id: "1", kind: "global", name: "Общий", writable: true },
-  { id: "2", kind: "party", name: "Группа", writable: true },
-  { id: "3", kind: "guild", name: "Гильдия", writable: true },
-  { id: "4", kind: "whisper", name: "Личные", writable: true },
   { id: SYSTEM_CHANNEL, kind: "system", name: "Объявления", writable: false },
 ];
 export const players: Player[] = [

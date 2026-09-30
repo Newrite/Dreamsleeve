@@ -22,10 +22,10 @@
 | `Game/Fireflies.ixx` | Placed reference на каждого видимого игрока из `MovementView` |
 | `Game/GroundMarks.ixx` | Метки на земле: отбор ближайших из снимка Core, статики со снапом на пол, подписи, отправка `ReportDeath` один раз на смерть |
 | `Game/Input.ixx` | Состояние захвата клавиатуры и фильтрация цепочки `InputEvent` до всех sinks; адресов не содержит |
-| `UI/PrismaUI.ixx` | View, listener, доставка событий, focus/visibility |
+| `UI/PrismaUI.ixx` | View, listener, разбор команды и передача её `Host::Handle`, доставка событий, focus/visibility |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
 | `API/ModApi.ixx`, `API/DreamsleeveAPI.h` | API для других модов: интерфейс `IVDreamsleeve1` через экспорт `RequestPluginAPI` из `ModApi.ixx` (как PrismaUI и TrueFlasksNG), Papyrus `DreamsleeveClient`, callbacks итогов объявлений ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)) |
-| `Host/Bridge.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI, TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры, типы запроса и итога объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
+| `Host/Bridge.ixx`, `Host/Commands.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI (варианты команд и событий), исполнение команд UI через порты плагина (`CommandPorts`: запись `ui.toml`, выход из фокуса, клавиша активации, место персонажа для заметки), TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, политика захвата клавиатуры, типы запроса и итога объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
 
 `Runtime::Get()` хранит единственный экземпляр приложения; getter не перемещает
 владение (прежний вариант возвращал `std::move` статического `unique_ptr` и

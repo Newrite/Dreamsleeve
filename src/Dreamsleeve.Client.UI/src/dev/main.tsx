@@ -422,6 +422,7 @@ function command(c: Command) {
     emitAuth({}, "disconnected");
     return true;
   }
+  if (c.type !== "sendChat") return c satisfies never;
   const rejected = rejectNext;
   rejectNext = false;
   setTimeout(() => {

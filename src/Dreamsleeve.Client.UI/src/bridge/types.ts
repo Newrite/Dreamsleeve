@@ -1,33 +1,22 @@
 import type { Settings } from "./settings.generated";
+import type {
+  announcementKinds,
+  announcementOrigins,
+  authFailures,
+  authOperations,
+  channelKinds,
+  commandTypes,
+  connectionPhases,
+  eventTypes,
+  groundMarkKinds,
+  hidingModes,
+} from "./bridge.generated";
 export type { Settings };
 export type Id = string;
-export type ConnectionPhase =
-  | "disconnected"
-  | "authenticating"
-  | "connecting"
-  | "opening"
-  | "connected"
-  | "disconnecting"
-  | "faulted";
-export type AuthOperation =
-  | "none"
-  | "passwordLogin"
-  | "resume"
-  | "signOut"
-  | "forgetSavedLogin"
-  | "resetPassword";
-export type AuthFailure =
-  | "none"
-  | "invalidCredentials"
-  | "usernameTaken"
-  | "invalidRequest"
-  | "registrationDisabled"
-  | "busy"
-  | "unavailable"
-  | "invalidResponse"
-  | "credentialStorage"
-  | "canceled"
-  | "nameNotAllowed";
+// The enum strings are the host's (Host/Bridge.ixx, bridge.generated.ts).
+export type ConnectionPhase = (typeof connectionPhases)[number];
+export type AuthOperation = (typeof authOperations)[number];
+export type AuthFailure = (typeof authFailures)[number];
 // Typed authentication state; no password or token ever crosses the bridge.
 export interface AuthState {
   authenticating: boolean;
@@ -37,8 +26,7 @@ export interface AuthState {
   savedLogin: boolean;
   savedUsername: string;
 }
-export type ChannelKind =
-  "global" | "local" | "party" | "guild" | "whisper" | "system";
+export type ChannelKind = (typeof channelKinds)[number];
 export interface Channel {
   id: Id;
   kind: ChannelKind;
@@ -80,8 +68,8 @@ export interface Player {
 }
 // The server assigns the origin. A third-party signature is declared by the
 // mod itself and does not raise trust; it is shown as received, as plain text.
-export type AnnouncementOrigin = "server" | "trustedClient" | "thirdParty";
-export type AnnouncementKind = "announcement" | "event" | "admin" | "periodic";
+export type AnnouncementOrigin = (typeof announcementOrigins)[number];
+export type AnnouncementKind = (typeof announcementKinds)[number];
 export interface Announcement {
   origin: AnnouncementOrigin;
   kind: AnnouncementKind;
@@ -103,7 +91,7 @@ export type Message = {
 );
 // off: the names are shown; everywhere: online, fireflies, chat and ground
 // marks; exceptGroundMarks: ground marks keep the real profile.
-export type HideIdentity = "off" | "everywhere" | "exceptGroundMarks";
+export type HideIdentity = (typeof hidingModes)[number];
 // "Hide my name from other players" as the host reports it: mode is the
 // choice (the requested one while pending), pending waits for the server,
 // pseudonym is what the others see now, error the last refusal.
@@ -124,7 +112,7 @@ export interface DisplayNameState {
 // marks the server shows nearby. `author` is the host-resolved name of a
 // nearby mark, `character` the snapshot at placement (absent in streamer
 // mode), `location` the WRLD/CELL key and x/y/z the position in game units.
-export type GroundMarkKind = "note" | "death";
+export type GroundMarkKind = (typeof groundMarkKinds)[number];
 export interface GroundMark {
   id: Id;
   kind: GroundMarkKind;
@@ -224,3 +212,13 @@ export type HostEvent =
       error: string;
     };
 export type Send = (command: Command) => boolean;
+// The unions above name exactly the host's events and commands: a type added
+// on one side only fails to compile.
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Assert<T extends true> = T;
+export type EventTypesMatch = Assert<
+  Same<HostEvent["type"], (typeof eventTypes)[number]>
+>;
+export type CommandTypesMatch = Assert<
+  Same<Command["type"], (typeof commandTypes)[number]>
+>;

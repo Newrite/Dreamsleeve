@@ -5,6 +5,8 @@ import Dreamsleeve.Host.Session;
 import Dreamsleeve.Host.Bubbles;
 import Dreamsleeve.Client.Model;
 
+#include "Bridge.h"
+
 namespace
 {
 
@@ -61,19 +63,6 @@ namespace
     auto result = ClientExchange::TryCreate(8, 8);
     REQUIRE(result);
     return std::move(*result);
-  }
-
-  // Minimal JSON view for assertions; the UI parser is the real contract owner.
-  glz::generic Parse(const std::string& json)
-  {
-    glz::generic value;
-    REQUIRE_FALSE(glz::read_json(value, json));
-    return value;
-  }
-
-  std::string Type(const std::string& json)
-  {
-    return Parse(json)["type"].get<std::string>();
   }
 
   ClientOutput Drain(ClientExchange& exchange, ClientModel& model, SessionPhase phase, std::string_view server = "Tamriel")
@@ -141,32 +130,6 @@ TEST_CASE("UI settings round trip through TOML with normalization and atomic rep
     output << "version = 2\n";
   }
   CHECK_FALSE(LoadUiFile(file.path));
-}
-
-TEST_CASE("Older UI files inherit name preferences from client configuration")
-{
-  TempPath file;
-  UiFile   seed;
-  seed.ui.chat.showFireflyNames    = false;
-  seed.ui.chat.fireflyNameFontSize = 30;
-  auto missing                     = LoadUiFile(file.path, seed);
-  REQUIRE(missing);
-  CHECK(*missing == seed);
-  {
-    std::ofstream output{file.path};
-    output << "[ui.chat]\nfontSize = 20\nfireflyNameOffset = 75\n";
-  }
-  auto loaded = LoadUiFile(file.path, seed);
-  REQUIRE(loaded);
-  CHECK_FALSE(loaded->ui.chat.showFireflyNames);
-  CHECK(loaded->ui.chat.fireflyNameFontSize == 30);
-  CHECK(loaded->ui.chat.fireflyNameOffset == 75);
-  auto invalid                = loaded->ui.chat;
-  invalid.fireflyNameFontSize = 100;
-  invalid.fireflyNameOffset   = -1;
-  auto normalized             = Dreamsleeve::Host::Normalize(invalid);
-  CHECK(normalized.fireflyNameFontSize == 48);
-  CHECK(normalized.fireflyNameOffset == 0);
 }
 
 TEST_CASE("Bridge encodes players with string identifiers and safe text")
@@ -244,21 +207,26 @@ TEST_CASE("Session reports every authentication completion, even an identical re
   }
 }
 
-TEST_CASE("Bridge validates UI commands")
+TEST_CASE("Bridge parses each command into its own checked type")
 {
-  auto chat = Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"1","text":"Привет","extra":1})");
-  REQUIRE(chat);
-  CHECK(chat->text == "Привет");
+  const auto chat = CommandOf<Bridge::Commands::SendChat>(R"({"type":"sendChat","requestId":"3","channelId":"1","text":"Привет","extra":1})");
+  CHECK(chat.text == "Привет");
+  CHECK(chat.channelId.value == 1);
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"1","text":""})"));
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"0","text":"x"})"));
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"one","text":"x"})"));
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"jump"})"));
   CHECK_FALSE(Bridge::ParseCommand("not json"));
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"signIn","username":"a"})"));
-  auto save = Bridge::ParseCommand(R"({"type":"saveSettings","revision":4,"settings":{"scale":5,"theme":"skyrim"}})");
-  REQUIRE(save);
-  CHECK(save->settings->scale == 1.5);
-  CHECK(save->revision == 4);
-  CHECK(Bridge::ParseCommand(R"({"type":"close"})"));
-  CHECK(Bridge::ParseCommand(R"({"type":"signInSaved"})"));
+  // A registration name only when there is one.
+  CHECK_FALSE(CommandOf<Bridge::Commands::SignIn>(R"({"type":"signIn","username":"a","password":"b","displayName":""})").displayName);
+  const auto save = CommandOf<Bridge::Commands::SaveSettings>(R"({"type":"saveSettings","revision":4,"settings":{"scale":5,"theme":"skyrim"}})");
+  CHECK(save.settings.scale == 1.5);
+  CHECK(save.revision == 4);
+  CommandOf<Bridge::Commands::Close>(R"({"type":"close"})");
+  CommandOf<Bridge::Commands::SignInSaved>(R"({"type":"signInSaved"})");
+  CHECK(CommandOf<Bridge::Commands::Ignore>(R"({"type":"ignore","playerId":"18446744073709551615"})").playerId.value == 18446744073709551615ull);
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"unignore","playerId":"0"})"));
 }
 
 TEST_CASE("Session publishes snapshots only for a ready session and correlates chat requests")
@@ -277,7 +245,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   CHECK(Type(frame.events[2]) == "identity");
   CHECK_FALSE(session.Ready());
   CHECK(
-    session.SendChat(*exchange, Bridge::UiCommand{.type = "sendChat", .requestId = "u1", .channelId = "1", .text = "x"}).has_value() ==
+    session.SendChat(*exchange, Bridge::Commands::SendChat{.requestId = "u1", .channelId = {1}, .text = "x"}).has_value() ==
     false);
 
   REQUIRE(model.Apply(
@@ -303,7 +271,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   CHECK(session.OnlinePlayers().size() == 2);
 
   // Chat request: UI id maps to the Core RequestId and completes on confirmation.
-  REQUIRE(session.SendChat(*exchange, Bridge::UiCommand{.type = "sendChat", .requestId = "u1", .channelId = "1", .text = "hello"}));
+  REQUIRE(session.SendChat(*exchange, Bridge::Commands::SendChat{.requestId = "u1", .channelId = {1}, .text = "hello"}));
   std::vector<QueuedClientCommand> commands;
   exchange->TakeCommands(commands);
   REQUIRE(commands.size() == 1);
@@ -325,7 +293,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   CHECK(session.PendingChatCount() == 0);
 
   // Local failure with a foreign request id is ignored; a known one reports an error.
-  REQUIRE(session.SendChat(*exchange, Bridge::UiCommand{.type = "sendChat", .requestId = "u2", .channelId = "1", .text = "again"}));
+  REQUIRE(session.SendChat(*exchange, Bridge::Commands::SendChat{.requestId = "u2", .channelId = {1}, .text = "again"}));
   exchange->TakeCommands(commands);
   const auto second = std::get<SendChat>(commands[0].command).requestId;
   REQUIRE(exchange->PublishResult({model.Generation(), 999, CommandFailureCode::Busy}));
@@ -361,7 +329,7 @@ TEST_CASE("Session view reset requests a fresh snapshot and drops stale correlat
   Session::Frame frame;
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.snapshot);
-  REQUIRE(session.SendChat(*exchange, Bridge::UiCommand{.type = "sendChat", .requestId = "old", .channelId = "1", .text = "x"}));
+  REQUIRE(session.SendChat(*exchange, Bridge::Commands::SendChat{.requestId = "old", .channelId = {1}, .text = "x"}));
   std::vector<QueuedClientCommand> commands;
   exchange->TakeCommands(commands);
 
@@ -826,11 +794,11 @@ TEST_CASE("Streamer mode projects only pseudonyms; messages keep their character
   session.Process(*exchange, output, streamer, Domain::HiddenIdentity::None, frame);
   std::string all;
   for (const auto& event : frame.events)
-    all += event;
+    all += Json(event);
   Settle(session, *exchange, model, frame, streamer);
   REQUIRE(frame.snapshot);
   for (const auto& event : frame.events)
-    all += event;
+    all += Json(event);
   for (std::string_view real : {"Alice", "Seven", "user1", "user7", "Nerevar", "Lydia"})
     CHECK_MESSAGE(all.find(real) == std::string::npos, real);
   auto  hidden  = Parse(frame.events[0]);
@@ -840,10 +808,9 @@ TEST_CASE("Streamer mode projects only pseudonyms; messages keep their character
     const auto name = player["name"].get<std::string>();
     CHECK(player["alias"].get<std::string>() == name);
     CHECK(player["username"].get<std::string>().empty());
-    const auto id = Bridge::ParseId(player["id"].get<std::string>());
-    REQUIRE(id);
+    const auto id = std::stoull(player["id"].get<std::string>());
     // Nameplates ask the same resolver: identical label.
-    CHECK(session.PlayerNames().NameFor(*id, session.OnlinePlayers().at(*id).data, "Nerevar", streamer) == name);
+    CHECK(session.PlayerNames().NameFor(id, session.OnlinePlayers().at(id).data, "Nerevar", streamer) == name);
   }
 }
 
@@ -917,7 +884,7 @@ TEST_CASE("Session applies the text filter to history, deltas and bubbles alike"
   auto masked = Parse(frame.events[0]);
   CHECK(masked["messages"][0]["text"].get<std::string>() == "join ********* now");
   CHECK(masked["messages"][0]["filtered"].get<bool>());
-  CHECK(frame.events[0].find("spam") == std::string::npos);
+  CHECK(Json(frame.events[0]).find("spam") == std::string::npos);
 
   auto live    = MakeMessage(11, 1, "t.me/spam");
   live.flagged = {
@@ -955,7 +922,7 @@ TEST_CASE("Session applies the text filter to history, deltas and bubbles alike"
   REQUIRE(delta["messages"].get_array().size() == 2);
   CHECK(delta["messages"][0]["text"].get<std::string>() == std::string{Bridge::HiddenOwnText});
   CHECK(delta["messages"][1]["text"].get<std::string>() == "clean");
-  CHECK(frame.events[0].find("spam") == std::string::npos);
+  CHECK(Json(frame.events[0]).find("spam") == std::string::npos);
 }
 
 TEST_CASE("Older UI files keep bubble style, firefly height and ground mark defaults; colours are validated")
@@ -1219,14 +1186,13 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
 
 TEST_CASE("Bridge validates ground mark commands")
 {
-  auto note = Bridge::ParseCommand(R"({"type":"placeGroundNote","requestId":"5","text":"Осторожно, тролль"})");
-  REQUIRE(note);
-  CHECK(note->text == "Осторожно, тролль");
+  CHECK(CommandOf<Bridge::Commands::PlaceGroundNote>(R"({"type":"placeGroundNote","requestId":"5","text":"Осторожно, тролль"})").text ==
+        "Осторожно, тролль");
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"placeGroundNote","requestId":"5","text":""})"));
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"placeGroundNote","text":"x"})"));
-  auto removal = Bridge::ParseCommand(R"({"type":"removeGroundMark","requestId":"6","markId":"18446744073709551615"})");
-  REQUIRE(removal);
-  CHECK(Bridge::ParseId(removal->markId) == 18446744073709551615ull);
+  CHECK(
+    CommandOf<Bridge::Commands::RemoveGroundMark>(R"({"type":"removeGroundMark","requestId":"6","markId":"18446744073709551615"})").markId.value ==
+    18446744073709551615ull);
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"removeGroundMark","requestId":"6"})"));
   auto mark = Bridge::ToUiGroundMark(MakeMark(3, 1, Domain::GroundMarkKind::Death, "Wolf"), UiSettings{}, true);
   CHECK(mark.id == "3");
@@ -1324,7 +1290,7 @@ TEST_CASE("Pseudonymous players and authors reach the UI flagged and without rea
     else
       CHECK_FALSE(player["pseudonymous"].get<bool>());
   CHECK(found);
-  CHECK(frame.events[0].find("user9") == std::string::npos);
+  CHECK(Json(frame.events[0]).find("user9") == std::string::npos);
 }
 
 TEST_CASE("The hide-my-name switch waits for the server and keeps the preference until it answers")
@@ -1422,9 +1388,8 @@ TEST_CASE("The hide-my-name preference round-trips through ui.toml and defaults 
   REQUIRE(unknown);
   CHECK(unknown->ui.chat.streamerMode);
   CHECK(unknown->ui.hideIdentity == "off");
-  const auto command = Bridge::ParseCommand(R"({"type":"setIdentityVisibility","hiding":"everywhere"})");
-  REQUIRE(command);
-  CHECK(Bridge::HidingOf(command->hiding) == Domain::HiddenIdentity::Everywhere);
+  const auto command = CommandOf<Bridge::Commands::SetIdentityVisibility>(R"({"type":"setIdentityVisibility","hiding":"everywhere"})");
+  CHECK(Bridge::HidingOf(command.hiding) == Domain::HiddenIdentity::Everywhere);
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"setIdentityVisibility","hiding":"sometimes"})"));
 }
 
@@ -1506,9 +1471,7 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   CHECK_FALSE((*dropped)["pending"].get<bool>());
   CHECK((*dropped)["error"].get<std::string>() == "Соединение прервано до ответа сервера");
 
-  const auto command = Bridge::ParseCommand(R"({"type":"changeDisplayName","displayName":"Имя"})");
-  REQUIRE(command);
-  CHECK(command->displayName == "Имя");
+  CHECK(CommandOf<Bridge::Commands::ChangeDisplayName>(R"({"type":"changeDisplayName","displayName":"Имя"})").displayName == "Имя");
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"changeDisplayName","displayName":""})"));
 }
 

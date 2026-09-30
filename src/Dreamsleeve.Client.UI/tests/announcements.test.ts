@@ -55,7 +55,6 @@ const snapshot: HostEvent = {
   serverName: "Голоса Тамриэля",
   channels: [
     { id: "1", name: "Общий", kind: "global", writable: true },
-    { id: "2", name: "Группа", kind: "party", writable: true },
     {
       id: "9",
       name: "Объявления",
@@ -273,7 +272,7 @@ describe("announcement visibility", () => {
     chat.read();
     expect(chat.store.getState().unread["9"]).toBe(1);
     chat.configure({ announcementChannels: "current" });
-    chat.select("2");
+    chat.select("1");
     chat.read();
     expect(chat.store.getState().unread["9"]).toBe(0);
     chat.receive({ type: "messages", messages: [announcement("2")] });

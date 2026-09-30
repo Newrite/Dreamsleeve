@@ -4,6 +4,8 @@ import std;
 import Dreamsleeve.Host.Session;
 import Dreamsleeve.Client.Model;
 
+#include "Bridge.h"
+
 namespace
 {
 
@@ -58,18 +60,6 @@ namespace
   Api::Request Request(std::string text, std::string signature = "DeathMod")
   {
     return {std::move(text), Domain::AnnouncementKind::Event, Domain::ClientAnnouncementSource::ThirdParty, std::move(signature)};
-  }
-
-  glz::generic Parse(const std::string& json)
-  {
-    glz::generic value;
-    REQUIRE_FALSE(glz::read_json(value, json));
-    return value;
-  }
-
-  std::string Type(const std::string& json)
-  {
-    return Parse(json)["type"].get<std::string>();
   }
 
   // Ready session with the global and the system channel, self = 1, player 7 online.
@@ -148,7 +138,7 @@ TEST_CASE("Session projects the system channel by its kind; announcements never 
   CHECK(channels[1]["kind"].get<std::string>() == "system");
   CHECK_FALSE(channels[1]["writable"].get<bool>());
   CHECK_FALSE(
-    fixture.session.SendChat(*fixture.exchange, Bridge::UiCommand{.type = "sendChat", .requestId = "u1", .channelId = "2", .text = "x"}));
+    fixture.session.SendChat(*fixture.exchange, Bridge::Commands::SendChat{.requestId = "u1", .channelId = {2}, .text = "x"}));
 
   using Source = Domain::AnnouncementSource;
   using Kind   = Domain::AnnouncementKind;

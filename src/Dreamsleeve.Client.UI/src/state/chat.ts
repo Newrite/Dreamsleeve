@@ -482,6 +482,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
         store.setState({ pending });
         break;
       }
+      default:
+        event satisfies never;
     }
   }
   function close() {
