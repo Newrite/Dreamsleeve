@@ -313,7 +313,8 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   CHECK(snapshot["channels"][0]["id"].get<std::string>() == "1");
   CHECK(snapshot["messages"][0]["text"].get<std::string>() == "history");
   CHECK(snapshot["players"].get_array().size() == 2);
-  CHECK(snapshot["settings"]["activationKey"].get<std::string>() == "Enter");
+  // Settings travel only as their own event: a re-projection never undoes unsaved page edits.
+  CHECK_FALSE(snapshot.contains("settings"));
   CHECK(session.Ready());
   CHECK(session.OnlinePlayers().size() == 2);
 

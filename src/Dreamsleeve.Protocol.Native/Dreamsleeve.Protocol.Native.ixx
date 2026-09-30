@@ -6,174 +6,200 @@ import std;
 
 export namespace Protocol::Network
 {
+
   enum class DisconnectReason : std::uint32_t
   {
-    Unspecified = 0,
+    Unspecified    = 0,
     ClientShutdown = 1,
     ServerShutdown = 2,
-    Kicked = 3,
-    AuthFailed = 4,
-    TimeoutPolicy = 5,
-    ProtocolError = 6,
+    Kicked         = 3,
+    AuthFailed     = 4,
+    TimeoutPolicy  = 5,
+    ProtocolError  = 6,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class RequestRejectionCode : std::int32_t
   {
-    Unspecified = 0,
-    InvalidRequest = 1,
-    SessionNotReady = 2,
-    SessionAlreadyOpen = 3,
-    UsernameTaken = 4,
-    ChannelNotFound = 5,
-    NotChannelMember = 6,
-    Overloaded = 7,
-    AuthenticationFailed = 8,
-    TextNotAllowed = 9,
-    RateLimited = 10,
-    AnnouncementNotAllowed = 11,
-    GroundMarkAreaFull = 12,
-    GroundMarkNotFound = 13,
-    HiddenIdentityNotAllowed = 14,
+    Unspecified                 = 0,
+    InvalidRequest              = 1,
+    SessionNotReady             = 2,
+    SessionAlreadyOpen          = 3,
+    UsernameTaken               = 4,
+    ChannelNotFound             = 5,
+    NotChannelMember            = 6,
+    Overloaded                  = 7,
+    AuthenticationFailed        = 8,
+    TextNotAllowed              = 9,
+    RateLimited                 = 10,
+    AnnouncementNotAllowed      = 11,
+    GroundMarkAreaFull          = 12,
+    GroundMarkNotFound          = 13,
+    HiddenIdentityNotAllowed    = 14,
     DisplayNameChangeNotAllowed = 15,
-    Muted = 16,
-    NotPermitted = 17,
-    TargetNotFound = 18,
+    Muted                       = 16,
+    NotPermitted                = 17,
+    TargetNotFound              = 18,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class ActivityKind : std::int32_t
   {
-    Unknown = 0,
-    Exploring = 1,
-    Combat = 2,
-    Talking = 3,
-    Bartering = 4,
-    Training = 5,
-    Reading = 6,
+    Unknown     = 0,
+    Exploring   = 1,
+    Combat      = 2,
+    Talking     = 3,
+    Bartering   = 4,
+    Training    = 5,
+    Reading     = 6,
     Lockpicking = 7,
-    Crafting = 8,
+    Crafting    = 8,
     UsingObject = 9,
-    Riding = 10,
-    Sneaking = 11,
-    Swimming = 12,
-    Flying = 13,
-    Dead = 14,
-    Ragdoll = 15,
-    Menu = 16,
-    NewGame = 17,
-    Loading = 18,
+    Riding      = 10,
+    Sneaking    = 11,
+    Swimming    = 12,
+    Flying      = 13,
+    Dead        = 14,
+    Ragdoll     = 15,
+    Menu        = 16,
+    NewGame     = 17,
+    Loading     = 18,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class LockDifficulty : std::int32_t
   {
-    Unknown = 0,
-    Unlocked = 1,
-    VeryEasy = 2,
-    Easy = 3,
-    Average = 4,
-    Hard = 5,
-    VeryHard = 6,
+    Unknown     = 0,
+    Unlocked    = 1,
+    VeryEasy    = 2,
+    Easy        = 3,
+    Average     = 4,
+    Hard        = 5,
+    VeryHard    = 6,
     RequiresKey = 7,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class ChatChannelKind : std::int32_t
   {
     Unspecified = 0,
-    Global = 1,
-    System = 5,
+    Global      = 1,
+    System      = 5,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class AnnouncementSource : std::int32_t
   {
-    Unspecified = 0,
-    Server = 1,
+    Unspecified   = 0,
+    Server        = 1,
     TrustedClient = 2,
-    ThirdParty = 3,
+    ThirdParty    = 3,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class AnnouncementKind : std::int32_t
   {
-    Unspecified = 0,
+    Unspecified  = 0,
     Announcement = 1,
-    Event = 2,
-    Admin = 3,
-    Periodic = 4,
+    Event        = 2,
+    Admin        = 3,
+    Periodic     = 4,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class ClientAnnouncementSource : std::int32_t
   {
-    Unspecified = 0,
+    Unspecified   = 0,
     TrustedClient = 1,
-    ThirdParty = 2,
+    ThirdParty    = 2,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class GroundMarkKind : std::int32_t
   {
     Unspecified = 0,
-    Note = 1,
-    Death = 2,
+    Note        = 1,
+    Death       = 2,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class HiddenIdentity : std::int32_t
   {
-    None = 0,
-    Everywhere = 1,
+    None              = 0,
+    Everywhere        = 1,
     ExceptGroundMarks = 2,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class SessionEndReason : std::int32_t
   {
-    Unspecified = 0,
+    Unspecified   = 0,
     AccessRevoked = 1,
-    Banned = 2,
-    Kicked = 3,
+    Banned        = 2,
+    Kicked        = 3,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class PlayerRole : std::int32_t
   {
-    Player = 0,
+    Player    = 0,
     Moderator = 1,
   };
+
 }
 
 export namespace Protocol::Chat
 {
+
   enum class SanctionKind : std::int32_t
   {
     Unspecified = 0,
-    Mute = 1,
-    Ban = 2,
+    Mute        = 1,
+    Ban         = 2,
   };
+
 }

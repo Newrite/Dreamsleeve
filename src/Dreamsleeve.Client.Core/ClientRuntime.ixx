@@ -339,7 +339,7 @@ private:
 
       if (auto* rejected = std::get_if<Wire::RequestRejected>(&*response))
       {
-        const auto found    = pending.find(rejected->requestId);
+        const auto found = pending.find(rejected->requestId);
         const bool chat =
           found != pending.end() && (found->second.kind == PendingKind::Chat || found->second.kind == PendingKind::Deletion);
         const auto expected = chat ? Wire::Channel::Chat : Wire::Channel::Control;

@@ -731,7 +731,6 @@ private:
       event.refresh              = refresh;
       event.selfId               = Bridge::Id(selfId.value_or(Domain::InvalidId));
       event.serverName           = serverName;
-      event.settings             = settings;
       event.groundMarksSupported = true;  // Protocol v8: every Ready session carries marks.
       event.groundMarks          = OwnMarkList(settings);
       event.nearbyMarks          = NearbyMarkList(settings);

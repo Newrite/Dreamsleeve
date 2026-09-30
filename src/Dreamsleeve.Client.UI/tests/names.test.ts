@@ -61,18 +61,14 @@ describe("names", () => {
     );
   });
 
-  it("sends name settings at once and keeps the local choice over a stale refresh", () => {
+  it("sends name settings at once and keeps the local choice over the refresh", () => {
     const { chat, send } = ready();
     chat.configure({ streamerMode: true });
     expect(send).toHaveBeenLastCalledWith({
       type: "displaySettings",
       settings: { ...defaults, streamerMode: true },
     });
-    chat.receive({
-      ...snapshot,
-      refresh: true,
-      settings: { ...defaults, streamerMode: false },
-    } as HostEvent);
+    chat.receive({ ...snapshot, refresh: true } as HostEvent);
     expect(chat.store.getState().settings.streamerMode).toBe(true);
     send.mockClear();
     chat.configure({ fontSize: 18 });

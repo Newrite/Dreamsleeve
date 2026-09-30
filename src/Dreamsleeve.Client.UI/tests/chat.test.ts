@@ -193,6 +193,23 @@ describe("settings", () => {
   });
 });
 
+it("unsaved edits survive the snapshots an instant switch and a reconnect bring", () => {
+  const { chat } = ready();
+  chat.configure({ fontSize: 18 });
+  chat.configure({ streamerMode: true });
+  // The host applies only the instant keys, saves them and projects the session again.
+  chat.receive({ ...snapshot, refresh: true } as HostEvent);
+  expect(chat.store.getState().settings).toMatchObject({
+    fontSize: 18,
+    streamerMode: true,
+  });
+  chat.receive(snapshot);
+  expect(chat.store.getState().settings.fontSize).toBe(18);
+  // The host's own change (a new page, the SKSE menu) comes as settings.
+  chat.receive({ type: "settings", settings: defaults });
+  expect(chat.store.getState().settings.fontSize).toBe(16);
+});
+
 it("editing settings during a save does not show a stale success", () => {
   const { chat } = ready();
   chat.save();

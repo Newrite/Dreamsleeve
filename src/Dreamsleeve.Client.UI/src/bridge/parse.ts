@@ -151,7 +151,6 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     list(v.players, player, 4096) &&
     id(v.selfId) &&
     label(v.serverName) &&
-    optional(object)(v.settings) &&
     optional(flag)(v.refresh) &&
     optional(flag)(v.groundMarksSupported) &&
     optional(marks(256))(v.groundMarks) &&

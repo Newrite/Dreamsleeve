@@ -223,8 +223,6 @@ export type HostEvent =
       players: Player[];
       selfId: Id;
       serverName: string;
-      // Normalized by the host; every key present.
-      settings?: Settings;
       // Same session projected again (names or ignore list changed).
       refresh?: boolean;
       // The session can place marks; the player's own marks as the server
@@ -275,7 +273,9 @@ export type HostEvent =
   | { type: "activate" }
   | { type: "deactivate" }
   | { type: "connection"; connected: boolean; phase?: ConnectionPhase }
-  // Sent when the page is (re)created: applies the saved window settings before any snapshot.
+  // The host's settings, normalized, every key present: sent when the page is
+  // (re)created, before any snapshot, and when the host changes them itself.
+  // Snapshots carry none, so a re-projection never undoes unsaved edits.
   | { type: "settings"; settings: Settings }
   | AuthEvent
   | { type: "sendResult"; requestId: string; messageId: Id; error?: never }

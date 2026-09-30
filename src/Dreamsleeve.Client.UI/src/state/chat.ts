@@ -21,9 +21,6 @@ import { idleAuth } from "./auth";
 import { muted, muteText, sessionEndText } from "./moderation";
 import { idleModerator, makeModerator, type ModeratorState } from "./moderator";
 import { defaults, instantKeys } from "../bridge/settings.generated";
-// The settings the host applies and saves at once (displaySettings).
-const instantOf = (settings: Settings) =>
-  Object.fromEntries(instantKeys.map((key) => [key, settings[key]]));
 // Lines kept per channel: a busy channel never pushes another one out.
 export const HISTORY_LIMIT = 500;
 // Message IDs are sequential within a channel; a line is named by the pair.
@@ -268,10 +265,6 @@ export function makeChat(send: Send, now = () => Date.now()) {
             groundMarksSupported: event.groundMarksSupported ?? false,
             groundMarks: event.groundMarks ?? state.groundMarks,
             nearbyMarks: event.nearbyMarks ?? state.nearbyMarks,
-            // A local instant switch may be newer than the host copy.
-            settings: event.settings
-              ? { ...event.settings, ...instantOf(state.settings) }
-              : state.settings,
           });
           break;
         }
@@ -306,7 +299,6 @@ export function makeChat(send: Send, now = () => Date.now()) {
           unread: {},
           filter: "all",
           target: channels.find((c) => c.writable)?.id ?? "",
-          settings: event.settings ?? state.settings,
           notice: "",
           sessionEnd: null,
           scrolled: false,

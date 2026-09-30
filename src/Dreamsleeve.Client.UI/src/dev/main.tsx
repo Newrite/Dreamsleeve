@@ -184,7 +184,6 @@ function snapshot(settings = chat.store.getState().settings, refresh = false) {
     messages: projectMessages(history, settings),
     players: players.map((p) => project(p, settings)),
     selfId: players[0].id,
-    settings,
     refresh,
     groundMarksSupported: true,
     groundMarks: marks,
@@ -589,6 +588,8 @@ try {
 } catch {
   /* Local preview only. */
 }
+// The host sends its settings as soon as the page is ready, before any snapshot.
+chat.receive({ type: "settings", settings });
 snapshot(settings);
 emitAuth({}, "connected");
 identityEvent();

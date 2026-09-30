@@ -165,7 +165,6 @@ namespace
                               .players              = {player},
                               .selfId               = "1",
                               .serverName           = "Tamriel",
-                              .settings             = settings,
                               .groundMarksSupported = true,
                               .groundMarks          = {own},
                               .nearbyMarks          = {nearby}},

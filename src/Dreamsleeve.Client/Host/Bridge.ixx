@@ -404,12 +404,11 @@ export namespace Dreamsleeve::Host::Bridge
 
   struct SnapshotEvent
   {
-    std::vector<UiChannel>    channels;
-    std::vector<UiMessage>    messages;
-    std::vector<UiPlayer>     players;
-    std::string               selfId;
-    std::string               serverName;
-    std::optional<UiSettings> settings;
+    std::vector<UiChannel> channels;
+    std::vector<UiMessage> messages;
+    std::vector<UiPlayer>  players;
+    std::string            selfId;
+    std::string            serverName;
     // Same session re-projected (names or ignore list changed): the UI keeps
     // its pending rows, filters and scroll instead of treating it as new.
     bool refresh{};
@@ -477,8 +476,9 @@ export namespace Dreamsleeve::Host::Bridge
     std::string phase{PhaseNames.front()};
   };
 
-  // Sent when a page is (re)created so window position and options apply
-  // before any snapshot; a snapshot repeats them.
+  // The host's copy of the settings: when a page is (re)created, so window
+  // position and options apply before any snapshot, and when the host changes
+  // it itself. Snapshots never carry settings: unsaved edits are the page's.
   struct SettingsEvent
   {
     UiSettings settings;
