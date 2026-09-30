@@ -11,15 +11,6 @@ module internal RateLimit =
     [<Literal>]
     let MaxRecentPerSender = 8
 
-    type Options = {
-        /// Attempts an account may make at once before the refill rate applies.
-        Burst: int
-        /// One more attempt per this interval, up to Burst.
-        RefillMs: int
-        /// The same fingerprint is refused within this window; 0 disables the check.
-        DuplicateWindowMs: int
-    }
-
     [<RequireQualifiedAccess>]
     type Refusal =
         | Repeated
@@ -32,7 +23,7 @@ module internal RateLimit =
     }
 
     type State = {
-        Options: Options
+        Options: RateLimitOptions
         Senders: Dictionary<PlayerId, Sender>
         mutable NextPrune: int64
     }

@@ -316,45 +316,40 @@ module GroundMarksAgent =
     /// loaded are the stored marks with their authors' current profiles; nextId
     /// is the storage high-water mark plus one, so IDs never repeat across runs.
     /// Expired marks among them are removed at the first expiry pass.
-    let start (options: GroundMarkOptions) (loaded: StoredGroundMark list) (nextId: uint64)
+    /// The options and their rules come checked by GameSettings.create.
+    let start (options: GroundMarkOptions) (rules: GroundMarkRules) (loaded: StoredGroundMark list) (nextId: uint64)
               (writer: ReliableAgentRef<GroundMarkWrite>) (host: ReliableAgentRef<SessionHostCommand>) (logger: ILogger) =
-        match GroundMarkOptions.validate options with
-        | error :: _ -> Error error
-        | [] ->
-            match GroundMarkOptions.rules options with
-            | Error error -> Error (sprintf "%A" error)
-            | Ok rules ->
-                let state = {
-                    Options = options; Rules = rules
-                    Marks = GroundMarkStorage.create (); Authors = Dictionary()
-                    Index = SpatialIndex.create (double options.VisibilityDistance)
-                    Observers = Dictionary(); Players = Dictionary()
-                    Notes = RateLimit.create { Burst = options.RateBurst; RefillMs = options.RateRefillMs; DuplicateWindowMs = options.DuplicateWindowMs }
-                    Deaths = Dictionary(); Candidates = HashSet()
-                    Writer = AgentOutbox(options.MaxPendingWrites, writer)
-                    Host = AgentOutbox(options.MaxControlDeliveries, host)
-                    Logger = logger
-                    NextId = max nextId 1UL
-                    Ticker = None
-                }
-                let mutable highest = 0UL
-                let duplicates = ResizeArray<StoredGroundMark>()
-                for entry in loaded |> List.sortBy (fun entry -> entry.Mark.Id) do
-                    match GroundMarkStorage.add rules entry.Mark state.Marks with
-                    | Ok _ ->
-                        state.Authors[entry.Mark.Author] <- entry.Author
-                        SpatialIndex.setCell entry.Mark.Id
-                            (ValueSome (SpatialIndex.cellOf state.Index entry.Mark.Placement.LocationId entry.Mark.Placement.Position)) state.Index
-                        highest <- max highest (GroundMarkId.value entry.Mark.Id)
-                    | Error _ -> duplicates.Add entry
-                if duplicates.Count > 0 then Error (sprintf "Stored ground marks contain %d duplicate IDs." duplicates.Count)
-                elif highest >= state.NextId then Error (sprintf "Stored ground mark ID %d is not below the next ID %d." highest state.NextId)
-                else
-                    let settings = {
-                        AgentOptions.create "ground-marks" with
-                            Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
-                    }
-                    let agent = Agent.Start(settings, handle state, isControl = isControl)
-                    let now = System.Diagnostics.Stopwatch.GetTimestamp()
-                    agent.TryPost(GroundMarkCommand.Expire { DueTimestamp = now; QueuedTimestamp = now }) |> ignore
-                    Ok agent
+        let state = {
+            Options = options; Rules = rules
+            Marks = GroundMarkStorage.create (); Authors = Dictionary()
+            Index = SpatialIndex.create (double options.VisibilityDistance)
+            Observers = Dictionary(); Players = Dictionary()
+            Notes = RateLimit.create options.NoteRate
+            Deaths = Dictionary(); Candidates = HashSet()
+            Writer = AgentOutbox(options.MaxPendingWrites, writer)
+            Host = AgentOutbox(options.MaxControlDeliveries, host)
+            Logger = logger
+            NextId = max nextId 1UL
+            Ticker = None
+        }
+        let mutable highest = 0UL
+        let duplicates = ResizeArray<StoredGroundMark>()
+        for entry in loaded |> List.sortBy (fun entry -> entry.Mark.Id) do
+            match GroundMarkStorage.add rules entry.Mark state.Marks with
+            | Ok _ ->
+                state.Authors[entry.Mark.Author] <- entry.Author
+                SpatialIndex.setCell entry.Mark.Id
+                    (ValueSome (SpatialIndex.cellOf state.Index entry.Mark.Placement.LocationId entry.Mark.Placement.Position)) state.Index
+                highest <- max highest (GroundMarkId.value entry.Mark.Id)
+            | Error _ -> duplicates.Add entry
+        if duplicates.Count > 0 then Error (sprintf "Stored ground marks contain %d duplicate IDs." duplicates.Count)
+        elif highest >= state.NextId then Error (sprintf "Stored ground mark ID %d is not below the next ID %d." highest state.NextId)
+        else
+            let settings = {
+                AgentOptions.create "ground-marks" with
+                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
+            }
+            let agent = Agent.Start(settings, handle state, isControl = isControl)
+            let now = System.Diagnostics.Stopwatch.GetTimestamp()
+            agent.TryPost(GroundMarkCommand.Expire { DueTimestamp = now; QueuedTimestamp = now }) |> ignore
+            Ok agent

@@ -17,7 +17,7 @@ let private error = function
     | Ok _ -> failtest "Expected error"
 
 let private config = ServerConfig.defaults
-let private codec = ProtocolCodec.create config |> ok
+let private codec = ProtocolCodec.create config
 let private pid raw = PlayerId.create raw |> ok
 let private channel = ChatChannelKind.channelId ChatChannelKind.System
 let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
@@ -51,7 +51,7 @@ let private withFile (text: string) action =
 let private load text =
     withFile text (fun path ->
         match Configuration.parse [|"--config"; path|] with
-        | Ok (LaunchCommand.Run settings) -> Ok settings
+        | Ok (LaunchCommand.Run(settings, _)) -> Ok settings
         | Ok other -> failtestf "Unexpected launch %A" other
         | Error failure -> Error failure)
 
@@ -190,8 +190,8 @@ let tests = testList "Announcements" [
         let settings = load "[Server]\nPort = 9000\n" |> ok
         Expect.equal settings.Announcements AnnouncementOptions.defaults "missing section keeps defaults"
         let source = String.concat "\n" [
-            "[Announcements]"
-            "RateBurst = 1"
+            "[Announcements.Rate]"
+            "Burst = 1"
             "[Announcements.ThirdParty]"
             "Enabled = false"
             "[[Announcements.Scheduled]]"
@@ -202,7 +202,7 @@ let tests = testList "Announcements" [
             "Text = 'Рестарт в полночь'"
             "" ]
         let loaded = (load source |> ok).Announcements
-        Expect.equal loaded.RateBurst 1 "rate"
+        Expect.equal loaded.Rate.Burst 1 "rate"
         Expect.isTrue loaded.TrustedClient.Enabled "unset source keeps default"
         Expect.isFalse loaded.ThirdParty.Enabled "switched off"
         Expect.equal loaded.Scheduled [

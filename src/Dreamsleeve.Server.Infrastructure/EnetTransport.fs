@@ -232,12 +232,7 @@ module EnetTransport =
                 enet.ENET_API.enet_deinitialize()
                 Error (sprintf "ENet host configuration failed: %s" error.Message)
 
-    let createInline config =
-        match ServerConfig.validate config with
-        | Error errors -> Error (String.concat " " errors)
-        | Ok settings -> allocate settings
+    /// The settings come checked by GameSettings.create.
+    let createInline config = allocate config
 
-    let create config =
-        match ServerConfig.validate config with
-        | Error errors -> Error (String.concat " " errors)
-        | Ok settings -> TransportOwner.create settings (fun () -> allocate settings)
+    let create config = TransportOwner.create config (fun () -> allocate config)

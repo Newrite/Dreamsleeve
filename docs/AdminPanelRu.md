@@ -62,7 +62,8 @@ flowchart LR
 забывает все коды.
 
 Имя администратора подчиняется правилам `Username` игроков, пароль — тому же правилу 12–128 байт
-UTF-8 и тому же `PasswordHasher` с `PasswordIterations` из `[Authentication.Service]`.
+UTF-8 и тому же `PasswordHasher`; стоимость — свой `PasswordIterations` в `[Admin.Service]`
+(по умолчанию как у игроков).
 Администраторы хранятся отдельно (`admin_accounts`): администратор не обязан быть игроком, а
 игровой аккаунт не даёт доступа к панели.
 
@@ -71,25 +72,33 @@ UTF-8 и тому же `PasswordHasher` с `PasswordIterations` из `[Authentic
 ```toml
 [Admin]
 Enabled = true
+MaxConnections = 64
+
+[Admin.Listener]                 # те же ключи, что у [Authentication.Listener]
 ListenUrl = "http://127.0.0.1:8780"
 AllowInsecureLoopback = true
 AllowInsecureRemote = false      # пароль без TLS только явно, как у аутентификации
 CertificatePath = ""             # прямой HTTPS без обратного прокси
 TrustForwardedHeaders = false    # true только за прокси на loopback
+RequestsPerMinute = 600          # все запросы, кроме входа, на адрес клиента
+RequestTimeoutSeconds = 15
+
+[Admin.Service]
+MailboxCapacity = 64
+MaxConcurrentOperations = 2
+PasswordIterations = 210000
 SessionHours = 12
 CodeLifetimeMinutes = 15
 LoginAttemptsPerMinute = 10      # на адрес клиента и на имя администратора
-RequestsPerMinute = 600          # остальные запросы на адрес клиента
-MaxConnections = 64
-RequestTimeoutSeconds = 15
+MaxTrackedLogins = 1024
 ```
 
-Старый `server.toml` без `[Admin]` получает эти значения. Проверки при запуске (только при
-`Enabled = true`): абсолютный URL только со схемой, хостом и портом; HTTP вне буквального
-loopback — только с `AllowInsecureRemote`; порт панели не совпадает с портом аутентификации;
-лимиты в допустимых диапазонах. Пароль сертификата — переменная окружения
-`DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD` (у аутентификации — `DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD`).
-`[Authentication]` получила тот же ключ `TrustForwardedHeaders = false`.
+Файл без `[Admin]` получает эти значения. Проверки при запуске (только при `Enabled = true`):
+абсолютный URL только со схемой, хостом и портом; HTTP вне буквального loopback — только с
+`AllowInsecureRemote`; порт панели не совпадает с портом аутентификации; лимиты в допустимых
+диапазонах. Слушатель проверяет одна функция для обоих хостов. Пароль сертификата — переменная
+окружения `DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD` (у аутентификации —
+`DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD`).
 
 `Enabled = false` не запускает ни хост панели, ни `AdminService`; консольные `admin-setup` и
 `admin-reset` тогда отвечают, что панель выключена.
@@ -173,7 +182,7 @@ auth: `unauthorized` (401), `not_found` (404), `rate_limited` (429), `busy`/`una
 
 - SSH-туннель без изменения конфигурации: `ssh -L 8780:127.0.0.1:8780 user@server`, затем
   `http://127.0.0.1:8780` у себя.
-- Обратный прокси с HTTPS на той же машине. Панель остаётся на loopback, в `[Admin]` —
+- Обратный прокси с HTTPS на той же машине. Панель остаётся на loopback, в `[Admin.Listener]` —
   `TrustForwardedHeaders = true`. Заголовки `X-Forwarded-For`/`X-Forwarded-Proto` принимаются
   только от `127.0.0.1`/`::1` и только один переход (`ForwardLimit = 1`). Прокси обязан передать
   исходный `Host`: проверка `Origin` сравнивает его со `схемой://Host` запроса.

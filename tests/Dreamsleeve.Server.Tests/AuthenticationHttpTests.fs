@@ -43,7 +43,8 @@ let private withHost customize execute run = task {
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()
     let initial = {
         Configuration.defaults with
-            Authentication = { Configuration.defaults.Authentication with ListenUrl = "http://127.0.0.1:0" }
+            Authentication = { Configuration.defaults.Authentication with
+                                   Listener = { Configuration.defaults.Authentication.Listener with ListenUrl = "http://127.0.0.1:0" } }
     }
     let settings = customize initial
     // The host exactly as Program builds it: the same settings mapping and ports.
@@ -211,7 +212,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
         }))
 
     case "per-IP rate limit has no waiting queue and ignores spoofed forwarded addresses" (fun () ->
-        let limit config = { config with Authentication = { config.Authentication with RequestsPerMinute = 1 } }
+        let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestsPerMinute = 1 } } }
         withHost limit (reply signedIn) (fun http received -> task {
             use! first = post http "auth/login" credentials
             status 200 first
@@ -224,7 +225,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
         }))
 
     case "request deadline includes a client that never finishes its HTTP body" (fun () ->
-        let limit config = { config with Authentication = { config.Authentication with RequestTimeoutSeconds = 1 } }
+        let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestTimeoutSeconds = 1 } } }
         withHost limit (reply signedIn) (fun http received -> task {
             use client = new TcpClient()
             do! client.ConnectAsync(http.BaseAddress.Host, http.BaseAddress.Port)
@@ -239,7 +240,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
         }))
 
     case "HTTP timeout completes without stopping the authentication dependency" (fun () ->
-        let limit config = { config with Authentication = { config.Authentication with RequestTimeoutSeconds = 1 } }
+        let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestTimeoutSeconds = 1 } } }
         withHost limit (fun _ _ -> ()) (fun http received -> task {
             use! response = post http "auth/login" credentials
             status 503 response

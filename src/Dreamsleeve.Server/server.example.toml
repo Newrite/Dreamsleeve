@@ -72,10 +72,13 @@ MailboxCapacity = 256
 ControlReserve = 64
 HistoryCapacity = 512
 MaxControlDeliveries = 128
-# Anti-spam per stable account ID; reconnecting does not reset it.
-# Up to RateBurst messages at once, then one more per RateRefillMs.
-RateBurst = 5
-RateRefillMs = 2000
+
+# Anti-spam per stable account ID; reconnecting does not reset it. The same three
+# keys limit client announcements ([Announcements.Rate]) and notes ([GroundMarks.NoteRate]).
+[Runtime.Chat.Rate]
+# Up to Burst messages at once, then one more per RefillMs.
+Burst = 5
+RefillMs = 2000
 # The same normalized text is refused again within this window; 0 disables the check.
 DuplicateWindowMs = 30000
 
@@ -91,15 +94,21 @@ DatabasePath = "data/dreamsleeve.db"
 BusyTimeoutSeconds = 5
 
 [Authentication]
+AllowRegistration = true
+
+# The same keys describe the admin panel listener ([Admin.Listener]).
+[Authentication.Listener]
 ListenUrl = "http://127.0.0.1:8779"
 AllowInsecureLoopback = true
 # Explicit opt-in for remote HTTP; passwords and tokens are sent without TLS.
 AllowInsecureRemote = false
-AllowRegistration = true
+# Direct HTTPS without a reverse proxy; the password is in DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD.
 CertificatePath = ""
 # true only behind a reverse proxy on this machine: X-Forwarded-For/Proto are then read from loopback.
 TrustForwardedHeaders = false
+# Requests per client address and minute, 1..100000.
 RequestsPerMinute = 120
+# 1..120.
 RequestTimeoutSeconds = 15
 
 [Authentication.Service]
@@ -107,6 +116,7 @@ MailboxCapacity = 64
 MaxConcurrentOperations = 4
 MaxTickets = 4096
 TicketLifetimeSeconds = 60
+# PBKDF2 iterations of player passwords, 210000..2000000.
 PasswordIterations = 210000
 SavedLoginDays = 30
 MaxSavedLogins = 8
@@ -118,17 +128,28 @@ DisplayNameHistory = 20
 # or a reverse proxy. Without administrators the server prints a one-time setup code to the console.
 [Admin]
 Enabled = true
+# Concurrent HTTP connections, 1..10000.
+MaxConnections = 64
+
+[Admin.Listener]
 ListenUrl = "http://127.0.0.1:8780"
 AllowInsecureLoopback = true
 AllowInsecureRemote = false      # passwords without TLS only by explicit choice, as for authentication
-CertificatePath = ""             # direct HTTPS without a reverse proxy
+CertificatePath = ""             # direct HTTPS; the password is in DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD
 TrustForwardedHeaders = false    # true only behind a proxy on loopback
-SessionHours = 12
-CodeLifetimeMinutes = 15
-LoginAttemptsPerMinute = 10      # per client address and per administrator name
-RequestsPerMinute = 600          # all other requests per client address
-MaxConnections = 64
+RequestsPerMinute = 600          # all requests but sign-in, per client address
 RequestTimeoutSeconds = 15
+
+[Admin.Service]
+MailboxCapacity = 64
+MaxConcurrentOperations = 2
+# PBKDF2 iterations of administrator passwords, 210000..2000000.
+PasswordIterations = 210000
+SessionHours = 12                # 1..720
+CodeLifetimeMinutes = 15         # one-time setup and reset codes, 1..60
+LoginAttemptsPerMinute = 10      # per client address and per administrator name, 1..1000
+# Administrator names whose sign-in attempts are counted at once; more are refused as busy.
+MaxTrackedLogins = 1024
 
 [Logging]
 MinimumLevel = "Information"
@@ -173,10 +194,11 @@ DisplayNameChangeIntervalMinutes = 1
 [Announcements]
 # Retained announcements, also sent at session opening; at most Server.MaxRecentMessages.
 HistoryCapacity = 128
-# Client announcements per stable account; chat has its own limit in Runtime.Chat.
-RateBurst = 3
-RateRefillMs = 20000
-# The same normalized text is refused again within this window; 0 disables the check.
+
+# Client announcements per stable account; chat has its own limit in Runtime.Chat.Rate.
+[Announcements.Rate]
+Burst = 3
+RefillMs = 20000
 DuplicateWindowMs = 300000
 
 # Requested by the Dreamsleeve client itself. A disabled source is refused with
@@ -218,14 +240,16 @@ DeathMarkTtlDays = 7
 # Marks one spatial index cell (VisibilityDistance on a side) may hold; more is
 # refused with GROUND_MARK_AREA_FULL, nothing of other players is evicted.
 MaxPerIndexCell = 64
-# Notes per stable account: up to RateBurst at once, then one per RateRefillMs;
-# the same normalized text is refused again within DuplicateWindowMs (0 disables).
-RateBurst = 3
-RateRefillMs = 20000
-DuplicateWindowMs = 300000
 # Deaths reported closer together than this are refused with RATE_LIMITED.
 DeathMinIntervalMs = 5000
 # A placement farther than this from the player's last known position is refused; 0 disables.
 MaxPlacementDistance = 2048
 # How often expired marks are collected (milliseconds, at least 1000).
 ExpiryCheckIntervalMs = 60000
+
+# Notes per stable account: up to Burst at once, then one per RefillMs; the same
+# normalized text is refused again within DuplicateWindowMs (0 disables).
+[GroundMarks.NoteRate]
+Burst = 3
+RefillMs = 20000
+DuplicateWindowMs = 300000

@@ -178,8 +178,7 @@ module SqliteGroundMarkStore =
     /// One sequential writer keeps order between an eviction and the insert
     /// that caused it. A failed write is logged; memory stays authoritative
     /// for the running server and the next successful write is unaffected.
+    /// capacity is GroundMarks.MaxPendingWrites, checked with the configuration.
     let startWriter config (logger: ILogger) capacity =
-        if capacity < 1 then Error "Ground mark writer capacity must be positive."
-        else
-            let options = { AgentOptions.create "ground-mark-writer" with Mailbox = AgentMailbox.boundedWait capacity }
-            Ok (Agent.Start(options, write config logger))
+        let options = { AgentOptions.create "ground-mark-writer" with Mailbox = AgentMailbox.boundedWait capacity }
+        Agent.Start(options, write config logger)

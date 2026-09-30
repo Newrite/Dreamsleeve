@@ -46,7 +46,7 @@ let private withService options run = task {
     use database = new Database()
     SqliteAccountStore.initialize database.Config |> ok
     let clock = WallClock()
-    let service = AdminService.start options database.Config NullLogger.Instance clock |> ok
+    let service = AdminService.start options database.Config NullLogger.Instance clock
     do! run service clock
     do! stop service
 }

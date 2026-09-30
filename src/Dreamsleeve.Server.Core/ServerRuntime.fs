@@ -76,13 +76,8 @@ module ServerRuntime =
     type private State = {
         Table: SessionTable.State
         mutable RouteScratch: SessionTable.Entry array
-        Codec: ProtocolCodec
-        MaxActorValues: int
+        Settings: GameSettings
         Moderation: ModerationRules
-        Identity: IdentityOptions
-        Announcements: AnnouncementOptions
-        GroundMarks: GroundMarkOptions
-        GroundMarkRules: GroundMarkRules
         Persistence: GroundMarkPersistence
         Schedule: AnnouncementSchedule
         Transport: ServerTransport
@@ -170,7 +165,7 @@ module ServerRuntime =
 
     let private send options state context (entry: SessionTable.Entry) response =
         let budget = state.Transport.MaxUnfragmentedPayloadBytes entry.ConnectionId
-        transmit options state context entry (ProtocolCodec.delivery response).Lane (ProtocolCodec.encode state.Codec budget response)
+        transmit options state context entry (ProtocolCodec.delivery response).Lane (ProtocolCodec.encode state.Settings.Codec budget response)
 
     // The rejection goes back on the lane of the request it answers.
     let private refuse options state context (entry: SessionTable.Entry) lane requestId (rejection: RequestRejection) =
@@ -277,19 +272,18 @@ module ServerRuntime =
             state.Logger.LogWarning("Slow consumer {ConnectionId}", connectionId)
             SessionTable.find connectionId state.Table |> Option.iter (close options state context)
 
-    let private openSession (options: ServerRuntimeOptions) maxActorValues (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket hiding =
+    let private openSession (options: ServerRuntimeOptions) (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket hiding =
         match state.Sources, context.Ref.TryReliable() with
         | Some sources, Some self ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket; Hiding = hiding }
-            match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements state.GroundMarkRules state.Identity authenticator.Requests authenticator.DisplayNames
-                      (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
-                      (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) state.Logger request with
-            | Error reason -> fail state context reason
-            | Ok child ->
-                entry.Child <- Some child
-                entry.Phase <- RuntimeSessionPhase.Opening
-                context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
-                state.Logger.LogDebug("Session {ConnectionId} is opening (request {RequestId}, hides names: {Hiding})", entry.ConnectionId, requestId, hiding)
+            let child =
+                PlayerSession.start state.Settings state.Moderation authenticator.Requests authenticator.DisplayNames
+                    (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
+                    (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) state.Logger request
+            entry.Child <- Some child
+            entry.Phase <- RuntimeSessionPhase.Opening
+            context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
+            state.Logger.LogDebug("Session {ConnectionId} is opening (request {RequestId}, hides names: {Hiding})", entry.ConnectionId, requestId, hiding)
         | None, _ | _, None ->
             state.Logger.LogWarning("Cannot open session {ConnectionId}: runtime sources are not running", entry.ConnectionId)
             close options state context entry
@@ -331,7 +325,7 @@ module ServerRuntime =
 
     let private receiveSample state (entry: SessionTable.Entry) bytes =
         if entry.Phase = RuntimeSessionPhase.Ready then
-            match ProtocolCodec.decodeMovement state.Codec bytes, entry.Child with
+            match ProtocolCodec.decodeMovement state.Settings.Codec bytes, entry.Child with
             | Ok sample, Some child ->
                 // A dropped sample is repaired by the next periodic absolute pose.
                 child.TryPost(PlayerSessionMessage.SampleMovement sample) |> ignore
@@ -340,7 +334,7 @@ module ServerRuntime =
     let private receive (options: ServerRuntimeOptions) authenticator state context entry lane bytes =
         if lane = DeliveryLane.Realtime then receiveSample state entry bytes
         else
-            match ProtocolCodec.decodeClient state.Codec bytes with
+            match ProtocolCodec.decodeClient state.Settings.Codec bytes with
             | Error error ->
                 match error.RequestId with
                 | None ->
@@ -354,7 +348,7 @@ module ServerRuntime =
             | Ok request ->
                 match route request.RequestId request.Command, entry.Phase with
                 | CommandRoute.Open(sessionTicket, hiding), RuntimeSessionPhase.Waiting ->
-                    openSession options state.MaxActorValues authenticator state context entry request.RequestId sessionTicket hiding
+                    openSession options authenticator state context entry request.RequestId sessionTicket hiding
                 | CommandRoute.Open _, (RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
                 | CommandRoute.Session message, RuntimeSessionPhase.Ready -> forward options state context entry lane request.RequestId message
@@ -409,17 +403,17 @@ module ServerRuntime =
         | None -> fail state context "Runtime requires a reliable mailbox."
         | Some self ->
             let output = self.Map ServerRuntimeMessage.Host
-            let system = ChatRoomAgent.start (AnnouncementOptions.channelOptions options.Chat state.Announcements) ChatChannelKind.System output
+            let game = state.Settings
+            let system = ChatRoomAgent.start (AnnouncementOptions.channelOptions options.Chat game.Announcements) ChatChannelKind.System output
             match ChatRoomAgent.start options.Chat ChatChannelKind.Global output, system with
             | Error error, _ | _, Error error -> fail state context $"Chat startup failed: {error}"
             | Ok chat, Ok system ->
                 context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
                 context.Own(system, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.System, outcome))
-                let marks = GroundMarksAgent.start state.GroundMarks state.Persistence.Loaded state.Persistence.NextId state.Persistence.Writer output state.Logger
-                match PresenceAgent.start options.Presence output, marks with
-                | Error error, _ -> fail state context $"Presence startup failed: {error}"
-                | _, Error error -> fail state context $"Ground marks startup failed: {error}"
-                | Ok presence, Ok marks ->
+                match GroundMarksAgent.start game.GroundMarks game.GroundMarkRules state.Persistence.Loaded state.Persistence.NextId state.Persistence.Writer output state.Logger with
+                | Error error -> fail state context $"Ground marks startup failed: {error}"
+                | Ok marks ->
+                    let presence = PresenceAgent.start options.Presence output
                     context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
                     context.Own(marks, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GroundMarks, outcome))
                     context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
@@ -636,57 +630,19 @@ module ServerRuntime =
 
     /// The caller owns authentication separately and disposes the
     /// transport AFTER this agent's Completion, including Abort/fault paths.
-    /// Moderation rules, identity options with the pseudonym dictionary, announcements
-    /// and ground mark options are fixed for the runtime lifetime, like the rest of config.
-    let start (options: ServerRuntimeOptions) config (moderation: ModerationRules) (identity: IdentityOptions) (pseudonyms: PseudonymDictionary)
-              (announcements: AnnouncementOptions) (groundMarks: GroundMarkOptions) (persistence: GroundMarkPersistence)
+    /// The checked settings, moderation rules and pseudonym dictionary are
+    /// fixed for the runtime lifetime.
+    let start (settings: GameSettings) (moderation: ModerationRules) (pseudonyms: PseudonymDictionary) (persistence: GroundMarkPersistence)
               (authenticator: SessionAuthenticator) transport (logger: ILogger) =
-        let limits = [ options.MaxSessions; options.MailboxCapacity; options.ControlReserve; options.OpenTimeoutMs
-                       options.ShutdownTimeoutMs; options.PollIntervalMs; options.Player.MailboxCapacity
-                       options.Player.ControlReserve; options.Player.MaxPendingChat; options.Player.MaxPendingUpdates; options.Player.MaxBootstrapEvents
-                       options.Player.MaxPendingOutput; options.Chat.MailboxCapacity; options.Chat.ControlReserve
-                       options.Chat.HistoryCapacity; options.Chat.MaxControlDeliveries; options.Presence.MailboxCapacity
-                       options.Presence.ControlReserve; options.Presence.MaxControlDeliveries; options.Presence.ReplicationIntervalMs ]
-        let errors = [
-            if not (System.Single.IsFinite options.Presence.VisibilityDistance) || options.Presence.VisibilityDistance < 0.0f then
-                "Presence.VisibilityDistance must be finite and non-negative."
-            if limits |> List.exists (fun value -> value < 1) then "Runtime capacities and deadlines must be positive."
-            if int64 options.ControlReserve < 4L * int64 options.MaxSessions + 4L then
-                "Runtime ControlReserve must allow 4 * MaxSessions + 4 lifecycle messages."
-            if options.MaxSessions > config.PeerLimit || options.MaxSessions > config.MaxInitialPlayers then
-                "Runtime MaxSessions must fit transport PeerLimit and protocol MaxInitialPlayers."
-            if options.Chat.HistoryCapacity > config.MaxRecentMessages || announcements.HistoryCapacity > config.MaxRecentMessages then
-                "Chat and announcement histories must fit MaxRecentMessages."
-            if int64 config.ServiceTimeoutMs + int64 options.PollIntervalMs > int64 (min options.OpenTimeoutMs options.ShutdownTimeoutMs) then
-                "Transport service wait plus poll interval must fit runtime deadlines."
-            if options.Player.MaxPendingChat > Int32.MaxValue - 2 || options.Player.MaxPendingUpdates > Int32.MaxValue - 2
-               || options.Player.MaxPendingOutput > Int32.MaxValue - 2 then
-                "Session pending capacity plus cleanup reserve overflows."
-            for ordinary, reserve in [options.MailboxCapacity, options.ControlReserve; options.Player.MailboxCapacity, options.Player.ControlReserve
-                                      options.Chat.MailboxCapacity, options.Chat.ControlReserve; options.Presence.MailboxCapacity, options.Presence.ControlReserve] do
-                if int64 ordinary + int64 reserve > int64 Int32.MaxValue then "Mailbox capacity and control reserve overflow."
-            match ServerConfig.validate config with Ok _ -> () | Error errors -> yield! errors
-            yield! GroundMarkOptions.validate groundMarks
-            yield! IdentityOptions.validate identity
-            if isNull (box persistence) || isNull (box persistence.Loaded) || isNull (box persistence.Writer) then "Ground mark persistence is missing."
-        ]
-        let scheduled = if errors.IsEmpty then AnnouncementOptions.resolve config.ChatInput announcements else Error errors
-        let rules = if errors.IsEmpty then GroundMarkOptions.rules groundMarks |> Result.mapError (fun error -> [sprintf "%A" error]) else Error errors
-        match scheduled, ProtocolCodec.create config, rules with
-        | Ok entries, Ok codec, Ok rules ->
-            let state = {
-                Table = SessionTable.create pseudonyms; RouteScratch = Array.empty; Codec = codec; MaxActorValues = config.PlayerInput.MaxActorValues
-                Moderation = moderation
-                Identity = identity
-                Announcements = announcements
-                GroundMarks = groundMarks; GroundMarkRules = rules; Persistence = persistence
-                Schedule = AnnouncementSchedule.create (now ()) entries
-                Transport = transport; Logger = logger
-                Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
-            }
-            let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
-            let agent = Agent.Start(agentOptions, handle options authenticator state, isControl = isControl)
-            agent.TryPost ServerRuntimeMessage.Start |> ignore
-            Ok agent
-        | Error errors, _, _ | _, _, Error errors -> Error errors
-        | Ok _, Error _, Ok _ -> Error ["Cannot create runtime codec."]
+        let options = settings.Runtime
+        let state = {
+            Table = SessionTable.create pseudonyms; RouteScratch = Array.empty
+            Settings = settings; Moderation = moderation; Persistence = persistence
+            Schedule = AnnouncementSchedule.create (now ()) settings.Schedule
+            Transport = transport; Logger = logger
+            Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
+        }
+        let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
+        let agent = Agent.Start(agentOptions, handle options authenticator state, isControl = isControl)
+        agent.TryPost ServerRuntimeMessage.Start |> ignore
+        agent

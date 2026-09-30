@@ -136,7 +136,8 @@ let private withRuntimeNamed options identity pseudonyms createAuthentication ru
     }
     use authenticator = createAuthentication ()
     use writer = Agent.Start(AgentOptions.create "writer", discard)
-    use runtime = ServerRuntime.start options ServerConfig.defaults Dreamsleeve.Server.Domain.Moderation.empty identity pseudonyms AnnouncementOptions.defaults GroundMarkOptions.defaults (persistence writer) (authentication authenticator) transport NullLogger.Instance |> ok
+    let game = Settings.game ServerConfig.defaults options identity AnnouncementOptions.defaults GroundMarkOptions.defaults
+    use runtime = ServerRuntime.start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (authentication authenticator) transport NullLogger.Instance
     let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
@@ -419,19 +420,9 @@ let tests = testList "ServerRuntime" [
         })
     }
     testCase "transport blocking interval must fit runtime deadlines" (fun () ->
-        use authenticator = createAuthentication ()
-        let transport = {
-            MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
-            SetReadyHandler = ignore
-            Poll = fun () -> failwith "Invalid runtime must not poll."
-            Send = fun _ -> failwith "Invalid runtime must not send."
-            Close = ignore; Reset = ignore; Dispose = ignore
-        }
         let config = { ServerConfig.defaults with ServiceTimeoutMs = UInt32.MaxValue }
-        use writer = Agent.Start(AgentOptions.create "writer", discard)
-        match ServerRuntime.start ServerRuntimeOptions.defaults config Dreamsleeve.Server.Domain.Moderation.empty IdentityOptions.defaults Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn AnnouncementOptions.defaults GroundMarkOptions.defaults (persistence writer) (authentication authenticator) transport NullLogger.Instance with
-        | Error errors -> check (errors |> List.exists (fun error -> error.Contains "deadlines")) "Deadline validation missing."
-        | Ok runtime -> runtime.Abort(); failwith "Invalid runtime started.")
+        let errors = Settings.errors config ServerRuntimeOptions.defaults IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults
+        check (errors |> List.exists (fun error -> error.Contains "deadlines")) "Deadline validation missing.")
 
     testTask "a peer that never acknowledges close is reset without stopping healthy sessions" {
         let options = { ServerRuntimeOptions.defaults with ShutdownTimeoutMs = 100 }

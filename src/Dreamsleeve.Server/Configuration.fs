@@ -11,38 +11,33 @@ open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 
-type AuthenticationSettings = {
+/// An HTTP(S) listener of the server: authentication or the admin panel.
+type HttpListenerSettings = {
     ListenUrl: string
-    AllowInsecureRemote: bool
     AllowInsecureLoopback: bool
-    AllowRegistration: bool
+    /// Passwords without TLS outside loopback only by explicit choice.
+    AllowInsecureRemote: bool
+    /// Direct HTTPS without a reverse proxy.
     CertificatePath: string
     /// X-Forwarded-For/Proto from a proxy on this machine only.
     TrustForwardedHeaders: bool
+    /// Requests per client address and minute; the panel's sign-in has its own limit.
     RequestsPerMinute: int
     RequestTimeoutSeconds: int
+}
+
+type AuthenticationSettings = {
+    AllowRegistration: bool
+    Listener: HttpListenerSettings
     Service: AccountServiceOptions
 }
 
 /// The web panel host. By default it listens on loopback only; see docs/AdminPanelRu.md.
 type AdminSettings = {
     Enabled: bool
-    ListenUrl: string
-    AllowInsecureLoopback: bool
-    /// Passwords without TLS outside loopback only by explicit choice, like authentication.
-    AllowInsecureRemote: bool
-    /// Direct HTTPS without a reverse proxy.
-    CertificatePath: string
-    /// true only behind a proxy on loopback.
-    TrustForwardedHeaders: bool
-    SessionHours: int
-    CodeLifetimeMinutes: int
-    /// Sign-in, setup and reset attempts per client address and per name, each minute.
-    LoginAttemptsPerMinute: int
-    /// All other requests per client address and minute.
-    RequestsPerMinute: int
     MaxConnections: int
-    RequestTimeoutSeconds: int
+    Listener: HttpListenerSettings
+    Service: AdminServiceOptions
 }
 
 /// Word-list filtering of names and chat text. Anti-spam limits are in Runtime.Chat.
@@ -67,7 +62,8 @@ type ApplicationConfig = {
 
 [<RequireQualifiedAccess>]
 type LaunchCommand =
-    | Run of ApplicationConfig
+    /// The file as read, and its game part as the runtime receives it.
+    | Run of ApplicationConfig * GameSettings
     | WriteConfig of string
     | Help
 
@@ -76,17 +72,23 @@ module Configuration =
     let defaults = {
         Server = ServerConfig.defaults
         Runtime = ServerRuntimeOptions.defaults
-        Database = { DatabasePath = "data/dreamsleeve.db"; BusyTimeoutSeconds = 5 }
+        Database = SqliteAccountStoreConfig.defaults
         Authentication = {
-            ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; AllowRegistration = true
-            CertificatePath = ""; TrustForwardedHeaders = false; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
+            AllowRegistration = true
+            Listener = {
+                ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
+                TrustForwardedHeaders = false; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
+            }
             Service = AuthService.defaults
         }
         Admin = {
-            Enabled = true; ListenUrl = "http://127.0.0.1:8780"; AllowInsecureLoopback = true; AllowInsecureRemote = false
-            CertificatePath = ""; TrustForwardedHeaders = false; SessionHours = AdminService.defaults.SessionHours
-            CodeLifetimeMinutes = AdminService.defaults.CodeLifetimeMinutes; LoginAttemptsPerMinute = AdminService.defaults.LoginAttemptsPerMinute
-            RequestsPerMinute = 600; MaxConnections = 64; RequestTimeoutSeconds = 15
+            Enabled = true
+            MaxConnections = 64
+            Listener = {
+                ListenUrl = "http://127.0.0.1:8780"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
+                TrustForwardedHeaders = false; RequestsPerMinute = 600; RequestTimeoutSeconds = 15
+            }
+            Service = AdminService.defaults
         }
         Logging = ServerLogging.defaults
         Moderation = { Enabled = true; RulesPath = "moderation.toml" }
@@ -199,14 +201,6 @@ module Configuration =
         | :? IOException as error -> Error error.Message
         | :? UnauthorizedAccessException as error -> Error error.Message
 
-    /// The admin service takes the password cost of player accounts.
-    let adminService (config: ApplicationConfig) : AdminServiceOptions =
-        { AdminService.defaults with
-            PasswordIterations = config.Authentication.Service.PasswordIterations
-            SessionHours = config.Admin.SessionHours
-            CodeLifetimeMinutes = config.Admin.CodeLifetimeMinutes
-            LoginAttemptsPerMinute = config.Admin.LoginAttemptsPerMinute }
-
     let private isLoopback (uri: Uri) = uri.Host = "127.0.0.1" || uri.Host = "[::1]" || uri.Host = "::1"
 
     /// One rule for both hosts: an absolute URL of scheme, host and port only;
@@ -222,59 +216,56 @@ module Configuration =
             Error $"Remote HTTP {section} requires {section}.AllowInsecureRemote; otherwise use HTTPS or explicitly enabled literal loopback."
         | true, uri -> Ok uri
 
-    let private validateAdmin (config: ApplicationConfig) =
-        let admin = config.Admin
-        if not admin.Enabled then Ok ()
-        elif admin.RequestsPerMinute < 1 || admin.RequestsPerMinute > 100000 || admin.MaxConnections < 1 || admin.MaxConnections > 10000
-             || admin.RequestTimeoutSeconds < 1 || admin.RequestTimeoutSeconds > 120 || isNull admin.CertificatePath then
-            Error "Invalid admin request limits or certificate path."
-        elif not (AdminService.validate (adminService config)).IsEmpty then
-            Error (String.concat " " (AdminService.validate (adminService config)))
-        else
-            match listenUrl "Admin" admin.ListenUrl admin.AllowInsecureLoopback admin.AllowInsecureRemote,
-                  Uri.TryCreate(config.Authentication.ListenUrl, UriKind.Absolute) with
-            | Error error, _ -> Error error
-            | Ok panel, (true, authentication) when panel.Port <> 0 && panel.Port = authentication.Port ->
-                Error "Admin.ListenUrl and Authentication.ListenUrl must use different ports."
-            | Ok _, _ -> Ok ()
+    [<Literal>]
+    let MaxRequestsPerMinute = 100000
 
+    [<Literal>]
+    let MaxRequestTimeoutSeconds = 120
+
+    [<Literal>]
+    let MaxAdminConnections = 10000
+
+    let private listener section (settings: HttpListenerSettings) = [
+        match listenUrl section settings.ListenUrl settings.AllowInsecureLoopback settings.AllowInsecureRemote with
+        | Error error -> error
+        | Ok _ -> ()
+        if settings.RequestsPerMinute < 1 || settings.RequestsPerMinute > MaxRequestsPerMinute then
+            $"{section}.RequestsPerMinute must be 1..{MaxRequestsPerMinute}."
+        if settings.RequestTimeoutSeconds < 1 || settings.RequestTimeoutSeconds > MaxRequestTimeoutSeconds then
+            $"{section}.RequestTimeoutSeconds must be 1..{MaxRequestTimeoutSeconds}."
+    ]
+
+    let private port (url: string) =
+        match Uri.TryCreate(url, UriKind.Absolute) with
+        | true, uri -> Some uri.Port
+        | false, _ -> None
+
+    /// The one check of the whole file: every section's own rules and the rules
+    /// between sections. The owners that receive the settings trust them.
     let private validate (config: ApplicationConfig) =
-        if isNull (box config.Server) || isNull (box config.Runtime) || isNull (box config.Database) || isNull (box config.Authentication) || isNull (box config.Logging)
-           || isNull (box config.Admin) || isNull config.Admin.ListenUrl
-           || isNull (box config.Server.ChatInput) || isNull (box config.Server.PlayerInput) || isNull (box config.Runtime.Player)
-           || isNull (box config.Runtime.Chat) || isNull (box config.Runtime.Presence)
-           || isNull (box config.Authentication.Service) || isNull (box config.Moderation) || isNull (box config.Announcements)
-           || isNull (box config.GroundMarks) || isNull (box config.Identity) then
-            Error "Configuration sections cannot be null."
-        elif not (GroundMarkOptions.validate config.GroundMarks).IsEmpty then
-            Error (String.concat " " (GroundMarkOptions.validate config.GroundMarks))
-        elif not (IdentityOptions.validate config.Identity).IsEmpty then
-            Error (String.concat " " (IdentityOptions.validate config.Identity))
-        elif not (Single.IsFinite config.Runtime.Presence.VisibilityDistance) || config.Runtime.Presence.VisibilityDistance < 0.0f then
-            Error "Presence.VisibilityDistance must be finite and non-negative."
-        elif config.Runtime.MaxSessions > config.Server.PeerLimit then
-            Error "Runtime.MaxSessions cannot exceed Server.PeerLimit."
-        elif config.Runtime.MaxSessions > config.Server.MaxInitialPlayers then
-            Error "Server.MaxInitialPlayers must include every admitted session."
-        elif config.Runtime.Chat.HistoryCapacity > config.Server.MaxRecentMessages then
-            Error "Server.MaxRecentMessages must include the retained chat history."
-        elif String.IsNullOrWhiteSpace config.Database.DatabasePath
-             || config.Database.BusyTimeoutSeconds < 1 || config.Database.BusyTimeoutSeconds > 30 then
-            Error "Database path must be nonempty and busy timeout 1..30 seconds."
-        elif config.Authentication.RequestsPerMinute < 1 || config.Authentication.RequestsPerMinute > 100000
-             || config.Authentication.RequestTimeoutSeconds < 1 || config.Authentication.RequestTimeoutSeconds > 120
-             || isNull config.Authentication.CertificatePath then
-            Error "Invalid authentication request limits or certificate path."
-        elif isNull config.Moderation.RulesPath || (config.Moderation.Enabled && String.IsNullOrWhiteSpace config.Moderation.RulesPath) then
-            Error "Moderation.RulesPath must be set when moderation is enabled."
-        elif not (AuthService.validate config.Authentication.Service).IsEmpty then
-            Error (String.concat " " (AuthService.validate config.Authentication.Service))
-        else
-            listenUrl "Authentication" config.Authentication.ListenUrl config.Authentication.AllowInsecureLoopback config.Authentication.AllowInsecureRemote
-            |> Result.bind (fun _ -> validateAdmin config)
-            |> Result.bind (fun () -> ServerLogging.validate config.Logging)
-            |> Result.bind (fun () -> ServerConfig.validate config.Server |> Result.mapError (String.concat " "))
-            |> Result.map (fun _ -> config)
+        let authentication = config.Authentication
+        let admin = config.Admin
+        let errors = [
+            yield! SqliteAccountStoreConfig.validate config.Database
+            yield! listener "Authentication.Listener" authentication.Listener
+            yield! AuthService.validate authentication.Service
+            if admin.Enabled then
+                yield! listener "Admin.Listener" admin.Listener
+                yield! AdminService.validate admin.Service
+                if admin.MaxConnections < 1 || admin.MaxConnections > MaxAdminConnections then
+                    $"Admin.MaxConnections must be 1..{MaxAdminConnections}."
+                match port admin.Listener.ListenUrl, port authentication.Listener.ListenUrl with
+                | Some panel, Some accounts when panel = accounts ->
+                    "Admin.Listener.ListenUrl and Authentication.Listener.ListenUrl must use different ports."
+                | _ -> ()
+            match ServerLogging.validate config.Logging with Ok () -> () | Error error -> error
+            if config.Moderation.Enabled && String.IsNullOrWhiteSpace config.Moderation.RulesPath then
+                "Moderation.RulesPath must be set when moderation is enabled."
+        ]
+        match errors, GameSettings.create config.Server config.Runtime config.Identity config.Announcements config.GroundMarks with
+        | [], Ok game -> Ok (config, game)
+        | errors, Ok _ -> Error (String.concat " " errors)
+        | errors, Error game -> Error (String.concat " " (errors @ game))
 
     /// The effective settings as TOML, for the read-only configuration page.
     let render (config: ApplicationConfig) = TomlSerializer.Serialize(toTableValue (box config))
@@ -400,10 +391,11 @@ module Configuration =
     let rec private arguments configFile port (remainingArgs: string list) =
         match remainingArgs with
         | [] ->
-            let loaded = match configFile with None -> Ok defaults | Some path -> load path
-            loaded |> Result.bind validate |> Result.bind (fun config ->
-                let updated = match port with None -> config | Some value -> { config with Server = { config.Server with Port = value } }
-                validate updated |> Result.map LaunchCommand.Run)
+            // --port replaces the file's value before the one check.
+            match configFile with None -> Ok defaults | Some path -> load path
+            |> Result.map (fun config -> match port with None -> config | Some value -> { config with Server = { config.Server with Port = value } })
+            |> Result.bind validate
+            |> Result.map LaunchCommand.Run
         | "--help" :: _ | "-h" :: _ -> Ok LaunchCommand.Help
         | "--config" :: path :: remaining -> arguments (Some path) port remaining
         | "--port" :: value :: remaining ->

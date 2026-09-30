@@ -29,7 +29,7 @@ type private ManualClock() =
     member _.Advance(span: TimeSpan) = Interlocked.Add(&ticks, span.Ticks) |> ignore
 
 let private start database options clock =
-    AuthService.start options database NullLogger.Instance clock |> ok
+    AuthService.start options database NullLogger.Instance clock
 
 let private access (service: Agent<AuthMessage>) command =
     service.AskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitResult

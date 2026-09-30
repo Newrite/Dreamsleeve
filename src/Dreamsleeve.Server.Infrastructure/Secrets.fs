@@ -29,5 +29,12 @@ module Secrets =
             let bytes = Encoding.UTF8.GetByteCount password
             bytes >= 12 && bytes <= 128
 
+    /// PBKDF2 iterations of every password: the OWASP minimum and a bound on sign-in cost.
+    [<Literal>]
+    let MinPasswordIterations = 210000
+
+    [<Literal>]
+    let MaxPasswordIterations = 2000000
+
     let hasher iterations =
         PasswordHasher<obj>(Options.Create(PasswordHasherOptions(IterationCount = iterations)))

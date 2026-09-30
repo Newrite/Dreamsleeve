@@ -103,7 +103,7 @@ PlayerLeft. Оно содержит профиль автора и коррек�
 PlayerSession проверяет текст по словарю (`ModerationRules`, передаётся в
 `ServerRuntime.start`) до передачи в канал и публикует профиль и имя персонажа только
 в модерированном виде. ChatRoomAgent ограничивает частоту, всплеск и повторы по
-стабильному PlayerId (`Runtime.Chat.RateBurst/RateRefillMs/DuplicateWindowMs`) и
+стабильному PlayerId (`[Runtime.Chat.Rate]`: `Burst`, `RefillMs`, `DuplicateWindowMs`) и
 отклоняет лишнее до `Chat.append`. См. [модерация и имена](../../docs/ModerationAndNamesRu.md).
 
 Путь публикации: `runtime → PlayerSession → ChatRoomAgent → PlayerSession получателя → runtime`.
@@ -363,7 +363,22 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Pla
 ```
 
 По умолчанию ENet слушает 127.0.0.1:8778, auth HTTP — 127.0.0.1:8779, веб-админка — 127.0.0.1:8780
-(`[Admin]`; HTTP-код обоих хостов — в `Dreamsleeve.Server.Web`). Консоль сервера также принимает
+(`[Authentication.Listener]` и `[Admin.Listener]`; HTTP-код обоих хостов — в `Dreamsleeve.Server.Web`).
+
+### Проверка конфигурации
+
+Файл проверяется один раз, при разборе аргументов, до миграций БД и запуска слушателей.
+`Configuration.validate` собирает все ошибки сразу: разделы хоста (`[Database]`, слушатели,
+сервисы аккаунтов и панели, `[Logging]`, `[Moderation]`) своими валидаторами, а игровую часть
+(`[Server]`, `[Runtime]`, `[Identity]`, `[Announcements]`, `[GroundMarks]`) — `GameSettings.create`.
+Только она создаёт `GameSettings`: проверенные разделы вместе с тем, что из них следует (кодек,
+расписание объявлений, правила меток). `ServerRuntime.start` принимает `GameSettings`, а runtime,
+агенты, сессии, кодек, ENet-транспорт и сервисы аккаунтов и панели проверок конфигурации не
+повторяют. Правило нового ключа пишется один раз, у владельца его раздела, и попадает в общую
+проверку. Числовые пределы в сообщениях — именованные константы владельца (`MaxPeerLimit`,
+`MaxDisplayNameChangeIntervalMinutes`, `Secrets.MinPasswordIterations` и т. п.).
+`server.example.toml` содержит каждый ключ со значением по умолчанию; тест сверяет с
+`Configuration.defaults` и значения, и полноту. Консоль сервера также принимает
 `admin-setup` и `admin-reset <имя>` (одноразовые коды панели печатаются только в консоль).
 Пароль вводится скрыто; после регистрации запускайте без --register. В сетевом Client.Dev доступны
 `send <text>`, `announce <trusted|third> <kind> <signature|-> <text>`, `hide <on|off>`, `read`, команды наблюдений персонажа,

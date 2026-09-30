@@ -16,10 +16,8 @@ module ProtocolCodec =
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
-    let create (config: ServerConfig) : Result<ProtocolCodec, string list> =
-        match ServerConfig.protocolErrors config with
-        | [] -> Ok { Config = config }
-        | errors -> Error errors
+    /// The settings come checked by GameSettings.create.
+    let create (config: ServerConfig) = { Config = config }
 
     let private decodePayload (config: ServerConfig) (packet: Dreamsleeve.Protocol.Chat.ClientPacket) =
         let decoded =

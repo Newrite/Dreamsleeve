@@ -100,8 +100,7 @@ module ServerConfig =
             }
         }
 
-    // Used at codec creation and host startup; no per-packet config validation.
-    let protocolErrors (config: ServerConfig) =
+    let private protocolErrors (config: ServerConfig) =
         [
             if System.String.IsNullOrWhiteSpace config.ServerName || config.ServerName.Length > 128
                || config.ServerName |> Seq.exists System.Char.IsControl then
@@ -131,7 +130,24 @@ module ServerConfig =
             if config.PlayerInput.ActivityKey < 1 then "PlayerInput.ActivityKey must be positive."
         ]
 
-    /// Validate before initializing ENet or allocating its host.
+    /// ENet refuses more peers than this.
+    [<Literal>]
+    let MaxPeerLimit = 4095
+
+    /// ENet channels: at least the three delivery lanes, at most what one byte addresses.
+    [<Literal>]
+    let MinChannelLimit = 3
+
+    [<Literal>]
+    let MaxChannelLimit = 255
+
+    [<Literal>]
+    let MinIdleWaitMs = 1
+
+    [<Literal>]
+    let MaxIdleWaitMs = 10
+
+    /// Checked once, by GameSettings.create, before ENet is initialized.
     let validate config =
         let errors =
             [
@@ -139,21 +155,20 @@ module ServerConfig =
                     "BindAddress must be an IPv4 address."
                 if config.Port = 0us then
                     "Port must be between 1 and 65535."
-                if config.PeerLimit < 1 || config.PeerLimit > 4095 then
-                    "PeerLimit must be between 1 and 4095."
-                if config.ChannelLimit < 3 || config.ChannelLimit > 255 then
-                    "ChannelLimit must be between 3 and 255."
+                if config.PeerLimit < 1 || config.PeerLimit > MaxPeerLimit then
+                    $"PeerLimit must be between 1 and {MaxPeerLimit}."
+                if config.ChannelLimit < MinChannelLimit || config.ChannelLimit > MaxChannelLimit then
+                    $"ChannelLimit must be between {MinChannelLimit} and {MaxChannelLimit}."
                 if config.ReceiveBufferBytes < 1 || config.SendBufferBytes < 1 then
                     "UDP socket buffer sizes must be positive."
                 if config.ServiceTimeoutMs <> 0u then "ServiceTimeoutMs must be zero; the owner uses an interruptible idle wait."
-                if isNull (box config.Worker) then "Worker settings must not be null."
-                else
-                    if config.Worker.QueueCapacity < 1 || int64 config.Worker.QueueCapacity + 2L * int64 config.PeerLimit + 2L > int64 System.Int32.MaxValue then
-                        "Worker.QueueCapacity must be positive and leave room for lifecycle reserve."
-                    if config.Worker.QueueBytes < config.MaxPacketBytes then "Worker.QueueBytes must allow a maximum-size packet."
-                    if config.Worker.SendCommandsPerPass < 1 || config.Worker.SendBytesPerPass < 1 || config.Worker.WorkBudgetMs < 1 then
-                        "Worker admission budgets must be positive."
-                    if config.Worker.IdleWaitMs < 1 || config.Worker.IdleWaitMs > 10 then "Worker.IdleWaitMs must be between 1 and 10."
+                if config.Worker.QueueCapacity < 1 || int64 config.Worker.QueueCapacity + 2L * int64 config.PeerLimit + 2L > int64 System.Int32.MaxValue then
+                    "Worker.QueueCapacity must be positive and leave room for lifecycle reserve."
+                if config.Worker.QueueBytes < config.MaxPacketBytes then "Worker.QueueBytes must allow a maximum-size packet."
+                if config.Worker.SendCommandsPerPass < 1 || config.Worker.SendBytesPerPass < 1 || config.Worker.WorkBudgetMs < 1 then
+                    "Worker admission budgets must be positive."
+                if config.Worker.IdleWaitMs < MinIdleWaitMs || config.Worker.IdleWaitMs > MaxIdleWaitMs then
+                    $"Worker.IdleWaitMs must be between {MinIdleWaitMs} and {MaxIdleWaitMs}."
                 if config.EventBudget < 1 then
                     "EventBudget must be positive."
                 if config.MaxOutgoingPacketsPerPeer < 1 then
@@ -169,13 +184,10 @@ module ServerConfig =
 
         if List.isEmpty errors then Ok config else Error errors
 
-    /// Apply before serving any peers. Create ProtocolCodec from the same config before serving peers.
+    /// Apply before serving any peers; the codec uses the same settings.
     let applyPacketLimits config (host: Enet.EnetHost) =
-        match validate config with
-        | Error errors -> Error errors
-        | Ok _ when not host.IsCreated -> Error ["ENet host must be created."]
-        | Ok settings ->
-            host.SetMaximumPacketSize(unativeint settings.MaxPacketBytes)
-            host.SetMaximumWaitingData(unativeint settings.MaxWaitingData)
-
+        if not host.IsCreated then Error ["ENet host must be created."]
+        else
+            host.SetMaximumPacketSize(unativeint config.MaxPacketBytes)
+            host.SetMaximumWaitingData(unativeint config.MaxWaitingData)
             Ok ()

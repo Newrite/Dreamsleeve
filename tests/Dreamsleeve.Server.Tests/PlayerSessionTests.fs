@@ -67,9 +67,10 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
         SessionTicket = String('a', 43)
         Hiding = hideIdentity
     }
-    use player = PlayerSession.start settings 64 moderation announcements (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok) identity
+    let game = Settings.game ServerConfig.defaults { ServerRuntimeOptions.defaults with Player = settings } identity announcements GroundMarkOptions.defaults
+    use player = PlayerSession.start game moderation
                      (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
-                     (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request |> ok
+                     (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
     let fixture = { Request = request; Player = player; Authentication = queries;
                     Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Host = hostCommands
                     Names = nameRequests }
@@ -853,9 +854,9 @@ let tests = testList "PlayerSession" ([
         }
         use marks = Agent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
         use names = Agent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<DisplayNameChangeRequest>()))
-        use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok)
-                         IdentityOptions.defaults (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
-                         (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request |> ok
+        let game = Settings.game ServerConfig.defaults { ServerRuntimeOptions.defaults with Player = options } IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults
+        use player = PlayerSession.start game Moderation.empty (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+                         (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
         equal 0 chatCommands.Reader.Count

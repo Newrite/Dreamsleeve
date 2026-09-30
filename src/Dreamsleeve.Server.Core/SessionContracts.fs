@@ -205,17 +205,36 @@ type PresenceCommand =
     | Flush of AgentTick
     | Detach of SessionDetach
 
+/// Admission per stable account: up to Burst attempts at once, then one more
+/// per RefillMs; the same normalized text is refused within DuplicateWindowMs,
+/// 0 disables that check. Reconnecting resets nothing.
+type RateLimitOptions = {
+    Burst: int
+    RefillMs: int
+    DuplicateWindowMs: int
+}
+
+[<RequireQualifiedAccess>]
+module RateLimitOptions =
+    /// section names the table, e.g. "Runtime.Chat.Rate".
+    let validate section options = [
+        if options.Burst < 1 || options.RefillMs < 1 then $"{section}.Burst and {section}.RefillMs must be positive."
+        if options.DuplicateWindowMs < 0 then $"{section}.DuplicateWindowMs must be non-negative; 0 disables the check."
+    ]
+
+[<RequireQualifiedAccess>]
+module Visibility =
+    /// World units within which a client is told of players and marks, unless configured.
+    [<Literal>]
+    let DefaultDistance = 8192.0f
+
 type ChatRoomOptions = {
     MailboxCapacity: int
     ControlReserve: int
     HistoryCapacity: int
     MaxControlDeliveries: int
-    /// Messages an account may send at once before the refill rate applies.
-    RateBurst: int
-    /// One more message is allowed per this interval, up to RateBurst.
-    RateRefillMs: int
-    /// The same normalized text is refused within this window; 0 disables the check.
-    DuplicateWindowMs: int
+    /// Messages per stable account.
+    Rate: RateLimitOptions
 }
 
 type PresenceOptions = {
@@ -244,11 +263,8 @@ type GroundMarkOptions = {
     DeathMarkTtlDays: int
     /// Marks one spatial index cell may hold; more is refused, nothing is evicted.
     MaxPerIndexCell: int
-    /// Note placements an account may make at once; then one per RateRefillMs.
-    RateBurst: int
-    RateRefillMs: int
-    /// The same normalized note text is refused within this window; 0 disables it.
-    DuplicateWindowMs: int
+    /// Note placements per stable account.
+    NoteRate: RateLimitOptions
     /// Deaths reported closer together than this are refused.
     DeathMinIntervalMs: int
     /// A placement farther than this from the player's last known position is refused; 0 disables it.
@@ -259,13 +275,16 @@ type GroundMarkOptions = {
 
 [<RequireQualifiedAccess>]
 module GroundMarkOptions =
+    [<Literal>]
+    let MinExpiryCheckIntervalMs = 1000
+
     let defaults = {
         MailboxCapacity = 256; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 256
-        VisibilityDistance = 8192.0f
+        VisibilityDistance = Visibility.DefaultDistance
         MaxNotesPerPlayer = 5; MaxDeathMarksPerPlayer = 10
         NoteTtlDays = 30; DeathMarkTtlDays = 7
         MaxPerIndexCell = 64
-        RateBurst = 3; RateRefillMs = 20000; DuplicateWindowMs = 300000
+        NoteRate = { Burst = 3; RefillMs = 20000; DuplicateWindowMs = 300000 }
         DeathMinIntervalMs = 5000
         MaxPlacementDistance = 2048.0f
         ExpiryCheckIntervalMs = 60000
@@ -277,25 +296,23 @@ module GroundMarkOptions =
             options.DeathMarkTtlDays options.VisibilityDistance options.MaxPlacementDistance
 
     let validate options = [
-        if isNull (box options) then "GroundMarks section cannot be null."
-        else
-            if options.MailboxCapacity < 1 || options.ControlReserve < 1 || options.MaxControlDeliveries < 1 || options.MaxPendingWrites < 1 then
-                "GroundMarks queue capacities must be positive."
-            if int64 options.MailboxCapacity + int64 options.ControlReserve > int64 Int32.MaxValue then
-                "GroundMarks mailbox capacity and control reserve overflow."
-            if not (Single.IsFinite options.VisibilityDistance) || options.VisibilityDistance < 0.0f then
-                "GroundMarks.VisibilityDistance must be finite and non-negative."
-            if not (Single.IsFinite options.MaxPlacementDistance) || options.MaxPlacementDistance < 0.0f then
-                "GroundMarks.MaxPlacementDistance must be finite and non-negative."
-            if options.MaxNotesPerPlayer < 1 || options.MaxDeathMarksPerPlayer < 1 then
-                "GroundMarks.MaxNotesPerPlayer and MaxDeathMarksPerPlayer must be positive."
-            if options.NoteTtlDays < 0 || options.DeathMarkTtlDays < 0 then
-                "GroundMarks lifetimes must be non-negative days; 0 means no expiry."
-            if options.MaxPerIndexCell < 1 then "GroundMarks.MaxPerIndexCell must be positive."
-            if options.RateBurst < 1 || options.RateRefillMs < 1 || options.DuplicateWindowMs < 0 then
-                "GroundMarks note rate limits must be positive; DuplicateWindowMs non-negative."
-            if options.DeathMinIntervalMs < 0 then "GroundMarks.DeathMinIntervalMs must be non-negative."
-            if options.ExpiryCheckIntervalMs < 1000 then "GroundMarks.ExpiryCheckIntervalMs must be at least 1000."
+        if options.MailboxCapacity < 1 || options.ControlReserve < 1 || options.MaxControlDeliveries < 1 || options.MaxPendingWrites < 1 then
+            "GroundMarks queue capacities must be positive."
+        if int64 options.MailboxCapacity + int64 options.ControlReserve > int64 Int32.MaxValue then
+            "GroundMarks mailbox capacity and control reserve overflow."
+        if not (Single.IsFinite options.VisibilityDistance) || options.VisibilityDistance < 0.0f then
+            "GroundMarks.VisibilityDistance must be finite and non-negative."
+        if not (Single.IsFinite options.MaxPlacementDistance) || options.MaxPlacementDistance < 0.0f then
+            "GroundMarks.MaxPlacementDistance must be finite and non-negative."
+        if options.MaxNotesPerPlayer < 1 || options.MaxDeathMarksPerPlayer < 1 then
+            "GroundMarks.MaxNotesPerPlayer and MaxDeathMarksPerPlayer must be positive."
+        if options.NoteTtlDays < 0 || options.DeathMarkTtlDays < 0 then
+            "GroundMarks lifetimes must be non-negative days; 0 means no expiry."
+        if options.MaxPerIndexCell < 1 then "GroundMarks.MaxPerIndexCell must be positive."
+        yield! RateLimitOptions.validate "GroundMarks.NoteRate" options.NoteRate
+        if options.DeathMinIntervalMs < 0 then "GroundMarks.DeathMinIntervalMs must be non-negative."
+        if options.ExpiryCheckIntervalMs < MinExpiryCheckIntervalMs then
+            $"GroundMarks.ExpiryCheckIntervalMs must be at least {MinExpiryCheckIntervalMs}."
     ]
 
 type PlayerSessionOptions = {
@@ -306,6 +323,13 @@ type PlayerSessionOptions = {
     MaxBootstrapEvents: int
     MaxPendingOutput: int
 }
+
+[<RequireQualifiedAccess>]
+module PlayerSessionOptions =
+    /// Each outbox of a session holds its pending budget plus these slots, so a
+    /// join or detach and an identity or profile change always fit.
+    [<Literal>]
+    let OutboxReserve = 2
 
 /// [Identity]: whether players may hide their names behind a server pseudonym
 /// and how often one session may switch. Read at startup.
@@ -325,18 +349,19 @@ type IdentityOptions = {
 
 [<RequireQualifiedAccess>]
 module IdentityOptions =
+    /// A year of minutes.
+    [<Literal>]
+    let MaxDisplayNameChangeIntervalMinutes = 525600
+
     let defaults = {
         AllowHiddenIdentity = true; ToggleIntervalMs = 30000; PseudonymsPath = "pseudonyms.toml"
         AllowDisplayNameChange = true; DisplayNameChangeIntervalMinutes = 1
     }
 
     let validate options = [
-        if isNull (box options) then "Identity section cannot be null."
-        else
-            if options.ToggleIntervalMs < 0 then "Identity.ToggleIntervalMs must be non-negative."
-            if isNull options.PseudonymsPath then "Identity.PseudonymsPath cannot be null."
-            if options.DisplayNameChangeIntervalMinutes < 0 || options.DisplayNameChangeIntervalMinutes > 525600 then
-                "Identity.DisplayNameChangeIntervalMinutes must be 0..525600."
+        if options.ToggleIntervalMs < 0 then "Identity.ToggleIntervalMs must be non-negative."
+        if options.DisplayNameChangeIntervalMinutes < 0 || options.DisplayNameChangeIntervalMinutes > MaxDisplayNameChangeIntervalMinutes then
+            $"Identity.DisplayNameChangeIntervalMinutes must be 0..{MaxDisplayNameChangeIntervalMinutes}."
     ]
 
     let displayNameInterval options = TimeSpan.FromMinutes(float options.DisplayNameChangeIntervalMinutes)
@@ -365,6 +390,7 @@ module ServerRuntimeOptions =
         Player = { MailboxCapacity = 128; ControlReserve = 32; MaxPendingChat = 16; MaxPendingUpdates = 16;
                    MaxBootstrapEvents = 128; MaxPendingOutput = 128 }
         Chat = { MailboxCapacity = 256; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128
-                 RateBurst = 5; RateRefillMs = 2000; DuplicateWindowMs = 30000 }
-        Presence = { MailboxCapacity = 128; ControlReserve = 64; MaxControlDeliveries = 128; ReplicationIntervalMs = 50; VisibilityDistance = 8192.0f }
+                 Rate = { Burst = 5; RefillMs = 2000; DuplicateWindowMs = 30000 } }
+        Presence = { MailboxCapacity = 128; ControlReserve = 64; MaxControlDeliveries = 128; ReplicationIntervalMs = 50
+                     VisibilityDistance = Visibility.DefaultDistance }
     }

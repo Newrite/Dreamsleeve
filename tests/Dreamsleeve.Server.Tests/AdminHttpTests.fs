@@ -95,7 +95,8 @@ let private withPanel customize run = task {
         Configuration = fun () -> []
     }
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()
-    let config = customize { Configuration.defaults with Admin = { Configuration.defaults.Admin with ListenUrl = "http://127.0.0.1:0" } }
+    let panel = Configuration.defaults.Admin
+    let config = customize { Configuration.defaults with Admin = { panel with Listener = { panel.Listener with ListenUrl = "http://127.0.0.1:0" } } }
     let app = AdminRoutes.build (WebPorts.adminListener config) (WebPorts.adminRoutes config Moderation.empty) ports logger
     let! outcome = task {
         try
@@ -248,7 +249,7 @@ let tests = testSequenced (testList "Admin HTTP" [
         }))
 
     case "sign-in attempts are limited per address and forwarded addresses are ignored unless trusted" (fun () ->
-        let limit (config: ApplicationConfig) = { config with Admin = { config.Admin with LoginAttemptsPerMinute = 2 } }
+        let limit (config: ApplicationConfig) = { config with Admin = { config.Admin with Service = { config.Admin.Service with LoginAttemptsPerMinute = 2 } } }
         let wrong = [ "username", "root"; "password", "Wrong-Password-2026" ]
         task {
             do! withPanel limit (fun panel -> task {
@@ -258,7 +259,8 @@ let tests = testSequenced (testList "Admin HTTP" [
                 use! limited = submit panel "/login" wrong [ "X-Forwarded-For", Some "203.0.113.9" ]
                 status 429 limited
             })
-            let trusted (config: ApplicationConfig) = limit { config with Admin = { config.Admin with TrustForwardedHeaders = true } }
+            let trusted (config: ApplicationConfig) =
+                limit { config with Admin = { config.Admin with Listener = { config.Admin.Listener with TrustForwardedHeaders = true } } }
             do! withPanel trusted (fun panel -> task {
                 for index in 1 .. 3 do
                     use! refused = submit panel "/login" wrong [ "X-Forwarded-For", Some $"203.0.113.{index}" ]

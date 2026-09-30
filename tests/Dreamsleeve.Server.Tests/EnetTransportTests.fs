@@ -147,9 +147,9 @@ let tests = testSequenced <| testList "ENet transport" [
                 PacketSendResult.Sent "borrowed socket was not closed"
             until (fun () -> budget.Packets = 0) pump)
 
-    testCase "invalid socket buffers are rejected before host allocation" <| fun _ ->
-        Expect.isError (EnetTransport.createInline { ServerConfig.defaults with ReceiveBufferBytes = 0 }) "invalid receive buffer"
-        Expect.isError (EnetTransport.createInline { ServerConfig.defaults with SendBufferBytes = -1 }) "invalid send buffer"
+    testCase "invalid socket buffers fail the settings check before any host exists" <| fun _ ->
+        Expect.isError (ServerConfig.validate { ServerConfig.defaults with ReceiveBufferBytes = 0 }) "invalid receive buffer"
+        Expect.isError (ServerConfig.validate { ServerConfig.defaults with SendBufferBytes = -1 }) "invalid send buffer"
 
     testCase "outgoing leases enforce packet and byte budgets, then release after ACK and reset" <| fun _ ->
         withPeers (fun _ peer pump ->
@@ -322,12 +322,12 @@ let tests = testSequenced <| testList "ENet transport" [
             Expect.equal events.Count 0 "incompatible peer is never visible to the application"
         finally transport.Dispose()
 
-    testCase "invalid outgoing budgets fail before host allocation" <| fun _ ->
+    testCase "invalid outgoing budgets fail the settings check before any host exists" <| fun _ ->
         for settings in [
             { ServerConfig.defaults with MaxOutgoingPacketsPerPeer = 0 }
             { ServerConfig.defaults with MaxOutgoingPackets = 1 }
             { ServerConfig.defaults with MaxOutgoingBytesPerPeer = 1 }
             { ServerConfig.defaults with MaxOutgoingBytes = 1 }
         ] do
-            Expect.isError (EnetTransport.createInline settings) "invalid transport config"
+            Expect.isError (ServerConfig.validate settings) "invalid transport config"
 ]

@@ -84,9 +84,7 @@ module PlayerSession =
         /// The one own display name change waiting for the account service.
         mutable NameRequest: struct (uint64 * Guid) voption
         Moderation: ModerationRules
-        Identity: IdentityOptions
-        Announcements: AnnouncementOptions
-        GroundMarkRules: GroundMarkRules
+        Settings: GameSettings
         Pending: HashSet<uint64>
         Authentication: AgentOutbox<SessionAuthenticationRequest>
         DisplayNames: AgentOutbox<DisplayNameChangeRequest>
@@ -234,7 +232,7 @@ module PlayerSession =
 
     let private beginResolve (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) =
         match state.Phase, reliable context with
-        | Starting, Some _ when HiddenIdentity.isHidden request.Hiding && not state.Identity.AllowHiddenIdentity ->
+        | Starting, Some _ when HiddenIdentity.isHidden request.Hiding && not state.Settings.Identity.AllowHiddenIdentity ->
             // Refused before the ticket is spent: the player may reconnect with names shown.
             rejectOpening options request state context RequestRejectionCode.HiddenIdentityNotAllowed "The server does not let players hide their names."
         | Starting, Some address ->
@@ -322,7 +320,7 @@ module PlayerSession =
                     SelfPlayerId = opening.Player.Data.PlayerId
                     Players = online
                     Channels = [ channel chat; channel system ]
-                    AnnouncementSources = AnnouncementOptions.allowedSources state.Announcements
+                    AnnouncementSources = AnnouncementOptions.allowedSources state.Settings.Announcements
                     OwnPseudonym = state.Pseudonym
                     Hiding = state.Hiding
                 }
@@ -439,7 +437,7 @@ module PlayerSession =
                 close request state context "Request ID is invalid or already pending."
             elif state.Pending.Count >= options.MaxPendingChat then
                 refuse RequestRejectionCode.Overloaded "Too many pending requests." ""
-            elif not (GroundMarkPlacement.isNear state.GroundMarkRules.MaxPlacementDistance player.Location placement) then
+            elif not (GroundMarkPlacement.isNear state.Settings.GroundMarkRules.MaxPlacementDistance player.Location placement) then
                 refuse RequestRejectionCode.InvalidRequest "The mark is not where the player is." "placement"
             elif not (Moderation.allows state.Moderation text) then
                 refuse RequestRejectionCode.TextNotAllowed "Mark contains words that are not allowed." "text"
@@ -529,7 +527,7 @@ module PlayerSession =
             elif ChatChannelKind.tryOfChannelId announcement.ChannelId <> Some ChatChannelKind.System then
                 refuse RequestRejectionCode.InvalidRequest "Announcements are published only in the system channel." "channel_id"
             else
-                match AnnouncementOptions.admit state.Announcements announcement with
+                match AnnouncementOptions.admit state.Settings.Announcements announcement with
                 | Error rejection -> sendRefusal options request state context DeliveryLane.Chat requestId rejection
                 | Ok () ->
                     if state.Pending.Count >= options.MaxPendingChat then
@@ -618,13 +616,13 @@ module PlayerSession =
             let now = Environment.TickCount64
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
-            elif HiddenIdentity.isHidden hiding && not state.Identity.AllowHiddenIdentity then
+            elif HiddenIdentity.isHidden hiding && not state.Settings.Identity.AllowHiddenIdentity then
                 refuse RequestRejectionCode.HiddenIdentityNotAllowed "The server does not let players hide their names."
             elif state.IdentityRequest.IsSome then
                 refuse RequestRejectionCode.Overloaded "An identity change is already pending."
             elif hiding = state.Hiding then
                 send options request state context (ServerResponse.IdentityVisibilityChanged(requestId, state.Pseudonym, state.Hiding))
-            elif state.LastIdentitySwitch |> ValueOption.exists (fun last -> now - last < int64 state.Identity.ToggleIntervalMs) then
+            elif state.LastIdentitySwitch |> ValueOption.exists (fun last -> now - last < int64 state.Settings.Identity.ToggleIntervalMs) then
                 refuse RequestRejectionCode.RateLimited "Identity visibility was changed too recently."
             else
                 let reply = address.Map(fun pseudonym -> PlayerSessionMessage.IdentityChanged(requestId, pseudonym))
@@ -694,7 +692,7 @@ module PlayerSession =
         | Active player, Some address ->
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
-            elif not state.Identity.AllowDisplayNameChange then
+            elif not state.Settings.Identity.AllowDisplayNameChange then
                 refuse RequestRejectionCode.DisplayNameChangeNotAllowed "The server does not let players change their display name."
             elif state.NameRequest.IsSome then
                 refuse RequestRejectionCode.Overloaded "A display name change is already pending."
@@ -709,7 +707,7 @@ module PlayerSession =
                     OperationId = operationId
                     PlayerId = player.Data.PlayerId
                     DisplayName = name
-                    MinInterval = IdentityOptions.displayNameInterval state.Identity
+                    MinInterval = IdentityOptions.displayNameInterval state.Settings.Identity
                     ReplyTo = address.Map PlayerSessionMessage.DisplayNameReplied
                 }
                 if state.DisplayNames.TrySend(context, change) then
@@ -844,52 +842,41 @@ module PlayerSession =
         | PlayerSessionMessage.Read _ | PlayerSessionMessage.Describe _ | PlayerSessionMessage.ChangeDisplayName _ -> false
 
     /// chat and system are the owners of the global and the system channel; marks owns the ground marks.
-    /// identity says whether names may be hidden and how often the choice may change.
-    let start (options: PlayerSessionOptions) maxActorValues moderation announcements groundMarkRules (identity: IdentityOptions)
-              authentication displayNames chat system presence marks host (logger: ILogger) (request: SessionOpenRequest) =
-        let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
-                      options.MaxBootstrapEvents; options.MaxPendingOutput]
-        if limits |> List.exists (fun value -> value < 1) then
-            Error "Session queue limits must be positive."
-        elif int64 options.MailboxCapacity + int64 options.ControlReserve > int64 Int32.MaxValue
-             || options.MaxPendingChat > Int32.MaxValue - 2 || options.MaxPendingUpdates > Int32.MaxValue - 2
-             || options.MaxPendingOutput > Int32.MaxValue - 2 then
-            Error "Session queue limits exceed Int32.MaxValue."
-        else
-            let state = {
-                Phase = Starting
-                ChatAttached = false
-                SystemAttached = false
-                PresenceAttached = false
-                GroundMarksAttached = false
-                CloseSent = false
-                CharacterWithheld = false
-                Pseudonym = ValueNone
-                Hiding = HiddenIdentity.Shown
-                IdentityRequest = ValueNone
-                LastIdentitySwitch = ValueNone
-                Account = ValueNone
-                Role = PlayerRole.Player
-                OpenedAt = DateTimeOffset.UtcNow
-                NameRequest = ValueNone
-                Moderation = moderation
-                Identity = identity
-                Announcements = announcements
-                GroundMarkRules = groundMarkRules
-                Pending = HashSet()
-                Authentication = AgentOutbox(1, authentication)
-                DisplayNames = AgentOutbox(1, displayNames)
-                Chat = AgentOutbox(options.MaxPendingChat + 2, chat)
-                System = AgentOutbox(options.MaxPendingChat + 2, system)
-                Presence = AgentOutbox(options.MaxPendingUpdates + 2, presence)
-                GroundMarks = AgentOutbox(options.MaxPendingUpdates + options.MaxPendingChat + 2, marks)
-                Host = AgentOutbox(options.MaxPendingOutput + 2, host)
-                Logger = logger
-            }
-            let settings = {
-                AgentOptions.create $"player-{request.ConnectionId}" with
-                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
-            }
-            let agent = Agent.Start(settings, handle options maxActorValues request state, isControl = isControl)
-            agent.TryPost PlayerSessionMessage.Begin |> ignore
-            Ok agent
+    let start (settings: GameSettings) moderation authentication displayNames chat system presence marks host (logger: ILogger) (request: SessionOpenRequest) =
+        let options = settings.Runtime.Player
+        let reserve = PlayerSessionOptions.OutboxReserve
+        let state = {
+            Phase = Starting
+            ChatAttached = false
+            SystemAttached = false
+            PresenceAttached = false
+            GroundMarksAttached = false
+            CloseSent = false
+            CharacterWithheld = false
+            Pseudonym = ValueNone
+            Hiding = HiddenIdentity.Shown
+            IdentityRequest = ValueNone
+            LastIdentitySwitch = ValueNone
+            Account = ValueNone
+            Role = PlayerRole.Player
+            OpenedAt = DateTimeOffset.UtcNow
+            NameRequest = ValueNone
+            Moderation = moderation
+            Settings = settings
+            Pending = HashSet()
+            Authentication = AgentOutbox(1, authentication)
+            DisplayNames = AgentOutbox(1, displayNames)
+            Chat = AgentOutbox(options.MaxPendingChat + reserve, chat)
+            System = AgentOutbox(options.MaxPendingChat + reserve, system)
+            Presence = AgentOutbox(options.MaxPendingUpdates + reserve, presence)
+            GroundMarks = AgentOutbox(options.MaxPendingUpdates + options.MaxPendingChat + reserve, marks)
+            Host = AgentOutbox(options.MaxPendingOutput + reserve, host)
+            Logger = logger
+        }
+        let agentOptions = {
+            AgentOptions.create $"player-{request.ConnectionId}" with
+                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
+        }
+        let agent = Agent.Start(agentOptions, handle options settings.Server.PlayerInput.MaxActorValues request state, isControl = isControl)
+        agent.TryPost PlayerSessionMessage.Begin |> ignore
+        agent

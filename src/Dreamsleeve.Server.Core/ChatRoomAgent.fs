@@ -162,34 +162,22 @@ module ChatRoomAgent =
             reply.Reply(Chat.historyAfter cursor count state.Chat)
     }
 
-    /// One owner per channel; its ID follows from the kind.
+    /// One owner per channel; its ID follows from the kind. The options come
+    /// checked by GameSettings.create; the history itself is the domain's.
     let start (config: ChatRoomOptions) kind (host: ReliableAgentRef<SessionHostCommand>) =
-        if config.MailboxCapacity < 1 then
-            Error (DomainError.InvalidLimit("mailboxCapacity", config.MailboxCapacity))
-        elif config.ControlReserve < 1 || int64 config.MailboxCapacity + int64 config.ControlReserve > int64 Int32.MaxValue then
-            Error (DomainError.InvalidLimit("controlReserve", config.ControlReserve))
-        elif config.MaxControlDeliveries < 1 then
-            Error (DomainError.InvalidLimit("maxControlDeliveries", config.MaxControlDeliveries))
-        elif config.RateBurst < 1 then
-            Error (DomainError.InvalidLimit("rateBurst", config.RateBurst))
-        elif config.RateRefillMs < 1 then
-            Error (DomainError.InvalidLimit("rateRefillMs", config.RateRefillMs))
-        elif config.DuplicateWindowMs < 0 then
-            Error (DomainError.InvalidLimit("duplicateWindowMs", config.DuplicateWindowMs))
-        else
-            Chat.create kind config.HistoryCapacity
-            |> Result.map (fun chat ->
-                let state = {
-                    Chat = chat
-                    Members = Dictionary()
-                    Players = Dictionary()
-                    Senders = RateLimit.create { Burst = config.RateBurst; RefillMs = config.RateRefillMs; DuplicateWindowMs = config.DuplicateWindowMs }
-                    Options = config
-                    Host = AgentOutbox(config.MaxControlDeliveries, host)
-                    NextMessageId = 1UL
-                }
-                let options = {
-                    AgentOptions.create $"chat-room-{ChatChannelId.value (ChatChannelKind.channelId kind)}" with
-                        Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
-                }
-                Agent.Start(options, handle state, isControl = isControl))
+        Chat.create kind config.HistoryCapacity
+        |> Result.map (fun chat ->
+            let state = {
+                Chat = chat
+                Members = Dictionary()
+                Players = Dictionary()
+                Senders = RateLimit.create config.Rate
+                Options = config
+                Host = AgentOutbox(config.MaxControlDeliveries, host)
+                NextMessageId = 1UL
+            }
+            let options = {
+                AgentOptions.create $"chat-room-{ChatChannelId.value (ChatChannelKind.channelId kind)}" with
+                    Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
+            }
+            Agent.Start(options, handle state, isControl = isControl))

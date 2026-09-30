@@ -79,7 +79,7 @@ let private withPresenceUsing settings initialize run = task {
     use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
     use late = Agent.Start(AgentOptions.create "late", collect lateEvents)
     use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-    use presence = PresenceAgent.start settings (host.Ref.TryReliable().Value) |> ok
+    use presence = PresenceAgent.start settings (host.Ref.TryReliable().Value)
     let a, b = initialize (subscription 1UL alice, subscription 2UL bob)
     do! post presence (PresenceCommand.Join a)
     let! _ = receive aliceEvents
@@ -169,7 +169,7 @@ let tests = testList "PresenceAgent" [
         use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
         use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
         use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> ok
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
         let a, b = subscription 1UL alice, subscription 2UL bob
         let detach = { ConnectionId = a.ConnectionId; ReplyTo = cleanup.Ref.TryReliable().Value }
         do! post presence (PresenceCommand.Join a)
@@ -196,7 +196,7 @@ let tests = testList "PresenceAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
         use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> ok
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
         let old = subscription 1UL player
         let replacement = { old with ConnectionId = Guid.NewGuid() }
         let detach connectionId = post presence (PresenceCommand.Detach { ConnectionId = connectionId; ReplyTo = cleanup.Ref.TryReliable().Value })
@@ -226,7 +226,7 @@ let tests = testList "PresenceAgent" [
         use fast = Agent.Start(AgentOptions.create "fast", collect fastEvents)
         use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
         use newcomer = Agent.Start(AgentOptions.create "newcomer", collect nextEvents)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> ok
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
         let a, n = subscription 1UL fast, subscription 3UL newcomer
         let s = { ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile 2UL)); Events = receiver.Ref.TryReliable().Value.Map Value }
         do! post presence (PresenceCommand.Join a)
@@ -260,7 +260,7 @@ let tests = testList "PresenceAgent" [
         use healthy = Agent.Start(AgentOptions.create "healthy", collect events)
         use receiver = Agent.Start(options "blocked" (AgentMailbox.boundedWait 1), slow ignored)
         use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> ok
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
         do! post presence (PresenceCommand.Join(subscription 1UL healthy))
         let! _ = receive events
         let! release = block receiver
@@ -281,7 +281,7 @@ let tests = testList "PresenceAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use cleanup = Agent.Start(options "blocked-cleanup" (AgentMailbox.boundedWait 1), slow ignored)
         let! release = block cleanup
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> ok
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
         do! post presence (PresenceCommand.Detach { ConnectionId = Guid.NewGuid(); ReplyTo = cleanup.Ref.TryReliable().Value.Map Value })
         let! _ = terminal presence.Completion
         check presence.Completion.IsCanceled "Cleanup failure was swallowed."
@@ -371,7 +371,7 @@ let tests = testList "PresenceAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use fast = Agent.Start(AgentOptions.create "fast", collect fastEvents)
         use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> ok
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
         let a = subscription 1UL fast
         let s = { ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile 2UL)); Events = receiver.Ref.TryReliable().Value.Map Value }
         do! post presence (PresenceCommand.Join a)
@@ -513,7 +513,7 @@ let tests = testList "PresenceAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use receiver = Agent.Start(options "slow-realtime" (AgentMailbox.boundedWait 1), slow events)
         use cleanup = Agent.Start(AgentOptions.create "barrier", collect acknowledgments)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> ok
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
         let positioned = Player.create (profile 1UL) |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome (location 0.0f))) |> Player.snapshot
         let subscriber = { ConnectionId = Guid.NewGuid(); Snapshot = positioned; Events = receiver.Ref.TryReliable().Value.Map Value }
         do! post presence (PresenceCommand.Join subscriber)
@@ -553,13 +553,11 @@ let tests = testList "PresenceAgent" [
                 equal expected projected.Location.IsSome
         }))
 
-    case "zero radius includes only coincident positions and invalid radii fail startup" (fun () -> task {
-        let hostEvents = Channel.CreateUnbounded<SessionHostCommand>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
+    case "zero radius includes only coincident positions and invalid radii fail the settings check" (fun () -> task {
         for radius in [-1.0f; Single.NaN; Single.PositiveInfinity] do
-            match PresenceAgent.start { config with VisibilityDistance = radius } (host.Ref.TryReliable().Value) with
-            | Error DomainError.InvalidRadius -> ()
-            | other -> failwithf "Expected radius validation: %A" other
+            let runtime = { ServerRuntimeOptions.defaults with Presence = { ServerRuntimeOptions.defaults.Presence with VisibilityDistance = radius } }
+            let errors = Settings.errors ServerConfig.defaults runtime IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults
+            check (errors |> List.exists (fun error -> error.Contains "VisibilityDistance")) $"Expected radius validation: {radius}"
         do! withPositions { config with VisibilityDistance = 0.0f } (ValueSome (location 0.0f)) (ValueSome (location 0.0f)) (fun fixture -> task {
             let! _, (_, players) = flushViewsNow fixture
             check (players |> List.forall (fun value -> value.Location.IsSome)) "Coincident peers are visible."

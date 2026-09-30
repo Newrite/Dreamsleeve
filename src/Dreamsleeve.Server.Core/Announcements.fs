@@ -25,12 +25,8 @@ type ScheduledAnnouncement = {
 type AnnouncementOptions = {
     /// Retained announcements; also the tail sent at session opening.
     HistoryCapacity: int
-    /// Client announcements an account may post at once; chat has its own limit.
-    RateBurst: int
-    /// One more client announcement per this interval, up to RateBurst.
-    RateRefillMs: int
-    /// The same normalized announcement text is refused within this window; 0 disables it.
-    DuplicateWindowMs: int
+    /// Client announcements per stable account; chat has its own limit.
+    Rate: RateLimitOptions
     TrustedClient: ClientAnnouncementRules
     ThirdParty: ClientAnnouncementRules
     Scheduled: ScheduledAnnouncement list
@@ -40,9 +36,7 @@ type AnnouncementOptions = {
 module AnnouncementOptions =
     let defaults = {
         HistoryCapacity = 128
-        RateBurst = 3
-        RateRefillMs = 20000
-        DuplicateWindowMs = 300000
+        Rate = { Burst = 3; RefillMs = 20000; DuplicateWindowMs = 300000 }
         TrustedClient = { Enabled = true }
         ThirdParty = { Enabled = true }
         Scheduled = []
@@ -50,11 +44,7 @@ module AnnouncementOptions =
 
     /// Mailbox limits follow the chat channel; history and admission are the channel's own.
     let channelOptions (chat: ChatRoomOptions) options =
-        { chat with
-            HistoryCapacity = options.HistoryCapacity
-            RateBurst = options.RateBurst
-            RateRefillMs = options.RateRefillMs
-            DuplicateWindowMs = options.DuplicateWindowMs }
+        { chat with HistoryCapacity = options.HistoryCapacity; Rate = options.Rate }
 
     let private rules options = function
         | ClientAnnouncementSource.TrustedClient -> options.TrustedClient
@@ -79,26 +69,27 @@ module AnnouncementOptions =
         | "periodic" -> Some AnnouncementKind.Periodic
         | _ -> None
 
-    /// Resolves the schedule once, at runtime start. Server text has the chat
-    /// limit; the channel limits are checked by the channel owner itself.
+    /// A periodic server announcement repeats no more often than this.
+    [<Literal>]
+    let MinIntervalSeconds = 10
+
+    /// Resolves the schedule once, when the settings are checked. Server text has
+    /// the chat limit; the channel limits are checked by the channel owner itself.
     let resolve (limits: ChatInputLimits) options : Result<(ServerAnnouncement * ScheduledAnnouncement) list, string list> =
-        if isNull (box options) || isNull (box options.TrustedClient) || isNull (box options.ThirdParty) || isNull (box options.Scheduled) then
-            Error ["Announcements sections cannot be null."]
-        else
-            let entries =
-                options.Scheduled |> List.mapi (fun index entry ->
-                    let name = $"Announcements.Scheduled[{index}]"
-                    match ChatMessageText.create limits.MessageText entry.Text, parseKind entry.Kind with
-                    | Error _, _ -> Error $"{name}.Text must be nonempty text of at most {limits.MessageText} characters."
-                    | _, None -> Error $"{name}.Kind must be Announcement, Event, Admin or Periodic."
-                    | Ok _, Some _ when entry.DelaySeconds < 0 || entry.IntervalSeconds < 0 ->
-                        Error $"{name} delay and interval must be nonnegative."
-                    | Ok _, Some _ when entry.IntervalSeconds > 0 && entry.IntervalSeconds < 10 ->
-                        Error $"{name}.IntervalSeconds must be 0 (once) or at least 10."
-                    | Ok text, Some kind -> Ok({ Text = text; Kind = kind }, entry))
-            let errors = entries |> List.choose (function Error error -> Some error | Ok _ -> None)
-            if errors.IsEmpty then Ok(entries |> List.choose (function Ok entry -> Some entry | Error _ -> None))
-            else Error errors
+        let entries =
+            options.Scheduled |> List.mapi (fun index entry ->
+                let name = $"Announcements.Scheduled[{index}]"
+                match ChatMessageText.create limits.MessageText entry.Text, parseKind entry.Kind with
+                | Error _, _ -> Error $"{name}.Text must be nonempty text of at most {limits.MessageText} characters."
+                | _, None -> Error $"{name}.Kind must be Announcement, Event, Admin or Periodic."
+                | Ok _, Some _ when entry.DelaySeconds < 0 || entry.IntervalSeconds < 0 ->
+                    Error $"{name} delay and interval must be nonnegative."
+                | Ok _, Some _ when entry.IntervalSeconds > 0 && entry.IntervalSeconds < MinIntervalSeconds ->
+                    Error $"{name}.IntervalSeconds must be 0 (once) or at least {MinIntervalSeconds}."
+                | Ok text, Some kind -> Ok({ Text = text; Kind = kind }, entry))
+        let errors = entries |> List.choose (function Error error -> Some error | Ok _ -> None)
+        if errors.IsEmpty then Ok(entries |> List.choose (function Ok entry -> Some entry | Error _ -> None))
+        else Error errors
 
 /// Owned by the runtime. Due times are milliseconds of Environment.TickCount64.
 type AnnouncementSchedule = private {

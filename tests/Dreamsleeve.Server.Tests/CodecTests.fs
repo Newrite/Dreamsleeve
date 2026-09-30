@@ -21,8 +21,8 @@ let private error = function
     | Error value -> value
     | Ok _ -> failtest "Expected error"
 
-let private codec = ProtocolCodec.create config |> ok
-let private configured settings = ProtocolCodec.create settings |> ok
+let private codec = ProtocolCodec.create config
+let private configured settings = ProtocolCodec.create settings
 
 let private pid raw = PlayerId.create raw |> ok
 let private channel = ChatChannelId.create 1UL |> ok
@@ -88,14 +88,14 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
         let packet = Packets.single codec (ServerResponse.PlayersMoved movements) |> ok
         for limit in [32; 127; 128; packet.Length - 1; packet.Length] do
-            let small = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = limit } |> ok
+            let small = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = limit }
             let packets = ProtocolCodec.encode small Int32.MaxValue (ServerResponse.PlayersMoved movements) |> ok
             let decoded = packets |> List.collect (fun bytes ->
                 Expect.isLessThanOrEqual bytes.Length limit "Application limit includes the whole envelope."
                 let value = parseMovement bytes
                 value.Movements.Players |> Seq.map _.PlayerId |> List.ofSeq)
             Expect.equal decoded [1UL .. 130UL] "Every entry exactly once and in order."
-        let tiny = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = 1 } |> ok
+        let tiny = ProtocolCodec.create { ServerConfig.defaults with MaxPacketBytes = 1 }
         Expect.isError (ProtocolCodec.encode tiny Int32.MaxValue (ServerResponse.PlayersMoved movements)) "An unsplittable entry fails before any send."
         Expect.isError (Packets.single codec (ServerResponse.PlayersMoved (movementBatch []))) "Empty batch is invalid."
 
@@ -316,7 +316,6 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             { config with PlayerInput = { config.PlayerInput with ActivityKey = 0 } }
         ] do
             Expect.isError (ServerConfig.validate invalid) "startup validation"
-            Expect.isError (ProtocolCodec.create invalid) "codec startup validation"
 
     testCase "one config sets yENet packet budgets and codec boundaries" <| fun _ ->
         Expect.equal (enet.ENET_API.enet_initialize()) 0 "initialize ENet"
@@ -328,8 +327,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             Expect.equal host.MaximumPacketSize (unativeint bytes.Length) "actual host packet limit"
             Expect.equal host.MaximumWaitingData (unativeint (bytes.Length * 2)) "actual host waiting budget"
             Expect.isOk (ProtocolCodec.decodeClient (configured settings) bytes) "codec uses same config"
-            Expect.isError (ServerConfig.applyPacketLimits { settings with MaxPacketBytes = 0 } host) "reject invalid config"
-            Expect.equal host.MaximumPacketSize (unativeint bytes.Length) "no partial mutation"
+            Expect.isError (ServerConfig.validate { settings with MaxPacketBytes = 0 }) "the settings check refuses it before any host"
         finally
             enet.ENET_API.enet_deinitialize()
 

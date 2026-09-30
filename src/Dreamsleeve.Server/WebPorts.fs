@@ -17,28 +17,27 @@ module WebPorts =
     [<Literal>]
     let DescribeTimeoutMs = 1000
 
-    let authListener (settings: ApplicationConfig) : ListenerSettings =
-        { ListenUrl = settings.Authentication.ListenUrl; CertificatePath = settings.Authentication.CertificatePath
-          CertificatePasswordVariable = "DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD"
-          TrustForwardedHeaders = settings.Authentication.TrustForwardedHeaders }
+    let private listener passwordVariable (settings: HttpListenerSettings) : ListenerSettings =
+        { ListenUrl = settings.ListenUrl; CertificatePath = settings.CertificatePath
+          CertificatePasswordVariable = passwordVariable; TrustForwardedHeaders = settings.TrustForwardedHeaders }
+
+    let authListener (settings: ApplicationConfig) = listener "DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD" settings.Authentication.Listener
 
     let authRoutes (settings: ApplicationConfig) : AuthRouteSettings =
-        let service = settings.Authentication.Service
-        { AllowRegistration = settings.Authentication.AllowRegistration
-          RequestsPerMinute = settings.Authentication.RequestsPerMinute
-          RequestTimeoutSeconds = settings.Authentication.RequestTimeoutSeconds
-          MaxConnections = 2 * service.MailboxCapacity + service.MaxConcurrentOperations
+        let authentication = settings.Authentication
+        { AllowRegistration = authentication.AllowRegistration
+          RequestsPerMinute = authentication.Listener.RequestsPerMinute
+          RequestTimeoutSeconds = authentication.Listener.RequestTimeoutSeconds
+          MaxConnections = 2 * authentication.Service.MailboxCapacity + authentication.Service.MaxConcurrentOperations
           Input = settings.Server.ChatInput }
 
-    let adminListener (settings: ApplicationConfig) : ListenerSettings =
-        { ListenUrl = settings.Admin.ListenUrl; CertificatePath = settings.Admin.CertificatePath
-          CertificatePasswordVariable = "DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD"
-          TrustForwardedHeaders = settings.Admin.TrustForwardedHeaders }
+    let adminListener (settings: ApplicationConfig) = listener "DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD" settings.Admin.Listener
 
     let adminRoutes (settings: ApplicationConfig) moderation : AdminRouteSettings =
-        { SessionHours = settings.Admin.SessionHours; LoginAttemptsPerMinute = settings.Admin.LoginAttemptsPerMinute
-          RequestsPerMinute = settings.Admin.RequestsPerMinute; RequestTimeoutSeconds = settings.Admin.RequestTimeoutSeconds
-          MaxConnections = settings.Admin.MaxConnections; DescribeTimeoutMs = DescribeTimeoutMs
+        let admin = settings.Admin
+        { SessionHours = admin.Service.SessionHours; LoginAttemptsPerMinute = admin.Service.LoginAttemptsPerMinute
+          RequestsPerMinute = admin.Listener.RequestsPerMinute; RequestTimeoutSeconds = admin.Listener.RequestTimeoutSeconds
+          MaxConnections = admin.MaxConnections; DescribeTimeoutMs = DescribeTimeoutMs
           Input = settings.Server.ChatInput; Moderation = moderation }
 
     let auth (authentication: Agent<AuthMessage>) : AuthPorts =

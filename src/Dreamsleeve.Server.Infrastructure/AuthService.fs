@@ -139,7 +139,8 @@ module AuthService =
         if options.MaxConcurrentOperations < 1 || options.MaxConcurrentOperations > 64 then "Account workers must be 1..64."
         if options.MaxTickets < 1 || options.MaxTickets > 100000 then "Outstanding ticket capacity must be 1..100000."
         if options.TicketLifetimeSeconds < 1 || options.TicketLifetimeSeconds > 300 then "Session ticket lifetime must be 1..300 seconds."
-        if options.PasswordIterations < 210000 || options.PasswordIterations > 2000000 then "Password iterations must be 210000..2000000."
+        if options.PasswordIterations < Secrets.MinPasswordIterations || options.PasswordIterations > Secrets.MaxPasswordIterations then
+            $"Authentication.Service.PasswordIterations must be {Secrets.MinPasswordIterations}..{Secrets.MaxPasswordIterations}."
     ]
 
     let validPassword password = Secrets.validPassword password
@@ -453,29 +454,27 @@ module AuthService =
         | AuthMessage.SetRevocationTarget _ | AuthMessage.RevocationFailed _ -> true
         | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeDisplayName _ -> false
 
+    /// The options come checked with the configuration.
     let start options database (logger: ILogger) (clock: TimeProvider) =
-        match validate options with
-        | errors when not errors.IsEmpty -> Error (String.concat " " errors)
-        | _ ->
-            let dummyHash = (hasher options).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
-            let workerOptions = { AgentOptions.create "account-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
-            let work = AgentReplyDispatcher.createAsyncHandler options.MaxConcurrentOperations (fun (request: AccountWorkRequest) -> request.ReplyTo)
-                           (execute options database dummyHash clock logger)
-            let workers = Agent.Start(workerOptions, work)
-            let state = {
-                Tickets = Dictionary(); Pending = Dictionary(); Workers = workers
-                Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
-                Exclusive = false; Revocations = None; Stopping = false; WorkersStopped = false
-            }
-            let consumeRequest = AgentReplyDispatcher.createHandler options.MailboxCapacity
-                                     (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) (consume options clock state)
-            let settings = {
-                AgentOptions.create "authentication" with
-                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
-            }
-            let agent = Agent.Start(settings, handle options clock logger state consumeRequest, isControl = isControl)
-            agent.TryPost AuthMessage.Start |> ignore
-            Ok agent
+        let dummyHash = (hasher options).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
+        let workerOptions = { AgentOptions.create "account-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
+        let work = AgentReplyDispatcher.createAsyncHandler options.MaxConcurrentOperations (fun (request: AccountWorkRequest) -> request.ReplyTo)
+                       (execute options database dummyHash clock logger)
+        let workers = Agent.Start(workerOptions, work)
+        let state = {
+            Tickets = Dictionary(); Pending = Dictionary(); Workers = workers
+            Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
+            Exclusive = false; Revocations = None; Stopping = false; WorkersStopped = false
+        }
+        let consumeRequest = AgentReplyDispatcher.createHandler options.MailboxCapacity
+                                 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) (consume options clock state)
+        let settings = {
+            AgentOptions.create "authentication" with
+                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
+        }
+        let agent = Agent.Start(settings, handle options clock logger state consumeRequest, isControl = isControl)
+        agent.TryPost AuthMessage.Start |> ignore
+        agent
 
     let authenticator (agent: Agent<AuthMessage>) = {
         Requests = agent.Ref.TryReliable().Value.Map AuthMessage.ConsumeTicket

@@ -13,12 +13,35 @@ let private withFile (text: string) action =
     finally
         File.Delete path
 
+let private parsed path =
+    match Configuration.parse [|"--config"; path|] with
+    | Ok (LaunchCommand.Run(config, _)) -> config
+    | other -> failtestf "Expected a valid configuration: %A" other
+
+let private example () =
+    let rec find (directory: DirectoryInfo) =
+        let candidate = Path.Combine(directory.FullName, "src", "Dreamsleeve.Server", "server.example.toml")
+        if File.Exists candidate then candidate
+        elif isNull directory.Parent then failtest "server.example.toml not found"
+        else find directory.Parent
+    find (DirectoryInfo AppContext.BaseDirectory)
+
+// Every value path of a TOML document; table arrays and empty arrays name no setting.
+let rec private keys prefix (table: Tomlyn.Model.TomlTable) = [
+    for pair in table do
+        match pair.Value with
+        | :? Tomlyn.Model.TomlTable as nested -> yield! keys $"{prefix}{pair.Key}." nested
+        | :? Tomlyn.Model.TomlTableArray -> ()
+        | :? Tomlyn.Model.TomlArray as values when values.Count = 0 -> ()
+        | _ -> $"{prefix}{pair.Key}"
+]
+
 let tests = testList "Server configuration" [
     testCase "moderation is on by default, switchable and loads a separate word list" <| fun _ ->
         Expect.isTrue Configuration.defaults.Moderation.Enabled "enabled by default"
         withFile "[Moderation]\nEnabled = false\nRulesPath = ''\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with
-            | Ok (LaunchCommand.Run config) ->
+            | Ok (LaunchCommand.Run(config, _)) ->
                 Expect.isFalse config.Moderation.Enabled "switched off"
                 match Configuration.loadModeration config.Moderation with
                 | Ok (rules, warning) ->
@@ -92,20 +115,18 @@ let tests = testList "Server configuration" [
     testCase "server display name loads from TOML and rejects invalid labels" <| fun _ ->
         withFile "[Server]\nServerName = 'Голоса Тамриэля'\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with
-            | Ok (LaunchCommand.Run config) -> Expect.equal config.Server.ServerName "Голоса Тамриэля" "name"
+            | Ok (LaunchCommand.Run(config, _)) -> Expect.equal config.Server.ServerName "Голоса Тамриэля" "name"
             | other -> failtestf "%A" other)
         for name in [""; "   "; String.replicate 129 "x"] do
             withFile (sprintf "[Server]\nServerName = '%s'\n" name) (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) "invalid name")
 
     testCase "TOML comments empty tables literal paths and inline tables are supported" <| fun _ ->
-        withFile "# defaults\n" (fun path ->
-            Expect.equal (Configuration.parse [|"--config"; path|]) (Ok (LaunchCommand.Run Configuration.defaults)) "Comments-only TOML keeps defaults.")
-        withFile "" (fun path ->
-            Expect.equal (Configuration.parse [|"--config"; path|]) (Ok (LaunchCommand.Run Configuration.defaults)) "Empty TOML keeps defaults.")
+        withFile "# defaults\n" (fun path -> Expect.equal (parsed path) Configuration.defaults "Comments-only TOML keeps defaults.")
+        withFile "" (fun path -> Expect.equal (parsed path) Configuration.defaults "Empty TOML keeps defaults.")
         withFile "Server = { Port = 9_001 } # inline override\n[Database]\nDatabasePath = 'C:\\Игры\\data.db'\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with
-            | Ok (LaunchCommand.Run config) ->
+            | Ok (LaunchCommand.Run(config, _)) ->
                 Expect.equal config.Server.Port 9001us "TOML integer separators."
                 Expect.equal config.Database.DatabasePath @"C:\Игры\data.db" "Literal strings preserve backslashes."
             | other -> failwithf "%A" other)
@@ -120,7 +141,7 @@ let tests = testList "Server configuration" [
     testCase "partial nested settings retain defaults and CLI port takes precedence" <| fun _ ->
         withFile "[Runtime.Player]\nMaxPendingChat = 3\n\n[Server]\nPort = 9000\n" (fun path ->
             match Configuration.parse [|"--config"; path; "--port"; "9001"|] with
-            | Ok (LaunchCommand.Run config) ->
+            | Ok (LaunchCommand.Run(config, _)) ->
                 Expect.equal config.Server.Port 9001us "CLI override"
                 Expect.equal config.Runtime.Player.MaxPendingChat 3 "nested override"
                 Expect.equal config.Server.MaxOutgoingBytes Configuration.defaults.Server.MaxOutgoingBytes "omitted budget preserved"
@@ -129,7 +150,7 @@ let tests = testList "Server configuration" [
     testCase "movement target supports automatic MTU and rejects negative values" <| fun _ ->
         withFile "[Server]\nMovementPacketTargetBytes = 900\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with
-            | Ok (LaunchCommand.Run config) -> Expect.equal config.Server.MovementPacketTargetBytes 900 "Configured target."
+            | Ok (LaunchCommand.Run(config, _)) -> Expect.equal config.Server.MovementPacketTargetBytes 900 "Configured target."
             | other -> failwithf "%A" other)
         withFile "[Server]\nMovementPacketTargetBytes = 0\n" (fun path ->
             Expect.isOk (Configuration.parse [|"--config"; path|]) "Zero uses the negotiated MTU target.")
@@ -164,30 +185,30 @@ let tests = testList "Server configuration" [
         withFile "" (fun path ->
             Configuration.writeDefaults path |> function Ok () -> () | Error error -> failwith error
             match Configuration.parse [|"--config"; path|] with
-            | Ok (LaunchCommand.Run config) -> Expect.equal config Configuration.defaults "roundtrip all fields"
+            | Ok (LaunchCommand.Run(config, _)) -> Expect.equal config Configuration.defaults "roundtrip all fields"
             | other -> failwithf "Cannot load exported defaults: %A" other)
     testCase "authentication requires TLS outside explicitly enabled literal loopback" <| fun _ ->
         for source in [
-            "[Authentication]\nListenUrl = \"http://0.0.0.0:8779\"\n"
-            "[Authentication]\nListenUrl = \"http://localhost:8779\"\n"
-            "[Authentication]\nAllowInsecureLoopback = false\n"
-            "[Authentication]\nListenUrl = \"https://user:secret@example.com\"\n"
-            "[Authentication]\nListenUrl = \"https://example.com/auth\"\n"
-            "[Authentication]\nListenUrl = 0\n"
+            "[Authentication.Listener]\nListenUrl = \"http://0.0.0.0:8779\"\n"
+            "[Authentication.Listener]\nListenUrl = \"http://localhost:8779\"\n"
+            "[Authentication.Listener]\nAllowInsecureLoopback = false\n"
+            "[Authentication.Listener]\nListenUrl = \"https://user:secret@example.com\"\n"
+            "[Authentication.Listener]\nListenUrl = \"https://example.com/auth\"\n"
+            "[Authentication.Listener]\nListenUrl = 0\n"
         ] do
             withFile source (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) "unsafe or ambiguous binding rejected")
-        withFile "[Authentication]\nListenUrl = \"https://example.com:9443\"\nAllowInsecureLoopback = false\n" (fun path ->
+        withFile "[Authentication.Listener]\nListenUrl = \"https://example.com:9443\"\nAllowInsecureLoopback = false\n" (fun path ->
             Expect.isOk (Configuration.parse [|"--config"; path|]) "TLS endpoint accepted")
 
     testCase "remote HTTP requires explicit opt-in without weakening URL validation" <| fun _ ->
         for url in [ "http://0.0.0.0:8779"; "http://192.168.1.10:8779"; "http://auth.example.test:8779" ] do
-            let source = sprintf "[Authentication]\nListenUrl = \"%s\"\nAllowInsecureLoopback = false\n" url
+            let source = sprintf "[Authentication.Listener]\nListenUrl = \"%s\"\nAllowInsecureLoopback = false\n" url
             withFile source (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) "default rejects HTTP")
             withFile (source + "AllowInsecureRemote = true\n") (fun path ->
                 Expect.isOk (Configuration.parse [|"--config"; path|]) "explicit opt-in accepts HTTP")
-        withFile "[Authentication]\nListenUrl = \"http://user:secret@example.test\"\nAllowInsecureRemote = true\n" (fun path ->
+        withFile "[Authentication.Listener]\nListenUrl = \"http://user:secret@example.test\"\nAllowInsecureRemote = true\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "credentials in URL remain forbidden")
 
     testCase "account and logging limits and wrong section types fail before startup" <| fun _ ->
@@ -196,7 +217,7 @@ let tests = testList "Server configuration" [
             "[Authentication]\nService = 0\n"
             "[Authentication.Service]\nMaxConcurrentOperations = 0\n"
             "[Authentication.Service]\nPasswordIterations = 1\n"
-            "[Authentication]\nRequestsPerMinute = 0\n"
+            "[Authentication.Listener]\nRequestsPerMinute = 0\n"
             "[Database]\nDatabasePath = \"\"\n"
             "[Logging]\nMinimumLevel = \"bogus\"\n"
             "[Logging]\nConsole = false\nFilePath = \"\"\n"
@@ -216,7 +237,7 @@ let tests = testList "Server configuration" [
     testCase "visibility distance loads from TOML and rejects negative radius" <| fun _ ->
         withFile "[Runtime.Presence]\nVisibilityDistance = 0\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with
-            | Ok (LaunchCommand.Run config) -> Expect.equal config.Runtime.Presence.VisibilityDistance 0.0f "Zero is valid."
+            | Ok (LaunchCommand.Run(config, _)) -> Expect.equal config.Runtime.Presence.VisibilityDistance 0.0f "Zero is valid."
             | other -> failwithf "%A" other)
         withFile "[Runtime.Presence]\nVisibilityDistance = -1\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "Invalid distance rejected before startup.")
@@ -227,7 +248,7 @@ let tests = testList "Server configuration" [
         Expect.equal defaults.PseudonymsPath "pseudonyms.toml" "next to moderation.toml"
         withFile "[Identity]\nAllowHiddenIdentity = false\nToggleIntervalMs = 0\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with
-            | Ok (LaunchCommand.Run config) ->
+            | Ok (LaunchCommand.Run(config, _)) ->
                 Expect.isFalse config.Identity.AllowHiddenIdentity "switched off"
                 Expect.equal config.Identity.ToggleIntervalMs 0 "no limit"
                 Expect.equal config.Identity.PseudonymsPath "pseudonyms.toml" "default path kept"
@@ -266,57 +287,47 @@ let tests = testList "Server configuration" [
         match Configuration.parsePseudonyms (File.ReadAllText path) with
         | Ok (dictionary, 0) -> Expect.equal dictionary.Names Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn.Names "same 24 names"
         | other -> failtestf "%A" other
-        let example = File.ReadAllText(Path.Combine(Path.GetDirectoryName path, "server.example.toml"))
-        withFile example (fun serverPath ->
-            match Configuration.parse [|"--config"; serverPath|] with
-            | Ok (LaunchCommand.Run config) -> Expect.equal config.Identity Configuration.defaults.Identity "example documents the defaults"
-            | other -> failtestf "%A" other)
     testCase "the admin panel section has loopback defaults and an old server.toml without it keeps them" <| fun _ ->
         let admin = Configuration.defaults.Admin
         Expect.isTrue admin.Enabled "enabled by default"
-        Expect.equal admin.ListenUrl "http://127.0.0.1:8780" "loopback only"
-        Expect.isFalse admin.TrustForwardedHeaders "forwarded headers are not trusted"
-        Expect.isFalse Configuration.defaults.Authentication.TrustForwardedHeaders "same for authentication"
-        withFile "[Authentication]\nListenUrl = \"http://127.0.0.1:8779\"\nAllowRegistration = false\n" (fun path ->
-            match Configuration.parse [|"--config"; path|] with
-            | Ok (LaunchCommand.Run config) -> Expect.equal config.Admin admin "an older file gets the defaults"
-            | other -> failtestf "%A" other)
-        withFile "[Admin]\nEnabled = false\nListenUrl = \"http://0.0.0.0:8780\"\n" (fun path ->
+        Expect.equal admin.Listener.ListenUrl "http://127.0.0.1:8780" "loopback only"
+        Expect.isFalse admin.Listener.TrustForwardedHeaders "forwarded headers are not trusted"
+        Expect.isFalse Configuration.defaults.Authentication.Listener.TrustForwardedHeaders "same for authentication"
+        withFile "[Authentication]\nAllowRegistration = false\n" (fun path ->
+            Expect.equal (parsed path).Admin admin "a file without [Admin] gets the defaults")
+        withFile "[Admin]\nEnabled = false\n[Admin.Listener]\nListenUrl = \"http://0.0.0.0:8780\"\n" (fun path ->
             Expect.isOk (Configuration.parse [|"--config"; path|]) "a disabled panel is not validated")
 
     testCase "the admin panel refuses remote HTTP without permission, a shared port and bad limits" <| fun _ ->
         for source in [
-            "[Admin]\nListenUrl = \"http://0.0.0.0:8780\"\n"
-            "[Admin]\nListenUrl = \"http://admin.example.test:8780\"\n"
-            "[Admin]\nListenUrl = \"http://127.0.0.1:8779\"\n"
-            "[Admin]\nListenUrl = \"https://example.test/admin\"\n"
-            "[Admin]\nAllowInsecureLoopback = false\n"
-            "[Admin]\nSessionHours = 0\n"
-            "[Admin]\nCodeLifetimeMinutes = 61\n"
-            "[Admin]\nLoginAttemptsPerMinute = 0\n"
-            "[Admin]\nRequestsPerMinute = 0\n"
-            "[Admin]\nTrustForwardedHeaders = 1\n"
+            "[Admin.Listener]\nListenUrl = \"http://0.0.0.0:8780\"\n"
+            "[Admin.Listener]\nListenUrl = \"http://admin.example.test:8780\"\n"
+            "[Admin.Listener]\nListenUrl = \"http://127.0.0.1:8779\"\n"
+            "[Admin.Listener]\nListenUrl = \"https://example.test/admin\"\n"
+            "[Admin.Listener]\nAllowInsecureLoopback = false\n"
+            "[Admin.Service]\nSessionHours = 0\n"
+            "[Admin.Service]\nCodeLifetimeMinutes = 61\n"
+            "[Admin.Service]\nLoginAttemptsPerMinute = 0\n"
+            "[Admin.Service]\nPasswordIterations = 1\n"
+            "[Admin.Listener]\nRequestsPerMinute = 0\n"
+            "[Admin.Listener]\nTrustForwardedHeaders = 1\n"
+            "[Admin]\nMaxConnections = 0\n"
             "[Admin]\nPassword = \"x\"\n"
         ] do
             withFile source (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) $"refused: {source}")
         for source in [
-            "[Admin]\nListenUrl = \"http://0.0.0.0:8780\"\nAllowInsecureRemote = true\n"
-            "[Admin]\nListenUrl = \"https://admin.example.test:9443\"\n"
-            "[Admin]\nListenUrl = \"http://[::1]:8780\"\nTrustForwardedHeaders = true\n"
+            "[Admin.Listener]\nListenUrl = \"http://0.0.0.0:8780\"\nAllowInsecureRemote = true\n"
+            "[Admin.Listener]\nListenUrl = \"https://admin.example.test:9443\"\n"
+            "[Admin.Listener]\nListenUrl = \"http://[::1]:8780\"\nTrustForwardedHeaders = true\n"
         ] do
             withFile source (fun path ->
                 Expect.isOk (Configuration.parse [|"--config"; path|]) $"accepted: {source}")
 
-    testCase "the bundled server example documents the authentication and admin defaults" <| fun _ ->
-        let rec find (directory: DirectoryInfo) =
-            let candidate = Path.Combine(directory.FullName, "src", "Dreamsleeve.Server", "server.example.toml")
-            if File.Exists candidate then candidate
-            elif isNull directory.Parent then failtest "server.example.toml not found"
-            else find directory.Parent
-        match Configuration.parse [|"--config"; find (DirectoryInfo AppContext.BaseDirectory)|] with
-        | Ok (LaunchCommand.Run config) ->
-            Expect.equal config.Admin Configuration.defaults.Admin "[Admin] equals the defaults"
-            Expect.equal config.Authentication Configuration.defaults.Authentication "[Authentication] equals the defaults"
-        | other -> failtestf "%A" other
+    testCase "the bundled server example names every setting with its default value" <| fun _ ->
+        let path = example ()
+        Expect.equal (parsed path) Configuration.defaults "every value in the example equals the default"
+        let written = Tomlyn.TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(File.ReadAllText path)
+        let defaults = Tomlyn.TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(Configuration.render Configuration.defaults)
+        Expect.equal (keys "" written |> List.sort) (keys "" defaults |> List.sort) "the example names every setting"
 ]

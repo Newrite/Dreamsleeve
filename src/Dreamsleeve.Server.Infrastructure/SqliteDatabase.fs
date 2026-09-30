@@ -12,6 +12,21 @@ type SqliteAccountStoreConfig = {
 }
 
 [<RequireQualifiedAccess>]
+module SqliteAccountStoreConfig =
+    [<Literal>]
+    let MaxBusyTimeoutSeconds = 30
+
+    let defaults = { DatabasePath = "data/dreamsleeve.db"; BusyTimeoutSeconds = 5 }
+
+    /// [Database], checked once with the rest of the configuration.
+    let validate config = [
+        if String.IsNullOrWhiteSpace config.DatabasePath || config.DatabasePath = ":memory:" then
+            "Database.DatabasePath must name a persistent SQLite file."
+        if config.BusyTimeoutSeconds < 1 || config.BusyTimeoutSeconds > MaxBusyTimeoutSeconds then
+            $"Database.BusyTimeoutSeconds must be 1..{MaxBusyTimeoutSeconds}."
+    ]
+
+[<RequireQualifiedAccess>]
 module internal SqliteDatabase =
     [<Literal>]
     let SchemaVersion = 7L
@@ -31,14 +46,6 @@ module internal SqliteDatabase =
         use command = connection.CreateCommand()
         command.CommandText <- sql
         command.ExecuteScalar()
-
-    let private validateConfig config =
-        if String.IsNullOrWhiteSpace config.DatabasePath || config.DatabasePath = ":memory:" then
-            Error "Accounts.DatabasePath must name a persistent SQLite file."
-        elif config.BusyTimeoutSeconds < 1 then
-            Error "Accounts.BusyTimeoutSeconds must be positive."
-        else
-            Ok ()
 
     let private verifySchema (connection: SqliteConnection) =
         let version = scalar connection "PRAGMA user_version" :?> int64
@@ -68,39 +75,36 @@ module internal SqliteDatabase =
     /// Called before listeners start. SQLite and Migrondi execute synchronously;
     /// the application must offload this entire operation, like ordinary store calls.
     let initialize config migrationsDirectory =
-        match validateConfig config with
-        | Error error -> Error error
-        | Ok () ->
-            try
-                let path = Path.GetFullPath config.DatabasePath
-                Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+        try
+            let path = Path.GetFullPath config.DatabasePath
+            Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
 
-                use connection = new SqliteConnection(connectionString config SqliteOpenMode.ReadWriteCreate)
-                connection.Open()
-                let version = scalar connection "PRAGMA user_version" :?> int64
-                let application = scalar connection "PRAGMA application_id" :?> int64
+            use connection = new SqliteConnection(connectionString config SqliteOpenMode.ReadWriteCreate)
+            connection.Open()
+            let version = scalar connection "PRAGMA user_version" :?> int64
+            let application = scalar connection "PRAGMA application_id" :?> int64
 
-                if version > SchemaVersion || version < 0L then
-                    Error $"Account database version {version} is not supported by schema {SchemaVersion}."
-                elif application <> 0L && application <> ApplicationId then
-                    Error $"The SQLite file belongs to a different application ({application})."
-                elif not (Directory.Exists migrationsDirectory) then
-                    Error $"Account migrations directory is missing: {migrationsDirectory}"
-                else
-                    let migrationConfig = {
-                        MigrondiConfig.Default with
-                            connection = connection.ConnectionString
-                            migrations = Path.GetFullPath migrationsDirectory
-                    }
-                    let migrations = Migrondi.MigrondiFactory(migrationConfig, AppContext.BaseDirectory, NullLogger.Instance)
-                    migrations.Initialize()
-                    migrations.RunUp() |> ignore
+            if version > SchemaVersion || version < 0L then
+                Error $"Account database version {version} is not supported by schema {SchemaVersion}."
+            elif application <> 0L && application <> ApplicationId then
+                Error $"The SQLite file belongs to a different application ({application})."
+            elif not (Directory.Exists migrationsDirectory) then
+                Error $"Account migrations directory is missing: {migrationsDirectory}"
+            else
+                let migrationConfig = {
+                    MigrondiConfig.Default with
+                        connection = connection.ConnectionString
+                        migrations = Path.GetFullPath migrationsDirectory
+                }
+                let migrations = Migrondi.MigrondiFactory(migrationConfig, AppContext.BaseDirectory, NullLogger.Instance)
+                migrations.Initialize()
+                migrations.RunUp() |> ignore
 
-                    match verifySchema connection with
-                    | Error error -> Error error
-                    | Ok () ->
-                        let mode = scalar connection "PRAGMA journal_mode=WAL" :?> string
-                        if mode.Equals("wal", StringComparison.OrdinalIgnoreCase) then Ok ()
-                        else Error $"SQLite did not enable WAL mode (returned {mode})."
-            with error ->
-                Error $"Could not initialize the account database: {error}"
+                match verifySchema connection with
+                | Error error -> Error error
+                | Ok () ->
+                    let mode = scalar connection "PRAGMA journal_mode=WAL" :?> string
+                    if mode.Equals("wal", StringComparison.OrdinalIgnoreCase) then Ok ()
+                    else Error $"SQLite did not enable WAL mode (returned {mode})."
+        with error ->
+            Error $"Could not initialize the account database: {error}"

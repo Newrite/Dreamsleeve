@@ -289,7 +289,7 @@ Client.Dev: --movement-demo выводит детерминированную т
 
 Для явного разрешения HTTP по удалённому IP/домену задайте корневой параметр
 `allowInsecureRemoteAuth = true`. По умолчанию он выключен. Сервер отдельно
-должен разрешить `[Authentication].AllowInsecureRemote = true`.
+должен разрешить `[Authentication.Listener] AllowInsecureRemote = true`.
 См. режим тестирования в `docs/AuthenticationRu.md`.
 
 Имена над светлячками: `showFireflyNames = true`, `fireflyNameOcclusion = true`,

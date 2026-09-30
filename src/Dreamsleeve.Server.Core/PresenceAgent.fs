@@ -330,27 +330,17 @@ module PresenceAgent =
         | PresenceCommand.Join _ | PresenceCommand.Flush _ | PresenceCommand.Detach _ -> true
         | PresenceCommand.Update _ -> false
 
+    /// The options come checked by GameSettings.create.
     let start (config: PresenceOptions) (host: ReliableAgentRef<SessionHostCommand>) =
-        if config.MailboxCapacity < 1 then
-            Error (DomainError.InvalidLimit("mailboxCapacity", config.MailboxCapacity))
-        elif config.ControlReserve < 1 || int64 config.MailboxCapacity + int64 config.ControlReserve > int64 Int32.MaxValue then
-            Error (DomainError.InvalidLimit("controlReserve", config.ControlReserve))
-        elif config.MaxControlDeliveries < 1 then
-            Error (DomainError.InvalidLimit("maxControlDeliveries", config.MaxControlDeliveries))
-        elif config.ReplicationIntervalMs < 1 then
-            Error (DomainError.InvalidLimit("replicationIntervalMs", config.ReplicationIntervalMs))
-        elif not (Single.IsFinite config.VisibilityDistance) || config.VisibilityDistance < 0.0f then
-            Error DomainError.InvalidRadius
-        else
-            let state = {
-                Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
-                Candidates = HashSet(); Movements = ResizeArray()
-                LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
-                VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
-                Ticker = None; LastFlush = 0L; Host = AgentOutbox(config.MaxControlDeliveries, host)
-            }
-            let options = {
-                AgentOptions.create "presence" with
-                    Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
-            }
-            Ok (Agent.Start(options, handle config state, isControl = isControl))
+        let state = {
+            Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
+            Candidates = HashSet(); Movements = ResizeArray()
+            LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
+            VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
+            Ticker = None; LastFlush = 0L; Host = AgentOutbox(config.MaxControlDeliveries, host)
+        }
+        let options = {
+            AgentOptions.create "presence" with
+                Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
+        }
+        Agent.Start(options, handle config state, isControl = isControl)

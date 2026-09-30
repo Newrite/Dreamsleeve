@@ -124,17 +124,18 @@ module AdminService =
     }
 
     let defaults = {
-        MailboxCapacity = 64; MaxConcurrentOperations = 2; PasswordIterations = 210000
+        MailboxCapacity = 64; MaxConcurrentOperations = 2; PasswordIterations = Secrets.MinPasswordIterations
         SessionHours = 12; CodeLifetimeMinutes = 15; LoginAttemptsPerMinute = 10; MaxTrackedLogins = 1024
     }
 
     let validate options = [
         if options.MailboxCapacity < 1 || options.MailboxCapacity > 65536 then "Admin mailbox capacity must be 1..65536."
         if options.MaxConcurrentOperations < 1 || options.MaxConcurrentOperations > 64 then "Admin workers must be 1..64."
-        if options.PasswordIterations < 210000 || options.PasswordIterations > 2000000 then "Password iterations must be 210000..2000000."
-        if options.SessionHours < 1 || options.SessionHours > 720 then "Admin.SessionHours must be 1..720."
-        if options.CodeLifetimeMinutes < 1 || options.CodeLifetimeMinutes > 60 then "Admin.CodeLifetimeMinutes must be 1..60."
-        if options.LoginAttemptsPerMinute < 1 || options.LoginAttemptsPerMinute > 1000 then "Admin.LoginAttemptsPerMinute must be 1..1000."
+        if options.PasswordIterations < Secrets.MinPasswordIterations || options.PasswordIterations > Secrets.MaxPasswordIterations then
+            $"Admin.Service.PasswordIterations must be {Secrets.MinPasswordIterations}..{Secrets.MaxPasswordIterations}."
+        if options.SessionHours < 1 || options.SessionHours > 720 then "Admin.Service.SessionHours must be 1..720."
+        if options.CodeLifetimeMinutes < 1 || options.CodeLifetimeMinutes > 60 then "Admin.Service.CodeLifetimeMinutes must be 1..60."
+        if options.LoginAttemptsPerMinute < 1 || options.LoginAttemptsPerMinute > 1000 then "Admin.Service.LoginAttemptsPerMinute must be 1..1000."
         if options.MaxTrackedLogins < 1 || options.MaxTrackedLogins > 100000 then "Tracked admin logins must be 1..100000."
     ]
 
@@ -394,25 +395,23 @@ module AdminService =
         | AdminMessage.Start | AdminMessage.Finished _ | AdminMessage.WorkersStopped _ | AdminMessage.Stop -> true
         | AdminMessage.Access _ -> false
 
+    /// The options come checked with the configuration.
     let start options database (logger: ILogger) (clock: TimeProvider) =
-        match validate options with
-        | errors when not errors.IsEmpty -> Error (String.concat " " errors)
-        | _ ->
-            let dummyHash = (Secrets.hasher options.PasswordIterations).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
-            let workerOptions = { AgentOptions.create "admin-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
-            let work = AgentReplyDispatcher.createAsyncHandler options.MaxConcurrentOperations (fun (request: AdminWorkRequest) -> request.ReplyTo)
-                           (execute options database dummyHash clock logger)
-            let workers = Agent.Start(workerOptions, work)
-            let state = {
-                Pending = Dictionary(); Workers = workers
-                Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
-                Attempts = Dictionary(); Codes = AdminCodes.empty
-                Exclusive = false; Stopping = false; WorkersStopped = false
-            }
-            let settings = {
-                AgentOptions.create "admin" with
-                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
-            }
-            let agent = Agent.Start(settings, handle options clock logger state, isControl = isControl)
-            agent.TryPost AdminMessage.Start |> ignore
-            Ok agent
+        let dummyHash = (Secrets.hasher options.PasswordIterations).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
+        let workerOptions = { AgentOptions.create "admin-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
+        let work = AgentReplyDispatcher.createAsyncHandler options.MaxConcurrentOperations (fun (request: AdminWorkRequest) -> request.ReplyTo)
+                       (execute options database dummyHash clock logger)
+        let workers = Agent.Start(workerOptions, work)
+        let state = {
+            Pending = Dictionary(); Workers = workers
+            Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
+            Attempts = Dictionary(); Codes = AdminCodes.empty
+            Exclusive = false; Stopping = false; WorkersStopped = false
+        }
+        let settings = {
+            AgentOptions.create "admin" with
+                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
+        }
+        let agent = Agent.Start(settings, handle options clock logger state, isControl = isControl)
+        agent.TryPost AdminMessage.Start |> ignore
+        agent

@@ -353,50 +353,47 @@ module TransportOwner =
     /// Factory and every call on its result execute on the dedicated owner thread.
     /// Success from Send means bounded handoff admission, not remote delivery.
     let create (config: ServerConfig) factory =
-        match ServerConfig.validate config with
-        | Error errors -> Error(String.concat " " errors)
-        | Ok config ->
-            let state = {
-                Config = config; Gate = obj(); Incoming = Queue(); Outgoing = Queue(); Peers = Dictionary()
-                Payloads = ConcurrentDictionary(); Wake = new AutoResetEvent(false)
-                Ready = TaskCompletionSource<Result<unit, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
-                IncomingPackets = 0; IncomingBytes = 0L; OutgoingPackets = 0; OutgoingBytes = 0L
-                Stopped = false; Fault = None; ReadyHandler = None; Notified = false; Dropped = 0L; NativeFailures = 0L
-            }
-            let worker = Thread(ThreadStart(run state factory), IsBackground = true, Name = "Dreamsleeve ENet owner")
-            worker.Start()
-            match state.Ready.Task.GetAwaiter().GetResult() with
-            | Error reason ->
-                lock state.Gate (fun () -> state.Stopped <- true)
-                state.Wake.Set() |> ignore
-                worker.Join()
-                state.Wake.Dispose()
-                Error reason
-            | Ok () ->
-                Ok {
-                    Poll = poll state
-                    SetReadyHandler = fun callback ->
+        let state = {
+            Config = config; Gate = obj(); Incoming = Queue(); Outgoing = Queue(); Peers = Dictionary()
+            Payloads = ConcurrentDictionary(); Wake = new AutoResetEvent(false)
+            Ready = TaskCompletionSource<Result<unit, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
+            IncomingPackets = 0; IncomingBytes = 0L; OutgoingPackets = 0; OutgoingBytes = 0L
+            Stopped = false; Fault = None; ReadyHandler = None; Notified = false; Dropped = 0L; NativeFailures = 0L
+        }
+        let worker = Thread(ThreadStart(run state factory), IsBackground = true, Name = "Dreamsleeve ENet owner")
+        worker.Start()
+        match state.Ready.Task.GetAwaiter().GetResult() with
+        | Error reason ->
+            lock state.Gate (fun () -> state.Stopped <- true)
+            state.Wake.Set() |> ignore
+            worker.Join()
+            state.Wake.Dispose()
+            Error reason
+        | Ok () ->
+            Ok {
+                Poll = poll state
+                SetReadyHandler = fun callback ->
+                    lock state.Gate (fun () ->
+                        if not state.Stopped then
+                            state.ReadyHandler <- Some callback
+                            state.Notified <- false
+                            state.Wake.Set() |> ignore)
+                Send = send state
+                MaxUnfragmentedPayloadBytes = fun id ->
+                    match state.Payloads.TryGetValue id with true, size -> size | false, _ -> 0
+                Close = control state false
+                Reset = control state true
+                Dispose = fun () ->
+                    let dispose = lock state.Gate (fun () ->
+                        if state.Stopped then false
+                        else
+                            state.Stopped <- true
+                            state.ReadyHandler <- None
+                            state.Wake.Set() |> ignore
+                            true)
+                    if dispose then
+                        worker.Join()
                         lock state.Gate (fun () ->
-                            if not state.Stopped then
-                                state.ReadyHandler <- Some callback
-                                state.Notified <- false
-                                state.Wake.Set() |> ignore)
-                    Send = send state
-                    MaxUnfragmentedPayloadBytes = fun id ->
-                        match state.Payloads.TryGetValue id with true, size -> size | false, _ -> 0
-                    Close = control state false
-                    Reset = control state true
-                    Dispose = fun () ->
-                        let dispose = lock state.Gate (fun () ->
-                            if state.Stopped then false
-                            else
-                                state.Stopped <- true
-                                state.ReadyHandler <- None
-                                state.Wake.Set() |> ignore
-                                true)
-                        if dispose then
-                            worker.Join()
-                            lock state.Gate (fun () ->
-                                state.Incoming.Clear(); state.Outgoing.Clear(); state.Peers.Clear(); state.Payloads.Clear())
-                            state.Wake.Dispose()
-                }
+                            state.Incoming.Clear(); state.Outgoing.Clear(); state.Peers.Clear(); state.Payloads.Clear())
+                        state.Wake.Dispose()
+            }

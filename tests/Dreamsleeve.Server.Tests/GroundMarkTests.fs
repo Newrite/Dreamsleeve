@@ -53,7 +53,7 @@ let private options = {
     GroundMarkOptions.defaults with
         VisibilityDistance = 100.0f; MaxPlacementDistance = 0.0f; ExpiryCheckIntervalMs = 3600000
         MaxNotesPerPlayer = 2; MaxDeathMarksPerPlayer = 2; MaxPerIndexCell = 3
-        RateBurst = 10; RateRefillMs = 1000; DuplicateWindowMs = 0; DeathMinIntervalMs = 0
+        NoteRate = { Burst = 10; RefillMs = 1000; DuplicateWindowMs = 0 }; DeathMinIntervalMs = 0
 }
 
 type private Observer = {
@@ -80,7 +80,8 @@ let private withMarksUsing settings (loaded: StoredGroundMark list) nextId run =
     use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
     use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
     use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-    use marks = GroundMarksAgent.start settings loaded nextId (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
+    let rules = GroundMarkOptions.rules settings |> ok
+    use marks = GroundMarksAgent.start settings rules loaded nextId (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
     let observer number (agent: Agent<GroundMarkEvent>) events =
         { Subscription = { ConnectionId = Guid.NewGuid(); Profile = profile number; Events = agent.Ref.TryReliable().Value }; Events = events }
     let a, b = observer 1UL alice aliceEvents, observer 2UL bob bobEvents
@@ -343,7 +344,7 @@ let private agentTests = testList "GroundMarksAgent" [
         }))
 
     case "notes are rate limited per account and deaths keep a minimum interval" (fun () ->
-        withMarksUsing { options with RateBurst = 1; RateRefillMs = 60000; DuplicateWindowMs = 60000; DeathMinIntervalMs = 60000 } [] 1UL (fun fixture -> task {
+        withMarksUsing { options with NoteRate = { Burst = 1; RefillMs = 60000; DuplicateWindowMs = 60000 }; DeathMinIntervalMs = 60000 } [] 1UL (fun fixture -> task {
             do! submit fixture fixture.Alice 1UL (note "first") (placement whiterun 0.0f)
             let! _ = next fixture.Alice
             do! submit fixture fixture.Alice 2UL (note "second") (placement whiterun 0.0f)
@@ -424,7 +425,7 @@ let private agentTests = testList "GroundMarksAgent" [
 ]
 
 let private config = ServerConfig.defaults
-let private codec = ProtocolCodec.create config |> ok
+let private codec = ProtocolCodec.create config
 let private parse bytes = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes: byte array)
 let private wirePlacement x =
     Dreamsleeve.Protocol.Chat.GroundMarkPlacement(
@@ -539,7 +540,7 @@ let private withFile (text: string) action =
 let private load text =
     withFile text (fun path ->
         match Configuration.parse [|"--config"; path|] with
-        | Ok (LaunchCommand.Run settings) -> Ok settings
+        | Ok (LaunchCommand.Run(settings, _)) -> Ok settings
         | Ok other -> failtestf "Unexpected launch %A" other
         | Error failure -> Error failure)
 
@@ -559,7 +560,7 @@ let private configurationTests = testList "GroundMarks configuration" [
 
     testCase "out-of-range keys are refused at startup" <| fun _ ->
         for invalid in [ "[GroundMarks]\nMaxNotesPerPlayer = 0\n"; "[GroundMarks]\nNoteTtlDays = -1\n"; "[GroundMarks]\nVisibilityDistance = -1\n"
-                         "[GroundMarks]\nMaxPerIndexCell = 0\n"; "[GroundMarks]\nRateRefillMs = 0\n"; "[GroundMarks]\nExpiryCheckIntervalMs = 10\n"
+                         "[GroundMarks]\nMaxPerIndexCell = 0\n"; "[GroundMarks.NoteRate]\nRefillMs = 0\n"; "[GroundMarks]\nExpiryCheckIntervalMs = 10\n"
                          "[GroundMarks]\nDeathMinIntervalMs = -5\n"; "[GroundMarks]\nUnknown = 1\n"
                          "[Server.ChatInput]\nGroundNoteText = 0\n"; "[Server.ChatInput]\nDeathMarkText = 129\n" ] do
             Expect.isError (load invalid) $"refused: {invalid}"
@@ -695,7 +696,7 @@ let private storeTests = testList "SQLite ground marks" [
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = register database "writer"
-        use writer = SqliteGroundMarkStore.startWriter database.Config NullLogger.Instance 8 |> ok
+        use writer = SqliteGroundMarkStore.startWriter database.Config NullLogger.Instance 8
         let mark id = GroundMark.create (markId id) alice.PlayerId (note $"n{id}") (placement whiterun 0.0f) DateTimeOffset.UnixEpoch
         for id in 1UL .. 3UL do
             let! posted = writer.PostAsync(GroundMarkWrite.Insert (mark id))

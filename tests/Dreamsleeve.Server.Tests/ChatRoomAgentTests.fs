@@ -12,7 +12,7 @@ open BackgroundTests
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private config = { MailboxCapacity = 4; ControlReserve = 2; HistoryCapacity = 2; MaxControlDeliveries = 4
-                       RateBurst = 100; RateRefillMs = 1000; DuplicateWindowMs = 0 }
+                       Rate = { Burst = 100; RefillMs = 1000; DuplicateWindowMs = 0 } }
 let private channelId = ChatChannelKind.channelId ChatChannelKind.Global
 let private profile number =
     PlayerData.create (PlayerId.create number |> ok)
@@ -91,7 +91,7 @@ let tests = testList "ChatRoomAgent" [
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
         use cleanup = Agent.Start(AgentOptions.create "cleanup", collect replies)
-        let limited = { config with HistoryCapacity = 8; RateBurst = 2; RateRefillMs = 60000; DuplicateWindowMs = 0 }
+        let limited = { config with HistoryCapacity = 8; Rate = { Burst = 2; RefillMs = 60000; DuplicateWindowMs = 0 } }
         use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let first = subscription 1UL player
         do! post room (ChatRoomCommand.Join first)
@@ -131,7 +131,7 @@ let tests = testList "ChatRoomAgent" [
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
         use player = Agent.Start(AgentOptions.create "player", collect events)
-        let limited = { config with HistoryCapacity = 8; RateBurst = 1; RateRefillMs = 50; DuplicateWindowMs = 60000 }
+        let limited = { config with HistoryCapacity = 8; Rate = { Burst = 1; RefillMs = 50; DuplicateWindowMs = 60000 } }
         use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
         let alice = subscription 1UL player
         do! post room (ChatRoomCommand.Join alice)

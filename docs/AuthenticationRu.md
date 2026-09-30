@@ -85,12 +85,12 @@ SQLite имеет WAL, foreign keys, конечный busy timeout; каждая
 
 По умолчанию HTTP без TLS разрешён только при явном AllowInsecureLoopback и буквальном
 loopback-адресе; это локальный dev-режим. Для удалённого входа по умолчанию нужен HTTPS (явный HTTP opt-in описан ниже):
-Authentication.ListenUrl, CertificatePath и при необходимости пароль сертификата
+`Authentication.Listener.ListenUrl`, `CertificatePath` и при необходимости пароль сертификата
 в `DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD`. Без CertificatePath используются
 стандартные настройки сертификата Kestrel. Клиент проверяет сертификат и не
 следует redirect при передаче credentials.
 
-За обратным прокси на этой же машине `Authentication.TrustForwardedHeaders = true` включает
+За обратным прокси на этой же машине `Authentication.Listener.TrustForwardedHeaders = true` включает
 `X-Forwarded-For`/`X-Forwarded-Proto` (только от `127.0.0.1`/`::1`, один переход): rate limit
 считает адрес клиента, а не прокси. По умолчанию `false` — заголовки игнорируются.
 
@@ -283,7 +283,7 @@ Steam-адаптер должен серверно проверить доказ
 
 ## Явное разрешение удалённого HTTP для тестирования
 
-На сервере в `[Authentication]` установите `AllowInsecureRemote = true` и,
+На сервере в `[Authentication.Listener]` установите `AllowInsecureRemote = true` и,
 например, `ListenUrl = "http://0.0.0.0:8779"`. На клиенте в корне TOML:
 `allowInsecureRemoteAuth = true`, `authUrl = "http://адрес-сервера:8779"`.
 Поддерживаются IP и доменные имена. Оба флага по умолчанию `false`.
