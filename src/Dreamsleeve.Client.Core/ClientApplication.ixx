@@ -147,10 +147,12 @@ private:
     }
 
     // Closes the session and serves the transport until the close completes.
-    void CloseSession()
+    // The client stays a guest unless it leaves: the application stops.
+    void CloseSession(bool leave = false)
     {
+      if (leave) runtime->KeepGuest(false);
       Report(runtime->Disconnect());
-      while (runtime->Phase() == SessionPhase::Disconnecting)
+      while (runtime->Closing())
         Report(runtime->Poll(10));
     }
 
@@ -260,6 +262,8 @@ private:
         exchange->PublishSavedLogin(saved->has_value(), saved->has_value() ? (**saved).username : std::string{});
       else
         exchange->PublishError(saved.error().message);
+      // Online from the start: the server counts a client that has not signed in.
+      runtime->KeepGuest(true);
 
       while (!exchange->StopRequested())
       {
@@ -280,7 +284,7 @@ private:
         if (SessionIdle(runtime->Phase())) exchange->WaitForControl();
       }
 
-      CloseSession();
+      CloseSession(true);
       runtime.reset();
       exchange->Finish();
     }

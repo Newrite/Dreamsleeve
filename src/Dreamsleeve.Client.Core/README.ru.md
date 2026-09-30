@@ -8,6 +8,12 @@ ClientExchange. После создания им владеет один сет�
 Сохранённый вход: `Connect(credentials, std::nullopt, true)`, затем при следующем
 запуске `ConnectSaved()`. `SignOut()` отзывает токен и удаляет запись Windows;
 `Disconnect()` сохраняет её. `ForgetSavedLogin()` — явное локальное удаление без сети.
+Без сессии приложение держит гостевое соединение: `ClientRuntime::KeepGuest(true)` при запуске,
+`JoinAsGuest` на Connected, `Connect(ticket)` открывает сессию на этом же соединении (или
+дожидается его Connected). После конца сессии или ошибки гость подключается снова (пауза
+`Backoff` 5→60 с после неудач). Гость не публикуется в Exchange: фаза остаётся `Disconnected`.
+`KeepGuest(false)` при остановке закрывает соединение штатно, `Closing()` сообщает, что закрытие
+ещё обслуживается.
 `ResetPassword(code, password)` завершает административный сброс.
 Статус содержит типизированные authOperation/authFailure и savedLogin/savedUsername;
 пароль и токен UI обратно не выдаются. [Полный контракт](../../docs/AuthenticationRu.md).

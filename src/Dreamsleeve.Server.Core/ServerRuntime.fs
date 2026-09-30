@@ -13,6 +13,8 @@ type SessionSource = Chat | System | Presence | GroundMarks | Authentication
 
 type ServerRuntimeSnapshot = {
     Connections: int
+    /// Connected without signing in; counted in Connections.
+    Guests: int
     Ready: int
     Reservations: int
     Closing: int
@@ -129,7 +131,7 @@ module ServerRuntime =
                 state.Logger.LogInformation("Player {PlayerId} {Username} left (session {ConnectionId}, {Duration})",
                                             PlayerId.value playerId, username state playerId, entry.ConnectionId,
                                             duration.ToString(if duration.TotalDays >= 1.0 then @"d\.hh\:mm\:ss" else @"hh\:mm\:ss"))
-            | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> ()
+            | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> ()
             entry.Phase <- RuntimeSessionPhase.Closing
             let deadline = now () + int64 options.ShutdownTimeoutMs
             entry.Deadline <- if state.Stopping then min deadline state.StopDeadline else deadline
@@ -282,6 +284,9 @@ module ServerRuntime =
                     (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) state.Logger request
             entry.Child <- Some child
             entry.Phase <- RuntimeSessionPhase.Opening
+            // Authentication has its own time from the request: a guest may have
+            // been connected for hours.
+            entry.Deadline <- now () + int64 options.OpenTimeoutMs
             context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
             state.Logger.LogDebug("Session {ConnectionId} is opening (request {RequestId}, hides names: {Hiding})", entry.ConnectionId, requestId, hiding)
         | None, _ | _, None ->
@@ -303,15 +308,18 @@ module ServerRuntime =
             state.Logger.LogWarning("Ready connection {ConnectionId} has no session; closing", entry.ConnectionId)
             close options state context entry
 
-    /// Where a decoded command goes: it opens this connection's session or is a
-    /// message to the open session. The phase rules for both live in receive.
+    /// Where a decoded command goes: it opens this connection's session, keeps
+    /// the connection as a guest or is a message to the open session. The phase
+    /// rules for all of them live in receive.
     [<RequireQualifiedAccess>]
     type private CommandRoute =
         | Open of sessionTicket: string * HiddenIdentity
+        | Guest
         | Session of PlayerSessionMessage
 
     let private route requestId = function
         | ClientCommand.OpenSession(sessionTicket, hiding) -> CommandRoute.Open(sessionTicket, hiding)
+        | ClientCommand.JoinAsGuest -> CommandRoute.Guest
         | ClientCommand.SendChat(channelId, text) -> CommandRoute.Session(PlayerSessionMessage.SendChat(requestId, channelId, text))
         | ClientCommand.UpdatePlayer update -> CommandRoute.Session(PlayerSessionMessage.Update(requestId, update))
         | ClientCommand.PostAnnouncement announcement -> CommandRoute.Session(PlayerSessionMessage.PostAnnouncement(requestId, announcement))
@@ -347,24 +355,30 @@ module ServerRuntime =
                 close options state context entry
             | Ok request ->
                 match route request.RequestId request.Command, entry.Phase with
-                | CommandRoute.Open(sessionTicket, hiding), RuntimeSessionPhase.Waiting ->
+                | CommandRoute.Open(sessionTicket, hiding), (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest) ->
                     openSession options authenticator state context entry request.RequestId sessionTicket hiding
                 | CommandRoute.Open _, (RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionAlreadyOpen "Session is already opening or open."
+                | CommandRoute.Guest, RuntimeSessionPhase.Waiting ->
+                    entry.Phase <- RuntimeSessionPhase.Guest
+                    state.Logger.LogDebug("Connection {ConnectionId} stays as a guest", entry.ConnectionId)
+                | CommandRoute.Guest, (RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready) ->
+                    reject options state context entry lane request.RequestId RequestRejectionCode.InvalidRequest "The connection is not waiting."
                 | CommandRoute.Session message, RuntimeSessionPhase.Ready -> forward options state context entry lane request.RequestId message
-                | CommandRoute.Session _, (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening) ->
+                | CommandRoute.Session _, (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
-                | (CommandRoute.Open _ | CommandRoute.Session _), RuntimeSessionPhase.Closing -> ()
+                | (CommandRoute.Open _ | CommandRoute.Guest | CommandRoute.Session _), RuntimeSessionPhase.Closing -> ()
 
     let private disconnected options state context connectionId =
         match SessionTable.find connectionId state.Table with
         | None -> ()
         | Some entry ->
-            // A ready player's departure is logged by close together with the name.
+            // A ready player's departure is logged by close together with the name;
+            // guests come and go with every game start and sign-in.
             match entry.Phase with
             | RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening ->
                 state.Logger.LogInformation("Transport disconnected {ConnectionId} during {Phase}", connectionId, entry.Phase)
-            | RuntimeSessionPhase.Ready -> state.Logger.LogDebug("Transport disconnected {ConnectionId}", connectionId)
+            | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Ready -> state.Logger.LogDebug("Transport disconnected {ConnectionId}", connectionId)
             | RuntimeSessionPhase.Closing -> ()
 
             entry.TransportClosed <- true
@@ -486,7 +500,9 @@ module ServerRuntime =
                 SessionTable.remove entry state.Table
             else
                 fail state context $"Session cleanup timed out: {entry.ConnectionId}"
-        | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Closing -> ()
+        // A guest has no deadline: ENet's timeout drops a dead peer.
+        | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening
+        | RuntimeSessionPhase.Closing -> ()
 
     let private stop (options: ServerRuntimeOptions) state context =
         if not state.Stopping then
@@ -604,11 +620,13 @@ module ServerRuntime =
             ]
         | ServerRuntimeMessage.Stop -> stop options state context
         | ServerRuntimeMessage.Read reply ->
+            let count phase = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.Phase = phase) |> Seq.length
             reply.Reply {
                 Connections = state.Table.Connections.Count
-                Ready = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.Phase = RuntimeSessionPhase.Ready) |> Seq.length
+                Guests = count RuntimeSessionPhase.Guest
+                Ready = count RuntimeSessionPhase.Ready
                 Reservations = state.Table.Players.Count
-                Closing = state.Table.Connections.Values |> Seq.filter (fun entry -> entry.Phase = RuntimeSessionPhase.Closing) |> Seq.length
+                Closing = count RuntimeSessionPhase.Closing
                 Stopping = state.Stopping
             }
         | ServerRuntimeMessage.FindPlayer(connectionId, reply) ->

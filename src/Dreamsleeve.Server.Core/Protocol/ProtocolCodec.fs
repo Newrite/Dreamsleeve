@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 12u
+    let Version = 13u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -40,6 +40,7 @@ module ProtocolCodec =
                 SessionCodec.decodeHiding "hidden" packet.SetIdentityVisibility.Hidden |> Result.map ClientCommand.SetIdentityVisibility
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.ChangeDisplayName ->
                 SessionCodec.decodeDisplayName config packet.ChangeDisplayName
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.JoinAsGuest -> Ok ClientCommand.JoinAsGuest
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.None ->
                 Error(ProtocolCodecFailure.InvalidPayload "payload")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "payload")
@@ -72,8 +73,9 @@ module ProtocolCodec =
     let requestLane (request: ClientRequest) =
         match request.Command with
         | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _ -> DeliveryLane.Chat
-        | ClientCommand.OpenSession _ | ClientCommand.UpdatePlayer _ | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _
-        | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ -> DeliveryLane.Control
+        | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.UpdatePlayer _ | ClientCommand.SetIdentityVisibility _
+        | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ ->
+            DeliveryLane.Control
 
     /// What the client hears for a request this codec refused: the wire field
     /// that was wrong and why, worded for the player.

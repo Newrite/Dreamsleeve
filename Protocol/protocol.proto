@@ -7,7 +7,8 @@ import "session.proto";
 import "player.proto";
 import "ground.proto";
 
-// Control/chat envelope. Version 12 dates marks with the in-game calendar;
+// Control/chat envelope. Version 13 keeps a client connected as a guest before
+// it signs in; version 12 dates marks with the in-game calendar;
 // version 11 lets a player change the display name; version 10 lets a player hide their names behind a
 // server pseudonym; version 9 sends a player's own marks after opening; version 8 adds marks on the ground; version 7 opens a session with a list of channels; version 6
 // separated repeated realtime poses from reliable commands. Opens sessions
@@ -26,6 +27,7 @@ message ClientPacket {
     RemoveGroundMark remove_ground_mark = 16; // Control lane.
     SetIdentityVisibility set_identity_visibility = 17; // Control lane.
     ChangeDisplayName change_display_name = 18; // Control lane.
+    JoinAsGuest join_as_guest = 19; // Control lane, no reply.
   }
 }
 

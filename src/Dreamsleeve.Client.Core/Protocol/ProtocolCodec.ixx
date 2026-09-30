@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 12;
+  inline constexpr std::uint32_t Version = 13;
 
   enum class ErrorCode
   {
@@ -36,6 +36,13 @@ export namespace Dreamsleeve::Client::Wire
     std::string   sessionTicket;
     // Where others see a server pseudonym, from the first packet.
     Domain::HiddenIdentity hiding{Domain::HiddenIdentity::None};
+  };
+
+  // Keeps the connection without a session: the server counts this client
+  // online until it opens one on the same connection. No reply.
+  struct JoinAsGuest
+  {
+    std::uint64_t requestId{};
   };
 
   enum class Channel : std::uint8_t
@@ -68,6 +75,7 @@ export namespace Dreamsleeve::Client::Wire
 
   using ClientRequest = std::variant<
     OpenSession,
+    JoinAsGuest,
     SendChat,
     UpdatePlayer,
     PostAnnouncement,

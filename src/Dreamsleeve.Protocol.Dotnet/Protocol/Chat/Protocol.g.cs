@@ -26,7 +26,7 @@ namespace Dreamsleeve.Protocol.Chat {
           string.Concat(
             "Cg5wcm90b2NvbC5wcm90bxIZRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdBoK",
             "Y2hhdC5wcm90bxoNc2Vzc2lvbi5wcm90bxoMcGxheWVyLnByb3RvGgxncm91",
-            "bmQucHJvdG8iwwUKDENsaWVudFBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9u",
+            "bmQucHJvdG8ihAYKDENsaWVudFBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9u",
             "GAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKAQSPgoMb3Blbl9zZXNzaW9uGAog",
             "ASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5PcGVuU2Vzc2lvbkgA",
             "EjgKCXNlbmRfY2hhdBgLIAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
@@ -41,65 +41,67 @@ namespace Dreamsleeve.Protocol.Chat {
             "YXJrSAASUwoXc2V0X2lkZW50aXR5X3Zpc2liaWxpdHkYESABKAsyMC5EcmVh",
             "bXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlNldElkZW50aXR5VmlzaWJpbGl0eUgA",
             "EksKE2NoYW5nZV9kaXNwbGF5X25hbWUYEiABKAsyLC5EcmVhbXNsZWV2ZS5Q",
-            "cm90b2NvbC5DaGF0LkNoYW5nZURpc3BsYXlOYW1lSABCCQoHcGF5bG9hZCLz",
-            "CQoMU2VydmVyUGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SFwoK",
-            "cmVxdWVzdF9pZBgCIAEoBEgBiAEBEkIKDnNlc3Npb25fb3BlbmVkGAogASgL",
-            "MiguRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5TZXNzaW9uT3BlbmVkSAAS",
-            "QgoOY2hhdF9wdWJsaXNoZWQYCyABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
-            "bC5DaGF0LkNoYXRQdWJsaXNoZWRIABJGChByZXF1ZXN0X3JlamVjdGVkGAwg",
-            "ASgLMiouRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5SZXF1ZXN0UmVqZWN0",
-            "ZWRIABJACg1wbGF5ZXJfam9pbmVkGA0gASgLMicuRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuQ2hhdC5QbGF5ZXJKb2luZWRIABI8CgtwbGF5ZXJfbGVmdBgOIAEo",
-            "CzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyTGVmdEgAEkIK",
-            "DnBsYXllcl91cGRhdGVkGA8gASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wu",
-            "Q2hhdC5QbGF5ZXJVcGRhdGVkSAASUQoWcGxheWVyX3VwZGF0ZV9hY2NlcHRl",
-            "ZBgQIAEoCzIvLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyVXBk",
-            "YXRlQWNjZXB0ZWRIABJXChlwbGF5ZXJfdmlzaWJpbGl0eV9jaGFuZ2VkGBQg",
-            "ASgLMjIuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJWaXNpYmls",
-            "aXR5Q2hhbmdlZEgAElMKF3BsYXllcl9tZXRhZGF0YV9jaGFuZ2VkGBIgASgL",
-            "MjAuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJNZXRhZGF0YUNo",
-            "YW5nZWRIABJNChRncm91bmRfbWFya3NfY2hhbmdlZBgVIAEoCzItLkRyZWFt",
-            "c2xlZXZlLlByb3RvY29sLkNoYXQuR3JvdW5kTWFya3NDaGFuZ2VkSAASSQoS",
-            "Z3JvdW5kX21hcmtfcGxhY2VkGBYgASgLMisuRHJlYW1zbGVldmUuUHJvdG9j",
-            "b2wuQ2hhdC5Hcm91bmRNYXJrUGxhY2VkSAASSwoTZ3JvdW5kX21hcmtfcmVt",
-            "b3ZlZBgXIAEoCzIsLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3JvdW5k",
-            "TWFya1JlbW92ZWRIABJFChBvd25fZ3JvdW5kX21hcmtzGBggASgLMikuRHJl",
-            "YW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Pd25Hcm91bmRNYXJrc0gAElsKG2lk",
-            "ZW50aXR5X3Zpc2liaWxpdHlfY2hhbmdlZBgZIAEoCzI0LkRyZWFtc2xlZXZl",
-            "LlByb3RvY29sLkNoYXQuSWRlbnRpdHlWaXNpYmlsaXR5Q2hhbmdlZEgAEk0K",
-            "FGRpc3BsYXlfbmFtZV9jaGFuZ2VkGBogASgLMi0uRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuQ2hhdC5EaXNwbGF5TmFtZUNoYW5nZWRIAEIJCgdwYXlsb2FkQg0K",
-            "C19yZXF1ZXN0X2lkSgQIERASSgQIExAUUgxwbGF5ZXJfbW92ZWRSDXBsYXll",
-            "cnNfbW92ZWQiFgoUUGxheWVyVXBkYXRlQWNjZXB0ZWQicAoPUmVxdWVzdFJl",
-            "amVjdGVkEj0KBGNvZGUYASABKA4yLy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
-            "aGF0LlJlcXVlc3RSZWplY3Rpb25Db2RlEg8KB21lc3NhZ2UYAiABKAkSDQoF",
-            "ZmllbGQYAyABKAkiawoUQ2xpZW50TW92ZW1lbnRQYWNrZXQSGAoQcHJvdG9j",
-            "b2xfdmVyc2lvbhgBIAEoDRI5CgZzYW1wbGUYAiABKAsyKS5EcmVhbXNsZWV2",
-            "ZS5Qcm90b2NvbC5DaGF0Lk1vdmVtZW50U2FtcGxlImwKFFNlcnZlck1vdmVt",
-            "ZW50UGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SOgoJbW92ZW1l",
-            "bnRzGAIgASgLMicuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJz",
-            "TW92ZWQqjQYKFFJlcXVlc3RSZWplY3Rpb25Db2RlEiYKIlJFUVVFU1RfUkVK",
-            "RUNUSU9OX0NPREVfVU5TUEVDSUZJRUQQABIqCiZSRVFVRVNUX1JFSkVDVElP",
-            "Tl9DT0RFX0lOVkFMSURfUkVRVUVTVBABEiwKKFJFUVVFU1RfUkVKRUNUSU9O",
-            "X0NPREVfU0VTU0lPTl9OT1RfUkVBRFkQAhIvCitSRVFVRVNUX1JFSkVDVElP",
-            "Tl9DT0RFX1NFU1NJT05fQUxSRUFEWV9PUEVOEAMSKQolUkVRVUVTVF9SRUpF",
-            "Q1RJT05fQ09ERV9VU0VSTkFNRV9UQUtFThAEEiwKKFJFUVVFU1RfUkVKRUNU",
-            "SU9OX0NPREVfQ0hBTk5FTF9OT1RfRk9VTkQQBRItCilSRVFVRVNUX1JFSkVD",
-            "VElPTl9DT0RFX05PVF9DSEFOTkVMX01FTUJFUhAGEiUKIVJFUVVFU1RfUkVK",
-            "RUNUSU9OX0NPREVfT1ZFUkxPQURFRBAHEjAKLFJFUVVFU1RfUkVKRUNUSU9O",
-            "X0NPREVfQVVUSEVOVElDQVRJT05fRkFJTEVEEAgSKwonUkVRVUVTVF9SRUpF",
-            "Q1RJT05fQ09ERV9URVhUX05PVF9BTExPV0VEEAkSJwojUkVRVUVTVF9SRUpF",
-            "Q1RJT05fQ09ERV9SQVRFX0xJTUlURUQQChIzCi9SRVFVRVNUX1JFSkVDVElP",
-            "Tl9DT0RFX0FOTk9VTkNFTUVOVF9OT1RfQUxMT1dFRBALEjAKLFJFUVVFU1Rf",
-            "UkVKRUNUSU9OX0NPREVfR1JPVU5EX01BUktfQVJFQV9GVUxMEAwSMAosUkVR",
-            "VUVTVF9SRUpFQ1RJT05fQ09ERV9HUk9VTkRfTUFSS19OT1RfRk9VTkQQDRI2",
-            "CjJSRVFVRVNUX1JFSkVDVElPTl9DT0RFX0hJRERFTl9JREVOVElUWV9OT1Rf",
-            "QUxMT1dFRBAOEjoKNlJFUVVFU1RfUkVKRUNUSU9OX0NPREVfRElTUExBWV9O",
-            "QU1FX0NIQU5HRV9OT1RfQUxMT1dFRBAPYgZwcm90bzM="));
+            "cm90b2NvbC5DaGF0LkNoYW5nZURpc3BsYXlOYW1lSAASPwoNam9pbl9hc19n",
+            "dWVzdBgTIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuSm9pbkFz",
+            "R3Vlc3RIAEIJCgdwYXlsb2FkIvMJCgxTZXJ2ZXJQYWNrZXQSGAoQcHJvdG9j",
+            "b2xfdmVyc2lvbhgBIAEoDRIXCgpyZXF1ZXN0X2lkGAIgASgESAGIAQESQgoO",
+            "c2Vzc2lvbl9vcGVuZWQYCiABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
+            "aGF0LlNlc3Npb25PcGVuZWRIABJCCg5jaGF0X3B1Ymxpc2hlZBgLIAEoCzIo",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQ2hhdFB1Ymxpc2hlZEgAEkYK",
+            "EHJlcXVlc3RfcmVqZWN0ZWQYDCABKAsyKi5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
+            "bC5DaGF0LlJlcXVlc3RSZWplY3RlZEgAEkAKDXBsYXllcl9qb2luZWQYDSAB",
+            "KAsyJy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckpvaW5lZEgA",
+            "EjwKC3BsYXllcl9sZWZ0GA4gASgLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "Q2hhdC5QbGF5ZXJMZWZ0SAASQgoOcGxheWVyX3VwZGF0ZWQYDyABKAsyKC5E",
+            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllclVwZGF0ZWRIABJRChZw",
+            "bGF5ZXJfdXBkYXRlX2FjY2VwdGVkGBAgASgLMi8uRHJlYW1zbGVldmUuUHJv",
+            "dG9jb2wuQ2hhdC5QbGF5ZXJVcGRhdGVBY2NlcHRlZEgAElcKGXBsYXllcl92",
+            "aXNpYmlsaXR5X2NoYW5nZWQYFCABKAsyMi5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
+            "bC5DaGF0LlBsYXllclZpc2liaWxpdHlDaGFuZ2VkSAASUwoXcGxheWVyX21l",
+            "dGFkYXRhX2NoYW5nZWQYEiABKAsyMC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
+            "aGF0LlBsYXllck1ldGFkYXRhQ2hhbmdlZEgAEk0KFGdyb3VuZF9tYXJrc19j",
+            "aGFuZ2VkGBUgASgLMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Hcm91",
+            "bmRNYXJrc0NoYW5nZWRIABJJChJncm91bmRfbWFya19wbGFjZWQYFiABKAsy",
+            "Ky5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkdyb3VuZE1hcmtQbGFjZWRI",
+            "ABJLChNncm91bmRfbWFya19yZW1vdmVkGBcgASgLMiwuRHJlYW1zbGVldmUu",
+            "UHJvdG9jb2wuQ2hhdC5Hcm91bmRNYXJrUmVtb3ZlZEgAEkUKEG93bl9ncm91",
+            "bmRfbWFya3MYGCABKAsyKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk93",
+            "bkdyb3VuZE1hcmtzSAASWwobaWRlbnRpdHlfdmlzaWJpbGl0eV9jaGFuZ2Vk",
+            "GBkgASgLMjQuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5JZGVudGl0eVZp",
+            "c2liaWxpdHlDaGFuZ2VkSAASTQoUZGlzcGxheV9uYW1lX2NoYW5nZWQYGiAB",
+            "KAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkRpc3BsYXlOYW1lQ2hh",
+            "bmdlZEgAQgkKB3BheWxvYWRCDQoLX3JlcXVlc3RfaWRKBAgREBJKBAgTEBRS",
+            "DHBsYXllcl9tb3ZlZFINcGxheWVyc19tb3ZlZCIWChRQbGF5ZXJVcGRhdGVB",
+            "Y2NlcHRlZCJwCg9SZXF1ZXN0UmVqZWN0ZWQSPQoEY29kZRgBIAEoDjIvLkRy",
+            "ZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUmVxdWVzdFJlamVjdGlvbkNvZGUS",
+            "DwoHbWVzc2FnZRgCIAEoCRINCgVmaWVsZBgDIAEoCSJrChRDbGllbnRNb3Zl",
+            "bWVudFBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEjkKBnNhbXBs",
+            "ZRgCIAEoCzIpLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuTW92ZW1lbnRT",
+            "YW1wbGUibAoUU2VydmVyTW92ZW1lbnRQYWNrZXQSGAoQcHJvdG9jb2xfdmVy",
+            "c2lvbhgBIAEoDRI6Cgltb3ZlbWVudHMYAiABKAsyJy5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5DaGF0LlBsYXllcnNNb3ZlZCqNBgoUUmVxdWVzdFJlamVjdGlv",
+            "bkNvZGUSJgoiUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9VTlNQRUNJRklFRBAA",
+            "EioKJlJFUVVFU1RfUkVKRUNUSU9OX0NPREVfSU5WQUxJRF9SRVFVRVNUEAES",
+            "LAooUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9TRVNTSU9OX05PVF9SRUFEWRAC",
+            "Ei8KK1JFUVVFU1RfUkVKRUNUSU9OX0NPREVfU0VTU0lPTl9BTFJFQURZX09Q",
+            "RU4QAxIpCiVSRVFVRVNUX1JFSkVDVElPTl9DT0RFX1VTRVJOQU1FX1RBS0VO",
+            "EAQSLAooUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9DSEFOTkVMX05PVF9GT1VO",
+            "RBAFEi0KKVJFUVVFU1RfUkVKRUNUSU9OX0NPREVfTk9UX0NIQU5ORUxfTUVN",
+            "QkVSEAYSJQohUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9PVkVSTE9BREVEEAcS",
+            "MAosUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9BVVRIRU5USUNBVElPTl9GQUlM",
+            "RUQQCBIrCidSRVFVRVNUX1JFSkVDVElPTl9DT0RFX1RFWFRfTk9UX0FMTE9X",
+            "RUQQCRInCiNSRVFVRVNUX1JFSkVDVElPTl9DT0RFX1JBVEVfTElNSVRFRBAK",
+            "EjMKL1JFUVVFU1RfUkVKRUNUSU9OX0NPREVfQU5OT1VOQ0VNRU5UX05PVF9B",
+            "TExPV0VEEAsSMAosUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9HUk9VTkRfTUFS",
+            "S19BUkVBX0ZVTEwQDBIwCixSRVFVRVNUX1JFSkVDVElPTl9DT0RFX0dST1VO",
+            "RF9NQVJLX05PVF9GT1VORBANEjYKMlJFUVVFU1RfUkVKRUNUSU9OX0NPREVf",
+            "SElEREVOX0lERU5USVRZX05PVF9BTExPV0VEEA4SOgo2UkVRVUVTVF9SRUpF",
+            "Q1RJT05fQ09ERV9ESVNQTEFZX05BTUVfQ0hBTkdFX05PVF9BTExPV0VEEA9i",
+            "BnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.RequestRejectionCode), }, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ClientPacket), global::Dreamsleeve.Protocol.Chat.ClientPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "OpenSession", "SendChat", "UpdatePlayer", "PostAnnouncement", "PlaceGroundNote", "ReportDeath", "RemoveGroundMark", "SetIdentityVisibility", "ChangeDisplayName" }, new[]{ "Payload" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ClientPacket), global::Dreamsleeve.Protocol.Chat.ClientPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "OpenSession", "SendChat", "UpdatePlayer", "PostAnnouncement", "PlaceGroundNote", "ReportDeath", "RemoveGroundMark", "SetIdentityVisibility", "ChangeDisplayName", "JoinAsGuest" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ServerPacket), global::Dreamsleeve.Protocol.Chat.ServerPacket.Parser, new[]{ "ProtocolVersion", "RequestId", "SessionOpened", "ChatPublished", "RequestRejected", "PlayerJoined", "PlayerLeft", "PlayerUpdated", "PlayerUpdateAccepted", "PlayerVisibilityChanged", "PlayerMetadataChanged", "GroundMarksChanged", "GroundMarkPlaced", "GroundMarkRemoved", "OwnGroundMarks", "IdentityVisibilityChanged", "DisplayNameChanged" }, new[]{ "Payload", "RequestId" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted), global::Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RequestRejected), global::Dreamsleeve.Protocol.Chat.RequestRejected.Parser, new[]{ "Code", "Message", "Field" }, null, null, null, null),
@@ -186,7 +188,8 @@ namespace Dreamsleeve.Protocol.Chat {
 
   #region Messages
   /// <summary>
-  /// Control/chat envelope. Version 12 dates marks with the in-game calendar;
+  /// Control/chat envelope. Version 13 keeps a client connected as a guest before
+  /// it signs in; version 12 dates marks with the in-game calendar;
   /// version 11 lets a player change the display name; version 10 lets a player hide their names behind a
   /// server pseudonym; version 9 sends a player's own marks after opening; version 8 adds marks on the ground; version 7 opens a session with a list of channels; version 6
   /// separated repeated realtime poses from reliable commands. Opens sessions
@@ -257,6 +260,9 @@ namespace Dreamsleeve.Protocol.Chat {
           break;
         case PayloadOneofCase.ChangeDisplayName:
           ChangeDisplayName = other.ChangeDisplayName.Clone();
+          break;
+        case PayloadOneofCase.JoinAsGuest:
+          JoinAsGuest = other.JoinAsGuest.Clone();
           break;
       }
 
@@ -422,6 +428,21 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "join_as_guest" field.</summary>
+    public const int JoinAsGuestFieldNumber = 19;
+    /// <summary>
+    /// Control lane, no reply.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.JoinAsGuest JoinAsGuest {
+      get { return payloadCase_ == PayloadOneofCase.JoinAsGuest ? (global::Dreamsleeve.Protocol.Chat.JoinAsGuest) payload_ : null; }
+      set {
+        payload_ = value;
+        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.JoinAsGuest;
+      }
+    }
+
     private object payload_;
     /// <summary>Enum of possible cases for the "payload" oneof.</summary>
     public enum PayloadOneofCase {
@@ -435,6 +456,7 @@ namespace Dreamsleeve.Protocol.Chat {
       RemoveGroundMark = 16,
       SetIdentityVisibility = 17,
       ChangeDisplayName = 18,
+      JoinAsGuest = 19,
     }
     private PayloadOneofCase payloadCase_ = PayloadOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -476,6 +498,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (!object.Equals(RemoveGroundMark, other.RemoveGroundMark)) return false;
       if (!object.Equals(SetIdentityVisibility, other.SetIdentityVisibility)) return false;
       if (!object.Equals(ChangeDisplayName, other.ChangeDisplayName)) return false;
+      if (!object.Equals(JoinAsGuest, other.JoinAsGuest)) return false;
       if (PayloadCase != other.PayloadCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -495,6 +518,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (payloadCase_ == PayloadOneofCase.RemoveGroundMark) hash ^= RemoveGroundMark.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.SetIdentityVisibility) hash ^= SetIdentityVisibility.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.ChangeDisplayName) hash ^= ChangeDisplayName.GetHashCode();
+      if (payloadCase_ == PayloadOneofCase.JoinAsGuest) hash ^= JoinAsGuest.GetHashCode();
       hash ^= (int) payloadCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -558,6 +582,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(146, 1);
         output.WriteMessage(ChangeDisplayName);
       }
+      if (payloadCase_ == PayloadOneofCase.JoinAsGuest) {
+        output.WriteRawTag(154, 1);
+        output.WriteMessage(JoinAsGuest);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -612,6 +640,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(146, 1);
         output.WriteMessage(ChangeDisplayName);
       }
+      if (payloadCase_ == PayloadOneofCase.JoinAsGuest) {
+        output.WriteRawTag(154, 1);
+        output.WriteMessage(JoinAsGuest);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -654,6 +686,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (payloadCase_ == PayloadOneofCase.ChangeDisplayName) {
         size += 2 + pb::CodedOutputStream.ComputeMessageSize(ChangeDisplayName);
+      }
+      if (payloadCase_ == PayloadOneofCase.JoinAsGuest) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(JoinAsGuest);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -727,6 +762,12 @@ namespace Dreamsleeve.Protocol.Chat {
             ChangeDisplayName = new global::Dreamsleeve.Protocol.Chat.ChangeDisplayName();
           }
           ChangeDisplayName.MergeFrom(other.ChangeDisplayName);
+          break;
+        case PayloadOneofCase.JoinAsGuest:
+          if (JoinAsGuest == null) {
+            JoinAsGuest = new global::Dreamsleeve.Protocol.Chat.JoinAsGuest();
+          }
+          JoinAsGuest.MergeFrom(other.JoinAsGuest);
           break;
       }
 
@@ -838,6 +879,15 @@ namespace Dreamsleeve.Protocol.Chat {
             ChangeDisplayName = subBuilder;
             break;
           }
+          case 154: {
+            global::Dreamsleeve.Protocol.Chat.JoinAsGuest subBuilder = new global::Dreamsleeve.Protocol.Chat.JoinAsGuest();
+            if (payloadCase_ == PayloadOneofCase.JoinAsGuest) {
+              subBuilder.MergeFrom(JoinAsGuest);
+            }
+            input.ReadMessage(subBuilder);
+            JoinAsGuest = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -944,6 +994,15 @@ namespace Dreamsleeve.Protocol.Chat {
             }
             input.ReadMessage(subBuilder);
             ChangeDisplayName = subBuilder;
+            break;
+          }
+          case 154: {
+            global::Dreamsleeve.Protocol.Chat.JoinAsGuest subBuilder = new global::Dreamsleeve.Protocol.Chat.JoinAsGuest();
+            if (payloadCase_ == PayloadOneofCase.JoinAsGuest) {
+              subBuilder.MergeFrom(JoinAsGuest);
+            }
+            input.ReadMessage(subBuilder);
+            JoinAsGuest = subBuilder;
             break;
           }
         }

@@ -160,6 +160,10 @@ presence-обновление; остальные получают `PlayerUpdate
 [ModerationAndNamesRu.md](ModerationAndNamesRu.md#скрытое-имя), абзац «Админка.». Эти данные
 собирает только `AdminPlayerView.create` и только для панели; игровые пакеты их не несут.
 Сессия, не ответившая за 1 с, показывается строкой «нет данных», страница не падает.
+Гость (игра запущена, вход не выполнен) показывается строкой «гость» с фазой `guest` и временем
+подключения: имён у него нет. Заголовок таблицы называет число гостей, обзор — строкой «Гости».
+Гости занимают соединения наравне с игроками (`MaxSessions`, `PeerLimit`); при нехватке мест
+поднимайте эти пределы в `server.toml`.
 
 ## REST API
 
@@ -167,8 +171,8 @@ presence-обновление; остальные получают `PlayerUpdate
 
 | Маршрут | Ответ |
 |---|---|
-| `GET /api/v1/status` | `{connections, ready, reservations, closing, stopping}` |
-| `GET /api/v1/online` | Массив строк онлайна (настоящие имена, `pseudonym`, `hidden`, `role`, `phase`, `connectedAt`, `described`) |
+| `GET /api/v1/status` | `{connections, guests, ready, reservations, closing, stopping}`; `guests` входит в `connections` |
+| `GET /api/v1/online` | Массив строк онлайна (настоящие имена, `pseudonym`, `hidden`, `role`, `phase` — `waiting`/`guest`/`opening`/`ready`/`closing`, `connectedAt`, `described`) |
 | `GET /api/v1/players?page=&q=` | `{query, page, pageSize, total, players[]}` |
 | `GET /api/v1/players/{id}` | `{player, sessions[], names[]}` |
 

@@ -183,20 +183,20 @@ def smoke(args, log, directory: Path):
         "Moderation": {"Enabled": True, "RulesPath": str(moderation)},
         "Identity": {"AllowHiddenIdentity": True, "ToggleIntervalMs": 30000, "PseudonymsPath": str(pseudonyms)},
         "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
-        "Authentication": {"ListenUrl": auth_url, "AllowInsecureLoopback": True, "AllowRegistration": True},
+        "Authentication": {"AllowRegistration": True, "Listener": {"ListenUrl": auth_url, "AllowInsecureLoopback": True}},
         # The admin panel runs in the same process; a free port keeps it off the default 8780.
-        "Admin": {"ListenUrl": f"http://127.0.0.1:{free_tcp_port()}"},
+        "Admin": {"Listener": {"ListenUrl": f"http://127.0.0.1:{free_tcp_port()}"}},
         "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},
         # Own client disabled to see a type refusal; two mod announcements per minute.
         "Announcements": {
-            "RateBurst": 2, "RateRefillMs": 60000, "DuplicateWindowMs": 0,
+            "Rate": {"Burst": 2, "RefillMs": 60000, "DuplicateWindowMs": 0},
             "TrustedClient": {"Enabled": False}, "ThirdParty": {"Enabled": True},
             "Scheduled": [{"Text": f"smoke-welcome-{nonce}", "Kind": "Announcement", "DelaySeconds": 0, "IntervalSeconds": 0}],
         },
         # Two notes per player and four marks per cell make eviction and density observable;
         # a long death interval makes the second death refusal deterministic.
         "GroundMarks": {"MaxNotesPerPlayer": 2, "MaxPerIndexCell": 4, "DeathMinIntervalMs": 60000,
-                        "RateBurst": 10, "DuplicateWindowMs": 0},
+                        "NoteRate": {"Burst": 10, "DuplicateWindowMs": 0}},
     }
     config.write_text(tomli_w.dumps(settings), encoding="utf-8")
 

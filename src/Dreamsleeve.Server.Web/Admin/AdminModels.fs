@@ -10,6 +10,8 @@ open Dreamsleeve.Server.Infrastructure
 
 type StatusModel = {
     Connections: int
+    /// Connected without signing in; counted in Connections.
+    Guests: int
     Ready: int
     Reservations: int
     Closing: int
@@ -87,14 +89,18 @@ type TokenModel = {
 [<RequireQualifiedAccess>]
 module AdminModels =
     let status (snapshot: ServerRuntimeSnapshot) : StatusModel =
-        { Connections = snapshot.Connections; Ready = snapshot.Ready; Reservations = snapshot.Reservations
+        { Connections = snapshot.Connections; Guests = snapshot.Guests; Ready = snapshot.Ready; Reservations = snapshot.Reservations
           Closing = snapshot.Closing; Stopping = snapshot.Stopping }
 
     let phase = function
         | RuntimeSessionPhase.Waiting -> "waiting"
+        | RuntimeSessionPhase.Guest -> "guest"
         | RuntimeSessionPhase.Opening -> "opening"
         | RuntimeSessionPhase.Ready -> "ready"
         | RuntimeSessionPhase.Closing -> "closing"
+
+    /// The phase of a connection that has not signed in; its row has no names.
+    let guestPhase = phase RuntimeSessionPhase.Guest
 
     let hidden = function
         | HiddenIdentity.Shown -> "none"

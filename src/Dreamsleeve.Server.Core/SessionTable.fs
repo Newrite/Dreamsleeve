@@ -6,9 +6,10 @@ open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
 /// Where a connection is in its life. The runtime's table holds it and the
-/// panel reads the same value.
+/// panel reads the same value. A guest has not signed in: it stays connected
+/// without a deadline and may open a session later on the same connection.
 [<RequireQualifiedAccess>]
-type RuntimeSessionPhase = Waiting | Opening | Ready | Closing
+type RuntimeSessionPhase = Waiting | Guest | Opening | Ready | Closing
 
 /// These records are touched only by the runtime handler, never by session agents.
 [<RequireQualifiedAccess>]
@@ -70,14 +71,14 @@ module internal SessionTable =
             entry.PlayerId <- Some playerId
             IdentityAdmission.Reserved(PseudonymBook.apply pick hiding profile state.Names)
         | RuntimeSessionPhase.Opening, None | RuntimeSessionPhase.Opening, Some _ -> IdentityAdmission.AlreadyInUse
-        | RuntimeSessionPhase.Waiting, _ | RuntimeSessionPhase.Ready, _ | RuntimeSessionPhase.Closing, _ -> IdentityAdmission.Closed
+        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> IdentityAdmission.Closed
 
     /// See PseudonymBook.apply. None when the connection is not a ready session
     /// holding its reservation.
     let changeIdentity hiding pick (entry: Entry) state =
         match entry.Phase, entry.PlayerId |> Option.map (fun playerId -> PseudonymBook.tryProfile playerId state.Names) with
         | RuntimeSessionPhase.Ready, Some (ValueSome profile) -> Some (PseudonymBook.apply pick hiding profile state.Names)
-        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> None
+        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> None
 
     /// Keeps the pseudonym and hiding of the player; None when this connection
     /// is not the ready or opening owner of the reservation.
@@ -87,7 +88,7 @@ module internal SessionTable =
             PseudonymBook.rename profile state.Names
             if own then state.Profiles.Remove playerId |> ignore
             true
-        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> false
+        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> false
 
     let domainClean (entry: Entry) =
         entry.ChildStopped && entry.ChatDetached && entry.SystemDetached && entry.PresenceDetached && entry.GroundMarksDetached

@@ -40,6 +40,24 @@ public:
       return phase;
     }
 
+    // While no session is open, keeps a connection to the server as a guest,
+    // so the server counts this client online. The link is internal: the
+    // exchange phase stays idle, and a session opens on it. Off, an idle link
+    // is closed gracefully (see Closing).
+    void KeepGuest(bool enabled)
+    {
+      keepGuest = enabled;
+      if (enabled || !SessionIdle(phase) || !transport) return;
+      if (transport->State() == ClientState::Connected && transport->BeginDisconnect()) return;
+      if (transport->State() != ClientState::Disconnecting) DropGuest();
+    }
+
+    // A close is still being served: the session's or the guest link's.
+    bool Closing() const noexcept
+    {
+      return phase == SessionPhase::Disconnecting || GuestLink() == ClientState::Disconnecting;
+    }
+
     Result<void> Connect(std::string sessionTicket)
     {
       if (!SessionIdle(phase))
@@ -51,21 +69,29 @@ public:
       const auto requestId = exchange.NextRequestId();
       if (!requestId) return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Request IDs exhausted")};
 
-      DreamNetClientConfig transportConfig{config.network, config.serverAddress, config.connectTimeoutMs, config.disconnectTimeoutMs};
-      auto                 created = DreamNetClient::TryCreate(transportConfig);
-      if (!created) return Fail(created.error());
+      // A guest link carries the session: connected, it opens at once; still
+      // connecting, it opens on Connected. Otherwise a new connection is made.
+      const auto link  = GuestLink();
+      const bool reuse = link == ClientState::Connected || link == ClientState::Connecting;
+      if (!reuse)
+      {
+        auto created = NewTransport();
+        if (!created) return Fail(created.error());
+        transport = std::move(*created);
+      }
 
-      transport   = std::move(*created);
       opening     = Wire::OpenSession{*requestId, std::move(sessionTicket), exchange.HideIdentity()};
       lastRequest = *requestId;
       ResetSession();
       auto published = Publish();
       if (!published) return Fail(published.error());
 
-      auto connected = transport->BeginConnect();
-      if (!connected) return Fail(connected.error());
+      if (!reuse)
+        if (auto connected = transport->BeginConnect(); !connected) return Fail(connected.error());
 
       SetPhase(SessionPhase::Connecting);
+      if (link == ClientState::Connected)
+        if (auto sent = SendOpening(); !sent) return Fail(std::move(sent.error()));
 
       return {};
     }
@@ -91,6 +117,7 @@ public:
     Result<void> Poll(TimeOutMs waitMs = 0)
     {
       auto commandsResult = ProcessCommands();
+      if (SessionIdle(phase)) ServeGuest(waitMs);
       if (!transport || SessionIdle(phase)) return commandsResult;
 
       events.clear();
@@ -123,6 +150,12 @@ public:
 private:
 
     using Clock = std::chrono::steady_clock;
+
+    // Guest links are made again after these waits, doubling: a server that
+    // drops guests (a full one) is not called in a loop. A session starting
+    // resets them, so the guest after its end connects at once.
+    static constexpr auto GuestRetryMinimum = std::chrono::seconds{5};
+    static constexpr auto GuestRetryMaximum = std::chrono::seconds{60};
 
     // What a sent request waits for. Chat and announcements remember their channel.
     enum class PendingKind
@@ -207,8 +240,12 @@ private:
     Result<void> Handle(ClientConnected&)
     {
       if (phase != SessionPhase::Connecting) return Unexpected("connected");
+      return SendOpening();
+    }
 
-      if (transport->NegotiatedChannelCount() < 3) return Unexpected("channel_count");
+    Result<void> SendOpening()
+    {
+      if (transport->NegotiatedChannelCount() < MinimumChannels) return Unexpected("channel_count");
 
       auto packet = codec.Encode(opening);
       opening.sessionTicket.clear();  // A reconnect must supply a newly issued ticket.
@@ -218,9 +255,61 @@ private:
       if (!sent) return std::unexpected{sent.error()};
 
       deadline = Clock::now() + std::chrono::milliseconds(config.sessionTimeoutMs);
+      guestRetry.Reset();
       SetPhase(SessionPhase::Opening);
 
       return {};
+    }
+
+    std::expected<DreamNetClient::Ptr, DreamNetError> NewTransport() const
+    {
+      return DreamNetClient::TryCreate({config.network, config.serverAddress, config.connectTimeoutMs, config.disconnectTimeoutMs});
+    }
+
+    // The state of the connection kept without a session; Disconnected when
+    // there is none or a session owns the transport.
+    ClientState GuestLink() const noexcept
+    {
+      return SessionIdle(phase) && transport ? transport->State() : ClientState::Disconnected;
+    }
+
+    // Idle phase only. Makes the link when it is due, serves it and joins as
+    // a guest on Connected. Its failures stay here: the client is simply
+    // offline until the next attempt, and the exchange hears nothing.
+    void ServeGuest(TimeOutMs waitMs)
+    {
+      const auto link = GuestLink();
+      if (link == ClientState::Disconnected || link == ClientState::Faulted)
+      {
+        if (!keepGuest || !guestRetry.Due(Clock::now())) return;
+        auto created = NewTransport();
+        if (!created) return;
+        transport = std::move(*created);
+        if (!transport->BeginConnect()) return DropGuest();
+      }
+
+      events.clear();
+      bool failed = !transport->Poll(events, waitMs);
+      // A guest is told nothing but a refusal, and a close needs no answer.
+      for (const auto& event : events)
+        if (!failed && std::holds_alternative<ClientConnected>(event)) failed = !JoinAsGuest();
+      events.clear();
+      if (failed) DropGuest();
+    }
+
+    bool JoinAsGuest()
+    {
+      if (!keepGuest || transport->NegotiatedChannelCount() < MinimumChannels) return false;
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return false;
+      auto packet = codec.Encode(Wire::JoinAsGuest{*requestId});
+      return packet && transport->Send(std::move(*packet));
+    }
+
+    void DropGuest()
+    {
+      if (transport) transport->Abort(DisconnectReason::ClientShutdown);
+      transport.reset();
     }
 
     Result<void> Handle(ClientClosed&)
@@ -631,19 +720,20 @@ private:
       return {};
     }
 
+    // The latest pose goes every interval on the unreliable lane, a repeat
+    // included: it covers a lost sample. The stamp is the capture time the
+    // exchange gave the pose, so a repeat says when the pose was true and
+    // receivers drop it as the sample they already have.
     Result<void> SendMovement()
     {
       if (phase != SessionPhase::Ready || !movementReady || !latestMovement || Clock::now() < nextPlayerSample) return {};
       if (movementSequence == std::numeric_limits<std::uint64_t>::max()) return Unexpected("movement_sequence_exhausted");
-      const auto now   = Clock::now();
-      nextPlayerSample = now + std::chrono::milliseconds(config.playerSampleIntervalMs);
-      const auto sampledAt =
-        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count());
-      auto packet = codec.Encode(
+      nextPlayerSample = Clock::now() + std::chrono::milliseconds(config.playerSampleIntervalMs);
+      auto packet      = codec.Encode(
         Wire::MovementSample{
             contextRevision,
             ++movementSequence,
-            {latestMovement->position, latestMovement->rotation, sampledAt}
+            {latestMovement->position, latestMovement->rotation, latestMovement->sampledAtUs}
       },
         transport->MaxUnfragmentedPayloadBytes());
       if (!packet) return Fail(packet.error());
@@ -695,10 +785,15 @@ private:
       return firstError;
     }
 
+    // Control, chat and realtime lanes.
+    static constexpr std::size_t MinimumChannels = 3;
+
     Configuration                                     config;
     Wire::ProtocolCodec                               codec;
     ClientExchange&                                   exchange;
     DreamNetClient::Ptr                               transport;
+    bool                                              keepGuest{};
+    Utils::Timing::Backoff                            guestRetry{GuestRetryMinimum, GuestRetryMaximum};
     ClientModel                                       model;
     SessionPhase                                      phase{SessionPhase::Disconnected};
     Wire::OpenSession                                 opening;

@@ -36,8 +36,8 @@ let private post text kind source signature : Result<ClientRequest, ProtocolCode
 let private request (result: Result<ClientRequest, ProtocolCodecError>) =
     match (ok result).Command with
     | ClientCommand.PostAnnouncement value -> value
-    | ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.ChangeDisplayName _
-    | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
+    | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _
+    | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
     | ClientCommand.SetIdentityVisibility _ -> failtest "Expected announcement"
 
 let private withFile (text: string) action =

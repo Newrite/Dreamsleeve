@@ -24,6 +24,11 @@ message OpenSession {
   HiddenIdentity hidden_identity = 4;
 }
 
+// A client that has not signed in keeps its connection as a guest: the server
+// counts it online, and a session opens later on the same connection. No
+// reply; on a connection that is not waiting it is refused as INVALID_REQUEST.
+message JoinAsGuest {}
+
 message SessionOpened {
   string server_name = 6;
   uint64 self_player_id = 1;

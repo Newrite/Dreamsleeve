@@ -31,6 +31,12 @@ namespace Dreamsleeve::Client::Wire
         WriteSession(*packet.mutable_open_session(), value);
       }
 
+      void operator()(const JoinAsGuest& value) const
+      {
+        packet.set_request_id(value.requestId);
+        packet.mutable_join_as_guest();
+      }
+
       void operator()(const UpdatePlayer& value) const
       {
         packet.set_request_id(value.requestId);

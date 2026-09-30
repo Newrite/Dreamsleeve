@@ -77,7 +77,7 @@ let private scalarEntry key scalar =
 let private playerUpdate result =
     match (result |> ok).Command with
     | ClientCommand.UpdatePlayer value -> value
-    | ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _
+    | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _
     | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
     | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ -> failtest "Expected player update"
 
@@ -162,13 +162,20 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         | ClientCommand.OpenSession(actual, hidden) ->
             Expect.equal actual ticket "credential preserved exactly"
             Expect.equal hidden HiddenIdentity.Shown "names are shown unless the client asks otherwise"
-        | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _
+        | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _
         | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
         | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ -> failtest "Wrong command"
 
         for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
             packet.OpenSession.SessionTicket <- invalid
             Expect.equal (decode packet |> error).Failure (ProtocolCodecFailure.InvalidPayload "session_ticket") "bounded base64url ticket"
+
+    testCase "a guest joins with an empty payload on the control lane" <| fun _ ->
+        let packet = Dreamsleeve.Protocol.Chat.ClientPacket(
+            ProtocolVersion = ProtocolCodec.Version, RequestId = 7UL, JoinAsGuest = Dreamsleeve.Protocol.Chat.JoinAsGuest())
+        let result = decode packet |> ok
+        Expect.equal result.Command ClientCommand.JoinAsGuest "guest command"
+        Expect.equal (ProtocolCodec.requestLane result) DeliveryLane.Control "control lane"
 
     testCase "send chat preserves text and full uint64 request IDs" <| fun _ ->
         let result = send UInt64.MaxValue "Привет\nworld" |> decode |> ok

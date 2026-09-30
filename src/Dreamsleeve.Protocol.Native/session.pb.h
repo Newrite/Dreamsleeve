@@ -20,6 +20,7 @@
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/arenastring.h"
+#include "google/protobuf/generated_message_bases.h"
 #include "google/protobuf/generated_message_tctable_decl.h"
 #include "google/protobuf/generated_message_util.h"
 #include "google/protobuf/metadata_lite.h"
@@ -72,6 +73,10 @@ class IdentityVisibilityChanged;
 struct IdentityVisibilityChangedDefaultTypeInternal;
 extern IdentityVisibilityChangedDefaultTypeInternal _IdentityVisibilityChanged_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull IdentityVisibilityChanged_class_data_;
+class JoinAsGuest;
+struct JoinAsGuestDefaultTypeInternal;
+extern JoinAsGuestDefaultTypeInternal _JoinAsGuest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull JoinAsGuest_class_data_;
 class OpenSession;
 struct OpenSessionDefaultTypeInternal;
 extern OpenSessionDefaultTypeInternal _OpenSession_default_instance_;
@@ -196,7 +201,7 @@ class SetIdentityVisibility final : public ::google::protobuf::Message
     return *reinterpret_cast<const SetIdentityVisibility*>(
         &_SetIdentityVisibility_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(SetIdentityVisibility& a, SetIdentityVisibility& b) { a.Swap(&b); }
   inline void Swap(SetIdentityVisibility* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -538,6 +543,140 @@ class OpenSession final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull OpenSession_class_data_;
 // -------------------------------------------------------------------
 
+class JoinAsGuest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.JoinAsGuest) */ {
+ public:
+  inline JoinAsGuest() : JoinAsGuest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(JoinAsGuest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(JoinAsGuest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR JoinAsGuest(::google::protobuf::internal::ConstantInitialized);
+
+  inline JoinAsGuest(const JoinAsGuest& from) : JoinAsGuest(nullptr, from) {}
+  inline JoinAsGuest(JoinAsGuest&& from) noexcept
+      : JoinAsGuest(nullptr, ::std::move(from)) {}
+  inline JoinAsGuest& operator=(const JoinAsGuest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline JoinAsGuest& operator=(JoinAsGuest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const JoinAsGuest& default_instance() {
+    return *reinterpret_cast<const JoinAsGuest*>(
+        &_JoinAsGuest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(JoinAsGuest& a, JoinAsGuest& b) { a.Swap(&b); }
+  inline void Swap(JoinAsGuest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(JoinAsGuest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  JoinAsGuest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<JoinAsGuest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const JoinAsGuest& from) {
+    ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const JoinAsGuest& from) {
+    ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from);
+  }
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.JoinAsGuest"; }
+
+  explicit JoinAsGuest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  JoinAsGuest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const JoinAsGuest& from);
+  JoinAsGuest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, JoinAsGuest&& from) noexcept
+      : JoinAsGuest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.JoinAsGuest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 0,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  friend struct ::TableStruct_session_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull JoinAsGuest_class_data_;
+// -------------------------------------------------------------------
+
 class IdentityVisibilityChanged final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged) */ {
  public:
@@ -593,7 +732,7 @@ class IdentityVisibilityChanged final : public ::google::protobuf::Message
     return *reinterpret_cast<const IdentityVisibilityChanged*>(
         &_IdentityVisibilityChanged_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(IdentityVisibilityChanged& a, IdentityVisibilityChanged& b) { a.Swap(&b); }
   inline void Swap(IdentityVisibilityChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -801,7 +940,7 @@ class DisplayNameChanged final : public ::google::protobuf::Message
     return *reinterpret_cast<const DisplayNameChanged*>(
         &_DisplayNameChanged_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(DisplayNameChanged& a, DisplayNameChanged& b) { a.Swap(&b); }
   inline void Swap(DisplayNameChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -996,7 +1135,7 @@ class ChangeDisplayName final : public ::google::protobuf::Message
     return *reinterpret_cast<const ChangeDisplayName*>(
         &_ChangeDisplayName_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(ChangeDisplayName& a, ChangeDisplayName& b) { a.Swap(&b); }
   inline void Swap(ChangeDisplayName* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1191,7 +1330,7 @@ class SessionOpened final : public ::google::protobuf::Message
     return *reinterpret_cast<const SessionOpened*>(
         &_SessionOpened_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(SessionOpened& a, SessionOpened& b) { a.Swap(&b); }
   inline void Swap(SessionOpened* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1532,6 +1671,10 @@ inline void OpenSession::_internal_set_hidden_identity(::Dreamsleeve::Protocol::
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hidden_identity_ = value;
 }
+
+// -------------------------------------------------------------------
+
+// JoinAsGuest
 
 // -------------------------------------------------------------------
 

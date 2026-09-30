@@ -86,7 +86,7 @@ let private withPanel customize run = task {
     let ports = {
         Admin = fun command _ _ -> Task.FromResult(AgentAskResult.Replied(admin.Handle command))
         Account = fun _ _ _ -> Task.FromResult(AgentAskResult.Replied(Error AccountAccessError.Unavailable))
-        Snapshot = fun _ _ -> Task.FromResult(AgentAskResult.Replied { Connections = 1; Ready = 1; Reservations = 1; Closing = 0; Stopping = false })
+        Snapshot = fun _ _ -> Task.FromResult(AgentAskResult.Replied { Connections = 1; Guests = 0; Ready = 1; Reservations = 1; Closing = 0; Stopping = false })
         Sessions = fun _ _ -> Task.FromResult(AgentAskResult.Replied [ hiddenRow ])
         Describe = fun _ row -> Task.FromResult(if row.ConnectionId = hiddenRow.ConnectionId then Some hiddenView else None)
         Announce = fun announcement -> announcements.Enqueue announcement; true

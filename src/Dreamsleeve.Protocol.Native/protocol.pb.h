@@ -1554,6 +1554,7 @@ class ClientPacket final : public ::google::protobuf::Message
     kRemoveGroundMark = 16,
     kSetIdentityVisibility = 17,
     kChangeDisplayName = 18,
+    kJoinAsGuest = 19,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -1654,6 +1655,7 @@ class ClientPacket final : public ::google::protobuf::Message
     kRemoveGroundMarkFieldNumber = 16,
     kSetIdentityVisibilityFieldNumber = 17,
     kChangeDisplayNameFieldNumber = 18,
+    kJoinAsGuestFieldNumber = 19,
   };
   // uint64 request_id = 2;
   void clear_request_id() ;
@@ -1846,6 +1848,25 @@ class ClientPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::ChangeDisplayName* PROTOBUF_NONNULL _internal_mutable_change_display_name();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.JoinAsGuest join_as_guest = 19;
+  bool has_join_as_guest() const;
+  private:
+  bool _internal_has_join_as_guest() const;
+
+  public:
+  void clear_join_as_guest() ;
+  const ::Dreamsleeve::Protocol::Chat::JoinAsGuest& join_as_guest() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NULLABLE release_join_as_guest();
+  ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NONNULL mutable_join_as_guest();
+  void set_allocated_join_as_guest(::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_join_as_guest(::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NULLABLE unsafe_arena_release_join_as_guest();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::JoinAsGuest& _internal_join_as_guest() const;
+  ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NONNULL _internal_mutable_join_as_guest();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ClientPacket)
@@ -1860,11 +1881,12 @@ class ClientPacket final : public ::google::protobuf::Message
   void set_has_remove_ground_mark();
   void set_has_set_identity_visibility();
   void set_has_change_display_name();
+  void set_has_join_as_guest();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 11,
-                                   9, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 12,
+                                   10, 0,
                                    2>
       _table_;
 
@@ -1899,6 +1921,7 @@ class ClientPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE remove_ground_mark_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE set_identity_visibility_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE change_display_name_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE join_as_guest_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -2611,6 +2634,77 @@ inline ::Dreamsleeve::Protocol::Chat::ChangeDisplayName* PROTOBUF_NONNULL Client
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::ChangeDisplayName* _msg = _internal_mutable_change_display_name();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.change_display_name)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.JoinAsGuest join_as_guest = 19;
+inline bool ClientPacket::has_join_as_guest() const {
+  return payload_case() == kJoinAsGuest;
+}
+inline bool ClientPacket::_internal_has_join_as_guest() const {
+  return payload_case() == kJoinAsGuest;
+}
+inline void ClientPacket::set_has_join_as_guest() {
+  _impl_._oneof_case_[0] = kJoinAsGuest;
+}
+inline ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NULLABLE ClientPacket::release_join_as_guest() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.join_as_guest)
+  if (payload_case() == kJoinAsGuest) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::JoinAsGuest*>(_impl_.payload_.join_as_guest_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.join_as_guest_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::JoinAsGuest& ClientPacket::_internal_join_as_guest() const {
+  return payload_case() == kJoinAsGuest ? static_cast<const ::Dreamsleeve::Protocol::Chat::JoinAsGuest&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::JoinAsGuest*>(_impl_.payload_.join_as_guest_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::JoinAsGuest&>(::Dreamsleeve::Protocol::Chat::_JoinAsGuest_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::JoinAsGuest& ClientPacket::join_as_guest() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.join_as_guest)
+  return _internal_join_as_guest();
+}
+inline ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_join_as_guest() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.join_as_guest)
+  if (payload_case() == kJoinAsGuest) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::JoinAsGuest*>(_impl_.payload_.join_as_guest_);
+    _impl_.payload_.join_as_guest_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_join_as_guest(
+    ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_join_as_guest();
+    _impl_.payload_.join_as_guest_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.join_as_guest)
+}
+inline ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NONNULL ClientPacket::_internal_mutable_join_as_guest() {
+  if (payload_case() != kJoinAsGuest) {
+    clear_payload();
+    set_has_join_as_guest();
+    _impl_.payload_.join_as_guest_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::JoinAsGuest>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::JoinAsGuest*>(_impl_.payload_.join_as_guest_);
+}
+inline ::Dreamsleeve::Protocol::Chat::JoinAsGuest* PROTOBUF_NONNULL ClientPacket::mutable_join_as_guest()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::JoinAsGuest* _msg = _internal_mutable_join_as_guest();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.join_as_guest)
   return _msg;
 }
 

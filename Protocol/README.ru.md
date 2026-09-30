@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 11
+# Прикладной протокол сессии, версия 13
 
 Схемы разделены по назначению:
 
@@ -7,7 +7,7 @@
 | [common.proto](common.proto) | PlayerProfile (публичная личность, в том числе псевдонимная) и FormKey |
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
-| [session.proto](session.proto) | OpenSession и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged |
+| [session.proto](session.proto) | OpenSession, JoinAsGuest и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged |
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
@@ -15,13 +15,13 @@
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 12 датирует метки игровым календарём; версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–11 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 13 оставляет клиента подключённым гостем до входа; версия 12 датирует метки игровым календарём; версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–12 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 12. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 13. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -37,7 +37,11 @@ Flags=0 — не Unsequenced/UnreliableFragment. При исчерпании unr
 ENet может внутренне перейти к reliable; прикладного ACK движения при этом нет.
 
 Сессия привязана к одному ENet-соединению. После транспортного Connected клиент
-посылает OpenSession. Только SessionOpened переводит прикладную сессию в Ready.
+посылает OpenSession или, пока не вошёл, JoinAsGuest. Гость остаётся подключённым без
+дедлайна (мёртвое соединение отсекает таймаут ENet), сервер считает его в онлайне и
+принимает OpenSession на том же соединении. Ответа на JoinAsGuest нет; на соединении,
+которое уже гость или открывает сессию, он получает InvalidRequest, прочие команды
+гостя — SessionNotReady. Только SessionOpened переводит прикладную сессию в Ready.
 Повторное открытие на том же соединении и SendChat до Ready должен отклонять
 серверный владелец. Codec не хранит состояние соединения и сам эти правила не применяет.
 
@@ -65,6 +69,7 @@ plain HTTP допустим только для явно разрешённой 
 | Направление | Payload | Содержание |
 |---|---|---|
 | Клиент → сервер | OpenSession | Одноразовый SessionTicket и выбор hidden_identity |
+| Клиент → сервер | JoinAsGuest | Пустой: соединение остаётся гостем до OpenSession; ответа нет |
 | Клиент → сервер | SendChat | ChannelId и текст, без авторства/времени/MessageId |
 | Клиент → сервер | PostAnnouncement | ChannelId системного канала, текст, вид (Announcement/Event), заявленный источник (TrustedClient/ThirdParty) и подпись; Chat-канал ENet |
 | Сервер → клиент | SessionOpened | SelfPlayerId, весь онлайн, каналы с видом и хвостом истории, политика объявлений, own_pseudonym и hidden_identity |
@@ -598,7 +603,9 @@ ReplicationIntervalMs — период серверной рассылки ак�
 PlayerLocation.sampled_at_us в baseline и MovementPose.sampled_at_us в realtime —
 монотонные микросекунды источника, не UTC. Часы игроков не сравниваются. Ноль допустим
 и допускает интерполяцию по приёму; порядок задаёт sequence, не timestamp.
-C++ runtime при повторе последней позы назначает новый sequence и текущее время.
+C++ runtime при повторе последней позы назначает новый sequence, а метку оставляет
+временем замера из ClientExchange: повтор закрывает потерю пакета и не выдаёт себя за
+новое измерение (время отправки сдвигало бы позу до одного интервала при движении).
 Сервер сохраняет source sequence/time при пересылке, не выдавая повтор за новое
 измерение. Та же sequence не добавляет наблюдение интерполяции.
 [Клиентская история](../docs/MovementInterpolationRu.md).

@@ -80,6 +80,24 @@ struct OpenSessionDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 OpenSessionDefaultTypeInternal _OpenSession_default_instance_;
+template <typename>
+PROTOBUF_CONSTEXPR JoinAsGuest::JoinAsGuest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(JoinAsGuest_class_data_.base()){}
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase() {
+}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+struct JoinAsGuestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR JoinAsGuestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~JoinAsGuestDefaultTypeInternal() {}
+  union {
+    JoinAsGuest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 JoinAsGuestDefaultTypeInternal _JoinAsGuest_default_instance_;
 
 inline constexpr IdentityVisibilityChanged::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -214,6 +232,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::OpenSession, _impl_.hidden_identity_),
         0,
         1,
+        0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SessionOpened, _impl_._has_bits_),
         10, // hasbit index offset
@@ -258,14 +277,16 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::OpenSession)},
-        {7, sizeof(::Dreamsleeve::Protocol::Chat::SessionOpened)},
-        {24, sizeof(::Dreamsleeve::Protocol::Chat::SetIdentityVisibility)},
-        {29, sizeof(::Dreamsleeve::Protocol::Chat::IdentityVisibilityChanged)},
-        {36, sizeof(::Dreamsleeve::Protocol::Chat::ChangeDisplayName)},
-        {41, sizeof(::Dreamsleeve::Protocol::Chat::DisplayNameChanged)},
+        {7, sizeof(::Dreamsleeve::Protocol::Chat::JoinAsGuest)},
+        {8, sizeof(::Dreamsleeve::Protocol::Chat::SessionOpened)},
+        {25, sizeof(::Dreamsleeve::Protocol::Chat::SetIdentityVisibility)},
+        {30, sizeof(::Dreamsleeve::Protocol::Chat::IdentityVisibilityChanged)},
+        {37, sizeof(::Dreamsleeve::Protocol::Chat::ChangeDisplayName)},
+        {42, sizeof(::Dreamsleeve::Protocol::Chat::DisplayNameChanged)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_OpenSession_default_instance_._instance,
+    &::Dreamsleeve::Protocol::Chat::_JoinAsGuest_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_SessionOpened_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_SetIdentityVisibility_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_IdentityVisibilityChanged_default_instance_._instance,
@@ -279,28 +300,28 @@ const char descriptor_table_protodef_session_2eproto[] ABSL_ATTRIBUTE_SECTION_VA
     "sion\022\026\n\016session_ticket\030\003 \001(\t\022B\n\017hidden_i"
     "dentity\030\004 \001(\0162).Dreamsleeve.Protocol.Cha"
     "t.HiddenIdentityJ\004\010\001\020\002J\004\010\002\020\003R\010usernameR\014"
-    "display_name\"\234\003\n\rSessionOpened\022\023\n\013server"
-    "_name\030\006 \001(\t\022\026\n\016self_player_id\030\001 \001(\004\0226\n\007p"
-    "layers\030\005 \003(\0132%.Dreamsleeve.Protocol.Chat"
-    ".PlayerInfo\022D\n\rannouncements\030\007 \001(\0132-.Dre"
-    "amsleeve.Protocol.Chat.AnnouncementPolic"
-    "y\0228\n\010channels\030\010 \003(\0132&.Dreamsleeve.Protoc"
-    "ol.Chat.ChatChannel\022\032\n\rown_pseudonym\030\t \001"
-    "(\tH\000\210\001\001\022B\n\017hidden_identity\030\n \001(\0162).Dream"
-    "sleeve.Protocol.Chat.HiddenIdentityB\020\n\016_"
-    "own_pseudonymJ\004\010\002\020\003J\004\010\003\020\004J\004\010\004\020\005R\021global_"
-    "channel_idR\017recent_messages\"R\n\025SetIdenti"
-    "tyVisibility\0229\n\006hidden\030\001 \001(\0162).Dreamslee"
-    "ve.Protocol.Chat.HiddenIdentity\"|\n\031Ident"
-    "ityVisibilityChanged\022\026\n\tpseudonym\030\001 \001(\tH"
-    "\000\210\001\001\0229\n\006hidden\030\002 \001(\0162).Dreamsleeve.Proto"
-    "col.Chat.HiddenIdentityB\014\n\n_pseudonym\")\n"
-    "\021ChangeDisplayName\022\024\n\014display_name\030\001 \001(\t"
-    "\"*\n\022DisplayNameChanged\022\024\n\014display_name\030\001"
-    " \001(\t*s\n\016HiddenIdentity\022\030\n\024HIDDEN_IDENTIT"
-    "Y_NONE\020\000\022\036\n\032HIDDEN_IDENTITY_EVERYWHERE\020\001"
-    "\022\'\n#HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS\020"
-    "\002b\006proto3"
+    "display_name\"\r\n\013JoinAsGuest\"\234\003\n\rSessionO"
+    "pened\022\023\n\013server_name\030\006 \001(\t\022\026\n\016self_playe"
+    "r_id\030\001 \001(\004\0226\n\007players\030\005 \003(\0132%.Dreamsleev"
+    "e.Protocol.Chat.PlayerInfo\022D\n\rannounceme"
+    "nts\030\007 \001(\0132-.Dreamsleeve.Protocol.Chat.An"
+    "nouncementPolicy\0228\n\010channels\030\010 \003(\0132&.Dre"
+    "amsleeve.Protocol.Chat.ChatChannel\022\032\n\row"
+    "n_pseudonym\030\t \001(\tH\000\210\001\001\022B\n\017hidden_identit"
+    "y\030\n \001(\0162).Dreamsleeve.Protocol.Chat.Hidd"
+    "enIdentityB\020\n\016_own_pseudonymJ\004\010\002\020\003J\004\010\003\020\004"
+    "J\004\010\004\020\005R\021global_channel_idR\017recent_messag"
+    "es\"R\n\025SetIdentityVisibility\0229\n\006hidden\030\001 "
+    "\001(\0162).Dreamsleeve.Protocol.Chat.HiddenId"
+    "entity\"|\n\031IdentityVisibilityChanged\022\026\n\tp"
+    "seudonym\030\001 \001(\tH\000\210\001\001\0229\n\006hidden\030\002 \001(\0162).Dr"
+    "eamsleeve.Protocol.Chat.HiddenIdentityB\014"
+    "\n\n_pseudonym\")\n\021ChangeDisplayName\022\024\n\014dis"
+    "play_name\030\001 \001(\t\"*\n\022DisplayNameChanged\022\024\n"
+    "\014display_name\030\001 \001(\t*s\n\016HiddenIdentity\022\030\n"
+    "\024HIDDEN_IDENTITY_NONE\020\000\022\036\n\032HIDDEN_IDENTI"
+    "TY_EVERYWHERE\020\001\022\'\n#HIDDEN_IDENTITY_EXCEP"
+    "T_GROUND_MARKS\020\002b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_session_2eproto_deps[2] = {
@@ -311,13 +332,13 @@ static ::absl::once_flag descriptor_table_session_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_session_2eproto = {
     false,
     false,
-    1049,
+    1064,
     descriptor_table_protodef_session_2eproto,
     "session.proto",
     &descriptor_table_session_2eproto_once,
     descriptor_table_session_2eproto_deps,
     2,
-    6,
+    7,
     schemas,
     file_default_instances,
     TableStruct_session_2eproto::offsets,
@@ -641,6 +662,115 @@ void OpenSession::InternalSwap(OpenSession* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
 
 ::google::protobuf::Metadata OpenSession::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class JoinAsGuest::_Internal {
+ public:
+};
+
+JoinAsGuest::JoinAsGuest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, JoinAsGuest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Chat.JoinAsGuest)
+}
+JoinAsGuest::JoinAsGuest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const JoinAsGuest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, JoinAsGuest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  JoinAsGuest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.JoinAsGuest)
+}
+
+inline void* PROTOBUF_NONNULL JoinAsGuest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JoinAsGuest(arena);
+}
+constexpr auto JoinAsGuest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(JoinAsGuest),
+                                            alignof(JoinAsGuest));
+}
+constexpr auto JoinAsGuest::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_JoinAsGuest_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &JoinAsGuest::MergeImpl,
+          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<JoinAsGuest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JoinAsGuest::SharedDtor,
+          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<JoinAsGuest>(), &JoinAsGuest::ByteSizeLong,
+              &JoinAsGuest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JoinAsGuest, _impl_._cached_size_),
+          false,
+      },
+      &JoinAsGuest::kDescriptorMethods,
+      &descriptor_table_session_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JoinAsGuest_class_data_ =
+        JoinAsGuest::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JoinAsGuest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JoinAsGuest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JoinAsGuest_class_data_.tc_table);
+  return JoinAsGuest_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 0, 0, 0, 2>
+JoinAsGuest::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    0, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967295,  // skipmap
+    offsetof(decltype(_table_), field_names),  // no field_entries
+    0,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    JoinAsGuest_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::JoinAsGuest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, // no field_entries, or aux_entries
+  {{
+  }},
+};
+
+
+
+
+
+
+
+::google::protobuf::Metadata JoinAsGuest::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
 

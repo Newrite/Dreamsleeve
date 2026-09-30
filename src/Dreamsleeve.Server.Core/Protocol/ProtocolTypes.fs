@@ -52,6 +52,8 @@ type GroundMarkView = {
 [<RequireQualifiedAccess>]
 type ClientCommand =
     | OpenSession of sessionTicket: string * HiddenIdentity
+    /// Stays connected without a session; the server counts the client online.
+    | JoinAsGuest
     | SendChat of ChatChannelId * ChatMessageText
     | UpdatePlayer of PlayerUpdate
     | PostAnnouncement of AnnouncementRequest

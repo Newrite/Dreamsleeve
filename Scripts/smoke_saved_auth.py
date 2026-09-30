@@ -31,8 +31,8 @@ def run(directory, log):
     client_config = directory / "client.toml"
     server_config.write_text(tomli_w.dumps({
         "Server": {"Port": port}, "Database": {"DatabasePath": str(directory / "accounts.db")},
-        "Authentication": {"ListenUrl": origin, "RequestsPerMinute": 1000},
-        "Admin": {"ListenUrl": f"http://127.0.0.1:{free_tcp_port()}"},
+        "Authentication": {"Listener": {"ListenUrl": origin, "RequestsPerMinute": 1000}},
+        "Admin": {"Listener": {"ListenUrl": f"http://127.0.0.1:{free_tcp_port()}"}},
         "Logging": {"FilePath": str(directory / "server-.json")}}), encoding="utf-8")
     client_config.write_text(tomli_w.dumps({"serverPort": port, "authUrl": origin}), encoding="utf-8")
     lock, children = threading.Lock(), []

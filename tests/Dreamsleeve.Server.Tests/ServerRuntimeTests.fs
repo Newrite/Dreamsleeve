@@ -26,6 +26,7 @@ let private packet requestId payload =
 
 let private ticket (name: string) = name.PadRight(43, '_')
 let private opening name = packet 1UL (fun packet -> packet.OpenSession <- OpenSession(SessionTicket = ticket name))
+let private joinAsGuest requestId = packet requestId (fun packet -> packet.JoinAsGuest <- JoinAsGuest())
 
 // Authentication is a controlled dependency in runtime tests; account/password/ticket
 // consumption semantics are verified by authentication service tests.
@@ -334,6 +335,50 @@ let tests = testList "ServerRuntime" [
             do! empty fixture
         })
     }
+    testTask "a guest outlives the open deadline, opens its session on the same connection and gets the full time to authenticate" {
+        let options = { ServerRuntimeOptions.defaults with OpenTimeoutMs = 50 }
+        do! withRuntime options (fun fixture -> task {
+            let guest = Guid.NewGuid()
+            fixture.Input.Enqueue(ServerTransportEvent.Connected guest)
+            fixture.Input.Enqueue(incoming(guest, joinAsGuest 1UL))
+            fixture.Notify() |> ignore
+            // Several deadlines of a connection that never announces itself.
+            do! Task.Delay 250
+            let! counted = stats fixture
+            equal 1 counted.Connections
+            equal 1 counted.Guests
+            let! rows = fixture.Runtime.AskAsync ServerRuntimeMessage.ListSessions |> awaitResult
+            check (rows |> List.exactlyOne |> fun row -> row.Phase = RuntimeSessionPhase.Guest && row.PlayerId.IsNone) "a guest row has no player"
+
+            fixture.Input.Enqueue(incoming(guest, chat 2UL "hello"))
+            let! _, early = nextWhere fixture (fun id _ -> id = guest)
+            equal RequestRejectionCode.SessionNotReady early.RequestRejected.Code
+            fixture.Input.Enqueue(incoming(guest, joinAsGuest 3UL))
+            let! _, again = nextWhere fixture (fun id _ -> id = guest)
+            equal RequestRejectionCode.InvalidRequest again.RequestRejected.Code
+
+            fixture.Input.Enqueue(incoming(guest, packet 4UL (fun packet -> packet.OpenSession <- OpenSession(SessionTicket = ticket "alice"))))
+            let! opened = welcome fixture guest
+            equal 1 opened.Players.Count
+            let! after = stats fixture
+            equal 0 after.Guests
+            equal 1 after.Ready
+        })
+    }
+
+    testTask "a guest that leaves frees its connection" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
+            let guest = Guid.NewGuid()
+            fixture.Input.Enqueue(ServerTransportEvent.Connected guest)
+            fixture.Input.Enqueue(incoming(guest, joinAsGuest 1UL))
+            fixture.Input.Enqueue(ServerTransportEvent.Disconnected guest)
+            fixture.Notify() |> ignore
+            let! closed = receive fixture.Closed
+            equal guest closed
+            do! empty fixture
+        })
+    }
+
     testTask "malformed envelope closes only its peer" {
         do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
             let first = connect fixture "healthy"

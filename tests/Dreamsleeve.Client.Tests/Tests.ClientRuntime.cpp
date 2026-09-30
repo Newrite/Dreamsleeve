@@ -42,6 +42,7 @@ namespace
     std::vector<P::ClientMovementPacket> samples;
     std::vector<ClientRuntime::Error> errors;
     bool                              closed{};
+    int                               connects{};
 
     explicit Fixture(TimeOutMs sessionTimeout = 2000, std::size_t maxPending = 2, std::size_t packetBytes = 1024 * 1024, std::size_t resultCapacity = 8)
         : exchange{Value(ClientExchange::TryCreate(resultCapacity, 16))}
@@ -68,6 +69,7 @@ namespace
         {
           peer   = event->Peer();
           closed = false;
+          ++connects;
         }
         else if (event->IsDisconnect())
         {
@@ -890,7 +892,7 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
   CHECK(fixture.errors.empty());
 }
 
-TEST_CASE("Periodic movement repeats after local sampling stops without request acknowledgements")
+TEST_CASE("Periodic movement repeats the last pose with its capture time after local sampling stops")
 {
   Fixture fixture;
   const auto generation = Ready(fixture);
@@ -908,6 +910,67 @@ TEST_CASE("Periodic movement repeats after local sampling stops without request 
   CHECK(fixture.requests.size() == 2);
   CHECK(fixture.samples[0].sample().sequence() < fixture.samples[2].sample().sequence());
   CHECK(fixture.samples[2].sample().pose().position().x() == 42);
+  // A repeat says when the pose was true, not when it was sent.
+  for (const auto& sample : fixture.samples)
+    CHECK(sample.sample().pose().sampled_at_us() == 100);
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("A guest link joins at once, carries the session opened on it and comes back when the session ends")
+{
+  Fixture fixture;
+  fixture.client->KeepGuest(true);
+  fixture.Until([&] { return fixture.requests.size() == 1; });
+  CHECK(fixture.requests[0].has_join_as_guest());
+  CHECK(fixture.requests[0].request_id() != 0);
+  CHECK(fixture.client->Phase() == SessionPhase::Disconnected);
+  // The guest is invisible to the exchange: nothing was published.
+  CHECK(fixture.Drain().state.updates.empty());
+
+  const auto request = fixture.Open();
+  CHECK(fixture.connects == 1);
+  fixture.Send(Welcome(request));
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+
+  REQUIRE(fixture.client->Disconnect());
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
+  fixture.Until([&] { return fixture.connects == 2 && fixture.requests.back().has_join_as_guest(); });
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("A sign-in while the guest link connects opens on that connection instead of joining")
+{
+  Fixture fixture;
+  fixture.client->KeepGuest(true);
+  REQUIRE(fixture.client->Poll(0));
+  fixture.Open();
+  CHECK(fixture.connects == 1);
+  CHECK(std::ranges::none_of(fixture.requests, &P::ClientPacket::has_join_as_guest));
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("A refused sign-in leaves the client a guest")
+{
+  Fixture fixture;
+  fixture.client->KeepGuest(true);
+  fixture.Until([&] { return fixture.requests.size() == 1; });
+  fixture.Send(Rejection(fixture.Open()));
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Disconnected; });
+  fixture.Until([&] { return fixture.connects == 2 && fixture.requests.back().has_join_as_guest(); });
+}
+
+TEST_CASE("Leaving closes the guest link gracefully and nothing connects again")
+{
+  Fixture fixture;
+  fixture.client->KeepGuest(true);
+  fixture.Until([&] { return fixture.requests.size() == 1; });
+  fixture.client->KeepGuest(false);
+  CHECK(fixture.client->Closing());
+  fixture.Until([&] { return fixture.closed && !fixture.client->Closing(); });
+  for (int step = 0; step < 20; ++step)
+    fixture.Step();
+  CHECK(fixture.connects == 1);
+  CHECK(fixture.requests.size() == 1);
   CHECK(fixture.errors.empty());
 }
 

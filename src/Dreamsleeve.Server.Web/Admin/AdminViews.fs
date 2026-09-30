@@ -164,7 +164,8 @@ module AdminViews =
     /// Falco.Htmx writes the constant hx-* attributes; nothing dynamic goes through it.
     let online (rows: OnlineModel list) (available: bool) =
         Elem.section [ attr "id" "online"; Hx.get "/partials/online"; Hx.trigger "every 5s"; Hx.swapOuterHtml ] [
-            Elem.h2 [] [ text $"Онлайн ({rows.Length})" ]
+            let guests = rows |> List.filter (fun row -> row.Phase = AdminModels.guestPhase) |> List.length
+            Elem.h2 [] [ text (if guests = 0 then $"Онлайн ({rows.Length})" else $"Онлайн ({rows.Length}, из них гостей {guests})") ]
             if not available then Elem.p [ css "error" ] [ text "Рантайм не ответил; данные устарели." ]
             Elem.table [] [
                 Elem.thead [] [
@@ -188,7 +189,9 @@ module AdminViews =
                                 Elem.td [] [ text row.Role ]
                                 Elem.td [] [ text (if isNull row.Location then "—" else row.Location) ]
                             else
-                                Elem.td [ attr "colspan" "6"; css "muted" ] [ text "нет данных" ]
+                                // A guest has not signed in: there is nothing to describe.
+                                let note = if row.Phase = AdminModels.guestPhase then "гость" else "нет данных"
+                                Elem.td [ attr "colspan" "6"; css "muted" ] [ text note ]
                             Elem.td [] [ text row.Phase ]
                             Elem.td [] [ text (time row.ConnectedAt) ]
                         ]
@@ -203,7 +206,7 @@ module AdminViews =
                 match status with
                 | Some status ->
                     Elem.dl [] [
-                        for label, value in [ "Соединения", string status.Connections; "Готовы", string status.Ready
+                        for label, value in [ "Соединения", string status.Connections; "Гости", string status.Guests; "Готовы", string status.Ready
                                               "Резервы PlayerId", string status.Reservations; "Закрываются", string status.Closing
                                               "Остановка", (if status.Stopping then "да" else "нет") ] do
                             Elem.dt [] [ text label ]
