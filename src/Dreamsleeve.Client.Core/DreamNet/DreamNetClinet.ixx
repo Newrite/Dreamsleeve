@@ -80,7 +80,9 @@ export class DreamNetClient final
   DreamNetClient& operator=(DreamNetClient&&)      = delete;
   ~DreamNetClient()                                = default;
 
-  static Result TryCreate(DreamNetClientConfig config)
+  // A client host: one peer slot, an explicit channel count, timeouts, and the
+  // ENet bounds of any host. The application checks its settings with it at start.
+  static NetOperationResult ValidateConfig(const DreamNetClientConfig& config)
   {
     if (config.host.maxPeers != 1 || config.host.channelLimit == 0)
     {
@@ -98,6 +100,13 @@ export class DreamNetClient final
           config.connectTimeoutMs,
           config.disconnectTimeoutMs));
     }
+
+    return DreamNetHost::ValidateConfig(config.host);
+  }
+
+  static Result TryCreate(DreamNetClientConfig config)
+  {
+    if (auto valid = ValidateConfig(config); !valid) return std::unexpected{std::move(valid.error())};
 
     auto clientHostResult = DreamNetHost::TryCreateClient(config.host);
     if (!clientHostResult)

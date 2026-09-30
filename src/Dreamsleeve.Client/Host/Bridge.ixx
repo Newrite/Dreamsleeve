@@ -90,14 +90,16 @@ export namespace Dreamsleeve::Host::Bridge
 
   // ---- UI -> host ----------------------------------------------------------
 
-  // A uint64 ID as the UI writes it: a decimal string, never 0 in a valid command.
+  // A uint64 ID as the UI writes it: a decimal string (0 is Domain::InvalidId).
   struct UiId
   {
     std::uint64_t value{};
   };
 
-  // One struct per command; ParseCommand reads the one named by "type", ignores
-  // unknown keys and admits the values, so handlers get checked commands.
+  // One struct per command; ParseCommand reads the one named by "type" and
+  // ignores unknown keys. The host checks only what it owns: the page's
+  // correlation IDs, size bounds of page input and its own settings. What
+  // travels further is checked by Core once (the codec's request shape).
   namespace Commands
   {
 
@@ -537,8 +539,8 @@ export namespace Dreamsleeve::Host::Bridge
 
     std::expected<void, std::string> Admit(Commands::SendChat& command)
     {
-      if (command.requestId.empty() || command.channelId.value == 0) return std::unexpected{"sendChat requires requestId and channelId"};
-      if (command.text.empty() || command.text.size() > MaxChatText) return std::unexpected{"sendChat text is empty or too long"};
+      if (command.requestId.empty()) return std::unexpected{"sendChat requires requestId"};
+      if (command.text.size() > MaxChatText) return std::unexpected{"sendChat text is too long"};
       return {};
     }
 
@@ -548,22 +550,10 @@ export namespace Dreamsleeve::Host::Bridge
       return {};
     }
 
+    // An empty registration name means none.
     std::expected<void, std::string> Admit(Commands::SignIn& command)
     {
-      if (command.username.empty() || command.password.empty()) return std::unexpected{"signIn requires username and password"};
       if (command.displayName && command.displayName->empty()) command.displayName.reset();
-      return {};
-    }
-
-    std::expected<void, std::string> Admit(Commands::Ignore& command)
-    {
-      if (command.playerId.value == 0) return std::unexpected{"ignore requires playerId"};
-      return {};
-    }
-
-    std::expected<void, std::string> Admit(Commands::Unignore& command)
-    {
-      if (command.playerId.value == 0) return std::unexpected{"unignore requires playerId"};
       return {};
     }
 
@@ -576,13 +566,13 @@ export namespace Dreamsleeve::Host::Bridge
     std::expected<void, std::string> Admit(Commands::PlaceGroundNote& command)
     {
       if (command.requestId.empty()) return std::unexpected{"placeGroundNote requires requestId"};
-      if (command.text.empty() || command.text.size() > MaxChatText) return std::unexpected{"placeGroundNote text is empty or too long"};
+      if (command.text.size() > MaxChatText) return std::unexpected{"placeGroundNote text is too long"};
       return {};
     }
 
     std::expected<void, std::string> Admit(Commands::RemoveGroundMark& command)
     {
-      if (command.requestId.empty() || command.markId.value == 0) return std::unexpected{"removeGroundMark requires requestId and markId"};
+      if (command.requestId.empty()) return std::unexpected{"removeGroundMark requires requestId"};
       return {};
     }
 
@@ -595,8 +585,7 @@ export namespace Dreamsleeve::Host::Bridge
 
     std::expected<void, std::string> Admit(Commands::ChangeDisplayName& command)
     {
-      if (command.displayName.empty() || command.displayName.size() > MaxDisplayName)
-        return std::unexpected{"changeDisplayName displayName is empty or too long"};
+      if (command.displayName.size() > MaxDisplayName) return std::unexpected{"changeDisplayName displayName is too long"};
       return {};
     }
 
@@ -932,9 +921,9 @@ export namespace Dreamsleeve::Host::Bridge
       result.append(text.substr(at, span.start - at));
       for (std::size_t index = span.start; index < span.start + span.length; ++index)
       {
-        const auto byte = static_cast<unsigned char>(text[index]);
-        if ((byte & 0xC0) == 0x80) continue;
-        result += byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r' ? static_cast<char>(byte) : '*';
+        const auto byte = text[index];
+        if (Dreamsleeve::Utils::Text::Continuation(byte)) continue;
+        result += byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r' ? byte : '*';
       }
       at = span.start + span.length;
     }

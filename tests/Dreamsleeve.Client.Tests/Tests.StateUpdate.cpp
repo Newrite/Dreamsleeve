@@ -55,12 +55,9 @@ TEST_CASE("State publication owns player data and distinguishes self removal fro
     REQUIRE(model.SetSelfPlayer(model.Generation(), 7));
     update = TakeStateUpdate(model, scratch);
     CHECK_FALSE(TakeStateUpdate(model, scratch));
-    REQUIRE(model.Apply(
-      model.Generation(),
-      PlayerProfileUpdated{
-          7,
-          {7, "player", "Renamed"}
-    }));
+    auto renamed             = MakePlayer(7);
+    renamed.data.displayName = "Renamed";
+    REQUIRE(model.Apply(model.Generation(), PlayerUpserted{renamed}));
     REQUIRE(model.SetSelfPlayer(model.Generation(), std::nullopt));
 
     const auto  next  = TakeStateUpdate(model, scratch);
@@ -78,7 +75,7 @@ TEST_CASE("State publication owns player data and distinguishes self removal fro
   CHECK(delta.selfPlayerId == std::optional<PlayerId>{7});
   REQUIRE(delta.players.size() == 1);
   CHECK(delta.players.front().data.displayName == "Display");
-  CHECK(ActorValues::GetCurrent(delta.players.front().actorValues.at("skyrim:health").state) == 90);
+  CHECK(std::get<ResourceActorValue>(delta.players.front().actorValues.at("skyrim:health").state).current == 90);
 }
 
 TEST_CASE("State publication resolves removals and complete online replacements")
@@ -150,39 +147,6 @@ TEST_CASE("State publication forwards owned chat deltas without rereading full h
   CHECK(std::get<ChatMessagesAdded>(initialDelta.chatContent[0]).messages == std::vector<ChatMessage>{Message(1), Message(2)});
 }
 
-TEST_CASE("State publication distinguishes channel reincarnation from history metadata")
-{
-  ClientModel model;
-  ChangeBatch scratch;
-  REQUIRE(model.RegisterChannel(1, 4));
-  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {Message(1)}}));
-  TakeStateUpdate(model, scratch);  // The receiver already has this channel/history.
-  REQUIRE(model.BeginHistory(1));
-  auto update = TakeStateUpdate(model, scratch);
-  REQUIRE(Delta(update).chats.size() == 1);
-  CHECK_FALSE(Delta(update).chats.front().resetContent);
-  CHECK(Delta(update).chatContent.empty());
-
-  REQUIRE(model.RemoveChannel(1));
-  REQUIRE(model.RegisterChannel(1, 2));
-  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {Message(2)}}));
-  update            = TakeStateUpdate(model, scratch);
-  const auto& delta = Delta(update);
-  REQUIRE(delta.chats.size() == 1);
-  REQUIRE(delta.chats.front().state);
-  CHECK(delta.chats.front().channelId == 1);
-  CHECK(delta.chats.front().resetContent);  // Clear the previously published message 1.
-  CHECK(delta.chats.front().state->capacity == 2);
-  REQUIRE(delta.chatContent.size() == 1);
-  CHECK(std::get<ChatMessagesAdded>(delta.chatContent[0]).messages == std::vector<ChatMessage>{Message(2)});
-
-  REQUIRE(model.RemoveChannel(1));
-  update = TakeStateUpdate(model, scratch);
-  REQUIRE(Delta(update).chats.size() == 1);
-  CHECK_FALSE(Delta(update).chats.front().state);
-  CHECK(Delta(update).chatContent.empty());
-}
-
 TEST_CASE("State publication returns a complete detached snapshot at a session boundary")
 {
   ClientModel model;
@@ -190,17 +154,7 @@ TEST_CASE("State publication returns a complete detached snapshot at a session b
   REQUIRE(model.RegisterChannel(1, 4));
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {Message(1)}}));
   REQUIRE(model.Apply(model.Generation(), PlayerUpserted{MakePlayer(7)}));
-  bool retainsChat{};
-
-  SUBCASE("disconnect keeps accepted history")
-  {
-    model.ClearOnlineState();
-    retainsChat = true;
-  }
-  SUBCASE("server switch discards history")
-  {
-    model.ResetSession();
-  }
+  model.ResetSession();
 
   const auto update = TakeStateUpdate(model, scratch);
   REQUIRE(update);
@@ -209,9 +163,7 @@ TEST_CASE("State publication returns a complete detached snapshot at a session b
   CHECK(snapshot.generation == model.Generation());
   CHECK(snapshot.revision == model.Snapshot().revision);
   CHECK(snapshot.players.empty());
-  CHECK(snapshot.chats.size() == (retainsChat ? 1 : 0));
-  model.ResetSession();
-  if (retainsChat) CHECK(snapshot.chats.front().messages == std::vector<ChatMessage>{Message(1)});
+  CHECK(snapshot.chats.empty());
 }
 
 TEST_SUITE_END();

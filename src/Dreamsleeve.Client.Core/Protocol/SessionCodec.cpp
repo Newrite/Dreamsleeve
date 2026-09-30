@@ -12,7 +12,8 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   Result<SessionOpened> Welcome(const Configuration& config, std::uint64_t requestId, const P::SessionOpened& source)
   {
-    if (source.self_player_id() == 0 || source.channels().empty() || !source.has_announcements()) return Invalid("session_opened");
+    if (source.self_player_id() == Domain::InvalidId || source.channels().empty() || !source.has_announcements())
+      return Invalid("session_opened");
     if (static_cast<std::size_t>(source.players_size()) > config.maxInitialPlayers) return Invalid("initial_count");
 
     SessionOpened result{requestId, source.self_player_id()};
@@ -37,7 +38,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     bool global = false, system = false;
     for (const auto& channel : source.channels())
     {
-      if (channel.channel_id() == 0) return Invalid("channel_id");
+      if (channel.channel_id() == Domain::InvalidId) return Invalid("channel_id");
       if (channel.kind() != P::CHAT_CHANNEL_KIND_GLOBAL && channel.kind() != P::CHAT_CHANNEL_KIND_SYSTEM) return Invalid("kind");
       auto& seen = channel.kind() == P::CHAT_CHANNEL_KIND_GLOBAL ? global : system;
       if (seen) return Invalid("kind");
@@ -62,13 +63,6 @@ namespace Dreamsleeve::Client::Wire::Detail
   {
     target.set_session_ticket(value.sessionTicket);
     target.set_hidden_identity(static_cast<P::HiddenIdentity>(value.hiding));
-  }
-
-  bool ValidTicket(std::string_view ticket)
-  {
-    return ticket.size() == 43 && std::ranges::all_of(ticket, [](unsigned char c) {
-             return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
-           });
   }
 
 }

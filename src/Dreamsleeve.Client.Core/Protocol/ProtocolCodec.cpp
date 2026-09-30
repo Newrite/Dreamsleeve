@@ -3,6 +3,7 @@ module;
 #include "network.pb.h"
 
 module Dreamsleeve.Client.ProtocolCodec;
+import Dreamsleeve.Client.Utils;
 #include "CodecParts.h"
 
 // Unknown wire values are handled; every newly generated named case must be listed.
@@ -79,36 +80,105 @@ namespace Dreamsleeve::Client::Wire
       }
     };
 
+    // The one check of a request's shape before it leaves: IDs, the text the
+    // protocol requires, finite numbers, the calendar. What depends on the
+    // session (channel, pending slots, the announced policy) is the runtime's.
+    // Returns the invalid field. No catch-all overload.
+    struct RequestShape
+    {
+      const Configuration& config;
+
+      using Field = std::optional<std::string_view>;
+
+      // Non-empty well-formed UTF-8.
+      static bool Text(std::string_view text)
+      {
+        return !text.empty() && Utils::Text::ValidUtf8(text);
+      }
+
+      // One line of well-formed UTF-8, possibly empty.
+      static bool Line(std::string_view text)
+      {
+        return Utils::Text::ValidUtf8(text) && !Utils::Text::HasControl(text);
+      }
+
+      Field operator()(const OpenSession& value) const
+      {
+        if (!Auth::ValidToken(value.sessionTicket)) return "session_ticket";
+        return std::nullopt;
+      }
+
+      Field operator()(const SendChat& value) const
+      {
+        if (value.channelId == Domain::InvalidId) return "channel_id";
+        if (!Text(value.text)) return "text";
+        return std::nullopt;
+      }
+
+      Field operator()(const UpdatePlayer& value) const
+      {
+        const auto* values = std::get_if<LocalActorValues>(&value.update);
+        if (values && values->actorValues.size() > config.maxActorValues) return "actor_values";
+        return std::nullopt;
+      }
+
+      // A third-party mod signs its announcements; the server and trusted clients need not.
+      Field operator()(const PostAnnouncement& value) const
+      {
+        if (value.channelId == Domain::InvalidId) return "channel_id";
+        if (!Text(value.text)) return "text";
+        if (!Line(value.signature)) return "signature";
+        if (value.source == Domain::ClientAnnouncementSource::ThirdParty && value.signature.empty()) return "signature";
+        return std::nullopt;
+      }
+
+      Field operator()(const PlaceGroundNote& value) const
+      {
+        if (!Text(value.text)) return "text";
+        if (!ValidPlacement(value.placement)) return "placement";
+        if (!ValidGameDate(value.gameDate)) return "game_date";
+        return std::nullopt;
+      }
+
+      // A death may carry no label at all.
+      Field operator()(const ReportDeath& value) const
+      {
+        if (!Line(value.label)) return "label";
+        if (!ValidPlacement(value.placement)) return "placement";
+        if (!ValidGameDate(value.gameDate)) return "game_date";
+        return std::nullopt;
+      }
+
+      Field operator()(const RemoveGroundMark& value) const
+      {
+        if (value.markId == Domain::InvalidId) return "mark_id";
+        return std::nullopt;
+      }
+
+      Field operator()(const SetIdentityVisibility&) const
+      {
+        return std::nullopt;
+      }
+
+      Field operator()(const ChangeDisplayName& value) const
+      {
+        const bool blank = std::ranges::all_of(value.displayName, [](char c) { return c == ' ' || c == '\t'; });
+        if (blank || !Line(value.displayName)) return "display_name";
+        return std::nullopt;
+      }
+    };
+
   }
 
   Result<DreamNetPacket> ProtocolCodec::Encode(const ClientRequest& request) const
   {
+    if (std::visit([](const auto& value) { return value.requestId; }, request) == Domain::InvalidId)
+      return Failure(ErrorCode::InvalidEnvelope, "request_id");
+    if (const auto field = std::visit(RequestShape{config}, request)) return Invalid(std::string{*field});
+
     P::ClientPacket packet;
     packet.set_protocol_version(Version);
     std::visit(RequestWriter{packet}, request);
-
-    if (packet.request_id() == 0) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-    if (packet.has_open_session())
-    {
-      if (!ValidTicket(packet.open_session().session_ticket())) return Invalid("session_ticket");
-    }
-
-    if (packet.has_send_chat() && packet.send_chat().channel_id() == 0) return Invalid("channel_id");
-    if (
-      const auto* note = std::get_if<PlaceGroundNote>(&request);
-      note && (note->text.empty() || !ValidPlacement(note->placement) || !ValidGameDate(note->gameDate)))
-      return Invalid("place_ground_note");
-    if (
-      const auto* death = std::get_if<ReportDeath>(&request);
-      death && (!ValidPlacement(death->placement) || !ValidGameDate(death->gameDate)))
-      return Invalid("report_death");
-    if (packet.has_remove_ground_mark() && packet.remove_ground_mark().mark_id() == 0) return Invalid("mark_id");
-    if (packet.has_change_display_name() && packet.change_display_name().display_name().empty()) return Invalid("display_name");
-
-    if (
-      packet.has_update_player() && packet.update_player().has_set_actor_values() &&
-      static_cast<std::size_t>(packet.update_player().set_actor_values().values_size()) > config.maxActorValues)
-      return Invalid("actor_values");
 
     const auto size = packet.ByteSizeLong();
     if (size > config.network.maxPacketBytes) return Failure(ErrorCode::PacketTooLarge, "packet");
@@ -124,12 +194,7 @@ namespace Dreamsleeve::Client::Wire
   Result<DreamNetPacket> ProtocolCodec::Encode(const MovementSample& sample, std::size_t maxPayloadBytes) const
   {
     if (sample.contextRevision == 0 || sample.sequence == 0) return Invalid("movement");
-    const auto& p = sample.pose.position;
-    const auto& r = sample.pose.rotation;
-    if (
-      !std::isfinite(p.X) || !std::isfinite(p.Y) || !std::isfinite(p.Z) || !std::isfinite(r.X) || !std::isfinite(r.Y) ||
-      !std::isfinite(r.Z))
-      return Invalid("pose");
+    if (!Finite(sample.pose.position) || !Finite(sample.pose.rotation)) return Invalid("pose");
     P::ClientMovementPacket packet;
     packet.set_protocol_version(Version);
     packet.mutable_sample()->set_context_revision(sample.contextRevision);
@@ -171,7 +236,7 @@ namespace Dreamsleeve::Client::Wire
     P::ServerPacket packet;
     if (!packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size()))) return Failure(ErrorCode::MalformedPacket, "packet");
     if (packet.protocol_version() != Version) return Failure(ErrorCode::UnsupportedVersion, "protocol_version");
-    if (packet.has_request_id() && packet.request_id() == 0) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+    if (packet.has_request_id() && packet.request_id() == Domain::InvalidId) return Failure(ErrorCode::InvalidEnvelope, "request_id");
 
     const auto expected = packet.has_chat_published() ? Channel::Chat : Channel::Control;
     if (!packet.has_request_rejected() && channel != expected) return Failure(ErrorCode::InvalidEnvelope, "channel");
@@ -238,7 +303,7 @@ namespace Dreamsleeve::Client::Wire
         return PlayerUpdateAccepted{packet.request_id()};
       case P::ServerPacket::kPlayerLeft:
         if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-        if (packet.player_left().player_id() == 0) return Invalid("player_id");
+        if (packet.player_left().player_id() == Domain::InvalidId) return Invalid("player_id");
 
         return PlayerRemoved{packet.player_left().player_id()};
       case P::ServerPacket::kGroundMarksChanged: {
@@ -256,7 +321,7 @@ namespace Dreamsleeve::Client::Wire
       }
       case P::ServerPacket::kGroundMarkRemoved:
         if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-        if (packet.ground_mark_removed().mark_id() == 0) return Invalid("mark_id");
+        if (packet.ground_mark_removed().mark_id() == Domain::InvalidId) return Invalid("mark_id");
         return GroundMarkRemoved{packet.request_id(), packet.ground_mark_removed().mark_id()};
       case P::ServerPacket::kOwnGroundMarks: {
         if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");

@@ -477,6 +477,9 @@ export class DreamNetHost
     return std::optional<DreamNetEvent>{std::move(dreamEvent.value())};
   }
 
+  public:
+
+  // The ENet bounds of a host configuration; hosts are created only from valid ones.
   static NetOperationResult ValidateConfig(const NetConfig& config)
   {
     if (config.maxPacketBytes == 0 || config.maxPacketBytes > DreamNetPacket::MaxDataSize)
@@ -539,6 +542,8 @@ export class DreamNetHost
 
     return {};
   }
+
+  private:
 
   explicit DreamNetHost(NativePtr enetHost) : host(std::move(enetHost)) {}
 

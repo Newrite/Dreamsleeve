@@ -46,23 +46,6 @@ public:
     GroundMarkStore(GroundMarkStore&&)                 = default;
     GroundMarkStore& operator=(GroundMarkStore&&)      = default;
 
-    std::uint64_t ViewRevision() const noexcept
-    {
-      return viewRevision;
-    }
-
-    std::size_t Count() const noexcept
-    {
-      return marks.size();
-    }
-
-    std::optional<Domain::GroundMark> Find(Domain::GroundMarkId id) const
-    {
-      const auto found = marks.find(id);
-      if (found == marks.end()) return std::nullopt;
-      return found->second;
-    }
-
     // Applies one reliable delta. Revisions must increase; a repeated or older
     // one is a protocol fault, not a duplicate to skip. Removing an unknown
     // mark is harmless. The result is the exact visible transition, in order:

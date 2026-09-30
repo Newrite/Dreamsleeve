@@ -270,10 +270,8 @@ TEST_CASE("Stop discards an admitted login and closes the exchange")
 TEST_CASE("One check names the first invalid setting as client.toml spells it")
 {
   const std::vector<std::pair<std::string_view, std::function<void(Configuration&)>>> cases{
-      {"network.maxPacketBytes", [](auto& c) { c.network.maxPacketBytes = 0; }},
       {"network.maxPacketBytes", [](auto& c) { c.network.maxPacketBytes = MaxProtobufCount + 1; }},
-      {"network.maxWaitingData", [](auto& c) { c.network.maxWaitingData = c.network.maxPacketBytes - 1; }},
-      {"network.channelLimit", [](auto& c) { c.network.channelLimit = MaxChannels + 1; }},
+      {"network.channelLimit", [](auto& c) { c.network.channelLimit = MinChannels - 1; }},
       {"maxInitialPlayers", [](auto& c) { c.maxInitialPlayers = 0; }},
       {"maxRecentMessages", [](auto& c) { c.maxRecentMessages = MaxProtobufCount + 1; }},
       {"maxActorValues", [](auto& c) { c.maxActorValues = 0; }},
@@ -301,6 +299,29 @@ TEST_CASE("One check names the first invalid setting as client.toml spells it")
   Configuration near;
   near.visibilityDistance = 0;
   CHECK_FALSE(near.InvalidSetting());
+}
+
+TEST_CASE("Start-up checks the transport and the queues with the rules of their owners")
+{
+  const std::vector<std::function<void(ClientSettings&)>> cases{
+      [](auto& s) { s.client.network.maxPeers = 2; },
+      [](auto& s) { s.client.network.channelLimit = 300; },
+      [](auto& s) { s.client.network.maxPacketBytes = 0; },
+      [](auto& s) { s.client.network.maxWaitingData = s.client.network.maxPacketBytes - 1; },
+      [](auto& s) { s.client.connectTimeoutMs = 0; },
+      [](auto& s) { s.client.disconnectTimeoutMs = 0; },
+      [](auto& s) { s.commandCapacity = 0; },
+      [](auto& s) { s.stateCapacity = 0; },
+  };
+  CHECK(ValidateClientSettings({}));
+  for (const auto& spoil : cases)
+  {
+    ClientSettings settings;
+    spoil(settings);
+    // Not a Configuration rule: DreamNetClient and ClientExchange own these.
+    CHECK_FALSE(settings.client.InvalidSetting());
+    CHECK_FALSE(ValidateClientSettings(settings));
+  }
 }
 
 TEST_CASE("The bundled client.example.toml is the first-run file and holds every default")

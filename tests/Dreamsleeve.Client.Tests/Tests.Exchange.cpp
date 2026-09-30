@@ -90,7 +90,7 @@ TEST_CASE("Posting chat does not mutate history and accepted messages are delive
   REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
   CHECK(output.state.updates.empty());
-  REQUIRE(model.FindChat(1)->messages.size() == 1);
+  REQUIRE(model.FindChatState(1)->count == 1);
   Receive(model, 2);
   REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
@@ -142,7 +142,7 @@ TEST_CASE("Explicit snapshot consumes included changes and an idle pump emits no
   exchange->Drain(output);
   REQUIRE(output.state.updates.size() == 1);
   const auto& snapshot = std::get<ClientSnapshot>(output.state.updates[0]);
-  CHECK(snapshot.chats[0].messages == model.FindChat(1)->messages);
+  CHECK(snapshot.chats[0].messages == model.Snapshot().chats[0].messages);
   REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
   CHECK(output.state.updates.empty());
@@ -165,7 +165,7 @@ TEST_CASE("State overflow and reset preserve results while recovering bounded ch
   REQUIRE(output.state.updates.size() == 1);
   REQUIRE(std::holds_alternative<ClientSnapshot>(output.state.updates[0]));
   const auto& snapshot = std::get<ClientSnapshot>(output.state.updates[0]);
-  CHECK(snapshot.chats[0].messages == model.FindChat(1)->messages);
+  CHECK(snapshot.chats[0].messages == model.Snapshot().chats[0].messages);
   REQUIRE(ResultsOf<ServerRejection>(output).size() == 1);
   CHECK(ResultsOf<ServerRejection>(output)[0].requestId == 42);
   REQUIRE(exchange->PublishResult({generation, 43, ServerRejection{RequestRejectionCode::InvalidRequest, "Old session", ""}}));

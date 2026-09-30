@@ -8,6 +8,7 @@ module;
 export module Dreamsleeve.Client.Auth;
 
 import std;
+import Dreamsleeve.Client.Domain;
 
 export namespace Dreamsleeve::Client::Auth
 {
@@ -236,6 +237,15 @@ namespace Dreamsleeve::Client::Auth
 
   }
 
+  // A session ticket or a saved login token: 32 random bytes in unpadded base64url.
+  export bool ValidToken(std::string_view token)
+  {
+    constexpr std::size_t Length = 43;
+    return token.size() == Length && std::ranges::all_of(token, [](unsigned char c) {
+             return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+           });
+  }
+
   export Result<void> ValidatePassword(std::string_view password)
   {
     if (password.size() < 12 || password.size() > 128) return std::unexpected{"Password must be 12 to 128 UTF-8 bytes"};
@@ -349,8 +359,8 @@ namespace Dreamsleeve::Client::Auth
     const auto    error = glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, response->body);
     SecureZeroMemory(response->body.data(), response->body.size());
     if (
-      error || decoded.playerId == 0 || decoded.expiresInSeconds == 0 || decoded.sessionTicket.size() != 43 ||
-      (!decoded.rememberToken.empty() && decoded.rememberToken.size() != 43))
+      error || decoded.playerId == Domain::InvalidId || decoded.expiresInSeconds == 0 || !ValidToken(decoded.sessionTicket) ||
+      (!decoded.rememberToken.empty() && !ValidToken(decoded.rememberToken)))
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Invalid authentication response"}
       };
@@ -428,13 +438,6 @@ namespace Dreamsleeve::Client::Auth
           Failure{FailureCode::InvalidResponse, "Cannot encode password reset"}
       };
     return RequestCompletion(url, L"/auth/reset-password", std::move(*body), allowInsecureRemote);
-  }
-
-  export Result<std::string> Login(std::string_view url, const Credentials& credentials, bool allowInsecureRemote = false)
-  {
-    auto grant = LoginGrant(url, credentials, false, allowInsecureRemote);
-    if (!grant) return std::unexpected{grant.error().message};
-    return std::move(grant->sessionTicket);
   }
 
 }

@@ -36,10 +36,22 @@ export namespace Dreamsleeve::Utils::Text
     return false;
   }
 
+  // A UTF-8 continuation byte (10xxxxxx): never the start of a code point.
+  constexpr bool Continuation(char byte) noexcept
+  {
+    return (static_cast<unsigned char>(byte) & 0xC0) == 0x80;
+  }
+
+  // Whether a cut at byte `at` keeps well-formed UTF-8 on both sides.
+  constexpr bool CodePointBoundary(std::string_view text, std::size_t at) noexcept
+  {
+    return at == text.size() || (at < text.size() && !Continuation(text[at]));
+  }
+
   // Code points of well-formed UTF-8, the unit the server limits count.
   std::size_t CodePoints(std::string_view text)
   {
-    return static_cast<std::size_t>(std::ranges::count_if(text, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
+    return static_cast<std::size_t>(std::ranges::count_if(text, [](char c) { return !Continuation(c); }));
   }
 
   // The first `count` code points.
@@ -48,7 +60,7 @@ export namespace Dreamsleeve::Utils::Text
     std::size_t end = 0;
     for (std::size_t seen = 0; end < text.size(); ++end)
     {
-      if ((static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) continue;
+      if (Continuation(text[end])) continue;
       if (seen == count) break;
       ++seen;
     }
@@ -60,7 +72,7 @@ export namespace Dreamsleeve::Utils::Text
   {
     if (text.size() <= maxBytes) return text;
     auto end = maxBytes;
-    while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80)
+    while (end > 0 && !CodePointBoundary(text, end))
       --end;
     return text.substr(0, end);
   }

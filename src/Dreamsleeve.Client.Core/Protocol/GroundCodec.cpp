@@ -12,18 +12,14 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   void WritePlacement(P::GroundMarkPlacement& target, const Domain::GroundMarkPlacement& value)
   {
-    target.mutable_location_id()->set_plugin_name(value.locationId.pluginName);
-    target.mutable_location_id()->set_local_form_id(value.locationId.localFormId);
-    target.mutable_position()->set_x(value.position.X);
-    target.mutable_position()->set_y(value.position.Y);
-    target.mutable_position()->set_z(value.position.Z);
+    WriteKey(*target.mutable_location_id(), value.locationId);
+    WritePosition(*target.mutable_position(), value.position);
     target.set_heading(value.heading);
   }
 
   bool ValidPlacement(const Domain::GroundMarkPlacement& value)
   {
-    return !value.locationId.pluginName.empty() && value.locationId.localFormId != 0 && std::isfinite(value.position.X) &&
-           std::isfinite(value.position.Y) && std::isfinite(value.position.Z) && std::isfinite(value.heading);
+    return ValidKey(value.locationId) && Finite(value.position) && Finite(value.heading);
   }
 
   // The same calendar ranges as the server's GameDate.create; no leap years.
@@ -71,27 +67,19 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   Result<Domain::GroundMarkPlacement> ReadPlacement(const P::GroundMarkPlacement& source)
   {
-    const auto& key      = source.location_id();
-    const auto& position = source.position();
-    if (key.plugin_name().empty() || key.local_form_id() == 0) return Invalid("placement");
-    if (!std::isfinite(position.x()) || !std::isfinite(position.y()) || !std::isfinite(position.z()) || !std::isfinite(source.heading()))
-      return Invalid("placement");
-    return Domain::GroundMarkPlacement{
-        {key.plugin_name(), key.local_form_id()},
-        {position.x(), position.y(), position.z()},
-        source.heading()
-    };
+    Domain::GroundMarkPlacement result{KeyOf(source.location_id()), PositionOf(source.position()), source.heading()};
+    if (!ValidPlacement(result)) return Invalid("placement");
+    return result;
   }
 
   // Values are kept as sent; an unknown kind stays as its number for a host to
   // treat as it likes. A death may carry an empty label, a note may not.
   Result<Domain::GroundMark> Mark(const P::GroundMark& source)
   {
-    if (source.mark_id() == 0) return Invalid("mark_id");
+    if (source.mark_id() == Domain::InvalidId) return Invalid("mark_id");
     if (source.kind() == P::GROUND_MARK_KIND_UNSPECIFIED) return Invalid("kind");
     if (source.kind() == P::GROUND_MARK_KIND_NOTE && source.text().empty()) return Invalid("text");
-    if (source.created_at_unix_ms() < -62135596800000LL || source.created_at_unix_ms() > 253402300799999LL)
-      return Invalid("created_at_unix_ms");
+    if (!ValidUnixMs(source.created_at_unix_ms())) return Invalid("created_at_unix_ms");
     auto author = Profile(source.author());
     if (!author) return std::unexpected{author.error()};
     auto placement = ReadPlacement(source.placement());
@@ -127,7 +115,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     }
     for (const auto id : source.removed_ids())
     {
-      if (id == 0) return Invalid("removed_ids");
+      if (id == Domain::InvalidId) return Invalid("removed_ids");
       result.removedIds.push_back(id);
     }
     return result;

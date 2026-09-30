@@ -184,12 +184,6 @@ public:
     Result<DreamNetPacket> Encode(const MovementSample& sample, std::size_t maxPayloadBytes) const;
     Result<ServerResponse> Decode(std::span<const std::byte> packet, Channel channel = Channel::Control) const;
 
-    static Channel RequestChannel(const ClientRequest& request)
-    {
-      const bool chat = std::holds_alternative<SendChat>(request) || std::holds_alternative<PostAnnouncement>(request);
-      return chat ? Channel::Chat : Channel::Control;
-    }
-
 private:
 
     Configuration config;

@@ -212,12 +212,15 @@ TEST_CASE("Bridge parses each command into its own checked type")
   const auto chat = CommandOf<Bridge::Commands::SendChat>(R"({"type":"sendChat","requestId":"3","channelId":"1","text":"Привет","extra":1})");
   CHECK(chat.text == "Привет");
   CHECK(chat.channelId.value == 1);
-  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"1","text":""})"));
-  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"0","text":"x"})"));
+  // The host owns the page's correlation and the size of page input; the
+  // content of what travels on (empty text, ID 0) is Core's to refuse.
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","channelId":"1","text":"x"})"));
+  CHECK_FALSE(Bridge::ParseCommand(
+    std::format(R"({{"type":"sendChat","requestId":"3","channelId":"1","text":"{}"}})", std::string(Bridge::MaxChatText + 1, 'x'))));
+  CHECK(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"0","text":""})"));
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"one","text":"x"})"));
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"jump"})"));
   CHECK_FALSE(Bridge::ParseCommand("not json"));
-  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"signIn","username":"a"})"));
   // A registration name only when there is one.
   CHECK_FALSE(CommandOf<Bridge::Commands::SignIn>(R"({"type":"signIn","username":"a","password":"b","displayName":""})").displayName);
   const auto save = CommandOf<Bridge::Commands::SaveSettings>(R"({"type":"saveSettings","revision":4,"settings":{"scale":5,"theme":"skyrim"}})");
@@ -226,7 +229,6 @@ TEST_CASE("Bridge parses each command into its own checked type")
   CommandOf<Bridge::Commands::Close>(R"({"type":"close"})");
   CommandOf<Bridge::Commands::SignInSaved>(R"({"type":"signInSaved"})");
   CHECK(CommandOf<Bridge::Commands::Ignore>(R"({"type":"ignore","playerId":"18446744073709551615"})").playerId.value == 18446744073709551615ull);
-  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"unignore","playerId":"0"})"));
 }
 
 TEST_CASE("Session publishes snapshots only for a ready session and correlates chat requests")
@@ -364,7 +366,7 @@ TEST_CASE("Session reconnect: disconnect snapshot is silent and the new generati
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   const auto generation = session.Generation();
 
-  model.ClearOnlineState();
+  model.ResetSession();
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected, ""), UiSettings{}, Domain::HiddenIdentity::None, frame);
   CHECK_FALSE(frame.snapshot);
@@ -373,10 +375,11 @@ TEST_CASE("Session reconnect: disconnect snapshot is silent and the new generati
   REQUIRE(connection != frame.events.end());
   CHECK(Parse(*connection)["connected"].get<bool>() == false);
 
+  REQUIRE(model.RegisterChannel(1, 16));
   REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready, "Tamriel"), UiSettings{}, Domain::HiddenIdentity::None, frame);
-  // Core publishes a delta after ClearOnlineState; the host must request a snapshot for the UI.
+  // Core publishes a delta after the reset; the host must request a snapshot for the UI.
   Settle(session, *exchange, model, frame);
   CHECK(frame.snapshot);
 }
@@ -1188,12 +1191,11 @@ TEST_CASE("Bridge validates ground mark commands")
 {
   CHECK(CommandOf<Bridge::Commands::PlaceGroundNote>(R"({"type":"placeGroundNote","requestId":"5","text":"Осторожно, тролль"})").text ==
         "Осторожно, тролль");
-  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"placeGroundNote","requestId":"5","text":""})"));
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"placeGroundNote","text":"x"})"));
   CHECK(
     CommandOf<Bridge::Commands::RemoveGroundMark>(R"({"type":"removeGroundMark","requestId":"6","markId":"18446744073709551615"})").markId.value ==
     18446744073709551615ull);
-  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"removeGroundMark","requestId":"6"})"));
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"removeGroundMark","markId":"6"})"));
   auto mark = Bridge::ToUiGroundMark(MakeMark(3, 1, Domain::GroundMarkKind::Death, "Wolf"), UiSettings{}, true);
   CHECK(mark.id == "3");
   CHECK(mark.kind == "death");
@@ -1472,7 +1474,8 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   CHECK((*dropped)["error"].get<std::string>() == "Соединение прервано до ответа сервера");
 
   CHECK(CommandOf<Bridge::Commands::ChangeDisplayName>(R"({"type":"changeDisplayName","displayName":"Имя"})").displayName == "Имя");
-  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"changeDisplayName","displayName":""})"));
+  CHECK_FALSE(
+    Bridge::ParseCommand(std::format(R"({{"type":"changeDisplayName","displayName":"{}"}})", std::string(Bridge::MaxDisplayName + 1, 'x'))));
 }
 
 TEST_SUITE_END();

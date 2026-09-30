@@ -124,7 +124,11 @@ TEST_CASE("Space character teleport and long gaps snap instead of interpolating"
   SUBCASE("Huge untrusted source timestamp") { next.sampledAtUs = std::numeric_limits<std::uint64_t>::max(); }
   SUBCASE("New character")
   {
-    REQUIRE(fixture.model.Apply(1, PlayerCharacterStarted{7, "Another"}, At(250)));
+    // The server replaces the whole player: a new generation without a place yet.
+    auto player = *fixture.model.FindPlayer(7);
+    ++player.characterGeneration;
+    player.location.reset();
+    REQUIRE(fixture.model.Apply(1, PlayerUpserted{player}, At(250)));
   }
   REQUIRE(fixture.model.Apply(1, PlayerLocationUpdated{7, next}, At(300)));
   REQUIRE(fixture.exchange->Publish(fixture.model));
@@ -195,9 +199,9 @@ TEST_CASE("Player removal session reset and stale batches cannot resurrect a tra
     REQUIRE(fixture.model.Apply(1, PlayerRemoved{7}));
     REQUIRE(fixture.exchange->Publish(fixture.model));
   }
-  SUBCASE("Disconnect")
+  SUBCASE("Session reset")
   {
-    fixture.model.ClearOnlineState();
+    fixture.model.ResetSession();
     REQUIRE(fixture.exchange->Publish(fixture.model));
   }
   fixture.Drain(200);

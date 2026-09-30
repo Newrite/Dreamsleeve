@@ -312,18 +312,23 @@ public:
 
     using Ptr = std::unique_ptr<ClientExchange>;
 
+    // Both queues hold at least one entry; the settings check asks here too.
+    static std::optional<std::string_view> InvalidCapacity(std::size_t commandCapacity, std::size_t stateCapacity) noexcept
+    {
+      if (commandCapacity == 0) return "commandCapacity";
+      if (stateCapacity == 0) return "stateCapacity";
+      return std::nullopt;
+    }
+
     static Domain::Result<Ptr> TryCreate(std::size_t commandCapacity, std::size_t stateCapacity)
     {
-      if (commandCapacity == 0)
+      if (const auto field = InvalidCapacity(commandCapacity, stateCapacity))
         return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidConfig, "commandCapacity"}
+            Domain::Error{Domain::ErrorCode::InvalidConfig, std::string{*field}}
         };
 
-      auto state = StateUpdateQueue::TryCreate(stateCapacity);
-      if (!state) return std::unexpected{state.error()};
-
       return Ptr{
-          new ClientExchange{commandCapacity, std::move(*state)}
+          new ClientExchange{commandCapacity, StateUpdateQueue::Create(stateCapacity)}
       };
     }
 

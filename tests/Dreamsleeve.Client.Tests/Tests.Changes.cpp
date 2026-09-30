@@ -80,7 +80,9 @@ TEST_CASE("ClientModel coalesces changes and exposes detached targeted queries")
   REQUIRE(model.RegisterChannel(1, 20));
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   REQUIRE(model.SetSelfPlayer(generation, 7));
-  REQUIRE(model.Apply(generation, PlayerProfileUpdated{7, PlayerData{7, "player", "Renamed"}}));
+  auto renamed             = ChangeTestPlayer();
+  renamed.data.displayName = "Renamed";
+  REQUIRE(model.Apply(generation, PlayerUpserted{renamed}));
   REQUIRE(model.Apply(generation, ChatMessagesReceived{1, {ChangeTestMessage()}}));
   REQUIRE(model.Apply(generation, ChatMessagesReceived{1, {ChangeTestMessage(2)}}));
 
@@ -100,7 +102,7 @@ TEST_CASE("ClientModel coalesces changes and exposes detached targeted queries")
   CHECK(std::get<ChatMessagesAdded>(changes.chatContent.front()).messages.size() == 2);
   CHECK(model.SelfPlayerId() == std::optional<PlayerId>{7});
   CHECK_FALSE(model.FindPlayer(99));
-  CHECK_FALSE(model.FindChat(99));
+  CHECK_FALSE(model.FindChatState(99));
 
   auto player = model.FindPlayer(7);
   REQUIRE(player);
@@ -111,13 +113,11 @@ TEST_CASE("ClientModel coalesces changes and exposes detached targeted queries")
   CHECK(sourcePlayer->data.displayName == "Renamed");
   CHECK(sourcePlayer->actorValues.size() == 1);
 
-  auto chat = model.FindChat(1);
-  REQUIRE(chat);
-  REQUIRE(chat->messages.size() == 2);
-  chat->messages.front().messageText = "Local copy";
-  auto sourceChat = model.FindChat(1);
-  REQUIRE(sourceChat);
-  CHECK(sourceChat->messages.front().messageText == "Hello");
+  auto chats = model.Snapshot().chats;
+  REQUIRE(chats.size() == 1);
+  REQUIRE(chats.front().messages.size() == 2);
+  chats.front().messages.front().messageText = "Local copy";
+  CHECK(model.Snapshot().chats.front().messages.front().messageText == "Hello");
 
   const auto revision = changes.revision;
   model.TakeChanges(changes);
@@ -140,35 +140,15 @@ TEST_CASE("ClientModel records every supported player mutation")
     player.data.displayName = "Replacement";
     REQUIRE(model.Apply(generation, PlayerUpserted{std::move(player)}));
   }
-  SUBCASE("profile")
-  {
-    REQUIRE(model.Apply(generation, PlayerProfileUpdated{7, PlayerData{7, "player", "Renamed"}}));
-  }
   SUBCASE("location")
   {
     REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, std::nullopt}));
   }
-  SUBCASE("character rename")
-  {
-    REQUIRE(model.Apply(generation, PlayerCharacterRenamed{7, CharacterName{"Other"}}));
-  }
-  SUBCASE("new character")
-  {
-    REQUIRE(model.Apply(generation, PlayerCharacterStarted{7, "Other"}));
-    const auto player = model.FindPlayer(7);
-    REQUIRE(player);
-    CHECK_FALSE(player->location);
-    CHECK(player->actorValues.empty());
-  }
-  SUBCASE("game state cleared")
-  {
-    REQUIRE(model.Apply(generation, PlayerGameStateCleared{7}));
-  }
-  SUBCASE("actor-value delta")
+  SUBCASE("metadata")
   {
     ActorValueStorage values;
     values.emplace("skyrim:health", ActorValueInfo{"Health", ResourceActorValue{50, 100}});
-    REQUIRE(model.Apply(generation, PlayerActorValuesUpdated{7, std::move(values), {}}));
+    REQUIRE(model.Apply(generation, PlayerMetadataUpdated{7, std::move(values), std::nullopt}));
   }
   SUBCASE("player removed")
   {
@@ -180,7 +160,7 @@ TEST_CASE("ClientModel records every supported player mutation")
   CheckSinglePlayerChange(changes, 7);
 }
 
-TEST_CASE("ClientModel invalidates channel registration history and removal")
+TEST_CASE("ClientModel reports a channel registration and content, not a duplicate")
 {
   ClientModel model;
   ChangeBatch changes;
@@ -189,41 +169,18 @@ TEST_CASE("ClientModel invalidates channel registration history and removal")
   REQUIRE(changes.chats.size() == 1);
   CHECK(changes.chats.front() == 1);
 
-  auto round = model.BeginHistory(1);
-  REQUIRE(round);
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {ChangeTestMessage()}}));
   model.TakeChanges(changes);
-  REQUIRE(changes.chats.size() == 1);
-  CHECK(changes.chats.front() == 1);
-
-  ChatHistoryPage page{.channelId = 1, .round = *round, .nextCursor = 1, .messages = {ChangeTestMessage()}};
-  REQUIRE(model.Apply(model.Generation(), ChatHistoryReceived{page}));
-  model.TakeChanges(changes);
-  REQUIRE(changes.chats.size() == 1);
-  CHECK(changes.chats.front() == 1);
+  CHECK(changes.chats.empty());
   REQUIRE(changes.chatContent.size() == 1);
   REQUIRE(std::holds_alternative<ChatMessagesAdded>(changes.chatContent.front()));
   CHECK(std::get<ChatMessagesAdded>(changes.chatContent.front()).messages.size() == 1);
-  const auto chat = model.FindChat(1);
-  REQUIRE(chat);
-  CHECK(chat->history.cursor == std::optional<ChatMessageId>{1});
 
   // A duplicate changes neither visible content nor chat metadata.
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {ChangeTestMessage()}}));
   model.TakeChanges(changes);
-  CHECK(changes.chats.empty());
-  CHECK(changes.chatContent.empty());
-  const auto afterDuplicate = model.FindChat(1);
-  REQUIRE(afterDuplicate);
-  CHECK(afterDuplicate->messages.size() == 1);
-
-  REQUIRE(model.RemoveChannel(1));
-  model.TakeChanges(changes);
-  REQUIRE(changes.chats.size() == 1);
-  CHECK(changes.chats.front() == 1);
-  CHECK_FALSE(model.FindChat(1));
-  CHECK_FALSE(model.RemoveChannel(1));
-  model.TakeChanges(changes);
   CHECK(changes.Empty());
+  CHECK(model.FindChatState(1)->count == 1);
 }
 
 TEST_CASE("ClientModel rejected updates preserve earlier pending changes")
@@ -235,16 +192,16 @@ TEST_CASE("ClientModel rejected updates preserve earlier pending changes")
   REQUIRE(model.Apply(generation, ChatMessagesReceived{1, {ChangeTestMessage()}}));
   ChangeBatch changes;
   model.TakeChanges(changes);
-  REQUIRE(model.Apply(generation, PlayerProfileUpdated{7, PlayerData{7, "player", "Accepted"}}));
+  auto accepted             = ChangeTestPlayer();
+  accepted.data.displayName = "Accepted";
+  REQUIRE(model.Apply(generation, PlayerUpserted{accepted}));
   const auto acceptedRevision = model.Snapshot().revision;
 
   CHECK_FALSE(model.Apply(generation + 1, PlayerUpserted{ChangeTestPlayer(8)}));
-  CHECK_FALSE(model.Apply(generation, PlayerProfileUpdated{7, PlayerData{8, "other", "Wrong ID"}}));
   CHECK_FALSE(model.Apply(generation, PlayerLocationUpdated{99, std::nullopt}));
   CHECK_FALSE(model.Apply(generation, OnlinePlayersReplaced{{ChangeTestPlayer(8), ChangeTestPlayer(8)}}));
   CHECK_FALSE(model.RegisterChannel(1, 20));
   CHECK_FALSE(model.RegisterChannel(2, 0));
-  CHECK_FALSE(model.BeginHistory(1, 0));
   auto conflict = ChangeTestMessage();
   conflict.messageText = "Conflict";
   CHECK_FALSE(model.Apply(generation, ChatMessagesReceived{1, {conflict}}));
@@ -294,19 +251,7 @@ TEST_CASE("ClientModel session resets replace pending invalidations")
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   REQUIRE(model.SetSelfPlayer(generation, 7));
   REQUIRE(model.Apply(generation, ChatMessagesReceived{1, {ChangeTestMessage()}}));
-  auto round = model.BeginHistory(1);
-  REQUIRE(round);
-  bool retainsChats{};
-
-  SUBCASE("disconnect clears online state and keeps chat")
-  {
-    model.ClearOnlineState();
-    retainsChats = true;
-  }
-  SUBCASE("server switch clears all session data")
-  {
-    model.ResetSession();
-  }
+  model.ResetSession();
 
   ChangeBatch changes;
   model.TakeChanges(changes);
@@ -322,13 +267,7 @@ TEST_CASE("ClientModel session resets replace pending invalidations")
   CHECK(changes.revision == model.Snapshot().revision);
   CHECK_FALSE(model.FindPlayer(7));
   CHECK_FALSE(model.SelfPlayerId());
-  const auto chat = model.FindChat(1);
-  CHECK(chat.has_value() == retainsChats);
-  if (chat)
-  {
-    CHECK(chat->messages.size() == 1);
-    CHECK(chat->history.round == 0);
-  }
+  CHECK_FALSE(model.FindChatState(1));
   CHECK_FALSE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   model.TakeChanges(changes);
   CHECK(changes.Empty());
@@ -368,22 +307,6 @@ TEST_CASE("ClientModel emits ordered chat deltas instead of invalidating full ch
   const auto state = model.FindChatState(1);
   REQUIRE(state);
   CHECK(state->count == 2);
-}
-
-TEST_CASE("Removing a channel discards pending content deltas for that channel")
-{
-  ClientModel model;
-  ChangeBatch changes;
-  REQUIRE(model.RegisterChannel(1, 4));
-  model.TakeChanges(changes);
-  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {ChangeTestMessage()}}));
-  REQUIRE(model.RemoveChannel(1));
-
-  model.TakeChanges(changes);
-  REQUIRE(changes.chats.size() == 1);
-  CHECK(changes.chats.front() == 1);
-  CHECK(changes.chatContent.empty());
-  CHECK_FALSE(model.FindChatState(1));
 }
 
 TEST_CASE("ClientModel.TakeChanges replaces the output and recycles its capacities")

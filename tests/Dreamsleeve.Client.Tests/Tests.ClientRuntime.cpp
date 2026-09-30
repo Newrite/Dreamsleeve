@@ -608,6 +608,22 @@ TEST_CASE("Reusing a request ID cannot replace an outstanding chat command")
   CHECK(fixture.errors.empty());
 }
 
+TEST_CASE("Chat goes only to a known global channel and a refusal stays local")
+{
+  Fixture               fixture;
+  const auto            generation = Ready(fixture);
+  Domain::ChatChannelId channel{};
+  SUBCASE("system channel") { channel = 2; }
+  SUBCASE("unknown channel") { channel = 99; }
+  const auto id = Value(fixture.exchange->NextRequestId());
+  REQUIRE(fixture.exchange->Post({generation, SendChat{id, channel, "hello"}}) == CommandPostResult::Queued);
+  const auto output = fixture.ReceiveOutput();
+  REQUIRE(ResultsOf<CommandFailureCode>(output).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().requestId == id);
+  CHECK(ResultsOf<CommandFailureCode>(output).front().value == CommandFailureCode::InvalidRequest);
+  CHECK(fixture.requests.size() == 1);
+}
+
 TEST_CASE("Wrong chat response identity fails before publication")
 {
   Fixture fixture;

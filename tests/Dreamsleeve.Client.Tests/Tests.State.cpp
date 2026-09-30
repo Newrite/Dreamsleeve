@@ -52,22 +52,11 @@ namespace StateTests
     return ids;
   }
 
-  ChatHistoryPage Page(
-    const ChatCache& cache, std::vector<ChatMessage> messages,
-    bool hasMore = false, bool hasGap = false)
+  std::optional<ChatMessage> Find(const ChatCache& cache, ChatMessageId id)
   {
-    ChatHistoryPage result;
-    result.channelId = cache.ChannelId();
-    result.round = cache.HistoryState().round;
-    result.after = cache.HistoryState().cursor;
-    result.nextCursor = result.after;
-    for (const auto& message : messages)
-      if (!result.nextCursor || message.messageId > *result.nextCursor)
-        result.nextCursor = message.messageId;
-    result.messages = std::move(messages);
-    result.hasMore = hasMore;
-    result.hasGap = hasGap;
-    return result;
+    for (const auto& message : cache.Snapshot().messages)
+      if (message.messageId == id) return message;
+    return std::nullopt;
   }
 }
 
@@ -87,13 +76,13 @@ TEST_CASE("PlayerStore full snapshots replace membership atomically and reject d
 
   const std::array replacement{StateTests::MakePlayer(5), StateTests::MakePlayer(2)};
   REQUIRE(store.ReplaceAll(replacement).has_value());
-  CHECK_FALSE(store.Contains(9));
+  CHECK_FALSE(store.Find(9));
   const auto players = store.Snapshot();
   REQUIRE(players.size() == 2);
   CHECK(players[0].data.playerId == 2);
   CHECK(players[1].data.playerId == 5);
   REQUIRE(store.ReplaceAll({}).has_value());
-  CHECK(store.Count() == 0);
+  CHECK(store.Snapshot().empty());
 }
 
 TEST_CASE("PlayerStore preserves accepted payload bytes without normalizing or revalidating them")
@@ -126,12 +115,13 @@ TEST_CASE("PlayerStore snapshots and lookup results own their nested maps and st
   snapshot[0].data.displayName = "Changed locally";
   CHECK(store.Find(1)->actorValues.size() == 2);
   CHECK(store.Find(1)->data.displayName == "Player 1");
-  REQUIRE(store.ClearGameState(1).has_value());
+  REQUIRE(store.ReplaceMetadata(1, ActorValueStorage{}, std::nullopt).has_value());
+  REQUIRE(store.UpdateLocation(1, std::nullopt).has_value());
   CHECK(snapshot[0].actorValues.size() == 2);
   CHECK(snapshot[0].location.has_value());
 }
 
-TEST_CASE("PlayerStore partial updates preserve unrelated data and guard profile identity")
+TEST_CASE("PlayerStore location and metadata updates replace only what they carry")
 {
   PlayerStore store;
   const auto initial = StateTests::MakePlayer();
@@ -148,91 +138,29 @@ TEST_CASE("PlayerStore partial updates preserve unrelated data and guard profile
   CHECK(updated->characterName == initial.characterName);
   CHECK(updated->location == std::optional<PlayerLocation>{location});
 
-  auto profile = initial.data;
-  profile.username = " NewName ";
-  profile.displayName = "";
-  REQUIRE(store.UpdateProfile(1, profile).has_value());
-  CHECK(store.Find(1)->data == profile);
-  const auto before = store.Snapshot();
-  const auto rejected = store.UpdateProfile(1, StateTests::MakePlayer(2).data);
-  REQUIRE_FALSE(rejected.has_value());
-  CHECK(rejected.error().code == ErrorCode::IdentityMismatch);
-  CHECK(store.Snapshot() == before);
+  PlayerDetails details;
+  details.level = 12;
+  REQUIRE(store.ReplaceMetadata(1, std::nullopt, details).has_value());
+  CHECK(store.Find(1)->details.level == std::optional<std::uint32_t>{12});
+  CHECK(store.Find(1)->actorValues == initial.actorValues);
+  const ActorValueStorage values{{"skyrim:stamina", {"Stamina", ScalarActorValue{5}}}};
+  REQUIRE(store.ReplaceMetadata(1, values, std::nullopt).has_value());
+  CHECK(store.Find(1)->actorValues == values);
+  CHECK(store.Find(1)->details.level == std::optional<std::uint32_t>{12});
   REQUIRE(store.UpdateLocation(1, std::nullopt).has_value());
   CHECK_FALSE(store.Find(1)->location.has_value());
-  CHECK(store.Find(1)->actorValues == initial.actorValues);
 }
 
 TEST_CASE("PlayerStore unknown partial updates cannot create incomplete players")
 {
   PlayerStore store;
-  const std::array results{
-    store.UpdateProfile(42, StateTests::MakePlayer(42).data),
-    store.UpdateLocation(42, std::nullopt),
-    store.RenameCharacter(42, "Nerevar"),
-    store.BeginCharacter(42, "Nerevar"),
-    store.ClearGameState(42),
-    store.ApplyActorValues(42, {})
-  };
+  const std::array results{store.UpdateLocation(42, std::nullopt), store.ReplaceMetadata(42, ActorValueStorage{}, std::nullopt)};
   for (const auto& result : results)
   {
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code == ErrorCode::UnknownPlayer);
   }
-  CHECK(store.Count() == 0);
-}
-
-TEST_CASE("PlayerStore renaming and character replacement have different telemetry semantics")
-{
-  PlayerStore store;
-  const auto initial = StateTests::MakePlayer();
-  REQUIRE(store.Upsert(initial));
-  REQUIRE(store.RenameCharacter(1, "").has_value());
-  CHECK(store.Find(1)->characterName == std::optional<std::string>{""});
-  CHECK(store.Find(1)->actorValues == initial.actorValues);
-  CHECK(store.Find(1)->location == initial.location);
-  REQUIRE(store.BeginCharacter(1, "").has_value());
-  const auto reset = store.Find(1);
-  REQUIRE(reset.has_value());
-  CHECK(reset->data == initial.data);
-  CHECK(reset->characterName == std::optional<std::string>{""});
-  CHECK_FALSE(reset->location.has_value());
-  CHECK(reset->actorValues.empty());
-}
-
-TEST_CASE("PlayerStore Actor Value deltas use exact supplied keys and preserve unrelated values")
-{
-  PlayerStore store;
-  REQUIRE(store.Upsert(StateTests::MakePlayer()));
-  const ActorValueStorage delta{
-    {"skyrim:health", {"", ResourceActorValue{120, 100}}},
-    {"SKYRIM:Health", {"Здоровье", ResourceActorValue{70, 90}}}
-  };
-  REQUIRE(store.ApplyActorValues(1, delta).has_value());
-  auto updated = store.Find(1);
-  REQUIRE(updated.has_value());
-  CHECK(updated->actorValues.size() == 3);
-  CHECK(updated->actorValues.at("skyrim:health") == delta.at("skyrim:health"));
-  CHECK(updated->actorValues.at("SKYRIM:Health") == delta.at("SKYRIM:Health"));
-  CHECK(ActorValues::GetCurrent(updated->actorValues.at("skyrim:magicka").state) == 40);
-  const std::array<ActorValueKey, 2> removed{"SKYRIM:Health", "SKYRIM:Health"};
-  REQUIRE(store.ApplyActorValues(1, {}, removed).has_value());
-  CHECK_FALSE(store.Find(1)->actorValues.contains("SKYRIM:Health"));
-  CHECK(store.Find(1)->actorValues.contains("skyrim:health"));
-}
-
-TEST_CASE("PlayerStore rejects contradictory Actor Value deltas before applying any part")
-{
-  PlayerStore store;
-  REQUIRE(store.Upsert(StateTests::MakePlayer()));
-  const auto before = store.Snapshot();
-  const ActorValueStorage delta{
-    {"skyrim:health", {"Health", ScalarActorValue{1}}},
-    {"skyrim:stamina", {"Stamina", ScalarActorValue{2}}}
-  };
-  const std::array<ActorValueKey, 2> removed{"skyrim:magicka", "skyrim:health"};
-  CHECK_FALSE(store.ApplyActorValues(1, delta, removed).has_value());
-  CHECK(store.Snapshot() == before);
+  CHECK(store.Snapshot().empty());
 }
 
 TEST_CASE("ChatCache requires capacity and retains the greatest IDs from out-of-order batches")
@@ -248,7 +176,7 @@ TEST_CASE("ChatCache requires capacity and retains the greatest IDs from out-of-
   CHECK(result->added == 4);
   CHECK(result->evicted == 1);
   CHECK(StateTests::Ids(cache) == std::vector<ChatMessageId>{20, 30, 40});
-  CHECK(cache.MaxObservedId() == std::optional<ChatMessageId>{40});
+  CHECK(cache.State().count == 3);
 }
 
 TEST_CASE("ChatCache retains exact accepted text and ignores only identical message duplicates")
@@ -258,24 +186,24 @@ TEST_CASE("ChatCache retains exact accepted text and ignores only identical mess
   message.author->username    = " PLAYER_1 ";
   message.author->displayName = "";
   message.messageText = "  Cafe\xCC\x81\nsecond line\t ";
-  REQUIRE(cache.Merge(message).has_value());
-  CHECK(cache.Find(10) == std::optional<ChatMessage>{message});
+  REQUIRE(cache.Merge(std::array{message}).has_value());
+  CHECK(StateTests::Find(cache, 10) == std::optional<ChatMessage>{message});
   const std::array batch{message, StateTests::Message(20), StateTests::Message(20)};
   const auto merged = cache.Merge(batch);
   REQUIRE(merged.has_value());
   CHECK(merged->added == 1);
   CHECK(merged->duplicates == 2);
-  CHECK(cache.Count() == 2);
+  CHECK(cache.State().count == 2);
   auto changed = message;
   changed.author->username = "player_1";
-  CHECK_FALSE(cache.Merge(changed).has_value());
-  CHECK(cache.Find(10) == std::optional<ChatMessage>{message});
+  CHECK_FALSE(cache.Merge(std::array{changed}).has_value());
+  CHECK(StateTests::Find(cache, 10) == std::optional<ChatMessage>{message});
 }
 
 TEST_CASE("ChatCache conflicts and wrong channels reject the entire incoming batch")
 {
   auto cache = StateTests::Cache();
-  REQUIRE(cache.Merge(StateTests::Message(10)).has_value());
+  REQUIRE(cache.Merge(std::array{StateTests::Message(10)}).has_value());
   auto conflict = StateTests::Message(10);
   conflict.messageText = "Conflicting body";
   const std::array retainedConflict{StateTests::Message(20), conflict};
@@ -283,7 +211,6 @@ TEST_CASE("ChatCache conflicts and wrong channels reject the entire incoming bat
   REQUIRE_FALSE(result.has_value());
   CHECK(result.error().code == ErrorCode::ConflictingMessage);
   CHECK(StateTests::Ids(cache) == std::vector<ChatMessageId>{10});
-  CHECK(cache.MaxObservedId() == std::optional<ChatMessageId>{10});
   conflict = StateTests::Message(20);
   conflict.author->displayName = "A different author snapshot";
   const std::array newConflict{StateTests::Message(20), conflict};
@@ -295,118 +222,31 @@ TEST_CASE("ChatCache conflicts and wrong channels reject the entire incoming bat
   CHECK(StateTests::Ids(cache) == std::vector<ChatMessageId>{10});
 }
 
-TEST_CASE("ChatCache live messages do not skip the history cursor when pages interleave")
-{
-  auto cache = StateTests::Cache(8);
-  REQUIRE(cache.BeginHistory(10).has_value());
-  REQUIRE(cache.Merge(StateTests::Message(100)).has_value());
-  CHECK(cache.HistoryState().cursor == std::optional<ChatMessageId>{10});
-  auto page = StateTests::Page(cache, {StateTests::Message(20), StateTests::Message(30)}, true);
-  REQUIRE(cache.ApplyHistoryPage(page).has_value());
-  CHECK(cache.HistoryState().cursor == std::optional<ChatMessageId>{30});
-  CHECK(cache.MaxObservedId() == std::optional<ChatMessageId>{100});
-  const auto last = cache.ApplyHistoryPage(StateTests::Page(cache, {StateTests::Message(100)}));
-  REQUIRE(last.has_value());
-  CHECK(last->duplicates == 1);
-  CHECK_FALSE(cache.HistoryState().hasMore);
-  CHECK(StateTests::Ids(cache) == std::vector<ChatMessageId>{20, 30, 100});
-}
-
-TEST_CASE("ChatCache cursor advances even when an old history page is immediately evicted")
-{
-  auto cache = StateTests::Cache(1);
-  REQUIRE(cache.Merge(StateTests::Message(100)).has_value());
-  REQUIRE(cache.BeginHistory().has_value());
-  const auto page = StateTests::Page(cache, {StateTests::Message(10), StateTests::Message(20)}, true);
-  const auto merged = cache.ApplyHistoryPage(page);
-  REQUIRE(merged.has_value());
-  CHECK(merged->evicted == 2);
-  CHECK(StateTests::Ids(cache) == std::vector<ChatMessageId>{100});
-  CHECK(cache.HistoryState().cursor == std::optional<ChatMessageId>{20});
-  CHECK(cache.HistoryState().hasMore);
-  CHECK_FALSE(cache.HistoryState().hasGap);
-}
-
-TEST_CASE("ChatCache history gaps come from server metadata and remain sticky only within a round")
-{
-  auto cache = StateTests::Cache();
-  REQUIRE(cache.BeginHistory(1).has_value());
-  REQUIRE(cache.ApplyHistoryPage(StateTests::Page(cache, {StateTests::Message(1000)}, true, true)).has_value());
-  REQUIRE(cache.ApplyHistoryPage(StateTests::Page(cache, {StateTests::Message(9000)})).has_value());
-  CHECK(cache.HistoryState().hasGap);
-  REQUIRE(cache.BeginHistory(9000).has_value());
-  CHECK_FALSE(cache.HistoryState().hasGap);
-  REQUIRE(cache.ApplyHistoryPage(StateTests::Page(cache, {StateTests::Message(100000)})).has_value());
-  CHECK_FALSE(cache.HistoryState().hasGap);
-}
-
-TEST_CASE("ChatCache invalid cursors and empty progress cannot mutate history state")
-{
-  auto cache = StateTests::Cache();
-  CHECK_FALSE(cache.BeginHistory(0).has_value());
-  REQUIRE(cache.BeginHistory(10).has_value());
-  auto page = StateTests::Page(cache, {StateTests::Message(20)});
-  page.nextCursor = 21;
-  CHECK_FALSE(cache.ApplyHistoryPage(page).has_value());
-  CHECK_FALSE(cache.ApplyHistoryPage(StateTests::Page(cache, {}, true)).has_value());
-  CHECK_FALSE(cache.ApplyHistoryPage(StateTests::Page(cache, {StateTests::Message(10)})).has_value());
-  CHECK(cache.Count() == 0);
-  CHECK(cache.HistoryState().cursor == std::optional<ChatMessageId>{10});
-}
-
-TEST_CASE("ChatCache canceled and completed history rounds cannot accept stale replies")
-{
-  auto cache = StateTests::Cache();
-  REQUIRE(cache.Merge(StateTests::Message(10)).has_value());
-  REQUIRE(cache.BeginHistory(std::nullopt, 50).has_value());
-  const auto obsolete = StateTests::Page(cache, {StateTests::Message(20)});
-  cache.CancelHistory();
-  CHECK(StateTests::Ids(cache) == std::vector<ChatMessageId>{10});
-  CHECK_FALSE(cache.ApplyHistoryPage(obsolete).has_value());
-  CHECK_FALSE(cache.BeginHistory(std::nullopt, 50).has_value());
-  const auto next = cache.BeginHistory();
-  REQUIRE(next.has_value());
-  CHECK(*next > 50);
-  CHECK_FALSE(cache.ApplyHistoryPage(obsolete).has_value());
-  REQUIRE(cache.ApplyHistoryPage(StateTests::Page(cache, {StateTests::Message(30)})).has_value());
-  CHECK_FALSE(cache.ApplyHistoryPage(StateTests::Page(cache, {StateTests::Message(40)})).has_value());
-  cache.Clear();
-  const auto afterClear = cache.BeginHistory();
-  REQUIRE(afterClear.has_value());
-  CHECK(*afterClear > *next);
-  CHECK_FALSE(cache.ApplyHistoryPage(obsolete).has_value());
-  CHECK(cache.Count() == 0);
-}
-
 TEST_CASE("ClientModel routes accepted updates and advances revision only on success")
 {
   ClientModel model;
   REQUIRE(model.RegisterChannel(7, 4).has_value());
+  CHECK_FALSE(model.RegisterChannel(7, 9).has_value());
   const auto generation = model.Generation();
   REQUIRE(model.Apply(generation, OnlinePlayersReplaced{{StateTests::MakePlayer(), StateTests::MakePlayer(2)}}).has_value());
-  REQUIRE(model.Apply(generation, PlayerCharacterRenamed{1, "Renamed"}).has_value());
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{1, std::nullopt}).has_value());
-  REQUIRE(model.Apply(generation, PlayerActorValuesUpdated{1, {}, {"skyrim:health"}}).has_value());
+  REQUIRE(model.Apply(generation, PlayerMetadataUpdated{1, ActorValueStorage{}, std::nullopt}).has_value());
   REQUIRE(model.Apply(generation, ChatMessagesReceived{7, {StateTests::Message(10)}}).has_value());
   const auto accepted = model.Snapshot();
   REQUIRE(accepted.players.size() == 2);
   REQUIRE(accepted.chats.size() == 1);
-  CHECK(accepted.players[0].characterName == std::optional<std::string>{"Renamed"});
   CHECK_FALSE(accepted.players[0].location.has_value());
-  CHECK(accepted.players[0].actorValues.size() == 1);
+  CHECK(accepted.players[0].actorValues.empty());
   CHECK(accepted.chats[0].messages[0].messageId == 10);
-  CHECK_FALSE(model.Apply(generation, PlayerProfileUpdated{1, StateTests::MakePlayer(2).data}).has_value());
+  CHECK_FALSE(model.Apply(generation, PlayerLocationUpdated{42, std::nullopt}).has_value());
+  CHECK_FALSE(model.Apply(generation, ChatMessagesReceived{8, {StateTests::Message(11, 8)}}).has_value());
   CHECK(model.Snapshot().revision == accepted.revision);
   CHECK(model.Snapshot().players == accepted.players);
-  REQUIRE(model.Apply(generation, PlayerCharacterStarted{1, "Renamed"}).has_value());
-  CHECK(model.Snapshot().players[0].actorValues.empty());
-  REQUIRE(model.Apply(generation, PlayerGameStateCleared{1}).has_value());
-  CHECK_FALSE(model.Snapshot().players[0].characterName.has_value());
   REQUIRE(model.Apply(generation, PlayerRemoved{2}).has_value());
   CHECK(model.Snapshot().players.size() == 1);
 }
 
-TEST_CASE("ClientModel disconnect retains messages and invalidates old-generation updates")
+TEST_CASE("ClientModel server switch discards the session and rejects its late updates")
 {
   ClientModel model;
   REQUIRE(model.RegisterChannel(7, 4).has_value());
@@ -414,83 +254,25 @@ TEST_CASE("ClientModel disconnect retains messages and invalidates old-generatio
   REQUIRE(model.SetSelfPlayer(oldGeneration, 1).has_value());
   REQUIRE(model.Apply(oldGeneration, PlayerUpserted{StateTests::MakePlayer()}).has_value());
   REQUIRE(model.Apply(oldGeneration, ChatMessagesReceived{7, {StateTests::Message(10)}}).has_value());
-  model.ClearOnlineState();
+  model.ResetSession();
   const auto cleared = model.Snapshot();
+  CHECK(cleared.chats.empty());
   CHECK(cleared.players.empty());
   CHECK_FALSE(cleared.selfPlayerId.has_value());
-  REQUIRE(cleared.chats.size() == 1);
-  CHECK(cleared.chats[0].messages.size() == 1);
-  CHECK(cleared.generation != oldGeneration);
+  CHECK(model.Generation() != oldGeneration);
   const auto rejected = model.Apply(oldGeneration, PlayerUpserted{StateTests::MakePlayer(9)});
   REQUIRE_FALSE(rejected.has_value());
   CHECK(rejected.error().code == ErrorCode::StaleGeneration);
   CHECK_FALSE(model.SetSelfPlayer(oldGeneration, 9).has_value());
   CHECK(model.Snapshot().revision == cleared.revision);
-  CHECK(model.Snapshot().players.empty());
-  CHECK_FALSE(model.Snapshot().selfPlayerId.has_value());
-}
 
-TEST_CASE("ClientModel server switch discards previous channel history before IDs can be reused")
-{
-  ClientModel model;
-  REQUIRE(model.RegisterChannel(7, 4).has_value());
-  const auto oldGeneration = model.Generation();
-  REQUIRE(model.Apply(oldGeneration, ChatMessagesReceived{7, {StateTests::Message(10)}}).has_value());
-  model.ResetSession();
-  CHECK(model.Snapshot().chats.empty());
-  CHECK(model.Generation() != oldGeneration);
+  // Channels come back with the new session; its IDs may repeat the old ones.
   CHECK_FALSE(model.Apply(model.Generation(), ChatMessagesReceived{7, {StateTests::Message(10)}}).has_value());
   REQUIRE(model.RegisterChannel(7, 4).has_value());
   auto reused = StateTests::Message(10);
   reused.messageText = "A different server's message";
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{7, {reused}}).has_value());
   CHECK(model.Snapshot().chats[0].messages[0].messageText == reused.messageText);
-}
-
-TEST_CASE("ClientModel re-registering a channel cannot revive a canceled history request")
-{
-  ClientModel model;
-  CHECK_FALSE(model.BeginHistory(7).has_value());
-  REQUIRE(model.RegisterChannel(7, 4).has_value());
-  CHECK_FALSE(model.RegisterChannel(7, 9).has_value());
-  const auto first = model.BeginHistory(7);
-  REQUIRE(first.has_value());
-  ChatHistoryPage obsolete;
-  obsolete.channelId = 7;
-  obsolete.round = *first;
-  obsolete.nextCursor = 10;
-  obsolete.messages = {StateTests::Message(10)};
-  REQUIRE(model.RemoveChannel(7));
-  REQUIRE(model.RegisterChannel(7, 4).has_value());
-  const auto second = model.BeginHistory(7);
-  REQUIRE(second.has_value());
-  CHECK(*second != *first);
-  CHECK_FALSE(model.Apply(model.Generation(), ChatHistoryReceived{obsolete}).has_value());
-  CHECK(model.Snapshot().chats[0].messages.empty());
-  obsolete.round = *second;
-  REQUIRE(model.Apply(model.Generation(), ChatHistoryReceived{obsolete}).has_value());
-}
-
-TEST_CASE("ClientModel disconnect cancels active history while preserving accepted messages")
-{
-  ClientModel model;
-  REQUIRE(model.RegisterChannel(7, 4).has_value());
-  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{7, {StateTests::Message(10)}}).has_value());
-  const auto round = model.BeginHistory(7, 10);
-  REQUIRE(round.has_value());
-  model.ClearOnlineState();
-  const auto snapshot = model.Snapshot();
-  REQUIRE(snapshot.chats.size() == 1);
-  CHECK(snapshot.chats[0].messages.size() == 1);
-  CHECK_FALSE(snapshot.chats[0].history.hasMore);
-  CHECK_FALSE(snapshot.chats[0].history.cursor.has_value());
-  ChatHistoryPage obsolete;
-  obsolete.channelId = 7;
-  obsolete.round = *round;
-  obsolete.after = 10;
-  obsolete.nextCursor = 20;
-  obsolete.messages = {StateTests::Message(20)};
-  CHECK_FALSE(model.Apply(model.Generation(), ChatHistoryReceived{obsolete}).has_value());
 }
 
 TEST_SUITE_END();

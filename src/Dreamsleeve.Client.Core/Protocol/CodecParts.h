@@ -18,6 +18,71 @@ namespace Dreamsleeve::Client::Wire::Detail
     return Failure(ErrorCode::InvalidPayload, std::move(field));
   }
 
+  // Milliseconds of the years 1..9999, the range both sides can format.
+  inline constexpr std::int64_t MinUnixMs = -62135596800000LL;
+  inline constexpr std::int64_t MaxUnixMs = 253402300799999LL;
+
+  constexpr bool ValidUnixMs(std::int64_t value)
+  {
+    return value >= MinUnixMs && value <= MaxUnixMs;
+  }
+
+  inline bool Finite(std::floating_point auto... values)
+  {
+    return (std::isfinite(values) && ...);
+  }
+
+  inline bool Finite(const Domain::Position& value)
+  {
+    return Finite(value.X, value.Y, value.Z);
+  }
+
+  inline bool Finite(const Domain::Rotation& value)
+  {
+    return Finite(value.X, value.Y, value.Z);
+  }
+
+  // A form of a named plugin; the same rule for every WRLD, CELL and race key.
+  inline bool ValidKey(const Domain::FormKey& value)
+  {
+    return !value.pluginName.empty() && value.localFormId != Domain::InvalidId;
+  }
+
+  inline Domain::FormKey KeyOf(const P::FormKey& source)
+  {
+    return {source.plugin_name(), source.local_form_id()};
+  }
+
+  inline void WriteKey(P::FormKey& target, const Domain::FormKey& value)
+  {
+    target.set_plugin_name(value.pluginName);
+    target.set_local_form_id(value.localFormId);
+  }
+
+  inline Domain::Position PositionOf(const P::Position& source)
+  {
+    return {source.x(), source.y(), source.z()};
+  }
+
+  inline void WritePosition(P::Position& target, const Domain::Position& value)
+  {
+    target.set_x(value.X);
+    target.set_y(value.Y);
+    target.set_z(value.Z);
+  }
+
+  inline Domain::Rotation RotationOf(const P::Rotation& source)
+  {
+    return {source.x(), source.y(), source.z()};
+  }
+
+  inline void WriteRotation(P::Rotation& target, const Domain::Rotation& value)
+  {
+    target.set_x(value.X);
+    target.set_y(value.Y);
+    target.set_z(value.Z);
+  }
+
   void                           WritePose(P::MovementPose&, const Domain::MovementPose&);
   Result<PlayerLocationUpdated>  ReadVisibility(const P::PlayerVisibilityChanged&);
   void                           WritePlayerUpdate(P::UpdatePlayer&, const PlayerUpdate&);
@@ -42,7 +107,6 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<OwnGroundMarksReplaced> ReadOwnMarks(const P::OwnGroundMarks&);
 
   void                  WriteSession(P::OpenSession&, const OpenSession&);
-  bool                  ValidTicket(std::string_view);
   Result<SessionOpened> Welcome(const Configuration&, std::uint64_t, const P::SessionOpened&);
 
 }

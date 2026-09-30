@@ -6,6 +6,7 @@ module;
 export module Dreamsleeve.Host.Names;
 
 import std;
+import Dreamsleeve.Client.Utils;
 export import Dreamsleeve.Client.Domain;
 export import Dreamsleeve.Host.UiSettings;
 
@@ -84,21 +85,13 @@ export namespace Dreamsleeve::Host
       std::vector<std::string> names;
     };
 
-    // Plain printable UTF-8 of a sane length; anything else falls back.
+    // One printable line of UTF-8 of a sane length, without markup or edge
+    // spaces; anything else falls back.
     bool ValidAlias(std::string_view text)
     {
-      if (text.empty() || text.size() > MaxAliasBytes || text.front() == ' ' || text.back() == ' ') return false;
-      for (std::size_t index = 0; index < text.size();)
-      {
-        const auto  lead = static_cast<unsigned char>(text[index]);
-        std::size_t size = lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2 : (lead >> 4) == 0xE ? 3 : (lead >> 3) == 0x1E ? 4 : 0;
-        if (size == 0 || index + size > text.size()) return false;
-        if (size == 1 && (lead < 0x20 || lead == 0x7F || lead == '<' || lead == '>')) return false;
-        for (std::size_t next = 1; next < size; ++next)
-          if ((static_cast<unsigned char>(text[index + next]) & 0xC0) != 0x80) return false;
-        index += size;
-      }
-      return true;
+      using namespace Dreamsleeve::Utils::Text;
+      return !text.empty() && text.size() <= MaxAliasBytes && text.front() != ' ' && text.back() != ' ' && ValidUtf8(text) &&
+             !HasControl(text) && !text.contains('<') && !text.contains('>');
     }
 
     std::vector<std::string> BuiltIn()
@@ -237,13 +230,13 @@ public:
 
     bool Ignored(Domain::PlayerId id) const
     {
-      return id != 0 && ignoredIndex.contains(Key(scope, std::to_string(id)));
+      return id != Domain::InvalidId && ignoredIndex.contains(Key(scope, std::to_string(id)));
     }
 
     // A personal filter: system messages (no author) and self cannot be ignored.
     bool Ignore(Domain::PlayerId id, std::optional<Domain::PlayerId> self, const Domain::PlayerData* known)
     {
-      if (id == 0 || (self && *self == id) || Ignored(id) || scope.empty()) return false;
+      if (id == Domain::InvalidId || (self && *self == id) || Ignored(id) || scope.empty()) return false;
       if (book.ignored.size() >= MaxIgnoredRecords) return false;
       IgnoredRecord record{scope, std::to_string(id)};
       if (known)
@@ -282,7 +275,7 @@ public:
         if (record.server != scope) continue;
         Domain::PlayerId id{};
         const auto       parsed = std::from_chars(record.id.data(), record.id.data() + record.id.size(), id);
-        if (parsed.ec != std::errc{} || id == 0) continue;
+        if (parsed.ec != std::errc{} || id == Domain::InvalidId) continue;
         const Domain::PlayerData known{id, record.username, record.displayName};
         list.push_back({id, NameFor(id, known, std::nullopt, settings)});
       }

@@ -137,8 +137,6 @@ TEST_CASE("Session projects the system channel by its kind; announcements never 
   CHECK(channels[1]["id"].get<std::string>() == "2");
   CHECK(channels[1]["kind"].get<std::string>() == "system");
   CHECK_FALSE(channels[1]["writable"].get<bool>());
-  CHECK_FALSE(
-    fixture.session.SendChat(*fixture.exchange, Bridge::Commands::SendChat{.requestId = "u1", .channelId = {2}, .text = "x"}));
 
   using Source = Domain::AnnouncementSource;
   using Kind   = Domain::AnnouncementKind;

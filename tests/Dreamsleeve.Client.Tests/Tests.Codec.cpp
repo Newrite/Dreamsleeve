@@ -674,7 +674,6 @@ TEST_CASE("Announcements decode with unknown values kept, need an author unless 
 
   const W::ClientRequest request =
     PostAnnouncement{5, 2, "Пал", Domain::AnnouncementKind::Event, Domain::ClientAnnouncementSource::ThirdParty, "Мод"};
-  CHECK(W::ProtocolCodec::RequestChannel(request) == W::Channel::Chat);
   auto encoded = codec.Encode(request);
   REQUIRE(encoded);
   P::ClientPacket wire;
@@ -715,7 +714,6 @@ TEST_CASE("Pseudonymous profiles carry no username and the identity switch round
   REQUIRE(opening.ParseFromArray(hidden->DataBytesView().data(), static_cast<int>(hidden->Size())));
   CHECK(opening.open_session().hidden_identity() == P::HIDDEN_IDENTITY_EVERYWHERE);
   const auto request = W::ClientRequest{SetIdentityVisibility{4, Domain::HiddenIdentity::ExceptGroundMarks}};
-  CHECK(W::ProtocolCodec::RequestChannel(request) == W::Channel::Control);
   const auto encoded = codec.Encode(request);
   REQUIRE(encoded);
   P::ClientPacket sent;
@@ -764,7 +762,6 @@ TEST_CASE("A display name change and its answer round-trip with the correlation"
   const auto request = W::ClientRequest{
       ChangeDisplayName{5, "Новое Имя"}
   };
-  CHECK(W::ProtocolCodec::RequestChannel(request) == W::Channel::Control);
   const auto encoded = codec.Encode(request);
   REQUIRE(encoded);
   P::ClientPacket sent;
@@ -791,6 +788,55 @@ TEST_CASE("A display name change and its answer round-trip with the correlation"
   changed.mutable_display_name_changed()->set_display_name("Новое Имя");
   changed.clear_request_id();
   CHECK_FALSE(codec.Decode(Bytes(changed)));
+}
+
+TEST_CASE("The codec owns a request's shape and names the field that is wrong")
+{
+  const auto                        codec = MakeCodec();
+  const Domain::GroundMarkPlacement place{
+      {"skyrim.esm", 0x1A26F},
+      {1, 2, 3},
+      0.5f
+  };
+  const Domain::GameDate    date{4, 201, 8, 17, 2, 14, 5};
+  const auto                nan = std::numeric_limits<float>::quiet_NaN();
+  Domain::ActorValueStorage values;
+  for (std::size_t index = 0; index <= config.maxActorValues; ++index)
+    values.emplace("skyrim:value" + std::to_string(index), Domain::ActorValueInfo{"Value", Domain::ScalarActorValue{1}});
+  using Kind   = Domain::AnnouncementKind;
+  using Source = Domain::ClientAnnouncementSource;
+
+  const std::vector<std::pair<std::string_view, W::ClientRequest>> cases{
+      {"session_ticket", W::OpenSession{1, std::string(42, 'A')}},
+      {"channel_id", SendChat{1, Domain::InvalidId, "text"}},
+      {"text", SendChat{1, 1, ""}},
+      {"text", SendChat{1, 1, "\xFF"}},
+      {"actor_values", W::UpdatePlayer{1, LocalActorValues{values}}},
+      {"text", PostAnnouncement{1, 2, "", Kind::Event, Source::ThirdParty, "Mod"}},
+      {"signature", PostAnnouncement{1, 2, "notice", Kind::Event, Source::ThirdParty, ""}},
+      {"signature", PostAnnouncement{1, 2, "notice", Kind::Event, Source::TrustedClient, "Mod\n"}},
+      {"text", PlaceGroundNote{1, "", place, date}},
+      {"placement", PlaceGroundNote{1, "note", {{"", 0x1A26F}, {1, 2, 3}, 0.5f}, date}},
+      {"placement", PlaceGroundNote{1, "note", {{"skyrim.esm", 0x1A26F}, {nan, 2, 3}, 0.5f}, date}},
+      {"game_date", PlaceGroundNote{1, "note", place, {4, 201, 2, 30, 2, 14, 5}}},
+      {"label", ReportDeath{1, "Wolf\x01", place, date}},
+      {"mark_id", RemoveGroundMark{1, Domain::InvalidId}},
+      {"display_name", ChangeDisplayName{1, " \t "}},
+      {"display_name", ChangeDisplayName{1, "Line\nbreak"}},
+  };
+  for (const auto& [field, request] : cases)
+  {
+    const auto encoded = codec.Encode(request);
+    REQUIRE_FALSE(encoded);
+    CHECK(encoded.error().code == W::ErrorCode::InvalidPayload);
+    CHECK(encoded.error().field == field);
+  }
+  const auto unnumbered = codec.Encode(ChangeDisplayName{Domain::InvalidId, "Name"});
+  REQUIRE_FALSE(unnumbered);
+  CHECK(unnumbered.error().code == W::ErrorCode::InvalidEnvelope);
+  // A death may carry no label; a trusted client need not sign.
+  CHECK(codec.Encode(ReportDeath{1, "", place, date}));
+  CHECK(codec.Encode(PostAnnouncement{1, 2, "notice", Kind::Event, Source::TrustedClient, ""}));
 }
 
 TEST_SUITE_END();

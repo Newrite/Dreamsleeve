@@ -47,7 +47,7 @@
   размещение), `remove`, `expired`, `evictionCandidate`, `snapshot`.
 
 Клиентские типы: `Domain::GroundMark`, `GroundMarkPlacement`, `GroundMarkKind`
-(`Domain.ixx`), `Spatial::IsMarkWithinRadius` (`Logic.ixx`).
+(`Domain.ixx`); какие метки видны, решает сервер.
 
 ## Сервер
 

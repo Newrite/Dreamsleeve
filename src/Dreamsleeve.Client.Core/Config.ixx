@@ -18,7 +18,6 @@ export namespace Dreamsleeve::Client
   // One connection to one server, and at least the control, chat and movement channels.
   constexpr std::size_t ClientPeers        = 1;
   constexpr std::size_t MinChannels        = 3;
-  constexpr std::size_t MaxChannels        = 255;
   constexpr auto        MaxMovementGap     = std::chrono::hours{1};
   constexpr std::size_t MinMovementHistory = 2;
   constexpr Port        DefaultServerPort  = 8778;
@@ -70,7 +69,8 @@ export namespace Dreamsleeve::Client
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{4096};
 
-    // The first invalid setting, named as in client.toml.
+    // The first invalid setting of the client itself, named as in client.toml;
+    // the ENet bounds of network and the timeouts are DreamNetClient::ValidateConfig's.
     std::optional<std::string_view> InvalidSetting() const noexcept
     {
       const auto plugin = [](std::string_view name) {
@@ -86,10 +86,8 @@ export namespace Dreamsleeve::Client
         return value != 0 && value <= MaxProtobufCount;
       };
 
-      if (network.maxPeers != ClientPeers) return "network.maxPeers";
-      if (network.channelLimit < MinChannels || network.channelLimit > MaxChannels) return "network.channelLimit";
-      if (!count(network.maxPacketBytes)) return "network.maxPacketBytes";
-      if (network.maxWaitingData < network.maxPacketBytes) return "network.maxWaitingData";
+      if (network.channelLimit < MinChannels) return "network.channelLimit";
+      if (network.maxPacketBytes > MaxProtobufCount) return "network.maxPacketBytes";
       if (serverAddress.GetPort() == 0) return "serverPort";
       if (!count(maxInitialPlayers)) return "maxInitialPlayers";
       if (maxRecentMessages > MaxProtobufCount) return "maxRecentMessages";
@@ -99,8 +97,6 @@ export namespace Dreamsleeve::Client
       if (maxPendingPlayerUpdates == 0) return "maxPendingPlayerUpdates";
       if (playerSampleIntervalMs == 0) return "playerSampleIntervalMs";
       if (sessionTimeoutMs == 0) return "sessionTimeoutMs";
-      if (connectTimeoutMs == 0) return "connectTimeoutMs";
-      if (disconnectTimeoutMs == 0) return "disconnectTimeoutMs";
       if (!std::isfinite(visibilityDistance) || visibilityDistance < 0) return "visibilityDistance";
       if (!plugin(fireflyPlugin)) return "fireflyPlugin";
       if (!formId(fireflyFormId)) return "fireflyFormId";

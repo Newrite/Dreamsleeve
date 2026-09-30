@@ -26,9 +26,7 @@ namespace
 
   StateUpdateQueue::Ptr Queue(std::size_t capacity)
   {
-    auto result = StateUpdateQueue::TryCreate(capacity);
-    REQUIRE(result);
-    return std::move(*result);
+    return StateUpdateQueue::Create(capacity);
   }
 
   void Initialize(StateUpdateQueue& queue)
@@ -44,21 +42,16 @@ namespace
 
 TEST_SUITE_BEGIN("Client.StateUpdateQueue");
 
-TEST_CASE("State queue requires a positive capacity and starts awaiting a snapshot")
+TEST_CASE("State queue starts awaiting a snapshot")
 {
-  const auto invalid = StateUpdateQueue::TryCreate(0);
-  REQUIRE_FALSE(invalid);
-  CHECK(invalid.error().code == ErrorCode::InvalidConfig);
-  CHECK(invalid.error().field == "capacity");
   auto queue = Queue(2);
-  CHECK(queue->RequiresSnapshot());
   CHECK(queue->Publish(Delta(1)) == StatePublishResult::SnapshotRequired);
   StateUpdateBatch batch;
   queue->TakeAll(batch);
   CHECK(batch.requiresSnapshot);
   CHECK(batch.updates.empty());
   Initialize(*queue);
-  CHECK_FALSE(queue->RequiresSnapshot());
+  CHECK(queue->Publish(Delta(1)) == StatePublishResult::Queued);
 }
 
 TEST_CASE("State queue drains ordered deltas and replaces the reused output batch")
@@ -89,7 +82,6 @@ TEST_CASE("State queue overflow discards the incomplete chain until a fresh snap
   REQUIRE(queue->Publish(Delta(1)) == StatePublishResult::Queued);
   REQUIRE(queue->Publish(Delta(2)) == StatePublishResult::Queued);
   CHECK(queue->Publish(Delta(3)) == StatePublishResult::SnapshotRequired);
-  CHECK(queue->RequiresSnapshot());
 
   StateUpdateBatch batch;
   queue->TakeAll(batch);
@@ -195,7 +187,7 @@ TEST_CASE("State queue restores chat contents after overflow and delivers subseq
       messages.insert(messages.end(), added.begin(), added.end());
     }
   }
-  CHECK(messages == model.FindChat(1)->messages);
+  CHECK(messages == model.Snapshot().chats.front().messages);
 }
 
 TEST_CASE("State buffer preserves ordered batches under externally serialized access")

@@ -5,6 +5,8 @@ export module Dreamsleeve.Client.Settings;
 
 import std;
 import Dreamsleeve.Client.Auth;
+import Dreamsleeve.Client.Exchange;
+import DreamNet.Client;
 export import Dreamsleeve.Client.Config;
 
 export namespace Dreamsleeve::Client
@@ -185,8 +187,15 @@ namespace Dreamsleeve::Client
   // and the runtime, codec and movement view trust what passed.
   export std::expected<void, std::string> ValidateClientSettings(const ClientSettings& settings)
   {
-    if (auto field = settings.client.InvalidSetting()) return std::unexpected{"Invalid client setting: " + std::string{*field}};
-    if (settings.commandCapacity == 0 || settings.stateCapacity == 0) return std::unexpected{"Client exchange capacities must be positive"};
+    const auto& client = settings.client;
+    if (auto field = client.InvalidSetting()) return std::unexpected{"Invalid client setting: " + std::string{*field}};
+    if (auto field = ClientExchange::InvalidCapacity(settings.commandCapacity, settings.stateCapacity))
+      return std::unexpected{"Invalid client setting: " + std::string{*field}};
+    if (
+      auto transport =
+        DreamNetClient::ValidateConfig({client.network, client.serverAddress, client.connectTimeoutMs, client.disconnectTimeoutMs});
+      !transport)
+      return std::unexpected{"Invalid client network setting: " + transport.error().message};
     return Auth::ValidateUrl(settings.authUrl, settings.allowInsecureRemoteAuth);
   }
 

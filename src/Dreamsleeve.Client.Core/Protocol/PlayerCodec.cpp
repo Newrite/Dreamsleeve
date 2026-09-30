@@ -13,18 +13,10 @@ namespace Dreamsleeve::Client::Wire::Detail
   void WriteLocation(P::PlayerLocation& target, const Domain::PlayerLocation& value)
   {
     target.set_sampled_at_us(value.sampledAtUs);
-    auto* location = target.mutable_location();
-    location->mutable_location_id()->set_plugin_name(value.location.locationId.pluginName);
-    location->mutable_location_id()->set_local_form_id(value.location.locationId.localFormId);
-    location->set_location_name(value.location.locationName);
-    auto* position = target.mutable_position();
-    position->set_x(value.position.X);
-    position->set_y(value.position.Y);
-    position->set_z(value.position.Z);
-    auto* rotation = target.mutable_rotation();
-    rotation->set_x(value.rotation.X);
-    rotation->set_y(value.rotation.Y);
-    rotation->set_z(value.rotation.Z);
+    WriteKey(*target.mutable_location()->mutable_location_id(), value.location.locationId);
+    target.mutable_location()->set_location_name(value.location.locationName);
+    WritePosition(*target.mutable_position(), value.position);
+    WriteRotation(*target.mutable_rotation(), value.rotation);
   }
 
   struct ActorValueWriter
@@ -48,8 +40,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (value.race)
     {
       auto* race = target.mutable_race();
-      race->mutable_form()->set_plugin_name(value.race->form.pluginName);
-      race->mutable_form()->set_local_form_id(value.race->form.localFormId);
+      WriteKey(*race->mutable_form(), value.race->form);
       race->set_name(value.race->name);
     }
     if (value.level) target.set_level(*value.level);
@@ -123,7 +114,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   // Required nonzero IDs reject those as well, without separate has_* checks.
   Result<Domain::PlayerData> Profile(const P::PlayerProfile& player)
   {
-    if (player.player_id() == 0) return Invalid("player_id");
+    if (player.player_id() == Domain::InvalidId) return Invalid("player_id");
     if (player.pseudonymous() && (!player.username().empty() || player.display_name().empty())) return Invalid("pseudonymous");
 
     // Strings have already been validated/canonicalized by the server.
@@ -132,21 +123,15 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   Result<Domain::PlayerLocation> ReadLocation(const P::PlayerLocation& source)
   {
-    const auto& key      = source.location().location_id();
-    const auto& position = source.position();
-    const auto& rotation = source.rotation();
-    if (key.plugin_name().empty() || key.local_form_id() == 0) return Invalid("location_id");
-    if (
-      !std::isfinite(position.x()) || !std::isfinite(position.y()) || !std::isfinite(position.z()) || !std::isfinite(rotation.x()) ||
-      !std::isfinite(rotation.y()) || !std::isfinite(rotation.z()))
-      return Invalid("location");
-
-    return Domain::PlayerLocation{
-        {{key.plugin_name(), key.local_form_id()}, source.location().location_name()},
-        {position.x(), position.y(), position.z()},
-        {rotation.x(), rotation.y(), rotation.z()},
+    Domain::PlayerLocation result{
+        {KeyOf(source.location().location_id()), source.location().location_name()},
+        PositionOf(source.position()),
+        RotationOf(source.rotation()),
         source.sampled_at_us()
     };
+    if (!ValidKey(result.location.locationId)) return Invalid("location_id");
+    if (!Finite(result.position) || !Finite(result.rotation)) return Invalid("location");
+    return result;
   }
 
   Result<Domain::ActorValueInfo> ReadActorValue(const P::ActorValueEntry& entry)
@@ -155,10 +140,10 @@ namespace Dreamsleeve::Client::Wire::Detail
     switch (entry.value_case())
     {
       case P::ActorValueEntry::kScalar:
-        if (!std::isfinite(entry.scalar())) return Invalid("actor_value");
+        if (!Finite(entry.scalar())) return Invalid("actor_value");
         return Domain::ActorValueInfo{entry.display_name(), Domain::ScalarActorValue{entry.scalar()}};
       case P::ActorValueEntry::kResource:
-        if (!std::isfinite(entry.resource().current()) || !std::isfinite(entry.resource().maximum())) return Invalid("actor_value");
+        if (!Finite(entry.resource().current(), entry.resource().maximum())) return Invalid("actor_value");
         return Domain::ActorValueInfo{
             entry.display_name(),
             Domain::ResourceActorValue{entry.resource().current(), entry.resource().maximum()}
@@ -173,11 +158,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   Domain::PlayerDetails ReadDetails(const P::PlayerDetails& source)
   {
     Domain::PlayerDetails result;
-    if (source.has_race())
-      result.race = Domain::NamedForm{
-          {source.race().form().plugin_name(), source.race().form().local_form_id()},
-          source.race().name()
-      };
+    if (source.has_race()) result.race = Domain::NamedForm{KeyOf(source.race().form()), source.race().name()};
     if (source.has_level()) result.level = source.level();
     const auto& activity           = source.activity();
     result.activity.kind           = static_cast<Domain::ActivityKind>(activity.kind());
@@ -228,7 +209,8 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   Result<PlayerMetadataUpdated> ReadMetadata(const Configuration& config, const P::PlayerMetadataChanged& source)
   {
-    if (source.player_id() == 0 || (!source.has_actor_values() && !source.has_details())) return Invalid("player_metadata_changed");
+    if (source.player_id() == Domain::InvalidId || (!source.has_actor_values() && !source.has_details()))
+      return Invalid("player_metadata_changed");
     PlayerMetadataUpdated result{source.player_id()};
     if (source.has_actor_values())
     {
@@ -247,36 +229,23 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   void WritePose(P::MovementPose& target, const Domain::MovementPose& value)
   {
-    target.mutable_position()->set_x(value.position.X);
-    target.mutable_position()->set_y(value.position.Y);
-    target.mutable_position()->set_z(value.position.Z);
-    target.mutable_rotation()->set_x(value.rotation.X);
-    target.mutable_rotation()->set_y(value.rotation.Y);
-    target.mutable_rotation()->set_z(value.rotation.Z);
+    WritePosition(*target.mutable_position(), value.position);
+    WriteRotation(*target.mutable_rotation(), value.rotation);
     target.set_sampled_at_us(value.sampledAtUs);
   }
 
   Result<PlayerMovementReceived> ReadMovement(const P::PlayerMoved& source)
   {
-    if (source.player_id() == 0 || source.view_revision() == 0 || !source.has_pose()) return Invalid("movement");
-    const auto& pose = source.pose();
-    const auto& p    = pose.position();
-    const auto& r    = pose.rotation();
-    if (
-      !std::isfinite(p.x()) || !std::isfinite(p.y()) || !std::isfinite(p.z()) || !std::isfinite(r.x()) || !std::isfinite(r.y()) ||
-      !std::isfinite(r.z()))
-      return Invalid("pose");
-    return PlayerMovementReceived{
-        source.player_id(),
-        source.view_revision(),
-        source.sequence(),
-        {{p.x(), p.y(), p.z()}, {r.x(), r.y(), r.z()}, pose.sampled_at_us()}
-    };
+    if (source.player_id() == Domain::InvalidId || source.view_revision() == 0 || !source.has_pose()) return Invalid("movement");
+    const auto&                pose = source.pose();
+    const Domain::MovementPose value{PositionOf(pose.position()), RotationOf(pose.rotation()), pose.sampled_at_us()};
+    if (!Finite(value.position) || !Finite(value.rotation)) return Invalid("pose");
+    return PlayerMovementReceived{source.player_id(), source.view_revision(), source.sequence(), value};
   }
 
   Result<PlayerLocationUpdated> ReadVisibility(const P::PlayerVisibilityChanged& source)
   {
-    if (source.player_id() == 0 || source.view_revision() == 0) return Invalid("visibility");
+    if (source.player_id() == Domain::InvalidId || source.view_revision() == 0) return Invalid("visibility");
     std::optional<Domain::PlayerLocation> location;
     if (source.has_location())
     {

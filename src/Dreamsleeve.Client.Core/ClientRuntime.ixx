@@ -332,7 +332,7 @@ private:
       if (!TakePending(accepted.requestId, PendingKind::Update)) return Unexpected("request_id");
       if (accepted.requestId == pendingLocation)
       {
-        pendingLocation  = 0;
+        pendingLocation  = Domain::InvalidId;
         movementReady    = latestMovement.has_value();
         nextPlayerSample = {};
       }
@@ -470,7 +470,9 @@ private:
       return std::nullopt;
     }
 
-    // Sends an admitted command; it stays pending until its reply.
+    // Sends an admitted command; it stays pending until its reply. The codec
+    // checks the command's shape: a malformed one is an invalid request, one
+    // that cannot become a packet (too large) an encoding failure.
     template <class Command>
     Result<void> SendRequest(
       std::uint64_t  generation,
@@ -479,7 +481,15 @@ private:
       Wire::Channel  channel = Wire::Channel::Control)
     {
       auto packet = codec.Encode(command);
-      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
+      if (!packet)
+      {
+        const auto code      = packet.error().code;
+        const bool malformed = code == Wire::ErrorCode::InvalidPayload || code == Wire::ErrorCode::InvalidEnvelope;
+        return RejectCommand(
+          generation,
+          command.requestId,
+          malformed ? CommandFailureCode::InvalidRequest : CommandFailureCode::EncodingFailed);
+      }
 
       auto sent = transport->Send(std::move(*packet), static_cast<ChannelId>(channel));
       if (!sent) return Fail(sent.error());
@@ -489,15 +499,15 @@ private:
     }
 
     // Chat and announcements share the Chat lane and the pending budget. The
-    // channel must exist and be of the kind that accepts the command; valid
-    // covers the command's own local limits.
+    // channel must exist and be of the kind that accepts the command; allowed
+    // covers what the session announced for it.
     template <class Command>
-    Result<void> SendToChannel(std::uint64_t generation, Command& command, Domain::ChatChannelKind kind, bool valid)
+    Result<void> SendToChannel(std::uint64_t generation, Command& command, Domain::ChatChannelKind kind, bool allowed)
     {
       if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
 
       const auto channel = model.FindChatState(command.channelId);
-      if (!channel || channel->kind != kind || !valid)
+      if (!channel || channel->kind != kind || !allowed)
         return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
       if (PendingCount(PendingKind::Chat) >= config.maxPendingChatRequests)
         return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
@@ -515,11 +525,9 @@ private:
     Result<void> Process(std::uint64_t generation, PostAnnouncement& command)
     {
       using Utils::Text::CodePoints;
-      const bool labelRequired = command.source == Domain::ClientAnnouncementSource::ThirdParty;
-      const bool valid = announcementPolicy.Allows(command.source) && !command.text.empty() &&
-                         CodePoints(command.text) <= announcementPolicy.maxTextLength && (!labelRequired || !command.signature.empty()) &&
-                         CodePoints(command.signature) <= announcementPolicy.maxSignatureLength;
-      return SendToChannel(generation, command, Domain::ChatChannelKind::System, valid);
+      const bool allowed = announcementPolicy.Allows(command.source) && CodePoints(command.text) <= announcementPolicy.maxTextLength &&
+                           CodePoints(command.signature) <= announcementPolicy.maxSignatureLength;
+      return SendToChannel(generation, command, Domain::ChatChannelKind::System, allowed);
     }
 
     Result<void> Process(std::uint64_t, RequestSnapshot&)
@@ -528,13 +536,12 @@ private:
     }
 
     // Marks travel on the control lane with their own pending set; the server
-    // judges position, words, quotas and frequency. Locally only the shape.
+    // judges position, words, quotas and frequency.
     template <class Command>
-    Result<void> SendMarkCommand(std::uint64_t generation, Command& command, bool valid)
+    Result<void> SendMarkCommand(std::uint64_t generation, Command& command)
     {
       if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
 
-      if (!valid) return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
       if (PendingCount(PendingKind::Mark) >= config.maxPendingChatRequests)
         return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
@@ -543,17 +550,17 @@ private:
 
     Result<void> Process(std::uint64_t generation, PlaceGroundNote& command)
     {
-      return SendMarkCommand(generation, command, !command.text.empty() && Utils::Text::ValidUtf8(command.text));
+      return SendMarkCommand(generation, command);
     }
 
     Result<void> Process(std::uint64_t generation, ReportDeath& command)
     {
-      return SendMarkCommand(generation, command, Utils::Text::ValidUtf8(command.label) && !Utils::Text::HasControl(command.label));
+      return SendMarkCommand(generation, command);
     }
 
     Result<void> Process(std::uint64_t generation, RemoveGroundMark& command)
     {
-      return SendMarkCommand(generation, command, command.markId != 0);
+      return SendMarkCommand(generation, command);
     }
 
     // One switch at a time; the server judges permission and frequency.
@@ -566,14 +573,9 @@ private:
     }
 
     // One change at a time; the server judges the word list and how often.
-    // Locally only the shape: one line of valid UTF-8 that is not blank.
     Result<void> Process(std::uint64_t generation, ChangeDisplayName& command)
     {
       if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
-
-      const bool blank = std::ranges::all_of(command.displayName, [](char value) { return value == ' ' || value == '\t'; });
-      if (blank || !Utils::Text::ValidUtf8(command.displayName) || Utils::Text::HasControl(command.displayName))
-        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
       if (PendingCount(PendingKind::Name) != 0) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
       return SendRequest(generation, command, {PendingKind::Name});
@@ -597,7 +599,7 @@ private:
     void ResetMovement()
     {
       latestMovement.reset();
-      pendingLocation  = 0;
+      pendingLocation  = Domain::InvalidId;
       movementReady    = false;
       movementSequence = 0;
       nextPlayerSample = {};
@@ -615,7 +617,7 @@ private:
       latestMovement = command.location;
       Wire::SetLocation transition{++contextRevision, command.location};
       auto              result = SendPlayerUpdate(generation, transition, true);
-      if (!result || pendingLocation == 0) ResetMovement();
+      if (!result || pendingLocation == Domain::InvalidId) ResetMovement();
       return result;
     }
 
@@ -712,7 +714,7 @@ private:
     std::optional<Domain::PlayerLocation>             latestMovement;
     std::uint64_t                                     contextRevision{};
     std::uint64_t                                     movementSequence{};
-    std::uint64_t                                     pendingLocation{};
+    std::uint64_t                                     pendingLocation{Domain::InvalidId};  // The location update in flight.
     bool                                              movementReady{};
     std::vector<ChatMessagesReceived>                 earlyChat;
     std::vector<ClientEvent>                          events;

@@ -34,12 +34,6 @@ export namespace Dreamsleeve::Client
     PlayerId playerId;
   };
 
-  struct PlayerProfileUpdated
-  {
-    PlayerId   playerId;
-    PlayerData profile;
-  };
-
   struct PlayerMetadataUpdated
   {
     Domain::PlayerId                         playerId;
@@ -63,39 +57,10 @@ export namespace Dreamsleeve::Client
     MovementPose  pose;
   };
 
-  struct PlayerCharacterRenamed
-  {
-    PlayerId                     playerId;
-    std::optional<CharacterName> characterName;
-  };
-
-  struct PlayerCharacterStarted
-  {
-    PlayerId      playerId;
-    CharacterName characterName;
-  };
-
-  struct PlayerGameStateCleared
-  {
-    PlayerId playerId;
-  };
-
-  struct PlayerActorValuesUpdated
-  {
-    PlayerId                   playerId;
-    ActorValueStorage          values;
-    std::vector<ActorValueKey> removedKeys;
-  };
-
   struct ChatMessagesReceived
   {
     ChatChannelId            channelId;
     std::vector<ChatMessage> messages;
-  };
-
-  struct ChatHistoryReceived
-  {
-    ChatHistoryPage page;
   };
 
   using ClientUpdate = std::variant<
@@ -103,16 +68,10 @@ export namespace Dreamsleeve::Client
     OnlinePlayersReplaced,
     PlayerUpserted,
     PlayerRemoved,
-    PlayerProfileUpdated,
     PlayerLocationUpdated,
     PlayerMovementReceived,
     PlayerMetadataUpdated,
-    PlayerCharacterRenamed,
-    PlayerCharacterStarted,
-    PlayerGameStateCleared,
-    PlayerActorValuesUpdated,
     ChatMessagesReceived,
-    ChatHistoryReceived,
     GroundMarksChanged,
     OwnGroundMarksReplaced>;
 
@@ -162,48 +121,9 @@ public:
       return {};
     }
 
-    bool RemoveChannel(ChatChannelId channelId)
-    {
-      if (chats.erase(channelId) == 0)
-      {
-        return false;
-      }
-
-      ++revision;
-      ForgetChatContent(channelId);
-      MarkChatState(channelId);
-      return true;
-    }
-
     Domain::OperationResult SetSelfPlayer(std::uint64_t updateGeneration, std::optional<PlayerId> playerId)
     {
       return Apply(updateGeneration, SelfPlayerAssigned{playerId});
-    }
-
-    Domain::Result<std::uint64_t> BeginHistory(ChatChannelId channelId, std::optional<ChatMessageId> after = std::nullopt)
-    {
-      auto found = chats.find(channelId);
-      if (found == chats.end())
-      {
-        return std::unexpected(Domain::Error{Domain::ErrorCode::UnknownChannel, "channelId"});
-      }
-
-      if (historyRound == std::numeric_limits<std::uint64_t>::max())
-      {
-        return std::unexpected(Domain::Error{Domain::ErrorCode::InvalidCursor, "round"});
-      }
-
-      // The token belongs to this model, so removing and re-registering a
-      // channel cannot reuse a canceled request's token in the same session.
-      auto result = found->second.BeginHistory(after, historyRound + 1);
-      if (result)
-      {
-        historyRound = *result;
-        ++revision;
-        MarkChatState(channelId);
-      }
-
-      return result;
     }
 
     // Capture this generation when starting an async request/decoder job, not
@@ -240,27 +160,8 @@ public:
       return result;
     }
 
-    // A disconnect to the same server can retain accepted chat messages.
-    // The session adapter must still negotiate a valid history-resume cursor.
-    // Pending rejections survive: the server can reject and then disconnect.
-    void ClearOnlineState()
-    {
-      players.Clear();
-      groundMarks.Clear();
-      selfPlayerId.reset();
-
-      for (auto& [channelId, cache] : chats)
-      {
-        cache.CancelHistory();
-      }
-
-      ++generation;
-      ++revision;
-      RequireSnapshot();
-    }
-
-    // Use for a server switch or an announced reset of server identity/history.
-    // Re-register channels before accepting messages from the new server.
+    // Every session starts from nothing: channels are registered again before
+    // messages of the new session are accepted.
     void ResetSession()
     {
       players.Clear();
@@ -293,27 +194,9 @@ public:
       return players.Snapshot();
     }
 
-    std::optional<GroundMark> FindGroundMark(GroundMarkId id) const
-    {
-      return groundMarks.Find(id);
-    }
-
-    GroundMarkStoreSnapshot SnapshotGroundMarks() const
-    {
-      return groundMarks.Snapshot();
-    }
-
     std::vector<GroundMark> OwnGroundMarks() const
     {
       return groundMarks.Own();
-    }
-
-    std::optional<ChatCacheSnapshot> FindChat(ChatChannelId channelId) const
-    {
-      const auto found = chats.find(channelId);
-      if (found == chats.end()) return std::nullopt;
-
-      return found->second.Snapshot();
     }
 
     std::optional<ChatCacheState> FindChatState(ChatChannelId channelId) const noexcept
@@ -363,14 +246,11 @@ private:
         AppendMovement(update.player.data.playerId, receivedAt);
       else if constexpr (
         std::is_same_v<Update, PlayerLocationUpdated> || std::is_same_v<Update, PlayerMovementReceived> ||
-        std::is_same_v<Update, PlayerRemoved> || std::is_same_v<Update, PlayerCharacterStarted> ||
-        std::is_same_v<Update, PlayerGameStateCleared>)
+        std::is_same_v<Update, PlayerRemoved>)
         AppendMovement(update.playerId, receivedAt);
       else if constexpr (
         std::is_same_v<Update, SelfPlayerAssigned> || std::is_same_v<Update, OnlinePlayersReplaced> ||
-        std::is_same_v<Update, PlayerProfileUpdated> || std::is_same_v<Update, PlayerMetadataUpdated> ||
-        std::is_same_v<Update, PlayerCharacterRenamed> || std::is_same_v<Update, PlayerActorValuesUpdated> ||
-        std::is_same_v<Update, ChatMessagesReceived> || std::is_same_v<Update, ChatHistoryReceived> ||
+        std::is_same_v<Update, PlayerMetadataUpdated> || std::is_same_v<Update, ChatMessagesReceived> ||
         std::is_same_v<Update, GroundMarksChanged> || std::is_same_v<Update, OwnGroundMarksReplaced>)
       {
         // No new motion, or a complete online replacement already supersedes it.
@@ -480,13 +360,6 @@ private:
         std::make_move_iterator(changes.end()));
     }
 
-    void ForgetChatContent(ChatChannelId channelId)
-    {
-      std::erase_if(pendingChanges.chatContent, [channelId](const ChatContentChange& change) {
-        return std::visit([channelId](const auto& value) { return value.channelId == channelId; }, change);
-      });
-    }
-
     template <class Update>
     void MarkUpdate(const Update& update)
     {
@@ -507,8 +380,8 @@ private:
         MarkPlayer(update.player.data.playerId);
       }
       else if constexpr (
-        !std::is_same_v<Update, ChatMessagesReceived> && !std::is_same_v<Update, ChatHistoryReceived> &&
-        !std::is_same_v<Update, GroundMarksChanged> && !std::is_same_v<Update, OwnGroundMarksReplaced>)
+        !std::is_same_v<Update, ChatMessagesReceived> && !std::is_same_v<Update, GroundMarksChanged> &&
+        !std::is_same_v<Update, OwnGroundMarksReplaced>)
       {
         MarkPlayer(update.playerId);
       }
@@ -537,11 +410,6 @@ private:
       return {};
     }
 
-    Domain::OperationResult ApplyOne(const PlayerProfileUpdated& update)
-    {
-      return players.UpdateProfile(update.playerId, update.profile);
-    }
-
     Domain::OperationResult ApplyOne(const PlayerMetadataUpdated& update)
     {
       return players.ReplaceMetadata(update.playerId, update.actorValues, update.details);
@@ -556,26 +424,6 @@ private:
     {
       players.ApplyMovement(update.playerId, update.sequence, update.pose);
       return {};
-    }
-
-    Domain::OperationResult ApplyOne(const PlayerCharacterRenamed& update)
-    {
-      return players.RenameCharacter(update.playerId, update.characterName);
-    }
-
-    Domain::OperationResult ApplyOne(const PlayerCharacterStarted& update)
-    {
-      return players.BeginCharacter(update.playerId, update.characterName);
-    }
-
-    Domain::OperationResult ApplyOne(const PlayerGameStateCleared& update)
-    {
-      return players.ClearGameState(update.playerId);
-    }
-
-    Domain::OperationResult ApplyOne(const PlayerActorValuesUpdated& update)
-    {
-      return players.ApplyActorValues(update.playerId, update.values, update.removedKeys);
     }
 
     Domain::OperationResult ApplyOne(const ChatMessagesReceived& update)
@@ -593,25 +441,6 @@ private:
       }
 
       RecordChatMerge(update.channelId, std::move(*result));
-      return {};
-    }
-
-    Domain::OperationResult ApplyOne(const ChatHistoryReceived& update)
-    {
-      auto found = chats.find(update.page.channelId);
-      if (found == chats.end())
-      {
-        return std::unexpected(Domain::Error{Domain::ErrorCode::UnknownChannel, "channelId"});
-      }
-
-      auto result = found->second.ApplyHistoryPage(update.page);
-      if (!result)
-      {
-        return std::unexpected(std::move(result.error()));
-      }
-
-      RecordChatMerge(update.page.channelId, std::move(*result));
-      MarkChatState(update.page.channelId);
       return {};
     }
 
@@ -643,7 +472,6 @@ private:
     ChangeBatch                        pendingChanges;
     std::uint64_t                      generation{1};
     std::uint64_t                      revision{};
-    std::uint64_t                      historyRound{};
   };
 
 }

@@ -25,36 +25,12 @@ export namespace Dreamsleeve::Client
     std::vector<ChatMessageId> removedMessageIds{};
   };
 
-  struct ChatHistoryState
-  {
-    std::uint64_t                round{};
-    std::optional<ChatMessageId> cursor{};
-    bool                         hasMore{};
-    // Sticky within one BeginHistory round; supplied by the server, not inferred.
-    bool hasGap{};
-  };
-
-  struct ChatHistoryPage
-  {
-    ChatChannelId channelId{};
-    // Local round token captured when issuing this page's history request.
-    std::uint64_t round{};
-    // The cursor used in the request producing this page.
-    std::optional<ChatMessageId> after{};
-    std::optional<ChatMessageId> nextCursor{};
-    std::vector<ChatMessage>     messages{};
-    bool                         hasMore{};
-    bool                         hasGap{};
-  };
-
   struct ChatCacheState
   {
-    ChatChannelId                channelId{};
-    Domain::ChatChannelKind      kind{Domain::ChatChannelKind::Global};
-    std::size_t                  capacity{};
-    std::size_t                  count{};
-    ChatHistoryState             history{};
-    std::optional<ChatMessageId> maxObservedId{};
+    ChatChannelId           channelId{};
+    Domain::ChatChannelKind kind{Domain::ChatChannelKind::Global};
+    std::size_t             capacity{};
+    std::size_t             count{};
   };
 
   struct ChatCacheSnapshot
@@ -64,9 +40,6 @@ export namespace Dreamsleeve::Client
     std::size_t             capacity{};
     // Ascending MessageId, independently of timestamps and arrival order.
     std::vector<ChatMessage> messages{};
-    ChatHistoryState         history{};
-    // Separate from the history cursor and the currently retained messages.
-    std::optional<ChatMessageId> maxObservedId{};
   };
 
   // One serial owner must perform every operation, including reads and snapshots.
@@ -97,55 +70,14 @@ public:
       return ChatCache{channelId, capacity, kind};
     }
 
-    ChatChannelId ChannelId() const noexcept
-    {
-      return channelId;
-    }
-
-    std::size_t Capacity() const noexcept
-    {
-      return capacity;
-    }
-
-    std::size_t Count() const noexcept
-    {
-      return messages.size();
-    }
-
-    ChatHistoryState HistoryState() const noexcept
-    {
-      return history;
-    }
-
-    std::optional<ChatMessageId> MaxObservedId() const noexcept
-    {
-      return maxObservedId;
-    }
-
     ChatCacheState State() const noexcept
     {
-      return ChatCacheState{
-          .channelId     = channelId,
-          .kind          = kind,
-          .capacity      = capacity,
-          .count         = messages.size(),
-          .history       = history,
-          .maxObservedId = maxObservedId
-      };
-    }
-
-    std::optional<ChatMessage> Find(ChatMessageId messageId) const
-    {
-      const auto found = messages.find(messageId);
-      if (found == messages.end()) return std::nullopt;
-
-      return found->second;
+      return ChatCacheState{.channelId = channelId, .kind = kind, .capacity = capacity, .count = messages.size()};
     }
 
     ChatCacheSnapshot Snapshot() const
     {
-      ChatCacheSnapshot
-        result{.channelId = channelId, .kind = kind, .capacity = capacity, .history = history, .maxObservedId = maxObservedId};
+      ChatCacheSnapshot result{.channelId = channelId, .kind = kind, .capacity = capacity};
 
       result.messages.reserve(messages.size());
       for (const auto& [id, message] : messages)
@@ -154,11 +86,6 @@ public:
       }
 
       return result;
-    }
-
-    Domain::Result<ChatMergeResult> Merge(const ChatMessage& message)
-    {
-      return Merge(std::span<const ChatMessage>{&message, 1});
     }
 
     // Stage the whole batch before touching live state; preserve server values.
@@ -254,16 +181,7 @@ public:
         result.addedMessages.push_back(it->second);
       }
 
-      if (!staged.empty())
-      {
-        const auto greatest = staged.rbegin()->first;
-        if (!maxObservedId || greatest > *maxObservedId)
-        {
-          maxObservedId = greatest;
-        }
-
-        messages.merge(staged);
-      }
+      if (!staged.empty()) messages.merge(staged);
 
       for (std::size_t i = 0; i < evictCount; ++i)
       {
@@ -271,124 +189,6 @@ public:
       }
 
       return result;
-    }
-
-    // Starts one ordered history walk. Live messages may arrive in between pages.
-    // Begin again after a completed round, or when intentionally changing cursor.
-    // Attach the returned round to requests and their matching replies. Do not
-    // stamp an arriving response with the currently active round: an older round
-    // may have been canceled and restarted at precisely the same cursor.
-    Domain::Result<std::uint64_t> BeginHistory(std::optional<ChatMessageId> after = std::nullopt)
-    {
-      // Never reuse a token within this cache's lifetime, including after Clear.
-      if (historyRound == std::numeric_limits<std::uint64_t>::max())
-      {
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidCursor, "history.round"}
-        };
-      }
-
-      return BeginHistory(after, historyRound + 1);
-    }
-
-    // The enclosing model can allocate tokens across all of its caches. This
-    // keeps replies distinguishable when a channel cache is removed/recreated.
-    Domain::Result<std::uint64_t> BeginHistory(std::optional<ChatMessageId> after, std::uint64_t round)
-    {
-      if (after && *after == 0)
-      {
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidCursor, "after"}
-        };
-      }
-
-      if (round == 0 || round <= historyRound)
-      {
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidCursor, "history.round"}
-        };
-      }
-
-      historyRound   = round;
-      history        = ChatHistoryState{.round = round, .cursor = after};
-      historyPending = true;
-
-      return history.round;
-    }
-
-    Domain::Result<ChatMergeResult> ApplyHistoryPage(const ChatHistoryPage& page)
-    {
-      if (page.channelId != channelId)
-      {
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::ChannelMismatch, "channelId"}
-        };
-      }
-
-      if (page.round == 0 || page.round != history.round)
-      {
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidCursor, "history.round"}
-        };
-      }
-
-      if (!historyPending || page.after != history.cursor)
-      {
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidCursor, "after"}
-        };
-      }
-
-      auto expectedCursor = page.after;
-      for (const auto& message : page.messages)
-      {
-        if (message.messageId == 0 || (page.after && message.messageId <= *page.after))
-        {
-          return std::unexpected{
-              Domain::Error{Domain::ErrorCode::InvalidCursor, "messages.messageId"}
-          };
-        }
-
-        if (!expectedCursor || message.messageId > *expectedCursor)
-        {
-          expectedCursor = message.messageId;
-        }
-      }
-
-      if (page.nextCursor != expectedCursor || (page.hasMore && page.messages.empty()))
-      {
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidCursor, "nextCursor"}
-        };
-      }
-
-      auto merged = Merge(std::span<const ChatMessage>{page.messages});
-      if (!merged) return std::unexpected{std::move(merged.error())};
-
-      // A valid old page still advances the cursor if capacity immediately
-      // evicted every message in it. A live Merge never changes these fields.
-      history.cursor  = page.nextCursor;
-      history.hasMore = page.hasMore;
-      history.hasGap  = history.hasGap || page.hasGap;
-      historyPending  = page.hasMore;
-
-      return merged;
-    }
-
-    // Stop the pending walk without discarding retained messages or high-water ID.
-    // Delayed replies fail; the next BeginHistory must use a newer round token.
-    void CancelHistory() noexcept
-    {
-      history        = {};
-      historyPending = false;
-    }
-
-    // Call when discarding this server session or intentionally resetting chat.
-    void Clear() noexcept
-    {
-      messages.clear();
-      CancelHistory();
-      maxObservedId.reset();
     }
 
 private:
@@ -403,11 +203,6 @@ private:
     Domain::ChatChannelKind              kind{};
     std::size_t                          capacity{};
     std::map<ChatMessageId, ChatMessage> messages{};
-    ChatHistoryState                     history{};
-    std::optional<ChatMessageId>         maxObservedId{};
-    bool                                 historyPending{};
-    // Deliberately retained by Clear so delayed replies cannot match a new round.
-    std::uint64_t historyRound{};
   };
 
 }

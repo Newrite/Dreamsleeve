@@ -251,15 +251,11 @@ public:
       return event;
     }
 
+    // Core refuses a channel that is not the session's global one.
     std::expected<void, std::string> SendChat(ClientExchange& exchange, const Bridge::Commands::SendChat& command)
     {
-      // Without a session the missing connection is the reason, not the channel.
-      const auto channel = command.channelId.value;
-      const auto found   = channels.find(channel);
-      if (Ready() && (found == channels.end() || found->second != Domain::ChatChannelKind::Global))
-        return std::unexpected{"Канал недоступен"};
       return Posted(Submit(exchange, PendingChat{command.requestId}, [&](std::uint64_t id) {
-        return Dreamsleeve::Client::SendChat{id, channel, command.text};
+        return Dreamsleeve::Client::SendChat{id, command.channelId.value, command.text};
       }));
     }
 
@@ -664,7 +660,7 @@ private:
       }
       event.players              = PlayerList(settings);
       event.refresh              = refresh;
-      event.selfId               = selfId ? Bridge::Id(*selfId) : "0";
+      event.selfId               = Bridge::Id(selfId.value_or(Domain::InvalidId));
       event.serverName           = serverName;
       event.settings             = settings;
       event.groundMarksSupported = true;  // Protocol v8: every Ready session carries marks.

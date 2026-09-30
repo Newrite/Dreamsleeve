@@ -14,7 +14,6 @@ namespace
   namespace P = Dreamsleeve::Protocol::Chat;
 
   const Domain::FormKey Whiterun{"skyrim.esm", 0x1A26F};
-  const Domain::FormKey Riften{"skyrim.esm", 0x16BB4};
 
   Domain::GroundMarkPlacement Placement(float x, Domain::FormKey space = Whiterun)
   {
@@ -46,11 +45,6 @@ namespace
         Placement(x),
         Domain::FromUnixMilliseconds(1700000000000)
     };
-  }
-
-  Domain::PlayerLocation Observer(float x, Domain::FormKey space = Whiterun)
-  {
-    return Domain::PlayerLocation{.location = {space, "Whiterun"}, .position = {x, 0, 0}};
   }
 
   std::vector<Domain::GroundMarkId> Ids(const std::vector<Domain::GroundMark>& marks)
@@ -109,25 +103,16 @@ namespace
 
 TEST_SUITE_BEGIN("Client.GroundMarks");
 
-TEST_CASE("Mark visibility needs the observer's space and radius, boundary included")
-{
-  CHECK(Domain::Spatial::IsMarkWithinRadius(100.0f, Observer(0), Placement(100)) == Domain::Result<bool>{true});
-  CHECK(Domain::Spatial::IsMarkWithinRadius(100.0f, Observer(0), Placement(100.001f)) == Domain::Result<bool>{false});
-  CHECK(Domain::Spatial::IsMarkWithinRadius(100.0f, Observer(0, Riften), Placement(0)) == Domain::Result<bool>{false});
-  CHECK_FALSE(Domain::Spatial::IsMarkWithinRadius(-1.0f, Observer(0), Placement(0)));
-}
-
 TEST_CASE("The visible store applies baselines and deltas in order and refuses stale revisions")
 {
   GroundMarkStore store;
-  CHECK(store.ViewRevision() == 0);
+  CHECK(store.Snapshot().viewRevision == 0);
   auto baseline = store.Apply(GroundMarksChanged{1, {Mark(1), Mark(2)}, {}, true});
   REQUIRE(baseline);
   REQUIRE(baseline->size() == 2);
   CHECK(std::holds_alternative<GroundMarksCleared>((*baseline)[0]));
   CHECK(Ids(std::get<GroundMarksAdded>((*baseline)[1]).marks) == std::vector<Domain::GroundMarkId>{1, 2});
-  CHECK(store.Count() == 2);
-  CHECK(store.Find(2));
+  CHECK(Ids(store.Snapshot().marks) == std::vector<Domain::GroundMarkId>{1, 2});
 
   auto delta = store.Apply(GroundMarksChanged{2, {Mark(3)}, {1, 99}, false});
   REQUIRE(delta);
@@ -141,16 +126,16 @@ TEST_CASE("The visible store applies baselines and deltas in order and refuses s
   auto stale = store.Apply(GroundMarksChanged{2, {Mark(4)}, {}, false});
   REQUIRE_FALSE(stale);
   CHECK(stale.error().code == Domain::ErrorCode::InvalidCursor);
-  CHECK(store.Count() == 2);
+  CHECK(store.Snapshot().marks.size() == 2);
   CHECK_FALSE(store.Apply(GroundMarksChanged{0, {}, {}, true}));
 
   auto cleared = store.Apply(GroundMarksChanged{5, {}, {}, true});
   REQUIRE(cleared);
   REQUIRE(cleared->size() == 1);
   CHECK(std::holds_alternative<GroundMarksCleared>(cleared->front()));
-  CHECK(store.Count() == 0);
+  CHECK(store.Snapshot().marks.empty());
   store.Clear();
-  CHECK(store.ViewRevision() == 0);
+  CHECK(store.Snapshot().viewRevision == 0);
 }
 
 TEST_CASE("The model forwards ordered mark transitions, snapshots include marks and a session reset drops them")
@@ -185,7 +170,6 @@ TEST_CASE("The model forwards ordered mark transitions, snapshots include marks 
   const auto snapshot = model.Snapshot();
   CHECK(Ids(snapshot.groundMarks.marks) == std::vector<Domain::GroundMarkId>{5});
   CHECK(snapshot.groundMarks.viewRevision == 4);
-  CHECK(model.FindGroundMark(5));
 
   auto stale = model.Apply(model.Generation(), GroundMarksChanged{4, {Mark(6)}, {}, false});
   REQUIRE_FALSE(stale);
@@ -253,7 +237,6 @@ TEST_CASE("Mark requests encode on the control lane and refuse an empty note, a 
   CHECK(packet.place_ground_note().game_date().day_of_week() == 2);
   CHECK(packet.place_ground_note().game_date().hour() == 14);
   CHECK(packet.place_ground_note().game_date().minute() == 5);
-  CHECK(W::ProtocolCodec::RequestChannel(PlaceGroundNote{5, "x", Placement(0)}) == W::Channel::Control);
 
   auto death = codec.Encode(ReportDeath{6, "", Placement(0), Date});
   REQUIRE(death);

@@ -10,6 +10,10 @@ export namespace Domain
   using ChatMessageId = std::uint64_t;
   using ChatChannelId = std::uint64_t;
 
+  // No player, message, channel, mark, form or request has ID 0: it means
+  // "none" in memory, and protobuf reads an absent ID as 0 as well.
+  constexpr std::uint64_t InvalidId = 0;
+
   using LocalFormId = std::uint32_t;
 
   using Username        = std::string;

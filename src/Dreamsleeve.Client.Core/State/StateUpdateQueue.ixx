@@ -27,13 +27,9 @@ public:
 
     using Ptr = std::unique_ptr<StateUpdateQueue>;
 
-    static Domain::Result<Ptr> TryCreate(std::size_t capacity)
+    // At least one entry: ClientExchange::InvalidCapacity checked it.
+    static Ptr Create(std::size_t capacity)
     {
-      if (capacity == 0)
-        return std::unexpected{
-            Domain::Error{Domain::ErrorCode::InvalidConfig, "capacity"}
-        };
-
       return Ptr{new StateUpdateQueue{capacity}};
     }
 
@@ -64,11 +60,6 @@ public:
 
       pending.push_back(std::move(update));
       return StatePublishResult::Queued;
-    }
-
-    bool RequiresSnapshot() const
-    {
-      return requiresSnapshot;
     }
 
     void TakeAll(StateUpdateBatch& output)

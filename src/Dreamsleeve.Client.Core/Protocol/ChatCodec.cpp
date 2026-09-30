@@ -2,6 +2,7 @@ module;
 #include "protocol.pb.h"
 
 module Dreamsleeve.Client.ProtocolCodec;
+import Dreamsleeve.Client.Utils;
 #include "CodecParts.h"
 
 // Unknown wire values are handled; every newly generated named case must be listed.
@@ -12,8 +13,8 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   Result<Domain::ChatMessage> Message(const P::ChatMessage& message)
   {
-    if (message.message_id() == 0 || message.channel_id() == 0) return Invalid("message");
-    if (message.sent_at_unix_ms() < -62135596800000LL || message.sent_at_unix_ms() > 253402300799999LL) return Invalid("sent_at_unix_ms");
+    if (message.message_id() == Domain::InvalidId || message.channel_id() == Domain::InvalidId) return Invalid("message");
+    if (!ValidUnixMs(message.sent_at_unix_ms())) return Invalid("sent_at_unix_ms");
 
     // Only a server announcement has no author; the system is not a player.
     const bool serverAnnouncement = message.has_announcement() && message.announcement().source() == P::ANNOUNCEMENT_SOURCE_SERVER;
@@ -58,14 +59,14 @@ namespace Dreamsleeve::Client::Wire::Detail
   {
     std::vector<Domain::TextSpan> flagged;
     flagged.reserve(static_cast<std::size_t>(spans.size()));
+    using Dreamsleeve::Utils::Text::CodePointBoundary;
     std::uint64_t floor{};
-    const auto    boundary = [&](std::uint64_t at) {
-      return at == text.size() || (static_cast<unsigned char>(text[at]) & 0xC0) != 0x80;
-    };
     for (const auto& span : spans)
     {
       const auto end = static_cast<std::uint64_t>(span.start()) + span.length();
-      if (span.length() == 0 || span.start() < floor || end > text.size() || !boundary(span.start()) || !boundary(end))
+      if (
+        span.length() == 0 || span.start() < floor || end > text.size() || !CodePointBoundary(text, span.start()) ||
+        !CodePointBoundary(text, end))
         return Invalid("flagged");
       flagged.push_back({span.start(), span.length()});
       floor = end;
