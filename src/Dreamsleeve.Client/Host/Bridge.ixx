@@ -9,6 +9,7 @@ import Dreamsleeve.Client.Exchange;
 import Dreamsleeve.Client.Utils;
 export import Dreamsleeve.Host.UiSettings;
 export import Dreamsleeve.Host.Names;
+export import Dreamsleeve.Host.GameDates;
 
 // In-process JSON contract with the web UI (src/Dreamsleeve.Client.UI/src/bridge/types.ts).
 // Host -> UI payloads are handed to InteropCall as a string argument and parsed
@@ -109,6 +110,8 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<std::string> character;
     std::string                location;
     double                     x{}, y{}, z{};
+    // The in-game date in the chosen markDateStyle; absent on marks stored before dates were kept.
+    std::optional<std::string> gameDate;
   };
 
   struct SnapshotEvent
@@ -820,6 +823,7 @@ export namespace Dreamsleeve::Host::Bridge
     result.y        = mark.placement.position.Y;
     result.z        = mark.placement.position.Z;
     if (!settings.streamerMode) result.character = mark.characterName;
+    if (mark.gameDate) result.gameDate = FormatGameDate(*mark.gameDate, settings.markDateStyle);
     return result;
   }
 

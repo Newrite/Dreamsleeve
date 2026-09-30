@@ -357,10 +357,10 @@ module ServerRuntime =
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.Update(request.RequestId, update))
                 | ClientCommand.PostAnnouncement announcement, SessionTable.Ready ->
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.PostAnnouncement(request.RequestId, announcement))
-                | ClientCommand.PlaceGroundNote(text, placement), SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.PlaceGroundNote(request.RequestId, text, placement))
-                | ClientCommand.ReportDeath(label, placement), SessionTable.Ready ->
-                    forward options state context entry lane request.RequestId (PlayerSessionMessage.ReportDeath(request.RequestId, label, placement))
+                | ClientCommand.PlaceGroundNote(text, placement, gameDate), SessionTable.Ready ->
+                    forward options state context entry lane request.RequestId (PlayerSessionMessage.PlaceGroundNote(request.RequestId, text, placement, gameDate))
+                | ClientCommand.ReportDeath(label, placement, gameDate), SessionTable.Ready ->
+                    forward options state context entry lane request.RequestId (PlayerSessionMessage.ReportDeath(request.RequestId, label, placement, gameDate))
                 | ClientCommand.RemoveGroundMark id, SessionTable.Ready ->
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.RemoveGroundMark(request.RequestId, id))
                 | ClientCommand.SetIdentityVisibility hiding, SessionTable.Ready ->

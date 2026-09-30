@@ -198,14 +198,15 @@ public:
       ClientExchange&                    exchange,
       std::string                        uiRequestId,
       std::string                        text,
-      const Domain::GroundMarkPlacement& placement)
+      const Domain::GroundMarkPlacement& placement,
+      const Domain::GameDate&            gameDate)
     {
       if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
       const auto requestId = exchange.NextRequestId();
       if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
       const auto posted = exchange.Post({
           generation,
-          Dreamsleeve::Client::PlaceGroundNote{*requestId, std::move(text), placement}
+          Dreamsleeve::Client::PlaceGroundNote{*requestId, std::move(text), placement, gameDate}
       });
       if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
       pendingMarks.emplace(*requestId, PendingMark{std::move(uiRequestId), MarkRequest::Note, generation});
@@ -213,14 +214,18 @@ public:
     }
 
     // The place the character died, reported by the game once per death.
-    std::expected<void, std::string> ReportDeath(ClientExchange& exchange, std::string label, const Domain::GroundMarkPlacement& placement)
+    std::expected<void, std::string> ReportDeath(
+      ClientExchange&                    exchange,
+      std::string                        label,
+      const Domain::GroundMarkPlacement& placement,
+      const Domain::GameDate&            gameDate)
     {
       if (!Ready()) return std::unexpected{"session not ready"};
       const auto requestId = exchange.NextRequestId();
       if (!requestId) return std::unexpected{"request ids exhausted"};
       const auto posted = exchange.Post({
           generation,
-          Dreamsleeve::Client::ReportDeath{*requestId, std::move(label), placement}
+          Dreamsleeve::Client::ReportDeath{*requestId, std::move(label), placement, gameDate}
       });
       if (posted != CommandPostResult::Queued) return std::unexpected{"command queue full"};
       pendingMarks.emplace(*requestId, PendingMark{{}, MarkRequest::Death, generation});

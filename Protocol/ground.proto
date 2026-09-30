@@ -22,6 +22,19 @@ message GroundMarkPlacement {
   float heading = 3;
 }
 
+// The in-game calendar at placement, as the author's game showed it. Reported
+// by the client and only checked for ranges: it is flavour, not a timestamp.
+// The vanilla calendar has no era variable; its date line prints the Fourth Era.
+message GameDate {
+  uint32 era = 1;         // 1..99; 4 is the Fourth Era.
+  uint32 year = 2;        // 1..99999 within the era.
+  uint32 month = 3;       // 1..12; 1 is Morning Star.
+  uint32 day = 4;         // 1..the length of the month (28..31, no leap years).
+  uint32 day_of_week = 5; // 0..6; 0 is Sundas.
+  uint32 hour = 6;        // 0..23.
+  uint32 minute = 7;      // 0..59.
+}
+
 message GroundMark {
   uint64 mark_id = 1; // Server-issued, monotonic, never zero.
   // Profile of the author at the time of sending, possibly offline now;
@@ -35,12 +48,15 @@ message GroundMark {
   // Published character name of the author at placement, like ChatMessage.character_name;
   // absent outside a character or when the name was withheld.
   optional string character_name = 8;
+  // The author's in-game date at placement; absent on marks stored before version 12.
+  GameDate game_date = 9;
 }
 
 // Control lane, settled with GroundMarkPlaced or RequestRejected.
 message PlaceGroundNote {
   string text = 1;
   GroundMarkPlacement placement = 2;
+  GameDate game_date = 3; // Required.
 }
 
 // Control lane. The label is the killer's name or one word of cause as the
@@ -48,6 +64,7 @@ message PlaceGroundNote {
 message ReportDeath {
   string label = 1;
   GroundMarkPlacement placement = 2;
+  GameDate game_date = 3; // Required: the game date of the death.
 }
 
 // Control lane; only the author's own mark. Settled with GroundMarkRemoved.

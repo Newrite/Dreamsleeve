@@ -30,6 +30,10 @@ let private located space x =
 let private note text = GroundMarkBody.Note (GroundNoteText.create 200 text |> ok)
 let private death label = GroundMarkBody.Death (DeathMarkText.create 64 label |> ok)
 let private markId value = GroundMarkId.create value |> ok
+// Tirdas, 17 Last Seed 4E 201, 14:05.
+let private gameDate = GameDate.create 4 201 8 17 2 14 5 |> ok
+let private wireDate () =
+    Dreamsleeve.Protocol.Chat.GameDate(Era = 4u, Year = 201u, Month = 8u, Day = 17u, DayOfWeek = 2u, Hour = 14u, Minute = 5u)
 
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test output closed."
@@ -95,7 +99,7 @@ let private observe fixture (observer: Observer) generation location =
 let private submit fixture (observer: Observer) requestId body place =
     post fixture.Marks (GroundMarkCommand.Place {
         ConnectionId = observer.Subscription.ConnectionId; RequestId = requestId; Body = body; Placement = place
-        CharacterName = ValueSome (CharacterName.create 128 "Nerevar" |> ok); Pseudonym = ValueNone
+        GameDate = gameDate; CharacterName = ValueSome (CharacterName.create 128 "Nerevar" |> ok); Pseudonym = ValueNone
         Fingerprint = Moderation.normalize (GroundMarkBody.text body); Flagged = [] })
 
 let private placed requestId = function
@@ -199,6 +203,7 @@ let private agentTests = testList "GroundMarksAgent" [
             equal "praise the sun" record.Mark.Text
             equal (PublicIdentity.Profile (profile 1UL)) record.Author
             equal (ValueSome "Nerevar") (record.Mark.CharacterName |> ValueOption.map CharacterName.value)
+            equal (ValueSome gameDate) record.Mark.GameDate
             equal ValueNone evicted
             let! own = next fixture.Alice
             let! seen = next fixture.Bob
@@ -436,23 +441,44 @@ let private record id x : GroundMarkRecord =
 
 let private codecTests = testList "GroundMarkCodec" [
     testCase "placement commands decode through the domain factories with their limits" <| fun _ ->
-        let decoded = client 3UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = "  praise\n", Placement = wirePlacement 1.0f)) |> ok
+        let decoded = client 3UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = "  praise\n", Placement = wirePlacement 1.0f, GameDate = wireDate ())) |> ok
         match decoded.Command with
-        | ClientCommand.PlaceGroundNote(text, place) ->
+        | ClientCommand.PlaceGroundNote(text, place, date) ->
             equal "  praise\n" (GroundNoteText.value text)
             equal "skyrim.esm" (PluginName.value place.LocationId.PluginName)
             equal 1.5f (Radian.value place.Heading)
+            equal gameDate date
         | other -> failwithf "Expected note: %A" other
         equal DeliveryLane.Control (ProtocolCodec.requestLane decoded)
-        let death = client 4UL (fun packet -> packet.ReportDeath <- Dreamsleeve.Protocol.Chat.ReportDeath(Label = "", Placement = wirePlacement 1.0f)) |> ok
+        let death = client 4UL (fun packet -> packet.ReportDeath <- Dreamsleeve.Protocol.Chat.ReportDeath(Label = "", Placement = wirePlacement 1.0f, GameDate = wireDate ())) |> ok
         match death.Command with
-        | ClientCommand.ReportDeath(label, _) -> equal "" (DeathMarkText.value label)
+        | ClientCommand.ReportDeath(label, _, date) ->
+            equal "" (DeathMarkText.value label)
+            equal gameDate date
         | other -> failwithf "Expected death: %A" other
+        // The game date is required and checked for calendar ranges only.
+        Expect.isError (client 11UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = "x", Placement = wirePlacement 1.0f))) "missing game date"
+        Expect.isError (client 12UL (fun packet -> packet.ReportDeath <- Dreamsleeve.Protocol.Chat.ReportDeath(Label = "", Placement = wirePlacement 1.0f))) "missing death date"
+        let dated (change: Dreamsleeve.Protocol.Chat.GameDate -> unit) =
+            let date = wireDate ()
+            change date
+            match client 13UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = "x", Placement = wirePlacement 1.0f, GameDate = date)) with
+            | Error error -> error.Failure
+            | Ok _ -> failtest "Expected a refused date"
+        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "era")) (dated (fun date -> date.Era <- 0u))
+        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "year")) (dated (fun date -> date.Year <- 4000000000u))
+        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "month")) (dated (fun date -> date.Month <- 13u))
+        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "day")) (dated (fun date -> date.Month <- 2u; date.Day <- 29u))
+        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "day_of_week")) (dated (fun date -> date.DayOfWeek <- 7u))
+        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "hour")) (dated (fun date -> date.Hour <- 24u))
+        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "minute")) (dated (fun date -> date.Minute <- 60u))
+        Expect.isOk (GameDate.create 1 1 12 31 6 23 59) "the last minute of a year"
+        Expect.isOk (GameDate.create 99 99999 2 28 0 0 0) "the widest era and year"
         let removal = client 5UL (fun packet -> packet.RemoveGroundMark <- Dreamsleeve.Protocol.Chat.RemoveGroundMark(MarkId = 9UL)) |> ok
         equal (ClientCommand.RemoveGroundMark(markId 9UL)) removal.Command
         let failure result = match result with Error (error: ProtocolCodecError) -> error.Failure | Ok _ -> failtest "Expected failure"
         equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("GroundNoteText", TextError.TooLong 200)))
-            (failure (client 6UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = String('a', 201), Placement = wirePlacement 1.0f))))
+            (failure (client 6UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = String('a', 201), Placement = wirePlacement 1.0f, GameDate = wireDate ()))))
         Expect.isError (client 7UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = "x", Placement = wirePlacement Single.NaN))) "non-finite position"
         Expect.isError (client 8UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = "x"))) "missing placement"
         Expect.isError (client 9UL (fun packet -> packet.ReportDeath <- Dreamsleeve.Protocol.Chat.ReportDeath(Label = "two\nlines", Placement = wirePlacement 1.0f))) "multiline label"
@@ -473,6 +499,11 @@ let private codecTests = testList "GroundMarkCodec" [
         equal 1700000000000L first.CreatedAtUnixMs
         equal "skyrim.esm" first.Placement.LocationId.PluginName
         equal 1 first.Flagged.Count
+        // A mark stored before dates were kept goes out without one.
+        Expect.isNull first.GameDate "no game date"
+        let datedRecord = { record 6UL 0.0f with Mark = (record 6UL 0.0f).Mark |> GroundMark.withGameDate (ValueSome gameDate) }
+        let datedPacket = ProtocolCodec.encodeServer codec (ServerResponse.OwnGroundMarks [ datedRecord ]) |> ok |> parse
+        equal (wireDate ()) datedPacket.OwnGroundMarks.Marks[0].GameDate
         equal DeliveryLane.Control (ProtocolCodec.responseLane (ServerResponse.GroundMarksChanged view))
         let placed = ProtocolCodec.encodeServer codec (ServerResponse.GroundMarkPlaced(11UL, record 4UL 0.0f, ValueSome (markId 1UL))) |> ok |> parse
         equal 11UL placed.RequestId
@@ -587,27 +618,28 @@ let private storeTests = testList "SQLite ground marks" [
     testCase "a fresh database and a version two database both reach the current schema" (fun () ->
         use fresh = new Database()
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 6L (fresh.Scalar "PRAGMA user_version")
+        equal 7L (fresh.Scalar "PRAGMA user_version")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks")
         // Back to version two: the mark table, the admin tables and their migration markers are gone.
         fresh.Execute "DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_mark%'; PRAGMA user_version = 2"
         Expect.throws (fun () -> fresh.Scalar "SELECT count(*) FROM ground_marks" |> ignore) "table is gone"
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 6L (fresh.Scalar "PRAGMA user_version")
-        equal 6L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
+        equal 7L (fresh.Scalar "PRAGMA user_version")
+        equal 7L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks"))
 
-    testCase "a version three database keeps its marks and gains the pseudonym column" (fun () ->
+    testCase "a version three database keeps its marks and gains the pseudonym and game date columns" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = register database "alice"
         let mark = GroundMark.create (markId 1UL) alice.PlayerId (note "before") (placement whiterun 1.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
         SqliteGroundMarkStore.insert database.Config mark token |> ok
-        database.Execute "DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; PRAGMA user_version = 3"
+        database.Execute "DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; ALTER TABLE ground_marks DROP COLUMN game_era; ALTER TABLE ground_marks DROP COLUMN game_year; ALTER TABLE ground_marks DROP COLUMN game_month; ALTER TABLE ground_marks DROP COLUMN game_day; ALTER TABLE ground_marks DROP COLUMN game_day_of_week; ALTER TABLE ground_marks DROP COLUMN game_hour; ALTER TABLE ground_marks DROP COLUMN game_minute; DELETE FROM __migrondi_migrations WHERE name LIKE '%game_date%'; PRAGMA user_version = 3"
         SqliteAccountStore.initialize database.Config |> ok
-        equal 6L (database.Scalar "PRAGMA user_version")
+        equal 7L (database.Scalar "PRAGMA user_version")
         let loaded = SqliteGroundMarkStore.loadAll database.Config token |> ok
         equal [ValueNone] (loaded.Marks |> List.map (fun entry -> entry.Mark.Pseudonym))
+        equal [ValueNone] (loaded.Marks |> List.map (fun entry -> entry.Mark.GameDate))
         equal "Display alice" (DisplayName.value loaded.Marks.Head.Author.DisplayName))
 
     testCase "a mark placed under a pseudonym keeps it across a restart" (fun () ->
@@ -633,6 +665,7 @@ let private storeTests = testList "SQLite ground marks" [
         let noteMark =
             GroundMark.create (markId 1UL) alice.PlayerId (note "praise\nthe sun") (placement whiterun 10.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
             |> GroundMark.withCharacterName (ValueSome (CharacterName.create 128 " Ne\u0301revar " |> ok))
+            |> GroundMark.withGameDate (ValueSome gameDate)
         let deathMark = GroundMark.create (markId 2UL) bob.PlayerId (death "") (placement riften -5.5f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000001000L)
         SqliteGroundMarkStore.insert database.Config noteMark token |> ok
         SqliteGroundMarkStore.insert database.Config deathMark token |> ok
@@ -644,6 +677,11 @@ let private storeTests = testList "SQLite ground marks" [
         equal (GroundMarkKind.Death) loaded.Marks[1].Mark.Kind
         equal (ValueSome " Ne\u0301revar ") (loaded.Marks[0].Mark.CharacterName |> ValueOption.map CharacterName.value)
         equal ValueNone loaded.Marks[1].Mark.CharacterName
+        equal [ ValueSome gameDate; ValueNone ] (loaded.Marks |> List.map _.Mark.GameDate)
+        // A partial or out-of-range stored date is damage, not a mark without a date.
+        database.Execute "UPDATE ground_marks SET game_minute = NULL WHERE id = 1"
+        Expect.isError (SqliteGroundMarkStore.loadAll database.Config token) "partial game date"
+        database.Execute "UPDATE ground_marks SET game_minute = 5 WHERE id = 1"
         // A deleted top ID is not reused; deleting an account removes its marks.
         SqliteGroundMarkStore.delete database.Config [ markId 2UL ] token |> ok
         equal 3UL (SqliteGroundMarkStore.loadAll database.Config token |> ok).NextId

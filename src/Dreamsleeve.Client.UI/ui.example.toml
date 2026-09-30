@@ -72,6 +72,10 @@ deathBackground = 0.65
 deathBorder = true
 combatHideGroundMarks = false # statics and labels
 combatHideGroundText = false # labels only
+markDateStyle = "tamriel" # tamriel (Тирдас, 17 Последнего зерна) | earth (Вторник, 17 августа)
+deathDateHeader = true # in-game date on top of a death mark's bubble
+noteDateHeader = false # the same above notes
+markDateColor = "#A9A69B"
 
 # Written by the plugin, never sent to the server. IDs are scoped by the
 # server address "ip:port": an account ID is unique only within its server.

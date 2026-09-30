@@ -103,6 +103,27 @@ namespace GroundMarks
     };
   }
 
+  // The game calendar now, as a mark's date. The vanilla calendar has no era
+  // variable (its date line prints "4E"), so the era is the Fourth. Values a
+  // mod pushed out of range are clamped rather than refused: the date is flavour.
+  export std::optional<Domain::GameDate> CurrentGameDate()
+  {
+    auto* calendar = RE::Calendar::GetSingleton();
+    if (!calendar) return std::nullopt;
+    const auto month = std::min<std::uint32_t>(calendar->GetMonth(), 11);
+    const auto hours = std::clamp(calendar->GetHour(), 0.0f, 24.0f);
+    const auto hour  = std::min(static_cast<std::uint32_t>(hours), 23u);
+    return Domain::GameDate{
+        .era       = 4,
+        .year      = std::clamp<std::uint32_t>(calendar->GetYear(), 1, 99999),
+        .month     = month + 1,
+        .day       = std::clamp<std::uint32_t>(static_cast<std::uint32_t>(std::max(calendar->GetDay(), 1.0f)), 1, RE::Calendar::DAYS_IN_MONTH[month]),
+        .dayOfWeek = calendar->GetDayOfWeek() % 7,
+        .hour      = hour,
+        .minute    = std::min(static_cast<std::uint32_t>((hours - static_cast<float>(hour)) * 60.0f), 59u)
+    };
+  }
+
   // One word for a death without a killer: drowning while swimming, a fall
   // otherwise. The author's client localizes the label; the server only checks
   // its length and dictionary.
@@ -129,7 +150,8 @@ namespace GroundMarks
     auto* player = RE::PlayerCharacter::GetSingleton();
     if (!runtime.app || runtime.context != Runtime::GameContext::Playing || !player) return;
     const auto placement = CurrentPlacement();
-    if (!placement) return;
+    const auto gameDate  = CurrentGameDate();
+    if (!placement || !gameDate) return;
     state.deathReported = true;
 
     using Dreamsleeve::Utils::Text::CodePoints;
@@ -141,7 +163,7 @@ namespace GroundMarks
         label = std::string{KillerPrefix} + std::string{Prefix(*name, DeathLabelLimit - CodePoints(KillerPrefix))};
     if (label.empty()) label = CauseLabel(player);
 
-    if (auto sent = runtime.session.ReportDeath(runtime.app->Exchange(), label, *placement))
+    if (auto sent = runtime.session.ReportDeath(runtime.app->Exchange(), label, *placement, *gameDate))
       logger::info("Death reported (dead={}) with label of {} bytes", dead, label.size());
     else
       logger::warn("Death not reported: {}", sent.error());
@@ -166,7 +188,8 @@ namespace GroundMarks
         static_cast<float>(ui.groundMaxWidth),
         static_cast<float>(death ? ui.deathBackground : ui.groundBackground),
         death ? ui.deathBorder : ui.groundBorder,
-        Host::ParseColor(death ? ui.deathTextColor : ui.groundTextColor).value_or(Nameplates::DefaultTextColor)
+        Host::ParseColor(death ? ui.deathTextColor : ui.groundTextColor).value_or(Nameplates::DefaultTextColor),
+        Host::ParseColor(ui.markDateColor).value_or(Nameplates::DefaultHeaderColor)
     };
   }
 
@@ -218,9 +241,14 @@ namespace GroundMarks
       label.name = Host::Names::PlateName(
         runtime.session.PlayerNames().NameFor(mark.author.playerId, mark.author, mark.characterName, ui),
         mark.author);
-    // The same filter of server-flagged ranges as chat lines and bubbles.
+    // The same filter of server-flagged ranges as chat lines and bubbles. The
+    // date header comes and goes with the text.
     if (visual.textShown)
+    {
       if (auto text = Host::Bridge::FilterText(mark.text, mark.flagged, ui, own)) label.bubble = std::move(*text);
+      if (mark.gameDate && (death ? ui.deathDateHeader : ui.noteDateHeader))
+        label.header = Host::FormatGameDate(*mark.gameDate, ui.markDateStyle);
+    }
     const RE::NiPoint3 anchor{mark.placement.position.X, mark.placement.position.Y, visual.z + LabelHeight};
     Nameplates::Add(names, std::move(label), anchor, ui.fireflyNameOcclusion);
   }

@@ -170,6 +170,12 @@ export interface Settings {
   deathBorder: boolean;
   combatHideGroundMarks: boolean;
   combatHideGroundText: boolean;
+  // The in-game date of a mark: a header line in its bubble and a line in the
+  // marks lists. Weekday and month names of Tamriel or of our calendar.
+  markDateStyle: MarkDateStyle;
+  deathDateHeader: boolean;
+  noteDateHeader: boolean;
+  markDateColor: string;
   // Where others see a server pseudonym instead of this player's names.
   // Changed by setIdentityVisibility only; the host saves it once the server agrees.
   hideIdentity: HideIdentity;
@@ -177,6 +183,7 @@ export interface Settings {
 // off: the names are shown; everywhere: online, fireflies, chat and ground
 // marks; exceptGroundMarks: ground marks keep the real profile.
 export type HideIdentity = "off" | "everywhere" | "exceptGroundMarks";
+export type MarkDateStyle = "tamriel" | "earth";
 // "Hide my name from other players" as the host reports it: mode is the
 // choice (the requested one while pending), pending waits for the server,
 // pseudonym is what the others see now, error the last refusal.
@@ -209,6 +216,8 @@ export interface GroundMark {
   x: number;
   y: number;
   z: number;
+  // Formatted by the host in the chosen markDateStyle; absent on old marks.
+  gameDate?: string;
 }
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }

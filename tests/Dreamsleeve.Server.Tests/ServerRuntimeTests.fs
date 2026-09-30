@@ -555,7 +555,8 @@ let private placeNote requestId text x =
         packet.PlaceGroundNote <-
             PlaceGroundNote(Text = text,
                             Placement = GroundMarkPlacement(LocationId = FormKey(PluginName = "Skyrim.esm", LocalFormId = 60u),
-                                                            Position = Position(X = x, Y = 2.0f, Z = 3.0f))))
+                                                            Position = Position(X = x, Y = 2.0f, Z = 3.0f)),
+                            GameDate = GameDate(Era = 4u, Year = 201u, Month = 8u, Day = 17u, DayOfWeek = 2u, Hour = 14u, Minute = 5u)))
 
 let private switchIdentity requestId (hiding: HiddenIdentity) =
     packet requestId (fun packet -> packet.SetIdentityVisibility <- SetIdentityVisibility(Hidden = hiding))

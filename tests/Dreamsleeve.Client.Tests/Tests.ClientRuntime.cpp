@@ -1087,7 +1087,7 @@ TEST_CASE("Ground mark commands settle by request ID on the control lane and vis
   const auto                        generation = Ready(fixture);
   const Domain::GroundMarkPlacement placement{{"skyrim.esm", 0x1A26F}, {1, 2, 3}, 0.5f};
   const auto                        noteId = Value(fixture.exchange->NextRequestId());
-  REQUIRE(fixture.exchange->Post({generation, PlaceGroundNote{noteId, "praise", placement}}) == CommandPostResult::Queued);
+  REQUIRE(fixture.exchange->Post({generation, PlaceGroundNote{noteId, "praise", placement, {4, 201, 8, 17, 2, 14, 5}}}) == CommandPostResult::Queued);
   fixture.Until([&] { return fixture.requests.size() == 2; });
   CHECK(fixture.requests.back().has_place_ground_note());
   CHECK(fixture.requests.back().request_id() == noteId);
@@ -1160,7 +1160,7 @@ TEST_CASE("Ground mark commands settle by request ID on the control lane and vis
 
   // A refusal on the control lane settles a death report without a fault.
   const auto deathId = Value(fixture.exchange->NextRequestId());
-  REQUIRE(fixture.exchange->Post({generation, ReportDeath{deathId, "", placement}}) == CommandPostResult::Queued);
+  REQUIRE(fixture.exchange->Post({generation, ReportDeath{deathId, "", placement, {4, 201, 8, 17, 2, 14, 5}}}) == CommandPostResult::Queued);
   fixture.Until([&] { return fixture.requests.size() == 4; });
   CHECK(fixture.requests.back().has_report_death());
   auto rejection = Rejection(deathId);

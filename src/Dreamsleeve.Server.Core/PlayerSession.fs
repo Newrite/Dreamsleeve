@@ -21,8 +21,8 @@ type PlayerSessionMessage =
     | GroundMarksDetached of Guid
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
     | PostAnnouncement of requestId: uint64 * AnnouncementRequest
-    | PlaceGroundNote of requestId: uint64 * GroundNoteText * GroundMarkPlacement
-    | ReportDeath of requestId: uint64 * DeathMarkText * GroundMarkPlacement
+    | PlaceGroundNote of requestId: uint64 * GroundNoteText * GroundMarkPlacement * GameDate
+    | ReportDeath of requestId: uint64 * DeathMarkText * GroundMarkPlacement * GameDate
     | RemoveGroundMark of requestId: uint64 * GroundMarkId
     | Update of requestId: uint64 * PlayerUpdate
     | SetIdentityVisibility of requestId: uint64 * HiddenIdentity
@@ -407,7 +407,7 @@ module PlayerSession =
 
     /// Position rule (soft), word list and flags here; quotas, frequency,
     /// density and the ID belong to the mark owner, which also answers.
-    let private placeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (body: GroundMarkBody) placement =
+    let private placeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (body: GroundMarkBody) placement gameDate =
         let refuse code message field =
             send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = field }))
         match state.Phase with
@@ -427,6 +427,7 @@ module PlayerSession =
                     RequestId = requestId
                     Body = body
                     Placement = placement
+                    GameDate = gameDate
                     CharacterName = markCharacterName state player
                     Pseudonym = markPseudonym state
                     Fingerprint = Moderation.normalize text
@@ -765,10 +766,10 @@ module PlayerSession =
             sendChat options request state context requestId channelId text
         | PlayerSessionMessage.PostAnnouncement(requestId, announcement) ->
             postAnnouncement options request state context requestId announcement
-        | PlayerSessionMessage.PlaceGroundNote(requestId, text, placement) ->
-            placeMark options request state context requestId (GroundMarkBody.Note text) placement
-        | PlayerSessionMessage.ReportDeath(requestId, label, placement) ->
-            placeMark options request state context requestId (GroundMarkBody.Death label) placement
+        | PlayerSessionMessage.PlaceGroundNote(requestId, text, placement, gameDate) ->
+            placeMark options request state context requestId (GroundMarkBody.Note text) placement gameDate
+        | PlayerSessionMessage.ReportDeath(requestId, label, placement, gameDate) ->
+            placeMark options request state context requestId (GroundMarkBody.Death label) placement gameDate
         | PlayerSessionMessage.RemoveGroundMark(requestId, id) ->
             removeMark options request state context requestId id
         | PlayerSessionMessage.Update(requestId, command) ->

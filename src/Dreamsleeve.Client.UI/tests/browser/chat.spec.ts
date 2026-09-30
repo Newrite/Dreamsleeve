@@ -1062,6 +1062,13 @@ test("bubble style and ground mark preferences save and restore", async ({
     .fill("zzz");
   await page.getByLabel("Показывать надписи", { exact: true }).uncheck();
   await page.getByLabel("Скрывать метки", { exact: true }).check();
+  await expect(
+    page.getByLabel("Дата над местом смерти", { exact: true }),
+  ).toBeChecked();
+  await page.getByLabel("Дата над надписью", { exact: true }).check();
+  await page.getByRole("combobox", { name: "Календарь дат" }).click();
+  await page.getByRole("option", { name: /Привычный/ }).click();
+  await page.getByLabel("Цвет даты", { exact: true }).fill("#112233");
   await page.getByRole("combobox", { name: "Надписей рядом" }).click();
   await page.getByRole("option", { name: "32" }).click();
   await page.getByRole("slider", { name: "Дальность текста" }).fill("300");
@@ -1103,6 +1110,15 @@ test("bubble style and ground mark preferences save and restore", async ({
   await expect(
     page.getByRole("slider", { name: "Высота светлячка над землёй" }),
   ).toHaveValue("90");
+  await expect(
+    page.getByLabel("Дата над надписью", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("combobox", { name: "Календарь дат" }),
+  ).toHaveAttribute("data-value", "earth");
+  await expect(page.getByLabel("Цвет даты", { exact: true })).toHaveValue(
+    "#112233",
+  );
 });
 
 test("leave here places the draft as a ground note and shows a refusal", async ({
@@ -1152,7 +1168,9 @@ test("my marks lists own marks and removes one", async ({ page }) => {
   const list = page.getByLabel("Мои метки");
   await expect(list.getByRole("listitem")).toHaveCount(2);
   await expect(list).toContainText("Место смерти");
-  await expect(list).toContainText("Морозный тролль");
+  await expect(list).toContainText("Убийца: Морозный тролль");
+  // The in-game date as the host formatted it, next to the real time.
+  await expect(list).toContainText("Миддас, 18 Последнего зерна 4Э 201, 02:40");
   // The far death mark is listed with its place, without walking up to it.
   await expect(list).toContainText("skyrim.esm:016BB4 · 20140, 3300, 610");
   const nearby = page.getByLabel("Метки рядом");

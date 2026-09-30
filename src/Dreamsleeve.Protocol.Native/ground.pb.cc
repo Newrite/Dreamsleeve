@@ -78,6 +78,37 @@ struct GroundMarkRemovedDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GroundMarkRemovedDefaultTypeInternal _GroundMarkRemoved_default_instance_;
 
+inline constexpr GameDate::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        era_{0u},
+        year_{0u},
+        month_{0u},
+        day_{0u},
+        day_of_week_{0u},
+        hour_{0u},
+        minute_{0u} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR GameDate::GameDate(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(GameDate_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct GameDateDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GameDateDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GameDateDefaultTypeInternal() {}
+  union {
+    GameDate _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GameDateDefaultTypeInternal _GameDate_default_instance_;
+
 inline constexpr GroundMarkPlacement::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
@@ -111,7 +142,8 @@ inline constexpr ReportDeath::Impl_::Impl_(
         label_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        placement_{nullptr} {}
+        placement_{nullptr},
+        game_date_{nullptr} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR ReportDeath::ReportDeath(::_pbi::ConstantInitialized)
@@ -139,7 +171,8 @@ inline constexpr PlaceGroundNote::Impl_::Impl_(
         text_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        placement_{nullptr} {}
+        placement_{nullptr},
+        game_date_{nullptr} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR PlaceGroundNote::PlaceGroundNote(::_pbi::ConstantInitialized)
@@ -173,6 +206,7 @@ inline constexpr GroundMark::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         author_{nullptr},
         placement_{nullptr},
+        game_date_{nullptr},
         mark_id_{::uint64_t{0u}},
         created_at_unix_ms_{::int64_t{0}},
         kind_{static_cast< ::Dreamsleeve::Protocol::Chat::GroundMarkKind >(0)} {}
@@ -296,8 +330,25 @@ const ::uint32_t
         1,
         2,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GameDate, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GameDate, _impl_.era_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GameDate, _impl_.year_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GameDate, _impl_.month_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GameDate, _impl_.day_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GameDate, _impl_.day_of_week_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GameDate, _impl_.hour_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GameDate, _impl_.minute_),
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GroundMark, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GroundMark, _impl_.mark_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GroundMark, _impl_.author_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GroundMark, _impl_.kind_),
@@ -306,28 +357,34 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GroundMark, _impl_.placement_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GroundMark, _impl_.created_at_unix_ms_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GroundMark, _impl_.character_name_),
-        5,
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::GroundMark, _impl_.game_date_),
+        6,
         3,
-        7,
+        8,
         1,
         0,
         4,
-        6,
+        7,
         2,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlaceGroundNote, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlaceGroundNote, _impl_.text_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlaceGroundNote, _impl_.placement_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlaceGroundNote, _impl_.game_date_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ReportDeath, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ReportDeath, _impl_.label_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ReportDeath, _impl_.placement_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ReportDeath, _impl_.game_date_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::RemoveGroundMark, _impl_._has_bits_),
         4, // hasbit index offset
@@ -366,17 +423,19 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::GroundMarkPlacement)},
-        {9, sizeof(::Dreamsleeve::Protocol::Chat::GroundMark)},
-        {28, sizeof(::Dreamsleeve::Protocol::Chat::PlaceGroundNote)},
-        {35, sizeof(::Dreamsleeve::Protocol::Chat::ReportDeath)},
-        {42, sizeof(::Dreamsleeve::Protocol::Chat::RemoveGroundMark)},
-        {47, sizeof(::Dreamsleeve::Protocol::Chat::GroundMarksChanged)},
-        {58, sizeof(::Dreamsleeve::Protocol::Chat::GroundMarkPlaced)},
-        {65, sizeof(::Dreamsleeve::Protocol::Chat::GroundMarkRemoved)},
-        {70, sizeof(::Dreamsleeve::Protocol::Chat::OwnGroundMarks)},
+        {9, sizeof(::Dreamsleeve::Protocol::Chat::GameDate)},
+        {26, sizeof(::Dreamsleeve::Protocol::Chat::GroundMark)},
+        {47, sizeof(::Dreamsleeve::Protocol::Chat::PlaceGroundNote)},
+        {56, sizeof(::Dreamsleeve::Protocol::Chat::ReportDeath)},
+        {65, sizeof(::Dreamsleeve::Protocol::Chat::RemoveGroundMark)},
+        {70, sizeof(::Dreamsleeve::Protocol::Chat::GroundMarksChanged)},
+        {81, sizeof(::Dreamsleeve::Protocol::Chat::GroundMarkPlaced)},
+        {88, sizeof(::Dreamsleeve::Protocol::Chat::GroundMarkRemoved)},
+        {93, sizeof(::Dreamsleeve::Protocol::Chat::OwnGroundMarks)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_GroundMarkPlacement_default_instance_._instance,
+    &::Dreamsleeve::Protocol::Chat::_GameDate_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_GroundMark_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_PlaceGroundNote_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_ReportDeath_default_instance_._instance,
@@ -393,33 +452,41 @@ const char descriptor_table_protodef_ground_2eproto[] ABSL_ATTRIBUTE_SECTION_VAR
     "o\"\226\001\n\023GroundMarkPlacement\0227\n\013location_id"
     "\030\001 \001(\0132\".Dreamsleeve.Protocol.Chat.FormK"
     "ey\0225\n\010position\030\002 \001(\0132#.Dreamsleeve.Proto"
-    "col.Chat.Position\022\017\n\007heading\030\003 \001(\002\"\343\002\n\nG"
-    "roundMark\022\017\n\007mark_id\030\001 \001(\004\0228\n\006author\030\002 \001"
-    "(\0132(.Dreamsleeve.Protocol.Chat.PlayerPro"
-    "file\0227\n\004kind\030\003 \001(\0162).Dreamsleeve.Protoco"
-    "l.Chat.GroundMarkKind\022\014\n\004text\030\004 \001(\t\0224\n\007f"
-    "lagged\030\005 \003(\0132#.Dreamsleeve.Protocol.Chat"
-    ".TextSpan\022A\n\tplacement\030\006 \001(\0132..Dreamslee"
-    "ve.Protocol.Chat.GroundMarkPlacement\022\032\n\022"
-    "created_at_unix_ms\030\007 \001(\003\022\033\n\016character_na"
-    "me\030\010 \001(\tH\000\210\001\001B\021\n\017_character_name\"b\n\017Plac"
-    "eGroundNote\022\014\n\004text\030\001 \001(\t\022A\n\tplacement\030\002"
-    " \001(\0132..Dreamsleeve.Protocol.Chat.GroundM"
-    "arkPlacement\"_\n\013ReportDeath\022\r\n\005label\030\001 \001"
-    "(\t\022A\n\tplacement\030\002 \001(\0132..Dreamsleeve.Prot"
-    "ocol.Chat.GroundMarkPlacement\"#\n\020RemoveG"
-    "roundMark\022\017\n\007mark_id\030\001 \001(\004\"\205\001\n\022GroundMar"
-    "ksChanged\022\025\n\rview_revision\030\001 \001(\004\0224\n\005adde"
-    "d\030\002 \003(\0132%.Dreamsleeve.Protocol.Chat.Grou"
-    "ndMark\022\023\n\013removed_ids\030\003 \003(\004\022\r\n\005clear\030\004 \001"
-    "(\010\"[\n\020GroundMarkPlaced\0223\n\004mark\030\001 \001(\0132%.D"
-    "reamsleeve.Protocol.Chat.GroundMark\022\022\n\ne"
-    "victed_id\030\002 \001(\004\"$\n\021GroundMarkRemoved\022\017\n\007"
-    "mark_id\030\001 \001(\004\"F\n\016OwnGroundMarks\0224\n\005marks"
-    "\030\001 \003(\0132%.Dreamsleeve.Protocol.Chat.Groun"
-    "dMark*i\n\016GroundMarkKind\022 \n\034GROUND_MARK_K"
-    "IND_UNSPECIFIED\020\000\022\031\n\025GROUND_MARK_KIND_NO"
-    "TE\020\001\022\032\n\026GROUND_MARK_KIND_DEATH\020\002b\006proto3"
+    "col.Chat.Position\022\017\n\007heading\030\003 \001(\002\"t\n\010Ga"
+    "meDate\022\013\n\003era\030\001 \001(\r\022\014\n\004year\030\002 \001(\r\022\r\n\005mon"
+    "th\030\003 \001(\r\022\013\n\003day\030\004 \001(\r\022\023\n\013day_of_week\030\005 \001"
+    "(\r\022\014\n\004hour\030\006 \001(\r\022\016\n\006minute\030\007 \001(\r\"\233\003\n\nGro"
+    "undMark\022\017\n\007mark_id\030\001 \001(\004\0228\n\006author\030\002 \001(\013"
+    "2(.Dreamsleeve.Protocol.Chat.PlayerProfi"
+    "le\0227\n\004kind\030\003 \001(\0162).Dreamsleeve.Protocol."
+    "Chat.GroundMarkKind\022\014\n\004text\030\004 \001(\t\0224\n\007fla"
+    "gged\030\005 \003(\0132#.Dreamsleeve.Protocol.Chat.T"
+    "extSpan\022A\n\tplacement\030\006 \001(\0132..Dreamsleeve"
+    ".Protocol.Chat.GroundMarkPlacement\022\032\n\022cr"
+    "eated_at_unix_ms\030\007 \001(\003\022\033\n\016character_name"
+    "\030\010 \001(\tH\000\210\001\001\0226\n\tgame_date\030\t \001(\0132#.Dreamsl"
+    "eeve.Protocol.Chat.GameDateB\021\n\017_characte"
+    "r_name\"\232\001\n\017PlaceGroundNote\022\014\n\004text\030\001 \001(\t"
+    "\022A\n\tplacement\030\002 \001(\0132..Dreamsleeve.Protoc"
+    "ol.Chat.GroundMarkPlacement\0226\n\tgame_date"
+    "\030\003 \001(\0132#.Dreamsleeve.Protocol.Chat.GameD"
+    "ate\"\227\001\n\013ReportDeath\022\r\n\005label\030\001 \001(\t\022A\n\tpl"
+    "acement\030\002 \001(\0132..Dreamsleeve.Protocol.Cha"
+    "t.GroundMarkPlacement\0226\n\tgame_date\030\003 \001(\013"
+    "2#.Dreamsleeve.Protocol.Chat.GameDate\"#\n"
+    "\020RemoveGroundMark\022\017\n\007mark_id\030\001 \001(\004\"\205\001\n\022G"
+    "roundMarksChanged\022\025\n\rview_revision\030\001 \001(\004"
+    "\0224\n\005added\030\002 \003(\0132%.Dreamsleeve.Protocol.C"
+    "hat.GroundMark\022\023\n\013removed_ids\030\003 \003(\004\022\r\n\005c"
+    "lear\030\004 \001(\010\"[\n\020GroundMarkPlaced\0223\n\004mark\030\001"
+    " \001(\0132%.Dreamsleeve.Protocol.Chat.GroundM"
+    "ark\022\022\n\nevicted_id\030\002 \001(\004\"$\n\021GroundMarkRem"
+    "oved\022\017\n\007mark_id\030\001 \001(\004\"F\n\016OwnGroundMarks\022"
+    "4\n\005marks\030\001 \003(\0132%.Dreamsleeve.Protocol.Ch"
+    "at.GroundMark*i\n\016GroundMarkKind\022 \n\034GROUN"
+    "D_MARK_KIND_UNSPECIFIED\020\000\022\031\n\025GROUND_MARK"
+    "_KIND_NOTE\020\001\022\032\n\026GROUND_MARK_KIND_DEATH\020\002"
+    "b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_ground_2eproto_deps[3] = {
@@ -431,13 +498,13 @@ static ::absl::once_flag descriptor_table_ground_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ground_2eproto = {
     false,
     false,
-    1280,
+    1568,
     descriptor_table_protodef_ground_2eproto,
     "ground.proto",
     &descriptor_table_ground_2eproto_once,
     descriptor_table_ground_2eproto_deps,
     3,
-    9,
+    10,
     schemas,
     file_default_instances,
     TableStruct_ground_2eproto::offsets,
@@ -817,6 +884,435 @@ void GroundMarkPlacement::InternalSwap(GroundMarkPlacement* PROTOBUF_RESTRICT PR
 }
 // ===================================================================
 
+class GameDate::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<GameDate>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GameDate, _impl_._has_bits_);
+};
+
+GameDate::GameDate(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GameDate_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Chat.GameDate)
+}
+GameDate::GameDate(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GameDate& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GameDate_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GameDate::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GameDate::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, era_),
+           0,
+           offsetof(Impl_, minute_) -
+               offsetof(Impl_, era_) +
+               sizeof(Impl_::minute_));
+}
+GameDate::~GameDate() {
+  // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.GameDate)
+  SharedDtor(*this);
+}
+inline void GameDate::SharedDtor(MessageLite& self) {
+  GameDate& this_ = static_cast<GameDate&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL GameDate::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GameDate(arena);
+}
+constexpr auto GameDate::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GameDate),
+                                            alignof(GameDate));
+}
+constexpr auto GameDate::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_GameDate_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &GameDate::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GameDate>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GameDate::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GameDate>(), &GameDate::ByteSizeLong,
+              &GameDate::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GameDate, _impl_._cached_size_),
+          false,
+      },
+      &GameDate::kDescriptorMethods,
+      &descriptor_table_ground_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GameDate_class_data_ =
+        GameDate::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GameDate::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GameDate_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GameDate_class_data_.tc_table);
+  return GameDate_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 7, 0, 0, 2>
+GameDate::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(GameDate, _impl_._has_bits_),
+    0, // no _extensions_
+    7, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967168,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    7,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    GameDate_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GameDate>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // uint32 era = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameDate, _impl_.era_), 0>(),
+     {8, 0, 0,
+      PROTOBUF_FIELD_OFFSET(GameDate, _impl_.era_)}},
+    // uint32 year = 2;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameDate, _impl_.year_), 1>(),
+     {16, 1, 0,
+      PROTOBUF_FIELD_OFFSET(GameDate, _impl_.year_)}},
+    // uint32 month = 3;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameDate, _impl_.month_), 2>(),
+     {24, 2, 0,
+      PROTOBUF_FIELD_OFFSET(GameDate, _impl_.month_)}},
+    // uint32 day = 4;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameDate, _impl_.day_), 3>(),
+     {32, 3, 0,
+      PROTOBUF_FIELD_OFFSET(GameDate, _impl_.day_)}},
+    // uint32 day_of_week = 5;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameDate, _impl_.day_of_week_), 4>(),
+     {40, 4, 0,
+      PROTOBUF_FIELD_OFFSET(GameDate, _impl_.day_of_week_)}},
+    // uint32 hour = 6;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameDate, _impl_.hour_), 5>(),
+     {48, 5, 0,
+      PROTOBUF_FIELD_OFFSET(GameDate, _impl_.hour_)}},
+    // uint32 minute = 7;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameDate, _impl_.minute_), 6>(),
+     {56, 6, 0,
+      PROTOBUF_FIELD_OFFSET(GameDate, _impl_.minute_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint32 era = 1;
+    {PROTOBUF_FIELD_OFFSET(GameDate, _impl_.era_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // uint32 year = 2;
+    {PROTOBUF_FIELD_OFFSET(GameDate, _impl_.year_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // uint32 month = 3;
+    {PROTOBUF_FIELD_OFFSET(GameDate, _impl_.month_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // uint32 day = 4;
+    {PROTOBUF_FIELD_OFFSET(GameDate, _impl_.day_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // uint32 day_of_week = 5;
+    {PROTOBUF_FIELD_OFFSET(GameDate, _impl_.day_of_week_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // uint32 hour = 6;
+    {PROTOBUF_FIELD_OFFSET(GameDate, _impl_.hour_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // uint32 minute = 7;
+    {PROTOBUF_FIELD_OFFSET(GameDate, _impl_.minute_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+  }},
+  // no aux_entries
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void GameDate::Clear() {
+// @@protoc_insertion_point(message_clear_start:Dreamsleeve.Protocol.Chat.GameDate)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    ::memset(&_impl_.era_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.minute_) -
+        reinterpret_cast<char*>(&_impl_.era_)) + sizeof(_impl_.minute_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GameDate::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GameDate& this_ = static_cast<const GameDate&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GameDate::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GameDate& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:Dreamsleeve.Protocol.Chat.GameDate)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 era = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_era() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_era(), target);
+    }
+  }
+
+  // uint32 year = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_year() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_year(), target);
+    }
+  }
+
+  // uint32 month = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_month() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_month(), target);
+    }
+  }
+
+  // uint32 day = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_day() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_day(), target);
+    }
+  }
+
+  // uint32 day_of_week = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_day_of_week() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_day_of_week(), target);
+    }
+  }
+
+  // uint32 hour = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_hour() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_hour(), target);
+    }
+  }
+
+  // uint32 minute = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_minute() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_minute(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:Dreamsleeve.Protocol.Chat.GameDate)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GameDate::ByteSizeLong(const MessageLite& base) {
+  const GameDate& this_ = static_cast<const GameDate&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GameDate::ByteSizeLong() const {
+  const GameDate& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:Dreamsleeve.Protocol.Chat.GameDate)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    // uint32 era = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_era() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_era());
+      }
+    }
+    // uint32 year = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_year() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_year());
+      }
+    }
+    // uint32 month = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_month() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_month());
+      }
+    }
+    // uint32 day = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_day() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_day());
+      }
+    }
+    // uint32 day_of_week = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_day_of_week() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_day_of_week());
+      }
+    }
+    // uint32 hour = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_hour() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_hour());
+      }
+    }
+    // uint32 minute = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_minute() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_minute());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GameDate::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<GameDate*>(&to_msg);
+  auto& from = static_cast<const GameDate&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:Dreamsleeve.Protocol.Chat.GameDate)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_era() != 0) {
+        _this->_impl_.era_ = from._impl_.era_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_year() != 0) {
+        _this->_impl_.year_ = from._impl_.year_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_month() != 0) {
+        _this->_impl_.month_ = from._impl_.month_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_day() != 0) {
+        _this->_impl_.day_ = from._impl_.day_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_day_of_week() != 0) {
+        _this->_impl_.day_of_week_ = from._impl_.day_of_week_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_hour() != 0) {
+        _this->_impl_.hour_ = from._impl_.hour_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_minute() != 0) {
+        _this->_impl_.minute_ = from._impl_.minute_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GameDate::CopyFrom(const GameDate& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:Dreamsleeve.Protocol.Chat.GameDate)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GameDate::InternalSwap(GameDate* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GameDate, _impl_.minute_)
+      + sizeof(GameDate::_impl_.minute_)
+      - PROTOBUF_FIELD_OFFSET(GameDate, _impl_.era_)>(
+          reinterpret_cast<char*>(&_impl_.era_),
+          reinterpret_cast<char*>(&other->_impl_.era_));
+}
+
+::google::protobuf::Metadata GameDate::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 class GroundMark::_Internal {
  public:
   using HasBits =
@@ -876,6 +1372,9 @@ GroundMark::GroundMark(
   _impl_.placement_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.placement_)
                 : nullptr;
+  _impl_.game_date_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.game_date_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, mark_id_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -918,6 +1417,7 @@ inline void GroundMark::SharedDtor(MessageLite& self) {
   this_._impl_.character_name_.Destroy();
   delete this_._impl_.author_;
   delete this_._impl_.placement_;
+  delete this_._impl_.game_date_;
   this_._impl_.~Impl_();
 }
 
@@ -976,17 +1476,17 @@ GroundMark::GetClassData() const {
   return GroundMark_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 8, 3, 71, 2>
+const ::_pbi::TcParseTable<4, 9, 4, 71, 2>
 GroundMark::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(GroundMark, _impl_._has_bits_),
     0, // no _extensions_
-    8, 56,  // max_field_number, fast_idx_mask
+    9, 120,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967040,  // skipmap
+    4294966784,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    8,  // num_field_entries
-    3,  // num_aux_entries
+    9,  // num_field_entries
+    4,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     GroundMark_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -995,21 +1495,18 @@ GroundMark::_table_ = {
     ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GroundMark>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // optional string character_name = 8;
-    {::_pbi::TcParser::FastUS1,
-     {66, 2, 0,
-      PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.character_name_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // uint64 mark_id = 1;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GroundMark, _impl_.mark_id_), 5>(),
-     {8, 5, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GroundMark, _impl_.mark_id_), 6>(),
+     {8, 6, 0,
       PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.mark_id_)}},
     // .Dreamsleeve.Protocol.Chat.PlayerProfile author = 2;
     {::_pbi::TcParser::FastMtS1,
      {18, 3, 0,
       PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.author_)}},
     // .Dreamsleeve.Protocol.Chat.GroundMarkKind kind = 3;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GroundMark, _impl_.kind_), 7>(),
-     {24, 7, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GroundMark, _impl_.kind_), 8>(),
+     {24, 8, 0,
       PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.kind_)}},
     // string text = 4;
     {::_pbi::TcParser::FastUS1,
@@ -1024,18 +1521,32 @@ GroundMark::_table_ = {
      {50, 4, 2,
       PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.placement_)}},
     // int64 created_at_unix_ms = 7;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GroundMark, _impl_.created_at_unix_ms_), 6>(),
-     {56, 6, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GroundMark, _impl_.created_at_unix_ms_), 7>(),
+     {56, 7, 0,
       PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.created_at_unix_ms_)}},
+    // optional string character_name = 8;
+    {::_pbi::TcParser::FastUS1,
+     {66, 2, 0,
+      PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.character_name_)}},
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 9;
+    {::_pbi::TcParser::FastMtS1,
+     {74, 5, 3,
+      PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.game_date_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
     // uint64 mark_id = 1;
-    {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.mark_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.mark_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // .Dreamsleeve.Protocol.Chat.PlayerProfile author = 2;
     {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.author_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.GroundMarkKind kind = 3;
-    {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.kind_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.kind_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // string text = 4;
     {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.text_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // repeated .Dreamsleeve.Protocol.Chat.TextSpan flagged = 5;
@@ -1043,14 +1554,17 @@ GroundMark::_table_ = {
     // .Dreamsleeve.Protocol.Chat.GroundMarkPlacement placement = 6;
     {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.placement_), _Internal::kHasBitsOffset + 4, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     // int64 created_at_unix_ms = 7;
-    {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.created_at_unix_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.created_at_unix_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     // optional string character_name = 8;
     {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.character_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 9;
+    {PROTOBUF_FIELD_OFFSET(GroundMark, _impl_.game_date_), _Internal::kHasBitsOffset + 5, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerProfile>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::TextSpan>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GroundMarkPlacement>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GameDate>()},
   }},
   {{
     "\44\0\0\0\4\0\0\0\16\0\0\0\0\0\0\0"
@@ -1067,7 +1581,7 @@ PROTOBUF_NOINLINE void GroundMark::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
       _impl_.flagged_.Clear();
     }
@@ -1085,12 +1599,17 @@ PROTOBUF_NOINLINE void GroundMark::Clear() {
       ABSL_DCHECK(_impl_.placement_ != nullptr);
       _impl_.placement_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(_impl_.game_date_ != nullptr);
+      _impl_.game_date_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&_impl_.mark_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.kind_) -
-        reinterpret_cast<char*>(&_impl_.mark_id_)) + sizeof(_impl_.kind_));
+        reinterpret_cast<char*>(&_impl_.created_at_unix_ms_) -
+        reinterpret_cast<char*>(&_impl_.mark_id_)) + sizeof(_impl_.created_at_unix_ms_));
   }
+  _impl_.kind_ = 0;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1115,7 +1634,7 @@ PROTOBUF_NOINLINE void GroundMark::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 mark_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_mark_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1131,7 +1650,7 @@ PROTOBUF_NOINLINE void GroundMark::Clear() {
   }
 
   // .Dreamsleeve.Protocol.Chat.GroundMarkKind kind = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_kind() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -1170,7 +1689,7 @@ PROTOBUF_NOINLINE void GroundMark::Clear() {
   }
 
   // int64 created_at_unix_ms = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_created_at_unix_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<7>(
@@ -1184,6 +1703,13 @@ PROTOBUF_NOINLINE void GroundMark::Clear() {
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
         _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Dreamsleeve.Protocol.Chat.GroundMark.character_name");
     target = stream->WriteStringMaybeAliased(8, _s, target);
+  }
+
+  // .Dreamsleeve.Protocol.Chat.GameDate game_date = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        9, *this_._impl_.game_date_, this_._impl_.game_date_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -1241,22 +1767,29 @@ PROTOBUF_NOINLINE void GroundMark::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.placement_);
     }
-    // uint64 mark_id = 1;
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 9;
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.game_date_);
+    }
+    // uint64 mark_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_mark_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_mark_id());
       }
     }
     // int64 created_at_unix_ms = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_created_at_unix_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_created_at_unix_ms());
       }
     }
+  }
+   {
     // .Dreamsleeve.Protocol.Chat.GroundMarkKind kind = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_kind() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_kind());
@@ -1317,19 +1850,27 @@ void GroundMark::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(from._impl_.game_date_ != nullptr);
+      if (_this->_impl_.game_date_ == nullptr) {
+        _this->_impl_.game_date_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.game_date_);
+      } else {
+        _this->_impl_.game_date_->MergeFrom(*from._impl_.game_date_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_mark_id() != 0) {
         _this->_impl_.mark_id_ = from._impl_.mark_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_created_at_unix_ms() != 0) {
         _this->_impl_.created_at_unix_ms_ = from._impl_.created_at_unix_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_kind() != 0) {
-        _this->_impl_.kind_ = from._impl_.kind_;
-      }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_kind() != 0) {
+      _this->_impl_.kind_ = from._impl_.kind_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1409,6 +1950,9 @@ PlaceGroundNote::PlaceGroundNote(
   _impl_.placement_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.placement_)
                 : nullptr;
+  _impl_.game_date_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.game_date_)
+                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.PlaceGroundNote)
 }
@@ -1420,7 +1964,12 @@ PROTOBUF_NDEBUG_INLINE PlaceGroundNote::Impl_::Impl_(
 
 inline void PlaceGroundNote::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.placement_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, placement_),
+           0,
+           offsetof(Impl_, game_date_) -
+               offsetof(Impl_, placement_) +
+               sizeof(Impl_::game_date_));
 }
 PlaceGroundNote::~PlaceGroundNote() {
   // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.PlaceGroundNote)
@@ -1435,6 +1984,7 @@ inline void PlaceGroundNote::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.text_.Destroy();
   delete this_._impl_.placement_;
+  delete this_._impl_.game_date_;
   this_._impl_.~Impl_();
 }
 
@@ -1481,17 +2031,17 @@ PlaceGroundNote::GetClassData() const {
   return PlaceGroundNote_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 1, 54, 2>
+const ::_pbi::TcParseTable<2, 3, 2, 54, 2>
 PlaceGroundNote::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_._has_bits_),
     0, // no _extensions_
-    2, 8,  // max_field_number, fast_idx_mask
+    3, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967292,  // skipmap
+    4294967288,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
-    1,  // num_aux_entries
+    3,  // num_field_entries
+    2,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     PlaceGroundNote_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1500,14 +2050,19 @@ PlaceGroundNote::_table_ = {
     ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlaceGroundNote>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // .Dreamsleeve.Protocol.Chat.GroundMarkPlacement placement = 2;
-    {::_pbi::TcParser::FastMtS1,
-     {18, 1, 0,
-      PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.placement_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // string text = 1;
     {::_pbi::TcParser::FastUS1,
      {10, 0, 0,
       PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.text_)}},
+    // .Dreamsleeve.Protocol.Chat.GroundMarkPlacement placement = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.placement_)}},
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 2, 1,
+      PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.game_date_)}},
   }}, {{
     65535, 65535
   }}, {{
@@ -1515,9 +2070,12 @@ PlaceGroundNote::_table_ = {
     {PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.text_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // .Dreamsleeve.Protocol.Chat.GroundMarkPlacement placement = 2;
     {PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.placement_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+    {PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.game_date_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GroundMarkPlacement>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GameDate>()},
   }},
   {{
     "\51\4\0\0\0\0\0\0"
@@ -1533,13 +2091,17 @@ PROTOBUF_NOINLINE void PlaceGroundNote::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.text_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       ABSL_DCHECK(_impl_.placement_ != nullptr);
       _impl_.placement_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.game_date_ != nullptr);
+      _impl_.game_date_->Clear();
     }
   }
   _impl_._has_bits_.Clear();
@@ -1582,6 +2144,13 @@ PROTOBUF_NOINLINE void PlaceGroundNote::Clear() {
         stream);
   }
 
+  // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.game_date_, this_._impl_.game_date_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1607,7 +2176,7 @@ PROTOBUF_NOINLINE void PlaceGroundNote::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // string text = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_text().empty()) {
@@ -1619,6 +2188,11 @@ PROTOBUF_NOINLINE void PlaceGroundNote::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.placement_);
+    }
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.game_date_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -1640,7 +2214,7 @@ void PlaceGroundNote::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_text().empty()) {
         _this->_internal_set_text(from._internal_text());
@@ -1656,6 +2230,14 @@ void PlaceGroundNote::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.placement_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.placement_);
       } else {
         _this->_impl_.placement_->MergeFrom(*from._impl_.placement_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.game_date_ != nullptr);
+      if (_this->_impl_.game_date_ == nullptr) {
+        _this->_impl_.game_date_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.game_date_);
+      } else {
+        _this->_impl_.game_date_->MergeFrom(*from._impl_.game_date_);
       }
     }
   }
@@ -1679,7 +2261,12 @@ void PlaceGroundNote::InternalSwap(PlaceGroundNote* PROTOBUF_RESTRICT PROTOBUF_N
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.text_, &other->_impl_.text_, arena);
-  swap(_impl_.placement_, other->_impl_.placement_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.game_date_)
+      + sizeof(PlaceGroundNote::_impl_.game_date_)
+      - PROTOBUF_FIELD_OFFSET(PlaceGroundNote, _impl_.placement_)>(
+          reinterpret_cast<char*>(&_impl_.placement_),
+          reinterpret_cast<char*>(&other->_impl_.placement_));
 }
 
 ::google::protobuf::Metadata PlaceGroundNote::GetMetadata() const {
@@ -1729,6 +2316,9 @@ ReportDeath::ReportDeath(
   _impl_.placement_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.placement_)
                 : nullptr;
+  _impl_.game_date_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.game_date_)
+                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.ReportDeath)
 }
@@ -1740,7 +2330,12 @@ PROTOBUF_NDEBUG_INLINE ReportDeath::Impl_::Impl_(
 
 inline void ReportDeath::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.placement_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, placement_),
+           0,
+           offsetof(Impl_, game_date_) -
+               offsetof(Impl_, placement_) +
+               sizeof(Impl_::game_date_));
 }
 ReportDeath::~ReportDeath() {
   // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.ReportDeath)
@@ -1755,6 +2350,7 @@ inline void ReportDeath::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.label_.Destroy();
   delete this_._impl_.placement_;
+  delete this_._impl_.game_date_;
   this_._impl_.~Impl_();
 }
 
@@ -1801,17 +2397,17 @@ ReportDeath::GetClassData() const {
   return ReportDeath_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 1, 51, 2>
+const ::_pbi::TcParseTable<2, 3, 2, 51, 2>
 ReportDeath::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_._has_bits_),
     0, // no _extensions_
-    2, 8,  // max_field_number, fast_idx_mask
+    3, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967292,  // skipmap
+    4294967288,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
-    1,  // num_aux_entries
+    3,  // num_field_entries
+    2,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ReportDeath_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1820,14 +2416,19 @@ ReportDeath::_table_ = {
     ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ReportDeath>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // .Dreamsleeve.Protocol.Chat.GroundMarkPlacement placement = 2;
-    {::_pbi::TcParser::FastMtS1,
-     {18, 1, 0,
-      PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.placement_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // string label = 1;
     {::_pbi::TcParser::FastUS1,
      {10, 0, 0,
       PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.label_)}},
+    // .Dreamsleeve.Protocol.Chat.GroundMarkPlacement placement = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.placement_)}},
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 2, 1,
+      PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.game_date_)}},
   }}, {{
     65535, 65535
   }}, {{
@@ -1835,9 +2436,12 @@ ReportDeath::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.label_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // .Dreamsleeve.Protocol.Chat.GroundMarkPlacement placement = 2;
     {PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.placement_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+    {PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.game_date_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GroundMarkPlacement>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GameDate>()},
   }},
   {{
     "\45\5\0\0\0\0\0\0"
@@ -1853,13 +2457,17 @@ PROTOBUF_NOINLINE void ReportDeath::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.label_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       ABSL_DCHECK(_impl_.placement_ != nullptr);
       _impl_.placement_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.game_date_ != nullptr);
+      _impl_.game_date_->Clear();
     }
   }
   _impl_._has_bits_.Clear();
@@ -1902,6 +2510,13 @@ PROTOBUF_NOINLINE void ReportDeath::Clear() {
         stream);
   }
 
+  // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.game_date_, this_._impl_.game_date_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1927,7 +2542,7 @@ PROTOBUF_NOINLINE void ReportDeath::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // string label = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_label().empty()) {
@@ -1939,6 +2554,11 @@ PROTOBUF_NOINLINE void ReportDeath::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.placement_);
+    }
+    // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.game_date_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -1960,7 +2580,7 @@ void ReportDeath::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_label().empty()) {
         _this->_internal_set_label(from._internal_label());
@@ -1976,6 +2596,14 @@ void ReportDeath::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.placement_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.placement_);
       } else {
         _this->_impl_.placement_->MergeFrom(*from._impl_.placement_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.game_date_ != nullptr);
+      if (_this->_impl_.game_date_ == nullptr) {
+        _this->_impl_.game_date_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.game_date_);
+      } else {
+        _this->_impl_.game_date_->MergeFrom(*from._impl_.game_date_);
       }
     }
   }
@@ -1999,7 +2627,12 @@ void ReportDeath::InternalSwap(ReportDeath* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.label_, &other->_impl_.label_, arena);
-  swap(_impl_.placement_, other->_impl_.placement_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.game_date_)
+      + sizeof(ReportDeath::_impl_.game_date_)
+      - PROTOBUF_FIELD_OFFSET(ReportDeath, _impl_.placement_)>(
+          reinterpret_cast<char*>(&_impl_.placement_),
+          reinterpret_cast<char*>(&other->_impl_.placement_));
 }
 
 ::google::protobuf::Metadata ReportDeath::GetMetadata() const {

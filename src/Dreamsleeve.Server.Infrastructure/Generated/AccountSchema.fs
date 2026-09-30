@@ -157,7 +157,14 @@ module main =
           z: double
           heading: double
           created_at: int64
-          author_pseudonym: Option<string> }
+          author_pseudonym: Option<string>
+          game_era: Option<int64>
+          game_year: Option<int64>
+          game_month: Option<int64>
+          game_day: Option<int64>
+          game_day_of_week: Option<int64>
+          game_hour: Option<int64>
+          game_minute: Option<int64> }
 
         interface IWriteColumns with
             member this.WriteColumns =
@@ -173,7 +180,14 @@ module main =
                   { WriteColumn.Name = "z"; Value = box this.z; ProviderDbType = None }
                   { WriteColumn.Name = "heading"; Value = box this.heading; ProviderDbType = None }
                   { WriteColumn.Name = "created_at"; Value = box this.created_at; ProviderDbType = None }
-                  { WriteColumn.Name = "author_pseudonym"; Value = box this.author_pseudonym; ProviderDbType = None } ]
+                  { WriteColumn.Name = "author_pseudonym"; Value = box this.author_pseudonym; ProviderDbType = None }
+                  { WriteColumn.Name = "game_era"; Value = box this.game_era; ProviderDbType = None }
+                  { WriteColumn.Name = "game_year"; Value = box this.game_year; ProviderDbType = None }
+                  { WriteColumn.Name = "game_month"; Value = box this.game_month; ProviderDbType = None }
+                  { WriteColumn.Name = "game_day"; Value = box this.game_day; ProviderDbType = None }
+                  { WriteColumn.Name = "game_day_of_week"; Value = box this.game_day_of_week; ProviderDbType = None }
+                  { WriteColumn.Name = "game_hour"; Value = box this.game_hour; ProviderDbType = None }
+                  { WriteColumn.Name = "game_minute"; Value = box this.game_minute; ProviderDbType = None } ]
 
     let ground_marks = table<ground_marks>
 

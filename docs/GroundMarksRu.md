@@ -85,7 +85,12 @@
 Хранение: таблица `ground_marks` (миграция `1790640000000_ground_marks.sql`, схема 3;
 `1790726400000_ground_mark_pseudonym.sql`, схема 4, добавляет `author_pseudonym`;
 проверка в `verifySchema`), `author_id REFERENCES profiles ON DELETE CASCADE`,
-`character_name` и `author_pseudonym` nullable. Метка, оставленная при скрытом имени автора,
+`character_name` и `author_pseudonym` nullable;
+`1790985600000_ground_mark_game_date.sql`, схема 7, добавляет игровую дату семью nullable
+колонками `game_era`, `game_year`, `game_month`, `game_day`, `game_day_of_week`, `game_hour`,
+`game_minute` с CHECK диапазонов. Заполнены все семь или ни одной: частично заполненная дата
+при загрузке — повреждение файла, а не метка без даты. Метки до схемы 7 остаются без даты.
+Метка, оставленная при скрытом имени автора,
 хранит его псевдоним того момента и показывает его вместо профиля всё время жизни, в
 том числе после перезапуска; остальные метки показывают текущий профиль автора
 ([скрытое имя](ModerationAndNamesRu.md#скрытое-имя)). `SqliteGroundMarkStore` работает через SqlHydra

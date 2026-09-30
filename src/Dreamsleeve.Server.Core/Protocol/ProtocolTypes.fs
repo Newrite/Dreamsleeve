@@ -55,8 +55,8 @@ type ClientCommand =
     | SendChat of ChatChannelId * ChatMessageText
     | UpdatePlayer of PlayerUpdate
     | PostAnnouncement of AnnouncementRequest
-    | PlaceGroundNote of GroundNoteText * GroundMarkPlacement
-    | ReportDeath of DeathMarkText * GroundMarkPlacement
+    | PlaceGroundNote of GroundNoteText * GroundMarkPlacement * GameDate
+    | ReportDeath of DeathMarkText * GroundMarkPlacement * GameDate
     | RemoveGroundMark of GroundMarkId
     | SetIdentityVisibility of HiddenIdentity
     /// The sender's own new display name, already accepted by DisplayName.create.

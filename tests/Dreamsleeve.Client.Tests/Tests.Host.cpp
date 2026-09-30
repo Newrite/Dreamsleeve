@@ -981,6 +981,10 @@ TEST_CASE("Older UI files keep bubble style, firefly height and ground mark defa
   CHECK(loaded->ui.chat.deathTextColor == "#D9534F");
   CHECK_FALSE(loaded->ui.chat.combatHideGroundMarks);
   CHECK_FALSE(loaded->ui.chat.combatHideGroundText);
+  CHECK(loaded->ui.chat.markDateStyle == "tamriel");
+  CHECK(loaded->ui.chat.deathDateHeader);
+  CHECK_FALSE(loaded->ui.chat.noteDateHeader);
+  CHECK(loaded->ui.chat.markDateColor == "#A9A69B");
 
   UiFile edited;
   edited.ui.chat.bubbleBorder          = false;
@@ -996,6 +1000,9 @@ TEST_CASE("Older UI files keep bubble style, firefly height and ground mark defa
   edited.ui.chat.deathBackground       = 0.2;
   edited.ui.chat.deathBorder           = false;
   edited.ui.chat.combatHideGroundMarks = true;
+  edited.ui.chat.markDateStyle         = "earth";
+  edited.ui.chat.noteDateHeader        = true;
+  edited.ui.chat.markDateColor         = "#112233";
   REQUIRE(SaveUiFile(file.path, edited));
   auto saved = LoadUiFile(file.path);
   REQUIRE(saved);
@@ -1010,11 +1017,15 @@ TEST_CASE("Older UI files keep bubble style, firefly height and ground mark defa
   invalid.maxVisibleDeaths    = 7.9;
   invalid.groundNoteOffset    = -100;
   invalid.groundTextDistance  = 10;
+  invalid.markDateStyle       = "gregorian";
+  invalid.markDateColor       = "grey";
   auto normalized             = Dreamsleeve::Host::Normalize(invalid);
   CHECK(normalized.bubbleTextColor == "#EEECE5");
   CHECK(normalized.fireflyNameColor == "#EEECE5");
   CHECK(normalized.deathTextColor == "#D9534F");
   CHECK(normalized.groundTextColor == "#ABCDEF");
+  CHECK(normalized.markDateStyle == "tamriel");
+  CHECK(normalized.markDateColor == "#A9A69B");
   CHECK(normalized.fireflyHeightOffset == 512);
   CHECK(normalized.maxVisibleNotes == 1);
   CHECK(normalized.maxVisibleDeaths == 7);
@@ -1146,8 +1157,9 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   REQUIRE(session.Ready());
 
   const Domain::GroundMarkPlacement here{{"skyrim.esm", 0x1A26F}, {1, 2, 3}, 0.5f};
-  REQUIRE(session.PlaceGroundNote(*exchange, "ui-1", "hello", here));
-  REQUIRE(session.ReportDeath(*exchange, "Bear", here));
+  const Domain::GameDate            today{4, 201, 8, 17, 2, 14, 5};
+  REQUIRE(session.PlaceGroundNote(*exchange, "ui-1", "hello", here, today));
+  REQUIRE(session.ReportDeath(*exchange, "Bear", here, today));
   REQUIRE(session.RemoveGroundMark(*exchange, "ui-2", 77));
   CHECK(session.PendingMarkCount() == 3);
   std::vector<QueuedClientCommand> commands;
@@ -1157,9 +1169,11 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   REQUIRE(note);
   CHECK(note->text == "hello");
   CHECK(note->placement == here);
+  CHECK(note->gameDate == today);
   const auto* death = std::get_if<ReportDeath>(&commands[1].command);
   REQUIRE(death);
   CHECK(death->label == "Bear");
+  CHECK(death->gameDate == today);
   const auto* removal = std::get_if<RemoveGroundMark>(&commands[2].command);
   REQUIRE(removal);
   CHECK(removal->markId == 77);
@@ -1224,6 +1238,24 @@ TEST_CASE("Bridge validates ground mark commands")
   CHECK(mark.location == "skyrim.esm:01A26F");
   CHECK(mark.z == 300);
   CHECK_FALSE(mark.author);
+  CHECK_FALSE(mark.gameDate);
+  auto dated     = MakeMark(4, 1, Domain::GroundMarkKind::Death, "Wolf");
+  dated.gameDate = Domain::GameDate{4, 201, 8, 17, 2, 14, 5};
+  CHECK(Bridge::ToUiGroundMark(dated, UiSettings{}, true).gameDate == "Тирдас, 17 Последнего зерна 4Э 201, 14:05");
+  UiSettings earth;
+  earth.markDateStyle = "earth";
+  CHECK(Bridge::ToUiGroundMark(dated, earth, true).gameDate == "Вторник, 17 августа 4Э 201, 14:05");
+}
+
+TEST_CASE("Game dates name the weekday and the month in the chosen calendar")
+{
+  using Dreamsleeve::Host::FormatGameDate;
+  CHECK(FormatGameDate({4, 201, 1, 1, 0, 0, 0}, "tamriel") == "Сандас, 1 Утренней звезды 4Э 201, 00:00");
+  CHECK(FormatGameDate({4, 202, 12, 31, 6, 23, 59}, "tamriel") == "Лордас, 31 Вечерней звезды 4Э 202, 23:59");
+  CHECK(FormatGameDate({4, 201, 10, 3, 5, 9, 7}, "earth") == "Пятница, 3 октября 4Э 201, 09:07");
+  CHECK(FormatGameDate({3, 433, 6, 16, 1, 12, 0}, "anything") == "Морндас, 16 Середины года 3Э 433, 12:00");
+  // Out-of-range parts never index past the tables.
+  CHECK(FormatGameDate({4, 201, 13, 1, 9, 0, 0}, "tamriel") == "?, 1 ? 4Э 201, 00:00");
 }
 
 TEST_CASE("A pseudonymous profile is named by its pseudonym in every mode; streamer mode keeps its alias")

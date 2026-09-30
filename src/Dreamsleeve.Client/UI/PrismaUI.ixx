@@ -253,8 +253,10 @@ namespace PrismaUI
       // The note stands where the character stands now; without a ready
       // world there is nowhere to put it.
       std::expected<void, std::string> placed = std::unexpected{"Персонаж не в игровом мире"};
-      if (const auto placement = GroundMarks::CurrentPlacement())
-        placed = runtime.session.PlaceGroundNote(app.Exchange(), command.requestId, std::move(command.text), *placement);
+      const auto placement = GroundMarks::CurrentPlacement();
+      const auto gameDate  = GroundMarks::CurrentGameDate();
+      if (placement && gameDate)
+        placed = runtime.session.PlaceGroundNote(app.Exchange(), command.requestId, std::move(command.text), *placement, *gameDate);
       if (!placed) Send(Bridge::MarkResultEvent{.requestId = command.requestId, .error = placed.error()});
       return;
     }
@@ -332,7 +334,8 @@ namespace PrismaUI
     {
       const bool names = runtime.ui.ui.chat.nameMode != command.settings->nameMode ||
                          runtime.ui.ui.chat.streamerMode != command.settings->streamerMode ||
-                         runtime.ui.ui.chat.textFilter != command.settings->textFilter;
+                         runtime.ui.ui.chat.textFilter != command.settings->textFilter ||
+                         runtime.ui.ui.chat.markDateStyle != command.settings->markDateStyle;
       // "Hide my name" has its own command and changes only when the server agrees.
       command.settings->hideIdentity = runtime.ui.ui.chat.hideIdentity;
       runtime.ui.ui.chat             = *command.settings;

@@ -14,7 +14,7 @@ type SqliteAccountStoreConfig = {
 [<RequireQualifiedAccess>]
 module internal SqliteDatabase =
     [<Literal>]
-    let SchemaVersion = 6L
+    let SchemaVersion = 7L
 
     [<Literal>]
     let ApplicationId = 1146309718L
@@ -55,7 +55,7 @@ module internal SqliteDatabase =
             command.CommandText <- "SELECT t.token_hash, t.account_id, t.kind, t.expires_at, i.provider, i.subject, i.account_id FROM auth_tokens t LEFT JOIN account_identities i ON i.account_id=t.account_id LIMIT 0"
             use credentials = command.ExecuteReader()
             credentials.Close()
-            command.CommandText <- "SELECT m.id, m.author_id, m.kind, m.text, m.author_pseudonym, m.plugin_name, m.local_form_id, m.x, m.y, m.z, m.heading, m.created_at FROM ground_marks m JOIN profiles p ON p.player_id = m.author_id LIMIT 0"
+            command.CommandText <- "SELECT m.id, m.author_id, m.kind, m.text, m.author_pseudonym, m.plugin_name, m.local_form_id, m.x, m.y, m.z, m.heading, m.created_at, m.game_era, m.game_year, m.game_month, m.game_day, m.game_day_of_week, m.game_hour, m.game_minute FROM ground_marks m JOIN profiles p ON p.player_id = m.author_id LIMIT 0"
             use marks = command.ExecuteReader()
             marks.Close()
             command.CommandText <- "SELECT a.id, a.username, a.password_hash, a.created_at, s.token_hash, s.admin_id, s.created_at, s.expires_at FROM admin_accounts a LEFT JOIN admin_sessions s ON s.admin_id = a.id LIMIT 0"

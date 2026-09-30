@@ -106,7 +106,8 @@ function groundMark(v: unknown): boolean {
     label(v.location) &&
     finite(v.x) &&
     finite(v.y) &&
-    finite(v.z)
+    finite(v.z) &&
+    (v.gameDate === undefined || label(v.gameDate))
   );
 }
 function channel(v: unknown): boolean {

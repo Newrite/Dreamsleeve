@@ -175,7 +175,16 @@ describe("ground mark events", () => {
       messages: [],
       groundMarksSupported: true,
       groundMarks: [{ id: "2", kind: "note", text: "x", time: 1, ...place }],
-      nearbyMarks: [{ id: "3", kind: "note", text: "y", time: 1, ...place }],
+      nearbyMarks: [
+        {
+          id: "3",
+          kind: "note",
+          text: "y",
+          time: 1,
+          gameDate: "Тирдас, 17 Последнего зерна 4Э 201, 14:05",
+          ...place,
+        },
+      ],
     };
     expect(parseHostEvent(JSON.stringify(snapshot))).toEqual(snapshot);
     expect(() =>

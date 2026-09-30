@@ -223,6 +223,7 @@ module GroundMarksAgent =
                         |> GroundMark.withFlagged submission.Flagged
                         |> GroundMark.withCharacterName submission.CharacterName
                         |> GroundMark.withPseudonym submission.Pseudonym
+                        |> GroundMark.withGameDate (ValueSome submission.GameDate)
                     match GroundMarkStorage.add state.Rules mark state.Marks with
                     | Error _ -> context.Abort()
                     | Ok evicted ->

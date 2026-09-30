@@ -253,6 +253,23 @@ export namespace Domain
     bool operator==(const GroundMarkPlacement&) const = default;
   };
 
+  // The in-game calendar at placement as the author's game showed it. Month
+  // 1..12 (1 is Morning Star), day of week 0..6 (0 is Sundas); the vanilla
+  // calendar has no era variable, its date line prints the Fourth Era (4).
+  // Flavour for readers: order and lifetime follow createdAt.
+  struct GameDate
+  {
+    std::uint32_t era{};
+    std::uint32_t year{};
+    std::uint32_t month{};
+    std::uint32_t day{};
+    std::uint32_t dayOfWeek{};
+    std::uint32_t hour{};
+    std::uint32_t minute{};
+
+    bool operator==(const GameDate&) const = default;
+  };
+
   // Persistent server data shown near the player: a note a player left or the
   // place a character died. Not a chat message: never in history or bubbles.
   struct GroundMark final
@@ -268,6 +285,8 @@ export namespace Domain
     MessageTime           createdAt{};
     // Published character name at placement; absent outside a character or when withheld.
     std::optional<CharacterName> characterName{};
+    // The author's in-game date at placement; absent on marks stored before protocol 12.
+    std::optional<GameDate> gameDate{};
 
     bool operator==(const GroundMark&) const = default;
   };

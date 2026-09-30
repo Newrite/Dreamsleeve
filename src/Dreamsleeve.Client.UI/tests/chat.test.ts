@@ -238,6 +238,27 @@ describe("settings", () => {
     expect(edited.bubbleMaxWidth).toBe(800);
     expect(edited.bubbleBackground).toBe(0);
   });
+  it("defaults the mark date header and refuses an unknown calendar or colour", () => {
+    const old = settingsFrom({ fontSize: 20 });
+    expect(old.markDateStyle).toBe("tamriel");
+    expect(old.deathDateHeader).toBe(true);
+    expect(old.noteDateHeader).toBe(false);
+    expect(old.markDateColor).toBe("#A9A69B");
+    const edited = settingsFrom({
+      markDateStyle: "earth",
+      noteDateHeader: true,
+      markDateColor: "#112233",
+    });
+    expect(edited.markDateStyle).toBe("earth");
+    expect(edited.noteDateHeader).toBe(true);
+    expect(edited.markDateColor).toBe("#112233");
+    const broken = settingsFrom({
+      markDateStyle: "gregorian" as never,
+      markDateColor: "grey",
+    });
+    expect(broken.markDateStyle).toBe("tamriel");
+    expect(broken.markDateColor).toBe("#A9A69B");
+  });
 });
 
 it("editing settings during a save does not show a stale success", () => {

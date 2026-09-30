@@ -65,6 +65,10 @@ export const defaults: Settings = {
   deathBorder: true,
   combatHideGroundMarks: false,
   combatHideGroundText: false,
+  markDateStyle: "tamriel",
+  deathDateHeader: true,
+  noteDateHeader: false,
+  markDateColor: "#A9A69B",
   hideIdentity: "off",
 };
 // "#RRGGBB" only, as the host parses it.
@@ -75,6 +79,7 @@ const colors: (keyof Settings)[] = [
   "fireflyNameColor",
   "groundTextColor",
   "deathTextColor",
+  "markDateColor",
 ];
 // Whole numbers of marks; the host floors them the same way.
 const integers: (keyof Settings)[] = ["maxVisibleNotes", "maxVisibleDeaths"];
@@ -142,7 +147,8 @@ export function settingsFrom(input: Partial<Settings>): Settings {
       (key === "announcementChannels" &&
         ["tab", "all", "current"].includes(String(value))) ||
       (key === "hideIdentity" &&
-        ["off", "everywhere", "exceptGroundMarks"].includes(String(value)))
+        ["off", "everywhere", "exceptGroundMarks"].includes(String(value))) ||
+      (key === "markDateStyle" && ["tamriel", "earth"].includes(String(value)))
     )
       Object.assign(result, { [key]: value });
   }

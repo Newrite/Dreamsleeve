@@ -33,6 +33,7 @@ export namespace Dreamsleeve::Client
     std::uint64_t               requestId{};
     std::string                 text;
     Domain::GroundMarkPlacement placement;
+    Domain::GameDate            gameDate;  // Required: the calendar where the player stands now.
   };
 
   // The place the character died, with the killer's name or a cause; the
@@ -42,6 +43,7 @@ export namespace Dreamsleeve::Client
     std::uint64_t               requestId{};
     std::string                 label;
     Domain::GroundMarkPlacement placement;
+    Domain::GameDate            gameDate;  // Required: the calendar at the death.
   };
 
   // Only the author's own mark.

@@ -93,6 +93,13 @@ export namespace Dreamsleeve::Host
     bool        deathBorder{true};
     bool        combatHideGroundMarks{false};  // Statics and labels.
     bool        combatHideGroundText{false};   // Labels only.
+    // The in-game date as a header line on top of a mark's bubble. Style
+    // "tamriel" (Тирдас, 17 Последнего зерна) or "earth" (Вторник, 17 августа);
+    // the era and year are Tamriel's either way. The web UI lists use the same style.
+    std::string markDateStyle{"tamriel"};
+    bool        deathDateHeader{true};
+    bool        noteDateHeader{false};
+    std::string markDateColor{"#A9A69B"};
     // Where others see a server pseudonym instead of this player's names:
     // off | everywhere | exceptGroundMarks. Sent when a session opens; the host
     // alone writes it, after the server confirmed a switch.
@@ -203,6 +210,7 @@ export namespace Dreamsleeve::Host
     Choose(value.theme, {"skyrim", "contrast"}, defaults.theme);
     Choose(value.announcementChannels, {"tab", "all", "current"}, defaults.announcementChannels);
     Choose(value.hideIdentity, {"off", "everywhere", "exceptGroundMarks"}, defaults.hideIdentity);
+    Choose(value.markDateStyle, {"tamriel", "earth"}, defaults.markDateStyle);
 
     value.fireflyNameFontSize = Clamp(value.fireflyNameFontSize, 8, 48, defaults.fireflyNameFontSize);
     value.fireflyNameOffset   = Clamp(value.fireflyNameOffset, 0, 512, defaults.fireflyNameOffset);
@@ -227,6 +235,7 @@ export namespace Dreamsleeve::Host
     Color(value.fireflyNameColor, defaults.fireflyNameColor);
     Color(value.groundTextColor, defaults.groundTextColor);
     Color(value.deathTextColor, defaults.deathTextColor);
+    Color(value.markDateColor, defaults.markDateColor);
     value.fireflyHeightOffset = Clamp(value.fireflyHeightOffset, 0, 512, defaults.fireflyHeightOffset);
     value.maxVisibleNotes     = std::floor(Clamp(value.maxVisibleNotes, 1, 64, defaults.maxVisibleNotes));
     value.maxVisibleDeaths    = std::floor(Clamp(value.maxVisibleDeaths, 1, 64, defaults.maxVisibleDeaths));

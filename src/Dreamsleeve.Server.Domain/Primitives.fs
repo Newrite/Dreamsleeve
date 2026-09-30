@@ -100,6 +100,8 @@ type DomainError =
     | NotChatMember of PlayerId
     | MessageOutOfOrder of lastAccepted: ChatMessageId * received: ChatMessageId
     | DuplicateGroundMark of GroundMarkId
+    /// A GameDate component outside its calendar range.
+    | InvalidGameDate of field: string
 
 module internal PrimitiveValidation =
     let invalidControl multiline (rune: Rune) =

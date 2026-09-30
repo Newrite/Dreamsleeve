@@ -445,6 +445,8 @@ export function SettingsPanel({
             ["showDeathMarks", "Показывать места смерти"],
             ["groundBorder", "Рамка надписи"],
             ["deathBorder", "Рамка места смерти"],
+            ["deathDateHeader", "Дата над местом смерти"],
+            ["noteDateHeader", "Дата над надписью"],
           ] as const
         ).map(([key, label]) => (
           <label key={key}>
@@ -456,6 +458,21 @@ export function SettingsPanel({
             />
           </label>
         ))}
+        <label className={styles.choice}>
+          Календарь дат
+          <Select
+            label="Календарь дат"
+            value={s.markDateStyle}
+            options={[
+              {
+                value: "tamriel",
+                label: "Тамриэльский: Тирдас, Последнего зерна",
+              },
+              { value: "earth", label: "Привычный: вторник, августа" },
+            ]}
+            onChange={(markDateStyle) => chat.configure({ markDateStyle })}
+          />
+        </label>
         <label className={styles.choice}>
           Надписей рядом
           <Select
@@ -525,6 +542,17 @@ export function SettingsPanel({
           value={s.deathTextColor}
           onChange={(deathTextColor) => chat.configure({ deathTextColor })}
         />
+        <ColorField
+          label="Цвет даты"
+          value={s.markDateColor}
+          onChange={(markDateColor) => chat.configure({ markDateColor })}
+        />
+        <p className={styles.muted}>
+          Дата — игровая, как её видел автор: день недели, число, месяц, эра и
+          год, время. Она стоит шапкой над текстом метки и видна вместе с ним;
+          тот же календарь используется во вкладке «Метки». У меток, оставленных
+          до появления дат, её нет.
+        </p>
         <p className={styles.muted}>
           Надписи других игроков и места смерти рядом с вами: статик на земле,
           имя автора и текст над ним. Дальности — в игровых единицах; имя и

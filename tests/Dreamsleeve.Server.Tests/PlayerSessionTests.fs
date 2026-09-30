@@ -326,7 +326,8 @@ let private identityTests = [
                                            (LocationName.create 64 "Whiterun" |> ok)) Position.zero Rotation.zero
             let! _ = applyUpdate fixture 4UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
             let placement = GroundMarkPlacement.create location.Location.LocationId Position.zero (Radian.create 0.0f |> ok)
-            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(5UL, GroundNoteText.create 200 "note" |> ok, placement))
+            let date = GameDate.create 4 201 8 17 2 14 5 |> ok
+            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(5UL, GroundNoteText.create 200 "note" |> ok, placement, date))
             let! mark = nextMarkPlacement fixture
             equal (ValueSome strazh) mark.Pseudonym
             equal ValueNone mark.CharacterName
@@ -400,7 +401,8 @@ let private identityTests = [
                                            (LocationName.create 64 "Whiterun" |> ok)) Position.zero Rotation.zero
             let! _ = applyUpdate fixture 4UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
             let placement = GroundMarkPlacement.create location.Location.LocationId Position.zero (Radian.create 0.0f |> ok)
-            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(5UL, GroundNoteText.create 200 "note" |> ok, placement))
+            let date = GameDate.create 4 201 8 17 2 14 5 |> ok
+            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(5UL, GroundNoteText.create 200 "note" |> ok, placement, date))
             let! mark = nextMarkPlacement fixture
             equal ValueNone mark.Pseudonym
             equal (ValueSome name) mark.CharacterName
@@ -410,7 +412,7 @@ let private identityTests = [
             let! _ = receive fixture.Presence
             let! settled = receive fixture.Host
             equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.IdentityVisibilityChanged(6UL, ValueSome strazh, HiddenIdentity.Everywhere))) settled
-            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(7UL, GroundNoteText.create 200 "later" |> ok, placement))
+            do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(7UL, GroundNoteText.create 200 "later" |> ok, placement, date))
             let! hidden = nextMarkPlacement fixture
             equal (ValueSome strazh) hidden.Pseudonym
             equal ValueNone hidden.CharacterName

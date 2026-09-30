@@ -101,9 +101,11 @@ namespace Dreamsleeve::Client::Wire
     }
 
     if (packet.has_send_chat() && packet.send_chat().channel_id() == 0) return Invalid("channel_id");
-    if (const auto* note = std::get_if<PlaceGroundNote>(&request); note && (note->text.empty() || !ValidPlacement(note->placement)))
+    if (const auto* note = std::get_if<PlaceGroundNote>(&request);
+        note && (note->text.empty() || !ValidPlacement(note->placement) || !ValidGameDate(note->gameDate)))
       return Invalid("place_ground_note");
-    if (const auto* death = std::get_if<ReportDeath>(&request); death && !ValidPlacement(death->placement)) return Invalid("report_death");
+    if (const auto* death = std::get_if<ReportDeath>(&request); death && (!ValidPlacement(death->placement) || !ValidGameDate(death->gameDate)))
+      return Invalid("report_death");
     if (packet.has_remove_ground_mark() && packet.remove_ground_mark().mark_id() == 0) return Invalid("mark_id");
     if (packet.has_change_display_name() && packet.change_display_name().display_name().empty()) return Invalid("display_name");
 

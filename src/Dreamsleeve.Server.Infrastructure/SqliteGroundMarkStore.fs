@@ -29,6 +29,17 @@ module SqliteGroundMarkStore =
         | GroundMarkKind.Note -> 1L
         | GroundMarkKind.Death -> 2L
 
+    // All seven columns or none: marks stored before the game date was kept
+    // have none. The domain factory checks the ranges again.
+    let private gameDate (mark: main.ground_marks) =
+        let small (value: int64) = if value < 0L || value > int64 Int32.MaxValue then -1 else int value
+        match mark.game_era, mark.game_year, mark.game_month, mark.game_day, mark.game_day_of_week, mark.game_hour, mark.game_minute with
+        | None, None, None, None, None, None, None -> Ok ValueNone
+        | Some era, Some year, Some month, Some day, Some weekday, Some hour, Some minute ->
+            GameDate.create (small era) (small year) (small month) (small day) (small weekday) (small hour) (small minute)
+            |> Result.map ValueSome
+        | _ -> Error(DomainError.InvalidGameDate "partial")
+
     // Stored rows were validated when written; limits here only guard against a
     // damaged file, so they are the widest the domain accepts.
     let private toRecord (mark: main.ground_marks) (profile: main.profiles) (account: main.accounts) : Result<StoredGroundMark, AccountStoreError> =
@@ -48,9 +59,10 @@ module SqliteGroundMarkStore =
                 match mark.author_pseudonym with
                 | None -> Ok ValueNone
                 | Some name -> Pseudonym.restore name |> Result.map ValueSome
-            match pseudonym with
-            | Error _ -> invalidData "A stored ground mark has an invalid author pseudonym."
-            | Ok pseudonym ->
+            match pseudonym, gameDate mark with
+            | Error _, _ -> invalidData "A stored ground mark has an invalid author pseudonym."
+            | _, Error _ -> invalidData "A stored ground mark has an invalid game date."
+            | Ok pseudonym, Ok gameDate ->
             match GroundMarkId.create (uint64 mark.id), PlayerId.create (uint64 mark.author_id), body, characterName,
                   PluginName.create Int32.MaxValue mark.plugin_name, LocalFormId.create (uint32 mark.local_form_id),
                   Position.create (float32 mark.x) (float32 mark.y) (float32 mark.z), Radian.create (float32 mark.heading),
@@ -68,6 +80,7 @@ module SqliteGroundMarkStore =
                             GroundMark.create markId author body placement createdAt
                             |> GroundMark.withCharacterName characterName
                             |> GroundMark.withPseudonym pseudonym
+                            |> GroundMark.withGameDate gameDate
                          Author = PlayerData.create author username displayName }
             | _ -> invalidData "A stored ground mark or its author profile is invalid."
 
@@ -108,6 +121,7 @@ module SqliteGroundMarkStore =
         if id > uint64 Int64.MaxValue || author > uint64 Int64.MaxValue then
             invalidData "Ground mark identifiers must fit the positive Int64 range of SQLite."
         else
+            let date (part: GameDate -> int) = mark.GameDate |> ValueOption.map (part >> int64) |> ValueOption.toOption
             SqliteAccountStore.withContext config token (fun context ->
                 let row: main.ground_marks = {
                     id = int64 id
@@ -123,6 +137,13 @@ module SqliteGroundMarkStore =
                     heading = float (Radian.value mark.Placement.Heading)
                     created_at = Core.toUnixMilliseconds mark.CreatedAt
                     author_pseudonym = mark.Pseudonym |> ValueOption.map Pseudonym.value |> ValueOption.toOption
+                    game_era = date (fun value -> value.Era)
+                    game_year = date (fun value -> value.Year)
+                    game_month = date (fun value -> value.Month)
+                    game_day = date (fun value -> value.Day)
+                    game_day_of_week = date (fun value -> value.DayOfWeek)
+                    game_hour = date (fun value -> value.Hour)
+                    game_minute = date (fun value -> value.Minute)
                 }
                 let query = insert {
                     for stored in main.ground_marks do

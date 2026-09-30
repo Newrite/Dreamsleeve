@@ -26,16 +26,47 @@ namespace Dreamsleeve::Client::Wire::Detail
            std::isfinite(value.position.Y) && std::isfinite(value.position.Z) && std::isfinite(value.heading);
   }
 
+  // The same calendar ranges as the server's GameDate.create; no leap years.
+  bool ValidGameDate(const Domain::GameDate& value)
+  {
+    constexpr std::array<std::uint32_t, 12> MonthLengths{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    return value.era >= 1 && value.era <= 99 && value.year >= 1 && value.year <= 99999 && value.month >= 1 && value.month <= 12 &&
+           value.day >= 1 && value.day <= MonthLengths[value.month - 1] && value.dayOfWeek <= 6 && value.hour <= 23 && value.minute <= 59;
+  }
+
+  void WriteGameDate(P::GameDate& target, const Domain::GameDate& value)
+  {
+    target.set_era(value.era);
+    target.set_year(value.year);
+    target.set_month(value.month);
+    target.set_day(value.day);
+    target.set_day_of_week(value.dayOfWeek);
+    target.set_hour(value.hour);
+    target.set_minute(value.minute);
+  }
+
   void WriteNote(P::PlaceGroundNote& target, const PlaceGroundNote& value)
   {
     target.set_text(value.text);
     WritePlacement(*target.mutable_placement(), value.placement);
+    WriteGameDate(*target.mutable_game_date(), value.gameDate);
   }
 
   void WriteDeath(P::ReportDeath& target, const ReportDeath& value)
   {
     target.set_label(value.label);
     WritePlacement(*target.mutable_placement(), value.placement);
+    WriteGameDate(*target.mutable_game_date(), value.gameDate);
+  }
+
+  // Absent on marks stored before protocol 12; present means valid.
+  Result<std::optional<Domain::GameDate>> ReadGameDate(const P::GroundMark& source)
+  {
+    if (!source.has_game_date()) return std::optional<Domain::GameDate>{};
+    const auto&            date = source.game_date();
+    const Domain::GameDate value{date.era(), date.year(), date.month(), date.day(), date.day_of_week(), date.hour(), date.minute()};
+    if (!ValidGameDate(value)) return Invalid("game_date");
+    return std::optional{value};
   }
 
   Result<Domain::GroundMarkPlacement> ReadPlacement(const P::GroundMarkPlacement& source)
@@ -67,6 +98,8 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (!placement) return std::unexpected{placement.error()};
     auto flagged = ReadFlagged(source.text(), source.flagged());
     if (!flagged) return std::unexpected{flagged.error()};
+    auto gameDate = ReadGameDate(source);
+    if (!gameDate) return std::unexpected{gameDate.error()};
     return Domain::GroundMark{
         source.mark_id(),
         std::move(*author),
@@ -75,7 +108,8 @@ namespace Dreamsleeve::Client::Wire::Detail
         std::move(*flagged),
         std::move(*placement),
         Domain::FromUnixMilliseconds(source.created_at_unix_ms()),
-        source.has_character_name() ? std::optional{source.character_name()} : std::nullopt
+        source.has_character_name() ? std::optional{source.character_name()} : std::nullopt,
+        *gameDate
     };
   }
 

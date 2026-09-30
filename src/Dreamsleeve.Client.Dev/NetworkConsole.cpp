@@ -101,12 +101,22 @@ namespace
     if (json) output << "player " << *json << '\n';
   }
 
-  // "mark <id> kind=<1|2> author=<name>[ [pseudonymous]] x=<x> character=<name> text=<text>": one line per visible mark.
+  // "<era>E<year>-<MM>-<DD>T<hh>:<mm>", or "-" for a mark stored without a game date.
+  std::string DateText(const std::optional<Domain::GameDate>& date)
+  {
+    if (!date) return "-";
+    return std::format("{}E{}-{:02}-{:02}T{:02}:{:02}", date->era, date->year, date->month, date->day, date->hour, date->minute);
+  }
+
+  // The console has no game calendar: every mark it places is dated Tirdas, 17 Last Seed 4E 201, 14:05.
+  constexpr Domain::GameDate ConsoleGameDate{4, 201, 8, 17, 2, 14, 5};
+
+  // "mark <id> kind=<1|2> author=<name>[ [pseudonymous]] x=<x> character=<name> date=<date> text=<text>": one line per visible mark.
   void PrintMark(std::ostream& output, const Domain::GroundMark& mark)
   {
     output << "mark " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " author=" << mark.author.displayName
            << (mark.author.pseudonymous ? " [pseudonymous]" : "") << " x=" << mark.placement.position.X
-           << " character=" << mark.characterName.value_or("") << " text=" << mark.text << '\n';
+           << " character=" << mark.characterName.value_or("") << " date=" << DateText(mark.gameDate) << " text=" << mark.text << '\n';
   }
 
   constexpr std::string_view Commands =
@@ -118,13 +128,14 @@ namespace
     return hiding == Domain::HiddenIdentity::ExceptGroundMarks ? "except-marks" : "everywhere";
   }
 
-  // "own-marks <n>" then "own <id> kind=<1|2> text=<text>" per mark: the server's
+  // "own-marks <n>" then "own <id> kind=<1|2> date=<date> text=<text>" per mark: the server's
   // complete list of this player's marks, wherever they stand.
   void PrintOwnMarks(std::ostream& output, const std::vector<Domain::GroundMark>& marks)
   {
     output << "own-marks " << marks.size() << '\n';
     for (const auto& mark : marks)
-      output << "own " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " text=" << mark.text << '\n';
+      output << "own " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " date=" << DateText(mark.gameDate) << " text=" << mark.text
+             << '\n';
   }
 
   // The last position sent by move/location; marks are placed where the player stands.
@@ -232,9 +243,9 @@ namespace
       }
       const Domain::GroundMarkPlacement placement{lastLocation->location.locationId, lastLocation->position, lastLocation->rotation.Z};
       if (line.starts_with("note "))
-        command = PlaceGroundNote{*requestId, line.substr(5), placement};
+        command = PlaceGroundNote{*requestId, line.substr(5), placement, ConsoleGameDate};
       else
-        command = ReportDeath{*requestId, line.size() > 6 ? line.substr(6) : std::string{}, placement};
+        command = ReportDeath{*requestId, line.size() > 6 ? line.substr(6) : std::string{}, placement, ConsoleGameDate};
     }
     if (exchange.Post({generation, std::move(command)}) == CommandPostResult::Queued)
       std::cout << "request " << *requestId << " queued\n";

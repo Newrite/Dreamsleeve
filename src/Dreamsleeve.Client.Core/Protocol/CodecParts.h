@@ -34,6 +34,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<std::vector<Domain::TextSpan>> ReadFlagged(const std::string&, const google::protobuf::RepeatedPtrField<P::TextSpan>&);
 
   bool                           ValidPlacement(const Domain::GroundMarkPlacement&);
+  bool                           ValidGameDate(const Domain::GameDate&);
   void                           WriteNote(P::PlaceGroundNote&, const PlaceGroundNote&);
   void                           WriteDeath(P::ReportDeath&, const ReportDeath&);
   Result<Domain::GroundMark>     Mark(const P::GroundMark&);

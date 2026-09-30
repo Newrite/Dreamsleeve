@@ -160,6 +160,8 @@ type GroundMarkSubmission = {
     RequestId: uint64
     Body: GroundMarkBody
     Placement: GroundMarkPlacement
+    /// The author's in-game date, as the client reported it.
+    GameDate: GameDate
     /// Published character name at placement, already moderated by the session.
     CharacterName: CharacterName voption
     /// The author's pseudonym at placement; the mark keeps it for its lifetime.

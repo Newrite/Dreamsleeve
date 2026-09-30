@@ -61,6 +61,10 @@ namespace Protocol {
 namespace Chat {
 enum GroundMarkKind : int;
 extern const uint32_t GroundMarkKind_internal_data_[];
+class GameDate;
+struct GameDateDefaultTypeInternal;
+extern GameDateDefaultTypeInternal _GameDate_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull GameDate_class_data_;
 class GroundMark;
 struct GroundMarkDefaultTypeInternal;
 extern GroundMarkDefaultTypeInternal _GroundMark_default_instance_;
@@ -209,7 +213,7 @@ class RemoveGroundMark final : public ::google::protobuf::Message
     return *reinterpret_cast<const RemoveGroundMark*>(
         &_RemoveGroundMark_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(RemoveGroundMark& a, RemoveGroundMark& b) { a.Swap(&b); }
   inline void Swap(RemoveGroundMark* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -399,7 +403,7 @@ class GroundMarkRemoved final : public ::google::protobuf::Message
     return *reinterpret_cast<const GroundMarkRemoved*>(
         &_GroundMarkRemoved_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(GroundMarkRemoved& a, GroundMarkRemoved& b) { a.Swap(&b); }
   inline void Swap(GroundMarkRemoved* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -532,6 +536,268 @@ class GroundMarkRemoved final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull GroundMarkRemoved_class_data_;
+// -------------------------------------------------------------------
+
+class GameDate final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.GameDate) */ {
+ public:
+  inline GameDate() : GameDate(nullptr) {}
+  ~GameDate() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GameDate* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GameDate));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR GameDate(::google::protobuf::internal::ConstantInitialized);
+
+  inline GameDate(const GameDate& from) : GameDate(nullptr, from) {}
+  inline GameDate(GameDate&& from) noexcept
+      : GameDate(nullptr, ::std::move(from)) {}
+  inline GameDate& operator=(const GameDate& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GameDate& operator=(GameDate&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const GameDate& default_instance() {
+    return *reinterpret_cast<const GameDate*>(
+        &_GameDate_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(GameDate& a, GameDate& b) { a.Swap(&b); }
+  inline void Swap(GameDate* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GameDate* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GameDate* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GameDate>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GameDate& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GameDate& from) { GameDate::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GameDate* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.GameDate"; }
+
+  explicit GameDate(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GameDate(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GameDate& from);
+  GameDate(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GameDate&& from) noexcept
+      : GameDate(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kEraFieldNumber = 1,
+    kYearFieldNumber = 2,
+    kMonthFieldNumber = 3,
+    kDayFieldNumber = 4,
+    kDayOfWeekFieldNumber = 5,
+    kHourFieldNumber = 6,
+    kMinuteFieldNumber = 7,
+  };
+  // uint32 era = 1;
+  void clear_era() ;
+  ::uint32_t era() const;
+  void set_era(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_era() const;
+  void _internal_set_era(::uint32_t value);
+
+  public:
+  // uint32 year = 2;
+  void clear_year() ;
+  ::uint32_t year() const;
+  void set_year(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_year() const;
+  void _internal_set_year(::uint32_t value);
+
+  public:
+  // uint32 month = 3;
+  void clear_month() ;
+  ::uint32_t month() const;
+  void set_month(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_month() const;
+  void _internal_set_month(::uint32_t value);
+
+  public:
+  // uint32 day = 4;
+  void clear_day() ;
+  ::uint32_t day() const;
+  void set_day(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_day() const;
+  void _internal_set_day(::uint32_t value);
+
+  public:
+  // uint32 day_of_week = 5;
+  void clear_day_of_week() ;
+  ::uint32_t day_of_week() const;
+  void set_day_of_week(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_day_of_week() const;
+  void _internal_set_day_of_week(::uint32_t value);
+
+  public:
+  // uint32 hour = 6;
+  void clear_hour() ;
+  ::uint32_t hour() const;
+  void set_hour(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_hour() const;
+  void _internal_set_hour(::uint32_t value);
+
+  public:
+  // uint32 minute = 7;
+  void clear_minute() ;
+  ::uint32_t minute() const;
+  void set_minute(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_minute() const;
+  void _internal_set_minute(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.GameDate)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 7,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GameDate& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t era_;
+    ::uint32_t year_;
+    ::uint32_t month_;
+    ::uint32_t day_;
+    ::uint32_t day_of_week_;
+    ::uint32_t hour_;
+    ::uint32_t minute_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_ground_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull GameDate_class_data_;
 // -------------------------------------------------------------------
 
 class GroundMarkPlacement final : public ::google::protobuf::Message
@@ -813,7 +1079,7 @@ class ReportDeath final : public ::google::protobuf::Message
     return *reinterpret_cast<const ReportDeath*>(
         &_ReportDeath_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(ReportDeath& a, ReportDeath& b) { a.Swap(&b); }
   inline void Swap(ReportDeath* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -902,6 +1168,7 @@ class ReportDeath final : public ::google::protobuf::Message
   enum : int {
     kLabelFieldNumber = 1,
     kPlacementFieldNumber = 2,
+    kGameDateFieldNumber = 3,
   };
   // string label = 1;
   void clear_label() ;
@@ -933,12 +1200,27 @@ class ReportDeath final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::GroundMarkPlacement* PROTOBUF_NONNULL _internal_mutable_placement();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+  bool has_game_date() const;
+  void clear_game_date() ;
+  const ::Dreamsleeve::Protocol::Chat::GameDate& game_date() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE release_game_date();
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL mutable_game_date();
+  void set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE unsafe_arena_release_game_date();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::GameDate& _internal_game_date() const;
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL _internal_mutable_game_date();
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ReportDeath)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   1, 51,
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   2, 51,
                                    2>
       _table_;
 
@@ -961,6 +1243,7 @@ class ReportDeath final : public ::google::protobuf::Message
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr label_;
     ::Dreamsleeve::Protocol::Chat::GroundMarkPlacement* PROTOBUF_NULLABLE placement_;
+    ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE game_date_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1025,7 +1308,7 @@ class PlaceGroundNote final : public ::google::protobuf::Message
     return *reinterpret_cast<const PlaceGroundNote*>(
         &_PlaceGroundNote_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(PlaceGroundNote& a, PlaceGroundNote& b) { a.Swap(&b); }
   inline void Swap(PlaceGroundNote* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1114,6 +1397,7 @@ class PlaceGroundNote final : public ::google::protobuf::Message
   enum : int {
     kTextFieldNumber = 1,
     kPlacementFieldNumber = 2,
+    kGameDateFieldNumber = 3,
   };
   // string text = 1;
   void clear_text() ;
@@ -1145,12 +1429,27 @@ class PlaceGroundNote final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::GroundMarkPlacement* PROTOBUF_NONNULL _internal_mutable_placement();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+  bool has_game_date() const;
+  void clear_game_date() ;
+  const ::Dreamsleeve::Protocol::Chat::GameDate& game_date() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE release_game_date();
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL mutable_game_date();
+  void set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE unsafe_arena_release_game_date();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::GameDate& _internal_game_date() const;
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL _internal_mutable_game_date();
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlaceGroundNote)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   1, 54,
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   2, 54,
                                    2>
       _table_;
 
@@ -1173,6 +1472,7 @@ class PlaceGroundNote final : public ::google::protobuf::Message
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr text_;
     ::Dreamsleeve::Protocol::Chat::GroundMarkPlacement* PROTOBUF_NULLABLE placement_;
+    ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE game_date_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1237,7 +1537,7 @@ class GroundMark final : public ::google::protobuf::Message
     return *reinterpret_cast<const GroundMark*>(
         &_GroundMark_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(GroundMark& a, GroundMark& b) { a.Swap(&b); }
   inline void Swap(GroundMark* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1329,6 +1629,7 @@ class GroundMark final : public ::google::protobuf::Message
     kCharacterNameFieldNumber = 8,
     kAuthorFieldNumber = 2,
     kPlacementFieldNumber = 6,
+    kGameDateFieldNumber = 9,
     kMarkIdFieldNumber = 1,
     kCreatedAtUnixMsFieldNumber = 7,
     kKindFieldNumber = 3,
@@ -1411,6 +1712,21 @@ class GroundMark final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::GroundMarkPlacement* PROTOBUF_NONNULL _internal_mutable_placement();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.GameDate game_date = 9;
+  bool has_game_date() const;
+  void clear_game_date() ;
+  const ::Dreamsleeve::Protocol::Chat::GameDate& game_date() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE release_game_date();
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL mutable_game_date();
+  void set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE unsafe_arena_release_game_date();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::GameDate& _internal_game_date() const;
+  ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL _internal_mutable_game_date();
+
+  public:
   // uint64 mark_id = 1;
   void clear_mark_id() ;
   ::uint64_t mark_id() const;
@@ -1445,8 +1761,8 @@ class GroundMark final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 8,
-                                   3, 71,
+  static const ::google::protobuf::internal::TcParseTable<4, 9,
+                                   4, 71,
                                    2>
       _table_;
 
@@ -1472,6 +1788,7 @@ class GroundMark final : public ::google::protobuf::Message
     ::google::protobuf::internal::ArenaStringPtr character_name_;
     ::Dreamsleeve::Protocol::Chat::PlayerProfile* PROTOBUF_NULLABLE author_;
     ::Dreamsleeve::Protocol::Chat::GroundMarkPlacement* PROTOBUF_NULLABLE placement_;
+    ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE game_date_;
     ::uint64_t mark_id_;
     ::int64_t created_at_unix_ms_;
     int kind_;
@@ -1539,7 +1856,7 @@ class OwnGroundMarks final : public ::google::protobuf::Message
     return *reinterpret_cast<const OwnGroundMarks*>(
         &_OwnGroundMarks_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(OwnGroundMarks& a, OwnGroundMarks& b) { a.Swap(&b); }
   inline void Swap(OwnGroundMarks* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1736,7 +2053,7 @@ class GroundMarksChanged final : public ::google::protobuf::Message
     return *reinterpret_cast<const GroundMarksChanged*>(
         &_GroundMarksChanged_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(GroundMarksChanged& a, GroundMarksChanged& b) { a.Swap(&b); }
   inline void Swap(GroundMarksChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1978,7 +2295,7 @@ class GroundMarkPlaced final : public ::google::protobuf::Message
     return *reinterpret_cast<const GroundMarkPlaced*>(
         &_GroundMarkPlaced_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(GroundMarkPlaced& a, GroundMarkPlaced& b) { a.Swap(&b); }
   inline void Swap(GroundMarkPlaced* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2358,6 +2675,185 @@ inline void GroundMarkPlacement::_internal_set_heading(float value) {
 
 // -------------------------------------------------------------------
 
+// GameDate
+
+// uint32 era = 1;
+inline void GameDate::clear_era() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.era_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::uint32_t GameDate::era() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GameDate.era)
+  return _internal_era();
+}
+inline void GameDate::set_era(::uint32_t value) {
+  _internal_set_era(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GameDate.era)
+}
+inline ::uint32_t GameDate::_internal_era() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.era_;
+}
+inline void GameDate::_internal_set_era(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.era_ = value;
+}
+
+// uint32 year = 2;
+inline void GameDate::clear_year() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.year_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint32_t GameDate::year() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GameDate.year)
+  return _internal_year();
+}
+inline void GameDate::set_year(::uint32_t value) {
+  _internal_set_year(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GameDate.year)
+}
+inline ::uint32_t GameDate::_internal_year() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.year_;
+}
+inline void GameDate::_internal_set_year(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.year_ = value;
+}
+
+// uint32 month = 3;
+inline void GameDate::clear_month() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.month_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint32_t GameDate::month() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GameDate.month)
+  return _internal_month();
+}
+inline void GameDate::set_month(::uint32_t value) {
+  _internal_set_month(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GameDate.month)
+}
+inline ::uint32_t GameDate::_internal_month() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.month_;
+}
+inline void GameDate::_internal_set_month(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.month_ = value;
+}
+
+// uint32 day = 4;
+inline void GameDate::clear_day() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline ::uint32_t GameDate::day() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GameDate.day)
+  return _internal_day();
+}
+inline void GameDate::set_day(::uint32_t value) {
+  _internal_set_day(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GameDate.day)
+}
+inline ::uint32_t GameDate::_internal_day() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.day_;
+}
+inline void GameDate::_internal_set_day(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_ = value;
+}
+
+// uint32 day_of_week = 5;
+inline void GameDate::clear_day_of_week() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_of_week_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline ::uint32_t GameDate::day_of_week() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GameDate.day_of_week)
+  return _internal_day_of_week();
+}
+inline void GameDate::set_day_of_week(::uint32_t value) {
+  _internal_set_day_of_week(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GameDate.day_of_week)
+}
+inline ::uint32_t GameDate::_internal_day_of_week() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.day_of_week_;
+}
+inline void GameDate::_internal_set_day_of_week(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_of_week_ = value;
+}
+
+// uint32 hour = 6;
+inline void GameDate::clear_hour() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hour_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline ::uint32_t GameDate::hour() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GameDate.hour)
+  return _internal_hour();
+}
+inline void GameDate::set_hour(::uint32_t value) {
+  _internal_set_hour(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GameDate.hour)
+}
+inline ::uint32_t GameDate::_internal_hour() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hour_;
+}
+inline void GameDate::_internal_set_hour(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hour_ = value;
+}
+
+// uint32 minute = 7;
+inline void GameDate::clear_minute() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minute_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000040U);
+}
+inline ::uint32_t GameDate::minute() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GameDate.minute)
+  return _internal_minute();
+}
+inline void GameDate::set_minute(::uint32_t value) {
+  _internal_set_minute(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GameDate.minute)
+}
+inline ::uint32_t GameDate::_internal_minute() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.minute_;
+}
+inline void GameDate::_internal_set_minute(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minute_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // GroundMark
 
 // uint64 mark_id = 1;
@@ -2365,7 +2861,7 @@ inline void GroundMark::clear_mark_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mark_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000040U);
 }
 inline ::uint64_t GroundMark::mark_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GroundMark.mark_id)
@@ -2373,7 +2869,7 @@ inline ::uint64_t GroundMark::mark_id() const {
 }
 inline void GroundMark::set_mark_id(::uint64_t value) {
   _internal_set_mark_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GroundMark.mark_id)
 }
 inline ::uint64_t GroundMark::_internal_mark_id() const {
@@ -2483,7 +2979,7 @@ inline void GroundMark::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000080U);
+                  0x00000100U);
 }
 inline ::Dreamsleeve::Protocol::Chat::GroundMarkKind GroundMark::kind() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GroundMark.kind)
@@ -2491,7 +2987,7 @@ inline ::Dreamsleeve::Protocol::Chat::GroundMarkKind GroundMark::kind() const {
 }
 inline void GroundMark::set_kind(::Dreamsleeve::Protocol::Chat::GroundMarkKind value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GroundMark.kind)
 }
 inline ::Dreamsleeve::Protocol::Chat::GroundMarkKind GroundMark::_internal_kind() const {
@@ -2722,7 +3218,7 @@ inline void GroundMark::clear_created_at_unix_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_unix_ms_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
+                  0x00000080U);
 }
 inline ::int64_t GroundMark::created_at_unix_ms() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GroundMark.created_at_unix_ms)
@@ -2730,7 +3226,7 @@ inline ::int64_t GroundMark::created_at_unix_ms() const {
 }
 inline void GroundMark::set_created_at_unix_ms(::int64_t value) {
   _internal_set_created_at_unix_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GroundMark.created_at_unix_ms)
 }
 inline ::int64_t GroundMark::_internal_created_at_unix_ms() const {
@@ -2809,6 +3305,105 @@ inline void GroundMark::set_allocated_character_name(::std::string* PROTOBUF_NUL
     _impl_.character_name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.GroundMark.character_name)
+}
+
+// .Dreamsleeve.Protocol.Chat.GameDate game_date = 9;
+inline bool GroundMark::has_game_date() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.game_date_ != nullptr);
+  return value;
+}
+inline void GroundMark::clear_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.game_date_ != nullptr) _impl_.game_date_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GameDate& GroundMark::_internal_game_date() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::GameDate* p = _impl_.game_date_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::GameDate&>(::Dreamsleeve::Protocol::Chat::_GameDate_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GameDate& GroundMark::game_date() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GroundMark.game_date)
+  return _internal_game_date();
+}
+inline void GroundMark::unsafe_arena_set_allocated_game_date(
+    ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.game_date_);
+  }
+  _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.GroundMark.game_date)
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE GroundMark::release_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* released = _impl_.game_date_;
+  _impl_.game_date_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE GroundMark::unsafe_arena_release_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.GroundMark.game_date)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* temp = _impl_.game_date_;
+  _impl_.game_date_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL GroundMark::_internal_mutable_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.game_date_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::GameDate>(GetArena());
+    _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(p);
+  }
+  return _impl_.game_date_;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL GroundMark::mutable_game_date()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* _msg = _internal_mutable_game_date();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GroundMark.game_date)
+  return _msg;
+}
+inline void GroundMark::set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.game_date_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.GroundMark.game_date)
 }
 
 // -------------------------------------------------------------------
@@ -2979,6 +3574,105 @@ inline void PlaceGroundNote::set_allocated_placement(::Dreamsleeve::Protocol::Ch
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlaceGroundNote.placement)
 }
 
+// .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+inline bool PlaceGroundNote::has_game_date() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.game_date_ != nullptr);
+  return value;
+}
+inline void PlaceGroundNote::clear_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.game_date_ != nullptr) _impl_.game_date_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GameDate& PlaceGroundNote::_internal_game_date() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::GameDate* p = _impl_.game_date_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::GameDate&>(::Dreamsleeve::Protocol::Chat::_GameDate_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GameDate& PlaceGroundNote::game_date() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlaceGroundNote.game_date)
+  return _internal_game_date();
+}
+inline void PlaceGroundNote::unsafe_arena_set_allocated_game_date(
+    ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.game_date_);
+  }
+  _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.PlaceGroundNote.game_date)
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE PlaceGroundNote::release_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* released = _impl_.game_date_;
+  _impl_.game_date_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE PlaceGroundNote::unsafe_arena_release_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.PlaceGroundNote.game_date)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* temp = _impl_.game_date_;
+  _impl_.game_date_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL PlaceGroundNote::_internal_mutable_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.game_date_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::GameDate>(GetArena());
+    _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(p);
+  }
+  return _impl_.game_date_;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL PlaceGroundNote::mutable_game_date()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* _msg = _internal_mutable_game_date();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.PlaceGroundNote.game_date)
+  return _msg;
+}
+inline void PlaceGroundNote::set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.game_date_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlaceGroundNote.game_date)
+}
+
 // -------------------------------------------------------------------
 
 // ReportDeath
@@ -3145,6 +3839,105 @@ inline void ReportDeath::set_allocated_placement(::Dreamsleeve::Protocol::Chat::
 
   _impl_.placement_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GroundMarkPlacement*>(value);
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ReportDeath.placement)
+}
+
+// .Dreamsleeve.Protocol.Chat.GameDate game_date = 3;
+inline bool ReportDeath::has_game_date() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.game_date_ != nullptr);
+  return value;
+}
+inline void ReportDeath::clear_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.game_date_ != nullptr) _impl_.game_date_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GameDate& ReportDeath::_internal_game_date() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Chat::GameDate* p = _impl_.game_date_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::GameDate&>(::Dreamsleeve::Protocol::Chat::_GameDate_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GameDate& ReportDeath::game_date() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ReportDeath.game_date)
+  return _internal_game_date();
+}
+inline void ReportDeath::unsafe_arena_set_allocated_game_date(
+    ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.game_date_);
+  }
+  _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ReportDeath.game_date)
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE ReportDeath::release_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* released = _impl_.game_date_;
+  _impl_.game_date_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE ReportDeath::unsafe_arena_release_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ReportDeath.game_date)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* temp = _impl_.game_date_;
+  _impl_.game_date_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL ReportDeath::_internal_mutable_game_date() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.game_date_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::GameDate>(GetArena());
+    _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(p);
+  }
+  return _impl_.game_date_;
+}
+inline ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL ReportDeath::mutable_game_date()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Chat::GameDate* _msg = _internal_mutable_game_date();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ReportDeath.game_date)
+  return _msg;
+}
+inline void ReportDeath::set_allocated_game_date(::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.game_date_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ReportDeath.game_date)
 }
 
 // -------------------------------------------------------------------

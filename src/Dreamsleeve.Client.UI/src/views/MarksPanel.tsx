@@ -10,7 +10,8 @@ const timeFormat = new Intl.DateTimeFormat("ru-RU", {
 });
 const coordinate = (value: number) => Math.round(value).toString();
 // One row per mark: kind, text, author (nearby only), character snapshot,
-// time and the place. Text is a React text node, never HTML.
+// the in-game date, the real time and the place. Text is a React text node,
+// never HTML.
 function MarkRow({
   mark,
   action,
@@ -27,7 +28,13 @@ function MarkRow({
       <span className={styles.markMeta}>
         {mark.author !== undefined && <b>{mark.author}</b>}
         {mark.character !== undefined && <i>{mark.character}</i>}
-        <time dateTime={new Date(mark.time).toISOString()}>
+        {mark.gameDate !== undefined && (
+          <span title="Игровая дата у автора">{mark.gameDate}</span>
+        )}
+        <time
+          title="Реальное время"
+          dateTime={new Date(mark.time).toISOString()}
+        >
           {timeFormat.format(mark.time)}
         </time>
         <small title="Пространство (WRLD/CELL) и координаты в игровых единицах">

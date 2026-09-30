@@ -29,37 +29,44 @@ namespace Dreamsleeve.Protocol.Chat {
             "bmRNYXJrUGxhY2VtZW50EjcKC2xvY2F0aW9uX2lkGAEgASgLMiIuRHJlYW1z",
             "bGVldmUuUHJvdG9jb2wuQ2hhdC5Gb3JtS2V5EjUKCHBvc2l0aW9uGAIgASgL",
             "MiMuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Qb3NpdGlvbhIPCgdoZWFk",
-            "aW5nGAMgASgCIuMCCgpHcm91bmRNYXJrEg8KB21hcmtfaWQYASABKAQSOAoG",
-            "YXV0aG9yGAIgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5",
-            "ZXJQcm9maWxlEjcKBGtpbmQYAyABKA4yKS5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
-            "bC5DaGF0Lkdyb3VuZE1hcmtLaW5kEgwKBHRleHQYBCABKAkSNAoHZmxhZ2dl",
-            "ZBgFIAMoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuVGV4dFNwYW4S",
-            "QQoJcGxhY2VtZW50GAYgASgLMi4uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
-            "dC5Hcm91bmRNYXJrUGxhY2VtZW50EhoKEmNyZWF0ZWRfYXRfdW5peF9tcxgH",
-            "IAEoAxIbCg5jaGFyYWN0ZXJfbmFtZRgIIAEoCUgAiAEBQhEKD19jaGFyYWN0",
-            "ZXJfbmFtZSJiCg9QbGFjZUdyb3VuZE5vdGUSDAoEdGV4dBgBIAEoCRJBCglw",
-            "bGFjZW1lbnQYAiABKAsyLi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkdy",
-            "b3VuZE1hcmtQbGFjZW1lbnQiXwoLUmVwb3J0RGVhdGgSDQoFbGFiZWwYASAB",
-            "KAkSQQoJcGxhY2VtZW50GAIgASgLMi4uRHJlYW1zbGVldmUuUHJvdG9jb2wu",
-            "Q2hhdC5Hcm91bmRNYXJrUGxhY2VtZW50IiMKEFJlbW92ZUdyb3VuZE1hcmsS",
-            "DwoHbWFya19pZBgBIAEoBCKFAQoSR3JvdW5kTWFya3NDaGFuZ2VkEhUKDXZp",
-            "ZXdfcmV2aXNpb24YASABKAQSNAoFYWRkZWQYAiADKAsyJS5EcmVhbXNsZWV2",
-            "ZS5Qcm90b2NvbC5DaGF0Lkdyb3VuZE1hcmsSEwoLcmVtb3ZlZF9pZHMYAyAD",
-            "KAQSDQoFY2xlYXIYBCABKAgiWwoQR3JvdW5kTWFya1BsYWNlZBIzCgRtYXJr",
-            "GAEgASgLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Hcm91bmRNYXJr",
-            "EhIKCmV2aWN0ZWRfaWQYAiABKAQiJAoRR3JvdW5kTWFya1JlbW92ZWQSDwoH",
-            "bWFya19pZBgBIAEoBCJGCg5Pd25Hcm91bmRNYXJrcxI0CgVtYXJrcxgBIAMo",
-            "CzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3JvdW5kTWFyayppCg5H",
-            "cm91bmRNYXJrS2luZBIgChxHUk9VTkRfTUFSS19LSU5EX1VOU1BFQ0lGSUVE",
-            "EAASGQoVR1JPVU5EX01BUktfS0lORF9OT1RFEAESGgoWR1JPVU5EX01BUktf",
-            "S0lORF9ERUFUSBACYgZwcm90bzM="));
+            "aW5nGAMgASgCInQKCEdhbWVEYXRlEgsKA2VyYRgBIAEoDRIMCgR5ZWFyGAIg",
+            "ASgNEg0KBW1vbnRoGAMgASgNEgsKA2RheRgEIAEoDRITCgtkYXlfb2Zfd2Vl",
+            "axgFIAEoDRIMCgRob3VyGAYgASgNEg4KBm1pbnV0ZRgHIAEoDSKbAwoKR3Jv",
+            "dW5kTWFyaxIPCgdtYXJrX2lkGAEgASgEEjgKBmF1dGhvchgCIAEoCzIoLkRy",
+            "ZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyUHJvZmlsZRI3CgRraW5k",
+            "GAMgASgOMikuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Hcm91bmRNYXJr",
+            "S2luZBIMCgR0ZXh0GAQgASgJEjQKB2ZsYWdnZWQYBSADKAsyIy5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0LlRleHRTcGFuEkEKCXBsYWNlbWVudBgGIAEo",
+            "CzIuLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3JvdW5kTWFya1BsYWNl",
+            "bWVudBIaChJjcmVhdGVkX2F0X3VuaXhfbXMYByABKAMSGwoOY2hhcmFjdGVy",
+            "X25hbWUYCCABKAlIAIgBARI2CglnYW1lX2RhdGUYCSABKAsyIy5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0LkdhbWVEYXRlQhEKD19jaGFyYWN0ZXJfbmFt",
+            "ZSKaAQoPUGxhY2VHcm91bmROb3RlEgwKBHRleHQYASABKAkSQQoJcGxhY2Vt",
+            "ZW50GAIgASgLMi4uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Hcm91bmRN",
+            "YXJrUGxhY2VtZW50EjYKCWdhbWVfZGF0ZRgDIAEoCzIjLkRyZWFtc2xlZXZl",
+            "LlByb3RvY29sLkNoYXQuR2FtZURhdGUilwEKC1JlcG9ydERlYXRoEg0KBWxh",
+            "YmVsGAEgASgJEkEKCXBsYWNlbWVudBgCIAEoCzIuLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLkNoYXQuR3JvdW5kTWFya1BsYWNlbWVudBI2CglnYW1lX2RhdGUY",
+            "AyABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkdhbWVEYXRlIiMK",
+            "EFJlbW92ZUdyb3VuZE1hcmsSDwoHbWFya19pZBgBIAEoBCKFAQoSR3JvdW5k",
+            "TWFya3NDaGFuZ2VkEhUKDXZpZXdfcmV2aXNpb24YASABKAQSNAoFYWRkZWQY",
+            "AiADKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkdyb3VuZE1hcmsS",
+            "EwoLcmVtb3ZlZF9pZHMYAyADKAQSDQoFY2xlYXIYBCABKAgiWwoQR3JvdW5k",
+            "TWFya1BsYWNlZBIzCgRtYXJrGAEgASgLMiUuRHJlYW1zbGVldmUuUHJvdG9j",
+            "b2wuQ2hhdC5Hcm91bmRNYXJrEhIKCmV2aWN0ZWRfaWQYAiABKAQiJAoRR3Jv",
+            "dW5kTWFya1JlbW92ZWQSDwoHbWFya19pZBgBIAEoBCJGCg5Pd25Hcm91bmRN",
+            "YXJrcxI0CgVtYXJrcxgBIAMoCzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
+            "YXQuR3JvdW5kTWFyayppCg5Hcm91bmRNYXJrS2luZBIgChxHUk9VTkRfTUFS",
+            "S19LSU5EX1VOU1BFQ0lGSUVEEAASGQoVR1JPVU5EX01BUktfS0lORF9OT1RF",
+            "EAESGgoWR1JPVU5EX01BUktfS0lORF9ERUFUSBACYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkKind), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkPlacement), global::Dreamsleeve.Protocol.Chat.GroundMarkPlacement.Parser, new[]{ "LocationId", "Position", "Heading" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMark), global::Dreamsleeve.Protocol.Chat.GroundMark.Parser, new[]{ "MarkId", "Author", "Kind", "Text", "Flagged", "Placement", "CreatedAtUnixMs", "CharacterName" }, new[]{ "CharacterName" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlaceGroundNote), global::Dreamsleeve.Protocol.Chat.PlaceGroundNote.Parser, new[]{ "Text", "Placement" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ReportDeath), global::Dreamsleeve.Protocol.Chat.ReportDeath.Parser, new[]{ "Label", "Placement" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GameDate), global::Dreamsleeve.Protocol.Chat.GameDate.Parser, new[]{ "Era", "Year", "Month", "Day", "DayOfWeek", "Hour", "Minute" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMark), global::Dreamsleeve.Protocol.Chat.GroundMark.Parser, new[]{ "MarkId", "Author", "Kind", "Text", "Flagged", "Placement", "CreatedAtUnixMs", "CharacterName", "GameDate" }, new[]{ "CharacterName" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlaceGroundNote), global::Dreamsleeve.Protocol.Chat.PlaceGroundNote.Parser, new[]{ "Text", "Placement", "GameDate" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ReportDeath), global::Dreamsleeve.Protocol.Chat.ReportDeath.Parser, new[]{ "Label", "Placement", "GameDate" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RemoveGroundMark), global::Dreamsleeve.Protocol.Chat.RemoveGroundMark.Parser, new[]{ "MarkId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarksChanged), global::Dreamsleeve.Protocol.Chat.GroundMarksChanged.Parser, new[]{ "ViewRevision", "Added", "RemovedIds", "Clear" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkPlaced), global::Dreamsleeve.Protocol.Chat.GroundMarkPlaced.Parser, new[]{ "Mark", "EvictedId" }, null, null, null, null),
@@ -387,6 +394,452 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
+  /// <summary>
+  /// The in-game calendar at placement, as the author's game showed it. Reported
+  /// by the client and only checked for ranges: it is flavour, not a timestamp.
+  /// The vanilla calendar has no era variable; its date line prints the Fourth Era.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GameDate : pb::IMessage<GameDate>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GameDate> _parser = new pb::MessageParser<GameDate>(() => new GameDate());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GameDate> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[1]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GameDate() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GameDate(GameDate other) : this() {
+      era_ = other.era_;
+      year_ = other.year_;
+      month_ = other.month_;
+      day_ = other.day_;
+      dayOfWeek_ = other.dayOfWeek_;
+      hour_ = other.hour_;
+      minute_ = other.minute_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GameDate Clone() {
+      return new GameDate(this);
+    }
+
+    /// <summary>Field number for the "era" field.</summary>
+    public const int EraFieldNumber = 1;
+    private uint era_;
+    /// <summary>
+    /// 1..99; 4 is the Fourth Era.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Era {
+      get { return era_; }
+      set {
+        era_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "year" field.</summary>
+    public const int YearFieldNumber = 2;
+    private uint year_;
+    /// <summary>
+    /// 1..99999 within the era.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Year {
+      get { return year_; }
+      set {
+        year_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "month" field.</summary>
+    public const int MonthFieldNumber = 3;
+    private uint month_;
+    /// <summary>
+    /// 1..12; 1 is Morning Star.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Month {
+      get { return month_; }
+      set {
+        month_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "day" field.</summary>
+    public const int DayFieldNumber = 4;
+    private uint day_;
+    /// <summary>
+    /// 1..the length of the month (28..31, no leap years).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Day {
+      get { return day_; }
+      set {
+        day_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "day_of_week" field.</summary>
+    public const int DayOfWeekFieldNumber = 5;
+    private uint dayOfWeek_;
+    /// <summary>
+    /// 0..6; 0 is Sundas.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint DayOfWeek {
+      get { return dayOfWeek_; }
+      set {
+        dayOfWeek_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "hour" field.</summary>
+    public const int HourFieldNumber = 6;
+    private uint hour_;
+    /// <summary>
+    /// 0..23.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Hour {
+      get { return hour_; }
+      set {
+        hour_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "minute" field.</summary>
+    public const int MinuteFieldNumber = 7;
+    private uint minute_;
+    /// <summary>
+    /// 0..59.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Minute {
+      get { return minute_; }
+      set {
+        minute_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GameDate);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GameDate other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Era != other.Era) return false;
+      if (Year != other.Year) return false;
+      if (Month != other.Month) return false;
+      if (Day != other.Day) return false;
+      if (DayOfWeek != other.DayOfWeek) return false;
+      if (Hour != other.Hour) return false;
+      if (Minute != other.Minute) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Era != 0) hash ^= Era.GetHashCode();
+      if (Year != 0) hash ^= Year.GetHashCode();
+      if (Month != 0) hash ^= Month.GetHashCode();
+      if (Day != 0) hash ^= Day.GetHashCode();
+      if (DayOfWeek != 0) hash ^= DayOfWeek.GetHashCode();
+      if (Hour != 0) hash ^= Hour.GetHashCode();
+      if (Minute != 0) hash ^= Minute.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Era != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Era);
+      }
+      if (Year != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(Year);
+      }
+      if (Month != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Month);
+      }
+      if (Day != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(Day);
+      }
+      if (DayOfWeek != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(DayOfWeek);
+      }
+      if (Hour != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(Hour);
+      }
+      if (Minute != 0) {
+        output.WriteRawTag(56);
+        output.WriteUInt32(Minute);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Era != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Era);
+      }
+      if (Year != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(Year);
+      }
+      if (Month != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Month);
+      }
+      if (Day != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(Day);
+      }
+      if (DayOfWeek != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(DayOfWeek);
+      }
+      if (Hour != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(Hour);
+      }
+      if (Minute != 0) {
+        output.WriteRawTag(56);
+        output.WriteUInt32(Minute);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Era != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Era);
+      }
+      if (Year != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Year);
+      }
+      if (Month != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Month);
+      }
+      if (Day != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Day);
+      }
+      if (DayOfWeek != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(DayOfWeek);
+      }
+      if (Hour != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Hour);
+      }
+      if (Minute != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Minute);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GameDate other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Era != 0) {
+        Era = other.Era;
+      }
+      if (other.Year != 0) {
+        Year = other.Year;
+      }
+      if (other.Month != 0) {
+        Month = other.Month;
+      }
+      if (other.Day != 0) {
+        Day = other.Day;
+      }
+      if (other.DayOfWeek != 0) {
+        DayOfWeek = other.DayOfWeek;
+      }
+      if (other.Hour != 0) {
+        Hour = other.Hour;
+      }
+      if (other.Minute != 0) {
+        Minute = other.Minute;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Era = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Year = input.ReadUInt32();
+            break;
+          }
+          case 24: {
+            Month = input.ReadUInt32();
+            break;
+          }
+          case 32: {
+            Day = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            DayOfWeek = input.ReadUInt32();
+            break;
+          }
+          case 48: {
+            Hour = input.ReadUInt32();
+            break;
+          }
+          case 56: {
+            Minute = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Era = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Year = input.ReadUInt32();
+            break;
+          }
+          case 24: {
+            Month = input.ReadUInt32();
+            break;
+          }
+          case 32: {
+            Day = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            DayOfWeek = input.ReadUInt32();
+            break;
+          }
+          case 48: {
+            Hour = input.ReadUInt32();
+            break;
+          }
+          case 56: {
+            Minute = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GroundMark : pb::IMessage<GroundMark>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -402,7 +855,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[1]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[2]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -430,6 +883,7 @@ namespace Dreamsleeve.Protocol.Chat {
       placement_ = other.placement_ != null ? other.placement_.Clone() : null;
       createdAtUnixMs_ = other.createdAtUnixMs_;
       characterName_ = other.characterName_;
+      gameDate_ = other.gameDate_ != null ? other.gameDate_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -565,6 +1019,21 @@ namespace Dreamsleeve.Protocol.Chat {
       characterName_ = null;
     }
 
+    /// <summary>Field number for the "game_date" field.</summary>
+    public const int GameDateFieldNumber = 9;
+    private global::Dreamsleeve.Protocol.Chat.GameDate gameDate_;
+    /// <summary>
+    /// The author's in-game date at placement; absent on marks stored before version 12.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GameDate GameDate {
+      get { return gameDate_; }
+      set {
+        gameDate_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -588,6 +1057,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (!object.Equals(Placement, other.Placement)) return false;
       if (CreatedAtUnixMs != other.CreatedAtUnixMs) return false;
       if (CharacterName != other.CharacterName) return false;
+      if (!object.Equals(GameDate, other.GameDate)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -603,6 +1073,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (placement_ != null) hash ^= Placement.GetHashCode();
       if (CreatedAtUnixMs != 0L) hash ^= CreatedAtUnixMs.GetHashCode();
       if (HasCharacterName) hash ^= CharacterName.GetHashCode();
+      if (gameDate_ != null) hash ^= GameDate.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -650,6 +1121,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(66);
         output.WriteString(CharacterName);
       }
+      if (gameDate_ != null) {
+        output.WriteRawTag(74);
+        output.WriteMessage(GameDate);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -689,6 +1164,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(66);
         output.WriteString(CharacterName);
       }
+      if (gameDate_ != null) {
+        output.WriteRawTag(74);
+        output.WriteMessage(GameDate);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -720,6 +1199,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (HasCharacterName) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(CharacterName);
+      }
+      if (gameDate_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(GameDate);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -760,6 +1242,12 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (other.HasCharacterName) {
         CharacterName = other.CharacterName;
+      }
+      if (other.gameDate_ != null) {
+        if (gameDate_ == null) {
+          GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+        }
+        GameDate.MergeFrom(other.GameDate);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -816,6 +1304,13 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 66: {
             CharacterName = input.ReadString();
+            break;
+          }
+          case 74: {
+            if (gameDate_ == null) {
+              GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+            }
+            input.ReadMessage(GameDate);
             break;
           }
         }
@@ -875,6 +1370,13 @@ namespace Dreamsleeve.Protocol.Chat {
             CharacterName = input.ReadString();
             break;
           }
+          case 74: {
+            if (gameDate_ == null) {
+              GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+            }
+            input.ReadMessage(GameDate);
+            break;
+          }
         }
       }
     }
@@ -900,7 +1402,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[2]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[3]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -922,6 +1424,7 @@ namespace Dreamsleeve.Protocol.Chat {
     public PlaceGroundNote(PlaceGroundNote other) : this() {
       text_ = other.text_;
       placement_ = other.placement_ != null ? other.placement_.Clone() : null;
+      gameDate_ = other.gameDate_ != null ? other.gameDate_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -955,6 +1458,21 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "game_date" field.</summary>
+    public const int GameDateFieldNumber = 3;
+    private global::Dreamsleeve.Protocol.Chat.GameDate gameDate_;
+    /// <summary>
+    /// Required.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GameDate GameDate {
+      get { return gameDate_; }
+      set {
+        gameDate_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -972,6 +1490,7 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (Text != other.Text) return false;
       if (!object.Equals(Placement, other.Placement)) return false;
+      if (!object.Equals(GameDate, other.GameDate)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -981,6 +1500,7 @@ namespace Dreamsleeve.Protocol.Chat {
       int hash = 1;
       if (Text.Length != 0) hash ^= Text.GetHashCode();
       if (placement_ != null) hash ^= Placement.GetHashCode();
+      if (gameDate_ != null) hash ^= GameDate.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1007,6 +1527,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(18);
         output.WriteMessage(Placement);
       }
+      if (gameDate_ != null) {
+        output.WriteRawTag(26);
+        output.WriteMessage(GameDate);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1025,6 +1549,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(18);
         output.WriteMessage(Placement);
       }
+      if (gameDate_ != null) {
+        output.WriteRawTag(26);
+        output.WriteMessage(GameDate);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1040,6 +1568,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (placement_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Placement);
+      }
+      if (gameDate_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(GameDate);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1061,6 +1592,12 @@ namespace Dreamsleeve.Protocol.Chat {
           Placement = new global::Dreamsleeve.Protocol.Chat.GroundMarkPlacement();
         }
         Placement.MergeFrom(other.Placement);
+      }
+      if (other.gameDate_ != null) {
+        if (gameDate_ == null) {
+          GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+        }
+        GameDate.MergeFrom(other.GameDate);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -1090,6 +1627,13 @@ namespace Dreamsleeve.Protocol.Chat {
               Placement = new global::Dreamsleeve.Protocol.Chat.GroundMarkPlacement();
             }
             input.ReadMessage(Placement);
+            break;
+          }
+          case 26: {
+            if (gameDate_ == null) {
+              GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+            }
+            input.ReadMessage(GameDate);
             break;
           }
         }
@@ -1122,6 +1666,13 @@ namespace Dreamsleeve.Protocol.Chat {
             input.ReadMessage(Placement);
             break;
           }
+          case 26: {
+            if (gameDate_ == null) {
+              GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+            }
+            input.ReadMessage(GameDate);
+            break;
+          }
         }
       }
     }
@@ -1148,7 +1699,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[3]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[4]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1170,6 +1721,7 @@ namespace Dreamsleeve.Protocol.Chat {
     public ReportDeath(ReportDeath other) : this() {
       label_ = other.label_;
       placement_ = other.placement_ != null ? other.placement_.Clone() : null;
+      gameDate_ = other.gameDate_ != null ? other.gameDate_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -1203,6 +1755,21 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "game_date" field.</summary>
+    public const int GameDateFieldNumber = 3;
+    private global::Dreamsleeve.Protocol.Chat.GameDate gameDate_;
+    /// <summary>
+    /// Required: the game date of the death.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GameDate GameDate {
+      get { return gameDate_; }
+      set {
+        gameDate_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -1220,6 +1787,7 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (Label != other.Label) return false;
       if (!object.Equals(Placement, other.Placement)) return false;
+      if (!object.Equals(GameDate, other.GameDate)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1229,6 +1797,7 @@ namespace Dreamsleeve.Protocol.Chat {
       int hash = 1;
       if (Label.Length != 0) hash ^= Label.GetHashCode();
       if (placement_ != null) hash ^= Placement.GetHashCode();
+      if (gameDate_ != null) hash ^= GameDate.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1255,6 +1824,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(18);
         output.WriteMessage(Placement);
       }
+      if (gameDate_ != null) {
+        output.WriteRawTag(26);
+        output.WriteMessage(GameDate);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1273,6 +1846,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(18);
         output.WriteMessage(Placement);
       }
+      if (gameDate_ != null) {
+        output.WriteRawTag(26);
+        output.WriteMessage(GameDate);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1288,6 +1865,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (placement_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Placement);
+      }
+      if (gameDate_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(GameDate);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1309,6 +1889,12 @@ namespace Dreamsleeve.Protocol.Chat {
           Placement = new global::Dreamsleeve.Protocol.Chat.GroundMarkPlacement();
         }
         Placement.MergeFrom(other.Placement);
+      }
+      if (other.gameDate_ != null) {
+        if (gameDate_ == null) {
+          GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+        }
+        GameDate.MergeFrom(other.GameDate);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -1338,6 +1924,13 @@ namespace Dreamsleeve.Protocol.Chat {
               Placement = new global::Dreamsleeve.Protocol.Chat.GroundMarkPlacement();
             }
             input.ReadMessage(Placement);
+            break;
+          }
+          case 26: {
+            if (gameDate_ == null) {
+              GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+            }
+            input.ReadMessage(GameDate);
             break;
           }
         }
@@ -1370,6 +1963,13 @@ namespace Dreamsleeve.Protocol.Chat {
             input.ReadMessage(Placement);
             break;
           }
+          case 26: {
+            if (gameDate_ == null) {
+              GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
+            }
+            input.ReadMessage(GameDate);
+            break;
+          }
         }
       }
     }
@@ -1395,7 +1995,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[4]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1598,7 +2198,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[5]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1891,7 +2491,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[6]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2138,7 +2738,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[7]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[8]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2342,7 +2942,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

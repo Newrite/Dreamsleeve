@@ -215,6 +215,7 @@ function command(c: Command) {
         text: c.text,
         time: Date.now(),
         character: "Довакин",
+        gameDate: "Турдас, 19 Последнего зерна 4Э 201, 10:30",
         location: "skyrim.esm:01A26F",
         x: 1240,
         y: -880,

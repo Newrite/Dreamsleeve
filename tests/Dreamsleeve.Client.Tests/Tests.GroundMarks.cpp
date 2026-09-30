@@ -19,6 +19,20 @@ namespace
     return {space, {x, 0, 0}, 1.5f};
   }
 
+  // Tirdas, 17 Last Seed 4E 201, 14:05.
+  constexpr Domain::GameDate Date{4, 201, 8, 17, 2, 14, 5};
+
+  void WriteDate(P::GameDate& target, const Domain::GameDate& date = Date)
+  {
+    target.set_era(date.era);
+    target.set_year(date.year);
+    target.set_month(date.month);
+    target.set_day(date.day);
+    target.set_day_of_week(date.dayOfWeek);
+    target.set_hour(date.hour);
+    target.set_minute(date.minute);
+  }
+
   Domain::GroundMark Mark(Domain::GroundMarkId id, float x = 0, Domain::GroundMarkKind kind = Domain::GroundMarkKind::Note)
   {
     return Domain::GroundMark{
@@ -74,6 +88,7 @@ namespace
     target.mutable_placement()->set_heading(1.5f);
     target.set_created_at_unix_ms(1700000000000);
     if (kind == P::GROUND_MARK_KIND_NOTE) target.set_character_name("Nerevar");
+    if (kind == P::GROUND_MARK_KIND_NOTE) WriteDate(*target.mutable_game_date());
   }
 
   P::ServerPacket Changed(std::uint64_t revision, std::vector<std::uint64_t> added, std::vector<std::uint64_t> removed = {}, bool clear = false)
@@ -193,8 +208,8 @@ TEST_CASE("Mark commands queue like chat and confirmations share the bounded res
   exchange.Drain(output);
 
   const auto first = *exchange.NextRequestId();
-  CHECK(exchange.Post({1, PlaceGroundNote{first, "hello", Placement(0)}}) == CommandPostResult::Queued);
-  CHECK(exchange.Post({1, ReportDeath{*exchange.NextRequestId(), "", Placement(0)}}) == CommandPostResult::Queued);
+  CHECK(exchange.Post({1, PlaceGroundNote{first, "hello", Placement(0), Date}}) == CommandPostResult::Queued);
+  CHECK(exchange.Post({1, ReportDeath{*exchange.NextRequestId(), "", Placement(0), Date}}) == CommandPostResult::Queued);
   CHECK(exchange.Post({1, RemoveGroundMark{*exchange.NextRequestId(), 5}}) == CommandPostResult::Full);
   std::vector<QueuedClientCommand> commands;
   exchange.TakeCommands(commands);
@@ -220,7 +235,7 @@ TEST_CASE("Mark commands queue like chat and confirmations share the bounded res
 TEST_CASE("Mark requests encode on the control lane and refuse an empty note, a zero id or a bad placement")
 {
   const auto codec = Codec();
-  auto       note  = codec.Encode(PlaceGroundNote{5, "praise\nthe sun", Placement(42)});
+  auto       note  = codec.Encode(PlaceGroundNote{5, "praise\nthe sun", Placement(42), Date});
   REQUIRE(note);
   CHECK(note->Flags() == PacketFlag::Reliable);
   P::ClientPacket packet;
@@ -231,22 +246,37 @@ TEST_CASE("Mark requests encode on the control lane and refuse an empty note, a 
   CHECK(packet.place_ground_note().placement().location_id().local_form_id() == 0x1A26F);
   CHECK(packet.place_ground_note().placement().position().x() == 42);
   CHECK(packet.place_ground_note().placement().heading() == 1.5f);
+  CHECK(packet.place_ground_note().game_date().era() == 4);
+  CHECK(packet.place_ground_note().game_date().year() == 201);
+  CHECK(packet.place_ground_note().game_date().month() == 8);
+  CHECK(packet.place_ground_note().game_date().day() == 17);
+  CHECK(packet.place_ground_note().game_date().day_of_week() == 2);
+  CHECK(packet.place_ground_note().game_date().hour() == 14);
+  CHECK(packet.place_ground_note().game_date().minute() == 5);
   CHECK(W::ProtocolCodec::RequestChannel(PlaceGroundNote{5, "x", Placement(0)}) == W::Channel::Control);
 
-  auto death = codec.Encode(ReportDeath{6, "", Placement(0)});
+  auto death = codec.Encode(ReportDeath{6, "", Placement(0), Date});
   REQUIRE(death);
   REQUIRE(packet.ParseFromArray(death->DataBytesView().data(), static_cast<int>(death->Size())));
   CHECK(packet.has_report_death());
   CHECK(packet.report_death().label().empty());
+  CHECK(packet.report_death().game_date().day() == 17);
 
   auto removal = codec.Encode(RemoveGroundMark{7, 9});
   REQUIRE(removal);
   REQUIRE(packet.ParseFromArray(removal->DataBytesView().data(), static_cast<int>(removal->Size())));
   CHECK(packet.remove_ground_mark().mark_id() == 9);
 
-  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "", Placement(0)}));
-  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "x", Placement(std::numeric_limits<float>::quiet_NaN())}));
-  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", {{"", 0}, {}, 0}}));
+  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "", Placement(0), Date}));
+  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "x", Placement(std::numeric_limits<float>::quiet_NaN()), Date}));
+  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", {{"", 0}, {}, 0}, Date}));
+  // The game date is required and must be a calendar date: no leap day, no hour 24.
+  CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "x", Placement(0)}));
+  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0), {4, 201, 2, 29, 0, 0, 0}}));
+  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0), {4, 201, 8, 17, 7, 0, 0}}));
+  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0), {4, 201, 8, 17, 2, 24, 0}}));
+  CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0), {0, 201, 8, 17, 2, 0, 0}}));
+  CHECK(codec.Encode(ReportDeath{8, "x", Placement(0), {99, 99999, 12, 31, 6, 23, 59}}));
   CHECK_FALSE(codec.Encode(RemoveGroundMark{8, 0}));
   CHECK_FALSE(codec.Encode(RemoveGroundMark{0, 9}));
 }
@@ -266,6 +296,7 @@ TEST_CASE("Mark responses decode with their correlation rules and validate the m
   CHECK(changed.added[0].placement == Placement(1));
   CHECK(changed.added[0].createdAt == Domain::FromUnixMilliseconds(1700000000000));
   CHECK(changed.added[0].characterName == "Nerevar");
+  CHECK(changed.added[0].gameDate == Date);
 
   auto withId = Changed(3, {1});
   withId.set_request_id(4);
@@ -294,6 +325,11 @@ TEST_CASE("Mark responses decode with their correlation rules and validate the m
   CHECK(std::get<GroundMarksChanged>(*death).added[0].kind == Domain::GroundMarkKind::Death);
   CHECK(std::get<GroundMarksChanged>(*death).added[0].text.empty());
   CHECK_FALSE(std::get<GroundMarksChanged>(*death).added[0].characterName);
+  // A mark stored before protocol 12 has no date; a present date must be valid.
+  CHECK_FALSE(std::get<GroundMarksChanged>(*death).added[0].gameDate);
+  auto badDate = Changed(3, {1});
+  badDate.mutable_ground_marks_changed()->mutable_added(0)->mutable_game_date()->set_month(13);
+  CHECK_FALSE(codec.Decode(Bytes(badDate)));
 
   P::ServerPacket placed;
   placed.set_protocol_version(W::Version);

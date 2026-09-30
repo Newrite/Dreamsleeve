@@ -66,6 +66,50 @@ module GroundMarkPlacement =
         | ValueSome origin ->
             origin.Location.LocationId = placement.LocationId && withinSquared radius origin.Position placement.Position
 
+/// The in-game calendar at placement as the author's game showed it. Reported
+/// by the client and checked for ranges only: flavour for readers, never an
+/// order or a lifetime (those use CreatedAt). No leap years in Tamriel.
+[<Struct>]
+type GameDate = private {
+    era: int
+    year: int
+    month: int
+    day: int
+    dayOfWeek: int
+    hour: int
+    minute: int
+} with
+    /// 1..99; 4 is the Fourth Era.
+    member this.Era = this.era
+    member this.Year = this.year
+    /// 1..12; 1 is Morning Star.
+    member this.Month = this.month
+    member this.Day = this.day
+    /// 0..6; 0 is Sundas.
+    member this.DayOfWeek = this.dayOfWeek
+    member this.Hour = this.hour
+    member this.Minute = this.minute
+
+[<RequireQualifiedAccess>]
+module GameDate =
+    let private monthLengths = [| 31; 28; 31; 30; 31; 30; 31; 31; 30; 31; 30; 31 |]
+
+    let create era year month day dayOfWeek hour minute : Result<GameDate, DomainError> =
+        let within field low high value = if value < low || value > high then Some field else None
+        let invalid =
+            [ within "era" 1 99 era
+              within "year" 1 99999 year
+              within "month" 1 12 month
+              within "day" 1 (if month >= 1 && month <= 12 then monthLengths[month - 1] else 31) day
+              within "day_of_week" 0 6 dayOfWeek
+              within "hour" 0 23 hour
+              within "minute" 0 59 minute ]
+            |> List.tryPick id
+        match invalid with
+        | Some field -> Error(DomainError.InvalidGameDate field)
+        | None ->
+            Ok { era = era; year = year; month = month; day = day; dayOfWeek = dayOfWeek; hour = hour; minute = minute }
+
 /// Persistent server data, unlike chat and poses: survives restarts and the
 /// author's reloads. Real names are not stored; the author's profile is looked
 /// up by ID. A mark placed under a pseudonym keeps that pseudonym instead.
@@ -78,6 +122,7 @@ type GroundMark = private {
     flagged: TextSpan list
     placement: GroundMarkPlacement
     createdAt: DateTimeOffset
+    gameDate: GameDate voption
 } with
     member this.Id = this.id
     member this.Author = this.author
@@ -93,6 +138,8 @@ type GroundMark = private {
     member this.Flagged = this.flagged
     member this.Placement = this.placement
     member this.CreatedAt = this.createdAt
+    /// The author's in-game date at placement; absent on marks stored before it was kept.
+    member this.GameDate = this.gameDate
 
 /// Per-kind quotas, lifetimes and distances. Validated once from configuration.
 type GroundMarkRules = private {
@@ -155,7 +202,10 @@ module GroundMark =
     /// supplies the ID and the creation time; the author is the account.
     let create id author body placement (createdAt: DateTimeOffset) : GroundMark =
         { id = id; author = author; characterName = ValueNone; pseudonym = ValueNone; body = body; flagged = []; placement = placement
-          createdAt = createdAt.ToUniversalTime() }
+          createdAt = createdAt.ToUniversalTime(); gameDate = ValueNone }
+
+    /// The in-game date the author's client reported at placement; never updated later.
+    let withGameDate date (mark: GroundMark) = { mark with gameDate = date }
 
     /// The author's published character name at placement; a withheld name stays absent.
     let withCharacterName name (mark: GroundMark) = { mark with characterName = name }

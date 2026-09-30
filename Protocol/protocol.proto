@@ -7,7 +7,8 @@ import "session.proto";
 import "player.proto";
 import "ground.proto";
 
-// Control/chat envelope. Version 10 lets a player hide their names behind a
+// Control/chat envelope. Version 12 dates marks with the in-game calendar;
+// version 11 lets a player change the display name; version 10 lets a player hide their names behind a
 // server pseudonym; version 9 sends a player's own marks after opening; version 8 adds marks on the ground; version 7 opens a session with a list of channels; version 6
 // separated repeated realtime poses from reliable commands. Opens sessions
 // with a single-use ticket issued by the separate authenticated HTTP endpoint. A session belongs to one ENet connection; opening it again
