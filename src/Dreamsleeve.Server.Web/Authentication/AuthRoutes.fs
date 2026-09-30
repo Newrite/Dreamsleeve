@@ -118,7 +118,8 @@ module AuthRoutes =
         | Error AccountAccessError.InvalidCredentials -> WebHost.error 401 "invalid_credentials" "Invalid or expired credentials."
         | Error AccountAccessError.UsernameTaken -> WebHost.error 409 "username_taken" "Username is already registered."
         | Error AccountAccessError.Busy -> busy ()
-        | Error AccountAccessError.Unavailable -> unavailable ()
+        // Only a game session can be refused as too soon; never a public route.
+        | Error AccountAccessError.Unavailable | Error (AccountAccessError.TooSoon _) -> unavailable ()
 
     let private handle settings moderation ports (logger: ILogger) operation : HttpHandler = fun context -> task {
         WebHost.noStore context

@@ -28,8 +28,34 @@ type SessionAuthenticationRequest = {
     ReplyTo: ReliableAgentRef<SessionAuthenticationReply>
 }
 
+[<RequireQualifiedAccess>]
+type DisplayNameChangeError =
+    /// The previous own change was too recent; the name stays.
+    | TooSoon of retryAfter: TimeSpan
+    | Busy
+    | Unavailable
+
+type DisplayNameChangeReply = {
+    OperationId: Guid
+    /// The stored profile with the new name.
+    Result: Result<PlayerData, DisplayNameChangeError>
+}
+
+/// A player's own display name change. The session has already validated the
+/// name and checked the word list; the account service stores it and limits
+/// how often it may happen.
+type DisplayNameChangeRequest = {
+    OperationId: Guid
+    PlayerId: PlayerId
+    DisplayName: DisplayName
+    /// TimeSpan.Zero: no limit.
+    MinInterval: TimeSpan
+    ReplyTo: ReliableAgentRef<DisplayNameChangeReply>
+}
+
 /// The runtime observes this dependency but does not own the account service.
 type SessionAuthenticator = {
     Requests: ReliableAgentRef<SessionAuthenticationRequest>
+    DisplayNames: ReliableAgentRef<DisplayNameChangeRequest>
     Completion: Task
 }

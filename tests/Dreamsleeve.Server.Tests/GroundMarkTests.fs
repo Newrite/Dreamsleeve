@@ -587,14 +587,14 @@ let private storeTests = testList "SQLite ground marks" [
     testCase "a fresh database and a version two database both reach the current schema" (fun () ->
         use fresh = new Database()
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 5L (fresh.Scalar "PRAGMA user_version")
+        equal 6L (fresh.Scalar "PRAGMA user_version")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks")
         // Back to version two: the mark table, the admin tables and their migration markers are gone.
-        fresh.Execute "DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_mark%'; PRAGMA user_version = 2"
+        fresh.Execute "DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_mark%'; PRAGMA user_version = 2"
         Expect.throws (fun () -> fresh.Scalar "SELECT count(*) FROM ground_marks" |> ignore) "table is gone"
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 5L (fresh.Scalar "PRAGMA user_version")
-        equal 5L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
+        equal 6L (fresh.Scalar "PRAGMA user_version")
+        equal 6L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks"))
 
     testCase "a version three database keeps its marks and gains the pseudonym column" (fun () ->
@@ -603,9 +603,9 @@ let private storeTests = testList "SQLite ground marks" [
         let alice = register database "alice"
         let mark = GroundMark.create (markId 1UL) alice.PlayerId (note "before") (placement whiterun 1.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
         SqliteGroundMarkStore.insert database.Config mark token |> ok
-        database.Execute "DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; PRAGMA user_version = 3"
+        database.Execute "DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; PRAGMA user_version = 3"
         SqliteAccountStore.initialize database.Config |> ok
-        equal 5L (database.Scalar "PRAGMA user_version")
+        equal 6L (database.Scalar "PRAGMA user_version")
         let loaded = SqliteGroundMarkStore.loadAll database.Config token |> ok
         equal [ValueNone] (loaded.Marks |> List.map (fun entry -> entry.Mark.Pseudonym))
         equal "Display alice" (DisplayName.value loaded.Marks.Head.Author.DisplayName))

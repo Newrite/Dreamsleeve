@@ -102,7 +102,13 @@ Authentication.ListenUrl, CertificatePath и при необходимости �
 ## Логирование
 
 Core зависит от ILogger abstraction; composition root подключает Serilog.
-Есть структурированные lifecycle/error-события с ConnectionId, PlayerId и причиной,
+Уровень Information (30.09.2026) рассказывает, что происходит на сервере, без секретов:
+регистрация (PlayerId, username, display name), вход (`password`, `saved login`) и отказы входа
+по username, отказ resume и сброса пароля, вход игрока в игру (сессия, режим скрытия, сколько
+онлайн) и выход с длительностью сессии, смена режима скрытия с псевдонимом, смена display name
+(игроком или администратором) и отказ по интервалу, размещение и удаление меток, объявления,
+действия администраторов панели. Тексты сообщений чата не пишутся. Есть также
+структурированные lifecycle/error-события с ConnectionId, PlayerId и причиной,
 вывод в консоль и JSON-файлы с ротацией по дню/размеру и ограничением числа файлов.
 Минимальный уровень, sinks и retention задаёт Logging. Payload auth и содержимое
 пакетов не логируются. Framework HTTP logging ограничен Warning.

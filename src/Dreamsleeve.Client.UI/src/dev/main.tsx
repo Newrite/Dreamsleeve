@@ -99,6 +99,8 @@ try {
   /* Local preview only. */
 }
 const pseudonymOf = () => `Страж ${3 + identity.switches}`;
+// The last own display name change, for the stand-in interval.
+let renamedAt = 0;
 if (identity.mode !== "off") identity.pseudonym = pseudonymOf();
 function identityEvent(error?: string, pending = false, mode = identity.mode) {
   chat.receive({
@@ -280,6 +282,34 @@ function command(c: Command) {
       identity.mode = c.hiding;
       localStorage.setItem("dreamsleeve.ui.hideIdentity", c.hiding);
       identityEvent();
+    }, 400);
+    return true;
+  }
+  // Stand-in for the server: the word list and a one-minute change interval.
+  if (c.type === "changeDisplayName") {
+    setTimeout(() => chat.receive({ type: "displayName", pending: true }), 0);
+    setTimeout(() => {
+      const name = c.displayName.trim();
+      if (/badword/i.test(name)) {
+        chat.receive({
+          type: "displayName",
+          pending: false,
+          error: "Имя содержит запрещённые слова",
+        });
+        return;
+      }
+      if (renamedAt && Date.now() - renamedAt < 60000) {
+        chat.receive({
+          type: "displayName",
+          pending: false,
+          error: "Имя можно сменить снова через 1 мин",
+        });
+        return;
+      }
+      renamedAt = Date.now();
+      players[0] = { ...players[0], displayName: name };
+      snapshot(chat.store.getState().settings, true);
+      chat.receive({ type: "displayName", pending: false, changed: name });
     }, 400);
     return true;
   }

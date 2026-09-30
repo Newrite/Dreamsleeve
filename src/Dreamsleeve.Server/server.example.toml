@@ -111,6 +111,8 @@ PasswordIterations = 210000
 SavedLoginDays = 30
 MaxSavedLogins = 8
 ResetLifetimeMinutes = 15
+# Display name changes kept per player for the admin panel; older ones are deleted. 1..1000.
+DisplayNameHistory = 20
 
 # Web admin panel (docs/AdminPanelRu.md). Loopback only by default: reach it through an SSH tunnel
 # or a reverse proxy. Without administrators the server prints a one-time setup code to the console.
@@ -157,6 +159,12 @@ ToggleIntervalMs = 30000
 # Separate TOML (see pseudonyms.example.toml), relative to the working directory.
 # A missing or broken file uses the 24 built-in names with a warning.
 PseudonymsPath = "pseudonyms.toml"
+# Players may change their own display name from the game (the word list applies);
+# false refuses it with DISPLAY_NAME_CHANGE_NOT_ALLOWED. The admin panel always can.
+AllowDisplayNameChange = true
+# A player's own change may come no sooner than this after the previous one,
+# across reconnects and restarts; sooner gets RATE_LIMITED. 0 disables the limit.
+DisplayNameChangeIntervalMinutes = 1
 
 # System channel: server announcements and announcements requested by clients.
 # A channel of its own, read-only for chat. Read at startup, like the rest of

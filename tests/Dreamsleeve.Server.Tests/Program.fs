@@ -30,6 +30,7 @@ let main argv =
         ServerRuntimeTests.tests
         ServerRuntimeTests.hiddenIdentityTests
         ServerRuntimeTests.adminTests
+        ServerRuntimeTests.displayNameTests
         EnetTransportTests.tests
         TransportOwnerTests.tests
         ConfigurationTests.tests

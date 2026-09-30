@@ -123,8 +123,21 @@ module ServerRuntime =
             if not chat || not system || not presence || not marks then fail state context "Session cleanup capacity exhausted."
         | None, _ | _, None -> fail state context "Session cleanup has no sources."
 
+    // The public (moderated) username of a reserved player, for the log.
+    let private username state playerId =
+        match PseudonymBook.tryProfile playerId state.Table.Names with
+        | ValueSome profile -> Username.value profile.Username
+        | ValueNone -> "?"
+
     let private close (options: ServerRuntimeOptions) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
         if entry.Phase <> SessionTable.Closing then
+            match entry.Phase, entry.PlayerId with
+            | SessionTable.Ready, Some playerId ->
+                let duration = DateTimeOffset.UtcNow - entry.ConnectedAt
+                state.Logger.LogInformation("Player {PlayerId} {Username} left (session {ConnectionId}, {Duration})",
+                                            PlayerId.value playerId, username state playerId, entry.ConnectionId,
+                                            duration.ToString(if duration.TotalDays >= 1.0 then @"d\.hh\:mm\:ss" else @"hh\:mm\:ss"))
+            | (SessionTable.Waiting | SessionTable.Opening | SessionTable.Ready | SessionTable.Closing), _ -> ()
             entry.Phase <- SessionTable.Closing
             let deadline = now () + int64 options.ShutdownTimeoutMs
             entry.Deadline <- if state.Stopping then min deadline state.StopDeadline else deadline
@@ -169,7 +182,7 @@ module ServerRuntime =
             | ServerResponse.PlayerUpdated _ | ServerResponse.PlayerMetadataChanged _ | ServerResponse.PlayerVisibilityChanged _
             | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
             | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-            | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ ->
+            | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ | ServerResponse.DisplayNameChanged _ ->
                 ProtocolCodec.encodeServer state.Codec response |> Result.map List.singleton
         transmit options state context entry (ProtocolCodec.responseLane response) encoded
 
@@ -218,6 +231,10 @@ module ServerRuntime =
             | Some entry ->
                 match SessionTable.changeIdentity hiding pick entry state.Table with
                 | Some pseudonym ->
+                    entry.PlayerId |> Option.iter (fun playerId ->
+                        state.Logger.LogInformation("Player {PlayerId} {Username} now hides names: {Hiding}, pseudonym {Pseudonym}",
+                                                    PlayerId.value playerId, username state playerId, hiding,
+                                                    (match pseudonym with ValueSome name -> Pseudonym.value name | ValueNone -> "-")))
                     match reply.TryPost pseudonym with
                     | AgentTryDeliveryResult.Posted -> ()
                     | AgentTryDeliveryResult.Full | AgentTryDeliveryResult.Closed -> close options state context entry
@@ -225,9 +242,9 @@ module ServerRuntime =
                 | None -> close options state context entry
             | None -> ()
 
-        | SessionHostCommand.UpdateProfile(connectionId, profile) ->
+        | SessionHostCommand.UpdateProfile(connectionId, profile, own) ->
             match SessionTable.find connectionId state.Table with
-            | Some entry -> SessionTable.updateProfile profile entry state.Table |> ignore
+            | Some entry -> SessionTable.updateProfile profile own entry state.Table |> ignore
             | None -> ()
 
         | SessionHostCommand.Activate(connectionId, requestId, welcome) ->
@@ -238,6 +255,9 @@ module ServerRuntime =
                 else
                     // Mark ready in the same handler that queues the welcome packet.
                     entry.Phase <- SessionTable.Ready
+                    state.Logger.LogInformation("Player {PlayerId} {Username} joined (session {ConnectionId}, hides names: {Hiding}, {Online} online)",
+                                                PlayerId.value welcome.SelfPlayerId, username state welcome.SelfPlayerId, connectionId, welcome.Hiding,
+                                                state.Table.Players.Count)
                     send options state context entry (ServerResponse.SessionOpened(requestId, welcome))
             | Some _ | None -> ()
 
@@ -252,7 +272,7 @@ module ServerRuntime =
                 | ServerResponse.PlayerUpdateAccepted _ | ServerResponse.PlayerLeft _
                 | ServerResponse.ChatRejected _ | ServerResponse.PlayerVisibilityChanged _
                 | ServerResponse.GroundMarksChanged _ | ServerResponse.GroundMarkPlaced _ | ServerResponse.GroundMarkRemoved _
-                | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ -> ()
+                | ServerResponse.OwnGroundMarks _ | ServerResponse.IdentityVisibilityChanged _ | ServerResponse.DisplayNameChanged _ -> ()
             | Some _ | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->
@@ -266,7 +286,7 @@ module ServerRuntime =
         match state.Sources, context.Ref.TryReliable() with
         | Some sources, Some self ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket; Hiding = hiding }
-            match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements state.GroundMarkRules state.Identity (authenticator.Requests)
+            match PlayerSession.start options.Player maxActorValues state.Moderation state.Announcements state.GroundMarkRules state.Identity authenticator.Requests authenticator.DisplayNames
                       (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                       (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) request with
             | Error reason -> fail state context reason
@@ -312,6 +332,14 @@ module ServerRuntime =
                 | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("GroundNoteText", TextError.TooLong maximum)) ->
                     let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = $"Note exceeds {maximum} characters."; Field = "text" }
                     send options state context entry (ServerResponse.RequestRejected(requestId, rejection))
+                | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DisplayName", error)) ->
+                    let message =
+                        match error with
+                        | TextError.TooLong maximum -> $"Display name exceeds {maximum} characters."
+                        | TextError.Missing | TextError.InvalidUnicode | TextError.InvalidCharacters | TextError.InvalidFormat ->
+                            "Display name is empty or contains control characters."
+                    let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = "display_name" }
+                    send options state context entry (ServerResponse.RequestRejected(requestId, rejection))
                 | Some requestId, ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DeathMarkText", _)) ->
                     let rejection = { Code = RequestRejectionCode.InvalidRequest; Message = "Death label is too long or contains control characters."; Field = "text" }
                     send options state context entry (ServerResponse.RequestRejected(requestId, rejection))
@@ -337,9 +365,11 @@ module ServerRuntime =
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.RemoveGroundMark(request.RequestId, id))
                 | ClientCommand.SetIdentityVisibility hiding, SessionTable.Ready ->
                     forward options state context entry lane request.RequestId (PlayerSessionMessage.SetIdentityVisibility(request.RequestId, hiding))
-                | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ | ClientCommand.SetIdentityVisibility _), (SessionTable.Waiting | SessionTable.Opening) ->
+                | ClientCommand.ChangeDisplayName name, SessionTable.Ready ->
+                    forward options state context entry lane request.RequestId (PlayerSessionMessage.ChangeDisplayName(request.RequestId, name))
+                | (ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _), (SessionTable.Waiting | SessionTable.Opening) ->
                     reject options state context entry lane request.RequestId RequestRejectionCode.SessionNotReady "Session is not ready."
-                | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ | ClientCommand.SetIdentityVisibility _), SessionTable.Closing -> ()
+                | (ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _ | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _), SessionTable.Closing -> ()
 
     let private disconnected options state context connectionId =
         match SessionTable.find connectionId state.Table with

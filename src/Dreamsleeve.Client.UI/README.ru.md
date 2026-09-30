@@ -80,6 +80,7 @@ ClientApplication. Не вызывать его методы непосредс�
 | `groundMarks` | Полный список собственных меток с сервера (id, kind `note`/`death`, text, time, character, location `plugin:formid`, x/y/z); в снимке — `groundMarks` и `groundMarksSupported` |
 | `nearbyMarks` | Метки, которые сервер показывает рядом с персонажем, с именем автора (`author`) от host; в снимке — `nearbyMarks`; метки игнорируемых не приходят |
 | `markResult` | Итог `placeGroundNote` (markId, evictedId) или `removeGroundMark` (removed) по requestId, либо error; это не дельта видимых меток |
+| `displayName` | Смена своего отображаемого имени: pending (ждём сервер), changed (сохранённое имя, один раз), error (текст отказа); свой профиль приходит в `players` |
 | `identity` | «Скрывать моё имя от других игроков»: mode (`off`/`everywhere`/`exceptGroundMarks`; во время ожидания — запрошенный), pending (ждём сервер), pseudonym (что видят другие, только в Ready-сессии), error (последний отказ); приходит при каждом изменении, после (пере)создания view и в ответ на `setIdentityVisibility` |
 
 | UI → host | Смысл |
@@ -96,6 +97,7 @@ ClientApplication. Не вызывать его методы непосредс�
 | `displaySettings` | nameMode, streamerMode и textFilter; host применяет и сохраняет сразу, затем шлёт refresh-снимок |
 | `placeGroundNote` | requestId, text: оставить черновик меткой там, где стоит персонаж; положение подставляет host |
 | `removeGroundMark` | requestId, markId: удалить свою метку |
+| `changeDisplayName` | displayName: в Ready-сессии — запрос серверу; username не меняется; одна смена за раз |
 | `setIdentityVisibility` | hiding (`off`/`everywhere`/`exceptGroundMarks`): в Ready-сессии — запрос серверу (выбор сохраняется после подтверждения), без сессии — выбор для следующего входа; пока сессия открывается — отказ «Дождитесь подключения к серверу» |
 
 UI requestId относится к lifetime данного view. Host сопоставляет его с RequestId,

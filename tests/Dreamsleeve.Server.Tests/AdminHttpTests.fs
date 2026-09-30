@@ -59,7 +59,7 @@ type private FakeAdmin() =
         | AdminCommand.RecentAudit _ -> Ok (AdminReply.Audit [])
         | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.ResetPassword _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.RevokeApiToken _ | AdminCommand.SetRole _ | AdminCommand.SearchPlayers _
-        | AdminCommand.FindPlayer _ -> Error AdminServiceError.Unavailable
+        | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ -> Error AdminServiceError.Unavailable
 
 // One hidden player online; its real names only the panel may show.
 let private hiddenRow = {

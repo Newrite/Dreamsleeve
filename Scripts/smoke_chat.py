@@ -712,6 +712,22 @@ def smoke(args, log, directory: Path):
 
         mark_refused(hidden, "hide on", 10)
         stage("a second switch within the interval is rate limited and changes nothing")
+
+        # The own display name: confirmed to the author, spread to the others through
+        # presence; the word list and the change interval (a minute by default) refuse more.
+        hidden_start, bob_start = hidden.mark(), bob.mark()
+        hidden.send("name Smoke Renamed")
+        hidden.wait_for(lambda lines: any(re.fullmatch(r"request \d+ display name Smoke Renamed", line) for line in lines),
+                        args.timeout, hidden_start, read=True)
+        wait_player(bob, hidden_id, lambda state: state["data"]["displayName"] == "Smoke Renamed"
+                    and state["data"]["username"] == "smoke_hidden", args.timeout, bob_start)
+        stage("an own display name change is confirmed and reaches the other client")
+        mark_refused(hidden, "name forbiddenword", 9)
+        hidden_start = hidden.mark()
+        hidden.send("name Smoke Again")
+        hidden.wait_for(lambda lines: any("rejected (10): The display name can be changed again in" in line for line in lines),
+                        args.timeout, hidden_start, read=True)
+        stage("a listed word and a second change within the interval are refused")
         for child in (hidden, late):
             child.send("quit")
             child.process.wait(timeout=args.timeout)
@@ -849,7 +865,8 @@ def smoke(args, log, directory: Path):
         # Its author shows the real names now, yet the mark placed while hidden keeps the pseudonym.
         bob.wait_for(lambda lines: any(line.startswith(f"mark {hidden_mark} kind=1 author=Тень [pseudonymous] x=") for line in lines),
                      args.timeout, bob_start, read=True)
-        check(not any(line.startswith(f"mark {hidden_mark} ") and "Smoke Hidden" in line for line in bob.output(bob_start)),
+        check(not any(line.startswith(f"mark {hidden_mark} ") and ("Smoke Hidden" in line or "Smoke Renamed" in line)
+                      for line in bob.output(bob_start)),
               "A stored mark placed while hidden revealed its author after restart")
         stage("a mark placed while hidden keeps its pseudonym across a server restart")
 

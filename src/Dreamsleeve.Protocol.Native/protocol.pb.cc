@@ -197,9 +197,10 @@ const ::uint32_t
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_._oneof_case_[0]),
-        15, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.protocol_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.request_id_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.payload_),
@@ -219,10 +220,11 @@ const ::uint32_t
         ~0u,
         ~0u,
         ~0u,
+        ~0u,
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._oneof_case_[0]),
-        21, // hasbit index offset
+        22, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.protocol_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
@@ -240,8 +242,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         1,
         0,
+        ~0u,
         ~0u,
         ~0u,
         ~0u,
@@ -285,11 +289,11 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::ClientPacket)},
-        {25, sizeof(::Dreamsleeve::Protocol::Chat::ServerPacket)},
-        {62, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
-        {63, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
-        {72, sizeof(::Dreamsleeve::Protocol::Chat::ClientMovementPacket)},
-        {79, sizeof(::Dreamsleeve::Protocol::Chat::ServerMovementPacket)},
+        {27, sizeof(::Dreamsleeve::Protocol::Chat::ServerPacket)},
+        {66, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
+        {67, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
+        {76, sizeof(::Dreamsleeve::Protocol::Chat::ClientMovementPacket)},
+        {83, sizeof(::Dreamsleeve::Protocol::Chat::ServerMovementPacket)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_ClientPacket_default_instance_._instance,
@@ -303,7 +307,7 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     protodesc_cold) = {
     "\n\016protocol.proto\022\031Dreamsleeve.Protocol.C"
     "hat\032\nchat.proto\032\rsession.proto\032\014player.p"
-    "roto\032\014ground.proto\"\366\004\n\014ClientPacket\022\030\n\020p"
+    "roto\032\014ground.proto\"\303\005\n\014ClientPacket\022\030\n\020p"
     "rotocol_version\030\001 \001(\r\022\022\n\nrequest_id\030\002 \001("
     "\004\022>\n\014open_session\030\n \001(\0132&.Dreamsleeve.Pr"
     "otocol.Chat.OpenSessionH\000\0228\n\tsend_chat\030\013"
@@ -319,64 +323,69 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "ve.Protocol.Chat.RemoveGroundMarkH\000\022S\n\027s"
     "et_identity_visibility\030\021 \001(\01320.Dreamslee"
     "ve.Protocol.Chat.SetIdentityVisibilityH\000"
-    "B\t\n\007payload\"\244\t\n\014ServerPacket\022\030\n\020protocol"
-    "_version\030\001 \001(\r\022\027\n\nrequest_id\030\002 \001(\004H\001\210\001\001\022"
-    "B\n\016session_opened\030\n \001(\0132(.Dreamsleeve.Pr"
-    "otocol.Chat.SessionOpenedH\000\022B\n\016chat_publ"
-    "ished\030\013 \001(\0132(.Dreamsleeve.Protocol.Chat."
-    "ChatPublishedH\000\022F\n\020request_rejected\030\014 \001("
-    "\0132*.Dreamsleeve.Protocol.Chat.RequestRej"
-    "ectedH\000\022@\n\rplayer_joined\030\r \001(\0132\'.Dreamsl"
-    "eeve.Protocol.Chat.PlayerJoinedH\000\022<\n\013pla"
-    "yer_left\030\016 \001(\0132%.Dreamsleeve.Protocol.Ch"
-    "at.PlayerLeftH\000\022B\n\016player_updated\030\017 \001(\0132"
-    "(.Dreamsleeve.Protocol.Chat.PlayerUpdate"
-    "dH\000\022Q\n\026player_update_accepted\030\020 \001(\0132/.Dr"
-    "eamsleeve.Protocol.Chat.PlayerUpdateAcce"
-    "ptedH\000\022W\n\031player_visibility_changed\030\024 \001("
-    "\01322.Dreamsleeve.Protocol.Chat.PlayerVisi"
-    "bilityChangedH\000\022S\n\027player_metadata_chang"
-    "ed\030\022 \001(\01320.Dreamsleeve.Protocol.Chat.Pla"
-    "yerMetadataChangedH\000\022M\n\024ground_marks_cha"
-    "nged\030\025 \001(\0132-.Dreamsleeve.Protocol.Chat.G"
-    "roundMarksChangedH\000\022I\n\022ground_mark_place"
-    "d\030\026 \001(\0132+.Dreamsleeve.Protocol.Chat.Grou"
-    "ndMarkPlacedH\000\022K\n\023ground_mark_removed\030\027 "
-    "\001(\0132,.Dreamsleeve.Protocol.Chat.GroundMa"
-    "rkRemovedH\000\022E\n\020own_ground_marks\030\030 \001(\0132)."
-    "Dreamsleeve.Protocol.Chat.OwnGroundMarks"
-    "H\000\022[\n\033identity_visibility_changed\030\031 \001(\0132"
-    "4.Dreamsleeve.Protocol.Chat.IdentityVisi"
-    "bilityChangedH\000B\t\n\007payloadB\r\n\013_request_i"
-    "dJ\004\010\021\020\022J\004\010\023\020\024R\014player_movedR\rplayers_mov"
-    "ed\"\026\n\024PlayerUpdateAccepted\"p\n\017RequestRej"
-    "ected\022=\n\004code\030\001 \001(\0162/.Dreamsleeve.Protoc"
-    "ol.Chat.RequestRejectionCode\022\017\n\007message\030"
-    "\002 \001(\t\022\r\n\005field\030\003 \001(\t\"k\n\024ClientMovementPa"
-    "cket\022\030\n\020protocol_version\030\001 \001(\r\0229\n\006sample"
-    "\030\002 \001(\0132).Dreamsleeve.Protocol.Chat.Movem"
-    "entSample\"l\n\024ServerMovementPacket\022\030\n\020pro"
-    "tocol_version\030\001 \001(\r\022:\n\tmovements\030\002 \001(\0132\'"
-    ".Dreamsleeve.Protocol.Chat.PlayersMoved*"
-    "\321\005\n\024RequestRejectionCode\022&\n\"REQUEST_REJE"
-    "CTION_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_REJE"
-    "CTION_CODE_INVALID_REQUEST\020\001\022,\n(REQUEST_"
-    "REJECTION_CODE_SESSION_NOT_READY\020\002\022/\n+RE"
-    "QUEST_REJECTION_CODE_SESSION_ALREADY_OPE"
-    "N\020\003\022)\n%REQUEST_REJECTION_CODE_USERNAME_T"
-    "AKEN\020\004\022,\n(REQUEST_REJECTION_CODE_CHANNEL"
-    "_NOT_FOUND\020\005\022-\n)REQUEST_REJECTION_CODE_N"
-    "OT_CHANNEL_MEMBER\020\006\022%\n!REQUEST_REJECTION"
-    "_CODE_OVERLOADED\020\007\0220\n,REQUEST_REJECTION_"
-    "CODE_AUTHENTICATION_FAILED\020\010\022+\n\'REQUEST_"
-    "REJECTION_CODE_TEXT_NOT_ALLOWED\020\t\022\'\n#REQ"
-    "UEST_REJECTION_CODE_RATE_LIMITED\020\n\0223\n/RE"
-    "QUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_AL"
-    "LOWED\020\013\0220\n,REQUEST_REJECTION_CODE_GROUND"
-    "_MARK_AREA_FULL\020\014\0220\n,REQUEST_REJECTION_C"
-    "ODE_GROUND_MARK_NOT_FOUND\020\r\0226\n2REQUEST_R"
-    "EJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWE"
-    "D\020\016b\006proto3"
+    "\022K\n\023change_display_name\030\022 \001(\0132,.Dreamsle"
+    "eve.Protocol.Chat.ChangeDisplayNameH\000B\t\n"
+    "\007payload\"\363\t\n\014ServerPacket\022\030\n\020protocol_ve"
+    "rsion\030\001 \001(\r\022\027\n\nrequest_id\030\002 \001(\004H\001\210\001\001\022B\n\016"
+    "session_opened\030\n \001(\0132(.Dreamsleeve.Proto"
+    "col.Chat.SessionOpenedH\000\022B\n\016chat_publish"
+    "ed\030\013 \001(\0132(.Dreamsleeve.Protocol.Chat.Cha"
+    "tPublishedH\000\022F\n\020request_rejected\030\014 \001(\0132*"
+    ".Dreamsleeve.Protocol.Chat.RequestReject"
+    "edH\000\022@\n\rplayer_joined\030\r \001(\0132\'.Dreamsleev"
+    "e.Protocol.Chat.PlayerJoinedH\000\022<\n\013player"
+    "_left\030\016 \001(\0132%.Dreamsleeve.Protocol.Chat."
+    "PlayerLeftH\000\022B\n\016player_updated\030\017 \001(\0132(.D"
+    "reamsleeve.Protocol.Chat.PlayerUpdatedH\000"
+    "\022Q\n\026player_update_accepted\030\020 \001(\0132/.Dream"
+    "sleeve.Protocol.Chat.PlayerUpdateAccepte"
+    "dH\000\022W\n\031player_visibility_changed\030\024 \001(\01322"
+    ".Dreamsleeve.Protocol.Chat.PlayerVisibil"
+    "ityChangedH\000\022S\n\027player_metadata_changed\030"
+    "\022 \001(\01320.Dreamsleeve.Protocol.Chat.Player"
+    "MetadataChangedH\000\022M\n\024ground_marks_change"
+    "d\030\025 \001(\0132-.Dreamsleeve.Protocol.Chat.Grou"
+    "ndMarksChangedH\000\022I\n\022ground_mark_placed\030\026"
+    " \001(\0132+.Dreamsleeve.Protocol.Chat.GroundM"
+    "arkPlacedH\000\022K\n\023ground_mark_removed\030\027 \001(\013"
+    "2,.Dreamsleeve.Protocol.Chat.GroundMarkR"
+    "emovedH\000\022E\n\020own_ground_marks\030\030 \001(\0132).Dre"
+    "amsleeve.Protocol.Chat.OwnGroundMarksH\000\022"
+    "[\n\033identity_visibility_changed\030\031 \001(\01324.D"
+    "reamsleeve.Protocol.Chat.IdentityVisibil"
+    "ityChangedH\000\022M\n\024display_name_changed\030\032 \001"
+    "(\0132-.Dreamsleeve.Protocol.Chat.DisplayNa"
+    "meChangedH\000B\t\n\007payloadB\r\n\013_request_idJ\004\010"
+    "\021\020\022J\004\010\023\020\024R\014player_movedR\rplayers_moved\"\026"
+    "\n\024PlayerUpdateAccepted\"p\n\017RequestRejecte"
+    "d\022=\n\004code\030\001 \001(\0162/.Dreamsleeve.Protocol.C"
+    "hat.RequestRejectionCode\022\017\n\007message\030\002 \001("
+    "\t\022\r\n\005field\030\003 \001(\t\"k\n\024ClientMovementPacket"
+    "\022\030\n\020protocol_version\030\001 \001(\r\0229\n\006sample\030\002 \001"
+    "(\0132).Dreamsleeve.Protocol.Chat.MovementS"
+    "ample\"l\n\024ServerMovementPacket\022\030\n\020protoco"
+    "l_version\030\001 \001(\r\022:\n\tmovements\030\002 \001(\0132\'.Dre"
+    "amsleeve.Protocol.Chat.PlayersMoved*\215\006\n\024"
+    "RequestRejectionCode\022&\n\"REQUEST_REJECTIO"
+    "N_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_REJECTIO"
+    "N_CODE_INVALID_REQUEST\020\001\022,\n(REQUEST_REJE"
+    "CTION_CODE_SESSION_NOT_READY\020\002\022/\n+REQUES"
+    "T_REJECTION_CODE_SESSION_ALREADY_OPEN\020\003\022"
+    ")\n%REQUEST_REJECTION_CODE_USERNAME_TAKEN"
+    "\020\004\022,\n(REQUEST_REJECTION_CODE_CHANNEL_NOT"
+    "_FOUND\020\005\022-\n)REQUEST_REJECTION_CODE_NOT_C"
+    "HANNEL_MEMBER\020\006\022%\n!REQUEST_REJECTION_COD"
+    "E_OVERLOADED\020\007\0220\n,REQUEST_REJECTION_CODE"
+    "_AUTHENTICATION_FAILED\020\010\022+\n\'REQUEST_REJE"
+    "CTION_CODE_TEXT_NOT_ALLOWED\020\t\022\'\n#REQUEST"
+    "_REJECTION_CODE_RATE_LIMITED\020\n\0223\n/REQUES"
+    "T_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWE"
+    "D\020\013\0220\n,REQUEST_REJECTION_CODE_GROUND_MAR"
+    "K_AREA_FULL\020\014\0220\n,REQUEST_REJECTION_CODE_"
+    "GROUND_MARK_NOT_FOUND\020\r\0226\n2REQUEST_REJEC"
+    "TION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED\020\016\022"
+    ":\n6REQUEST_REJECTION_CODE_DISPLAY_NAME_C"
+    "HANGE_NOT_ALLOWED\020\017b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_protocol_2eproto_deps[4] = {
@@ -389,7 +398,7 @@ static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    3011,
+    3227,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -410,7 +419,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_
   return file_level_enum_descriptors_protocol_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t RequestRejectionCode_internal_data_[] = {
-    983040u, 0u, };
+    1048576u, 0u, };
 // ===================================================================
 
 class ClientPacket::_Internal {
@@ -615,6 +624,30 @@ void ClientPacket::clear_set_identity_visibility() {
     clear_has_payload();
   }
 }
+void ClientPacket::set_allocated_change_display_name(::Dreamsleeve::Protocol::Chat::ChangeDisplayName* PROTOBUF_NULLABLE change_display_name) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_payload();
+  if (change_display_name) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(change_display_name)->GetArena();
+    if (message_arena != submessage_arena) {
+      change_display_name = ::google::protobuf::internal::GetOwnedMessage(message_arena, change_display_name, submessage_arena);
+    }
+    set_has_change_display_name();
+    _impl_.payload_.change_display_name_ = change_display_name;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.change_display_name)
+}
+void ClientPacket::clear_change_display_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (payload_case() == kChangeDisplayName) {
+    if (GetArena() == nullptr) {
+      delete _impl_.payload_.change_display_name_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.change_display_name_);
+    }
+    clear_has_payload();
+  }
+}
 ClientPacket::ClientPacket(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ClientPacket_class_data_.base()) {
@@ -679,6 +712,9 @@ ClientPacket::ClientPacket(
         break;
       case kSetIdentityVisibility:
         _impl_.payload_.set_identity_visibility_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.set_identity_visibility_);
+        break;
+      case kChangeDisplayName:
+        _impl_.payload_.change_display_name_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.change_display_name_);
         break;
   }
 
@@ -785,6 +821,14 @@ void ClientPacket::clear_payload() {
       }
       break;
     }
+    case kChangeDisplayName: {
+      if (GetArena() == nullptr) {
+        delete _impl_.payload_.change_display_name_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.change_display_name_);
+      }
+      break;
+    }
     case PAYLOAD_NOT_SET: {
       break;
     }
@@ -836,17 +880,17 @@ ClientPacket::GetClassData() const {
   return ClientPacket_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 10, 8, 0, 2>
+const ::_pbi::TcParseTable<1, 11, 9, 0, 2>
 ClientPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ClientPacket, _impl_._has_bits_),
     0, // no _extensions_
-    17, 8,  // max_field_number, fast_idx_mask
+    18, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294836732,  // skipmap
+    4294705660,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    10,  // num_field_entries
-    8,  // num_aux_entries
+    11,  // num_field_entries
+    9,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ClientPacket_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -886,6 +930,8 @@ ClientPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ClientPacket, _impl_.payload_.remove_ground_mark_), _Internal::kOneofCaseOffset + 0, 6, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.SetIdentityVisibility set_identity_visibility = 17;
     {PROTOBUF_FIELD_OFFSET(ClientPacket, _impl_.payload_.set_identity_visibility_), _Internal::kOneofCaseOffset + 0, 7, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.ChangeDisplayName change_display_name = 18;
+    {PROTOBUF_FIELD_OFFSET(ClientPacket, _impl_.payload_.change_display_name_), _Internal::kOneofCaseOffset + 0, 8, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::OpenSession>()},
@@ -896,6 +942,7 @@ ClientPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ReportDeath>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::RemoveGroundMark>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SetIdentityVisibility>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ChangeDisplayName>()},
   }},
   {{
   }},
@@ -1004,6 +1051,12 @@ PROTOBUF_NOINLINE void ClientPacket::Clear() {
           stream);
       break;
     }
+    case kChangeDisplayName: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          18, *this_._impl_.payload_.change_display_name_, this_._impl_.payload_.change_display_name_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -1095,6 +1148,12 @@ PROTOBUF_NOINLINE void ClientPacket::Clear() {
     case kSetIdentityVisibility: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.set_identity_visibility_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Chat.ChangeDisplayName change_display_name = 18;
+    case kChangeDisplayName: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.change_display_name_);
       break;
     }
     case PAYLOAD_NOT_SET: {
@@ -1206,6 +1265,14 @@ void ClientPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.payload_.set_identity_visibility_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.set_identity_visibility_);
         } else {
           _this->_impl_.payload_.set_identity_visibility_->MergeFrom(*from._impl_.payload_.set_identity_visibility_);
+        }
+        break;
+      }
+      case kChangeDisplayName: {
+        if (oneof_needs_init) {
+          _this->_impl_.payload_.change_display_name_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.change_display_name_);
+        } else {
+          _this->_impl_.payload_.change_display_name_->MergeFrom(*from._impl_.payload_.change_display_name_);
         }
         break;
       }
@@ -1568,6 +1635,30 @@ void ServerPacket::clear_identity_visibility_changed() {
     clear_has_payload();
   }
 }
+void ServerPacket::set_allocated_display_name_changed(::Dreamsleeve::Protocol::Chat::DisplayNameChanged* PROTOBUF_NULLABLE display_name_changed) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_payload();
+  if (display_name_changed) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(display_name_changed)->GetArena();
+    if (message_arena != submessage_arena) {
+      display_name_changed = ::google::protobuf::internal::GetOwnedMessage(message_arena, display_name_changed, submessage_arena);
+    }
+    set_has_display_name_changed();
+    _impl_.payload_.display_name_changed_ = display_name_changed;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.display_name_changed)
+}
+void ServerPacket::clear_display_name_changed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (payload_case() == kDisplayNameChanged) {
+    if (GetArena() == nullptr) {
+      delete _impl_.payload_.display_name_changed_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.display_name_changed_);
+    }
+    clear_has_payload();
+  }
+}
 ServerPacket::ServerPacket(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ServerPacket_class_data_.base()) {
@@ -1650,6 +1741,9 @@ ServerPacket::ServerPacket(
         break;
       case kIdentityVisibilityChanged:
         _impl_.payload_.identity_visibility_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.identity_visibility_changed_);
+        break;
+      case kDisplayNameChanged:
+        _impl_.payload_.display_name_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.display_name_changed_);
         break;
   }
 
@@ -1804,6 +1898,14 @@ void ServerPacket::clear_payload() {
       }
       break;
     }
+    case kDisplayNameChanged: {
+      if (GetArena() == nullptr) {
+        delete _impl_.payload_.display_name_changed_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.display_name_changed_);
+      }
+      break;
+    }
     case PAYLOAD_NOT_SET: {
       break;
     }
@@ -1855,17 +1957,17 @@ ServerPacket::GetClassData() const {
   return ServerPacket_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 16, 14, 0, 2>
+const ::_pbi::TcParseTable<1, 17, 15, 0, 2>
 ServerPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_._has_bits_),
     0, // no _extensions_
-    25, 8,  // max_field_number, fast_idx_mask
+    26, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4261741052,  // skipmap
+    4228186620,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    16,  // num_field_entries
-    14,  // num_aux_entries
+    17,  // num_field_entries
+    15,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ServerPacket_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1917,6 +2019,8 @@ ServerPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.own_ground_marks_), _Internal::kOneofCaseOffset + 0, 12, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged identity_visibility_changed = 25;
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.identity_visibility_changed_), _Internal::kOneofCaseOffset + 0, 13, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.DisplayNameChanged display_name_changed = 26;
+    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.display_name_changed_), _Internal::kOneofCaseOffset + 0, 14, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SessionOpened>()},
@@ -1933,6 +2037,7 @@ ServerPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GroundMarkRemoved>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::OwnGroundMarks>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::IdentityVisibilityChanged>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::DisplayNameChanged>()},
   }},
   {{
   }},
@@ -2075,6 +2180,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
           stream);
       break;
     }
+    case kDisplayNameChanged: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          26, *this_._impl_.payload_.display_name_changed_, this_._impl_.payload_.display_name_changed_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -2200,6 +2311,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
     case kIdentityVisibilityChanged: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.identity_visibility_changed_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Chat.DisplayNameChanged display_name_changed = 26;
+    case kDisplayNameChanged: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.display_name_changed_);
       break;
     }
     case PAYLOAD_NOT_SET: {
@@ -2357,6 +2474,14 @@ void ServerPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.payload_.identity_visibility_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.identity_visibility_changed_);
         } else {
           _this->_impl_.payload_.identity_visibility_changed_->MergeFrom(*from._impl_.payload_.identity_visibility_changed_);
+        }
+        break;
+      }
+      case kDisplayNameChanged: {
+        if (oneof_needs_init) {
+          _this->_impl_.payload_.display_name_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.display_name_changed_);
+        } else {
+          _this->_impl_.payload_.display_name_changed_->MergeFrom(*from._impl_.payload_.display_name_changed_);
         }
         break;
       }

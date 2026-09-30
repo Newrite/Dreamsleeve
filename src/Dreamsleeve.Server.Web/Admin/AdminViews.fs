@@ -263,6 +263,23 @@ module AdminViews =
                     Elem.dd [] [ text value ]
             ]
             if not card.Sessions.IsEmpty then online card.Sessions true
+            Elem.section [] [
+                Elem.h2 [] [ text "История имён" ]
+                if card.Names.IsEmpty then Elem.p [ css "muted" ] [ text "Display name не менялось." ]
+                else
+                    Elem.table [] [
+                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Когда"; "Было"; "Стало"; "Кто" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.tbody [] [
+                            for change in card.Names do
+                                Elem.tr [] [
+                                    Elem.td [] [ text (time change.At) ]
+                                    Elem.td [] [ text change.OldName ]
+                                    Elem.td [] [ text change.NewName ]
+                                    Elem.td [] [ text (if isNull change.ChangedBy then "игрок" else $"администратор {change.ChangedBy}") ]
+                                ]
+                        ]
+                    ]
+            ]
             Elem.section [ css "actions" ] [
                 Elem.h2 [] [ text "Действия" ]
                 Elem.form [ attr "method" "post"; action "role"; css "stack" ] [

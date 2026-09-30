@@ -78,10 +78,11 @@ module internal SessionTable =
 
     /// Keeps the pseudonym and hiding of the player; None when this connection
     /// is not the ready or opening owner of the reservation.
-    let updateProfile (profile: PlayerData) (entry: Entry) state =
+    let updateProfile (profile: PlayerData) own (entry: Entry) state =
         match entry.Phase, entry.PlayerId with
         | (Opening | Ready), Some playerId when playerId = profile.PlayerId ->
             PseudonymBook.rename profile state.Names
+            if own then state.Profiles.Remove playerId |> ignore
             true
         | (Waiting | Opening | Ready | Closing), _ -> false
 

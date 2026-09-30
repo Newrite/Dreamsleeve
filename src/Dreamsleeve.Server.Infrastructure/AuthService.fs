@@ -23,6 +23,8 @@ type AccountServiceOptions = {
     SavedLoginDays: int
     MaxSavedLogins: int
     ResetLifetimeMinutes: int
+    /// Display name changes kept per player (display_name_changes); older ones are deleted.
+    DisplayNameHistory: int
 }
 
 [<RequireQualifiedAccess>]
@@ -31,6 +33,8 @@ type AccountAccessError =
     | UsernameTaken
     | Busy
     | Unavailable
+    /// A player's own display name change sooner than the interval allows.
+    | TooSoon of retryAfter: TimeSpan
 
 type SessionGrant = {
     Profile: PlayerData
@@ -50,8 +54,10 @@ type AccountAccessCommand =
     // Trusted server callers only. Never map these directly to public HTTP input.
     | CreatePasswordReset of Username
     | RevokeAccount of Username
-    /// The caller has validated and moderated the new name.
-    | RenamePlayer of PlayerId * DisplayName
+    /// An administrator's change; the caller has validated and moderated the new name.
+    | RenamePlayer of PlayerId * DisplayName * changedBy: AdminId
+    /// The player's own change from the game session, limited by minInterval.
+    | ChangeOwnDisplayName of PlayerId * DisplayName * minInterval: TimeSpan
 
 [<RequireQualifiedAccess>]
 type AccountAccessResult =
@@ -67,7 +73,7 @@ type AccountWorkResult =
     | Verified of AuthenticatedPlayer * rememberToken: string
     | LoggedOut of tokenHash: string
     | Revoked of PlayerData * resetCode: string
-    | Renamed of PlayerData
+    | Renamed of previous: DisplayName * PlayerData * changedBy: AdminId voption
 
 type AccountWorkReply = {
     OperationId: Guid
@@ -89,6 +95,8 @@ type AuthMessage =
     | WorkersStopped of Result<unit, exn>
     | SetRevocationTarget of ReliableAgentRef<PlayerId>
     | RevocationFailed of AgentSendFailure
+    /// From a game session; settled by a DisplayNameChangeReply.
+    | ChangeDisplayName of DisplayNameChangeRequest
     | Stop
 
 /// Account I/O and password work run in bounded library workers. Only this
@@ -97,9 +105,17 @@ type AuthMessage =
 module AuthService =
     type private Ticket = { Player: AuthenticatedPlayer; CreatedAt: int64; RememberKey: string }
 
+    /// Who waits for an admitted operation: an HTTP or trusted caller, or a game session.
+    [<RequireQualifiedAccess>]
+    type private Requester =
+        | Caller of ReplyChannel<Result<AccountAccessResult, AccountAccessError>>
+        | Session of DisplayNameChangeRequest
+
+    type private Pending = { Command: AccountAccessCommand; Requester: Requester }
+
     type private State = {
         Tickets: Dictionary<string, Ticket>
-        Pending: Dictionary<Guid, ReplyChannel<Result<AccountAccessResult, AccountAccessError>>>
+        Pending: Dictionary<Guid, Pending>
         Workers: Agent<AccountWorkRequest>
         Outbox: AgentOutbox<AccountWorkRequest>
         mutable Exclusive: bool
@@ -111,13 +127,14 @@ module AuthService =
     let defaults = {
         MailboxCapacity = 64; MaxConcurrentOperations = 4; MaxTickets = 4096
         TicketLifetimeSeconds = 60; PasswordIterations = 210000
-        SavedLoginDays = 30; MaxSavedLogins = 8; ResetLifetimeMinutes = 15
+        SavedLoginDays = 30; MaxSavedLogins = 8; ResetLifetimeMinutes = 15; DisplayNameHistory = 20
     }
 
     let validate options = [
         if options.SavedLoginDays < 1 || options.SavedLoginDays > 365 then "Saved login lifetime must be 1..365 days."
         if options.MaxSavedLogins < 1 || options.MaxSavedLogins > 32 then "Saved logins per account must be 1..32."
         if options.ResetLifetimeMinutes < 1 || options.ResetLifetimeMinutes > 60 then "Reset lifetime must be 1..60 minutes."
+        if options.DisplayNameHistory < 1 || options.DisplayNameHistory > 1000 then "Display name history per player must be 1..1000."
         if options.MailboxCapacity < 1 || options.MailboxCapacity > 65536 then "Account mailbox capacity must be 1..65536."
         if options.MaxConcurrentOperations < 1 || options.MaxConcurrentOperations > 64 then "Account workers must be 1..64."
         if options.MaxTickets < 1 || options.MaxTickets > 100000 then "Outstanding ticket capacity must be 1..100000."
@@ -183,6 +200,13 @@ module AuthService =
                 else SqliteAccountStore.revoke database account.AccountId token
             result |> Result.map (fun () -> AccountWorkResult.Revoked(account.Profile, code)) |> Result.mapError (storageError logger)
 
+    let private rename options database logger token (clock: TimeProvider) playerId displayName changedBy interval =
+        match SqliteAccountStore.rename database playerId displayName changedBy interval options.DisplayNameHistory (clock.GetUtcNow()) token with
+        | Ok (RenameOutcome.Renamed(previous, stored)) -> Ok (AccountWorkResult.Renamed(previous, stored.Profile, changedBy))
+        | Ok RenameOutcome.NotFound -> Error AccountAccessError.InvalidCredentials
+        | Ok (RenameOutcome.TooSoon wait) -> Error (AccountAccessError.TooSoon wait)
+        | Error error -> Error (storageError logger error)
+
     let private execute options database dummyHash (clock: TimeProvider) (logger: ILogger) (token: CancellationToken) (request: AccountWorkRequest) = task {
         // createAsyncHandler invokes even this synchronous prefix in tracked work.
         let result =
@@ -224,11 +248,10 @@ module AuthService =
                         |> Result.mapError (storageError logger)
                 | AccountAccessCommand.CreatePasswordReset username -> administer options database now logger token username true
                 | AccountAccessCommand.RevokeAccount username -> administer options database now logger token username false
-                | AccountAccessCommand.RenamePlayer(playerId, displayName) ->
-                    match SqliteAccountStore.rename database playerId displayName token with
-                    | Ok (Some account) -> Ok (AccountWorkResult.Renamed account.Profile)
-                    | Ok None -> Error AccountAccessError.InvalidCredentials
-                    | Error error -> Error (storageError logger error)
+                | AccountAccessCommand.RenamePlayer(playerId, displayName, admin) ->
+                    rename options database logger token clock playerId displayName (ValueSome admin) TimeSpan.Zero
+                | AccountAccessCommand.ChangeOwnDisplayName(playerId, displayName, interval) ->
+                    rename options database logger token clock playerId displayName ValueNone interval
             with
             | :? OperationCanceledException -> Error AccountAccessError.Unavailable
             | error ->
@@ -275,12 +298,35 @@ module AuthService =
     let private exclusive = function
         | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _
         | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.Logout _ | AccountAccessCommand.RenamePlayer _ -> true
+        // The player is online: no second session of theirs can open with a stale
+        // ticket, and outstanding tickets are updated when the change settles.
         | AccountAccessCommand.Register _ | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _
-        | AccountAccessCommand.Resume _ -> false
+        | AccountAccessCommand.Resume _ | AccountAccessCommand.ChangeOwnDisplayName _ -> false
 
-    let private access options state (context: AgentContext<AuthMessage>) command (reply: ReplyChannel<Result<AccountAccessResult, AccountAccessError>>) =
-        if state.Stopping then reply.Reply(Error AccountAccessError.Unavailable)
-        elif state.Exclusive || (exclusive command && state.Pending.Count <> 0) || state.Pending.Count >= options.MaxConcurrentOperations then reply.Reply(Error AccountAccessError.Busy)
+    let private settle (logger: ILogger) (requester: Requester) (result: Result<AccountAccessResult, AccountAccessError>) =
+        match requester with
+        | Requester.Caller reply -> reply.Reply result
+        | Requester.Session request ->
+            let answer =
+                match result with
+                | Ok (AccountAccessResult.Renamed profile) -> Ok profile
+                | Error (AccountAccessError.TooSoon wait) -> Error (DisplayNameChangeError.TooSoon wait)
+                | Error AccountAccessError.Busy -> Error DisplayNameChangeError.Busy
+                | Ok _ | Error _ -> Error DisplayNameChangeError.Unavailable
+            // A control message of the session: it has room even when the session is busy.
+            match request.ReplyTo.TryPost { OperationId = request.OperationId; Result = answer } with
+            | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
+            | AgentTryDeliveryResult.Full ->
+                logger.LogWarning("Display name reply for player {PlayerId} was not delivered: the session is full", PlayerId.value request.PlayerId)
+
+    let private abandoned = function
+        | Requester.Caller reply -> reply.IsCompleted
+        | Requester.Session _ -> false
+
+    let private access options (logger: ILogger) state (context: AgentContext<AuthMessage>) command (requester: Requester) =
+        if state.Stopping then settle logger requester (Error AccountAccessError.Unavailable)
+        elif state.Exclusive || (exclusive command && state.Pending.Count <> 0) || state.Pending.Count >= options.MaxConcurrentOperations then
+            settle logger requester (Error AccountAccessError.Busy)
         else
             let operationId = Guid.NewGuid()
             let request = {
@@ -288,32 +334,68 @@ module AuthService =
                 ReplyTo = context.Ref.TryReliable().Value.Map AuthMessage.Finished
             }
             state.Exclusive <- exclusive command
-            state.Pending.Add(operationId, reply)
+            state.Pending.Add(operationId, { Command = command; Requester = requester })
             if not (state.Outbox.TrySend(context, request)) then
                 state.Exclusive <- false
                 state.Pending.Remove operationId |> ignore
-                reply.Reply(Error AccountAccessError.Busy)
+                settle logger requester (Error AccountAccessError.Busy)
+
+    let private signInMethod = function
+        | AccountAccessCommand.Login _ -> "password"
+        | AccountAccessCommand.RememberLogin _ -> "password, remembered"
+        | AccountAccessCommand.Resume _ -> "saved login"
+        | AccountAccessCommand.Register _ | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _
+        | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _
+        | AccountAccessCommand.ChangeOwnDisplayName _ -> "other"
+
+    // Names are logged, secrets never: no password, token, code or ticket.
+    let private logOutcome (logger: ILogger) (command: AccountAccessCommand) (result: Result<AccountWorkResult, AccountAccessError>) =
+        match command, result with
+        | (AccountAccessCommand.Login(username, _) | AccountAccessCommand.RememberLogin(username, _)), Error AccountAccessError.InvalidCredentials ->
+            logger.LogInformation("Sign-in refused for {Username}: wrong username or password", Username.value username)
+        | AccountAccessCommand.Resume _, Error AccountAccessError.InvalidCredentials ->
+            logger.LogInformation("Saved login refused: unknown, revoked or expired token")
+        | AccountAccessCommand.ResetPassword _, Error AccountAccessError.InvalidCredentials ->
+            logger.LogInformation("Password reset refused: unknown, used or expired code")
+        | AccountAccessCommand.Register(username, _, _), Error AccountAccessError.UsernameTaken ->
+            logger.LogInformation("Registration refused: {Username} is taken", Username.value username)
+        | AccountAccessCommand.ChangeOwnDisplayName(playerId, displayName, _), Error (AccountAccessError.TooSoon wait) ->
+            logger.LogInformation("Display name change of player {PlayerId} to {DisplayName} refused: allowed again in {Minutes} min",
+                                  PlayerId.value playerId, DisplayName.value displayName, int (ceil wait.TotalMinutes))
+        | _, (Ok _ | Error _) -> ()
 
     let private finished options clock (logger: ILogger) state (context: AgentContext<AuthMessage>) (completion: AccountWorkReply) =
         match state.Pending.TryGetValue completion.OperationId with
         | false, _ -> ()
-        | true, reply ->
+        | true, pending ->
             state.Exclusive <- false
             state.Pending.Remove completion.OperationId |> ignore
+            logOutcome logger pending.Command completion.Result
             let result =
                 match completion.Result with
                 | Ok (AccountWorkResult.Registered profile) ->
-                    logger.LogInformation("Account registered for player {PlayerId}", PlayerId.value profile.PlayerId)
+                    logger.LogInformation("Account registered: player {PlayerId} {Username} ({DisplayName})", PlayerId.value profile.PlayerId,
+                                          Username.value profile.Username, DisplayName.value profile.DisplayName)
                     Ok (AccountAccessResult.Registered profile)
-                | Ok (AccountWorkResult.Verified _) when state.Stopping || reply.IsCompleted -> Error AccountAccessError.Unavailable
+                | Ok (AccountWorkResult.Verified _) when state.Stopping || abandoned pending.Requester -> Error AccountAccessError.Unavailable
                 | Ok (AccountWorkResult.Verified(player, rememberToken)) ->
-                    logger.LogDebug("Account authenticated for player {PlayerId}", PlayerId.value player.Profile.PlayerId)
+                    logger.LogInformation("Player {PlayerId} {Username} signed in ({Method})", PlayerId.value player.Profile.PlayerId,
+                                          Username.value player.Profile.Username, signInMethod pending.Command)
                     issue options clock state player rememberToken
-                | Ok (AccountWorkResult.Renamed profile) ->
-                    // Exclusive: no login was pending, so outstanding tickets are the only stale copies.
+                | Ok (AccountWorkResult.Renamed(previous, profile, changedBy)) ->
+                    // Outstanding tickets would open a session with the old name.
                     let keys = state.Tickets |> Seq.filter (fun entry -> entry.Value.Player.Profile.PlayerId = profile.PlayerId) |> Seq.map _.Key |> Seq.toArray
                     for key in keys do state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Profile = profile } }
-                    logger.LogInformation("Display name changed for player {PlayerId}", PlayerId.value profile.PlayerId)
+                    if previous <> profile.DisplayName then
+                        match changedBy with
+                        | ValueSome admin ->
+                            logger.LogInformation("Display name of player {PlayerId} {Username} changed by admin {AdminId}: {Previous} -> {DisplayName}",
+                                                  PlayerId.value profile.PlayerId, Username.value profile.Username, AdminId.value admin,
+                                                  DisplayName.value previous, DisplayName.value profile.DisplayName)
+                        | ValueNone ->
+                            logger.LogInformation("Player {PlayerId} {Username} changed display name: {Previous} -> {DisplayName}",
+                                                  PlayerId.value profile.PlayerId, Username.value profile.Username,
+                                                  DisplayName.value previous, DisplayName.value profile.DisplayName)
                     Ok (AccountAccessResult.Renamed profile)
                 | Ok (AccountWorkResult.LoggedOut key) ->
                     // Logout is exclusive: no pending resume can issue a late ticket.
@@ -334,7 +416,7 @@ module AuthService =
                     elif code.Length = 0 then Ok AccountAccessResult.Completed
                     else Ok (AccountAccessResult.PasswordResetCreated code)
                 | Error error -> Error error
-            reply.Reply result
+            settle logger pending.Requester result
             completeIfStopped state context
 
     let private handle options clock (logger: ILogger) state consumeRequest (context: AgentContext<AuthMessage>) message = task {
@@ -344,7 +426,10 @@ module AuthService =
             logger.LogError("Session revocation delivery failed: {Failure}", failure)
             context.Abort()
         | AuthMessage.Start -> context.Own(state.Workers, AuthMessage.WorkersStopped)
-        | AuthMessage.Access(command, reply) -> access options state context command reply
+        | AuthMessage.Access(command, reply) -> access options logger state context command (Requester.Caller reply)
+        | AuthMessage.ChangeDisplayName request ->
+            let command = AccountAccessCommand.ChangeOwnDisplayName(request.PlayerId, request.DisplayName, request.MinInterval)
+            access options logger state context command (Requester.Session request)
         | AuthMessage.Finished reply -> finished options clock logger state context reply
         | AuthMessage.ConsumeTicket request -> do! consumeRequest context request
         | AuthMessage.WorkersStopped outcome ->
@@ -366,7 +451,7 @@ module AuthService =
     let private isControl = function
         | AuthMessage.Start | AuthMessage.Finished _ | AuthMessage.WorkersStopped _ | AuthMessage.Stop
         | AuthMessage.SetRevocationTarget _ | AuthMessage.RevocationFailed _ -> true
-        | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ -> false
+        | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeDisplayName _ -> false
 
     let start options database (logger: ILogger) (clock: TimeProvider) =
         match validate options with
@@ -394,5 +479,6 @@ module AuthService =
 
     let authenticator (agent: Agent<AuthMessage>) = {
         Requests = agent.Ref.TryReliable().Value.Map AuthMessage.ConsumeTicket
+        DisplayNames = agent.Ref.TryReliable().Value.Map AuthMessage.ChangeDisplayName
         Completion = agent.Completion
     }

@@ -169,6 +169,14 @@ Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIde
 проекции UI без username и персонажа (`UiPlayer.pseudonymous`); `NameFor` называет их
 псевдонимом в любом режиме имени.
 
+Смена отображаемого имени ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#смена-отображаемого-имени)).
+Команда UI `changeDisplayName{displayName}` в Ready-сессии идёт в `Session::ChangeDisplayName` →
+Core `ChangeDisplayName{requestId, displayName}` (одна за раз). Итог — `DisplayNameConfirmation`
+или отказ; host шлёт UI событие `displayName` (`pending`, `changed` — сохранённое имя, один раз,
+`error` — текст отказа на русском из `Bridge::DisplayNameRejectionText`, с минутами до следующей
+смены). Обрыв соединения до ответа снимает ожидание с ошибкой. Свой профиль с новым именем
+приходит обычным обновлением онлайна.
+
 Видимость: `visible = !hideUi && !menuBlocked && domReady`, `menuBlocked` пересчитывается
 по всему набору открытых меню (список `HidingMenus` в `PrismaUI.ixx`: загрузка, главное
 меню, инвентарь, контейнер, торговля, крафт, магия, карта, журнал, навыки, tween,

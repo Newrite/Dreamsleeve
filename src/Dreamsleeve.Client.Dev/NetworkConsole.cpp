@@ -110,7 +110,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -250,7 +250,7 @@ namespace
     movement.Apply(output.state);
     if (
       !verbose && output.state.updates.empty() && output.rejections.empty() && output.commandFailures.empty() &&
-      output.groundMarkConfirmations.empty() && output.identityConfirmations.empty())
+      output.groundMarkConfirmations.empty() && output.identityConfirmations.empty() && output.displayNameConfirmations.empty())
       return;
 
     std::osyncstream console(std::cout);
@@ -327,6 +327,9 @@ namespace
               << (confirmation.pseudonym ? "hidden as " + *confirmation.pseudonym + " " + std::string{HidingName(confirmation.hiding)}
                                          : "shown")
               << '\n';
+
+    for (const auto& confirmation : output.displayNameConfirmations)
+      console << "request " << confirmation.requestId << " display name " << confirmation.displayName << '\n';
 
     for (const auto& event : output.rejections)
       console << "request " << event.rejection.requestId << " rejected (" << static_cast<int>(event.rejection.code)
@@ -559,6 +562,22 @@ int RunNetworkConsole(int argc, char* argv[])
         exchange.SetHideIdentity(requested);
         std::cout << "request " << *requestId << " queued\n";
       }
+      else
+        std::cout << "Command queue is full or closed\n";
+    }
+    else if (line.starts_with("name "))
+    {
+      // The own display name; the username and PlayerId stay.
+      Print(exchange, generation, channel, **movement);
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId)
+        std::cout << "Request IDs exhausted\n";
+      else if (
+        exchange.Post({
+            generation,
+            ChangeDisplayName{*requestId, line.substr(5)}
+      }) == CommandPostResult::Queued)
+        std::cout << "request " << *requestId << " queued\n";
       else
         std::cout << "Command queue is full or closed\n";
     }

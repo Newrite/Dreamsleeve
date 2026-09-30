@@ -14,7 +14,7 @@ type SqliteAccountStoreConfig = {
 [<RequireQualifiedAccess>]
 module internal SqliteDatabase =
     [<Literal>]
-    let SchemaVersion = 5L
+    let SchemaVersion = 6L
 
     [<Literal>]
     let ApplicationId = 1146309718L
@@ -61,7 +61,7 @@ module internal SqliteDatabase =
             command.CommandText <- "SELECT a.id, a.username, a.password_hash, a.created_at, s.token_hash, s.admin_id, s.created_at, s.expires_at FROM admin_accounts a LEFT JOIN admin_sessions s ON s.admin_id = a.id LIMIT 0"
             use admins = command.ExecuteReader()
             admins.Close()
-            command.CommandText <- "SELECT t.token_hash, t.admin_id, t.label, t.created_at, r.player_id, r.role, r.granted_by, r.granted_at, u.id, u.admin_id, u.action, u.target, u.details, u.at FROM admin_api_tokens t, player_roles r, admin_audit u LIMIT 0"
+            command.CommandText <- "SELECT t.token_hash, t.admin_id, t.label, t.created_at, r.player_id, r.role, r.granted_by, r.granted_at, u.id, u.admin_id, u.action, u.target, u.details, u.at, n.id, n.player_id, n.old_name, n.new_name, n.changed_by, n.at FROM admin_api_tokens t, player_roles r, admin_audit u, display_name_changes n LIMIT 0"
             use panel = command.ExecuteReader()
             Ok ()
 

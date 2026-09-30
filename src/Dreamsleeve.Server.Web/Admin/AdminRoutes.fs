@@ -79,7 +79,7 @@ module AdminRoutes =
         match error with
         | AccountAccessError.Busy -> errorPage 503 "Сервис аккаунтов занят (выполняется другая операция), повторите." admin
         | AccountAccessError.InvalidCredentials -> errorPage 404 "Игрок не найден." admin
-        | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable -> errorPage 503 "Сервис аккаунтов недоступен." admin
+        | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ -> errorPage 503 "Сервис аккаунтов недоступен." admin
 
     // --- Ports -----------------------------------------------------------
 
@@ -378,7 +378,9 @@ module AdminRoutes =
         let! rows = sessions routes context
         let own = rows |> Option.defaultValue [] |> List.filter (fun row -> row.PlayerId = Some record.Profile.PlayerId)
         let! described = describe routes own
-        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described }
+        let! names = ask routes context (AdminCommand.NameHistory record.Profile.PlayerId)
+        let names = match names with Ok (AdminReply.Names changes) -> changes |> List.map AdminModels.nameChange | Ok _ | Error _ -> []
+        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names }
     }
 
     let private notices =
@@ -444,7 +446,7 @@ module AdminRoutes =
                 | Error error -> return! serviceFailure (Some admin) error context
                 | Ok None -> return! errorPage 404 "Игрок не найден." (Some admin) context
                 | Ok (Some before) ->
-                    match! account routes context (AccountAccessCommand.RenamePlayer(playerId, name)) with
+                    match! account routes context (AccountAccessCommand.RenamePlayer(playerId, name, admin.Id)) with
                     | Ok (AccountAccessResult.Renamed profile) ->
                         if not (routes.Ports.ApplyProfile profile) then
                             routes.Logger.Warning("Runtime did not take the new name of player {PlayerId}", PlayerId.value playerId)

@@ -71,6 +71,12 @@ namespace Dreamsleeve::Client::Wire
         packet.set_request_id(value.requestId);
         packet.mutable_set_identity_visibility()->set_hidden(static_cast<P::HiddenIdentity>(value.hiding));
       }
+
+      void operator()(const ChangeDisplayName& value) const
+      {
+        packet.set_request_id(value.requestId);
+        packet.mutable_change_display_name()->set_display_name(value.displayName);
+      }
     };
 
   }
@@ -99,6 +105,7 @@ namespace Dreamsleeve::Client::Wire
       return Invalid("place_ground_note");
     if (const auto* death = std::get_if<ReportDeath>(&request); death && !ValidPlacement(death->placement)) return Invalid("report_death");
     if (packet.has_remove_ground_mark() && packet.remove_ground_mark().mark_id() == 0) return Invalid("mark_id");
+    if (packet.has_change_display_name() && packet.change_display_name().display_name().empty()) return Invalid("display_name");
 
     if (
       packet.has_update_player() && packet.update_player().has_set_actor_values() &&
@@ -274,6 +281,10 @@ namespace Dreamsleeve::Client::Wire
             static_cast<Domain::HiddenIdentity>(changed.hidden())
         };
       }
+      case P::ServerPacket::kDisplayNameChanged:
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        if (packet.display_name_changed().display_name().empty()) return Invalid("display_name");
+        return DisplayNameChanged{packet.request_id(), packet.display_name_changed().display_name()};
       case P::ServerPacket::PAYLOAD_NOT_SET:
         return Invalid("payload");
       default:

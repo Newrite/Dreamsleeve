@@ -125,6 +125,25 @@ module main =
 
     let auth_tokens = table<auth_tokens>
 
+    type display_name_changes =
+        { id: int64
+          player_id: int64
+          old_name: string
+          new_name: string
+          changed_by: Option<int64>
+          at: int64 }
+
+        interface IWriteColumns with
+            member this.WriteColumns =
+                [ { WriteColumn.Name = "id"; Value = box this.id; ProviderDbType = None }
+                  { WriteColumn.Name = "player_id"; Value = box this.player_id; ProviderDbType = None }
+                  { WriteColumn.Name = "old_name"; Value = box this.old_name; ProviderDbType = None }
+                  { WriteColumn.Name = "new_name"; Value = box this.new_name; ProviderDbType = None }
+                  { WriteColumn.Name = "changed_by"; Value = box this.changed_by; ProviderDbType = None }
+                  { WriteColumn.Name = "at"; Value = box this.at; ProviderDbType = None } ]
+
+    let display_name_changes = table<display_name_changes>
+
     type ground_marks =
         { id: int64
           author_id: int64

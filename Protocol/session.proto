@@ -54,3 +54,18 @@ message IdentityVisibilityChanged {
   optional string pseudonym = 1;
   HiddenIdentity hidden = 2;
 }
+
+// Change the sender's own display name. Control lane; settled by
+// DisplayNameChanged or RequestRejected (INVALID_REQUEST, TEXT_NOT_ALLOWED,
+// RATE_LIMITED, DISPLAY_NAME_CHANGE_NOT_ALLOWED, OVERLOADED). The username and
+// the PlayerId never change.
+message ChangeDisplayName {
+  string display_name = 1;
+}
+
+// Settles ChangeDisplayName with the name as stored (trimmed, NFC). The other
+// players receive the new profile as PlayerUpdated, unless the sender hides
+// their names: then they keep seeing the pseudonym.
+message DisplayNameChanged {
+  string display_name = 1;
+}

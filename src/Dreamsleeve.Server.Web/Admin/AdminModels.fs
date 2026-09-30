@@ -53,9 +53,18 @@ type PlayerPageModel = {
     Players: PlayerModel list
 }
 
+/// A display name change; changedBy is null when the player changed it.
+type NameChangeModel = {
+    OldName: string
+    NewName: string
+    ChangedBy: string
+    At: DateTimeOffset
+}
+
 type PlayerCardModel = {
     Player: PlayerModel
     Sessions: OnlineModel list
+    Names: NameChangeModel list
 }
 
 type AuditModel = {
@@ -129,6 +138,10 @@ module AdminModels =
     let page query (online: PlayerId -> bool) (page: PlayerPage) : PlayerPageModel =
         { Query = query; Page = page.Page; PageSize = SqliteAdminStore.PageSize; Total = page.Total
           Players = page.Players |> List.map (player online) }
+
+    let nameChange (change: NameChange) : NameChangeModel =
+        { OldName = change.OldName; NewName = change.NewName
+          ChangedBy = change.ChangedBy |> Option.map Username.value |> Option.defaultValue null; At = change.At }
 
     let audit (entry: AuditEntry) : AuditModel =
         { Admin = Username.value entry.Admin.Username; Action = AdminAction.key entry.Action; Target = entry.Target

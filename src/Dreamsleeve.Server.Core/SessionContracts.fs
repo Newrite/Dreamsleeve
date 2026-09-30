@@ -59,9 +59,10 @@ type SessionHostCommand =
     /// Shows the reserved profile again or hides it; the pseudonym is new only
     /// when the names were shown everywhere before.
     | ChangeIdentity of Guid * HiddenIdentity * ReliableAgentRef<Pseudonym voption>
-    /// The moderated profile after an administrator renamed the player; the
-    /// names shown online (PseudonymBook) follow it.
-    | UpdateProfile of Guid * PlayerData
+    /// The moderated profile after a rename; the names shown online
+    /// (PseudonymBook) follow it. own: the player changed the name themself,
+    /// so an earlier administrator rename no longer applies to later sessions.
+    | UpdateProfile of Guid * PlayerData * own: bool
     | Activate of Guid * requestId: uint64 * SessionWelcome
     | Send of Guid * ServerResponse
     | Close of Guid * reason: string
@@ -190,6 +191,8 @@ type GroundMarkCommand =
     | Observe of connectionId: Guid * characterGeneration: uint64 * PlayerLocation voption
     | Place of GroundMarkSubmission
     | Remove of connectionId: Guid * requestId: uint64 * GroundMarkId
+    /// The observer's moderated profile after a rename; marks sent from now on carry it.
+    | Rename of connectionId: Guid * PlayerData
     | Expire of AgentTick
     | Detach of SessionDetach
 
@@ -310,18 +313,31 @@ type IdentityOptions = {
     ToggleIntervalMs: int
     /// Separate TOML with the pseudonym dictionary, next to moderation.toml.
     PseudonymsPath: string
+    /// false refuses a player's own display name change (DISPLAY_NAME_CHANGE_NOT_ALLOWED);
+    /// the admin panel still renames.
+    AllowDisplayNameChange: bool
+    /// A player's own change may come no sooner than this after the previous
+    /// one, across sessions and restarts (display_name_changes); 0 disables the limit.
+    DisplayNameChangeIntervalMinutes: int
 }
 
 [<RequireQualifiedAccess>]
 module IdentityOptions =
-    let defaults = { AllowHiddenIdentity = true; ToggleIntervalMs = 30000; PseudonymsPath = "pseudonyms.toml" }
+    let defaults = {
+        AllowHiddenIdentity = true; ToggleIntervalMs = 30000; PseudonymsPath = "pseudonyms.toml"
+        AllowDisplayNameChange = true; DisplayNameChangeIntervalMinutes = 1
+    }
 
     let validate options = [
         if isNull (box options) then "Identity section cannot be null."
         else
             if options.ToggleIntervalMs < 0 then "Identity.ToggleIntervalMs must be non-negative."
             if isNull options.PseudonymsPath then "Identity.PseudonymsPath cannot be null."
+            if options.DisplayNameChangeIntervalMinutes < 0 || options.DisplayNameChangeIntervalMinutes > 525600 then
+                "Identity.DisplayNameChangeIntervalMinutes must be 0..525600."
     ]
+
+    let displayNameInterval options = TimeSpan.FromMinutes(float options.DisplayNameChangeIntervalMinutes)
 
 type ServerRuntimeOptions = {
     MaxSessions: int

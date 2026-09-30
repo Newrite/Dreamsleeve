@@ -1403,4 +1403,98 @@ TEST_CASE("The hide-my-name preference round-trips through ui.toml and defaults 
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"setIdentityVisibility","hiding":"sometimes"})"));
 }
 
+TEST_CASE("A display name change waits for the server and reports the stored name or the refusal")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(model.Generation(), OnlinePlayersReplaced{{MakePlayer(1, "Alice")}}));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  Session        session;
+  Session::Frame frame;
+  UiSettings     settings;
+  const auto     nameOf = [](const Session::Frame& value) {
+    std::optional<glz::generic> found;
+    for (const auto& event : value.events)
+      if (Type(event) == "displayName") found = Parse(event);
+    return found;
+  };
+
+  CHECK_FALSE(session.ChangeDisplayName(*exchange, "Новое Имя"));
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  Settle(session, *exchange, model, frame, settings);
+  REQUIRE(session.Ready());
+
+  REQUIRE(session.ChangeDisplayName(*exchange, "Новое Имя"));
+  CHECK_FALSE(session.ChangeDisplayName(*exchange, "Другое"));
+  std::vector<QueuedClientCommand> commands;
+  exchange->TakeCommands(commands);
+  REQUIRE(commands.size() == 1);
+  const auto request = std::get<ChangeDisplayName>(commands[0].command);
+  CHECK(request.displayName == "Новое Имя");
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  auto pending = nameOf(frame);
+  REQUIRE(pending);
+  CHECK((*pending)["pending"].get<bool>());
+
+  REQUIRE(exchange->Publish(
+    model,
+    false,
+    SessionPhase::Ready,
+    "Tamriel",
+    std::nullopt,
+    std::nullopt,
+    std::nullopt,
+    DisplayNameConfirmation{model.Generation(), request.requestId, "Новое Имя"}));
+  ClientOutput output;
+  exchange->Drain(output);
+  frame = {};
+  session.Process(*exchange, output, settings, frame);
+  auto settled = nameOf(frame);
+  REQUIRE(settled);
+  CHECK_FALSE((*settled)["pending"].get<bool>());
+  CHECK((*settled)["changed"].get<std::string>() == "Новое Имя");
+  // The stored name is reported once.
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  auto quiet = nameOf(frame);
+  REQUIRE(quiet);
+  CHECK_FALSE(quiet->contains("changed"));
+
+  // A refusal names the wait in the UI language.
+  REQUIRE(session.ChangeDisplayName(*exchange, "Третье"));
+  exchange->TakeCommands(commands);
+  const auto second = std::get<ChangeDisplayName>(commands[0].command).requestId;
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ServerRejection{second, RequestRejectionCode::RateLimited, "The display name can be changed again in 90 min.", "display_name"}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, frame);
+  auto refused = nameOf(frame);
+  REQUIRE(refused);
+  CHECK_FALSE((*refused)["pending"].get<bool>());
+  CHECK((*refused)["error"].get<std::string>() == "Имя можно сменить снова через 90 мин");
+  CHECK(
+    Bridge::DisplayNameRejectionText(RequestRejectionCode::RateLimited, "The display name can be changed again in 600 min.") ==
+    "Имя можно сменить снова через 10 ч");
+  CHECK(Bridge::DisplayNameRejectionText(RequestRejectionCode::TextNotAllowed, "") == "Имя содержит запрещённые слова");
+  CHECK(Bridge::DisplayNameRejectionText(RequestRejectionCode::DisplayNameChangeNotAllowed, "") == "Сервер не разрешает менять имя");
+
+  // A lost connection ends the wait instead of leaving it forever.
+  REQUIRE(session.ChangeDisplayName(*exchange, "Четвёртое"));
+  exchange->TakeCommands(commands);
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), settings, frame);
+  auto dropped = nameOf(frame);
+  REQUIRE(dropped);
+  CHECK_FALSE((*dropped)["pending"].get<bool>());
+  CHECK((*dropped)["error"].get<std::string>() == "Соединение прервано до ответа сервера");
+
+  const auto command = Bridge::ParseCommand(R"({"type":"changeDisplayName","displayName":"Имя"})");
+  REQUIRE(command);
+  CHECK(command->displayName == "Имя");
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"changeDisplayName","displayName":""})"));
+}
+
 TEST_SUITE_END();

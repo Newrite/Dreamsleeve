@@ -7,6 +7,7 @@ import type {
   Channel,
   GroundMark,
   HideIdentity,
+  DisplayNameState,
   HostEvent,
   IdentityState,
   Message,
@@ -110,6 +111,8 @@ export interface ChatState {
   } | null;
   // "Hide my name from other players", as the host reports it.
   identity: IdentityState;
+  // A change of the own display name, as the host reports it.
+  displayName: DisplayNameState;
   // Ground marks: whether the session can place them, the server's list of
   // the player's own marks and the marks it shows nearby.
   groundMarksSupported: boolean;
@@ -188,6 +191,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     ignored: [],
     authorMenu: null,
     identity: { mode: "off", pending: false },
+    displayName: { pending: false },
     groundMarksSupported: false,
     groundMarks: [],
     nearbyMarks: [],
@@ -358,6 +362,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
             ? state.settings
             : { ...state.settings, hideIdentity: identity.mode },
         });
+        break;
+      }
+      case "displayName": {
+        const { type: _, ...displayName } = event;
+        store.setState({ displayName });
         break;
       }
       case "ignored":
@@ -801,6 +810,21 @@ export function makeChat(send: Send, now = () => Date.now()) {
       if (!send({ type: "setIdentityVisibility", hiding }))
         store.setState({
           identity: { ...s.identity, error: "Команда не принята приложением" },
+        });
+      touch();
+    },
+    // The server stores the name; the own profile follows through the players list.
+    changeDisplayName(name: string) {
+      const s = store.getState();
+      const displayName = name.trim();
+      if (!displayName || !s.connected || s.displayName.pending) return;
+      store.setState({ displayName: { pending: true } });
+      if (!send({ type: "changeDisplayName", displayName }))
+        store.setState({
+          displayName: {
+            pending: false,
+            error: "Команда не принята приложением",
+          },
         });
       touch();
     },

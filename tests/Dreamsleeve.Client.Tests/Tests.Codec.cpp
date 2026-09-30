@@ -791,4 +791,39 @@ TEST_CASE("Pseudonymous profiles carry no username and the identity switch round
   CHECK(std::get<W::SessionOpened>(*opened).hiding == Domain::HiddenIdentity::Everywhere);
 }
 
+TEST_CASE("A display name change and its answer round-trip with the correlation")
+{
+  const auto codec   = MakeCodec();
+  const auto request = W::ClientRequest{
+      ChangeDisplayName{5, "Новое Имя"}
+  };
+  CHECK(W::ProtocolCodec::RequestChannel(request) == W::Channel::Control);
+  const auto encoded = codec.Encode(request);
+  REQUIRE(encoded);
+  P::ClientPacket sent;
+  REQUIRE(sent.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  CHECK(sent.request_id() == 5);
+  CHECK(sent.change_display_name().display_name() == "Новое Имя");
+  CHECK_FALSE(codec.Encode(
+    W::ClientRequest{
+        ChangeDisplayName{6, ""}
+  }));
+
+  P::ServerPacket changed;
+  changed.set_protocol_version(W::Version);
+  changed.set_request_id(5);
+  changed.mutable_display_name_changed()->set_display_name("Новое Имя");
+  const auto settled = codec.Decode(Bytes(changed));
+  REQUIRE(settled);
+  const auto& value = std::get<W::DisplayNameChanged>(*settled);
+  CHECK(value.requestId == 5);
+  CHECK(value.displayName == "Новое Имя");
+  CHECK_FALSE(codec.Decode(Bytes(changed), W::Channel::Chat));
+  changed.mutable_display_name_changed()->set_display_name("");
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  changed.mutable_display_name_changed()->set_display_name("Новое Имя");
+  changed.clear_request_id();
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+}
+
 TEST_SUITE_END();

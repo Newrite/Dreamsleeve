@@ -184,6 +184,12 @@ export function parseHostEvent(source: string): HostEvent {
         (v.pseudonym === undefined || label(v.pseudonym)) &&
         (v.error === undefined || label(v.error));
       break;
+    case "displayName":
+      valid =
+        typeof v.pending === "boolean" &&
+        (v.changed === undefined || label(v.changed)) &&
+        (v.error === undefined || label(v.error));
+      break;
     case "ignored":
       valid = list(
         v.players,

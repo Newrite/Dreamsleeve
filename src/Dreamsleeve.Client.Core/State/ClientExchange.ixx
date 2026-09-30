@@ -59,6 +59,16 @@ export namespace Dreamsleeve::Client
     Domain::HiddenIdentity hiding{Domain::HiddenIdentity::None};
   };
 
+  // A new display name for this player's own account; the username and
+  // PlayerId never change. The server applies its word list and how often the
+  // name may change. Settled by a DisplayNameConfirmation, a ServerRejection
+  // or a CommandFailure; the own profile itself changes through PlayerUpdated.
+  struct ChangeDisplayName
+  {
+    std::uint64_t requestId{};
+    std::string   displayName;
+  };
+
   // Complete sampled values, not a patch. Only adjacent pending samples from
   // the same session can replace one another; transitions remain ordered.
   struct LocalMovement
@@ -105,6 +115,7 @@ export namespace Dreamsleeve::Client
     ReportDeath,
     RemoveGroundMark,
     SetIdentityVisibility,
+    ChangeDisplayName,
     LocalMovement,
     LocalLocation,
     LocalActorValues,
@@ -195,6 +206,14 @@ export namespace Dreamsleeve::Client
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
   };
 
+  // Settles ChangeDisplayName with the name as the server stored it.
+  struct DisplayNameConfirmation
+  {
+    std::uint64_t generation{};
+    std::uint64_t requestId{};
+    std::string   displayName;
+  };
+
   struct ClientStatus
   {
     SessionPhase      phase{SessionPhase::Disconnected};
@@ -261,6 +280,7 @@ export namespace Dreamsleeve::Client
     std::vector<ChatConfirmation>       chatConfirmations;
     std::vector<GroundMarkConfirmation> groundMarkConfirmations;
     std::vector<IdentityConfirmation>   identityConfirmations;
+    std::vector<DisplayNameConfirmation> displayNameConfirmations;
   };
 
   // One network owner and one application main thread (also the UI consumer).
@@ -520,16 +540,18 @@ public:
     // still publish so terminal failure can clear the UI. Only this owner adds
     // results; a concurrent Drain can only free room between check and insertion.
     [[nodiscard]] bool Publish(
-      ClientModel&                          model,
-      bool                                  requestSnapshot  = false,
-      std::optional<SessionPhase>           nextPhase        = std::nullopt,
-      std::string_view                      serverName       = {},
-      std::optional<ChatConfirmation>       confirmation     = std::nullopt,
-      std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt,
-      std::optional<IdentityConfirmation>   identity         = std::nullopt)
+      ClientModel&                           model,
+      bool                                   requestSnapshot  = false,
+      std::optional<SessionPhase>            nextPhase        = std::nullopt,
+      std::string_view                       serverName       = {},
+      std::optional<ChatConfirmation>        confirmation     = std::nullopt,
+      std::optional<GroundMarkConfirmation>  markConfirmation = std::nullopt,
+      std::optional<IdentityConfirmation>    identity         = std::nullopt,
+      std::optional<DisplayNameConfirmation> displayName      = std::nullopt)
     {
-      const bool accepted =
-        CanAcceptReplies(model.PendingServerRejectionCount() + (confirmation ? 1 : 0) + (markConfirmation ? 1 : 0) + (identity ? 1 : 0));
+      const bool accepted = CanAcceptReplies(
+        model.PendingServerRejectionCount() + (confirmation ? 1 : 0) + (markConfirmation ? 1 : 0) + (identity ? 1 : 0) +
+        (displayName ? 1 : 0));
       auto                             rejections = accepted ? model.TakeServerRejections() : std::vector<ServerRejectionEvent>{};
       std::optional<ClientStateUpdate> update;
 
@@ -548,6 +570,7 @@ public:
       if (accepted && confirmation) pendingConfirmations.push_back(*confirmation);
       if (accepted && markConfirmation) pendingMarkConfirmations.push_back(*markConfirmation);
       if (accepted && identity) pendingIdentityConfirmations.push_back(std::move(*identity));
+      if (accepted && displayName) pendingNameConfirmations.push_back(std::move(*displayName));
       if (update && state->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired) state->Publish(model.Snapshot());
 
       pendingRejections.insert(
@@ -572,6 +595,7 @@ public:
       output.chatConfirmations.clear();
       output.groundMarkConfirmations.clear();
       output.identityConfirmations.clear();
+      output.displayNameConfirmations.clear();
 
       std::lock_guard lock{mutex};
       state->TakeAll(output.state);
@@ -580,6 +604,7 @@ public:
       pendingConfirmations.swap(output.chatConfirmations);
       pendingMarkConfirmations.swap(output.groundMarkConfirmations);
       pendingIdentityConfirmations.swap(output.identityConfirmations);
+      pendingNameConfirmations.swap(output.displayNameConfirmations);
       output.status = status;
     }
 
@@ -614,7 +639,7 @@ private:
     std::size_t Settled() const noexcept
     {
       return pendingFailures.size() + pendingRejections.size() + pendingConfirmations.size() + pendingMarkConfirmations.size() +
-             pendingIdentityConfirmations.size();
+             pendingIdentityConfirmations.size() + pendingNameConfirmations.size();
     }
 
     mutable std::mutex                   mutex;
@@ -627,6 +652,7 @@ private:
     std::vector<ChatConfirmation>        pendingConfirmations;
     std::vector<GroundMarkConfirmation>  pendingMarkConfirmations;
     std::vector<IdentityConfirmation>    pendingIdentityConfirmations;
+    std::vector<DisplayNameConfirmation> pendingNameConfirmations;
     ClientStatus                         status;
     Domain::HiddenIdentity               hideIdentity{Domain::HiddenIdentity::None};
     std::optional<AuthenticationRequest> pendingAuthentication;

@@ -58,6 +58,8 @@ type AdminCommand =
     | RecentAudit of limit: int
     | SearchPlayers of query: string * page: int
     | FindPlayer of PlayerId
+    /// The latest display name changes of a player, newest first.
+    | NameHistory of PlayerId
 
 [<RequireQualifiedAccess>]
 type AdminReply =
@@ -71,6 +73,7 @@ type AdminReply =
     | Player of PlayerRecord option
     | Players of PlayerPage
     | Audit of AuditEntry list
+    | Names of NameChange list
 
 [<RequireQualifiedAccess>]
 type AdminWorkResult =
@@ -236,6 +239,8 @@ module AdminService =
                     SqliteAdminStore.searchPlayers database query page token |> stored (AdminReply.Players >> reply)
                 | AdminCommand.FindPlayer playerId, _ ->
                     SqliteAdminStore.findPlayer database playerId token |> stored (AdminReply.Player >> reply)
+                | AdminCommand.NameHistory playerId, _ ->
+                    SqliteAdminStore.nameHistory database playerId 50 token |> stored (AdminReply.Names >> reply)
             with
             | :? OperationCanceledException -> Error AdminServiceError.Unavailable
             | error ->
@@ -256,7 +261,7 @@ module AdminService =
         | AdminCommand.Status | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.Login _
         | AdminCommand.Logout _ | AdminCommand.Authenticate _ | AdminCommand.AuthenticateApi _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.RevokeApiToken _ | AdminCommand.SetRole _ | AdminCommand.Record _
-        | AdminCommand.RecentAudit _ | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ -> false
+        | AdminCommand.RecentAudit _ | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ -> false
 
     // Fixed one-minute window per canonical name, counted when an attempt is admitted.
     let private admitLogin options state (now: DateTimeOffset) (username: Username) =
@@ -304,7 +309,7 @@ module AdminService =
             if not (isNull hash) && hash.Length = 64 && hash |> Seq.forall Uri.IsHexDigit then Ok ValueNone else Error AdminServiceError.NotFound
         | AdminCommand.Status | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.SetRole _ | AdminCommand.Record _ | AdminCommand.RecentAudit _
-        | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ -> Ok ValueNone
+        | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ -> Ok ValueNone
 
     let private access options clock state (context: AgentContext<AdminMessage>) command (reply: ReplyChannel<Result<AdminReply, AdminServiceError>>) =
         if state.Stopping then reply.Reply(Error AdminServiceError.Unavailable)

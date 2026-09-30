@@ -17,6 +17,32 @@ export function AccountPanel({
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [remember, setRemember] = useState(true);
+  const [newName, setNewName] = useState("");
+  const self = s.players.find((p) => p.id === s.selfId);
+  // Streamer mode keeps even the own names off the screen, like the saved login.
+  const current = s.settings.streamerMode ? "" : (self?.displayName ?? "");
+  const canRename =
+    s.connected &&
+    !s.displayName.pending &&
+    newName.trim().length > 0 &&
+    newName.trim() !== self?.displayName;
+  function rename(e: FormEvent) {
+    e.preventDefault();
+    if (!canRename) return;
+    chat.changeDisplayName(newName);
+    setNewName("");
+  }
+  const nameStatus = s.displayName.pending
+    ? "Ожидание сервера…"
+    : s.displayName.error
+      ? s.displayName.error
+      : s.displayName.changed
+        ? s.settings.streamerMode
+          ? "Имя изменено"
+          : `Имя изменено на „${s.displayName.changed}“`
+        : current
+          ? `Сейчас: „${current}“`
+          : "";
   const can = accountActions(s.auth, s.connected, {
     username,
     password,
@@ -53,6 +79,45 @@ export function AccountPanel({
           </span>
         )}
       </p>
+      {s.connected && (
+        <form
+          className={styles.form}
+          onSubmit={rename}
+          aria-busy={s.displayName.pending}
+          data-part="display-name"
+        >
+          <label>
+            Отображаемое имя
+            <input
+              name="newDisplayName"
+              maxLength={128}
+              value={newName}
+              placeholder={current}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+          </label>
+          <div className={styles.actions}>
+            <button type="submit" disabled={!canRename}>
+              Сменить имя
+            </button>
+          </div>
+          <p
+            className={styles.status}
+            role="status"
+            aria-live="polite"
+            aria-label="Смена имени"
+            data-failure={Boolean(s.displayName.error)}
+          >
+            {nameStatus}
+          </p>
+          <p className={styles.muted}>
+            Имя пользователя не меняется. Сервер проверяет имя по словарю и
+            ограничивает, как часто его можно менять.
+            {s.identity.mode !== "off" &&
+              " Пока имя скрыто, другие игроки видят псевдоним."}
+          </p>
+        </form>
+      )}
       <form
         className={styles.form}
         onSubmit={submit}

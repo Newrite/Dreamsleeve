@@ -39,6 +39,7 @@ type private Fixture = {
     Presence: Channel<PresenceCommand>
     Marks: Channel<GroundMarkCommand>
     Host: Channel<SessionHostCommand>
+    Names: Channel<DisplayNameChangeRequest>
 }
 
 let private rules =
@@ -52,7 +53,9 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
     let markCommands = Channel.CreateUnbounded<GroundMarkCommand>()
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
+    let nameRequests = Channel.CreateUnbounded<DisplayNameChangeRequest>()
     use authentication = Agent.Start(AgentOptions.create "authentication", collect queries)
+    use names = Agent.Start(AgentOptions.create "names", collect nameRequests)
     use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
     use system = Agent.Start(AgentOptions.create "system", collect systemCommands)
     use presence = createPresence presenceCommands
@@ -65,10 +68,11 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
         Hiding = hideIdentity
     }
     use player = PlayerSession.start settings 64 moderation announcements (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok) identity
-                     (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
+                     (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
     let fixture = { Request = request; Player = player; Authentication = queries;
-                    Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Host = hostCommands }
+                    Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Host = hostCommands
+                    Names = nameRequests }
     do! run fixture
     if not player.Completion.IsCompleted then player.Abort()
     let! _ = terminal player.Completion
@@ -846,8 +850,9 @@ let tests = testList "PlayerSession" ([
             SessionTicket = String('b', 43); Hiding = HiddenIdentity.Shown
         }
         use marks = Agent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
+        use names = Agent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<DisplayNameChangeRequest>()))
         use player = PlayerSession.start options 64 Moderation.empty AnnouncementOptions.defaults (GroundMarkOptions.rules GroundMarkOptions.defaults |> ok)
-                         IdentityOptions.defaults (authentication.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
+                         IdentityOptions.defaults (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) request |> ok
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
@@ -953,5 +958,76 @@ let tests = testList "PlayerSession" ([
             release.SetResult()
         })
     })
+    case "a display name change passes the word list, goes to the account service and spreads through presence" (fun () ->
+        let identity = { IdentityOptions.defaults with DisplayNameChangeIntervalMinutes = 60 }
+        withIdentityPlayer rules AnnouncementOptions.defaults identity HiddenIdentity.Shown options
+            (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
+            let! profile, _, _ = ready fixture
+            let name value = DisplayName.create 64 value |> ok
+            let refusal requestId expected = task {
+                let! answer = receive fixture.Host
+                match answer with
+                | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, rejection)) ->
+                    equal requestId id
+                    equal expected rejection.Code
+                    equal "display_name" rejection.Field
+                    return rejection.Message
+                | other -> return failwithf "Expected a refusal: %A" other
+            }
+            // The word list refuses before the account service hears of it.
+            do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(2UL, name "Sir Badword"))
+            let! _ = refusal 2UL RequestRejectionCode.TextNotAllowed
+            // The current name settles at once and is not a change.
+            do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(3UL, name "Player"))
+            let! same = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.DisplayNameChanged(3UL, name "Player"))) same
+            equal 0 fixture.Names.Reader.Count
+
+            do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(4UL, name "Новое Имя"))
+            let! request = receive fixture.Names
+            equal profile.PlayerId request.PlayerId
+            equal "Новое Имя" (DisplayName.value request.DisplayName)
+            equal (TimeSpan.FromMinutes 60.) request.MinInterval
+            // One change at a time.
+            do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(5UL, name "Другое"))
+            let! _ = refusal 5UL RequestRejectionCode.Overloaded
+            let stored = PlayerData.withDisplayName (name "Новое Имя") profile
+            do! deliver request.ReplyTo { OperationId = request.OperationId; Result = Ok stored }
+            let! host = receive fixture.Host
+            equal (SessionHostCommand.UpdateProfile(fixture.Request.ConnectionId, stored, true)) host
+            let! update = receive fixture.Presence
+            match update with
+            | PresenceCommand.Update(_, snapshot) -> equal (PublicIdentity.Profile stored) snapshot.Identity
+            | other -> failwithf "Expected presence update: %A" other
+            let! marks = receive fixture.Marks
+            equal (GroundMarkCommand.Rename(fixture.Request.ConnectionId, stored)) marks
+            let! settled = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.DisplayNameChanged(4UL, name "Новое Имя"))) settled
+            let! current = read fixture.Player
+            equal (PublicIdentity.Profile stored) (ok current).Identity
+
+            // Too soon: the account service refuses and nothing changes.
+            do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(6UL, name "Третье"))
+            let! second = receive fixture.Names
+            do! deliver second.ReplyTo { OperationId = second.OperationId; Result = Error (DisplayNameChangeError.TooSoon(TimeSpan.FromMinutes 29.5)) }
+            let! message = refusal 6UL RequestRejectionCode.RateLimited
+            check (message.Contains "30 min") $"The refusal names the wait: {message}"
+            let! unchanged = read fixture.Player
+            equal (PublicIdentity.Profile stored) (ok unchanged).Identity
+        }))
+
+    case "a server that refuses display name changes answers before the account service" (fun () ->
+        let identity = { IdentityOptions.defaults with AllowDisplayNameChange = false }
+        withIdentityPlayer Moderation.empty AnnouncementOptions.defaults identity HiddenIdentity.Shown options
+            (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
+            let! _ = ready fixture
+            do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(2UL, DisplayName.create 64 "Other" |> ok))
+            let! answer = receive fixture.Host
+            match answer with
+            | SessionHostCommand.Send(_, ServerResponse.RequestRejected(2UL, rejection)) ->
+                equal RequestRejectionCode.DisplayNameChangeNotAllowed rejection.Code
+            | other -> failwithf "Expected a refusal: %A" other
+            equal 0 fixture.Names.Reader.Count
+        }))
 
 ] @ identityTests)

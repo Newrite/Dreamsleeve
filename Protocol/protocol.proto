@@ -24,6 +24,7 @@ message ClientPacket {
     ReportDeath report_death = 15; // Control lane.
     RemoveGroundMark remove_ground_mark = 16; // Control lane.
     SetIdentityVisibility set_identity_visibility = 17; // Control lane.
+    ChangeDisplayName change_display_name = 18; // Control lane.
   }
 }
 
@@ -50,6 +51,7 @@ message ServerPacket {
     GroundMarkRemoved ground_mark_removed = 23; // Control lane, request_id required.
     OwnGroundMarks own_ground_marks = 24; // Control lane, no request_id.
     IdentityVisibilityChanged identity_visibility_changed = 25; // Control lane, request_id required.
+    DisplayNameChanged display_name_changed = 26; // Control lane, request_id required.
   }
 }
 
@@ -74,6 +76,7 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL = 12; // The spatial cell already holds the configured number of marks.
   REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND = 13; // No such mark of this author.
   REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED = 14; // The server does not let players hide their names.
+  REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15; // The server does not let players change their display name.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

@@ -79,7 +79,7 @@ let private playerUpdate result =
     | ClientCommand.UpdatePlayer value -> value
     | ClientCommand.OpenSession _ | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _
     | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
-    | ClientCommand.SetIdentityVisibility _ -> failtest "Expected player update"
+    | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ -> failtest "Expected player update"
 
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
@@ -164,7 +164,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             Expect.equal hidden HiddenIdentity.Shown "names are shown unless the client asks otherwise"
         | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _
         | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
-        | ClientCommand.SetIdentityVisibility _ -> failtest "Wrong command"
+        | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ -> failtest "Wrong command"
 
         for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
             packet.OpenSession.SessionTicket <- invalid
@@ -640,4 +640,26 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, selfHidden))) "the self entry keeps the real profile"
         Expect.equal welcomed.SessionOpened.OwnPseudonym "Страж" "the owner learns its pseudonym at opening"
         Expect.isFalse (parse (ProtocolCodec.encodeServer codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok)).SessionOpened.HasOwnPseudonym "absent when shown"
+    testCase "a display name change decodes through the domain limit and its answer carries the correlation" <| fun _ ->
+        let change name =
+            Dreamsleeve.Protocol.Chat.ClientPacket(
+                ProtocolVersion = ProtocolCodec.Version, RequestId = 77UL,
+                ChangeDisplayName = Dreamsleeve.Protocol.Chat.ChangeDisplayName(DisplayName = name)) |> decode
+        match (change "  Новое́ Имя " |> ok).Command with
+        | ClientCommand.ChangeDisplayName name -> Expect.equal (DisplayName.value name) ("Новое́ Имя".Normalize()) "trimmed and NFC"
+        | other -> failtestf "%A" other
+        Expect.equal (ProtocolCodec.requestLane (change "Name" |> ok)) DeliveryLane.Control "control lane"
+        for invalid, expected in [ String('x', config.ChatInput.DisplayName + 1), TextError.TooLong config.ChatInput.DisplayName
+                                   "   ", TextError.Missing
+                                   "line\nbreak", TextError.InvalidCharacters ] do
+            match (change invalid |> error) with
+            | { RequestId = Some 77UL; Failure = ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DisplayName", actual)) } ->
+                Expect.equal actual expected "domain refusal keeps the correlation"
+            | other -> failtestf "%A" other
+        let name = DisplayName.create 64 "Новое Имя" |> ok
+        let packet = ProtocolCodec.encodeServer codec (ServerResponse.DisplayNameChanged(78UL, name)) |> ok |> parse
+        Expect.equal packet.RequestId 78UL "correlated"
+        Expect.equal packet.DisplayNameChanged.DisplayName "Новое Имя" "stored name"
+        Expect.equal (ProtocolCodec.responseLane (ServerResponse.DisplayNameChanged(78UL, name))) DeliveryLane.Control "control lane"
+        Expect.isError (ProtocolCodec.encodeServer codec (ServerResponse.DisplayNameChanged(0UL, name))) "zero correlation is invalid"
 ]

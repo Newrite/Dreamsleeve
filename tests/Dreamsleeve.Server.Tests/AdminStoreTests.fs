@@ -28,10 +28,10 @@ let private tableCount (database: Database) =
     let names = admin5 |> List.map (sprintf "'%s'") |> String.concat ","
     database.Scalar $"SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ({names})"
 
-// The DOWN section of the checked-in migration, exactly as written.
-let private downSql () =
+// The DOWN section of a checked-in migration, exactly as written.
+let private downSql file =
     let rec find (directory: DirectoryInfo) =
-        let candidate = Path.Combine(directory.FullName, "db", "migrations", "1790812800000_admin.sql")
+        let candidate = Path.Combine(directory.FullName, "db", "migrations", file)
         if File.Exists candidate then candidate
         elif isNull directory.Parent then failtest "admin migration not found"
         else find directory.Parent
@@ -39,19 +39,22 @@ let private downSql () =
     text.Substring(text.IndexOf("MIGRONDI:DOWN", StringComparison.Ordinal)).Split('\n', 2)[1]
 
 let tests = testList "SQLite admin" [
-    testCase "migration 5 applies over schema 4, keeps players and rolls back" (fun () ->
+    testCase "migrations 5 and 6 apply over schema 4, keep players and roll back" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = player database "alice" "Alice"
-        database.Execute ("DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts;"
+        database.Execute ("DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%';"
+                          + "DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts;"
                           + "DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; PRAGMA user_version = 4")
         equal 0L (tableCount database)
         SqliteAccountStore.initialize database.Config |> ok
-        equal 5L (database.Scalar "PRAGMA user_version")
+        equal 6L (database.Scalar "PRAGMA user_version")
         equal 5L (tableCount database)
         equal (Some alice.PlayerId) (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.map _.Profile.PlayerId)
-        // The DOWN section returns to schema 4 without touching player data.
-        database.Execute (downSql ())
+        // The DOWN sections return to schemas 5 and 4 without touching player data.
+        database.Execute (downSql "1790899200000_display_names.sql")
+        equal 5L (database.Scalar "PRAGMA user_version")
+        database.Execute (downSql "1790812800000_admin.sql")
         equal 4L (database.Scalar "PRAGMA user_version")
         equal 0L (tableCount database)
         equal 1L (database.Scalar "SELECT count(*) FROM profiles"))
@@ -156,11 +159,43 @@ let tests = testList "SQLite admin" [
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = player database "alice" "Alice"
-        let renamed = SqliteAccountStore.rename database.Config alice.PlayerId (DisplayName.create 64 "Алиса" |> ok) token |> ok |> Option.get
-        equal "Алиса" (DisplayName.value renamed.Profile.DisplayName)
-        equal "alice" (Username.value renamed.Profile.Username)
+        let root = firstAdmin database
+        let rename player value by interval at =
+            SqliteAccountStore.rename database.Config player (DisplayName.create 64 value |> ok) by interval 20 at token |> ok
+        match rename alice.PlayerId "Алиса" (ValueSome root.Id) TimeSpan.Zero now with
+        | RenameOutcome.Renamed(previous, renamed) ->
+            equal "Alice" (DisplayName.value previous)
+            equal "Алиса" (DisplayName.value renamed.Profile.DisplayName)
+            equal "alice" (Username.value renamed.Profile.Username)
+        | other -> failtestf "%A" other
         equal "Алиса" (DisplayName.value (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.get).Profile.DisplayName)
-        equal None (SqliteAccountStore.rename database.Config (PlayerId.create 404UL |> ok) (DisplayName.create 64 "X" |> ok) token |> ok))
+        equal RenameOutcome.NotFound (rename (PlayerId.create 404UL |> ok) "X" ValueNone TimeSpan.Zero now)
+        // The player's own changes are limited by the interval; administrator changes are not counted.
+        let day = TimeSpan.FromDays 1.
+        match rename alice.PlayerId "Own One" ValueNone day now with
+        | RenameOutcome.Renamed _ -> ()
+        | other -> failtestf "%A" other
+        equal (RenameOutcome.TooSoon(TimeSpan.FromHours 23.)) (rename alice.PlayerId "Own Two" ValueNone day (now + TimeSpan.FromHours 1.))
+        match rename alice.PlayerId "By Admin" (ValueSome root.Id) day (now + TimeSpan.FromHours 1.) with
+        | RenameOutcome.Renamed _ -> ()
+        | other -> failtestf "%A" other
+        match rename alice.PlayerId "Own Two" ValueNone day (now + day) with
+        | RenameOutcome.Renamed _ -> ()
+        | other -> failtestf "%A" other
+        // The same name is not a change: no history line.
+        match rename alice.PlayerId "Own Two" ValueNone TimeSpan.Zero (now + day) with
+        | RenameOutcome.Renamed _ -> ()
+        | other -> failtestf "%A" other
+        let history = SqliteAdminStore.nameHistory database.Config alice.PlayerId 10 token |> ok
+        equal [ "By Admin", "Own Two"; "Own One", "By Admin"; "Алиса", "Own One"; "Alice", "Алиса" ] (history |> List.map (fun change -> change.OldName, change.NewName))
+        equal [ None; Some "root"; None; Some "root" ] (history |> List.map (_.ChangedBy >> Option.map Username.value))
+        // Only the newest changes stay.
+        let trimmed = SqliteAccountStore.rename database.Config alice.PlayerId (DisplayName.create 64 "Last" |> ok) (ValueSome root.Id) TimeSpan.Zero 2 (now + day) token |> ok
+        match trimmed with
+        | RenameOutcome.Renamed _ -> ()
+        | other -> failtestf "%A" other
+        let kept = SqliteAdminStore.nameHistory database.Config alice.PlayerId 10 token |> ok
+        equal [ "Own Two", "Last"; "By Admin", "Own Two" ] (kept |> List.map (fun change -> change.OldName, change.NewName)))
 
     testCase "audit lines read back newest first with the administrator's name" (fun () ->
         use database = new Database()

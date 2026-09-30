@@ -47,6 +47,12 @@ public:
     {
       const bool ready = output.status.phase == SessionPhase::Ready && !output.status.stopped;
       serverName       = output.status.serverName;
+      if (!ready && pendingName)
+      {
+        // The core drops the request with the session; the server may or may not have stored it.
+        pendingName.reset();
+        nameError = "Соединение прервано до ответа сервера";
+      }
       for (const auto& update : output.state.updates)
         std::visit([&](const auto& value) { Apply(value, settings, ready, frame); }, update);
 
@@ -59,8 +65,11 @@ public:
         SettleMark(frame, confirmation);
       for (const auto& confirmation : output.identityConfirmations)
         SettleIdentity(frame, confirmation);
+      for (const auto& confirmation : output.displayNameConfirmations)
+        SettleName(confirmation);
       for (const auto& event : output.rejections)
       {
+        if (FailName(event.rejection.requestId, Bridge::DisplayNameRejectionText(event.rejection.code, event.rejection.message))) continue;
         auto reason = Bridge::RejectionText(event.rejection.code, event.rejection.message);
         if (
           Settle(frame, event.rejection.requestId, ResultOf(event.rejection), reason) ||
@@ -80,7 +89,7 @@ public:
         std::string reason{Bridge::FailureText(failure.code)};
         if (
           !Settle(frame, failure.requestId, ResultOf(failure.code), reason) && !FailMark(frame, failure.requestId, reason) &&
-          !FailIdentity(failure.requestId, reason))
+          !FailIdentity(failure.requestId, reason) && !FailName(failure.requestId, reason))
           Complete(frame, failure.requestId, {}, std::move(reason));
       }
       pseudonym = output.status.pseudonym;
@@ -94,7 +103,44 @@ public:
         Emit(frame, identity);
         lastIdentity = std::move(identity);
       }
+      if (auto name = NameEvent(); name != lastName)
+      {
+        Emit(frame, name);
+        lastName = std::move(name);
+        nameChanged.reset();
+      }
       RequestSnapshotIfNeeded(exchange, frame);
+    }
+
+    // The state of an own display name change as the UI shows it.
+    Bridge::DisplayNameEvent NameEvent() const
+    {
+      return Bridge::DisplayNameEvent{.pending = pendingName.has_value(), .changed = nameChanged, .error = nameError};
+    }
+
+    // A ready session asks the server; one change at a time. The own profile
+    // changes through the players list once the server applies it.
+    std::expected<void, std::string> ChangeDisplayName(ClientExchange& exchange, std::string displayName)
+    {
+      if (!Ready()) return std::unexpected{"Нет соединения с сервером"};
+      if (pendingName) return std::unexpected{"Ожидание ответа сервера"};
+      const auto requestId = exchange.NextRequestId();
+      if (!requestId) return std::unexpected{"Идентификаторы запросов исчерпаны"};
+      const auto posted = exchange.Post({
+          generation,
+          Dreamsleeve::Client::ChangeDisplayName{*requestId, std::move(displayName)}
+      });
+      if (posted != CommandPostResult::Queued) return std::unexpected{"Очередь команд заполнена"};
+      nameError.reset();
+      nameChanged.reset();
+      pendingName = PendingName{*requestId, generation};
+      return {};
+    }
+
+    // A refusal the UI shows under the name field, e.g. from a local check.
+    void SetNameError(std::string error)
+    {
+      nameError = error.empty() ? std::nullopt : std::optional{Bridge::ClipError(error)};
     }
 
     // "Hide my name from other players" as the UI shows it: the preference, or
@@ -212,6 +258,8 @@ public:
       std::erase_if(pendingMarks, [](const auto& entry) { return entry.second.request != MarkRequest::Death; });
       lastStatus.reset();
       lastIdentity.reset();
+      // The UI starts with nothing pending; only a difference is sent.
+      lastName = {};
     }
 
     // Names or the ignore list changed: the same session is projected again.
@@ -363,6 +411,28 @@ private:
       Domain::HiddenIdentity hiding{Domain::HiddenIdentity::None};
       std::uint64_t          generation{};
     };
+
+    struct PendingName
+    {
+      std::uint64_t requestId{};
+      std::uint64_t generation{};
+    };
+
+    void SettleName(const DisplayNameConfirmation& confirmation)
+    {
+      if (!pendingName || pendingName->requestId != confirmation.requestId) return;
+      pendingName.reset();
+      nameError.reset();
+      nameChanged = confirmation.displayName;
+    }
+
+    bool FailName(std::uint64_t requestId, const std::string& reason)
+    {
+      if (!pendingName || pendingName->requestId != requestId) return false;
+      pendingName.reset();
+      nameError = Bridge::ClipError(reason);
+      return true;
+    }
 
     void SettleIdentity(Frame& frame, const IdentityConfirmation& confirmation)
     {
@@ -527,6 +597,7 @@ private:
       std::erase_if(pendingChats, [&](const auto& entry) { return entry.second.generation != generation; });
       std::erase_if(pendingMarks, [&](const auto& entry) { return entry.second.generation != generation; });
       std::erase_if(pendingIdentity, [&](const auto& entry) { return entry.second.generation != generation; });
+      if (pendingName && pendingName->generation != generation) pendingName.reset();
       std::erase_if(pendingAnnouncements, [&](const auto& entry) {
         if (entry.second.generation == generation) return false;
         Finish(frame, entry.second, Announcements::Result::Failed, "Доставка неизвестна: сессия сменилась");
@@ -752,6 +823,10 @@ private:
     std::optional<std::string>                                         pseudonym;
     std::optional<std::string>                                         identityError;
     std::optional<Bridge::IdentityEvent>                               lastIdentity;
+    std::optional<PendingName>                                         pendingName;
+    std::optional<std::string>                                         nameError;
+    std::optional<std::string>                                         nameChanged;
+    Bridge::DisplayNameEvent                                           lastName;
     std::optional<ClientStatus>                                        lastStatus;
     bool                                                               needsSnapshot{true};
     bool                                                               snapshotRequested{};

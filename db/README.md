@@ -95,3 +95,11 @@ Only the admin service's bounded workers (`SqliteAdminStore`) touch these tables
 panel mutation writes its audit line in the same transaction or right after the owning
 agent reports success. One-time setup/reset codes live only in the service's memory.
 The DOWN section drops the five tables and returns `user_version` to 4.
+
+Schema v6 (`1790899200000_display_names.sql`) adds `display_name_changes(id, player_id ->
+profiles, old_name, new_name, changed_by -> admin_accounts NULL, at)`: every display name
+change, by the player (`changed_by` NULL) or by an administrator. The account service writes
+it in the same transaction as the new name and reads the latest own change to enforce
+`[Identity] DisplayNameChangeIntervalMinutes`. Only the newest
+`[Authentication.Service] DisplayNameHistory` (20) rows per player are kept; older ones are
+deleted in the same transaction. DOWN drops it and returns to version 5.

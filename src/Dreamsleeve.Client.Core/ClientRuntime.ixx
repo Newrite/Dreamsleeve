@@ -73,6 +73,7 @@ public:
       pendingUpdates.clear();
       pendingMarks.clear();
       pendingIdentity.clear();
+      pendingNames.clear();
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
@@ -162,6 +163,7 @@ private:
       pendingUpdates.clear();
       pendingMarks.clear();
       pendingIdentity.clear();
+      pendingNames.clear();
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
@@ -173,12 +175,21 @@ private:
     }
 
     Result<void> Publish(
-      bool                                  requestSnapshot  = false,
-      std::optional<ChatConfirmation>       confirmation     = std::nullopt,
-      std::optional<GroundMarkConfirmation> markConfirmation = std::nullopt,
-      std::optional<IdentityConfirmation>   identity         = std::nullopt)
+      bool                                   requestSnapshot  = false,
+      std::optional<ChatConfirmation>        confirmation     = std::nullopt,
+      std::optional<GroundMarkConfirmation>  markConfirmation = std::nullopt,
+      std::optional<IdentityConfirmation>    identity         = std::nullopt,
+      std::optional<DisplayNameConfirmation> displayName      = std::nullopt)
     {
-      if (!exchange.Publish(model, requestSnapshot, phase, serverName, confirmation, markConfirmation, std::move(identity)))
+      if (!exchange.Publish(
+            model,
+            requestSnapshot,
+            phase,
+            serverName,
+            confirmation,
+            markConfirmation,
+            std::move(identity),
+            std::move(displayName)))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
 
       return {};
@@ -303,7 +314,8 @@ private:
       if (phase != SessionPhase::Ready) return Unexpected("request_id");
       if (
         pendingChats.erase(rejection.requestId) == 0 && pendingUpdates.erase(rejection.requestId) == 0 &&
-        pendingMarks.erase(rejection.requestId) == 0 && pendingIdentity.erase(rejection.requestId) == 0)
+        pendingMarks.erase(rejection.requestId) == 0 && pendingIdentity.erase(rejection.requestId) == 0 &&
+        pendingNames.erase(rejection.requestId) == 0)
         return Unexpected("request_id");
 
       if (rejection.requestId == pendingLocation) ResetMovement();
@@ -376,6 +388,18 @@ private:
         std::nullopt,
         std::nullopt,
         IdentityConfirmation{model.Generation(), changed.requestId, std::move(changed.pseudonym), changed.hiding});
+    }
+
+    // The own profile changes through the PlayerUpdated that follows; this only settles the request.
+    Result<void> Receive(Wire::DisplayNameChanged& changed)
+    {
+      if (phase != SessionPhase::Ready || pendingNames.erase(changed.requestId) == 0) return Unexpected("request_id");
+      return Publish(
+        false,
+        std::nullopt,
+        std::nullopt,
+        std::nullopt,
+        DisplayNameConfirmation{model.Generation(), changed.requestId, std::move(changed.displayName)});
     }
 
     Result<void> Receive(GroundMarksChanged& value)
@@ -507,7 +531,7 @@ private:
       if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
       if (
         command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId) ||
-        pendingIdentity.contains(command.requestId))
+        pendingIdentity.contains(command.requestId) || pendingNames.contains(command.requestId))
         return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
 
       lastRequest = command.requestId;
@@ -557,6 +581,30 @@ private:
       auto sent = transport->Send(std::move(*packet));
       if (!sent) return Fail(sent.error());
       pendingIdentity.insert(command.requestId);
+      return {};
+    }
+
+    // One change at a time; the server judges the word list and how often.
+    // Locally only the shape: one line of valid UTF-8 that is not blank.
+    Result<void> Process(std::uint64_t generation, ChangeDisplayName& command)
+    {
+      if (generation != model.Generation()) return RejectCommand(generation, command.requestId, CommandFailureCode::StaleGeneration);
+      if (phase != SessionPhase::Ready) return RejectCommand(generation, command.requestId, CommandFailureCode::SessionNotReady);
+      if (
+        command.requestId <= lastRequest || pendingUpdates.contains(command.requestId) || pendingChats.contains(command.requestId) ||
+        pendingMarks.contains(command.requestId) || pendingIdentity.contains(command.requestId))
+        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      lastRequest      = command.requestId;
+      const bool blank = std::ranges::all_of(command.displayName, [](char value) { return value == ' ' || value == '\t'; });
+      if (blank || !Utils::Text::ValidUtf8(command.displayName) || Utils::Text::HasControl(command.displayName))
+        return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
+      if (!pendingNames.empty()) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      auto packet = codec.Encode(command);
+      if (!packet) return RejectCommand(generation, command.requestId, CommandFailureCode::EncodingFailed);
+      auto sent = transport->Send(std::move(*packet));
+      if (!sent) return Fail(sent.error());
+      pendingNames.insert(command.requestId);
       return {};
     }
 
@@ -669,7 +717,7 @@ private:
       const auto openingReply = phase == SessionPhase::Connecting || phase == SessionPhase::Opening ? 1u : 0u;
       exchange.TakeCommands(
         commands,
-        pendingChats.size() + pendingUpdates.size() + pendingMarks.size() + pendingIdentity.size() + openingReply +
+        pendingChats.size() + pendingUpdates.size() + pendingMarks.size() + pendingIdentity.size() + pendingNames.size() + openingReply +
           model.PendingServerRejectionCount());
       Result<void> firstError;
 
@@ -697,6 +745,7 @@ private:
     std::unordered_set<std::uint64_t>                        pendingUpdates;
     std::unordered_set<std::uint64_t>                        pendingMarks;
     std::unordered_set<std::uint64_t>                        pendingIdentity;
+    std::unordered_set<std::uint64_t>                        pendingNames;
     std::vector<QueuedClientCommand>                         commands;
     Clock::time_point                                        deadline{};
     Clock::time_point                                        nextPlayerSample{};

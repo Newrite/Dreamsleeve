@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 10
+# Прикладной протокол сессии, версия 11
 
 Схемы разделены по назначению:
 
@@ -7,7 +7,7 @@
 | [common.proto](common.proto) | PlayerProfile (публичная личность, в том числе псевдонимная) и FormKey |
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
-| [session.proto](session.proto) | OpenSession и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged |
+| [session.proto](session.proto) | OpenSession и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged |
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
@@ -15,13 +15,13 @@
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 10 позволяет игроку скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–9 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–10 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 10. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 11. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -83,6 +83,8 @@ plain HTTP допустим только для явно разрешённой 
 | Сервер → клиент | OwnGroundMarks | Полный список меток получателя, где бы они ни стояли: после открытия сессии и при каждом изменении набора; без RequestId |
 | Клиент → сервер | SetIdentityVisibility | Где скрыть свои имена от других игроков (HiddenIdentity); Control-канал |
 | Сервер → клиент | IdentityVisibilityChanged | Подтверждение с RequestId: применённый вариант и псевдоним, который теперь видят другие, или его отсутствие |
+| Клиент → сервер | ChangeDisplayName | Новое собственное отображаемое имя; Control-канал |
+| Сервер → клиент | DisplayNameChanged | Подтверждение с RequestId: имя, как сервер его сохранил (Trim + NFC) |
 
 RequestId — ненулевой uint64, назначаемый клиентским API до отправки. Клиент должен
 выдавать уникальные ID в течение жизни соединения; пропуски допустимы. Это не
@@ -93,7 +95,7 @@ ChatMessageId, не серверная последовательность и �
 
 В ClientPacket RequestId обязателен. В ServerPacket его наличие различается:
 
-- SessionOpened, PlayerUpdateAccepted, GroundMarkPlaced, GroundMarkRemoved, IdentityVisibilityChanged и RequestRejected обязательно возвращают ID исходного запроса.
+- SessionOpened, PlayerUpdateAccepted, GroundMarkPlaced, GroundMarkRemoved, IdentityVisibilityChanged, DisplayNameChanged и RequestRejected обязательно возвращают ID исходного запроса.
 - ChatPublished содержит RequestId только в копии инициатору. Остальные получают
   то же принятое сообщение без RequestId. ID других клиентов не завершает свои запросы.
 - PlayerJoined/PlayerLeft/PlayerUpdated/PlayerVisibilityChanged/PlayerMetadataChanged/GroundMarksChanged не содержат RequestId. Явный ноль всегда ошибочен.
@@ -224,6 +226,23 @@ Control-канале ENet.
 - Снимок автора в сообщении и метке фиксируется при создании: созданное при скрытом имени
   навсегда остаётся с псевдонимом, в том числе в истории нового подключения и в метках после
   перезапуска сервера.
+
+## Смена отображаемого имени
+
+С версии 11 игрок меняет своё отображаемое имя в сессии; username и PlayerId не меняются.
+Реализация и настройки — [ModerationAndNamesRu.md](../docs/ModerationAndNamesRu.md#смена-отображаемого-имени).
+
+- `ClientPacket.change_display_name = 18` (`ChangeDisplayName{display_name}`, Control, RequestId):
+  сервер проверяет имя правилами `DisplayName` (Trim + NFC, одна строка, лимит
+  `[Server.ChatInput] DisplayName`) ещё в кодеке — нарушение даёт `INVALID_REQUEST` с полем
+  `display_name`; затем словарь (`TEXT_NOT_ALLOWED`), разрешение сервера
+  (`DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15`), одну смену за раз (`OVERLOADED`) и интервал между
+  собственными сменами (`RATE_LIMITED`, message «The display name can be changed again in N min.»).
+  Запрос текущего имени подтверждается сразу и сменой не считается.
+- Ответ — `ServerPacket.display_name_changed = 26` (`DisplayNameChanged{display_name}`) с сохранённым
+  именем. Сам профиль приходит обычным `PlayerUpdated` — и автору, и остальным; у игрока со
+  скрытым именем другие по-прежнему видят псевдоним, `PlayerUpdated` им не приходит.
+- Клиентский кодек отвергает пустое имя в запросе и в ответе и ответ без RequestId.
 
 ## Игровое состояние
 
@@ -434,6 +453,7 @@ ProtocolError. Realtime не порождает коррелированные �
 | 12 | GroundMarkAreaFull | Ячейка пространственного индекса уже содержит предельное число меток |
 | 13 | GroundMarkNotFound | Нет такой метки этого автора |
 | 14 | HiddenIdentityNotAllowed | Сервер не разрешает скрывать имя (открытие со скрытым именем или переключение) |
+| 15 | DisplayNameChangeNotAllowed | Сервер не разрешает игрокам менять отображаемое имя |
 
 F# использует тип, сгенерированный protoc для .NET. Серверный encoder принимает
 только определённые ненулевые коды. C++ использует автоматически сгенерированное

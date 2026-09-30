@@ -23,6 +23,13 @@ type StoredAccount = {
 }
 
 [<RequireQualifiedAccess>]
+type RenameOutcome =
+    | Renamed of previous: DisplayName * StoredIdentity
+    | NotFound
+    /// The player's own change came sooner than the interval allows.
+    | TooSoon of retryAfter: TimeSpan
+
+[<RequireQualifiedAccess>]
 type AccountStoreError =
     | UsernameTaken
     | InvalidCredential
@@ -256,27 +263,57 @@ module SqliteAccountStore =
                 transaction.Commit()
                 Ok account.Profile)
 
-    /// Replaces the display name of an existing profile; the name was validated
-    /// and moderated by the caller. None when no such player is stored.
-    let rename config (playerId: PlayerId) (displayName: DisplayName) token =
+    let private scalar (context: QueryContext) sql parameters =
+        use statement = command context sql parameters
+        statement.ExecuteScalar()
+
+    /// Replaces the display name of an existing profile and records the change
+    /// in display_name_changes, in one transaction; the name was validated and
+    /// moderated by the caller. changedBy is the administrator, or ValueNone for
+    /// the player's own change, which may come only minInterval after the
+    /// previous own change (TimeSpan.Zero disables the limit). The same name is
+    /// not a change: nothing is written. Only the newest keepHistory changes of
+    /// the player stay in display_name_changes.
+    let rename config (playerId: PlayerId) (displayName: DisplayName) (changedBy: AdminId voption) (minInterval: TimeSpan) (keepHistory: int) (now: DateTimeOffset) token =
         withContext config token (fun context ->
             let id = PlayerId.value playerId
-            if id > uint64 Int64.MaxValue then Ok None
+            if id > uint64 Int64.MaxValue then Ok RenameOutcome.NotFound
             else
                 use transaction = context.Connection.BeginTransaction()
                 context.Transaction <- Some transaction
-                let changed =
-                    execute context "UPDATE profiles SET display_name=@name WHERE player_id=@id"
-                        [ "@name", box (DisplayName.value displayName); "@id", box (int64 id) ]
-                if changed = 0 then Ok None
-                else
-                    use statement = command context
-                                        $"SELECT {IdentityColumns} FROM profiles p JOIN accounts a ON a.id=p.account_id {RoleJoin} WHERE p.player_id=@id"
-                                        [ "@id", box (int64 id) ]
-                    use reader = statement.ExecuteReader()
-                    let identity = readIdentity reader
-                    reader.Close()
-                    match identity with
-                    | Ok (Some _) -> transaction.Commit()
-                    | Ok None | Error _ -> ()
-                    identity)
+                let parameters = [ "@id", box (int64 id) ]
+                match scalar context "SELECT display_name FROM profiles WHERE player_id=@id" parameters with
+                | :? string as current ->
+                    let previous = DisplayName.create Int32.MaxValue current
+                    let last =
+                        if changedBy.IsSome || minInterval <= TimeSpan.Zero then None
+                        else
+                            match scalar context "SELECT MAX(at) FROM display_name_changes WHERE player_id=@id AND changed_by IS NULL" parameters with
+                            | :? int64 as at -> Some (DateTimeOffset.FromUnixTimeMilliseconds at)
+                            | _ -> None
+                    match previous, last with
+                    | Error _, _ -> invalidData "The stored display name is invalid."
+                    | Ok _, Some at when at + minInterval > now -> Ok (RenameOutcome.TooSoon(at + minInterval - now))
+                    | Ok previous, _ ->
+                        if previous <> displayName then
+                            execute context "UPDATE profiles SET display_name=@name WHERE player_id=@id"
+                                [ "@name", box (DisplayName.value displayName); "@id", box (int64 id) ] |> ignore
+                            execute context "INSERT INTO display_name_changes(player_id, old_name, new_name, changed_by, at) VALUES (@id, @old, @new, @by, @at)"
+                                [ "@id", box (int64 id); "@old", box current; "@new", box (DisplayName.value displayName)
+                                  "@by", (match changedBy with ValueSome admin -> box (AdminId.value admin) | ValueNone -> box DBNull.Value)
+                                  "@at", box (now.ToUnixTimeMilliseconds()) ] |> ignore
+                            execute context "DELETE FROM display_name_changes WHERE player_id=@id AND id NOT IN (SELECT id FROM display_name_changes WHERE player_id=@id ORDER BY at DESC, id DESC LIMIT @keep)"
+                                [ "@id", box (int64 id); "@keep", box (max 1 keepHistory) ] |> ignore
+                        use statement = command context
+                                            $"SELECT {IdentityColumns} FROM profiles p JOIN accounts a ON a.id=p.account_id {RoleJoin} WHERE p.player_id=@id"
+                                            parameters
+                        use reader = statement.ExecuteReader()
+                        let identity = readIdentity reader
+                        reader.Close()
+                        match identity with
+                        | Ok (Some stored) ->
+                            transaction.Commit()
+                            Ok (RenameOutcome.Renamed(previous, stored))
+                        | Ok None -> Ok RenameOutcome.NotFound
+                        | Error error -> Error error
+                | _ -> Ok RenameOutcome.NotFound)

@@ -288,15 +288,48 @@ let tests = testList "Authentication service" [
         use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
         let! profile = register service
         database.Execute $"INSERT INTO player_roles(player_id, role, granted_by, granted_at) VALUES ({PlayerId.value profile.PlayerId}, 1, NULL, 0)"
+        database.Execute "INSERT INTO admin_accounts(id, username, password_hash, created_at) VALUES (1, 'root', 'hash', 0)"
+        let admin = AdminId.create 1L |> ok
         let! outstanding = login service
         let renamedTo = DisplayName.create 64 "Новое Имя" |> ok
-        let! renamed = access service (AccountAccessCommand.RenamePlayer(profile.PlayerId, renamedTo))
+        let! renamed = access service (AccountAccessCommand.RenamePlayer(profile.PlayerId, renamedTo, admin))
         let expected = PlayerData.withDisplayName renamedTo profile
         equal (Ok (AccountAccessResult.Renamed expected)) renamed
         let! consumed = consume service outstanding.SessionTicket
         equal (Ok ({ Profile = expected; Role = PlayerRole.Moderator } : AuthenticatedPlayer)) consumed
-        let! missing = access service (AccountAccessCommand.RenamePlayer(PlayerId.create 404UL |> ok, renamedTo))
+        let! missing = access service (AccountAccessCommand.RenamePlayer(PlayerId.create 404UL |> ok, renamedTo, admin))
         equal (Error AccountAccessError.InvalidCredentials) missing
+        do! stop service
+    })
+    case "a player's own display name change is stored, limited by the interval and recorded" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
+        let! profile = register service
+        let replies = System.Threading.Channels.Channel.CreateUnbounded<DisplayNameChangeReply>()
+        use receiver = Agent.Start(AgentOptions.create "name-replies", fun _ (reply: DisplayNameChangeReply) -> task {
+            replies.Writer.TryWrite reply |> ignore
+        })
+        let change value = task {
+            let request = {
+                OperationId = Guid.NewGuid(); PlayerId = profile.PlayerId; DisplayName = DisplayName.create 64 value |> ok
+                MinInterval = TimeSpan.FromHours 1.; ReplyTo = receiver.Ref.TryReliable().Value
+            }
+            let! admitted = (AuthService.authenticator service).DisplayNames.PostAsync request
+            equal AgentDeliveryResult.Posted admitted
+            let! reply = replies.Reader.ReadAsync().AsTask() |> awaitResult
+            equal request.OperationId reply.OperationId
+            return reply.Result
+        }
+        let! first = change "Своё Имя"
+        equal (Ok (PlayerData.withDisplayName (DisplayName.create 64 "Своё Имя" |> ok) profile)) first
+        let! second = change "Ещё Одно"
+        match second with
+        | Error (DisplayNameChangeError.TooSoon wait) -> check (wait > TimeSpan.FromMinutes 59.) $"About an hour to wait: {wait}"
+        | other -> failtestf "%A" other
+        let! login = login service
+        equal "Своё Имя" (DisplayName.value login.Profile.DisplayName)
+        equal 1L (database.Scalar "SELECT count(*) FROM display_name_changes WHERE changed_by IS NULL AND old_name='Persistent Player' AND new_name='Своё Имя'")
         do! stop service
     })
 ]

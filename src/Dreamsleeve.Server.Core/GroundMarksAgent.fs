@@ -235,6 +235,10 @@ module GroundMarksAgent =
                         persist state context (GroundMarkWrite.Insert mark)
                         let evictedId = evicted |> ValueOption.map _.Id
                         deliver state context observer (GroundMarkEvent.Placed(submission.RequestId, record state mark, evictedId))
+                        state.Logger.LogInformation("Ground mark {MarkId} ({Kind}) placed by player {PlayerId} in {Location}{Evicted}",
+                                                    GroundMarkId.value mark.Id, mark.Kind, PlayerId.value author,
+                                                    PluginName.value mark.Placement.LocationId.PluginName + ":" + (LocalFormId.value mark.Placement.LocationId.LocalFormId).ToString("X6"),
+                                                    (match evictedId with ValueSome id -> $", evicting {GroundMarkId.value id}" | ValueNone -> ""))
                         announceOwn state context author
                         // The author learns about the visible set through the same delta as everyone.
                         let observers = state.Observers.Values |> Seq.toArray
@@ -257,6 +261,7 @@ module GroundMarksAgent =
                 forget state mark
                 persist state context (GroundMarkWrite.Delete [id])
                 deliver state context observer (GroundMarkEvent.Removed(requestId, id))
+                state.Logger.LogInformation("Ground mark {MarkId} removed by its author, player {PlayerId}", GroundMarkId.value id, PlayerId.value mark.Author)
                 announceOwn state context mark.Author
                 announceRemoved state context [id]
             | ValueSome _ | ValueNone ->
@@ -295,11 +300,17 @@ module GroundMarksAgent =
             expire state context
             state.Ticker |> Option.iter _.Acknowledge()
         | GroundMarkCommand.Detach request -> detach state context request
+        | GroundMarkCommand.Rename(connectionId, profile) ->
+            match state.Observers.TryGetValue connectionId with
+            | true, observer when observer.Profile.PlayerId = profile.PlayerId ->
+                state.Observers[connectionId] <- { observer with Profile = profile }
+                if state.Authors.ContainsKey profile.PlayerId then state.Authors[profile.PlayerId] <- profile
+            | true, _ | false, _ -> ()
     }
 
     let private isControl = function
         | GroundMarkCommand.Join _ | GroundMarkCommand.Expire _ | GroundMarkCommand.Detach _ -> true
-        | GroundMarkCommand.Observe _ | GroundMarkCommand.Place _ | GroundMarkCommand.Remove _ -> false
+        | GroundMarkCommand.Observe _ | GroundMarkCommand.Place _ | GroundMarkCommand.Remove _ | GroundMarkCommand.Rename _ -> false
 
     /// loaded are the stored marks with their authors' current profiles; nextId
     /// is the storage high-water mark plus one, so IDs never repeat across runs.

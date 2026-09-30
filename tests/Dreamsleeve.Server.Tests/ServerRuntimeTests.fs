@@ -47,8 +47,17 @@ let private createAuthentication () =
     Agent.Start(AgentOptions.create "fixture-authentication",
         AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
 
+// Display name changes are stored by the account service; here they succeed at once.
+let private names =
+    lazy (Agent.Start(AgentOptions.create "fixture-names", fun _ (request: DisplayNameChangeRequest) -> task {
+        let profile = Dreamsleeve.Server.Domain.PlayerData.create request.PlayerId
+                          (Dreamsleeve.Server.Domain.Username.create 32 $"p{Dreamsleeve.Server.Domain.PlayerId.value request.PlayerId}" |> ok) request.DisplayName
+        request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok profile } |> ignore
+    }))
+
 let private authentication (agent: Agent<SessionAuthenticationRequest>) : SessionAuthenticator = {
     Requests = agent.Ref.TryReliable().Value
+    DisplayNames = names.Value.Ref.TryReliable().Value
     Completion = agent.Completion
 }
 
@@ -789,6 +798,66 @@ let adminTests = testList "ServerRuntime admin panel" [
                         equal "Страж" value.ChatPublished.Message.Author.DisplayName
                         seen <- true
                     | _ -> ()
+        })
+    }
+]
+
+let private changeName requestId (name: string) =
+    packet requestId (fun packet -> packet.ChangeDisplayName <- ChangeDisplayName(DisplayName = name))
+
+let displayNameTests = testList "ServerRuntime display names" [
+    testTask "a player's own new name reaches the others, and a hidden player's never does" {
+        let accounts = [ "alice", "alice", "Alice"; "bob", "bob", "Bob"; "carol", "carol", "Carol" ]
+        do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (namedAuthentication accounts) (fun fixture -> task {
+            let carol = connect fixture "carol"
+            let! _ = welcome fixture carol
+            let bob = connect fixture "bob"
+            let! bobOpened = welcome fixture bob
+            let alice = connectHidden fixture "alice"
+            let! _ = welcome fixture alice
+
+            fixture.Input.Enqueue(incoming(bob, changeName 2UL "  Боб Новый "))
+            let! _, settled = nextWhere fixture (fun target value -> target = bob && value.PayloadCase = ServerPacket.PayloadOneofCase.DisplayNameChanged)
+            equal 2UL settled.RequestId
+            equal "Боб Новый" settled.DisplayNameChanged.DisplayName
+            let! _, updated = nextWhere fixture (fun target value ->
+                target = carol && value.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
+                && value.PlayerUpdated.Player.Profile.PlayerId = bobOpened.SelfPlayerId
+                && value.PlayerUpdated.Player.Profile.DisplayName = "Боб Новый")
+            check (not updated.PlayerUpdated.Player.Profile.Pseudonymous) "A shown player keeps a real profile."
+
+            // Too long: refused by the codec with the field, the session stays open.
+            fixture.Input.Enqueue(incoming(bob, changeName 3UL (String('x', ServerConfig.defaults.ChatInput.DisplayName + 1))))
+            let! _, refused = nextWhere fixture (fun target value -> target = bob && value.HasRequestId && value.RequestId = 3UL)
+            equal RequestRejectionCode.InvalidRequest refused.RequestRejected.Code
+            equal "display_name" refused.RequestRejected.Field
+
+            // A hidden player: the change is confirmed to them, others keep seeing the pseudonym.
+            fixture.Input.Enqueue(incoming(alice, changeName 2UL "Тайное Имя"))
+            let! _, own = nextWhere fixture (fun target value -> target = alice && value.PayloadCase = ServerPacket.PayloadOneofCase.DisplayNameChanged)
+            equal "Тайное Имя" own.DisplayNameChanged.DisplayName
+            fixture.Input.Enqueue(incoming(alice, chat 3UL "after my rename"))
+            let mutable seen = false
+            while not seen do
+                let! target, value = receive fixture.Output
+                if target = carol then
+                    check (not (contains "Тайное Имя" (value.ToByteArray()))) $"A packet to another player leaks the new name: {value}"
+                    match value.PayloadCase with
+                    | ServerPacket.PayloadOneofCase.ChatPublished when value.ChatPublished.Message.Text = "after my rename" ->
+                        equal "Страж" value.ChatPublished.Message.Author.DisplayName
+                        seen <- true
+                    | _ -> ()
+        })
+    }
+
+    testTask "a server that refuses own display name changes answers with its code" {
+        let refused = { IdentityOptions.defaults with AllowDisplayNameChange = false }
+        do! withRuntimeNamed ServerRuntimeOptions.defaults refused Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn createAuthentication (fun fixture -> task {
+            let alice = connect fixture "alice"
+            let! _ = welcome fixture alice
+            fixture.Input.Enqueue(incoming(alice, changeName 2UL "Other"))
+            let! _, answer = nextWhere fixture (fun target value -> target = alice && value.HasRequestId && value.RequestId = 2UL)
+            equal RequestRejectionCode.DisplayNameChangeNotAllowed answer.RequestRejected.Code
         })
     }
 ]

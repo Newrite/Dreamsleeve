@@ -1241,4 +1241,92 @@ TEST_CASE("Hidden identity opens from the first packet and a switch settles with
   CHECK_FALSE(fixture.Drain().status.pseudonym);
 }
 
+TEST_CASE("A display name change settles once, one at a time, and a refusal keeps the session")
+{
+  Fixture fixture;
+  auto    welcome = Welcome(fixture.Open());
+  fixture.Send(welcome);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  const auto opened     = fixture.Drain();
+  const auto generation = std::get<ClientSnapshot>(opened.state.updates.front()).generation;
+
+  // Until repeats the predicate once more: keep what was drained.
+  const auto results = [&] {
+    ClientOutput found;
+    const auto   any = [&] {
+      return !found.displayNameConfirmations.empty() || !found.rejections.empty() || !found.commandFailures.empty();
+    };
+    fixture.Until([&] {
+      if (any()) return true;
+      fixture.exchange->Drain(found);
+      return any();
+    });
+    return found;
+  };
+
+  const auto changeId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        ChangeDisplayName{changeId, "Новое Имя"}
+  }) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  CHECK(fixture.requests.back().request_id() == changeId);
+  CHECK(fixture.requests.back().change_display_name().display_name() == "Новое Имя");
+
+  // A second change while the first waits never leaves the client.
+  const auto busyId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        ChangeDisplayName{busyId, "Другое"}
+  }) == CommandPostResult::Queued);
+  const auto busy = results();
+  REQUIRE(busy.commandFailures.size() == 1);
+  CHECK(busy.commandFailures[0].requestId == busyId);
+  CHECK(busy.commandFailures[0].code == CommandFailureCode::Busy);
+
+  P::ServerPacket changed;
+  changed.set_protocol_version(Wire::Version);
+  changed.set_request_id(changeId);
+  changed.mutable_display_name_changed()->set_display_name("Новое Имя");
+  fixture.Send(changed);
+  const auto settled = results();
+  REQUIRE(settled.displayNameConfirmations.size() == 1);
+  CHECK(settled.displayNameConfirmations[0].requestId == changeId);
+  CHECK(settled.displayNameConfirmations[0].displayName == "Новое Имя");
+
+  // A blank name or control characters are refused locally.
+  const auto blankId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        ChangeDisplayName{blankId, "   "}
+  }) == CommandPostResult::Queued);
+  const auto blank = results();
+  REQUIRE(blank.commandFailures.size() == 1);
+  CHECK(blank.commandFailures[0].code == CommandFailureCode::InvalidRequest);
+  CHECK(fixture.requests.size() == 2);
+
+  // A server refusal settles the change; the session stays ready.
+  const auto limitedId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        ChangeDisplayName{limitedId, "Третье"}
+  }) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+  auto limited = Rejection(limitedId);
+  limited.mutable_request_rejected()->set_code(P::REQUEST_REJECTION_CODE_RATE_LIMITED);
+  fixture.Send(limited);
+  const auto refused = results();
+  REQUIRE(refused.rejections.size() == 1);
+  CHECK(refused.rejections[0].rejection.code == RequestRejectionCode::RateLimited);
+  CHECK(fixture.client->Phase() == SessionPhase::Ready);
+
+  // An unknown settlement is a protocol fault.
+  fixture.Send(changed);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
+}
+
 TEST_SUITE_END();

@@ -115,7 +115,8 @@ loopback — только с `AllowInsecureRemote`; порт панели не �
 
 ## Переименование
 
-Меняется только display name. Панель проверяет `DisplayName.create` с лимитом
+Меняется только display name (игрок может сменить его и сам из игры — см.
+[ModerationAndNamesRu.md](ModerationAndNamesRu.md#смена-отображаемого-имени)). Панель проверяет `DisplayName.create` с лимитом
 `[Server.ChatInput] DisplayName` и серверный словарь (`Moderation.allows`); уникальности у
 display name нет по домену (уникален только username). `AuthService.RenamePlayer` выполняется
 исключительно (как отзыв) и обновляет ещё не погашенные билеты этого игрока. Затем
@@ -123,8 +124,13 @@ display name нет по домену (уникален только username). 
 `Moderation.publicProfile`, обновляет книгу имён (`SessionHostCommand.UpdateProfile`) и отправляет
 presence-обновление; остальные получают `PlayerUpdated` тем же путём, что при смене псевдонима
 (`identityEqual`). У скрытого игрока публичная личность — псевдоним, поэтому новое настоящее имя
-к другим игрокам не уходит. Новые сообщения чата несут новое имя; метки на земле без
-псевдонима покажут его после переподключения автора (`GroundMarksAgent` берёт профиль из подписки).
+к другим игрокам не уходит. Новые сообщения чата и метки несут новое имя
+(`GroundMarkCommand.Rename`); уже показанные клиентам метки обновятся, когда снова попадут в их видимость.
+
+Каждая смена имени — игроком или администратором — пишется в `display_name_changes` (последние
+`[Authentication.Service] DisplayNameHistory` = 20 на игрока); карточка
+игрока показывает «Историю имён» (было, стало, кто, когда), REST `/api/v1/players/{id}` — поле
+`names`. Смены администратора интервалом `[Identity] DisplayNameChangeIntervalMinutes` не ограничены.
 
 ## Страницы
 
@@ -155,7 +161,7 @@ presence-обновление; остальные получают `PlayerUpdate
 | `GET /api/v1/status` | `{connections, ready, reservations, closing, stopping}` |
 | `GET /api/v1/online` | Массив строк онлайна (настоящие имена, `pseudonym`, `hidden`, `role`, `phase`, `connectedAt`, `described`) |
 | `GET /api/v1/players?page=&q=` | `{query, page, pageSize, total, players[]}` |
-| `GET /api/v1/players/{id}` | `{player, sessions[]}` |
+| `GET /api/v1/players/{id}` | `{player, sessions[], names[]}` |
 
 Доступ — cookie панели или `Authorization: Bearer <token>`. Токены создаются на странице
 «Токены API»; в БД — SHA-256 и метка (1–64 символа). Ошибки — тот же `{code, message}`, что у
@@ -226,7 +232,8 @@ HTTP наружу без TLS — только явным `AllowInsecureRemote = 
 
 Миграция `1790812800000_admin.sql`, `PRAGMA user_version = 5`, с DOWN-секцией:
 `admin_accounts`, `admin_sessions`, `admin_api_tokens`, `player_roles`, `admin_audit`
-(время — Unix-миллисекунды UTC). Подробности — [db/README.md](../db/README.md).
+(время — Unix-миллисекунды UTC). Миграция `1790899200000_display_names.sql` (схема 6) добавляет
+историю имён `display_name_changes`. Подробности — [db/README.md](../db/README.md).
 
 ## Не в этой версии
 

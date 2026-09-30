@@ -244,6 +244,19 @@ export namespace Dreamsleeve::Host::Bridge
     bool operator==(const IdentityEvent&) const = default;
   };
 
+  // A change of the own display name: pending waits for the server, changed is
+  // the name the server has just stored (sent once), error the last refusal.
+  // The own profile itself arrives with the players list.
+  struct DisplayNameEvent
+  {
+    std::string                type{"displayName"};
+    bool                       pending{};
+    std::optional<std::string> changed;
+    std::optional<std::string> error;
+
+    bool operator==(const DisplayNameEvent&) const = default;
+  };
+
   // Sent when a page is (re)created so window position and options apply
   // before any snapshot; a snapshot repeats them.
   struct SettingsEvent
@@ -289,6 +302,8 @@ export namespace Dreamsleeve::Host::Bridge
   }
 
   constexpr std::size_t MaxChatText     = 16000;
+  // Bytes of a requested display name; the server applies its own, smaller limit.
+  constexpr std::size_t MaxDisplayName  = 1024;
   constexpr std::size_t MaxSnapshotRows = 500;
 
   using Encoded = std::expected<std::string, std::string>;
@@ -383,6 +398,11 @@ export namespace Dreamsleeve::Host::Bridge
     return Detail::Write(event);
   }
 
+  Encoded Encode(const DisplayNameEvent& event)
+  {
+    return Detail::Write(event);
+  }
+
   std::expected<UiCommand, std::string> ParseCommand(std::string_view json)
   {
     if (json.size() > 1 << 20) return std::unexpected{"UI command exceeds limit"};
@@ -438,6 +458,12 @@ export namespace Dreamsleeve::Host::Bridge
     {
       if (command.hiding != "off" && command.hiding != "everywhere" && command.hiding != "exceptGroundMarks")
         return std::unexpected{"setIdentityVisibility requires hiding off, everywhere or exceptGroundMarks"};
+      return command;
+    }
+    if (type == "changeDisplayName")
+    {
+      if (command.displayName.empty() || command.displayName.size() > MaxDisplayName)
+        return std::unexpected{"changeDisplayName displayName is empty or too long"};
       return command;
     }
     if (type == "close" || type == "signInSaved" || type == "signOut" || type == "forgetLogin" || type == "disconnect") return command;
@@ -956,6 +982,43 @@ export namespace Dreamsleeve::Host::Bridge
         break;
     }
     return message.empty() ? std::string{"Сервер отклонил сообщение"} : std::string{message};
+  }
+
+  // Refusals of a display name change, in the UI language.
+  std::string DisplayNameRejectionText(Dreamsleeve::Client::RequestRejectionCode code, std::string_view message)
+  {
+    using Code = Dreamsleeve::Client::RequestRejectionCode;
+    switch (code)
+    {
+      case Code::TextNotAllowed:
+        return "Имя содержит запрещённые слова";
+      case Code::DisplayNameChangeNotAllowed:
+        return "Сервер не разрешает менять имя";
+      case Code::RateLimited: {
+        // "The display name can be changed again in N min."
+        constexpr std::string_view prefix = "The display name can be changed again in ";
+        if (message.starts_with(prefix))
+        {
+          std::uint64_t minutes{};
+          const auto*   begin  = message.data() + prefix.size();
+          const auto    parsed = std::from_chars(begin, message.data() + message.size(), minutes);
+          if (parsed.ec == std::errc{} && minutes > 0)
+          {
+            if (minutes < 120) return std::format("Имя можно сменить снова через {} мин", minutes);
+            return std::format("Имя можно сменить снова через {} ч", (minutes + 59) / 60);
+          }
+        }
+        return "Имя меняли недавно. Попробуйте позже";
+      }
+      case Code::InvalidRequest:
+        if (message.starts_with("Display name exceeds")) return "Имя слишком длинное";
+        return "Имя пустое или содержит недопустимые символы";
+      case Code::Overloaded:
+        return "Сервер занят. Попробуйте позже";
+      default:
+        break;
+    }
+    return message.empty() ? std::string{"Сервер отклонил имя"} : std::string{message};
   }
 
   std::string_view FailureText(CommandFailureCode code)

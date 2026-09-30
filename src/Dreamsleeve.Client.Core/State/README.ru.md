@@ -266,6 +266,13 @@ MovementView хранит их историю со сбросами на гра�
 завершении сессии). Модель не меняется: своя запись всегда приходит с настоящим профилем, а
 `Domain::PlayerData::pseudonymous` отмечает чужие псевдонимные профили (username пуст).
 
+`ChangeDisplayName{requestId, displayName}` — тот же путь: Control-канал, свой набор ожидания,
+одна смена за раз (вторая — `CommandFailure::Busy`); пустое имя, управляющие символы и
+некорректный UTF-8 отклоняются локально (`InvalidRequest`). Итог —
+`DisplayNameConfirmation{generation, requestId, displayName}` в
+`ClientOutput.displayNameConfirmations`, `ServerRejection` или `CommandFailure`. Модель
+подтверждение не меняет: своя запись с новым именем приходит `PlayerUpserted`.
+
 ## Метки на земле
 
 `PlaceGroundNote{requestId, text, placement}`, `ReportDeath{requestId, label, placement}` и

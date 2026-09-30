@@ -186,6 +186,13 @@ export interface IdentityState {
   pseudonym?: string;
   error?: string;
 }
+// A change of the own display name as the host reports it: pending waits
+// for the server, changed is the name it has just stored, error the last refusal.
+export interface DisplayNameState {
+  pending: boolean;
+  changed?: string;
+  error?: string;
+}
 // A ground mark for the lists: own marks (the server's complete list) and
 // marks the server shows nearby. `author` is the host-resolved name of a
 // nearby mark, `character` the snapshot at placement (absent in streamer
@@ -232,7 +239,9 @@ export type Command =
   | { type: "placeGroundNote"; requestId: string; text: string }
   | { type: "removeGroundMark"; requestId: string; markId: Id }
   // Outside a session only the choice for the next one changes.
-  | { type: "setIdentityVisibility"; hiding: HideIdentity };
+  | { type: "setIdentityVisibility"; hiding: HideIdentity }
+  // In a session only; the server applies its word list and change interval.
+  | { type: "changeDisplayName"; displayName: string };
 export type AuthEvent = { type: "auth"; phase: ConnectionPhase } & AuthState;
 export type HostEvent =
   | {
@@ -265,6 +274,7 @@ export type HostEvent =
       error?: string;
     }
   | ({ type: "identity" } & IdentityState)
+  | ({ type: "displayName" } & DisplayNameState)
   // Personal ignore list of this server, already named for current settings.
   | { type: "ignored"; players: { id: Id; name: string }[] }
   | { type: "messages"; messages: Message[] }

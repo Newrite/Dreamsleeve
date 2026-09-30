@@ -1275,3 +1275,29 @@ test("a player who hides their name is marked in chat, online and the author men
   await page.getByRole("button", { name: "Карточки", exact: true }).click();
   await expect(page.locator("h3[data-pseudonymous]")).toHaveText("Страж 2");
 });
+
+test("the own display name changes in the account panel once the server answers", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Аккаунт", exact: true }).click();
+  const status = page.getByRole("status", { name: "Смена имени" });
+  await expect(status).toHaveText(/^Сейчас: „.+“$/);
+  const field = page.getByLabel("Отображаемое имя", { exact: true });
+  const change = page.getByRole("button", { name: "Сменить имя" });
+  await expect(change).toBeDisabled();
+  // The workshop stands in for the server: its word list refuses, nothing changes.
+  await field.fill("Sir Badword");
+  await change.click();
+  await expect(status).toHaveText("Имя содержит запрещённые слова");
+  await field.fill("Новое Имя");
+  await change.click();
+  await expect(status).toHaveText("Ожидание сервера…");
+  await expect(status).toHaveText("Имя изменено на „Новое Имя“");
+  await expect(field).toHaveValue("");
+  // A second change within the interval is refused with the wait.
+  await field.fill("Ещё Одно");
+  await change.click();
+  await expect(status).toHaveText("Имя можно сменить снова через 1 мин");
+});

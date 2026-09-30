@@ -59,6 +59,8 @@ type ClientCommand =
     | ReportDeath of DeathMarkText * GroundMarkPlacement
     | RemoveGroundMark of GroundMarkId
     | SetIdentityVisibility of HiddenIdentity
+    /// The sender's own new display name, already accepted by DisplayName.create.
+    | ChangeDisplayName of DisplayName
 
 type ClientRequest = {
     RequestId: uint64
@@ -113,4 +115,6 @@ type ServerResponse =
     | OwnGroundMarks of GroundMarkRecord list
     /// Settles SetIdentityVisibility: where the names are hidden now and the pseudonym others see there.
     | IdentityVisibilityChanged of requestId: uint64 * Pseudonym voption * HiddenIdentity
+    /// Settles ChangeDisplayName with the stored name.
+    | DisplayNameChanged of requestId: uint64 * DisplayName
 

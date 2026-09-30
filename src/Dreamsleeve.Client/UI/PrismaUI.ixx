@@ -321,6 +321,13 @@ namespace PrismaUI
       Send(session.Identity(Bridge::HidingOf(chat.hideIdentity)));
       return;
     }
+    if (type == "changeDisplayName")
+    {
+      auto& session = runtime.session;
+      if (auto posted = session.ChangeDisplayName(app.Exchange(), command.displayName); !posted) session.SetNameError(posted.error());
+      Send(session.NameEvent());
+      return;
+    }
     if (type == "saveSettings")
     {
       const bool names = runtime.ui.ui.chat.nameMode != command.settings->nameMode ||

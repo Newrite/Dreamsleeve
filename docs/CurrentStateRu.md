@@ -777,3 +777,26 @@ DOWN, `AdminService`, runtime-панель, `AdminHttpTests`, конфигура
 `smoke_chat.py` — 43 проверки прошли, `package_dist.py` собирает `dist/Server` с
 `Dreamsleeve.Server.Web.dll` (htmx встроен) и `THIRD_PARTY_NOTICES.md`. Живой прогон сервера:
 setup по коду из консоли, вход, страницы, объявление, токен API, `admin-reset`.
+
+## Смена отображаемого имени и логирование (30.09.2026)
+
+- Протокол **v11** (несовместим с v10): `ChangeDisplayName` / `DisplayNameChanged`, код
+  `DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15`. Игрок меняет своё display name из панели «Аккаунт» UI
+  (Client.Dev: `name <имя>`); username и PlayerId не меняются. Подробности —
+  [ModerationAndNamesRu.md](ModerationAndNamesRu.md#смена-отображаемого-имени).
+- Сервер: проверка `DisplayName` в кодеке, словарь в `PlayerSession`, `[Identity]
+  AllowDisplayNameChange` (true) и `DisplayNameChangeIntervalMinutes` (1); интервал и
+  история — в `AuthService` и SQLite (схема 6, `display_name_changes`, последние
+  `[Authentication.Service] DisplayNameHistory` = 20 смен на игрока). Новый профиль идёт тем же
+  путём, что переименование из админки; у скрытого игрока наружу не уходит. Метки на земле теперь
+  берут новое имя сразу (`GroundMarkCommand.Rename`). Панель показывает историю имён.
+- Клиент: `ChangeDisplayName` / `DisplayNameConfirmation` в Core, `Session::ChangeDisplayName`
+  и событие `displayName` в host, поле «Отображаемое имя» в панели «Аккаунт».
+- Логирование: сервер почти ничего не писал на Information — теперь пишет регистрации, входы и
+  отказы входа, вход в игру и выход с длительностью, режим скрытия, смену имени, метки
+  (см. [AuthenticationRu.md](AuthenticationRu.md#логирование)). Уровень `Debug` в конфиге этого
+  не заменял: записей просто не было.
+
+Проверки: 438 managed, 284 native (5838 assertions), 64 vitest, 33 Playwright (Edge),
+`smoke_chat.py` — 45 проверок (новые: смена имени через Client.Dev доходит до собеседника,
+отказ по словарю и по интервалу).

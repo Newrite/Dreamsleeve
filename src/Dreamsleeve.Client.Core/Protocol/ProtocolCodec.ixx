@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 10;
+  inline constexpr std::uint32_t Version = 11;
 
   enum class ErrorCode
   {
@@ -66,8 +66,16 @@ export namespace Dreamsleeve::Client::Wire
     PlayerUpdate  update;
   };
 
-  using ClientRequest = std::
-    variant<OpenSession, SendChat, UpdatePlayer, PostAnnouncement, PlaceGroundNote, ReportDeath, RemoveGroundMark, SetIdentityVisibility>;
+  using ClientRequest = std::variant<
+    OpenSession,
+    SendChat,
+    UpdatePlayer,
+    PostAnnouncement,
+    PlaceGroundNote,
+    ReportDeath,
+    RemoveGroundMark,
+    SetIdentityVisibility,
+    ChangeDisplayName>;
 
   // A channel of the session with its retained tail, ascending MessageId.
   struct ChannelOpened
@@ -131,6 +139,13 @@ export namespace Dreamsleeve::Client::Wire
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
   };
 
+  // Settles ChangeDisplayName with the stored name.
+  struct DisplayNameChanged
+  {
+    std::uint64_t requestId;
+    std::string   displayName;
+  };
+
   // Replies carry required correlation; notifications have no request ID.
   // Own and broadcast chat both apply the same ChatMessagesReceived update.
   using ServerResponse = std::variant<
@@ -148,7 +163,8 @@ export namespace Dreamsleeve::Client::Wire
     GroundMarkPlaced,
     GroundMarkRemoved,
     OwnGroundMarksReplaced,
-    IdentityVisibilityChanged>;
+    IdentityVisibilityChanged,
+    DisplayNameChanged>;
 
   // One immutable configuration per network owner. Validate once at startup.
   class ProtocolCodec

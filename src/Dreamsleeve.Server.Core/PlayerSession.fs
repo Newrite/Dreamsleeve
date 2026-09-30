@@ -26,6 +26,10 @@ type PlayerSessionMessage =
     | RemoveGroundMark of requestId: uint64 * GroundMarkId
     | Update of requestId: uint64 * PlayerUpdate
     | SetIdentityVisibility of requestId: uint64 * HiddenIdentity
+    /// The player's own new display name, from the client.
+    | ChangeDisplayName of requestId: uint64 * DisplayName
+    /// The account service stored the name, or refused it.
+    | DisplayNameReplied of DisplayNameChangeReply
     | SampleMovement of MovementSample
     | Read of ReplyChannel<Result<PlayerSnapshot, PlayerStateError>>
     /// An administrator changed the role; applied without reconnecting.
@@ -76,12 +80,15 @@ module PlayerSession =
         mutable Account: PlayerData voption
         mutable Role: PlayerRole
         OpenedAt: DateTimeOffset
+        /// The one own display name change waiting for the account service.
+        mutable NameRequest: struct (uint64 * Guid) voption
         Moderation: ModerationRules
         Identity: IdentityOptions
         Announcements: AnnouncementOptions
         GroundMarkRules: GroundMarkRules
         Pending: HashSet<uint64>
         Authentication: AgentOutbox<SessionAuthenticationRequest>
+        DisplayNames: AgentOutbox<DisplayNameChangeRequest>
         Chat: AgentOutbox<ChatRoomCommand>
         System: AgentOutbox<ChatRoomCommand>
         Presence: AgentOutbox<PresenceCommand>
@@ -624,16 +631,19 @@ module PlayerSession =
             close request state context "Unexpected identity change."
 
     /// Same path as a pseudonym switch: the host updates the names shown online,
-    /// presence spreads the new identity as PlayerUpdated.
-    let private profileChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (stored: PlayerData) =
+    /// presence spreads the new identity as PlayerUpdated. own: the player's own
+    /// change rather than an administrator's.
+    let private profileChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state context own (stored: PlayerData) =
         let apply (player: Player) =
             match Player.withProfile (Moderation.publicProfile state.Moderation stored) player with
             | Error _ -> None
             | Ok updated ->
                 state.Account <- ValueSome stored
-                if emit options request state context (SessionHostCommand.UpdateProfile(request.ConnectionId, updated.Data)) then
+                if emit options request state context (SessionHostCommand.UpdateProfile(request.ConnectionId, updated.Data, own)) then
                     if not (state.Presence.TrySend(context, PresenceCommand.Update(request.ConnectionId, publicSnapshot state updated))) then
                         close request state context "Presence admission failed."
+                    // Marks without a pseudonym show the author's current profile.
+                    state.GroundMarks.TrySend(context, GroundMarkCommand.Rename(request.ConnectionId, updated.Data)) |> ignore
                 Some updated
         match state.Phase with
         | Opening opening when state.Account <> ValueSome stored ->
@@ -647,6 +657,65 @@ module PlayerSession =
                 | Active _ -> state.Phase <- Active updated
                 | Starting | Resolving _ | Reserving _ | Opening _ | Closing -> ())
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
+
+    /// Only the new name comes from the client. The word list is checked here,
+    /// like chat text; storage and the change interval belong to the account service.
+    let private changeDisplayName (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (name: DisplayName) =
+        let refuse code message =
+            send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "display_name" }))
+        match state.Phase, reliable context with
+        | Active player, Some address ->
+            if requestId = 0UL || state.Pending.Contains requestId then
+                close request state context "Request ID is invalid or already pending."
+            elif not state.Identity.AllowDisplayNameChange then
+                refuse RequestRejectionCode.DisplayNameChangeNotAllowed "The server does not let players change their display name."
+            elif state.NameRequest.IsSome then
+                refuse RequestRejectionCode.Overloaded "A display name change is already pending."
+            elif state.Account |> ValueOption.exists (fun stored -> stored.DisplayName = name) then
+                // Asking for the current name settles at once and is not a change.
+                send options request state context (ServerResponse.DisplayNameChanged(requestId, name))
+            elif not (Moderation.allows state.Moderation (DisplayName.value name)) then
+                refuse RequestRejectionCode.TextNotAllowed "Name contains words that are not allowed."
+            else
+                let operationId = Guid.NewGuid()
+                let change = {
+                    OperationId = operationId
+                    PlayerId = player.Data.PlayerId
+                    DisplayName = name
+                    MinInterval = IdentityOptions.displayNameInterval state.Identity
+                    ReplyTo = address.Map PlayerSessionMessage.DisplayNameReplied
+                }
+                if state.DisplayNames.TrySend(context, change) then
+                    state.Pending.Add requestId |> ignore
+                    state.NameRequest <- ValueSome(struct (requestId, operationId))
+                else
+                    refuse RequestRejectionCode.Overloaded "Display name admission is full."
+        | Closing, _ -> ()
+        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+            refuse RequestRejectionCode.SessionNotReady "Session is not ready."
+
+    let private displayNameReplied (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: DisplayNameChangeReply) =
+        match state.NameRequest with
+        | ValueSome(struct (requestId, operationId)) when operationId = reply.OperationId ->
+            state.NameRequest <- ValueNone
+            state.Pending.Remove requestId |> ignore
+            let refuse code message =
+                send options request state context (ServerResponse.RequestRejected(requestId, { Code = code; Message = message; Field = "display_name" }))
+            match state.Phase, reply.Result with
+            | Active _, Ok stored ->
+                profileChanged options request state context true stored
+                match state.Phase with
+                | Active _ -> send options request state context (ServerResponse.DisplayNameChanged(requestId, stored.DisplayName))
+                | Starting | Resolving _ | Reserving _ | Opening _ | Closing -> ()
+            | Active _, Error (DisplayNameChangeError.TooSoon wait) ->
+                let minutes = max 1 (int (ceil wait.TotalMinutes))
+                refuse RequestRejectionCode.RateLimited $"The display name can be changed again in {minutes} min."
+            | Active _, Error DisplayNameChangeError.Busy ->
+                refuse RequestRejectionCode.Overloaded "The account service is busy. Try again later."
+            | Active _, Error DisplayNameChangeError.Unavailable ->
+                refuse RequestRejectionCode.Overloaded "The account service is unavailable. Try again later."
+            | (Starting | Resolving _ | Reserving _ | Opening _ | Closing), _ -> ()
+        | ValueSome _ | ValueNone -> ()
 
     let private describe state =
         let view (player: Player) phase =
@@ -715,7 +784,9 @@ module PlayerSession =
             match state.Phase with
             | Opening _ | Active _ -> state.Role <- role
             | Starting | Resolving _ | Reserving _ | Closing -> ()
-        | PlayerSessionMessage.ProfileChanged stored -> profileChanged options request state context stored
+        | PlayerSessionMessage.ProfileChanged stored -> profileChanged options request state context false stored
+        | PlayerSessionMessage.ChangeDisplayName(requestId, name) -> changeDisplayName options request state context requestId name
+        | PlayerSessionMessage.DisplayNameReplied reply -> displayNameReplied options request state context reply
         | PlayerSessionMessage.Describe reply -> reply.Reply(describe state)
         | PlayerSessionMessage.Stop -> stop request state context
     }
@@ -727,6 +798,8 @@ module PlayerSession =
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.Stop -> true
         // Rare administrator changes use the reserve so a busy session still applies them.
         | PlayerSessionMessage.RoleChanged _ | PlayerSessionMessage.ProfileChanged _ -> true
+        // The account service must be able to settle a pending change.
+        | PlayerSessionMessage.DisplayNameReplied _ -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Placed _ | GroundMarkEvent.Removed _ | GroundMarkEvent.Rejected _) -> true
         | PlayerSessionMessage.GroundMarkEvent (GroundMarkEvent.Changed _ | GroundMarkEvent.Own _) -> false
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Joined _)
@@ -739,12 +812,12 @@ module PlayerSession =
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.PostAnnouncement _
         | PlayerSessionMessage.PlaceGroundNote _ | PlayerSessionMessage.ReportDeath _ | PlayerSessionMessage.RemoveGroundMark _
         | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _ | PlayerSessionMessage.SetIdentityVisibility _
-        | PlayerSessionMessage.Read _ | PlayerSessionMessage.Describe _ -> false
+        | PlayerSessionMessage.Read _ | PlayerSessionMessage.Describe _ | PlayerSessionMessage.ChangeDisplayName _ -> false
 
     /// chat and system are the owners of the global and the system channel; marks owns the ground marks.
     /// identity says whether names may be hidden and how often the choice may change.
     let start (options: PlayerSessionOptions) maxActorValues moderation announcements groundMarkRules (identity: IdentityOptions)
-              authentication chat system presence marks host (request: SessionOpenRequest) =
+              authentication displayNames chat system presence marks host (request: SessionOpenRequest) =
         let limits = [maxActorValues; options.MailboxCapacity; options.ControlReserve; options.MaxPendingChat; options.MaxPendingUpdates;
                       options.MaxBootstrapEvents; options.MaxPendingOutput]
         if limits |> List.exists (fun value -> value < 1) then
@@ -769,12 +842,14 @@ module PlayerSession =
                 Account = ValueNone
                 Role = PlayerRole.Player
                 OpenedAt = DateTimeOffset.UtcNow
+                NameRequest = ValueNone
                 Moderation = moderation
                 Identity = identity
                 Announcements = announcements
                 GroundMarkRules = groundMarkRules
                 Pending = HashSet()
                 Authentication = AgentOutbox(1, authentication)
+                DisplayNames = AgentOutbox(1, displayNames)
                 Chat = AgentOutbox(options.MaxPendingChat + 2, chat)
                 System = AgentOutbox(options.MaxPendingChat + 2, system)
                 Presence = AgentOutbox(options.MaxPendingUpdates + 2, presence)

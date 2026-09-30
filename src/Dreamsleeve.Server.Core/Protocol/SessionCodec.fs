@@ -57,6 +57,11 @@ module internal SessionCodec =
             Error(ProtocolCodecFailure.InvalidPayload "session_ticket")
         else decodeHiding "hidden_identity" source.HiddenIdentity |> Result.map (fun value -> ClientCommand.OpenSession(ticket, value))
 
+    let decodeDisplayName (config: ServerConfig) (source: Dreamsleeve.Protocol.Chat.ChangeDisplayName) =
+        DisplayName.create config.ChatInput.DisplayName source.DisplayName
+        |> Result.map ClientCommand.ChangeDisplayName
+        |> Result.mapError ProtocolCodecFailure.InvalidDomain
+
     let welcome (config: ServerConfig) (value: SessionWelcome) =
         let result = Dreamsleeve.Protocol.Chat.SessionOpened(
             ServerName = config.ServerName,

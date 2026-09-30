@@ -26,6 +26,15 @@ type PlayerPage = {
     Page: int
 }
 
+/// One display name change of a player, newest first when listed.
+type NameChange = {
+    OldName: string
+    NewName: string
+    /// The administrator, or None when the player changed it.
+    ChangedBy: Username option
+    At: DateTimeOffset
+}
+
 type ApiTokenInfo = {
     /// The stored SHA-256 hash identifies the token in forms; it cannot be used as the token.
     TokenHash: string
@@ -302,6 +311,30 @@ module SqliteAdminStore =
                             [ "@id", box (int64 id); "@role", box (PlayerRole.toInt assignment.Role); "@admin", box (AdminId.value actor.Id); "@at", box (milliseconds now) ] |> ignore
                         audit context actor.Id (AuditRecord.create AdminAction.SetRole (AuditTarget.Player playerId) (PlayerRole.key role)) now
                         Ok (stored |> Option.map (fun record -> { record with Role = assignment.Role }))))
+
+    /// The latest display name changes of a player, by the player and by administrators.
+    let nameHistory config (playerId: PlayerId) limit token =
+        SqliteAccountStore.withContext config token (fun context ->
+            let id = PlayerId.value playerId
+            if id > uint64 Int64.MaxValue then Ok []
+            else
+                use statement = command context "SELECT n.old_name, n.new_name, a.username, n.at FROM display_name_changes n LEFT JOIN admin_accounts a ON a.id=n.changed_by WHERE n.player_id=@id ORDER BY n.at DESC, n.id DESC LIMIT @limit"
+                                    [ "@id", box (int64 id); "@limit", box (max 1 limit) ]
+                use reader = statement.ExecuteReader()
+                let rows = ResizeArray()
+                let mutable failure = None
+                while failure.IsNone && reader.Read() do
+                    let changedBy =
+                        if reader.IsDBNull 2 then Ok None
+                        else Username.create Int32.MaxValue (reader.GetString 2) |> Result.map Some
+                    match changedBy with
+                    | Ok changedBy ->
+                        rows.Add { OldName = reader.GetString 0; NewName = reader.GetString 1; ChangedBy = changedBy
+                                   At = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 3) }
+                    | Error _ -> failure <- Some "A stored administrator name is invalid."
+                match failure with
+                | Some message -> invalidData message
+                | None -> Ok (List.ofSeq rows))
 
     /// An action that another owner performed (rename, reset, revoke, announcement).
     let record config (actor: AdminAccount) (entry: AuditRecord) (now: DateTimeOffset) token =

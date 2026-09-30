@@ -378,4 +378,54 @@ describe("hidden identity", () => {
     ).toBe("off");
     expect(defaults.hideIdentity).toBe("off");
   });
+
+  it("asks the server for a new display name, one at a time, and shows its answer", () => {
+    const { chat, send } = ready();
+    // Outside a session nothing is sent.
+    chat.receive({
+      type: "connection",
+      connected: false,
+      phase: "disconnected",
+    });
+    send.mockClear();
+    chat.changeDisplayName("Новое Имя");
+    expect(send).not.toHaveBeenCalled();
+    chat.receive({ type: "connection", connected: true, phase: "connected" });
+    send.mockClear();
+    chat.changeDisplayName("   ");
+    expect(send).not.toHaveBeenCalled();
+    chat.changeDisplayName("  Новое Имя ");
+    expect(send).toHaveBeenLastCalledWith({
+      type: "changeDisplayName",
+      displayName: "Новое Имя",
+    });
+    expect(chat.store.getState().displayName).toEqual({ pending: true });
+    chat.changeDisplayName("Другое");
+    expect(send).toHaveBeenCalledTimes(1);
+    chat.receive(
+      parseHostEvent(
+        JSON.stringify({
+          type: "displayName",
+          pending: false,
+          changed: "Новое Имя",
+        }),
+      ),
+    );
+    expect(chat.store.getState().displayName).toEqual({
+      pending: false,
+      changed: "Новое Имя",
+    });
+    chat.receive({
+      type: "displayName",
+      pending: false,
+      error: "Имя можно сменить снова через 90 мин",
+    });
+    expect(chat.store.getState().displayName.error).toBe(
+      "Имя можно сменить снова через 90 мин",
+    );
+    for (const pending of ["yes", undefined])
+      expect(() =>
+        parseHostEvent(JSON.stringify({ type: "displayName", pending })),
+      ).toThrow();
+  });
 });

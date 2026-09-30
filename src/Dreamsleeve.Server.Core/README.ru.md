@@ -254,6 +254,21 @@ Runtime после завершения сессии шлёт `Detach` и мет
   `ListSessions`/`SetPlayerRole`/`RenamePlayer` — обычные сообщения runtime.
 - Объявление панели — тот же `ServerRuntimeMessage.Announce`, что у консоли.
 
+### Смена отображаемого имени игроком
+
+`ClientCommand.ChangeDisplayName` (кодек уже применил `DisplayName.create`) → runtime пересылает
+`PlayerSessionMessage.ChangeDisplayName` Ready-сессии. Сессия отказывает сама
+(`DISPLAY_NAME_CHANGE_NOT_ALLOWED`, `OVERLOADED` при ожидающей смене, `TEXT_NOT_ALLOWED`), текущее
+имя подтверждает сразу, иначе отправляет `DisplayNameChangeRequest` по
+`SessionAuthenticator.DisplayNames` (outbox на одно место). `AuthService` хранит имя и считает
+интервал (`TooSoon` → `RATE_LIMITED` с минутами), ответ `DisplayNameReplied` — служебное сообщение
+сессии. После успеха — `profileChanged own=true`: `UpdateProfile(own = true)` снимает
+административную подмену профиля в `SessionTable.Profiles`, presence и `GroundMarkCommand.Rename`
+несут новое имя, клиент получает `DisplayNameChanged`.
+
+Логи runtime на Information: вход в игру (PlayerId, username, сессия, режим скрытия, онлайн),
+выход с длительностью, смена режима скрытия; `GroundMarksAgent` — размещение и удаление меток.
+
 ## Очереди и перегрузка
 
 AgentMailbox.boundedWithControl задаёт общий FIFO и предел обычных сообщений.

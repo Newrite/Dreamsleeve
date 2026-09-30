@@ -89,8 +89,8 @@ let tests = testList "SQLite accounts" [
         Expect.equal restored.Profile profile "Persisted profile is unchanged."
         Expect.equal restored.PasswordHash "stored-password-hash" "The opaque password hash survives restart."
         Expect.isGreaterThan restored.AccountId 0L "Account IDs are positive."
-        Expect.equal (database.Scalar "PRAGMA user_version") 5L "The applied schema is recorded."
-        Expect.equal (database.Scalar "SELECT count(*) FROM __migrondi_migrations") 5L "Repeated startup does not reapply migration.")
+        Expect.equal (database.Scalar "PRAGMA user_version") 6L "The applied schema is recorded."
+        Expect.equal (database.Scalar "SELECT count(*) FROM __migrondi_migrations") 6L "Repeated startup does not reapply migration.")
 
     testCase "duplicate canonical username does not create an orphan profile or change its hash" (fun () ->
         use database = new Database()
@@ -150,10 +150,10 @@ let tests = testList "SQLite accounts" [
 
     testCase "a newer schema is rejected before changing the database" (fun () ->
         use database = new Database()
-        database.Execute "PRAGMA user_version = 6"
+        database.Execute "PRAGMA user_version = 7"
 
         Expect.isError (SqliteAccountStore.initialize database.Config) "Older binaries must not open a newer schema."
-        Expect.equal (database.Scalar "PRAGMA user_version") 6L "The version is preserved."
+        Expect.equal (database.Scalar "PRAGMA user_version") 7L "The version is preserved."
         Expect.equal (database.Scalar "SELECT count(*) FROM sqlite_master WHERE type = 'table'") 0L "No migrations were applied.")
 
     testCase "another application database and damaged schema are rejected" (fun () ->
