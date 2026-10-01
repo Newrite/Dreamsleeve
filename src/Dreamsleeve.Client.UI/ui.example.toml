@@ -1,101 +1,176 @@
 # ui.toml of the plugin (Data/SKSE/Plugins/Dreamsleeve): the web UI and the SKSE
-# menu write it; every key with its default. Omitted keys and values out of range
-# fall back to the default; the limits live in Host/UiSettings.ixx.
+# menu write it; every key with its default. This file is a reference: the plugin
+# rewrites ui.toml without comments on every change. Omitted keys take the default,
+# unknown keys are ignored; a number out of range is clamped to it, any other invalid
+# value (word, colour, NaN) falls back to the default. The limits live in
+# Host/UiSettings.ixx. Colours are "#RRGGBB"; distances and heights are world units
+# (Skyrim game units, about 1.43 cm).
+
+# File format version; must be 1.
 version = 1
 
 [ui]
-# Full opt-out of the interface; the network keeps running.
+# true is a full opt-out of the interface (no window, no activation key); the network keeps running.
 hideUi = false
 # Where others see a server pseudonym instead of your names: off | everywhere |
 # exceptGroundMarks; written by the plugin only after the server confirmed it.
 hideIdentity = "off"
 
 [ui.chat]
+# Names above other players' fireflies.
 showFireflyNames = true
+# Hide those names behind walls and terrain.
 fireflyNameOcclusion = true
+# Name size, 8..48.
 fireflyNameFontSize = 18
+# Name height above the firefly, world units, 0..512.
 fireflyNameOffset = 35
+# Chat bubbles above fireflies when a nearby player writes.
 showBubbles = true
+# Seconds a bubble stays fully visible, 1..60.
 bubbleDuration = 8.0
+# Fade a bubble out instead of removing it at once.
 bubbleFade = true
+# Seconds of that fade-out, 0.1..5.
 bubbleFadeDuration = 1.0
+# Bubble text size, 8..48.
 bubbleFontSize = 16
+# Bubble width limit including padding, 120..800.
 bubbleMaxWidth = 320
+# Bubble background opacity, 0..1; the text stays opaque.
 bubbleBackground = 0.65
 # Hidden while the player is in combat, each surface on its own.
+# Fireflies of other players.
 combatHideFireflies = false
+# Names above fireflies.
 combatHideNames = false
+# Chat bubbles.
 combatHideBubbles = false
+# Online tab layout: cards | list.
 onlineView = "cards"
+# Fade each message out a while after it arrives; nothing fades while the chat is open.
 fade = true
+# Seconds a message stays before it fades, 0..120.
 delay = 12.0
+# Seconds the fade takes, 0..5.
 duration = 1.0
+# Opacity of a faded message, 0..1 (0 = hidden until the chat is opened).
 idleOpacity = 0.0
+# Scale of the whole window, 0.7..1.5.
 scale = 1.0
+# Chat text size, 12..26.
 fontSize = 16
+# Chat font: sans | serif.
 font = "sans"
+# Line spacing, 1.1..2.
 lineHeight = 1.45
+# Chat window background opacity, 0..1.
 background = 0.82
+# Show the time of each message.
 timestamps = true
+# Colour the whole line with the channel colour, not only the name.
 fullColor = false
-# username | display | character; without a character name the display name is shown.
+# Names shown for other players: username | display | character; without a character
+# name the display name is shown.
 nameMode = "display"
 # Local pseudonyms (aliases.toml) instead of every real name on every surface.
 streamerMode = false
 # Server-flagged ranges: off | mask (stars) | hide (whole message; own shown as a placeholder).
 textFilter = "off"
+# Lock the window: no dragging or resizing.
 locked = true
+# Window left edge as a fraction of the screen width, 0..1.
 x = 0.025
+# Window top edge as a fraction of the screen height, 0..1.
 y = 0.42
+# Window width, 320..1600.
 width = 680
+# Window height, 220..1200.
 height = 390
+# Key that opens the chat for typing: Enter | F2.
 activationKey = "Enter"
+# Colour theme: skyrim | contrast.
 theme = "skyrim"
 # tab (only the announcements tab) | all (also "Все") | current (every tab).
 announcementChannels = "all"
+# Announcement origins shown: the server itself.
 announcementsServer = true
+# Announcements requested by the Dreamsleeve client.
 announcementsTrustedClient = true
+# Announcements from other mods (C++/Papyrus API).
 announcementsThirdParty = true
+# Kinds shown: events.
 announcementsEvents = true
+# Kinds shown: periodic reminders.
 announcementsPeriodic = true
 # Bubble look: the fill opacity is bubbleBackground; border and text colour ("#RRGGBB")
 # are separate, so "no box at all" is bubbleBackground = 0 and bubbleBorder = false.
+# Bubble border.
 bubbleBorder = true
+# Bubble text colour.
 bubbleTextColor = "#EEECE5"
+# Colour of names above fireflies.
 fireflyNameColor = "#EEECE5"
-fireflyHeightOffset = 110 # Glow height above the pose origin, game units 0..512
+# Glow height above the pose origin, world units, 0..512.
+fireflyHeightOffset = 110
 # Ground marks (docs/GroundMarksRu.md): kinds, counts, distances and the label look.
+# Show notes players left.
 showGroundNotes = true
+# Show places where characters died.
 showDeathMarks = true
-maxVisibleNotes = 16 # 1..64 nearest
+# Nearest notes drawn, 1..64.
+maxVisibleNotes = 16
+# Nearest death marks drawn, 1..64.
 maxVisibleDeaths = 16
-groundDrawDistance = 4096 # game units, 0..16384
-groundNoteOffset = 5 # above the floor hit, -64..256
+# Marks drawn within this distance, world units, 0..16384; the server delivers only
+# within its own [GroundMarks] VisibilityDistance.
+groundDrawDistance = 4096
+# Note label height above the floor hit, world units, -64..256.
+groundNoteOffset = 5
+# Death label height above the floor hit, world units, -64..256.
 deathMarkOffset = 5
-groundNameDistance = 600 # author name visible within, 50..4096 (10% hysteresis)
-groundTextDistance = 150 # text visible within, 50..4096
+# Author name visible within, world units, 50..4096 (10% hysteresis).
+groundNameDistance = 600
+# Text visible within, world units, 50..4096 (10% hysteresis).
+groundTextDistance = 150
+# Mark label text size, 8..48.
 groundFontSize = 16
+# Mark label width limit, 120..800.
 groundMaxWidth = 320
+# Note label background opacity, 0..1.
 groundBackground = 0.65
+# Note label border.
 groundBorder = true
+# Note text colour.
 groundTextColor = "#EEECE5"
-deathTextColor = "#D9534F" # death label and author name
+# Death label and author name colour.
+deathTextColor = "#D9534F"
+# Death label background opacity, 0..1.
 deathBackground = 0.65
+# Death label border.
 deathBorder = true
-combatHideGroundMarks = false # statics and labels
-combatHideGroundText = false # labels only
-markDateStyle = "tamriel" # tamriel (Тирдас, 17 Последнего зерна) | earth (Вторник, 17 августа)
-deathDateHeader = true # in-game date on top of a death mark's bubble
-noteDateHeader = false # the same above notes
+# Hide mark statics and labels in combat.
+combatHideGroundMarks = false
+# Hide only the labels in combat.
+combatHideGroundText = false
+# Date style of marks: tamriel (Тирдас, 17 Последнего зерна) | earth (Вторник, 17 августа).
+markDateStyle = "tamriel"
+# In-game date on top of a death mark's bubble.
+deathDateHeader = true
+# The same above notes.
+noteDateHeader = false
+# Colour of that date line.
 markDateColor = "#A9A69B"
 
 # Written by the plugin, never sent to the server. IDs are scoped by the
 # server address "ip:port": an account ID is unique only within its server.
+# Streamer-mode pseudonyms given to accounts (at most 4096, the newest kept):
 # [[names.aliases]]
 # server = "127.0.0.1:8778"
 # id = "42"
 # name = "Страж 2"
 #
+# The personal ignore list (the «Игнор» panel; at most 1000, the newest kept):
 # [[names.ignored]]
 # server = "127.0.0.1:8778"
 # id = "7"

@@ -1,23 +1,37 @@
 # Protocol Buffers Handbook для MMO Chat проекта
 
-> Статус на 26.09.2026: справочник и примеры, не перечень готовых подсистем.
-> [Текущие решения](CurrentStateRu.md) определяют MVP и имеют приоритет над
-> ранними примерами ниже. Тесты находятся в `tests`, общий запуск:
-> `python Scripts/run_tests.py`.
+> Статус на 01.10.2026: общий справочник по protobuf с ранними примерами (§4–§15), не
+> описание текущей схемы. Реальный контракт — `Protocol/*.proto`, версия 15, и
+> [Protocol/README.ru.md](../Protocol/README.ru.md); раздел ниже перечисляет файлы.
+> [Текущие решения](CurrentStateRu.md) имеют приоритет над ранними примерами. Тесты
+> находятся в `tests`, общий запуск: `python Scripts/run_tests.py`.
 
 ## Реальный контракт проекта
 
-Source of truth — `Protocol/*.proto`: `network.proto` с DisconnectReason и
-`common.proto`, `chat.proto`, `player.proto`, `session.proto`, `protocol.proto`
-для прикладных сообщений и оболочек. Генерацию C++ и C# выполняет `Scripts/generate_protocol.py`.
-`Dreamsleeve.Protocol.Dotnet` содержит generated C# и Google.Protobuf, а
+Source of truth — `Protocol/*.proto`. У прикладных файлов общий package
+`Dreamsleeve.Protocol.Chat`, у `network.proto` — `Dreamsleeve.Protocol.Network`; суффикса
+`v1` и `csharp_namespace` нет:
+
+| Файл | Содержимое |
+|---|---|
+| `protocol.proto` | Оболочки `ClientPacket`/`ServerPacket` (`protocol_version`, `request_id`, `oneof payload`), `ClientMovementPacket`/`ServerMovementPacket`, общий `RequestRejectionCode` |
+| `session.proto` | Открытие сессии по билету, гость, скрытое имя, смена отображаемого имени, мут и завершение сессии |
+| `chat.proto` | Сообщения, каналы GLOBAL и SYSTEM, объявления и их политика |
+| `player.proto` | Присутствие, персонаж, место, Actor Values, PlayerDetails, движение |
+| `ground.proto` | Метки на земле и игровая дата |
+| `moderation.proto` | Роль, наказания, кик, списки и удаление сообщений и меток |
+| `common.proto` | `PlayerProfile` (в том числе псевдонимный) и `FormKey` |
+| `network.proto` | `DisconnectReason` и фиксированные каналы `DeliveryLane` |
+
+Версия — поле `protocol_version` оболочек: несовместимое изменение повышает её, клиент и
+сервер выпускаются вместе. Генерацию C++ и C# выполняет `Scripts/generate_protocol.py`
+через protoc. `Dreamsleeve.Protocol.Dotnet` содержит generated C# и Google.Protobuf, а
 Dreamsleeve.Protocol.Native — generated C++ и модульную границу. Рецепт
 Grpc.Tools ниже описывает альтернативную настройку, не текущую сборку.
 
-Вход, начальные профили/история, глобальный чат, онлайн и отказы описаны в
+Сообщения, корреляция, каналы и отказы описаны в
 [актуальном контракте](../Protocol/README.ru.md); реализованы C++/F# codec.
-Игровые показания и пагинация ещё не спроектированы. Будущее расширение должно
-отражать CharacterName, FormKey пространства и scalar/resource Actor Values.
+Запроса истории и пагинации нет: хвост каналов приходит в `SessionOpened`.
 Локальные generation/revision/round модели не являются wire sequence.
 
 Примеры из `40059c5:docs/ProtoExamples` — исторический проект широкого
@@ -216,6 +230,9 @@ enum ChatChannelKind {
 ```
 
 Правило: значение `0` оставляйте как `UNSPECIFIED` / `UNKNOWN`.
+
+В `Protocol/chat.proto` сейчас объявлены только `GLOBAL = 1` и `SYSTEM = 5` (канал
+объявлений); номера 2–4 оставлены будущим каналам партии, гильдии и личных сообщений.
 
 ### 7.3. `repeated`
 
@@ -462,6 +479,9 @@ parsed.ParseFromString(buffer);
 
 Для MMO Chat я рекомендую **не гонять на проводе десятки разрозненных top-level сообщений без общего контейнера**, а использовать envelope pattern.
 
+Примеры ниже — ранний эскиз. Реальные оболочки — `Protocol/protocol.proto`: `protocol_version`
+и `request_id` вместо `client_seq`/`server_seq`, отдельные пакеты движения для канала Realtime.
+
 ### 12.1. Клиент → сервер
 
 ```proto
@@ -522,6 +542,10 @@ message ServerPacket {
 ---
 
 ## 13. Рекомендуемая структура `.proto` файлов
+
+Ранний эскиз раскладки; реальные файлы и их содержимое — в разделе «Реальный контракт
+проекта». Party, guild, social, admin и state-файлов нет: админка работает через HTTP в
+процессе сервера, быстрое состояние игрока — в `player.proto`.
 
 ### 13.1. `common/v1/common.proto`
 Общие enum'ы и типы:
@@ -640,6 +664,9 @@ package mmochat.chat;
 ```
 
 Это упростит большие миграции схемы, если когда-нибудь придется делать несовместимый `v2`.
+
+В проекте выбран другой путь: версия — поле `protocol_version` оболочек, несовместимое
+изменение повышает её, а клиент и сервер обновляются вместе.
 
 ### 14.2. Явный `csharp_namespace`
 
@@ -1051,4 +1078,7 @@ enum GuildChatPermission {
 - правила versioning;
 - mapping transport ↔ domain;
 - guidelines по тестовым binary fixtures.
+
+Каталог файлов, сообщения, оболочки, версии и границы проверок уже описаны в
+[Protocol/README.ru.md](../Protocol/README.ru.md).
 

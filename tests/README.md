@@ -1,8 +1,9 @@
 # Тесты Dreamsleeve
 
 Тесты находятся отдельно от production-кода. Одна команда собирает и запускает
-native и managed проекты; нагрузочные измерения и проверка двух настоящих клиентов
-запускаются отдельно.
+native (`tests/Dreamsleeve.Client.Tests`, doctest) и managed (`tests/Dreamsleeve.Server.Tests`,
+Expecto) проекты; тесты веб-UI, smoke-сценарии с настоящими процессами и нагрузочные
+измерения запускаются отдельно.
 
 ```powershell
 python Scripts/run_tests.py
@@ -27,10 +28,10 @@ python Scripts/run_tests.py --suite managed
 |---|---|
 | Client Domain/State/Changes/Exchange | Владение моделью, дельты вместо копирования истории, bounded FIFO команд, снимок/восстановление UI, отсутствие локального эха |
 | Client.Movement | История замеров, джиттер, rotation wrap, остановки, переходы, лимиты и восстановление снимком |
-| Client.Host | Host-модули SKSE-адаптера без Skyrim: JSON bridge (строковые uint64, безопасный текст, команды UI), ui.toml (round trip, нормализация, атомарная запись), Session (снимок только при Ready, корреляция requestId, отказы, проекция онлайна, сброс view, reconnect) |
+| Client.Host, Host.* | Host-модули SKSE-адаптера без Skyrim: JSON bridge (строковые uint64, безопасный текст, команды UI, таблицы и примеры событий для веб-UI), команды UI, ui.toml (правила настроек, round trip, нормализация, атомарная запись), Session (снимок только при Ready, корреляция requestId, отказы, проекция онлайна, сброс view, reconnect), цвета надписей, объявления, фильтр ввода при захвате клавиатуры |
 | DreamNet/Client.Runtime | ENet ownership, лимиты host/peer, коррелированный вход и чат, таймаут/повторный вход, ошибочные и запоздалые ответы |
 | Server Domain/Codec | Правила value objects/хранилищ, bootstrap, доменные ошибки, общий enum отказов, обязательная корреляция, повреждённые пакеты и конфигурация |
-| Agent/Background/Outbox/Lifetimes | Последовательный handler, bounded доставка, отмена, наблюдение Completion, owned children и независимый Watch |
+| Agent/Background/Outbox/AsyncDispatcher/Lifetimes/AgentTicker | Последовательный handler, bounded доставка, фоновые запросы, отмена, наблюдение Completion, owned children и независимый Watch, тикер без догоняющих периодов |
 | Admission | Reliable TryPost Posted/Full/Closed; обычная квота и служебный резерв в одной FIFO; возврат допуска при чтении/остановке; mapped refs |
 | SQLite/Auth/HTTP | Миграции, rollback регистрации, restart профиля, пароль, one-use/expiry билета, роль в билете, переименование, лимиты и HTTP boundaries (`AuthRoutes` на общей обвязке `Server.Web`, прежние ожидания) |
 | Profiles (memory fixture) | Атомарный GetOrCreate, уникальные ID, сохранение офлайн-профиля, асинхронные ответы, полный/закрытый получатель |
@@ -40,6 +41,8 @@ python Scripts/run_tests.py --suite managed
 | Скрытое имя | Домен (псевдоним, словарь, книга: не из имени, номера при совпадении), сессия (подмена во всех проекциях, себе — нет, переключение, лимит, запрет), runtime (байтовая проверка пакетов другому игроку, новый псевдоним при повторном открытии), кодеки, SQLite (миграция 4), конфигурация; native: `NameFor`, проекция в UI, `ui.toml`, корреляция и отказы, кодек, ClientRuntime; UI: vitest и Playwright; `smoke_chat.py` |
 | Админка | Домен (роли, ключи аудита, коды и сессии панели, `AdminPlayerView`), SQLite схемы 5 (миграция поверх 4 и DOWN, уникальность, сроки сессий, токены, роль только для профиля и её чтение при входе, поиск с `%`/`_`, пагинация, аудит, переименование), `AdminService` (одноразовые коды, лимит входа, сброс пароля закрывает сессии, `Busy`, токены), runtime (`ListSessions`, `Describe`, роль вживую и при открытии, переименование), HTTP с фейковыми портами (setup, cookie, Origin, REST, объявление и аудит, CSP и кодирование, лимит входа, `X-Forwarded-*`), конфигурация `[Admin]` |
 | Смена отображаемого имени | Кодек (Trim/NFC, лимит, корреляция), сессия (словарь, текущее имя, одна смена, запрет, интервал), runtime (новое имя у других, у скрытого — побайтно нет), `AuthService`/SQLite (интервал, история); native: кодек, `ClientRuntime`, host; UI: vitest, Playwright; `smoke_chat.py` |
+| Словарь, антиспам, объявления | Нормализация, уровни `[block]`/`[flag]`, корпус ложных срабатываний, лимиты частоты; объявления сервера и клиентов (подпись, каналы, политика, расписание) |
+| Наказания и инструменты модератора | Домен (сроки, причина, ранг), SQLite (замена, истечение, аудит под выдавшим, миграция 9), `AuthService` (мут, бан, кик, список), удаление сообщений и меток, сессия и кодеки; native: `ClientRuntime`; UI: vitest и Playwright; `smoke_moderation.py`. Подробно — [ModerationAndNamesRu](../docs/ModerationAndNamesRu.md#проверки) |
 | PlayerSession | Оба порядка bootstrap, ограниченный буфер, персональная квота RequestId, отказ/подтверждение, независимые показания и очистка подписок |
 | ServerRuntime | Реальный обмен агентов через управляемый транспорт: вход, профильный резерв, адресованные пакеты, disconnect/Completion, старые ответы, дедлайны и Stop |
 | EnetTransport | Настоящий yENet loopback: correlation ID/peer lifetime, reliable channel, размеры и исходящие бюджеты, отключение и очистка |
@@ -50,12 +53,6 @@ PlayerStore/ChatCache/Domain.Chat находятся у их владельце�
 Сохранённые проверки enum/DU не заменяются wildcard: неизвестный payload отклоняется,
 добавочные поля известного payload остаются совместимыми. `ChatAccepted` содержит
 обязательный RequestId; рассылка создаёт обычное входящее сообщение без корреляции.
-
-Старые SessionRegistry/ChatFlow/PlayerAgent/ChatAgent сценарии перенесены к владельцам
-нового пути. Их исходники доступны в `f4eef57`, но второй серверный путь ради тестов
-не собирается. Проверки сравнения ответа с заранее созданным реестром ChatMessage
-убраны: теперь сообщение создаёт сам канал. Сохранены история/курсор/отдельные снимки,
-отказ без изменения истории, профильные ошибки и жизненный цикл показаний игрока.
 
 Функциональные проверки используют gates и конечные ожидания для обнаружения
 зависаний; короткие таймеры — в проверках самих deadline. Они не доказывают все
@@ -75,26 +72,41 @@ dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-
 dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list ChatRoomAgent
 dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list PlayerSession
 dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list ServerRuntime
-dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list EnetTransport
+dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list "ENet transport"
 ```
+
+`--filter-test-list` выбирает списки по подстроке имени; имена — первый аргумент
+`testList` в файлах тестов.
 
 Все managed-проверки: `dotnet run --project tests/Dreamsleeve.Server.Tests -c Release`.
 Это Expecto executable; `dotnet test` не заменяет его запуск. `--no-build` допустим
 только после успешной сборки текущих исходников. `vxmakegen.py` и
 `vxmakegen_modules.py` включают managed-проекты из `src` и `tests` в IDE solution.
 
-## Два настоящих клиента и сервер
+## Настоящий сервер и клиенты (smoke)
 
 ```powershell
 dotnet build src/Dreamsleeve.Server -c Release
 xmake build Dreamsleeve.Client.Dev
 python Scripts/smoke_chat.py
+python Scripts/smoke_moderation.py
+python Scripts/smoke_saved_auth.py
 ```
 
-Скрипт запускает F# ENet сервер и два C++ Client.Dev, проверяет авторитетную публикацию,
-доставку второй стороне, телеметрию автора/наблюдателя и поздний вход,
-сброс персонажа, отключение/повторный вход и завершает дочерние процессы.
-Сборку нужно выполнить заранее. Параметры: `python Scripts/smoke_chat.py --help`.
+Сборку нужно выполнить заранее (сервер Release, Client.Dev в releasedbg); каждый скрипт
+создаёт временную SQLite-базу и конфигурацию, пишет лог в `build/` и завершает дочерние
+процессы на любом пути выхода.
+
+- `smoke_chat.py` — F# ENet сервер и два C++ Client.Dev: авторитетная публикация и доставка,
+  телеметрия автора/наблюдателя и поздний вход, видимость по радиусу и пространству, сброс
+  персонажа, словарь и антиспам, объявления, метки на земле, скрытое имя, смена отображаемого
+  имени, отключение/повторный вход и перезапуск сервера с той же базой (PlayerId, метки).
+  Пароль передаётся через `DREAMSLEEVE_PASSWORD`, после перезапуска login выдаёт свежий билет.
+  Параметры: `--help`.
+- `smoke_moderation.py` — инструменты модератора: отказ без роли, роль из БД, удаление
+  сообщения, мут и снятие, список, метки игрока, кик, бан при входе, строки аудита.
+- `smoke_saved_auth.py` — сохранённый вход через native Core, Credential Manager, HTTP,
+  SQLite и ENet: перезапуск, отзыв живой сессии администратором, сброс пароля.
 
 Ручной запуск:
 
@@ -104,7 +116,8 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 alice --register "Alic
 xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 bob --register "Bob"
 ```
 
-В Client.Dev: `send <text>`, `read`, `disconnect`, `connect`, `quit`.
+Пароль Client.Dev спрашивает в консоли или берёт из `DREAMSLEEVE_PASSWORD`; список команд
+(`send`, `read`, `note`, `hide`, `name`, `mod …` и другие) печатает при старте.
 `--state-demo` остаётся локальной демонстрацией синтетических серверных событий.
 Параметры сервера и TOML: [Core README](../src/Dreamsleeve.Server.Core/README.ru.md).
 
@@ -124,25 +137,12 @@ production-файлы не возвращаются в текущую сборк
 Требует Release-сборки сервера и `Dreamsleeve.Server.NetworkBenchmarks`.
 [Методика, конфигурация и ограничения](Dreamsleeve.Server.NetworkBenchmarks/README.md).
 
-## Происхождение и адаптация архивов
+## Нечисловые координаты
 
-Архивы прочитаны из `F:\downloads`; тесты теперь самостоятельны и для запуска
-этот каталог не нужен. Production-файлы из архивов не копировались поверх проекта.
-
-| Источник | Что использовано |
-|---|---|
-| `Dreamsleeve.Client.Simplified.zip` | Tests.Domain.cpp, Tests.State.cpp — более поздний контракт, чем State.Mvp |
-| `Dreamsleeve.Client.ChatDeltas.zip` | Tests.Changes.cpp — заменяет старый вариант ChangeBatch |
-| `Dreamsleeve.Server.Review.zip` | Domain-тесты уже совпадали с репозиторием; перенесены без изменения проверок |
-| `Dreamsleeve.Agent.NET10.review.zip` | Agent-тесты уже совпадали с репозиторием; заменён только runner на Expecto |
-| Существующий `src/Dreamsleeve.Client.Tests` | Все транспортные тесты перенесены в native-проект |
-
-Единственное изменение ожидаемого поведения архивных domain-тестов: убраны
-ожидания отказа клиентских пространственных функций на NaN/Infinity. Это следует
-из принятого удаления клиентских IsFinite-проверок в `36ea57e`, а не из попытки
-скрыть сбой: конечность входа теперь предусловие. Проверки границы радиуса,
-отрицательного радиуса, разных пространств и точности расчёта сохранены.
-Серверные проверки нечисловых значений остались в DomainTests.
+Клиентские пространственные функции принимают конечные координаты как предусловие
+(проверки IsFinite удалены в `36ea57e`), поэтому ожиданий отказа на NaN/Infinity у них
+нет; проверяются граница и отрицательный радиус, разные пространства и точность расчёта.
+Серверные проверки нечисловых значений находятся в DomainTests.
 
 ## Как добавлять тесты
 
@@ -155,17 +155,13 @@ production-файлы не возвращаются в текущую сборк
 - Для async-гонок использовать управляемую доставку и gates. Все процессы/агенты должны
   завершаться даже после сбоя assertion; нагрузочные измерения не смешивать с unit-тестами.
 
-MSVC/protobuf workaround и проверенные отрицательные компиляции enum/visitor описаны
-в [MsvcProtobufModulesRu.md](../docs/MsvcProtobufModulesRu.md).
+MSVC/protobuf workaround описан в [MsvcProtobufModulesRu.md](../docs/MsvcProtobufModulesRu.md).
 
 Нагрузочные сравнения запускаются отдельно: [методика и скрипт](Dreamsleeve.Server.Benchmarks/README.md), [измеренные результаты](../docs/benchmarks/session-routing-2026-09-27.md).
 
-Auth smoke перезапускает настоящий сервер с той же временной SQLite-базой и проверяет
-сохранение PlayerId. Пароль передаётся через окружение, login выдаёт свежий билет.
-
-Телеметрия v3 проверяется на границах Domain/Codec, PlayerSession/PresenceAgent и
-ClientRuntime: полная замена Sample, scalar zero, ресурсы, rich details, bounded pending,
-отсутствие локального эха, частота Sample, компактное движение без потери метаданных,
+Телеметрия игрока проверяется на границах Domain/Codec, PlayerSession/PresenceAgent и
+ClientRuntime: полная замена actor values, scalar zero, ресурсы, details, bounded pending,
+отсутствие локального эха, компактное движение без потери метаданных,
 сброс поколения и поздняя подписка между обновлением и возвратом к прежнему состоянию.
 
 Область видимости проверяется на границе радиуса, при смене WRLD/CELL, отсутствии
@@ -173,8 +169,8 @@ ClientRuntime: полная замена Sample, scalar zero, ресурсы, ri
 Сетевой smoke проверяет очистку при удалении и восстановление неподвижного источника
 при возвращении наблюдателя, а также отсутствие координат в скрытом PlayerInfo.
 
-Protocol v6: reliable SetLocation/SetActorValues/SetDetails и отдельные repeated
-MovementSample. Managed/native тесты проверяют view/context revisions, старые samples,
+Движение ([контракт](../docs/SpatialReplicationRu.md)): reliable SetLocation/SetActorValues/SetDetails
+и отдельные repeated MovementSample. Managed/native тесты проверяют view/context revisions, старые samples,
 повтор остановившегося игрока, clear/reentry и metadata без отката позиции.
 Транспортные тесты проверяют три канала, MTU, перегрузку и выделенного владельца.
 
@@ -198,8 +194,9 @@ MovementSample. Managed/native тесты проверяют view/context revisi
 
 Многопроцессное сравнение движения запускает `Scripts/benchmark_enet_workers.py`:
 один сервер, одинаковые суммарные клиенты/сокеты, синхронное измерение и проверка
-межпроцессной доставки. [Методика](Dreamsleeve.Server.NetworkBenchmarks/README.md#multiple-load-processes),
-[результаты 1000 клиентов при 20 Гц](../docs/benchmarks/movement-workers-2026-09-27.md).
+межпроцессной доставки. [Методика](Dreamsleeve.Server.NetworkBenchmarks/README.md#multiple-load-processes);
+замеры 1000 клиентов при 20 Гц: [до v6](../docs/benchmarks/movement-workers-2026-09-27.md),
+[v6 и отдельный владелец ENet](../docs/benchmarks/movement-v6-owner-2026-09-27.md).
 
 ## Проверки владельца ENet
 
@@ -226,16 +223,28 @@ HTTP-ответ проверяет, что Disconnect во время регис
 
 Сохранённый вход: `Tests.CredentialStore.cpp` использует уникальную запись Windows
 и удаляет её при завершении; AuthServiceTests проверяет restart, TTL, лимит устройств,
-отзыв билетов и одноразовый reset. SqliteAccountStoreTests проверяет миграцию v1 → v2.
-`python Scripts/smoke_saved_auth.py` проходит полный путь через native Core, Credential
-Manager, HTTP, SQLite и ENet, включая отзыв живой сессии администратором.
+отзыв билетов и одноразовый reset. SqliteAccountStoreTests проверяет миграцию базы
+версии 1 и отказ от более новой схемы. Полный путь — `smoke_saved_auth.py` (выше).
 
 ## Клиентский web UI
 
 `src/Dreamsleeve.Client.UI` имеет отдельные TypeScript/Vitest/Playwright проверки.
-Из его каталога: `npm ci`, `npm test`, `npm run build`, `npm run test:browser`.
-Для Playwright нужен Chromium (`npx playwright install chromium`) либо установленный
-Edge (`$env:UI_BROWSER_CHANNEL='msedge'`). Проверяются публикации/отказы, readonly
-объявления, fade, scroll/unread, геометрия, сохранение dev-настроек и native JS bridge.
+Из его каталога:
+
+```powershell
+npm ci
+npx vitest run                  # то же, что npm test
+npm run build                   # tsc, vite build и проверка игровой сборки
+$env:UI_BROWSER_CHANNEL='msedge'; npx playwright test
+```
+
+`npm run test:browser` сам выполняет сборку и Playwright. Для Playwright нужен Chromium
+(`npx playwright install chromium`) либо установленный Edge (`UI_BROWSER_CHANNEL=msedge`);
+конфигурация поднимает dev-сервер (5178) и preview игровой сборки (5179). Vitest
+(`tests/*.test.ts`) проверяет чат, имена, объявления, модератора, разбор bridge и контракт
+команд/событий (`tests/contract/*.json`: `events.json` пишет native-тест host,
+`commands.json` — vitest, каждая сторона проверяет файл другой); Playwright
+(`tests/browser`) — публикации и отказы, fade, scroll/unread, геометрию и настройки,
+режим стримера, игнор, фильтр слов, метки, скрытое имя, смену имени и инструменты модератора.
 Game build автоматически проверяется на отсутствие dev fixtures и localStorage.
 Это не тест Skyrim/PrismaUI; [граница интеграции](../src/Dreamsleeve.Client.UI/README.ru.md).

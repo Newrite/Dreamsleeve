@@ -1,8 +1,8 @@
 # Сервер: владельцы состояния и сетевой runtime
 
 Сервер запускается через `Dreamsleeve.Server`: SQLite, HTTP(S) authentication, веб-админка,
-ServerRuntime, PlayerSession для каждого соединения, ChatRoomAgent и PresenceAgent.
-Общего прикладного маршрутизатора SessionRegistry больше нет.
+ServerRuntime, PlayerSession для каждого соединения, два ChatRoomAgent (общий и системный
+каналы), PresenceAgent и GroundMarksAgent. Общего прикладного маршрутизатора SessionRegistry больше нет.
 
 ## Владение
 
@@ -14,7 +14,7 @@ ServerRuntime, PlayerSession для каждого соединения, ChatRoo
 | ChatRoomAgent | Членство конкретных соединений, авторство, ID/время сообщения, история и адресная рассылка |
 | PresenceAgent | Онлайн, последние полные снимки игроков, объединение изменений и периодическая репликация |
 | GroundMarksAgent | Все метки на земле, их пространственный индекс, видимые наборы наблюдателей, квоты, частота, срок жизни и запись в хранилище |
-| AuthService | Допуск account-операций и одноразовые билеты с ролью игрока; bounded workers выполняют SQLite и проверку паролей |
+| AuthService | Допуск account-операций (вход, смена имени, наказания, запросы модератора) и одноразовые билеты с ролью и мутом игрока; bounded workers выполняют SQLite и проверку паролей |
 | AdminService | Администраторы, сессии панели, токены API, роли, аудит, поиск игроков; одноразовые коды и попытки входа в памяти, bounded workers `admin-storage` |
 | SessionDescriber | Ретранслятор запросов панели к сессиям: передаёт `ReplyChannel` вызывающего сессии, не дожидаясь ответа |
 | EnetTransport | Адаптер yENet на отдельном TransportOwner, bounded handoff с runtime |
@@ -50,12 +50,12 @@ RequestId — запрос клиента. Вход подтверждается
 
 HTTP register сохраняет учётную запись и профиль одной транзакцией. Login проверяет
 хеш пароля и выдаёт случайный билет с ограниченным сроком жизни. PlayerSession
-погашает его → резервирует PlayerId в runtime → подписывается на чат и онлайн →
-собирает начальные снимки. Профиль берётся из результата аутентификации, а не
+погашает его → резервирует PlayerId в runtime → подписывается на оба канала, онлайн и
+метки → собирает начальные снимки. Профиль берётся из результата аутентификации, а не
 из имени, присланного клиентом. Повторный вход после перезапуска сохраняет
 PlayerId, Username и DisplayName; старые билеты недействительны.
 
-Оба источника формируют snapshot и подписку в одном обработчике. Их следующие
+Каждый источник формирует snapshot и подписку в одном обработчике. Их следующие
 события идут после снимка через тот же последовательный путь. PlayerSession
 собирает снимки, ограниченно буферизует дельты, затем отправляет единый порядок:
 Activate(SessionOpened) → накопленные события → новые события.
@@ -187,8 +187,8 @@ PlayerSession подписывается на оба, открывается п�
   `Announcement` системному каналу; подтверждение — тем же `ChatAccepted`. `SendChat` в
   системный канал получает `INVALID_REQUEST`. Владелец канала заново вид не проверяет:
   это инвариант `Chat.append`, и нарушение останавливает владельца.
-- Лимиты истории и частоты системного канала проверяет `ChatRoomAgent.start`, расписание —
-  `AnnouncementOptions.resolve` при старте runtime; конфигурация их не дублирует.
+- Лимиты истории и частоты системного канала и расписание (`AnnouncementOptions.resolve`)
+  проверяет `GameSettings.create`; `ChatRoomAgent.start` и runtime их не повторяют.
 - Приветствие несёт каналы с видом и хвостом и `AnnouncementPolicy` (разрешённые
   источники и лимиты).
 - Имена `server` и `system` зарезервированы при регистрации (`Moderation.reservedUsername`).
@@ -213,7 +213,7 @@ Runtime после завершения сессии шлёт `Detach` и мет
 (`RateLimit` для надписей, интервал для смертей → `RATE_LIMITED`), плотность ячейки
 (`GROUND_MARK_AREA_FULL`), квоту с вытеснением, выдаёт id, пишет `Insert`/`Delete` и
 отвечает `Placed` (id вытесненной); наблюдатели, включая автора, получают дельту.
-`Remove` — только своя метка (`GROUND_MARK_NOT_FOUND`). Дельты (`Changed`):
+`Remove` — своя метка, у модератора — любая (иначе `GROUND_MARK_NOT_FOUND`). Дельты (`Changed`):
 при смене ячейки — добавлены/удалены, при смене пространства/поколения или потере
 позиции — `clear` и baseline; пустой baseline не отправляется. Истёкшие метки снимает
 тикер `ExpiryCheckIntervalMs` и первый шаг после старта.
@@ -239,9 +239,9 @@ Runtime после завершения сессии шлёт `Detach` и мет
   `None` до получения профиля. HTTP-обработчик спрашивает все сессии параллельно через
   `SessionDescriber` с таймаутом 1 с; неответившая строка остаётся «без данных». `Describe`
   — обычное сообщение: переполненная сессия не отвечает, но и не закрывается.
-- Роль: `SessionAuthenticationReply` несёт `AuthenticatedPlayer { Profile; Role }` (роль читается
-  из `player_roles` при входе и resume и хранится в билете). `SetPlayerRole(playerId, role)` —
-  после записи в БД: runtime запоминает её в `SessionTable.Roles` и передаёт
+- Роль: `SessionAuthenticationReply` несёт `AuthenticatedPlayer { Profile; Role; Mute }` (роль
+  читается из `player_roles`, действующий мут — из `sanctions` при входе и resume; оба хранятся
+  в билете). `SetPlayerRole(playerId, role)` — после записи в БД: runtime запоминает её в `SessionTable.Roles` и передаёт
   `PlayerSessionMessage.RoleChanged` сессии, держащей резерв PlayerId; сессия, резервирующая
   PlayerId позже, получает её сразу после `IdentityAdmission.Reserved` в своей FIFO.
 - Переименование: `AuthService.RenamePlayer` пишет БД, затем `RenamePlayer(profile)` —
@@ -249,9 +249,9 @@ Runtime после завершения сессии шлёт `Detach` и мет
   `Moderation.publicProfile`, отправляет `SessionHostCommand.UpdateProfile` (runtime обновляет
   книгу имён, сохраняя псевдоним) и `PresenceCommand.Update`; `identityEqual` превращает смену в
   `PlayerUpdated`. У скрытого игрока публичная личность не меняется, новое имя никуда не уходит.
-  Новые сообщения чата несут новое имя; `GroundMarksAgent` берёт профиль автора из подписки,
-  поэтому метки без псевдонима покажут его после переподключения.
-- `RoleChanged`/`ProfileChanged` — служебные сообщения сессии (резерв mailbox);
+  Новые сообщения чата несут новое имя; `GroundMarkCommand.Rename` обновляет профиль автора у
+  владельца меток, и метки без псевдонима уходят клиентам уже с ним.
+- `RoleChanged`/`ProfileChanged`/`MuteChanged` — служебные сообщения сессии (резерв mailbox);
   `ListSessions`/`SetPlayerRole`/`RenamePlayer` — обычные сообщения runtime.
 - Объявление панели — тот же `ServerRuntimeMessage.Announce`, что у консоли.
 
@@ -279,7 +279,7 @@ Runtime после завершения сессии шлёт `Detach` и мет
 
 `ClientCommand.ChangeDisplayName` (кодек уже применил `DisplayName.create`) → runtime пересылает
 `PlayerSessionMessage.ChangeDisplayName` Ready-сессии. Сессия отказывает сама
-(`DISPLAY_NAME_CHANGE_NOT_ALLOWED`, `OVERLOADED` при ожидающей смене, `TEXT_NOT_ALLOWED`), текущее
+(`MUTED`, `DISPLAY_NAME_CHANGE_NOT_ALLOWED`, `OVERLOADED` при ожидающей смене, `TEXT_NOT_ALLOWED`), текущее
 имя подтверждает сразу, иначе отправляет `DisplayNameChangeRequest` по
 `SessionAuthenticator.DisplayNames` (outbox на одно место). `AuthService` хранит имя и считает
 интервал (`TooSoon` → `RATE_LIMITED` с минутами), ответ `DisplayNameReplied` — служебное сообщение
@@ -294,12 +294,12 @@ Runtime после завершения сессии шлёт `Detach` и мет
 
 | Уровень | Runtime и сессия |
 |---|---|
-| Information | Вход в игру (PlayerId, username, сессия, режим скрытия, онлайн), выход с длительностью, смена режима скрытия; причина закрытия сессии; соединение без открытой сессии к дедлайну; отзыв доступа; второй вход того же игрока; остановка runtime; отказы `TEXT_NOT_ALLOWED` и `RATE_LIMITED`; имя персонажа, скрытое словарём |
+| Information | Вход в игру (PlayerId, username, сессия, режим скрытия, онлайн), выход с длительностью, смена режима скрытия; причина закрытия сессии; соединение без открытой сессии к дедлайну; закрытие сессий игрока по отзыву доступа, бану или кику; второй вход того же игрока; остановка runtime; отказы `TEXT_NOT_ALLOWED` и `RATE_LIMITED`; имя персонажа, скрытое словарём |
 | Warning | Сервер полон (`MaxSessions`), перегрузка (`OVERLOADED`, полный вход сессии), нераскодированный пакет или запрос не в своём канале — соединение закрывается; сессия открылась после дедлайна |
 | Debug | Каждый отказ с кодом, полем и текстом ответа; принятое соединение; гость и его отключение; открытие и аутентификация сессии; роль и переименование из панели |
 
-`GroundMarksAgent` пишет размещение и удаление меток, `AuthService` — входы, регистрации и смену
-имени.
+`GroundMarksAgent` пишет размещение и удаление меток (в том числе модератором), `AuthService` — входы,
+регистрации, смену имени, наказания, их снятие и кики.
 
 Команда проходит два шага: `route` определяет, открывает ли она сессию, оставляет ли соединение
 гостем (`JoinAsGuest`) или адресована открытой сессии (`PlayerSessionMessage`), а правила фаз
@@ -311,7 +311,7 @@ Runtime после завершения сессии шлёт `Detach` и мет
 Сервис аккаунтов сообщает runtime `ServerRuntimeMessage.AccountChanged`: отзыв доступа и бан
 закрывают сессии игрока и все открывающиеся (погашенный билет может быть ещё в пути), перед
 закрытием игрок получает `SessionEnded` с причиной; `MuteChanged` запоминается в
-`SessionTable.Mutes` и доходит до живой сессии. `KickPlayer` закрывает только сессию игрока.
+`SessionTable.Mutes` и доходит до живой сессии. `Kicked` закрывает только сессию игрока.
 `PlayerSession` хранит мут из билета и проверяет его перед чатом, объявлением, надписью и сменой
 имени (`MUTED`); метка смерти мутом не останавливается. Новая команда
 добавляется одной строкой в `route`. Отказ кодека формулирует `ProtocolCodec.rejection`, канал
@@ -383,9 +383,9 @@ Reset неответившего peer и завершает учёт соеди�
 выход закрытых соединений. Источники завершаются после cleanup сессий, transport
 освобождается после фактического Completion runtime.
 
-После остановки HTTP и игрового runtime AuthService дожидается принятых workers.
-Только затем закрываются зависимости и логирование. SQLite сохраняет профили;
-онлайн, чат и билеты остаются в памяти. Hot reload и HTTP-админка не добавлены.
+После остановки HTTP и игрового runtime AdminService и AuthService дожидаются принятых workers.
+Только затем закрываются зависимости и логирование. SQLite сохраняет профили, метки, роли,
+наказания и данные панели; онлайн, чат и билеты остаются в памяти. Hot reload нет.
 
 ## Запуск и конфигурация
 
@@ -415,28 +415,28 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --register "Pla
 `Configuration.defaults` и значения, и полноту. Консоль сервера также принимает
 `admin-setup` и `admin-reset <имя>` (одноразовые коды панели печатаются только в консоль).
 Пароль вводится скрыто; после регистрации запускайте без --register. В сетевом Client.Dev доступны
-`send <text>`, `announce <trusted|third> <kind> <signature|-> <text>`, `hide <on|off>`, `read`, команды наблюдений персонажа,
-`disconnect`, `connect`, `quit`; сервер завершается по `quit` или Ctrl+C, `announce <текст>` в его консоли публикует
-объявление администратора. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
+`send <text>`, `announce <trusted|third> <kind> <signature|-> <text>`, `hide <on|except-marks|off>`,
+`name <имя>`, `read`, команды наблюдений персонажа, меток (`note`, `death`, `unmark`, `marks`) и
+модератора (`mod …`), `disconnect`, `connect`, `quit`; сервер завершается по `quit` или Ctrl+C,
+`announce <текст>` в его консоли публикует объявление администратора. Для нескольких игроков запускаются несколько Client.Dev с разными именами.
 
 TOML читается при запуске; можно переопределить часть секций Server/Runtime/Database/Authentication/Admin/Logging/Moderation/Identity/Announcements/GroundMarks.
 Горячей перезагрузки нет ни у `server.toml`, ни у `moderation.toml`, ни у `pseudonyms.toml`: изменения, включая `[Announcements]`, действуют после перезапуска.
 `[Identity]`: `AllowHiddenIdentity` (true), `ToggleIntervalMs` (30000, 0 — без лимита), `PseudonymsPath`
-(`pseudonyms.toml`; отсутствующий или повреждённый файл — встроенные 24 имени с предупреждением).
+(`pseudonyms.toml`; отсутствующий или повреждённый файл — встроенные 24 имени с предупреждением),
+`AllowDisplayNameChange` (true) и `DisplayNameChangeIntervalMinutes` (1, 0 — без лимита) для смены имени из игры.
 Массивы таблиц поддержаны только для `[[Announcements.Scheduled]]`; каждая запись начинается со значений по умолчанию.
 Неуказанные параметры сохраняют значения по умолчанию; неизвестные поля отклоняются.
-`--port` имеет приоритет над файлом. ServerConfig проверяет согласованность transport
-и codec, MaxSessions укладывается в PeerLimit/MaxInitialPlayers, история — в
-MaxRecentMessages. `Server.PlayerInput` задаёт пределы строк игровых данных и
+`--port` имеет приоритет над файлом. `ServerConfig.validate` проверяет согласованность transport
+и codec, `GameSettings.create` — что MaxSessions укладывается в PeerLimit/MaxInitialPlayers, а история
+чата и объявлений — в MaxRecentMessages. `Server.PlayerInput` задаёт пределы строк игровых данных и
 `MaxActorValues` (по умолчанию 64), `Runtime.Player.MaxPendingUpdates` — личный
 выход в Presence (16), `Runtime.Presence.ReplicationIntervalMs` — интервал объединения
 изменений (50 мс, 20 Гц). Очереди и интервалы проверяются при запуске. Лимиты не согласуются
 между клиентом и сервером по сети.
 
-См. [схему протокола](../../../Protocol/README.ru.md),
-[тесты](../../../tests/README.md), [план и расхождения](../../../docs/SessionArchitecturePlanRu.md).
-
-См. [вход, хранение и зависимости](../../../docs/AuthenticationRu.md).
+См. [схему протокола](../../Protocol/README.ru.md), [тесты](../../tests/README.md),
+[вход, хранение и зависимости](../../docs/AuthenticationRu.md).
 
 ### Область доставки позиций
 
@@ -453,7 +453,7 @@ Presence хранит view revision только для текущих види�
 пар), плотная группа всё ещё требует O(N²) данных и работы.
 
 ProtocolCodec классифицирует Control/Chat/Realtime и вызывает внутренние
-ChatCodec/PlayerCodec/SessionCodec. [Контракт репликации](../../docs/SpatialReplicationRu.md).
+ChatCodec/PlayerCodec/SessionCodec/GroundMarkCodec/ModerationCodec. [Контракт репликации](../../docs/SpatialReplicationRu.md).
 
 TransportOwner непрерывно обслуживает ENet на одном потоке и уведомляет runtime
 о готовых событиях. Период runtime обслуживает deadlines и резервный drain,

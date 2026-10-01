@@ -1,54 +1,106 @@
 # client.toml of the plugin (Data/SKSE/Plugins/Dreamsleeve) and of Client.Dev --config:
 # every key with its default. Omitted keys keep the default; keys are case-sensitive.
-# The plugin writes this file on first run; ranges are checked at start
-# (Configuration::InvalidSetting). Chat, name and mark looks live in ui.toml.
+# The plugin writes this file on first run and never rewrites it; ranges are checked
+# at start (Configuration::InvalidSetting); with an invalid file the plugin does not start
+# and DreamsleeveClient.log names the reason. Chat, name and mark looks live in ui.toml.
+# Usually only serverIp, serverPort and authUrl change: the server owner publishes them.
+# "World units" are Skyrim game units: about 1.43 cm, an exterior cell is 4096.
+
+# File format version; must be 1.
 version = 1
+# Game server address: an IPv4 literal such as "203.0.113.10" (host names are not resolved).
 serverIp = "127.0.0.1"
+# Game server UDP port, 1..65535 (the server's [Server] Port).
 serverPort = 8778
+# Origin of the account service: "https://host[:port]" with no path, e.g. "https://auth.example.org".
+# Plain "http://" only for 127.0.0.1/localhost unless allowInsecureRemoteAuth = true.
+# The certificate must be trusted by Windows; redirects are never followed.
 authUrl = "http://127.0.0.1:8779"
+# true allows plain HTTP to a remote authUrl: passwords and tokens travel unencrypted. Tests only.
 allowInsecureRemoteAuth = false
+# Commands queued from the game thread to the network thread, >= 1.
 commandCapacity = 8
+# State updates queued from the network thread to the game thread, >= 1.
 stateCapacity = 8
 
 [client]
+# Wait for the ENet connection to the server, milliseconds, >= 1.
 connectTimeoutMs = 5000
+# Wait for a graceful ENet disconnect, milliseconds, >= 1.
 disconnectTimeoutMs = 2000
+# Wait for the server to open the game session after sign-in, milliseconds, >= 1.
 sessionTimeoutMs = 5000
+# Players accepted in the session-opening snapshot, 1..2147483647;
+# at least the server's [Server] MaxInitialPlayers.
 maxInitialPlayers = 4096
+# Messages per channel accepted in the snapshot, 0..2147483647;
+# at least the server's [Server] MaxRecentMessages.
 maxRecentMessages = 512
+# Messages kept per chat channel on the client, >= 1.
 chatCapacity = 512
+# Own requests waiting for the server's answer (chat, notes, moderation, deletions), >= 1.
 maxPendingChatRequests = 32
+# Own character updates waiting for the server's answer, >= 1.
 maxPendingPlayerUpdates = 32
+# Actor values accepted per player, 1..2147483647; at least the server's MaxActorValues.
 maxActorValues = 64
+# How often the character's pose and state are sampled and sent, milliseconds, >= 1 (50 = 20 Hz).
 playerSampleIntervalMs = 50
+# Other players within this many world units get a firefly, >= 0. The server sends
+# nothing beyond its own [Runtime.Presence] VisibilityDistance.
 visibilityDistance = 8192
+# true shows other players as fireflies.
 showFireflies = true
-# STAT base form: plugin-local ID, without the load-order prefix.
+# Firefly: a STAT base form given as the plugin file name and a plugin-local form ID
+# (1..0xFFFFFF, without the load-order prefix).
 fireflyPlugin = "Skyrim.esm"
+# Plugin-local form ID of the firefly static.
 fireflyFormId = 0x02EB0F
-fireflyScale = 0.25 # 0.01..10.0; engine precision is 0.01
-captureKeyboard = true # Keep keyboard events from the game and other SKSE mods while the chat is open
+# Firefly scale, 0.01..10.0; engine precision is 0.01.
+fireflyScale = 0.25
+# true keeps keyboard events from the game and other SKSE mods while the chat is open.
+captureKeyboard = true
 # Ground marks: STAT base forms without collision, plugin-local IDs. Defaults are
 # flat vanilla glow discs (FXGlowFlatRndBrt / FXGlowFlatRndDim); a missing form
 # disables that kind of mark with an error in the log.
+# Note marker: plugin file name.
 groundNotePlugin = "Skyrim.esm"
+# Note marker: plugin-local form ID, 1..0xFFFFFF.
 groundNoteFormId = 0x075DDB
-groundNoteScale = 0.5 # 0.01..10.0
+# Note marker scale, 0.01..10.0.
+groundNoteScale = 0.5
+# Death marker: plugin file name.
 deathMarkPlugin = "Skyrim.esm"
+# Death marker: plugin-local form ID, 1..0xFFFFFF.
 deathMarkFormId = 0x075DD9
-deathMarkScale = 0.5 # 0.01..10.0
+# Death marker scale, 0.01..10.0.
+deathMarkScale = 0.5
+# Movement samples buffered for the game thread, >= 1; overflow resynchronizes the view.
 maxPendingMovementSamples = 4096
 
+# ENet host of the client.
 [client.network]
+# Must be 1: one connection to one server.
 maxPeers = 1
+# ENet channels, 3..255; the protocol uses 3.
 channelLimit = 3
+# Incoming bandwidth limit, bytes per second; 0 = unlimited.
 inBwLimit = 0
+# Outgoing bandwidth limit, bytes per second; 0 = unlimited.
 outBwLimit = 0
+# Largest packet, bytes, 1..2147483647; the same as the server's [Server] MaxPacketBytes.
 maxPacketBytes = 1048576
+# Data waiting for reassembly, bytes, >= maxPacketBytes.
 maxWaitingData = 33554432
 
+# Smoothing of other players' movement between samples.
 [interpolation]
+# Players are drawn this far behind the newest sample, milliseconds, >= 0.
 delayMs = 150
+# A longer pause between samples snaps instead of interpolating, milliseconds,
+# greater than delayMs, at most 3600000.
 maxGapMs = 1000
+# Samples kept per player, >= 2.
 historyCapacity = 32
+# A jump longer than this snaps (teleport), world units, > 0.
 teleportDistance = 2048

@@ -191,6 +191,12 @@ kRecover) пишется в kTemporary (`Func32` → `damageav(1, …)`), пос
    - vtable-хук `KillImpl` — не даёт ничего сверх `TESDeathEvent`, но добавляет риск;
    - перерегистрация Papyrus-нативов — покрывает только скриптовый путь.
 
+Клиент следует пп. 1–2 ([SkseClientRu.md](SkseClientRu.md#телеметрия)): HP/MP/SP игрока
+опрашиваются из кадра каждые 250 мс и уходят при изменении больше 0.05, без heartbeat (максимум —
+`GetPermanentActorValue + GetActorValueModifier(kTemporary)`); sink `TESDeathEvent` кладёт в
+очередь только флаг `dead` и handle убийцы, кадр ускоряет следующий опрос и ставит метку места
+смерти. `TESEnterBleedoutEvent` не используется.
+
 Что не проверено: путь через BSTaskPool, регенерация и формула HUD — только на SE (на AE/VR
 предполагаются такими же); сериализация `kSetOnDeath` в сохранение; AE-отправители TESHitEvent
 по отдельности; VR-адреса взяты из таблицы соответствия SE→VR и подтверждены по структуре функций.

@@ -1,33 +1,38 @@
 # Технический handbook проекта MMO Chat / Social Server
 
-> Статус на 27.09.2026: справочник и примеры, не перечень готовых подсистем.
-> [Текущие решения](CurrentStateRu.md) определяют MVP и имеют приоритет над
-> ранними примерами ниже. Тесты находятся в `tests`, общий запуск:
-> `python Scripts/run_tests.py`.
+> Статус на 01.10.2026: справочник по стеку с ранними примерами (§4–§17), не описание
+> текущего кода. Реализованное устройство — раздел ниже и документы по ссылкам в нём;
+> [текущие решения](CurrentStateRu.md) имеют приоритет над ранними примерами. Тесты
+> находятся в `tests`, общий запуск: `python Scripts/run_tests.py`.
 
 ## Текущая структура и стек
 
 Сервер — F#/.NET 10+, yENet 1.2.1, домен с UMX и агенты Channels/Task.
 Клиент — C++23/MSVC/xmake, native ENet 1.3.18; Core независим от Skyrim,
-Client предназначен для SKSE/PrismaUI. Кодеки и ENet runtime подключены на обеих
-сторонах; сервер запускает PlayerSession, ChatRoomAgent и PresenceAgent.
+Client — SKSE-плагин с PrismaUI, UI — TypeScript/React (`src/Dreamsleeve.Client.UI`).
+Кодеки и ENet runtime подключены на обеих сторонах; сервер запускает PlayerSession,
+ChatRoomAgent, PresenceAgent и GroundMarksAgent, AuthService и AdminService.
 Актуальные контракты: [Server.Core](../src/Dreamsleeve.Server.Core/README.ru.md).
 
-Protobuf генерируется `Scripts/generate_protocol.py` из `Protocol/*.proto`
-в Native и Dotnet проекты; схемы — common/chat/player/session/protocol и network (DisconnectReason).
-[Прикладной контракт](../Protocol/README.ru.md) описывает текущий срез.
-Grpc.Tools из ранних примеров не подключён к текущему csproj.
+Protobuf генерируется `Scripts/generate_protocol.py` (protoc) из `Protocol/*.proto`
+в Native и Dotnet проекты; схемы — common/chat/player/session/ground/moderation/protocol
+и network (DisconnectReason, DeliveryLane). [Прикладной контракт](../Protocol/README.ru.md)
+описывает текущую версию. Grpc.Tools из ранних примеров не подключён.
 
-Подключены SQLite + SqlHydra 5 + Migrondi, ASP.NET Identity PasswordHasher и
-Serilog (ILogger, console/JSON file). AuthService обслуживает register/login и
-одноразовые билеты ENet. JSON остаётся действующим форматом конфигурации.
+Подключены SQLite (Microsoft.Data.Sqlite) + SqlHydra 5 + Migrondi.Core, ASP.NET Identity
+PasswordHasher, Serilog (ILogger, console/JSON file), Tomlyn и Falco + Falco.Markup +
+Falco.Htmx. AuthService обслуживает регистрацию, вход, сохранённый вход, сброс пароля,
+наказания и одноразовые билеты ENet; AdminService — веб-админку
+([AdminPanelRu.md](AdminPanelRu.md)). Схема SQLite — [db/README.md](../db/README.md).
+Конфигурация сервера — TOML (`server.toml`, образец
+`src/Dreamsleeve.Server/server.example.toml`), клиента — TOML через glaze.
 [Актуальные пакеты и причины отложить остальные](AuthenticationRu.md).
-Примеры Fling, Falco, TOML и расширенных logging adapters ниже — варианты будущего
-развития, а не требования установить все пакеты. SQL-примеры старых API следует
-сверять с SqlHydra 5 и текущим SqliteAccountStore, без SqlKata.
+Fling, FSharp.Logf, FsToolkit.ErrorHandling, Serilog.Settings.Configuration и
+Tomlyn.Extensions.Configuration из примеров ниже не подключены. SQL-примеры старых API
+следует сверять с SqlHydra 5 и текущими `Sqlite*Store`, без SqlKata.
 
-Тесты: `tests/Dreamsleeve.Client.Tests` (doctest) и
-`tests/Dreamsleeve.Server.Tests` (Expecto + Faqt, наборы Agent/Domain/Codec).
+Тесты: `tests/Dreamsleeve.Client.Tests` (doctest), `tests/Dreamsleeve.Server.Tests`
+(Expecto + Faqt), vitest и Playwright в `src/Dreamsleeve.Client.UI`.
 См. [общий запуск](../tests/README.md) и [корневой README](../README.md).
 
 ## Статус документа
@@ -59,6 +64,10 @@ Serilog (ILogger, console/JSON file). AuthService обслуживает registe
 ---
 
 ## 2. Зафиксированный стек
+
+Исходный план. Фактически подключённые пакеты перечислены в «Текущей структуре и стеке»
+выше: protobuf генерирует protoc, TOML читает Tomlyn напрямую, Fling, FSharp.Logf,
+FsToolkit.ErrorHandling и конфигурация Serilog из `IConfiguration` не используются.
 
 ### Сервер / .NET / F#
 - ENet transport: `Molth/enet-csharp`, выбран слой `yENet`
@@ -129,6 +138,11 @@ Serilog (ILogger, console/JSON file). AuthService обслуживает registe
 ---
 
 ## 4. Исходный эскиз расширенной структуры (после MVP)
+
+Фактические проекты — `src/Dreamsleeve.*`: Server (composition root и TOML), Server.Core,
+Server.Domain, Server.Infrastructure (SQLite, ENet, AuthService, AdminService), Server.Web
+(`/auth/*` и админка), Agent, Protocol.Dotnet/Native, Client.Core, Client, Client.Dev,
+Client.UI; `.proto` — в `Protocol`, миграции — в `db/migrations`. Ниже — ранний эскиз.
 
 Примерный ориентир:
 
@@ -288,6 +302,9 @@ shutdown:
 
 Если later понадобится, можно расширять, но стартовать лучше с минимального числа каналов.
 
+В проекте три канала `DeliveryLane` (`Protocol/network.proto`): Control 0 и Chat 1 —
+reliable, Realtime 2 — позы без подтверждений; см. [SpatialReplicationRu.md](SpatialReplicationRu.md).
+
 ### 5.6. Common mistakes на C++ стороне
 - забыли инициализировать ENet глобально
 - забыли уничтожить packet после receive
@@ -416,6 +433,10 @@ module Transport =
 ---
 
 ## 8. Логирование и конфиги на F#
+
+Сейчас сервер настраивает Serilog в коде (`src/Dreamsleeve.Server/Logging.fs`) по секции
+`[Logging]` своего `server.toml`; `IConfiguration`, секция `[Serilog]` и FSharp.Logf из
+примеров ниже не используются. Что пишется в лог — [AuthenticationRu.md](AuthenticationRu.md).
 
 ### 8.1. Рекомендуемый стек
 - `FSharp.Logf`
@@ -558,6 +579,11 @@ let example (logger: ILogger) playerId =
 - `appsettings.local.toml` — локальные override’ы вне git
 - `logging.toml` — опционально отдельно, если конфиг большой
 
+В проекте: один `server.toml` (`--config`; `--write-config` пишет значения по умолчанию,
+образец с комментариями — `src/Dreamsleeve.Server/server.example.toml`; неизвестные ключи
+останавливают запуск), рядом словари `moderation.toml` и `pseudonyms.toml`. Всё читается при
+запуске, hot reload нет.
+
 ### 9.5. Common mistakes
 - пытаться сделать TOML “мини-БД”
 - хранить там большие списки, которые лучше лежат в SQL
@@ -566,6 +592,10 @@ let example (logger: ILogger) playerId =
 ---
 
 ## 10. SQLite + SQLHydra + Migrondi
+
+Реальная схема — миграции `db/migrations/{timestamp}_{name}.sql` (Migrondi V1, UP и DOWN в
+одном файле), их применяет Migrondi.Core при старте сервера; описание таблиц и генерация
+SqlHydra — [db/README.md](../db/README.md). Имена и таблица в примерах ниже — ранний эскиз.
 
 ### 10.1. Роли инструментов
 - `SQLite` — база
@@ -786,10 +816,11 @@ TEST_CASE("client starts disconnected") {
 
 ## 13. Минимальная админка: Falco + Falco.Markup + Falco.Htmx
 
-> Статус на 30.09.2026: реализована в процессе сервера — `src/Dreamsleeve.Server.Web` (общая
+> Статус на 01.10.2026: реализована в процессе сервера — `src/Dreamsleeve.Server.Web` (общая
 > HTTP-обвязка, `/auth/*`, SSR-панель на Falco.Markup + вендоренный htmx, REST только чтение),
-> `AdminService` и схема 5 в SQLite, консольные `admin-setup`/`admin-reset`. См.
-> [AdminPanelRu.md](AdminPanelRu.md).
+> `AdminService`, таблицы админки в SQLite, консольные `admin-setup`/`admin-reset`. Панель
+> показывает онлайн и игроков, меняет роль и имя, сбрасывает пароль, наказывает и кикает,
+> публикует объявления, ведёт аудит; гильдий и партий нет. См. [AdminPanelRu.md](AdminPanelRu.md).
 
 ### 13.1. Назначение админки
 - просмотр состояния сервера
@@ -922,6 +953,11 @@ TEST_CASE("client starts disconnected") {
 - admin operations handbook
 - logging and diagnostics policy
 - testing strategy handbook
+
+Уже есть: протокол — [Protocol/README.ru.md](../Protocol/README.ru.md), схема SQLite —
+[db/README.md](../db/README.md), вход, восстановление и логирование —
+[AuthenticationRu.md](AuthenticationRu.md), админка — [AdminPanelRu.md](AdminPanelRu.md),
+тесты — [tests/README.md](../tests/README.md).
 
 ---
 

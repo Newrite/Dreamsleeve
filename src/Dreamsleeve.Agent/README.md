@@ -26,6 +26,8 @@ dotnet run --project src/Dreamsleeve.Agent/examples/Dreamsleeve.Agent.Examples.f
 dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list Dreamsleeve.Agent
 ```
 
+The remaining library checks are the `Background`, `Outbox`, `AsyncDispatcher`, `Admission`, `Lifetimes` and `AgentTicker` lists of the same project.
+
 The example program runs a base outbound worker, immutable party state, and mutable presence snapshots. It produces deterministic output and shuts down all agents. Source files: [Outbound.fs](examples/Outbound.fs), [Party.fs](examples/Party.fs), [Presence.fs](examples/Presence.fs).
 
 ## Minimal request/reply
@@ -144,6 +146,10 @@ commands and do not guarantee processing, deduplication or exactly-once effects.
 PipeToSelf remains available for background operations whose result the owner needs,
 while child observation uses Own/Watch; ordinary sends no longer require it.
 
+A ready outbox send uses synchronous admission when earlier sends have finished.
+While waiting for space it takes the bounded tracked path; the mapper runs once.
+A finished send means admission, not processing by the destination.
+
 ## Request/reply handlers
 
 `AgentOutbox.createHandler capacity output execute` creates an ordered request/reply
@@ -254,4 +260,14 @@ Control traffic remains bounded. This mailbox reserve does not reserve capacity 
 an outgoing AgentOutbox: its owner must separately bound ordinary pending operations,
 leave slots for Stop/Detach in the same ordered outbox, and stop ordinary admission
 before shutdown. Independent concurrent writers are ordered by actual admission,
-not by when their PostAsync calls started.
+not by when their PostAsync calls started. The shared admission notification TCS is
+created only when writers actually wait.
+
+## Periodic ticker
+
+`AgentTicker.start interval context toMessage` creates one owned PeriodicTimer.
+The owner calls `Acknowledge()` after handling a tick; until then further periods
+are coalesced, and missed periods are skipped rather than caught up in a burst. The
+callback only builds a message and never reads the agent's mutable state. It needs a
+non-dropping mailbox. Complete/Abort stop the worker. `startWithTimeProvider` tests the
+schedule without wall-clock sleeps. AgentTick timestamps come from the TimeProvider.

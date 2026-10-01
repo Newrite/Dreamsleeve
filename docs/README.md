@@ -1,67 +1,74 @@
 # Документация Dreamsleeve
 
-Начать с [CurrentStateRu.md](CurrentStateRu.md): решения из обсуждения «Языки для ENet»
-и состояние исходников на 28 сентября 2026 года. Документ отделяет принятые
-контракты от предложений для будущих слоёв.
+Начать с [CurrentStateRu.md](CurrentStateRu.md): что реализовано, принятые решения и открытые
+вопросы. Владельцу сервера — сразу [DeploymentRu.md](DeploymentRu.md).
 
-| Документ | Статус и назначение |
+## Развёртывание и эксплуатация
+
+| Документ | Назначение |
 |---|---|
-| [План разделения SessionRegistry](SessionArchitecturePlanRu.md) | Исходный план на основе `f4eef57`; ниже зафиксированы реализованные имена и изменения политики |
-| [ProductSpecRu.MD](ProductSpecRu.MD) | Текущий MVP и более широкое продуктовое видение |
-| [DomainSpecRu.MD](DomainSpecRu.MD) | Имена, пространство, показания, чат и будущие социальные правила |
+| [Развёртывание сервера](DeploymentRu.md) | Сборка, systemd, nginx и TLS, параметры, ёмкость, резервные копии, что раздать игрокам |
+| [Авторизация](AuthenticationRu.md) | HTTP-контракт входа, сохранённый вход, сброс пароля, транспорт, логирование |
+| [Веб-админка](AdminPanelRu.md) | Первичная настройка, роли, наказания, страницы и REST API, хостинг, безопасность |
+| [База данных](../db/README.md) | Схема SQLite, миграции и генерация типов |
+| Примеры конфигураций | [server](../src/Dreamsleeve.Server/server.example.toml), [client](../src/Dreamsleeve.Client.Core/client.example.toml), [ui](../src/Dreamsleeve.Client.UI/ui.example.toml), [moderation](../src/Dreamsleeve.Server/moderation.example.toml), [pseudonyms](../src/Dreamsleeve.Server/pseudonyms.example.toml) — каждый ключ с пояснением и допустимыми значениями |
+
+## Функции
+
+| Документ | Назначение |
+|---|---|
+| [Модерация, игнор и имена](ModerationAndNamesRu.md) | Словарь block/flag, антиспам, личный игнор, отображаемые имена, режим стримера, скрытое имя, наказания и инструменты модератора |
+| [Метки на земле](GroundMarksRu.md) | Надписи и места смерти: домен, протокол, сервер, клиент, игровая дата |
+| [API для других модов](DreamsleeveModApiRu.md) | Объявления из C++ (`IVDreamsleeve1`) и Papyrus (`DreamsleeveClient`) |
+| [Пространственная репликация](SpatialReplicationRu.md) | Каналы ENet, положение и область видимости, периодическая репликация |
+
+## Сервер и протокол
+
+| Документ | Назначение |
+|---|---|
+| [Прикладной протокол](../Protocol/README.ru.md) | Контракт protobuf, версии, C++/F# codec |
+| [Server.Core](../src/Dreamsleeve.Server.Core/README.ru.md) | Runtime, сессии, владельцы состояния, конфигурация, логирование |
+| [Server.Domain](../src/Dreamsleeve.Server.Domain/README.ru.md) | Проверяемые значения, текстовая политика, игроки, чат и объявления, метки, данные админки |
+| [Infrastructure.Interop](../src/Dreamsleeve.Server.Infrastructure.Interop/README.ru.md) | Владение исходящими пакетами ENet и их бюджеты |
+| [Агенты](../src/Dreamsleeve.Agent/README.ru.md) ([EN](../src/Dreamsleeve.Agent/README.md)) | Последовательные агенты на Channels/Task |
+
+## Клиент
+
+| Документ | Назначение |
+|---|---|
+| [SKSE-клиент](SkseClientRu.md) | Модули DLL, потоки, хуки, PrismaUI-host, телеметрия, светлячки, имена, облачка, метки |
+| [Клиентский UI: требования](ClientUiPlanRu.md) | Требования к чату и панелям и состояние их реализации |
+| [UI: запуск и bridge](../src/Dreamsleeve.Client.UI/README.ru.md) | React/TypeScript, события и команды host ↔ страница, тесты |
+| [Client.Core](../src/Dreamsleeve.Client.Core/README.ru.md) | ClientRuntime, ClientApplication, вход, конфигурация Dev/SKSE |
+| [Состояние клиента](../src/Dreamsleeve.Client.Core/State/README.ru.md) | ClientModel, ClientExchange, обмен с одним потребителем |
+| [Интерполяция движения](MovementInterpolationRu.md) | MovementView, история и настройки |
+| [Перехват ввода](InputCaptureHookRu.md) | Проверенные адреса и хук ввода |
+| [Смерть и actor values](DeathAndActorValuesRu.md) | Исследованные события и хуки, выбранный sampling |
+
+## Спецификации и справочники
+
+Ранние документы проекта. Там, где они расходятся с кодом, прав код и документы выше; в начале
+каждого сказано, что из него реализовано.
+
+| Документ | Назначение |
+|---|---|
+| [ProductSpecRu.MD](ProductSpecRu.MD) | Продуктовое видение: реализованное и будущие этапы |
+| [DomainSpecRu.MD](DomainSpecRu.MD) | Предметная модель: имена, пространство, чат, роли, будущие социальные правила |
 | [TechnicalHandbookRu.MD](TechnicalHandbookRu.MD) | Архитектура и справочные примеры стека |
-| [Прикладной протокол](../Protocol/README.ru.md) | Реализованные контракты сессии/чата и C++/F# codec |
-| [MSVC и protobuf в модулях](MsvcProtobufModulesRu.md) | Повторная проверка C1001 на VS 18.10.2 / cl 19.51.36260 |
-| [ProtobufHandbookRu.MD](ProtobufHandbookRu.MD) | Справочник работы с protobuf |
-| [SqlHandbookRu.md](SqlHandbookRu.md) | Справочник предложенного SQLite-стека, не работающая persistence-подсистема |
-| [FSAgentReadme.MD](FSAgentReadme.MD) | Указатель на поддерживаемую документацию агентов |
-| [Answers/PeerInfo.MD](Answers/PeerInfo.MD) | Справочные заметки об ENet Peer |
-| [Тесты](../tests/README.md) | Состав, происхождение и запуск |
+| [ProtobufHandbookRu.MD](ProtobufHandbookRu.MD) | Работа с protobuf |
+| [SqlHandbookRu.md](SqlHandbookRu.md) | SQLite: реальная схема и эскизы будущих таблиц |
+| [MSVC и protobuf в модулях](MsvcProtobufModulesRu.md) | Проверка C1001 и обход через отдельный модуль |
 
-Контракты реализованных модулей находятся рядом с кодом:
-[Client State](../src/Dreamsleeve.Client.Core/State/README.ru.md),
-[Server Domain](../src/Dreamsleeve.Server.Domain/README.ru.md),
-[Agent](../src/Dreamsleeve.Agent/README.ru.md),
-[Server.Core](../src/Dreamsleeve.Server.Core/README.ru.md).
+## Тесты и измерения
 
-Исторические SQL/protobuf-примеры удалены из рабочего дерева; архивный коммит `40059c5`.
-Просмотр: `git show 40059c5:docs/ProtoExamples/README.md` или
-`git show 40059c5:docs/SqlExamples/README_ru.md`.
+- [Тесты](../tests/README.md): состав, запуск, smoke-сценарии.
+- Нагрузочные прогоны 27–28 сентября 2026 (протокол того времени, loopback), без обновления
+  под текущий код: [чат через ENet](benchmarks/enet-2026-09-27.md),
+  [движение v6 и владелец ENet](benchmarks/movement-v6-owner-2026-09-27.md),
+  [1000 клиентов при 20 Гц](benchmarks/movement-workers-2026-09-27.md),
+  [разделение SessionRegistry](benchmarks/session-routing-2026-09-27.md).
 
-- [Измерения после разделения сессий](benchmarks/session-routing-2026-09-27.md): воспроизводимое сравнение и ограничения выводов.
-- [Нагрузочные прогоны через настоящий ENet](benchmarks/enet-2026-09-27.md): 100/500/1000 клиентов, CPU, память, задержки и полная проверка доставки.
-
-- [Авторизация, SQLite, логирование и NuGet-стек](AuthenticationRu.md).
-- [Веб-админка сервера](AdminPanelRu.md): первичная настройка, страницы и REST, роли, хостинг за прокси, безопасность.
-
-- [Телеметрия игрока и PlayerDetails](PlayerTelemetryPlanRu.md): реализованные данные игрока, владельцы и границы дальнейшей игровой интеграции.
-
-- [Движение через ENet и интерполяция](benchmarks/movement-2026-09-27.md): 100/500/1000 клиентов, AOI, перегрузка и стоимость C++-потребителя.
-
-- [Пространственный индекс и периодическая репликация v6](SpatialReplicationRu.md).
-
-- [Повторная матрица движения v5](benchmarks/movement-v5-2026-09-27.md): эффект индекса и batching, ограничения плотной рассылки.
-
-- [Диагностика движения: таймер, UDP, ENet и GC](benchmarks/movement-diagnostics-2026-09-27.md): частоты, буферные эксперименты и EventPipe-профили.
-
-- [План первой волны оптимизации движения](MovementOptimizationPlanRu.md): конкретные hot paths, Task/ValueTask, struct/DU, reuse и порядок проверок; первая волна реализована; результаты повторных бенчмарков ниже.
-
-- [Первая волна оптимизации: повторные ENet-бенчмарки](benchmarks/movement-opt-wave1-2026-09-27.md): группы по 25 приблизились к 10 Гц, плотная рассылка регрессировала; матрица и контрольные повторы.
-
-- [Расследование регрессии движения](benchmarks/movement-regression-2026-09-27.md): разделены расходы MTU-разбиения и ограничения общего клиентского сокета; исправленные defaults и контрольные прогоны.
-
-- [1000 клиентов при 20 Гц: независимые нагрузчики](benchmarks/movement-workers-2026-09-27.md): сравнение 1/4/10 процессов при одинаковом числе сокетов, проверки UDP-буферов и ограничения интерпретации.
-
-
-
-- [План рефакторинга каналов, движения и владельца ENet](EnetMovementRefactorPlanRu.md): три канала, периодические позиции без подтверждений, reliable-границы и последовательная проверка транспорта.
-
-- [Movement v6: каналы и production ENet owner](benchmarks/movement-v6-owner-2026-09-27.md): 1000 клиентов, 20 Гц, AOI по 25/100, сравнение inline/owner и отдельный прогрев видимости.
-
-- [SKSE-клиент](SkseClientRu.md): модули DLL, сообщения SKSE, потоки, хук Main::Update, PrismaUI host, телеметрия, светлячки, имена и облачка чата над ними, конфигурация и dist.
-
-- [Смерть и actor values](DeathAndActorValuesRu.md): исследованные события/хуки, покрытие и выбранный sampling.
-
-- [Модерация, игнор и отображаемые имена](ModerationAndNamesRu.md): серверный словарь и антиспам, личный игнор, выбор имени и режим стримера.
-- [API для других модов](DreamsleeveModApiRu.md): объявления из C++ (`IVDreamsleeve1`) и Papyrus (`DreamsleeveClient`), результаты, лимиты и модель доверия.
-- [Метки на земле](GroundMarksRu.md): надписи и места смерти — домен, протокол v8, серверный владелец и SQLite, ядро клиента и Client.Dev; открытые вопросы и принятые решения.
+Исторические SQL/protobuf-примеры удалены из рабочего дерева; архивный коммит `40059c5`:
+`git show 40059c5:docs/ProtoExamples/README.md`, `git show 40059c5:docs/SqlExamples/README_ru.md`.
+Завершённые планы и промежуточные отчёты о производительности удалены 1 октября 2026 года;
+они остаются в истории git.

@@ -55,19 +55,23 @@ cl /nologo /c /std:c++23preview /EHsc /MD /O2 /utf-8 /interface
 
 ## Что оставлено в проекте
 
-Представление DisconnectReason и RequestRejectionCode без protobuf-заголовков
-и его static_assert-проверки пока необходимы. Теперь Dreamsleeve.Protocol.Native.ixx
+Зеркало enum протокола без protobuf-заголовков (DisconnectReason, RequestRejectionCode
+и остальные enum, нужные клиенту; модуль `Dreamsleeve.Protocol`) и его static_assert-проверки
+пока необходимы. Dreamsleeve.Protocol.Native.ixx
 и ProtocolContract.cpp создаёт Scripts/generate_protocol.py из вывода protoc:
 имена и номера задаются только в .proto, ручного дублирования enum нет. Неожиданный
 формат generated enum останавливает генерацию с ошибкой.
-Generated protobuf headers остаются в обычных .cpp и реализации ChatCodec.cpp, вне интерфейса
-модуля. Расширение файла само по себе не обходит ошибку: тот же минимальный
-исходник, сохранённый как .cpp и собранный с /interface, также вызывает C1001.
+Generated protobuf headers включаются только в ProtocolContract.cpp и в global module
+fragment единиц реализации кодека, вне интерфейса модуля. Расширение файла само по себе
+не обходит ошибку: тот же минимальный исходник, сохранённый как .cpp и собранный с
+/interface, также вызывает C1001.
 
-ChatCodec.cpp уже является частью C++-модуля: `module Dreamsleeve.Client.Codec;`
-объявляет единицу реализации. Отдельный ChatCodec.ixx содержит
-`export module Dreamsleeve.Client.Codec;` и публичные объявления без protobuf.
-Такое разделение работает. Объединение в один интерфейсный файл с protobuf
+Кодек клиента — модуль `Dreamsleeve.Client.ProtocolCodec`: интерфейс `ProtocolCodec.ixx`
+(`export module Dreamsleeve.Client.ProtocolCodec;`) содержит публичные объявления без
+protobuf, а `Protocol/*.cpp` (ProtocolCodec, SessionCodec, ChatCodec, PlayerCodec,
+GroundCodec, ModerationCodec) начинаются с `module;`, включают `protocol.pb.h` в global
+module fragment и объявляют `module Dreamsleeve.Client.ProtocolCodec;` — единицы
+реализации. Такое разделение работает. Объединение в один интерфейсный файл с protobuf
 не становится рабочим от смены расширения на .cpp.
 
 При воспроизведении Windows может показать окно ошибки приложения cl.exe:
@@ -75,13 +79,11 @@ ChatCodec.cpp уже является частью C++-модуля: `module Dre
 компилятора во время минимальной пробы, а не ошибка выполнения Client.Dev.
 
 После проверки выполнена очистка `xmake clean -a` и пересборка всех native-целей,
-включая std.ifc, с отключённым compiler cache. Результаты тестов указаны в
+включая std.ifc, с отключённым compiler cache; тесты запускаются по
 [tests/README](../tests/README.md). После следующего обновления сначала повторить
 минимальную пробу, затем проверить импорт типов потребителем и полную сборку;
 только после успеха убирать зеркало и ProtocolContract.cpp.
 
-После разделения кодека текущий публичный модуль называется
-`Dreamsleeve.Client.ProtocolCodec` (`ProtocolCodec.ixx`). Реализации распределены
-по ProtocolCodec.cpp, PlayerCodec.cpp, ChatCodec.cpp и SessionCodec.cpp. Приведённые
-выше результаты диагностики относятся к прежним именам; граница protobuf остаётся
-той же: generated headers только в global module fragment `.cpp`, без экспорта в IFC.
+Пробы выше делались до разделения кодека (тогда модуль `Dreamsleeve.Client.Codec`); граница
+protobuf с тех пор та же: generated headers только в global module fragment `.cpp`, без
+экспорта в IFC.

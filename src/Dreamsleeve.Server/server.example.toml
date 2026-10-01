@@ -1,168 +1,300 @@
-# Omitted settings retain defaults. Keys are case-sensitive.
+# Dreamsleeve server configuration: every key with its default value.
+# Start: dotnet Dreamsleeve.Server.dll --config server.toml
+# (--write-config server.toml writes the same defaults without comments).
+# Read once at startup: restart the server to apply a change. Omitted keys keep
+# their defaults; keys are case-sensitive. An unknown or repeated key, a wrong
+# type or a value out of range stops the server with a message naming the key.
+# Relative paths are resolved against the working directory. At most 64 KiB.
+# Deployment, reverse proxy and TLS: docs/DeploymentRu.md.
+# "World units" are Skyrim game units: about 1.43 cm, an exterior cell is 4096.
+
+# ENet game transport (UDP) and the protocol limits it enforces.
 [Server]
+# Shown to players in the chat window; 1..128 characters, no control characters.
 ServerName = "Dreamsleeve"
+# IPv4 address of the UDP socket: "0.0.0.0" = every interface, "127.0.0.1" = this machine only.
 BindAddress = "127.0.0.1"
+# UDP port of the game connection, 1..65535; clients set it as serverPort. --port overrides it.
 Port = 8778
+# ENet connection slots, 1..4095, at least Runtime.MaxSessions. A few spare slots let a full
+# server answer "full" instead of ENet silently dropping the attempt.
 PeerLimit = 32
+# ENet channels per connection, 3..255; the protocol uses 3 (control, chat, realtime).
 ChannelLimit = 3
+# Must be 0: the transport thread waits on its own wake-up, never inside ENet.
 ServiceTimeoutMs = 0
+# Network events handed from the transport thread to the runtime per pass, >= 1.
 EventBudget = 64
+# Largest packet in either direction, bytes, >= 1; a larger incoming packet drops the connection.
+# Client: client.network.maxPacketBytes should be the same.
 MaxPacketBytes = 1048576
+# Target payload of one movement batch, bytes: 0 = the negotiated MTU (recommended), > 0 lowers it.
 MovementPacketTargetBytes = 0
+# UDP socket receive buffer, bytes, >= 1. Raise it for hundreds of players (the OS may cap it).
 ReceiveBufferBytes = 262144
+# UDP socket send buffer, bytes, >= 1.
 SendBufferBytes = 262144
+# ENet limit of data one connection may have waiting for reassembly, bytes, >= MaxPacketBytes.
 MaxWaitingData = 33554432
+# Packets of one connection held between the runtime and ENet: waiting in the handoff queue
+# (each direction) or kept by ENet until acknowledged, >= 1. Beyond it a movement packet is
+# dropped; any other packet closes the slow connection.
 MaxOutgoingPacketsPerPeer = 256
+# Bytes of one connection held the same way, >= MaxPacketBytes.
 MaxOutgoingBytesPerPeer = 4194304
+# Packets held the same way for all connections together, >= MaxOutgoingPacketsPerPeer.
 MaxOutgoingPackets = 4096
+# Bytes held for all connections together, >= MaxOutgoingBytesPerPeer.
 MaxOutgoingBytes = 33554432
+# Players one session-opening snapshot may list, >= Runtime.MaxSessions.
+# Client: maxInitialPlayers must be at least this.
 MaxInitialPlayers = 4096
+# Messages per channel one session-opening snapshot may carry, >= 0 and at least
+# Runtime.Chat.HistoryCapacity and Announcements.HistoryCapacity. Client: maxRecentMessages.
 MaxRecentMessages = 512
 
+# Handoff between the runtime and the dedicated ENet thread.
 [Server.Worker]
+# Packets waiting in the handoff queue, >= 1.
 QueueCapacity = 65536
+# Bytes waiting in the handoff queue, >= Server.MaxPacketBytes.
 QueueBytes = 16777216
+# Send commands the ENet thread takes per pass, >= 1.
 SendCommandsPerPass = 2048
+# Bytes the ENet thread sends per pass, >= 1.
 SendBytesPerPass = 4194304
+# Milliseconds of send work per pass before ENet is serviced again, >= 1.
 WorkBudgetMs = 2
+# Idle wait of the ENet thread when there is nothing to do, 1..10 ms.
 IdleWaitMs = 1
 
+# Text limits in characters (Unicode scalar values), checked on every input.
 [Server.ChatInput]
+# Account name (login), >= 1; ASCII letters, digits, "_" and "." only, stored in lower case.
 Username = 32
+# Name shown to other players, >= 1.
 DisplayName = 64
+# One chat message and a server announcement, >= 1.
 MessageText = 2000
-# Client announcements (Unicode scalar values). Server announcements use MessageText.
+# Client announcement (from the game or another mod), >= 1.
 AnnouncementText = 500
 # Self-declared label of the mod posting an announcement, 1..128.
 AnnouncementSignature = 64
-# A note written on the ground (Unicode scalar values); the chat text rules apply.
+# A note written on the ground, >= 1; the chat text rules apply.
 GroundNoteText = 200
 # Death mark label (killer or cause), one line, 1..128; the client may leave it empty.
 DeathMarkText = 64
 
+# Limits of what a client reports about its character, checked on every update.
 [Server.PlayerInput]
+# Character name, characters, >= 1.
 CharacterName = 128
+# Plugin file name in form references (for example "Skyrim.esm"), characters, >= 1.
 PluginName = 260
+# Location label shown in the online list, characters, >= 1.
 LocationName = 256
+# Actor value key (health, magicka, ...), characters, >= 1.
 ActorValueKey = 128
+# Actor value display name, characters, >= 1.
 ActorValueName = 128
+# Actor values in one update, >= 1. Client: maxActorValues must be at least this.
 MaxActorValues = 64
+# Each text of the character details (race, class, place description, ...), characters, >= 1.
 DetailsText = 256
+# Key of the current activity, characters, >= 1.
 ActivityKey = 64
 
+# Session runtime: connections, mailboxes and deadlines.
 [Runtime]
+# Simultaneous game connections, >= 1, at most Server.PeerLimit and Server.MaxInitialPlayers.
+# Every running client counts, signed in or not (a guest connection).
 MaxSessions = 32
+# Runtime mailbox, messages, >= 1.
 MailboxCapacity = 256
-# At least 4 * MaxSessions + 4: one cleanup acknowledgement per source (chat, system, presence, ground marks) per session.
+# Extra mailbox room for control messages, at least 4 * MaxSessions + 4: one cleanup
+# acknowledgement per source (chat, system, presence, ground marks) per session.
 ControlReserve = 160
+# A new connection must send its first request, and a session must finish signing in,
+# within this many milliseconds, >= 1.
 OpenTimeoutMs = 10000
+# Time the runtime gives sessions to close at shutdown, milliseconds, >= 1.
 ShutdownTimeoutMs = 1500
+# Runtime poll period of the transport, milliseconds, >= 1;
+# Server.ServiceTimeoutMs + PollIntervalMs must not exceed OpenTimeoutMs or ShutdownTimeoutMs.
 PollIntervalMs = 1
 
+# One player session.
 [Runtime.Player]
+# Session mailbox, messages, >= 1.
 MailboxCapacity = 128
+# Extra mailbox room for control messages, >= 1.
 ControlReserve = 32
+# Requests (chat, marks, moderation, name changes) waiting for their owner, >= 1;
+# more are refused with OVERLOADED.
 MaxPendingChat = 16
+# Character updates waiting for the online list, >= 1; more are refused with OVERLOADED.
 MaxPendingUpdates = 16
+# Events buffered while the session opens, >= 1; overflow closes the session.
 MaxBootstrapEvents = 128
+# Responses waiting to be sent, >= 1; overflow closes the session as a slow consumer.
 MaxPendingOutput = 128
 
+# The global chat channel.
 [Runtime.Chat]
+# Channel mailbox, messages, >= 1.
 MailboxCapacity = 256
+# Extra mailbox room for control messages, >= 1.
 ControlReserve = 64
+# Messages kept in memory and sent to a joining player, >= 1, at most Server.MaxRecentMessages.
+# Chat history is not stored in the database: a restart clears it.
 HistoryCapacity = 512
+# Control messages the channel may have in flight to the runtime, >= 1.
 MaxControlDeliveries = 128
 
 # Anti-spam per stable account ID; reconnecting does not reset it. The same three
 # keys limit client announcements ([Announcements.Rate]) and notes ([GroundMarks.NoteRate]).
 [Runtime.Chat.Rate]
-# Up to Burst messages at once, then one more per RefillMs.
+# Messages allowed at once, >= 1.
 Burst = 5
+# One more message allowed per this many milliseconds, >= 1.
 RefillMs = 2000
-# The same normalized text is refused again within this window; 0 disables the check.
+# The same normalized text is refused again within this window, milliseconds, >= 0; 0 = off.
 DuplicateWindowMs = 30000
 
+# The online list and movement replication.
 [Runtime.Presence]
+# Owner mailbox, messages, >= 1.
 MailboxCapacity = 128
+# Extra mailbox room for control messages, >= 1.
 ControlReserve = 64
+# Control messages the owner may have in flight to the runtime, >= 1.
 MaxControlDeliveries = 128
+# Period of pose replication, milliseconds, >= 1: 50 = 20 Hz.
 ReplicationIntervalMs = 50
+# Players within this many world units (same worldspace or interior cell) get each
+# other's poses, >= 0. Clients cannot draw fireflies farther than this.
 VisibilityDistance = 8192
 
+# SQLite database of accounts, profiles, marks, sanctions and the admin panel.
 [Database]
+# Database file, created with its directory on first start; migrations run at startup.
+# Not ":memory:". Back it up (docs/DeploymentRu.md).
 DatabasePath = "data/dreamsleeve.db"
+# How long a statement waits for a locked database, seconds, 1..30.
 BusyTimeoutSeconds = 5
 
+# Accounts: registration, password sign-in, saved sign-in and password reset over HTTP(S).
 [Authentication]
+# false refuses new accounts (HTTP 403 registration_disabled); existing accounts keep working.
 AllowRegistration = true
 
+# The public HTTP host of /auth/*. Clients set its origin as authUrl.
 # The same keys describe the admin panel listener ([Admin.Listener]).
 [Authentication.Listener]
+# "http(s)://host:port" only, no path. Host: an IP literal ("127.0.0.1", "0.0.0.0", "[::1]"),
+# "localhost", or any other name = every interface. Behind nginx keep "http://127.0.0.1:8779".
 ListenUrl = "http://127.0.0.1:8779"
+# Allows plain HTTP on a literal loopback address (127.0.0.1 or ::1), for a local server
+# or a reverse proxy on this machine.
 AllowInsecureLoopback = true
-# Explicit opt-in for remote HTTP; passwords and tokens are sent without TLS.
+# Explicit opt-in for plain HTTP on any address; passwords and tokens then travel without TLS.
 AllowInsecureRemote = false
-# Direct HTTPS without a reverse proxy; the password is in DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD.
+# Direct HTTPS without a reverse proxy: path of a PKCS#12 (.pfx) certificate with its key;
+# its password goes in the DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD environment variable.
+# Empty = none (an https:// ListenUrl then needs Kestrel's default certificate).
 CertificatePath = ""
-# true only behind a reverse proxy on this machine: X-Forwarded-For/Proto are then read from loopback.
+# true only behind a reverse proxy on this machine: X-Forwarded-For/Proto are then read
+# from 127.0.0.1/::1, one hop; otherwise they are ignored and the socket address counts.
 TrustForwardedHeaders = false
-# Requests per client address and minute, 1..100000.
+# Requests per client address and minute, 1..100000; more get HTTP 429.
 RequestsPerMinute = 120
-# 1..120.
+# Request deadline and idle keep-alive, seconds, 1..120.
 RequestTimeoutSeconds = 15
 
+# The account service behind the listener.
 [Authentication.Service]
+# Service mailbox, requests, 1..65536; open HTTP connections are capped at
+# 2 * MailboxCapacity + MaxConcurrentOperations.
 MailboxCapacity = 64
+# Parallel storage and password-hashing workers, 1..64.
 MaxConcurrentOperations = 4
+# One-time game session tickets waiting to be used, 1..100000.
 MaxTickets = 4096
+# How long a ticket from sign-in stays valid for opening the game session, seconds, 1..300.
 TicketLifetimeSeconds = 60
-# PBKDF2 iterations of player passwords, 210000..2000000.
+# PBKDF2 iterations of player passwords, 210000..2000000; stored hashes are upgraded at sign-in.
 PasswordIterations = 210000
+# Lifetime of a saved sign-in ("remember me"), days, 1..365.
 SavedLoginDays = 30
+# Saved sign-ins per account (devices), 1..32; the oldest is dropped.
 MaxSavedLogins = 8
+# Lifetime of a one-time password reset code (console reset-password or the panel), minutes, 1..60.
 ResetLifetimeMinutes = 15
-# Display name changes kept per player for the admin panel; older ones are deleted. 1..1000.
+# Display name changes kept per player for the admin panel, 1..1000; older ones are deleted.
 DisplayNameHistory = 20
 
 # Web admin panel (docs/AdminPanelRu.md). Loopback only by default: reach it through an SSH tunnel
 # or a reverse proxy. Without administrators the server prints a one-time setup code to the console.
 [Admin]
+# false turns the panel off; the console commands keep working.
 Enabled = true
 # Concurrent HTTP connections, 1..10000.
 MaxConnections = 64
 
+# The same rules as [Authentication.Listener]; the port must differ from it.
 [Admin.Listener]
+# "http(s)://host:port" only. Keep loopback and use an SSH tunnel or a proxy with TLS.
 ListenUrl = "http://127.0.0.1:8780"
+# Plain HTTP on a literal loopback address.
 AllowInsecureLoopback = true
-AllowInsecureRemote = false      # passwords without TLS only by explicit choice, as for authentication
-CertificatePath = ""             # direct HTTPS; the password is in DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD
-TrustForwardedHeaders = false    # true only behind a proxy on loopback
-RequestsPerMinute = 600          # all requests but sign-in, per client address
+# Plain HTTP on any address: panel passwords and cookies without TLS. Explicit opt-in only.
+AllowInsecureRemote = false
+# Direct HTTPS: a PKCS#12 (.pfx) file; the password is in DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD.
+CertificatePath = ""
+# true only behind a reverse proxy on this machine (X-Forwarded-For/Proto from loopback).
+TrustForwardedHeaders = false
+# Requests per client address and minute except sign-in, 1..100000.
+RequestsPerMinute = 600
+# Request deadline and idle keep-alive, seconds, 1..120.
 RequestTimeoutSeconds = 15
 
+# The panel's administrator accounts and sessions.
 [Admin.Service]
+# Service mailbox, requests, 1..65536.
 MailboxCapacity = 64
+# Parallel storage and password-hashing workers, 1..64.
 MaxConcurrentOperations = 2
 # PBKDF2 iterations of administrator passwords, 210000..2000000.
 PasswordIterations = 210000
-SessionHours = 12                # 1..720
-CodeLifetimeMinutes = 15         # one-time setup and reset codes, 1..60
-LoginAttemptsPerMinute = 10      # per client address and per administrator name, 1..1000
-# Administrator names whose sign-in attempts are counted at once; more are refused as busy.
+# Lifetime of a panel sign-in, hours, 1..720.
+SessionHours = 12
+# Lifetime of one-time setup and reset codes, minutes, 1..60.
+CodeLifetimeMinutes = 15
+# Sign-in attempts per client address and per administrator name each minute, 1..1000.
+LoginAttemptsPerMinute = 10
+# Administrator names whose attempts are counted at once, 1..100000; more are refused as busy.
 MaxTrackedLogins = 1024
 
+# Serilog output. Logs never contain passwords, codes, tokens or chat text.
 [Logging]
+# Verbose | Debug | Information | Warning | Error | Fatal (case-insensitive).
 MinimumLevel = "Information"
+# Human-readable lines on the console (stdout; journald under systemd).
 Console = true
+# JSON lines, a new file per day: "logs/server-.json" becomes logs/server-20261001.json.
+# "" = no file (Console must then be true).
 FilePath = "logs/server-.json"
+# A file rolls over at this size, bytes, >= 1024.
 FileSizeLimitBytes = 10485760
+# Log files kept, >= 1; older ones are deleted.
 RetainedFileCount = 14
 
+# Word-list filter: moderation.example.toml explains the format and the tiers.
 [Moderation]
-# Word-list checks of new usernames/display names, chat text and published
+# Word-list checks of new usernames/display names, chat text, notes and published
 # character names. false disables only the word list; anti-spam stays active.
 Enabled = true
-# Separate TOML (see moderation.example.toml), relative to the working directory.
+# Separate TOML of at most 1 MiB, relative to the working directory; required when Enabled.
 # A missing file starts the server with an empty list and a warning.
 RulesPath = "moderation.toml"
 
@@ -174,8 +306,8 @@ RulesPath = "moderation.toml"
 # false refuses the mode: opening a hidden session or switching gets
 # HIDDEN_IDENTITY_NOT_ALLOWED and the real profile is never sent in its place.
 AllowHiddenIdentity = true
-# A session may switch no sooner than this after its previous switch; sooner
-# gets RATE_LIMITED and nothing changes. 0 disables the limit.
+# A session may switch no sooner than this after its previous switch, milliseconds, >= 0;
+# sooner gets RATE_LIMITED and nothing changes. 0 disables the limit.
 ToggleIntervalMs = 30000
 # Separate TOML (see pseudonyms.example.toml), relative to the working directory.
 # A missing or broken file uses the 24 built-in names with a warning.
@@ -183,8 +315,8 @@ PseudonymsPath = "pseudonyms.toml"
 # Players may change their own display name from the game (the word list applies);
 # false refuses it with DISPLAY_NAME_CHANGE_NOT_ALLOWED. The admin panel always can.
 AllowDisplayNameChange = true
-# A player's own change may come no sooner than this after the previous one,
-# across reconnects and restarts; sooner gets RATE_LIMITED. 0 disables the limit.
+# A player's own change may come no sooner than this after the previous one, minutes,
+# 0..525600 (a year), across reconnects and restarts; sooner gets RATE_LIMITED. 0 = no limit.
 DisplayNameChangeIntervalMinutes = 1
 
 # System channel: server announcements and announcements requested by clients.
@@ -192,26 +324,34 @@ DisplayNameChangeIntervalMinutes = 1
 # this file; there is no hot reload. A missing section keeps these defaults:
 # every client source is accepted.
 [Announcements]
-# Retained announcements, also sent at session opening; at most Server.MaxRecentMessages.
+# Retained announcements, also sent at session opening, >= 1, at most Server.MaxRecentMessages.
 HistoryCapacity = 128
 
 # Client announcements per stable account; chat has its own limit in Runtime.Chat.Rate.
 [Announcements.Rate]
+# Announcements allowed at once, >= 1.
 Burst = 3
+# One more allowed per this many milliseconds, >= 1.
 RefillMs = 20000
+# The same normalized text is refused again within this window, milliseconds, >= 0; 0 = off.
 DuplicateWindowMs = 300000
 
 # Requested by the Dreamsleeve client itself. A disabled source is refused with
 # ANNOUNCEMENT_NOT_ALLOWED; further per-source rules will live in these tables.
 [Announcements.TrustedClient]
+# true accepts this source, false refuses it.
 Enabled = true
 
 # Requested by other mods through the Dreamsleeve C++/Papyrus API.
 [Announcements.ThirdParty]
+# true accepts this source, false refuses it.
 Enabled = true
 
-# Server announcements: Kind is Announcement, Event, Admin or Periodic.
-# IntervalSeconds = 0 publishes once after DelaySeconds; otherwise at least 10.
+# Server announcements, any number of [[Announcements.Scheduled]] entries:
+#   Text            1..Server.ChatInput.MessageText characters.
+#   Kind            Announcement | Event | Admin | Periodic (case-insensitive).
+#   DelaySeconds    first publication this many seconds after start, >= 0.
+#   IntervalSeconds 0 = once; otherwise repeat every N seconds, N >= 10.
 # Scheduled announcements take system channel history, so keep intervals long.
 # [[Announcements.Scheduled]]
 # Text = "Welcome to Dreamsleeve. Be kind to other travellers."
@@ -220,36 +360,45 @@ Enabled = true
 # IntervalSeconds = 1800
 
 # Marks on the ground: notes players leave and places where characters died.
-# Persistent in SQLite (schema 3); shown to players nearby like poses. Read at
+# Persistent in SQLite; shown to players nearby like poses. Read at
 # startup; a missing section keeps these defaults.
 [GroundMarks]
+# Owner mailbox, messages, >= 1.
 MailboxCapacity = 256
+# Extra mailbox room for control messages, >= 1.
 ControlReserve = 64
+# Control messages the owner may have in flight to the runtime, >= 1.
 MaxControlDeliveries = 128
-# Queued storage writes before the owner treats the database as broken and stops.
+# Queued storage writes before the owner treats the database as broken and stops, >= 1.
 MaxPendingWrites = 256
-# Delivery radius in world units, same space (WRLD/CELL) only. A client cannot
+# Delivery radius in world units, same space (WRLD/CELL) only, >= 0. A client cannot
 # draw marks farther than this; by default equal to Runtime.Presence.VisibilityDistance.
 VisibilityDistance = 8192
-# Per account and kind; a new mark beyond the quota evicts the author's oldest of that kind.
+# Notes per account, >= 1; a new note beyond the quota replaces the author's oldest one.
 MaxNotesPerPlayer = 5
+# Death marks per account, >= 1; the same eviction of the oldest.
 MaxDeathMarksPerPlayer = 10
-# Lifetimes in days; 0 keeps the kind forever. Expired marks are removed lazily.
+# Lifetime of a note, days, >= 0; 0 keeps notes forever. Expired marks are removed lazily.
 NoteTtlDays = 30
+# Lifetime of a death mark, days, >= 0; 0 keeps them forever.
 DeathMarkTtlDays = 7
-# Marks one spatial index cell (VisibilityDistance on a side) may hold; more is
+# Marks one spatial index cell (VisibilityDistance on a side) may hold, >= 1; more is
 # refused with GROUND_MARK_AREA_FULL, nothing of other players is evicted.
 MaxPerIndexCell = 64
-# Deaths reported closer together than this are refused with RATE_LIMITED.
+# Deaths reported closer together than this are refused with RATE_LIMITED, milliseconds, >= 0.
 DeathMinIntervalMs = 5000
-# A placement farther than this from the player's last known position is refused; 0 disables.
+# A placement farther than this from the player's last known position is refused,
+# world units, >= 0; 0 disables the check.
 MaxPlacementDistance = 2048
-# How often expired marks are collected (milliseconds, at least 1000).
+# How often expired marks are collected, milliseconds, >= 1000.
 ExpiryCheckIntervalMs = 60000
 
 # Notes per stable account: up to Burst at once, then one per RefillMs; the same
 # normalized text is refused again within DuplicateWindowMs (0 disables).
 [GroundMarks.NoteRate]
+# Notes allowed at once, >= 1.
 Burst = 3
+# One more allowed per this many milliseconds, >= 1.
 RefillMs = 20000
+# Repeated text window, milliseconds, >= 0; 0 = off.
 DuplicateWindowMs = 300000

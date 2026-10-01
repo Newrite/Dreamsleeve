@@ -1,10 +1,23 @@
-## Movement transport contract (protocol v6)
+# Real ENet network load generator
+
+This executable is a separate process from `Dreamsleeve.Server`. It uses yENet and
+protobuf from the existing projects. The movement host also subscribes to standard
+server duration instruments; no benchmark branch is added to the server handlers.
+It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. It speaks the current protocol (`ProtocolCodec.Version` of Server.Core): ticket authentication, reliable player baselines and repeated realtime poses; no username enters OpenSession.
+
+```powershell
+dotnet build tests/Dreamsleeve.Server.NetworkBenchmarks -c Release
+dotnet tests/Dreamsleeve.Server.NetworkBenchmarks/bin/Release/net10.0/Dreamsleeve.Server.NetworkBenchmarks.dll --auth-url http://127.0.0.1:8779 --port 8778 --clients 100 --seconds 10 --rate 10 --output build/network-100.json
+```
+
+## Movement transport contract
 
 The managed load generator uses three ENet channels: Control 0 (reliable), Chat 1
-(reliable), and Realtime 2 (unreliable sequenced). Character initialization and
+(reliable), and Realtime 2 (unreliable sequenced), as defined since protocol v6
+([contract](../../docs/SpatialReplicationRu.md)). Character initialization and
 location/context changes remain acknowledged commands. Movement samples carry a
 context revision and increasing sequence, with no request ID, acknowledgement,
-or eight-request throttle. The native outgoing packet budget remains bounded.
+or pending-request throttle. The native outgoing packet budget remains bounded.
 
 Recipients apply realtime samples only after a reliable visibility baseline with
 matching view revision, and discard old sequences. Final convergence checks freeze
@@ -13,11 +26,11 @@ compare the shared final source timestamp and position for every expected visibl
 pair, including self, and require hidden pairs to have cleared their baseline.
 This verifies recovery of a lost final sample without relying on movement ACKs.
 
-`controlAckMs` reports only command acknowledgements. Historical reports below
-used reliable movement and are not directly comparable with protocol-v6 runs.
-No new performance results are implied by this protocol migration.
+`controlAckMs` reports only acknowledgements of SetLocation commands sent during
+load. Reports measured before protocol v6 used reliable, acknowledged movement and
+are not directly comparable with current runs.
 
-Before new 20 Hz comparisons, exploratory acceptance bounds are: achieved source
+Exploratory acceptance bounds for 20 Hz comparisons: achieved source
 rate at least 18 Hz per client, delivery-age p95 at most 200 ms, receive-gap p95 at
 most 100 ms, final convergence, and no unexpected disconnects. These are diagnostic
 bounds for the selected workload, not production capacity guarantees.
@@ -29,22 +42,12 @@ The histogram pools measured pair intervals and does not represent time before a
 pair's first measurement or after its last one; final convergence alone does not
 prove continuous cadence. Inspect counts and source rate alongside the histogram.
 
-
 Run `dotnet run --project tests/Dreamsleeve.Server.NetworkBenchmarks -c Release -- --verify-movement-oracle`
 to check the measurement oracle without sockets: baseline ordering, visibility
-revision changes, stale sequences, and recovery by repeating a lost final pose.
+revision changes, stale sequences, recovery by repeating a lost final pose, and
+warm-position preparation.
 
-# Real ENet network load generator
-
-This executable is a separate process from `Dreamsleeve.Server`. It uses yENet and
-protobuf from the existing projects. The movement host also subscribes to standard
-server duration instruments; no benchmark branch is added to the server handlers.
-It connects to IPv4 loopback on the selected ENet port and authenticates through the configured HTTP(S) endpoint. Protocol v6 keeps ticket authentication and uses reliable player baselines plus repeated realtime poses; no username enters OpenSession.
-
-```powershell
-dotnet build tests/Dreamsleeve.Server.NetworkBenchmarks -c Release
-dotnet tests/Dreamsleeve.Server.NetworkBenchmarks/bin/Release/net10.0/Dreamsleeve.Server.NetworkBenchmarks.dll --auth-url http://127.0.0.1:8779 --port 8778 --clients 100 --seconds 10 --rate 10 --output build/network-100.json
-```
+## Sessions and chat load
 
 Start the server separately with sufficient finite capacities. The command does
 not start, stop or change server configuration. `Scripts/benchmark_enet.py` starts
@@ -159,7 +162,7 @@ client logs, the complete server configuration, client verification JSON, 100ms
 process samples, and summaries. Failed cases remain in the results and make the
 runner return a nonzero exit code. Processes started by the runner are cleaned
 up on normal completion or failure; server `quit` has a 15-second guard. The
-whole-case guard defaults to180 seconds (`--timeout`), so increase it for longer
+whole-case guard defaults to 180 seconds (`--timeout`), so increase it for longer
 load intervals. A free loopback port is chosen per case; another process could
 claim it before server bind, in which case the run fails visibly.
 
@@ -177,22 +180,27 @@ the same capacities at every N to keep the allocated ENet host comparable:
 | Runtime.OpenTimeoutMs / ShutdownTimeoutMs | 30000 / 10000 |
 
 Other values come from the checked-in `server.example.toml`, including each
-player's mailbox/output limits128 and the per-peer outgoing limit256 packets.
+player's mailbox/output limits of 128 and the per-peer outgoing limit of 256 packets.
 Limits are finite and are not automatically raised when a run fails. `minimal`
 changes only peer/session counts and the required lifecycle control reserve,
 leaving all other example values intact. It is a separate configuration, not a
 comparable repetition of `scaled`.
 
+Known gap: the server now requires `Runtime.ControlReserve >= 4 * MaxSessions + 4` (four
+cleanup sources, including ground marks), while `Scripts/benchmark_enet.py` still writes
+3004 for `scaled`/`movement` and max(128, 3 × N + 4) for `minimal`; the server refuses such
+a configuration at startup until the runner is updated.
+
 Metrics use Windows GetProcessTimes and GetProcessMemoryInfo. CPU is accumulated
 kernel+user CPU time divided by sampled wall time, expressed in **equivalents of
-one core**: 0.25 means25% of one logical processor, not25% of the whole machine.
+one core**: 0.25 means 25% of one logical processor, not 25% of the whole machine.
 Private bytes and working set cover only the named process, including managed
 and native memory. They are not live managed-heap size. Per-stage medians and
-sampled peaks can miss spikes shorter than100ms; GC and allocation rates are not
+sampled peaks can miss spikes shorter than 100 ms; GC and allocation rates are not
 measured. No forced GC is performed. Heap retention, connection pools, and the ticket cache mean memory after
 disconnect need not return to the startup value.
 
-Stages are inferred from flushed stdout markers, observed at the next100ms
+Stages are inferred from flushed stdout markers, observed at the next 100 ms
 sample. Startup is sampled for one second before client launch; after successful
 client disconnect the server is sampled for another two seconds before quit.
 The three-second idle stage after presence convergence separates connection work
@@ -239,8 +247,8 @@ upper bound within 1% + 0.01 ms; max is exact. State matrices and histograms are
 - boundaries: groups change space and jump across the radius every two seconds.
 
 All players send fresh timestamps even while occupying similar coordinates. A
-source sends at most one due update per pump; missed intervals and eight-pending
-admission stalls are recorded rather than hidden behind catch-up bursts. The generator
+source sends at most one due update per pump; missed intervals are recorded
+(`generatorMissedIntervals`) rather than hidden behind catch-up bursts. The generator
 transport budget is 16 packets per peer and max(4096, 16*N) packets globally
 (16 MiB); the global limit accommodates all per-peer windows. Final
 samples are sent after the timed load, then every pair is checked for the exact
@@ -281,7 +289,7 @@ window, not a cumulative loss counter; `TotalSentPackets` counts send attempts e
 when the installed ENet socket implementation reports WouldBlock. Pending bytes
 exclude ENet command/fragment headers. Histograms cost time and use a benchmark-only
 lock. Slow-event timestamps and runtime samples use the same process-local clock.
-Presence interval/lateness use Environment.TickCount64 and have its clock granularity.
+Presence interval uses Environment.TickCount64 and has its clock granularity.
 An interval spanning setup/idle must not be treated as steady-state cadence.
 
 Diagnostic options (buffer sizes are per socket, in bytes):
@@ -375,11 +383,11 @@ python -u Scripts/benchmark_enet_workers.py --clients 1000 --hosts 200 --workers
 owns N/P clients and H/P sockets. Socket buffers stay 256 KiB by default. Server
 configuration is the existing finite `movement` profile, with packet target 0.
 The client aggregate 16 MiB budget is split between workers, as is the packet
-budget; per-peer windows remain eight pending movement requests. The per-host
+budget; the per-peer budget stays 16 packets. The per-host
 event budget is max(1,4096/H), independent of worker count. These are independent
 processes and service loops, not server sharding.
 
-Workers register, join and begin characters sequentially in the same four-request batches as the
+Workers register, join and begin characters one worker after another, in the same batches as the
 single-process runner. They exchange an exact ID manifest and validate all N*N
 online/character projections before starting. Global player indices are
 interleaved across workers so a group of 25 includes players from other processes;
@@ -388,7 +396,7 @@ The shared start deadline and sample timestamps use Windows Stopwatch's monotoni
 clock. This clock contract does **not** support distributed machines.
 
 Preparation, shared start and final-state barriers use atomic files in each case's
-`group` directory, outside the measured loop. Each barrier has a 180s deadline;
+`group` directory, outside the measured loop. Each barrier has a 600 s deadline;
 the runner gives other workers up to 15s to finish failure reports before stopping
 them if one fails. Clients continue servicing
 ENet while waiting. Final sample manifests let each worker validate every local
@@ -402,7 +410,7 @@ alongside server metrics and CPU/private bytes for each worker and their sum.
 `serviceIterationMs` measures send-due plus servicing all of that worker's sockets.
 The generator retains its non-catch-up schedule: sub-interval slippage can reduce
 actual rate even when `generatorMissedIntervals` is zero. Age includes receiving
-worker processing, and the eight-request window measures end-to-end ACK pressure.
+worker processing.
 
 Repeats reverse the process-count order. The first timed iteration includes JIT;
 there is no forced GC or CPU affinity. All processes compete on the same machine.
@@ -411,7 +419,9 @@ CPU totals. Increasing workers tests generator parallelism; a clean separate-hos
 experiment is still needed before claiming a production server capacity limit.
 
 `--server-buffer` and `--client-buffer` independently override receive/send socket
-buffer sizes for controlled tests (default 262144 bytes each). These only alter
+buffer sizes for controlled tests (default 262144 bytes each); `--worker-send-budget`
+(default 2048) sets `Server.Worker.SendCommandsPerPass`, and `--server-benchmark`
+runs the server from another benchmark DLL. These only alter
 the saved benchmark configuration, not production defaults. Failed runs may have
 missing worker reports; never divide a partial numerator by the total population.
 

@@ -43,7 +43,7 @@ namespace DreamsleeveAPI
     Queued       = 0,  // Accepted locally; the outcome follows in the result callback.
     Published    = 1,  // The server published the announcement.
     NotConnected = 2,  // No ready session; the request was not sent.
-    Rejected     = 3,  // Refused; the callback reason tells why (synchronously: not UTF-8, a multiline label, an unknown kind).
+    Rejected     = 3,  // Refused; the callback reason tells why (synchronously: not UTF-8 or an unknown kind).
     Busy         = 4,  // A local queue is full; try later.
     RateLimited  = 5,  // Too frequent or repeated; the server limit is per player account.
     Failed       = 6   // Delivery unknown: the session changed or the request could not be encoded.

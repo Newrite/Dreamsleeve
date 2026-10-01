@@ -4,7 +4,8 @@
 ClientModel и публикует принятые измерения через существующий ClientExchange.
 Игровой поток владеет MovementView: после Drain вызывает Apply, каждый кадр —
 Sample(playerId, frameTime). Sample не меняет модель и не отправляет команды.
-SKSE-хук и создание светлячков пока не реализованы.
+В игре это делает SKSE-плагин: кадр из хука `Main::Update` вызывает Apply после Drain, а
+светлячки каждый кадр встают в позу из Sample ([SkseClientRu.md](SkseClientRu.md#светлячки)).
 
 ## Время и порядок
 
@@ -82,7 +83,8 @@ PlayerStore копирует для измерения только коорди
 Configuration.maxPendingMovementSamples — 4096 наблюдений до публикации.
 Задержка неотрицательна, maxGap больше delay и не больше часа (безопасное преобразование
 в длительности), historyCapacity не меньше двух, teleportDistance положителен и конечен.
-Runtime и MovementView.TryCreate возвращают ошибку для неверной конфигурации.
+Проверяет их один раз `ValidateClientSettings` (в `ClientApplication::TryCreate`, ключи
+`interpolation.*`); runtime и `MovementView::Create` доверяют проверенной конфигурации.
 LoadClientSettings читает TOML по пути, переданному конечным клиентом; секция
 interpolation содержит delayMs/maxGapMs/historyCapacity/teleportDistance.
 
@@ -90,7 +92,7 @@ interpolation содержит delayMs/maxGapMs/historyCapacity/teleportDistance
 периоды передачи с общим ориентиром 50 мс (20 Гц) по умолчанию. Клиент повторяет последнюю позу, сервер повторяет все актуальные
 видимые позы, включая неподвижных игроков; потеря последнего пакета исправляется
 следующим периодом. ACK каждого измерения и ожидания pending для движения нет.
-visibilityDistance/showFireflies остаются настройками будущего адаптера отображения;
+visibilityDistance/showFireflies — настройки отображения SKSE-плагина;
 выключение светлячков не меняет сетевой поток и историю.
 
 ## Проверка без Skyrim
@@ -112,7 +114,7 @@ Scripts/smoke_chat.py проверяет метки и MovementView на реа�
 Нагрузочный стенд движения добавлен: [методика ENet и native-прогонов](../tests/Dreamsleeve.Server.NetworkBenchmarks/README.md#movement-benchmark).
 Он отдельно измеряет серверную рассылку и одного C++-потребителя с историей.
 
-Историческая проверка первоначальной интерполяции (до v6): 200 native-тестов, 259 managed-тестов, 19 сценариев ENet smoke,
-131 кадр детерминированного демо. Саморевью: метки не меняют авторизацию и критерий видимости,
+Первоначальная интерполяция (до v6) проверялась native- и managed-тестами, ENet smoke и
+детерминированным демо. Саморевью: метки не меняют авторизацию и критерий видимости,
 нет новой очереди/потока/блокировки, наблюдения ограничены и не копируют actor values;
 проверена устаревшая база при входе в видимость и отсутствие деления на ноль.

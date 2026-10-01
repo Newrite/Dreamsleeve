@@ -11,7 +11,8 @@ ClientExchange. После создания им владеет один сет�
 Без сессии приложение держит гостевое соединение: `ClientRuntime::KeepGuest(true)` при запуске,
 `JoinAsGuest` на Connected, `Connect(ticket)` открывает сессию на этом же соединении (или
 дожидается его Connected). После конца сессии или ошибки гость подключается снова (пауза
-`Backoff` 5→60 с после неудач). Гость не публикуется в Exchange: фаза остаётся `Disconnected`.
+`Backoff` 5→60 с после неудач). Гость не публикуется в Exchange: фаза остаётся простаивающей
+(`Disconnected` или `Faulted`).
 `KeepGuest(false)` при остановке закрывает соединение штатно, `Closing()` сообщает, что закрытие
 ещё обслуживается.
 `ResetPassword(code, password)` завершает административный сброс.
@@ -38,7 +39,7 @@ ClientExchange. После создания им владеет один сет�
 поэтому файл, аргументы Client.Dev и прямое создание `ClientSettings` проходят одну проверку.
 Частичный или пустой TOML дополняется defaults: 20 Гц, три канала,
 один peer, прежние лимиты и настройки интерполяции. `serverIp` — IPv4,
-`serverPort` — порт ENet; `authUrl` — HTTP(S) origin. Hot reload отсутствует.
+`serverPort` — порт ENet; `authUrl` — HTTP(S) origin без пути. Hot reload отсутствует.
 Файл читается как UTF-8 через Glaze 7.0.2; имена ключей чувствительны к регистру.
 Перед чтением проверяется структура документа и повторные ключи/таблицы с помощью
 токенизатора Glaze: сам `read_toml` этой версии допускает повторные ключи и корневую
@@ -58,7 +59,7 @@ auto accepted = (*app)->Connect({username, password});
 TryCreate проверяет настройки, владеет ENet runtime, Exchange и сетевым потоком.
 Connect принимает операцию без HTTP на вызывающем потоке. Одновременно допускается
 одна операция входа; новая отклоняется, пока идёт auth, disconnect или активна
-сессия. Connect по паролю получает свежий билет; ConnectSaved восстанавливает вход через Credential Manager;
+сессия (SignOut и ForgetSavedLogin при сессии допустимы). Connect по паролю получает свежий билет; ConnectSaved восстанавливает вход через Credential Manager;
 общий объект не сохраняет пароль для автоматических повторов.
 
 `Status()` возвращает текущие phase/authenticating/stopped и последнюю ошибку
@@ -93,15 +94,17 @@ xmake run Dreamsleeve.Client.Dev --config "path/to/client.toml" player --registe
 Прежний `--connect <IPv4> <port> <username>` сохранён. Его `--config <path>`
 загружает остальные настройки; позиционные IPv4/port и явный `--auth-url` затем
 переопределяют файл независимо от порядка опций. Без файла используются defaults.
+Без имени пользователя (или с `--saved`) вход идёт сохранённой сессией; `--remember`
+сохраняет вход, `--hide` / `--hide-except-marks` открывают сессию со скрытым именем.
 
 ## Вход и завершение
 
 `ClientRuntime::Create(config, exchange)` принимает уже проверенную конфигурацию, как и
-`ProtocolCodec` и `MovementView::Create`. `Connect(sessionTicket)` создаёт новый транспортный host
-из той же конфигурации и начинает подключение. При каждом новом входе вызывающий
+`ProtocolCodec` и `MovementView::Create`. `Connect(sessionTicket)` открывает сессию на гостевом
+соединении, а без него создаёт новый транспортный host из той же конфигурации. При каждом новом входе вызывающий
 код передаёт новый одноразовый билет, полученный из HTTP login; ClientRuntime не знает пароль
 и не выполняет HTTP; общий ClientApplication получает билет через AuthHttp. `Poll(waitMs)` обслуживает ENet;
-его нужно вызывать регулярно. Общий Exchange.NextRequestId() выдаёт ненулевые ID для OpenSession, SendChat и UpdatePlayer.
+его нужно вызывать регулярно. Общий Exchange.NextRequestId() выдаёт ненулевые ID для OpenSession, JoinAsGuest и всех reliable-команд.
 Счётчик не сбрасывается при переподключении; исчерпание возвращает пустой результат.
 
 Фазы: Disconnected → Connecting → Opening → Ready. ENet Connected запускает
@@ -134,7 +137,7 @@ connect/disconnect/session (5000/2000/5000 ms), ёмкость чата (512) и
 лимиты codec/ENet. Одна конфигурация используется для host и codec, в течение
 сессии не меняется. LoadClientSettings читает TOML по переданному вызывающей стороной пути.
 
-Poll обслуживает SendChat и RequestSnapshot из Exchange. Для отправки producer
+Poll обслуживает все команды из Exchange (чат, метки, модерация, телеметрия, RequestSnapshot). Для отправки producer
 берёт ID через NextRequestId(), затем Post({generation, SendChat{ID, channel, text}}).
 Generation берётся из последнего снимка/дельты; один producer публикует команды
 в порядке выделенных ID. Пропущенные и отклонённые ID не используются повторно.
@@ -151,7 +154,7 @@ ChatMessagesReceived, что и публикации остальных игро
 сервера: StaleGeneration, SessionNotReady, Busy, InvalidRequest, EncodingFailed. Он
 сохраняет исходные generation/requestId и не выдаётся за ServerRejection.
 Общий бюджет commandCapacity охватывает невыданные результаты, а также места для
-результатов ожидаемых SendChat, UpdatePlayer и OpenSession. TakeCommands
+результатов всех ожидаемых запросов, включая OpenSession. TakeCommands
 берёт команды с учётом этих резервов; Connect требует свободное место до начала входа.
 Если UI не вызывает Drain, команды остаются в ограниченной очереди, а Poll продолжает
 обслуживать сеть. Успешный ChatAccepted освобождает резерв: сообщение восстанавливается
@@ -194,7 +197,9 @@ reliable-границу с новым токеном, который сбрас�
 Клиентская Configuration содержит `visibilityDistance` (8192 Skyrim units) и
 `showFireflies` (true) для игрового адаптера. Форму STAT выбирают `fireflyPlugin`
 ("Skyrim.esm") и `fireflyFormId` (0x02EB0F, локальный ID без индекса загрузки);
-`fireflyScale` задаёт масштаб 0.01..10.0 (по умолчанию 0.25). Расстояние должно быть конечным
+`fireflyScale` задаёт масштаб 0.01..10.0 (по умолчанию 0.25). Так же заданы формы меток на земле
+(`groundNote*`, `deathMark*`) и `captureKeyboard` (true) — захват клавиатуры при открытом чате.
+Расстояние должно быть конечным
 и неотрицательным; 0 соответствует точному совпадению координат. Эти настройки пока
 не меняют сетевой трафик: выключение визуальных огоньков не отключает отправку samples
 и получение серверной репликации. Сервер самостоятельно задаёт и применяет свой AOI.
@@ -210,7 +215,8 @@ reliable-переходы не объединяются. Чат не ждёт о
 
 Каналы: Control=0 reliable, Chat=1 reliable, Realtime=2 unreliable sequenced.
 Пакет движения не превышает согласованный MTU; запроса и pending-записи у него нет.
-ChatPublished, обогнавший SessionOpened, сохраняется в bounded bootstrap-буфере.
+Изменения Chat-канала (публикации, удаления), обогнавшие SessionOpened, ждут в bootstrap-буфере
+размером `chatCapacity`.
 
 Тесты Client.Runtime используют настоящий ENet host и protobuf-пакеты на серверной
 стороне: отсутствие локального эха, корреляция, перегрузка, отказы без отключения,
@@ -242,6 +248,9 @@ xmake run Dreamsleeve.Client.Dev --connect 127.0.0.1 8778 player --auth-url http
 clear-location очищает только положение; actor values и details не затрагиваются.
 Принятый PlayerInfo печатается через read строкой `player <json>`.
 Позиция измеряется игровыми world units, вращение XYZ — радианами.
+Также: `resume`, `signout`, `forget`, `reset-password <code>` (вход), `announce …`, `location <json>`,
+`note <text>` / `death <label>` / `unmark <id>` / `marks` (метки), `hide <on|except-marks|off>`,
+`name <имя>` (отображаемое имя), `mod …` (инструменты модератора); полный список печатает консоль.
 
 ```text
 begin Nerevar
@@ -256,7 +265,7 @@ leave
 В JSON enum задаются номерами из player.proto: например activity.kind=2 — Combat,
 16 — Menu (menuKey="main" для главного меню), 18 — Loading. Внутри API это enum.
 Для подключения нужен Protocol/protocol.proto на IPv4, три ENet-канала,
-протокол версии 7 без checksum/compression. Старый `--state-demo` и консоль без аргументов
+та же версия протокола, что у сервера (`Wire::Version` в `Protocol/ProtocolCodec.ixx`), без checksum/compression. Старый `--state-demo` и консоль без аргументов
 остаются явно синтетическими проверками очередей и чата.
 
 ## Проверка с реальным сервером
@@ -275,6 +284,9 @@ UDP-порту, проверяет оба направления чата, ед�
 Проверки видимости включают bootstrap без позиции наблюдателя, выход из радиуса,
 смену пространства, отсутствие утечки координат через полное PlayerInfo и возврат
 неподвижной цели после перемещения только наблюдателя.
+Кроме того, smoke проверяет объявления, метки на земле, скрытое имя и смену отображаемого имени;
+`Scripts/smoke_moderation.py` — инструменты модератора, `Scripts/smoke_saved_auth.py` — сохранённый
+вход, отзыв и сброс пароля.
 Аккаунты регистрируются через Client.Dev, SQLite/config создаются во временной папке.
 После рестарта сервера проверяются тот же PlayerId и новый успешный login;
 история чата пока сохраняется только в памяти работающего сервера.
@@ -284,7 +296,7 @@ UDP-порту, проверяет оба направления чата, ед�
 Лог: build/smoke-chat.log.
 
 Публичный ProtocolCodec обрабатывает оболочку и вызывает внутренние преобразования
-ChatCodec/PlayerCodec/SessionCodec. Файлы находятся в каталоге Protocol соответствующего
+ChatCodec/PlayerCodec/SessionCodec/GroundCodec/ModerationCodec. Файлы находятся в каталоге Protocol соответствующего
 Core-проекта; отдельные экземпляры для частей протокола не создаются.
 
 ## Поток движения и интерполяция
@@ -303,9 +315,9 @@ Client.Dev: --movement-demo выводит детерминированную т
 должен разрешить `[Authentication.Listener] AllowInsecureRemote = true`.
 См. режим тестирования в `docs/AuthenticationRu.md`.
 
-Имена над светлячками: `showFireflyNames = true`, `fireflyNameOcclusion = true`,
-`fireflyNameFontSize = 18` (8..48), `fireflyNameOffset = 35` (0..512).
-Настройки относятся к Scaleform-адаптеру SE/AE. Через UI они сохраняются в ui.toml и применяются без перезапуска; значения client.toml служат начальными.
+Имена над светлячками (`showFireflyNames`, `fireflyNameOcclusion`, `fireflyNameFontSize`,
+`fireflyNameOffset`) и прочий вид чата, облачков и меток — не ключи `client.toml`, а настройки UI
+в `ui.toml` `[ui.chat]` SKSE-плагина ([SkseClientRu.md](../../docs/SkseClientRu.md)).
 
 ## Общие помощники
 

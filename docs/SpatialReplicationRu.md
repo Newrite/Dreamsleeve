@@ -1,7 +1,20 @@
 # Пространственная репликация v6
 
 Три согласованных ENet-канала: Control (0, reliable), Chat (1, reliable),
-Realtime (2, sequenced unreliable). Клиент и сервер обновляются вместе.
+Realtime (2, sequenced unreliable). Контракт движения введён в protocol v6 и с тех
+пор не менялся; клиент и сервер обновляются вместе.
+
+## Каналы
+
+Control несёт сессию и приветствие с историей, `UpdatePlayer`, baseline/clear видимости,
+остальные события присутствия, метки и модерацию; Chat — чат, объявления, удаление
+сообщений и их ответы; Realtime — только позы (`ClientMovementPacket`/`ServerMovementPacket`).
+Номера — часть протокола (`DeliveryLane`), надёжность задаёт флаг пакета, отказ идёт по
+каналу запроса. ENet упорядочивает reliable внутри канала: потеря пакета чата не задерживает
+Control. Позу не подтверждают — следующий период повторяет последнюю. Ранний `ChatPublished`
+клиент держит до `SessionOpened` в ограниченном буфере, ранний realtime отбрасывает. ENet
+`Service` сам выполняет работу протокола (отправку, ACK, повторы) и не ограничен по
+длительности, поэтому у ENet свой поток («Транспорт»); большие UDP-буферы его не заменяют.
 
 ## Положение и границы
 
@@ -36,6 +49,22 @@ clear/reentry не возвращает игрока. Смена revision сбр
 PlayerUpdated без location — metadata; она сохраняет позу только при том же
 CharacterGeneration. Смена поколения инвалидирует старое движение.
 
+## Состояние игрока
+
+`PlayerInfo`: профиль, имя персонажа или `character_name_withheld`, положение, actor values,
+поколение, `PlayerDetails`, `view_revision`, `movement_sequence`. `SetDetails` заменяет
+`PlayerDetails` целиком: раса (`NamedForm`: FormKey и подпись), необязательный уровень
+(отсутствие не равно 0), занятие (`ActivityKind`; цель — только у занятий с целью, сложность
+замка — у Lockpicking, ключ меню — ровно у Menu), место (подписи мира, локации и маркера,
+ASCII-ключ вида маркера, интерьер; в расстояниях не участвует), `game_started_at_unix_ms` —
+начало игры со слов клиента. Без персонажа `SetDetails` допустим только без расы и уровня. Actor values
+заменяются картой целиком (пустая — очистка, Scalar 0 — присутствующее значение).
+`PlayerSession` владеет `Player`: `BeginCharacter`/`LeaveGame` повышают поколение и очищают
+положение, details и actor values, `RenameCharacter` их сохраняет. `PresenceAgent` сравнивает
+`Latest`/`Published`: смена личности — `PlayerUpdated`, изменившиеся actor values и details —
+`PlayerMetadataChanged`. Модель клиента, и автора тоже, меняется только по этим событиям; в БД
+эти данные не пишутся.
+
 ## Область видимости
 
 Один Latest-индекс разделён по полному WRLD/CELL FormKey и трёхмерной сетке.
@@ -65,6 +94,6 @@ Realtime при насыщении может быть пропущен. Reliabl
 наблюдаемы и закрывают затронутое соединение, а не молча теряют команды.
 Внутренние ENet packet budgets и handoff count/bytes ограничиваются отдельно.
 
-Исторические результаты [v5](benchmarks/movement-v5-2026-09-27.md) относятся к
-прежней reliable-схеме. План и критерии текущих измерений:
-[EnetMovementRefactorPlanRu](EnetMovementRefactorPlanRu.md).
+Замер этого контракта 27–28 сентября 2026 года (1000 клиентов, 20 Гц, inline и отдельный
+владелец ENet): [movement v6/owner](benchmarks/movement-v6-owner-2026-09-27.md); методика —
+[NetworkBenchmarks](../tests/Dreamsleeve.Server.NetworkBenchmarks/README.md#movement-benchmark).

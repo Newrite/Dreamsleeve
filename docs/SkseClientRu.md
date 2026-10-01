@@ -12,7 +12,7 @@
 |---|---|
 | `Main.cpp` | Только экспорт `SKSEPlugin_Load`; заголовки CommonLib не включает (см. ниже) |
 | `Plugin.ixx` | `SKSE::Init`, listener сообщений SKSE, порядок инициализации |
-| `Runtime.ixx` | Единственный владелец `ClientApplication`, `MovementView`, `Host::Session`, `ui.toml`; ограниченная очередь уведомлений (64) с других потоков; снимок для страницы SKSE Menu |
+| `Runtime.ixx` | Единственный владелец `ClientApplication`, `MovementView`, `Host::Session`, `Host::Bubbles`, `ui.toml`; ограниченные очереди уведомлений (64) и объявлений API (32) с других потоков; снимок для страницы SKSE Menu |
 | `Logic.ixx` | Кадр: уведомления → Drain (события UI, свежие сообщения → облачки) → политика сессии → готовность мира → телеметрия → один HUD-кадр надписей (светлячки + метки) → focus |
 | `Hooks.ixx` | Все патчи игры: ID Address Library, смещения callsite, проверка байтов и thunks для `Main::Update`, `HUDMenu::AdvanceMovie` (имена над светлячками) и рассылки `InputEvent` (захват клавиатуры) |
 | `Events.ixx` | Sinks: меню, ввод, `TESDeathEvent` (флаг `dead` и handle убийцы, без резолва), `TESActivateEvent`; только `Runtime::Post` |
@@ -24,9 +24,10 @@
 | `Game/GroundMarks.ixx` | Метки на земле: отбор ближайших из снимка Core, статики со снапом на пол, подписи, отправка `ReportDeath` один раз на смерть |
 | `Game/Input.ixx` | Состояние захвата клавиатуры и фильтрация цепочки `InputEvent` до всех sinks; адресов не содержит |
 | `UI/PrismaUI.ixx` | View, listener, разбор команды и передача её `Host::Handle`, доставка событий, focus/visibility |
+| `UI/Nameplates.ixx` | Scaleform-слой в HUD: имена и облачки над светлячками, подписи меток (см. ниже) |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
 | `API/ModApi.ixx`, `API/DreamsleeveAPI.h` | API для других модов: интерфейс `IVDreamsleeve1` через экспорт `RequestPluginAPI` из `ModApi.ixx` (как PrismaUI и TrueFlasksNG), Papyrus `DreamsleeveClient`, callbacks итогов объявлений ([DreamsleeveModApiRu.md](DreamsleeveModApiRu.md)) |
-| `Host/Bridge.ixx`, `Host/Commands.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Bubbles.ixx`, `Host/Hud.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI (варианты команд и событий), исполнение команд UI через порты плагина (`CommandPorts`: запись `ui.toml`, выход из фокуса, клавиша активации, место персонажа для заметки), TOML настроек UI, корреляция запросов и проекция онлайна, таймеры облачков чата, вид надписей HUD из настроек (`Hud::PlayerBubble`, `MarkBubble`, `NameColor`), политика захвата клавиатуры, типы запроса и итога объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
+| `Host/Bridge.ixx`, `Host/Commands.ixx`, `Host/UiSettings.ixx`, `Host/Session.ixx`, `Host/Names.ixx`, `Host/GameDates.ixx`, `Host/Bubbles.ixx`, `Host/Hud.ixx`, `Host/InputCapture.ixx`, `Host/Announcements.ixx` | Без CommonLib: JSON-контракт UI (варианты команд и событий), исполнение команд UI через порты плагина (`CommandPorts`: запись `ui.toml`, выход из фокуса, клавиша активации, место персонажа для заметки), TOML настроек UI, корреляция запросов и проекция онлайна, имена игроков (режим имени, псевдонимы стримера, игнор), формат игровой даты, таймеры облачков чата, вид надписей HUD из настроек (`Hud::PlayerBubble`, `MarkBubble`, `NameColor`), политика захвата клавиатуры, типы запроса и итога объявлений API. Компилируются также в `Dreamsleeve.Client.Tests` |
 
 `Runtime::Get()` хранит единственный экземпляр приложения; getter не перемещает
 владение (прежний вариант возвращал `std::move` статического `unique_ptr` и
@@ -58,7 +59,7 @@ MSVC 14.51 отклоняет единицу трансляции, где тек
 |---|---|---|---|---|
 | kPostLoad / kPostPostLoad | `PluginManager::LoadComplete` → `CallPostLoad`, синхронно после загрузки DLL | нет | Загружены DLL-плагины, не мир и не сохранение; view PrismaUI ещё нет | PostPostLoad: запрос API PrismaUI, создание `ClientApplication` (сетевой поток), чтение `client.toml`/`ui.toml` |
 | kInputLoaded | `PlayerControls::ctor_Hook` | нет | Источник ввода существует; персонажа нет | ничего (sink ввода регистрируется на kDataLoaded, когда доступны все источники) |
-| kDataLoaded | `DataHandler::LoadScripts_Hook` | нет | Forms загружены; не загрузка сохранения и не готовность cell/3D | хук `Main::Update`, sinks, разрешение формы светлячка, `CreateView` |
+| kDataLoaded | `DataHandler::LoadScripts_Hook` | нет | Forms загружены; не загрузка сохранения и не готовность cell/3D | хуки (`Main::Update`, `HUDMenu::AdvanceMovie`, рассылка ввода), sinks, разрешение форм светлячка и меток, `CreateView` |
 | kNewGame | `TESQuest::NewGame_Hook` | `TESQuest*` CharGen | До завершения загрузки игры | контекст → Loading; готовность персонажа проверяется покадрово |
 | kPreLoadGame | `BGSSaveLoadManager::LoadGame_Hook`, под `g_loadGameLock` | заимствованное имя сохранения, `dataLen` без `\0` | Начало попытки загрузки | завершение прежнего контекста, очистка светлячков, прекращение семплирования |
 | kPostLoadGame | после `LoadGame_HookTarget`, под тем же lock | `data != nullptr` означает успех (не `bool*`) | Успех не гарантирует cell/3D и завершения загрузочного UI | контекст остаётся Loading; при неуспехе тоже; возобновление — после покадровой проверки готовности |
@@ -109,9 +110,13 @@ patch-site остаётся у трамплина CommonLib (`skse_patch_safety`
 
 ## Жизненный цикл сессии
 
-- Сеть не зависит от игры: чат работает в главном меню. При наличии сохранённого входа
-  (Windows Credential Manager) один раз выполняется `ConnectSaved()`; при потере
-  соединения после Ready — повтор с backoff 5→60 с, пока пользователь не отключится/выйдет.
+- Сеть не зависит от игры: чат работает в главном меню. До входа Core держит гостевое
+  соединение, и сервер считает клиента онлайн
+  ([Core README](../src/Dreamsleeve.Client.Core/README.ru.md)). При наличии сохранённого входа
+  (Windows Credential Manager) один раз выполняется `ConnectSaved()`; затем, пока сессии нет, —
+  повтор с backoff 5→60 с, пока пользователь не отключится/выйдет. Отказы, которые повтор не
+  исправит (`Auth::NeedsUser`: неверный вход, хранилище учётных данных, запрос, бан), ждут
+  действия игрока.
   Ручное отключение (`disconnect`, `signOut`, `forgetLogin`, кнопка в SKSE Menu) ставит
   `manualDisconnect`, который снимает только явный вход (`signIn`, `signInSaved`, «Войти»
   в меню). Статус Ready флаг не снимает: в кадре запроса Drain ещё видит Ready, и сброс
@@ -145,7 +150,7 @@ refresh-снимок после мгновенной настройки (име�
 `connection`. Чат: `sendChat` → `Session::SendChat` (`NextRequestId`, `Post`);
 результат команды с известным RequestId → `sendResult`, чужие RequestId (команды
 телеметрии) игнорируются. `Session` держит один реестр ожидающих запросов (чат, объявление
-мода, метка, скрытое имя, отображаемое имя) и по его виду решает, что показать; команду
+мода, метка, скрытое имя, отображаемое имя, модерация) и по его виду решает, что показать; команду
 отправляет одна функция `Submit`. Авторизация: `signIn`
 (с `displayName` — регистрация), `signInSaved`, `signOut`, `forgetLogin`, `disconnect`;
 пароль передаётся в `Connect` и затирается, в TOML/логи/JS не возвращается.
@@ -304,7 +309,7 @@ reliable-снятие позиции; после загрузки отправл
 
 | Файл | Кто пишет | Содержимое |
 |---|---|---|
-| `Data/SKSE/Plugins/Dreamsleeve/client.toml` | пользователь; без файла плагин пишет встроенный [client.example.toml](../src/Dreamsleeve.Client.Core/client.example.toml) (правило xmake `dreamsleeve.embed`), dist кладёт тот же файл | сервер, auth URL, интервалы, радиус, формы светлячка и меток; `LoadClientSettings` только разбирает, `ValidateClientSettings` в `ClientApplication::TryCreate` проверяет один раз, runtime, codec и `MovementView` доверяют проверенному |
+| `Data/SKSE/Plugins/Dreamsleeve/client.toml` | пользователь; без файла плагин пишет встроенный [client.example.toml](../src/Dreamsleeve.Client.Core/client.example.toml) (правило xmake `dreamsleeve.embed`), dist кладёт тот же файл | сервер, auth URL, интервалы, радиус, формы светлячка и меток, `captureKeyboard`; `LoadClientSettings` только разбирает, `ValidateClientSettings` в `ClientApplication::TryCreate` проверяет один раз, runtime, codec и `MovementView` доверяют проверенному |
 | `Data/SKSE/Plugins/Dreamsleeve/ui.toml` | плагин, атомарно | `[ui] hideUi` и `hideIdentity` (скрытое имя: `off`/`everywhere`/`exceptGroundMarks`; пишет только host после подтверждения сервера), `[ui.chat]` — положение, размер, оформление, клавиша активации, имена и облачки над светлячками (в том числе цвета и рамка), высота светлячка, метки на земле, `nameMode`/`streamerMode`; пределы и варианты — таблицы правил `Host/UiSettings.ixx`, все ключи — [ui.example.toml](../src/Dreamsleeve.Client.UI/ui.example.toml); `[[names.aliases]]` и `[[names.ignored]]` — псевдонимы и игнор по адресу сервера (до 1 MiB) |
 | `Data/SKSE/Plugins/Dreamsleeve/aliases.toml` | пользователь (поставляется в dist) | словарь псевдонимов режима стримера; при ошибке — встроенный список |
 
@@ -318,10 +323,12 @@ reliable-снятие позиции; после загрузки отправл
 
 | Каталог | Содержимое |
 |---|---|
-| `dist/Client` | Раскладка мода относительно Data: `SKSE/Plugins/Dreamsleeve.Client.dll(+pdb)`, `SKSE/Plugins/Dreamsleeve/client.toml`, `PrismaUI/views/Dreamsleeve/*`, `Scripts/DreamsleeveClient.pex`, `Scripts/Source/DreamsleeveClient.psc`, `Dreamsleeve/API/DreamsleeveAPI.h`, `Dreamsleeve/README.md`, `Dreamsleeve/THIRD_PARTY_NOTICES.md` |
-| `dist/Server` | `Dreamsleeve.Server.dll` с зависимостями, `db/migrations`, `server.example.toml`, `README.md` (нужен ASP.NET Core Runtime 10) |
+| `dist/Client` | Раскладка мода относительно Data: `SKSE/Plugins/Dreamsleeve.Client.dll(+pdb)`, `SKSE/Plugins/Dreamsleeve/client.toml`, `SKSE/Plugins/Dreamsleeve/aliases.toml`, `PrismaUI/views/Dreamsleeve/*`, `Scripts/DreamsleeveClient.pex`, `Scripts/Source/DreamsleeveClient.psc`, `Dreamsleeve/API/DreamsleeveAPI.h`, `Dreamsleeve/README.md`, `Dreamsleeve/THIRD_PARTY_NOTICES.md` |
+| `dist/Server` | `Dreamsleeve.Server.dll` с зависимостями, `db/migrations`, `server.example.toml`, `moderation.example.toml` и `pseudonyms.example.toml` (рабочие `moderation.toml`/`pseudonyms.toml` создаются, только если их нет), `README.md`, `THIRD_PARTY_NOTICES.md` (нужен ASP.NET Core Runtime 10) |
 
-`--skip-build` использует готовые DLL и UI, `--no-server` собирает только клиент. Сторонние DLL
+`--skip-build` использует готовые DLL и UI, `--no-server` собирает только клиент. Пользовательские
+файлы в dist (`client.toml`, `ui.toml`, `aliases.toml`, `server.toml`, словари, БД, логи) пересборка
+сохраняет. Сторонние DLL
 (PrismaUI, SKSE Menu Framework, Address Library, Media Keys Fix) не включаются: у них свои
 лицензии и страницы. `node_modules`, demo, dev-server, отчёты тестов, БД и логи в dist не попадают.
 
@@ -370,8 +377,8 @@ API для других модов (C++ `IVDreamsleeve1` и Papyrus `Dreamsleeve
 
 ## Проверки и границы
 
-См. итог в [CurrentStateRu.md](CurrentStateRu.md#skse-клиент). Игровые проверки, которые
-нельзя выполнить без запуска Skyrim, перечислены там как ручные.
+Общее состояние проекта — [CurrentStateRu.md](CurrentStateRu.md). Проверки без игры и
+ручные проверки в Skyrim для каждой части перечислены в её разделе этого документа.
 
 ### Форма светлячка
 
@@ -472,7 +479,7 @@ TES::Pick ID 13221/13371. Проверено по исходникам CommonLib
 ## Облачка чат-сообщений над светлячками
 
 Тот же слой `UI/Nameplates.ixx` рисует над ником одно облачко с последним сообщением
-игрока: вложенный MovieClip `bubble_<id>` в слое `DreamsleeveNames` с фоном через
+игрока: вложенный MovieClip `bubble_player_<id>` в слое `DreamsleeveNames` с фоном через
 drawing API (`beginFill`/`lineStyle`) и TextField с `wordWrap` на `$EverywhereFont`.
 Отдельного SWF, PrismaUI и новых зависимостей нет; в VR облачка отключены вместе с
 именами (тот же плоский HUD-рендерер).
@@ -556,7 +563,7 @@ fade окна чата), применяются кнопкой сохранен�
 упорядоченные переходы `ClientStateDelta.groundMarks` (`Cleared / Removed / Added`) в
 `VisibleMarks()`; сервер уже отфильтровал их по пространству и радиусу. Отдельно ведётся
 `OwnMarks()` — полный список меток игрока, который сервер присылает сразу после открытия
-сессии и заново при каждом изменении (`OwnGroundMarks`, протокол v9; в Core —
+сессии и заново при каждом изменении (`OwnGroundMarks`; в Core —
 `ClientSnapshot.groundMarks.own` и `ClientStateDelta.ownGroundMarks`). Метка, оставленная в
 прошлой сессии далеко отсюда, видна в «Моих метках» сразу после подключения.
 
@@ -629,7 +636,7 @@ housecarl); это та же семья, что светлячок `FXGlowFillRo
 (так же читается смерть через консоль: убийцы и воды нет). Подпись локализуется на стороне
 автора; сервер проверяет только длину и словарь; имя убийцы обрезается так, чтобы вся
 подпись уложилась в лимит. Подпись — недоверенный текст: обрезается до 64 скаляров (умолчание
-`ChatInput.DeathMarkText`; протокол v8 лимит не сообщает). `ReportDeath` уходит один раз на
+`[Server.ChatInput] DeathMarkText`; протокол лимит не сообщает). `ReportDeath` уходит один раз на
 смерть: повтор возможен после того, как `IsDead()` снова вернул false (воскрешение,
 загрузка, новая игра сбрасывают флаг вместе с контекстом). Второе уведомление (`dead=true`)
 без первого тоже создаёт метку. Без Ready-сессии смерть не отправляется (запись в логе).
@@ -698,8 +705,7 @@ host берёт положение и дату из `World::Spot()` (порт `n
 
 | Вопрос | Решение |
 |---|---|
-| Сервер не сообщает поддержку меток и лимит `DeathMarkText` | Серверные квоты хранения и клиентские настройки показа — разные понятия, сообщать нечего; поддержка = Ready-сессия протокола v9 (`groundMarksSupported = true` в снимке, поле оставлено для будущего host); лимит подписи — константа 64 в `GroundMarks.ixx` |
-| Список своих меток | Часть 3: сервер присылает полный список (`OwnGroundMarks`, протокол v9) |
+| Сервер не сообщает поддержку меток и лимит `DeathMarkText` | Серверные квоты хранения и клиентские настройки показа — разные понятия, сообщать нечего; поддержка = любая Ready-сессия (`groundMarksSupported = true` в снимке, поле оставлено для будущего host); лимит подписи — константа 64 в `GroundMarks.ixx` |
+| Список своих меток | Часть 3: сервер присылает полный список (`OwnGroundMarks`) |
 | Вид меток | Плоские glow-диски без коллизии; бумажная записка отклонена без игровой проверки |
 | Размер имени над меткой | `groundFontSize` (общий с текстом), не `fireflyNameFontSize` |
-| Шаг 1 отдельно | Правки стиля облачков (`BubbleStyle`, `bubbleBorder`/`bubbleTextColor`/`fireflyNameColor`, блок настроек, тесты) не зависят от остального и выделяются в отдельный коммит по файлам `Nameplates.ixx`, `UiSettings.ixx`, `types.ts`, `settings.ts`, `SettingsPanel.tsx` |

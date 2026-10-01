@@ -1,7 +1,9 @@
 # Метки на земле
 
 Реализовано 29 сентября 2026 года (часть 1: домен, протокол v8 (v9 с частью 3), сервер, ядро клиента и
-`Client.Dev`); часть 2 — SKSE-плагин и веб-UI, см. [SkseClientRu.md](SkseClientRu.md#метки-на-земле). Доменная модель —
+`Client.Dev`); часть 2 — SKSE-плагин и веб-UI, см. [SkseClientRu.md](SkseClientRu.md#метки-на-земле).
+Игровая дата — protocol v12, инструменты модератора — v15
+([ModerationAndNamesRu.md](ModerationAndNamesRu.md#инструменты-модератора-в-игре)). Доменная модель —
 [DomainSpecRu.MD §4.9](DomainSpecRu.MD); здесь — устройство реализации, конфигурация,
 границы проверок и открытые вопросы.
 
@@ -28,10 +30,13 @@
 `ChatMessage.CharacterName`; отсутствует вне персонажа или при скрытом имени), вид,
 текст, flagged-диапазоны (как `ChatMessage.flagged`), положение
 (`LocationId` + `Position` + курс — угол Z в радианах, чтобы клиент повернул статик по
-взгляду автора), серверное время создания (Unix ms). Имён в метке нет: на wire автор
-отдаётся снимком профиля (`PlayerProfile`), как у сообщения, чтобы имя было и у
-офлайн-автора; при загрузке из SQLite берётся текущий профиль через ту же публичную
-проекцию словаря, что у чата (`Moderation.publicProfile`).
+взгляду автора), серверное время создания (Unix ms), игровая дата автора (`GameDate`: эра,
+год, месяц, день, день недели, час, минута; клиент сообщает, сервер проверяет только
+диапазоны; у меток до v12 её нет) и псевдоним автора, если метку оставили при скрытом имени.
+Username и display name в метке не хранятся: на wire автор отдаётся снимком профиля
+(`PlayerProfile`), как у сообщения, чтобы имя было и у офлайн-автора; при загрузке из SQLite
+берётся текущий профиль через ту же публичную проекцию словаря, что у чата
+(`Moderation.publicProfile`).
 
 ## Домен (`Dreamsleeve.Server.Domain/GroundMarks.fs`)
 
@@ -40,13 +45,14 @@
   (`isNear` — мягкая проверка положения, `isVisibleFrom` — видимость).
 - `GroundMarkRules.create` — квоты (≥ 1 на вид), сроки жизни (дни, 0 — бессрочно),
   радиусы (конечные, неотрицательные); `quota`, `ttl`.
-- `GroundMark.create/withFlagged/isExpired/expiresAt/isVisibleFrom`.
+- `GameDate.create` — диапазоны календаря Skyrim (длина месяца без високосных лет).
+- `GroundMark.create/withFlagged/withCharacterName/withPseudonym/withGameDate/isExpired/expiresAt/isVisibleFrom`.
 - `GroundMarkStorage` — владелец всех меток в памяти: `add` с вытеснением самой старой
   метки того же автора и вида при достижении квоты (мягкое правило §10: лишние метки
   после снижения квоты не удаляются, уходит только одна старейшая на каждое новое
-  размещение), `remove`, `expired`, `evictionCandidate`, `snapshot`.
+  размещение), `remove`, `expired`, `evictionCandidate`, `ofAuthor`, `snapshot`.
 
-Клиентские типы: `Domain::GroundMark`, `GroundMarkPlacement`, `GroundMarkKind`
+Клиентские типы: `Domain::GroundMark`, `GroundMarkPlacement`, `GroundMarkKind`, `GameDate`
 (`Domain.ixx`); какие метки видны, решает сервер.
 
 ## Сервер
@@ -57,19 +63,26 @@
 
 | Команда | Кто | Что делает |
 |---|---|---|
-| `Join` | PlayerSession при входе | регистрирует наблюдателя; повторный вход того же аккаунта заменяет устаревшего наблюдателя |
+| `Join` | PlayerSession при входе | регистрирует наблюдателя и шлёт ему `Own`; второе соединение живого аккаунта закрывается (`ground_marks_identity_conflict`) |
 | `Observe(connection, generation, location)` | PlayerSession при `SetLocation`, `BeginCharacter`, `LeaveGame` и каждом принятом sample | при смене ячейки индекса — дельта «добавлены/удалены»; при смене пространства или поколения — `clear` + новый baseline; без позиции — `clear` |
 | `Place` | PlayerSession после проверок | частота, плотность, id, квота с вытеснением, запись, ответ `Placed`, дельты наблюдателям |
-| `Remove` | PlayerSession | только своя метка, иначе `GROUND_MARK_NOT_FOUND` |
+| `Remove` | PlayerSession | своя метка; модератору — любая (`anyAuthor`, решает сессия по роли); иначе `GROUND_MARK_NOT_FOUND`; ответ несёт автора для аудита |
+| `ListOf` | PlayerSession модератора | все метки автора, новые сверху |
+| `ClearOf` | PlayerSession модератора | удаляет метки автора выбранных видов, отвечает их id |
+| `Rename` | PlayerSession после смены профиля (игроком или в панели) | метки без псевдонима дальше отдаются с новым профилем автора |
 | `Expire` | тикер `ExpiryCheckIntervalMs` и первый шаг после старта | удаляет истёкшие, пишет `Delete`, шлёт дельты |
 | `Detach` | PlayerSession при остановке | снимает наблюдателя и подтверждает |
+
+Удаление, чистка модератором и истечение проходят одну процедуру `drop`: забыть метки,
+записать `Delete`, обновить свои списки авторов и отправить дельты тем, кто их видел.
 
 Свои метки (часть 3, протокол v9): при `Join` и после каждого изменения набора автора
 (размещение, вытеснение, удаление, истечение) агент шлёт `GroundMarkEvent.Own` — полный
 список `GroundMarkStorage.ofAuthor`, где бы метки ни стояли. Это отдельная от видимого
 набора проекция: сервер знает квоты и хранение, клиент сам решает, что и как рисовать.
 
-Порядок проверок при размещении: в `PlayerSession` — `RequestId`, лимит ожидающих
+Порядок проверок при размещении: в `PlayerSession` — `RequestId`, мут (только для
+надписи: подпись места смерти пишет игра), лимит ожидающих
 запросов (общий с чатом, `Runtime.Player.MaxPendingChat`), положение
 (`GroundMarkPlacement.isNear` с последним известным `Player.Location`: неизвестное
 проходит, другое пространство — отказ, `MaxPlacementDistance = 0` отключает
@@ -112,17 +125,19 @@ Runtime владеет агентом как остальными источни
 `Join` — нарушение инварианта, закрывается как у присутствия
 (`ground_marks_identity_conflict`).
 
-## Протокол v9
+## Протокол
 
-`Protocol/ground.proto`: `GroundMarkKind`, `GroundMarkPlacement`, `GroundMark`,
+`Protocol/ground.proto`: `GroundMarkKind`, `GroundMarkPlacement`, `GameDate` (v12,
+обязательна в `PlaceGroundNote` и `ReportDeath`), `GroundMark`,
 `PlaceGroundNote`, `ReportDeath`, `RemoveGroundMark`, `GroundMarksChanged`,
 `GroundMarkPlaced`, `GroundMarkRemoved`, `OwnGroundMarks`; в `protocol.proto` — элементы
 oneof 14–16 и 21–24 и коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_NOT_FOUND = 13`. Все
 команды и дельты — Control-канал ENet; подтверждения несут `request_id` в оболочке.
 `OwnGroundMarks` (24) — полный список меток получателя без `request_id`, после открытия
-сессии и при каждом изменении набора. Версия 9 несовместима с 8: клиент и сервер
-обновляются вместе. Подробнее —
-[Protocol/README](../Protocol/README.ru.md).
+сессии и при каждом изменении набора. Модератору (v15, `moderation.proto`) —
+`ListPlayerMarks` → `PlayerMarks` и `ClearPlayerMarks` → `PlayerMarksCleared`, а
+`RemoveGroundMark` принимает от него любую метку. Клиент и сервер обновляются вместе.
+Подробнее — [Protocol/README](../Protocol/README.ru.md).
 
 ## Конфигурация
 
@@ -138,7 +153,8 @@ oneof 14–16 и 21–24 и коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_
 - Команды `PlaceGroundNote`, `ReportDeath`, `RemoveGroundMark` в `ClientExchange`
   (с `RequestId`, как `SendChat`); результат — `CommandResult` с исходом `MarkPlaced{markId,
   evictedId}` или `MarkRemoved{markId}`, `ServerRejection` или `CommandFailureCode`; общий
-  ограниченный бюджет результатов.
+  ограниченный бюджет результатов. Модератору — `ListPlayerMarks` и `ClearPlayerMarks` с
+  исходами `MarksListed` и `MarksCleared`.
 - `GroundMarkStore` (видимые метки, `viewRevision`, и список своих меток `own` из
   `OwnGroundMarksReplaced` — замена целиком, `ClientStateDelta.ownGroundMarks`,
   `ClientSnapshot.groundMarks.own`), обновление модели `GroundMarksChanged`; `ChangeBatch.groundMarks` / `ClientStateDelta.groundMarks` —
@@ -147,11 +163,14 @@ oneof 14–16 и 21–24 и коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_
   чата, а не дубликат; сброс сессии очищает хранилище.
 - Кодек: `Protocol/GroundCodec.cpp`; `ClientRuntime` держит отдельный набор
   ожидающих mark-запросов на Control-канале.
-- `Client.Dev`: `note <текст>`, `death <подпись>`, `unmark <id>`, `marks`; метка ставится в
-  последнюю отправленную позицию (`move`/`location`). Вывод: `mark <id> kind=<1|2>
-  author=<имя> x=<x> text=<текст>`, `mark-removed <id>`, `marks-cleared`,
+- `Client.Dev`: `note <текст>`, `death <подпись>`, `unmark <id>`, `marks`; модератор —
+  `mod marks <id>`, `mod clear <id> <notes|deaths|all>`. Метка ставится в последнюю
+  отправленную позицию (`move`/`location`) с фиксированной игровой датой. Вывод:
+  `mark <id> kind=<1|2> author=<имя>[ [pseudonymous]] x=<x> character=<имя> date=<дата>
+  text=<текст>`, `mark-removed <id>`, `marks-cleared`,
   `request <n> placed mark <id>[ evicted <id>]`, `request <n> removed mark <id>`,
-  `own-marks <n>` и `own <id> kind=<1|2> text=<текст>` при каждой замене своего списка.
+  `own-marks <n>` и `own <id> kind=<1|2> date=<дата> text=<текст>` при каждой замене своего
+  списка.
 
 Метки не попадают в `ChatCache`, `freshMessages` и облачка.
 
@@ -160,15 +179,18 @@ oneof 14–16 и 21–24 и коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_
 Managed: `GroundMarkDomainTests` (текст, правила, TTL, видимость, положение, квота с
 вытеснением, индекс автора) и `GroundMarkTests` (агент: доставка по радиусу и
 пространству, дельты по движению, `clear` при смене пространства/поколения/потере
-позиции, удаление только автором, вытеснение с одной дельтой, плотность ячейки,
-частота надписей и смертей, загрузка/истечение/продолжение id, замена устаревшего
-наблюдателя; кодек; конфигурация; SQLite: миграция с нуля и поверх версии 2,
-round-trip с профилем, каскад удаления аккаунта, писатель). Native:
+позиции, удаление только автором, список, удаление и чистка чужих меток модератором,
+вытеснение с одной дельтой, плотность ячейки,
+частота надписей и смертей, загрузка/истечение/продолжение id, свой список после каждого
+изменения, отключённый наблюдатель и конфликт второго соединения; кодек; конфигурация; SQLite: миграция с нуля, поверх версий 2 и 3
+(псевдоним и игровая дата), round-trip с профилем, каскад удаления аккаунта, писатель). Native:
 `Tests.GroundMarks.cpp` (видимость, хранилище, модель, обмен, кодек) и сценарий
 `ClientRuntime` через настоящий ENet. Smoke: `Scripts/smoke_chat.py` — надпись у
 соседа и невидимость вдали, `marks-cleared` при смене WRLD/CELL, метка смерти и
 `RATE_LIMITED`, вытеснение по квоте с id в ответе, `GROUND_MARK_AREA_FULL`,
-`TEXT_NOT_ALLOWED`, удаление своей и отказ чужой, перезапуск сервера с сохранением.
+`TEXT_NOT_ALLOWED`, удаление своей и отказ чужой, перезапуск сервера с сохранением
+меток и игровой даты; `Scripts/smoke_moderation.py` — список меток игрока и удаление его
+надписей модератором.
 
 ## Открытые вопросы и принятые решения
 

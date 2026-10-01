@@ -88,7 +88,9 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
                             match result with
                             | Ok (AccountAccessResult.PasswordResetCreated code) -> printfn "One-time reset code (deliver privately): %s" code
                             | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
-                            | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.Renamed _) ->
+                            | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.Renamed _)
+                            | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
+                            | Ok (AccountAccessResult.ActiveSanctions _) ->
                                 printfn "Unexpected administrative result."
                             | Error error -> printfn "Administrative operation failed: %A" error
                     elif parts.Length = 1 && parts[0] = "admin-setup" then

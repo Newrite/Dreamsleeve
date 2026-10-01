@@ -1,7 +1,8 @@
-# SQLite account storage
+# SQLite storage
 
-The server persists accounts and profiles in SQLite. Registration creates both rows
-in one transaction; login reads the existing profile. Account IDs and player IDs
+The server persists accounts and profiles in SQLite, together with ground marks, the
+admin panel's tables and sanctions (see «Schema versions»). Registration creates the
+account and profile rows in one transaction; login reads the existing profile. Account IDs and player IDs
 are separate positive `INTEGER PRIMARY KEY AUTOINCREMENT` values. Their supported
 range is `1..Int64.MaxValue`; the network still carries player IDs as `uint64`.
 Deleting an account cascades to its profile and never reuses committed IDs.
@@ -22,8 +23,9 @@ fallback to an empty in-memory store.
 Each store call owns a pooled connection, enables foreign keys and uses the
 configured finite `BusyTimeoutSeconds`. Ordinary calls open in `ReadWrite` mode;
 only initialization can create the file. SQLite commands are synchronous even
-when an ADO.NET method is named `Async`. The account service therefore executes
-whole store operations in its bounded worker, outside the agent's mailbox.
+when an ADO.NET method is named `Async`. The account and admin services therefore
+execute whole store operations in their bounded workers, outside the agent's mailbox;
+ground mark writes go through their own sequential writer (`SqliteGroundMarkStore.startWriter`).
 Cancellation is checked before work and before committing a registration; an
 already running native call still has to finish, bounded by the provider timeout.
 
@@ -61,38 +63,25 @@ Pinned packages: Microsoft.Data.Sqlite **10.0.12**, Migrondi.Core **1.3.0**,
 SqlHydra.Query and SqlHydra.Cli **5.0.0**. The CLI version was verified by actual
 NuGet restore; some NuGet web search results still show the older CLI 4.1.0.
 
-Schema 8 (`1791072000000_sanctions.sql`) adds `sanctions`: mutes (kind 0) and
-bans (kind 1) with a required reason, the issuing administrator or moderator,
-`issued_at`, an optional `expires_at` and `lifted_at` (Unix milliseconds). A row
-is in force while it is not lifted and not expired; issuing lifts the one of its
-kind in force. `SqliteSanctionStore` owns the SQL; the rules are the domain's.
+## Schema versions
 
-Schema 9 (`1791158400000_moderator_audit.sql`) lets an audit line name a moderator
-acting in the game: `admin_audit.admin_id` becomes nullable and `moderator_id`
-references `profiles(player_id)` with `ON DELETE SET NULL`; a CHECK forbids both. A
-moderator's line keeps its text once the profile is gone. `SqliteAdminStore.audit` is
-the one writer of audit lines: panel actions, sanction actions of both issuers (in the
-sanction's transaction) and content a moderator removed. DOWN drops the moderator lines
-(schema 8 has no such actor) and returns to version 8.
+Schema 1 (`1790467200000_accounts.sql`) creates `accounts` and `profiles`.
 
-## Verification
-
-```powershell
-dotnet run --project tests/Dreamsleeve.Server.Tests -- --filter "SQLite accounts"
-```
-
-The tests use isolated temporary databases. They cover restart persistence,
-canonical username conflicts, concurrent registration, full rollback on a profile
-insert failure, password hash compare-and-swap, cancellation, unsupported/damaged
-schema rejection, and ID non-reuse after deletion.
-
-Schema v2 moves optional password credentials out of accounts and adds
+Schema v2 (`1790553600000_saved_auth.sql`) moves optional password credentials out of accounts and adds
 `account_identities(provider, subject, account_id)` for verified provider mappings.
 `auth_tokens` stores SHA-256 hashes, account IDs, kind (0 saved login / 1 reset code),
 and absolute UTC expiry. Raw bearer tokens are never persisted in SQLite. The reset
 transaction consumes its code, replaces the password hash and revokes all account tokens.
 The account service also invalidates in-memory tickets and notifies the game runtime.
 Do not bypass that service by modifying live authentication rows from an admin UI.
+
+Schema 3 (`1790640000000_ground_marks.sql`) adds `ground_marks`: notes (kind 1) and death
+marks (kind 2) with the author (`author_id -> profiles`, `ON DELETE CASCADE`), the published
+character name, the text, the placement (`plugin_name`, `local_form_id`, `x`, `y`, `z`,
+`heading`) and `created_at`. The server issues the IDs; `AUTOINCREMENT` keeps the high-water
+mark, so IDs never repeat after deletions and restarts. `SqliteGroundMarkStore` owns the SQL.
+Schema 4 (`1790726400000_ground_mark_pseudonym.sql`) adds `author_pseudonym`: a mark placed
+under a pseudonym keeps it; NULL shows the author's current profile.
 
 Schema v5 (`1790812800000_admin.sql`) adds the web admin panel (docs/AdminPanelRu.md).
 Times are Unix milliseconds (UTC); secrets are stored only as SHA-256 hashes.
@@ -105,9 +94,11 @@ Times are Unix milliseconds (UTC); secrets are stored only as SHA-256 hashes.
 | `player_roles(player_id PK -> profiles, role, granted_by, granted_at)` | 0 player, 1 moderator; read with the profile at login/resume |
 | `admin_audit(id, admin_id, action, target, details, at)` | One line per panel mutation; indexed by `admin_id` and `at` |
 
-Only the admin service's bounded workers (`SqliteAdminStore`) touch these tables; every
-panel mutation writes its audit line in the same transaction or right after the owning
-agent reports success. One-time setup/reset codes live only in the service's memory.
+`SqliteAdminStore` owns the SQL of these tables and runs in the admin service's bounded
+workers; the account service reads `player_roles` with the profile and writes audit lines of
+sanctions and moderator actions through `SqliteAdminStore.audit`. Every panel mutation writes
+its audit line in the same transaction or right after the owning agent reports success.
+One-time setup/reset codes live only in the service's memory.
 The DOWN section drops the five tables and returns `user_version` to 4.
 
 Schema v6 (`1790899200000_display_names.sql`) adds `display_name_changes(id, player_id ->
@@ -117,3 +108,36 @@ it in the same transaction as the new name and reads the latest own change to en
 `[Identity] DisplayNameChangeIntervalMinutes`. Only the newest
 `[Authentication.Service] DisplayNameHistory` (20) rows per player are kept; older ones are
 deleted in the same transaction. DOWN drops it and returns to version 5.
+
+Schema 7 (`1790985600000_ground_mark_game_date.sql`) adds the in-game date of a mark at
+placement: `game_era`, `game_year`, `game_month`, `game_day`, `game_day_of_week`, `game_hour`,
+`game_minute`, each range-checked and set together. Older marks keep NULL and have no date;
+order and lifetime still use `created_at`.
+
+Schema 8 (`1791072000000_sanctions.sql`) adds `sanctions`: mutes (kind 0) and
+bans (kind 1) with a required reason, the issuing administrator or moderator,
+`issued_at`, an optional `expires_at` and `lifted_at` (Unix milliseconds). A row
+is in force while it is not lifted and not expired; issuing lifts the one of its
+kind in force. `SqliteSanctionStore` owns the SQL; the rules are the domain's.
+
+Schema 9 (`1791158400000_moderator_audit.sql`) lets an audit line name a moderator
+acting in the game: `admin_audit.admin_id` becomes nullable and `moderator_id`
+references `profiles(player_id)` with `ON DELETE SET NULL`; a CHECK forbids both. A
+moderator's line keeps its text once the profile is gone. `SqliteAdminStore.audit` is
+the one writer of audit lines: panel actions, sanction actions of both issuers (in the
+sanction's transaction) and content a moderator removed. DOWN drops the moderator lines
+(schema 8 has no such actor) and returns to version 8. This is the schema version the
+server supports (`SqliteDatabase.SchemaVersion`).
+
+## Verification
+
+```powershell
+dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list SQLite
+```
+
+The tests use isolated temporary databases. Accounts: restart persistence, canonical
+username conflicts, concurrent registration, full rollback on a profile insert failure,
+password hash compare-and-swap, cancellation, unsupported/damaged schema rejection and ID
+non-reuse after deletion. The admin, sanction and ground mark stores: migrations 5..9 over
+schema 4 and their rollback, sessions, tokens, roles, search, audit, sanction terms and
+issuers, marks with their pseudonym and game date across restarts and account deletion.

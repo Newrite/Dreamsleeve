@@ -7,7 +7,7 @@
 | [common.proto](common.proto) | PlayerProfile (публичная личность, в том числе псевдонимная) и FormKey |
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
-| [session.proto](session.proto) | OpenSession, JoinAsGuest и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged |
+| [session.proto](session.proto) | OpenSession, JoinAsGuest и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged; мут и конец сессии: MuteState, MuteChanged, SessionEndReason, SessionEnded |
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [moderation.proto](moderation.proto) | Роль и инструменты модератора: PlayerRole, SanctionKind, RoleChanged, SanctionEntry, запросы наказаний, списков и удаления контента с их ответами |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
@@ -22,13 +22,13 @@
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 13. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 15. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
 |---|---|---|
-| 0 | Control | ClientPacket/ServerPacket: сессия, lifecycle, UpdatePlayer и ответы, reliable |
-| 1 | Chat | ClientPacket/ServerPacket: SendChat, ChatPublished и ответы чата, reliable |
+| 0 | Control | ClientPacket/ServerPacket: сессия, lifecycle, UpdatePlayer, метки, скрытое имя, смена имени, модерация (кроме удаления сообщений) и ответы, reliable |
+| 1 | Chat | ClientPacket/ServerPacket: SendChat, PostAnnouncement, DeleteChatMessage, ChatPublished, ChatMessageRemoved и ответы чата, reliable |
 | 2 | Realtime | ClientMovementPacket/ServerMovementPacket: абсолютные pose, unreliable sequenced (flags=0) |
 
 Нужно минимум три согласованных канала. Номера фиксированы в network.proto,
@@ -41,7 +41,7 @@ ENet может внутренне перейти к reliable; прикладн�
 посылает OpenSession или, пока не вошёл, JoinAsGuest. Гость остаётся подключённым без
 дедлайна (мёртвое соединение отсекает таймаут ENet), сервер считает его в онлайне и
 принимает OpenSession на том же соединении. Ответа на JoinAsGuest нет; на соединении,
-которое уже гость или открывает сессию, он получает InvalidRequest, прочие команды
+которое уже гость, открывает или открыло сессию, он получает InvalidRequest, прочие команды
 гостя — SessionNotReady. Только SessionOpened переводит прикладную сессию в Ready.
 Повторное открытие на том же соединении и SendChat до Ready должен отклонять
 серверный владелец. Codec не хранит состояние соединения и сам эти правила не применяет.
@@ -56,14 +56,16 @@ SessionTable резервирует PlayerId до завершения аген�
 
 Регистрация и проверка пароля идут отдельно от ENet: POST /auth/register принимает
 username/displayName/password, POST /auth/login — username/password и возвращает
-sessionTicket/expiresInSeconds/playerId/username/displayName. Повторный вход требует
-нового login и билета. Core не выполняет HTTP и не получает пароль; в Client.Dev
-эту границу обслуживает WinHTTP. Удалённый HTTP endpoint требует HTTPS;
+sessionTicket/expiresInSeconds/playerId/username/displayName (полный контракт, включая
+сохранённый вход, — [AuthenticationRu.md](../docs/AuthenticationRu.md)). Повторный вход требует
+нового билета. `ClientRuntime` не выполняет HTTP и не получает пароль; эту границу
+обслуживает `AuthHttp` (WinHTTP), который вызывает `ClientApplication`. Удалённый HTTP endpoint требует HTTPS;
 plain HTTP допустим только для явно разрешённой локальной разработки.
 
 После переподключения требуется новое начальное состояние. SessionOpened заменяет
-прежнее состояние сессии, а не продолжает старую историю. В этой версии нет resume,
-продолжения сессии по прежнему билету или history epoch; локальные generation/revision/round не передаются.
+прежнее состояние сессии, а не продолжает старую историю. В этой версии нет продолжения
+ENet-сессии по прежнему билету или history epoch (HTTP `/auth/resume` лишь выдаёт новый билет
+для нового OpenSession); локальные generation/revision/round не передаются.
 
 ## Сообщения и корреляция
 
@@ -73,7 +75,7 @@ plain HTTP допустим только для явно разрешённой 
 | Клиент → сервер | JoinAsGuest | Пустой: соединение остаётся гостем до OpenSession; ответа нет |
 | Клиент → сервер | SendChat | ChannelId и текст, без авторства/времени/MessageId |
 | Клиент → сервер | PostAnnouncement | ChannelId системного канала, текст, вид (Announcement/Event), заявленный источник (TrustedClient/ThirdParty) и подпись; Chat-канал ENet |
-| Сервер → клиент | SessionOpened | SelfPlayerId, весь онлайн, каналы с видом и хвостом истории, политика объявлений, own_pseudonym и hidden_identity |
+| Сервер → клиент | SessionOpened | Имя сервера, SelfPlayerId, весь онлайн, каналы с видом и хвостом истории, политика объявлений, own_pseudonym и hidden_identity, действующий мут и роль |
 | Сервер → клиент | ChatPublished | Одно принятое сообщение |
 | Сервер → клиент | RequestRejected | Общий RequestRejectionCode, объяснение, поле |
 | Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SetLocation / SetActorValues / LeaveGame / SetDetails |
@@ -91,6 +93,8 @@ plain HTTP допустим только для явно разрешённой 
 | Сервер → клиент | IdentityVisibilityChanged | Подтверждение с RequestId: применённый вариант и псевдоним, который теперь видят другие, или его отсутствие |
 | Клиент → сервер | ChangeDisplayName | Новое собственное отображаемое имя; Control-канал |
 | Сервер → клиент | DisplayNameChanged | Подтверждение с RequestId: имя, как сервер его сохранил (Trim + NFC) |
+| Сервер → клиент | MuteChanged / SessionEnded / RoleChanged | Свой мут, причина конца сессии, своя роль; без RequestId (см. «Модерация») |
+| Клиент → сервер | SanctionPlayer … DeleteChatMessage | Запросы модератора; ответы и коды — в разделе «Модерация» |
 
 RequestId — ненулевой uint64, назначаемый клиентским API до отправки. Клиент должен
 выдавать уникальные ID в течение жизни соединения; пропуски допустимы. Это не
@@ -101,10 +105,10 @@ ChatMessageId, не серверная последовательность и �
 
 В ClientPacket RequestId обязателен. В ServerPacket его наличие различается:
 
-- SessionOpened, PlayerUpdateAccepted, GroundMarkPlaced, GroundMarkRemoved, IdentityVisibilityChanged, DisplayNameChanged и RequestRejected обязательно возвращают ID исходного запроса.
-- ChatPublished содержит RequestId только в копии инициатору. Остальные получают
-  то же принятое сообщение без RequestId. ID других клиентов не завершает свои запросы.
-- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerVisibilityChanged/PlayerMetadataChanged/GroundMarksChanged не содержат RequestId. Явный ноль всегда ошибочен.
+- SessionOpened, PlayerUpdateAccepted, GroundMarkPlaced, GroundMarkRemoved, IdentityVisibilityChanged, DisplayNameChanged, ответы модератору (SanctionIssued … PlayerMarksCleared) и RequestRejected обязательно возвращают ID исходного запроса.
+- ChatPublished и ChatMessageRemoved содержат RequestId только в копии инициатору. Остальные получают
+  то же сообщение без RequestId. ID других клиентов не завершает свои запросы.
+- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerVisibilityChanged/PlayerMetadataChanged/GroundMarksChanged/OwnGroundMarks/MuteChanged/SessionEnded/RoleChanged не содержат RequestId. Явный ноль всегда ошибочен.
 
 Realtime-оболочки вообще не имеют RequestId: samples не занимают pending,
 не требуют PlayerUpdateAccepted, retry или коррелированного отказа.
@@ -112,10 +116,12 @@ Realtime-оболочки вообще не имеют RequestId: samples не �
 Optional RequestId существует только в общей protobuf-оболочке и диагностике codec.
 В прикладных ответах наличие ID закреплено вариантом типа:
 
-- F# ServerResponse.SessionOpened, ChatAccepted и RequestRejected принимают обязательный uint64 ID.
-- F# ChatPublished, PlayerJoined и PlayerLeft — уведомления без поля RequestId.
-- C++ ServerResponse — variant; SessionOpened, ChatAccepted и ServerRejection содержат ID,
-  ChatMessagesReceived, PlayerUpserted и PlayerRemoved — без него.
+- F# ServerResponse: SessionOpened, ChatAccepted, ChatRejected, RequestRejected и остальные ответы
+  на команды принимают обязательный uint64 ID; ChatMessageRemoved — `voption` (только у копии инициатору).
+- F# ChatPublished, PlayerJoined, PlayerLeft и прочие уведомления — без поля RequestId.
+- C++ ServerResponse — variant; SessionOpened, ChatAccepted, RequestRejected и остальные ответы
+  содержат requestId, ChatMessageRemoved — optional, ChatMessagesReceived, PlayerUpserted,
+  PlayerRemoved и прочие уведомления — без него.
 
 ChatAccepted и ChatPublished на F# кодируются одним wire-payload ChatPublished,
 различаясь корреляцией для получателя. На C++ ChatAccepted содержит обычный
@@ -152,7 +158,7 @@ Added/Removed из модели. Полная история не копируе
 - `ClientPacket.post_announcement = 13` (`PostAnnouncement{channel_id, ...}`) — запрос
   клиента в системный канал. Его enum `ClientAnnouncementSource` не содержит значения
   сервера. Ответ как у SendChat: автор получает `ChatPublished` со своим `request_id`,
-  при отказе — `RequestRejected` на Chat-канале ENet (`ANNOUNCEMENT_NOT_ALLOWED`,
+  при отказе — `RequestRejected` на Chat-канале ENet (`MUTED`, `ANNOUNCEMENT_NOT_ALLOWED`,
   `TEXT_NOT_ALLOWED`, `RATE_LIMITED`, `INVALID_REQUEST`: не системный канал — с полем
   `channel_id`, длина — с полем `text`/`source`, серверный вид — без поля). `SendChat` в
   системный канал тоже получает `INVALID_REQUEST`.
@@ -195,7 +201,8 @@ Control-канале ENet.
   или истечении любой из них. Замена целиком, не дельта; не зависит от видимого набора.
   Клиент отвергает список с чужим автором или повтором id.
 - Коды: `GROUND_MARK_AREA_FULL` (12) — ячейка индекса полна; `GROUND_MARK_NOT_FOUND`
-  (13) — нет такой своей метки; `RATE_LIMITED` — частота надписей или смертей;
+  (13) — нет такой своей метки (у модератора — никакой); `MUTED` — надпись в муте (метку смерти
+  мут не останавливает); `RATE_LIMITED` — частота надписей или смертей;
   `TEXT_NOT_ALLOWED` — словарь (поле `text`); `INVALID_REQUEST` — длина (`text`) или
   положение (`placement`). Codec отклоняет нулевой id, неконечные координаты,
   многострочную подпись смерти и слишком длинный текст (`GroundNoteText.create`,
@@ -247,7 +254,7 @@ Control-канале ENet.
 - `ClientPacket.change_display_name = 18` (`ChangeDisplayName{display_name}`, Control, RequestId):
   сервер проверяет имя правилами `DisplayName` (Trim + NFC, одна строка, лимит
   `[Server.ChatInput] DisplayName`) ещё в кодеке — нарушение даёт `INVALID_REQUEST` с полем
-  `display_name`; затем словарь (`TEXT_NOT_ALLOWED`), разрешение сервера
+  `display_name`; затем мут (`MUTED`), словарь (`TEXT_NOT_ALLOWED`), разрешение сервера
   (`DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15`), одну смену за раз (`OVERLOADED`) и интервал между
   собственными сменами (`RATE_LIMITED`, message «The display name can be changed again in N min.»).
   Запрос текущего имени подтверждается сразу и сменой не считается.
@@ -277,7 +284,7 @@ Control-канале ENet.
 - Удаление сообщения идёт по Chat-полосе: `ClientPacket.delete_chat_message = 26`
   (`DeleteChatMessage{channel_id, message_id}`); `ServerPacket.chat_message_removed = 36`
   (`ChatMessageRemoved{channel_id, message_id}`) получают все участники канала, копия модератора —
-  с его RequestId. Отказ удаления — `ChatRejected`, как у сообщения.
+  с его RequestId. Отказ удаления — `RequestRejected` на Chat-канале, как у сообщения.
 - Удаление одной метки — прежний `RemoveGroundMark`: модератору сервер удаляет метку любого автора.
 - Коды: `NOT_PERMITTED = 17` (нет роли модератора, или цель — модератор/сам модератор),
   `TARGET_NOT_FOUND = 18` (нет игрока, действующего наказания или сообщения). Причина и срок
@@ -357,7 +364,8 @@ SessionOpened содержит уникальные PlayerId, включая Sel
 истории. Будущая пагинация должна отдельно определить историю и её epoch.
 
 В C++ SessionOpened непосредственно содержит requestId, selfPlayerId, players,
-channels (`ChannelOpened{channelId, kind, recentMessages}`) и announcements. Players уже представлены обычными
+channels (`ChannelOpened{channelId, kind, recentMessages}`), serverName, announcements, ownPseudonym,
+hiding, mute и role. Players уже представлены обычными
 Domain::Player, сообщения — Domain::ChatMessage; отдельного типа состояния сессии нет.
 
 Начало сессии — последовательность действий владельца соединения. После проверки
@@ -400,8 +408,9 @@ realtime отбрасывается и восстанавливается сле
 в MaxWaitingData; этот бюджет не заменяет отдельные лимиты очередей приложения.
 
 На C++ [Configuration](../src/Dreamsleeve.Client.Core/Config.ixx) содержит network
-и лимиты начального состояния. `config.network` передаётся в создание DreamNetHost,
-сам config — в `Wire::ProtocolCodec::TryCreate(config)`. Полученный codec сохраняет копию
+и лимиты начального состояния; её один раз проверяет `ValidateClientSettings`
+(`ClientApplication::TryCreate`). `config.network` передаётся в создание DreamNetHost,
+сам config — в конструктор `Wire::ProtocolCodec{config}`. Codec хранит копию
 проверенных настроек; дальше вызываются `codec.Encode(request)` / `codec.Decode(bytes, channel)`.
 Для движения — `codec.Encode(sample, negotiatedPayloadBytes)` с flags=0.
 Encode возвращает владеющий DreamNetPacket: TryAllocateWith выделяет буфер ENet,
@@ -415,9 +424,9 @@ DreamNetPacket проверяет представимость длины в ENe
 в 32 MiB как потолок всех конфигураций.
 
 На F# [ServerConfig](../src/Dreamsleeve.Server.Core/Config.fs) — общий источник
-параметров: `ServerConfig.validate config`, затем `ServerConfig.applyPacketLimits
-config host` после создания yENet host и **до первого Service/Connect**.
-Из этого же config один раз создаётся `ProtocolCodec.create config`; затем используются
+параметров: `GameSettings.create` один раз проверяет его (`ServerConfig.validate`) и создаёт
+`ProtocolCodec.create config`; `ServerConfig.applyPacketLimits config host` применяется после
+создания yENet host и **до первого Service/Connect**. Затем используются
 `ProtocolCodec.decodeClient codec bytes` / `ProtocolCodec.encode codec payloadBudget response`
 (пакеты одного ответа: движение делится по бюджету peer, остальное — один пакет).
 `ProtocolCodec.delivery response` — единственная таблица свойств ответа: канал, RequestId
@@ -426,19 +435,22 @@ EnetTransport применяет лимиты к реальному yENet host; 
 Host/Peer выполняет один владелец транспорта.
 
 Конфигурация фиксируется на срок жизни сетевого владельца; менять только codec
-после создания host нельзя. Создание кодека отклоняет некорректные лимиты через Result;
-проверка всей конфигурации на каждом пакете не повторяется. C++ при создании также
+после создания host нельзя. Некорректные лимиты отклоняет единственная проверка настроек
+(`GameSettings.create` на сервере, `ValidateClientSettings` на клиенте); кодек её не повторяет,
+проверки всей конфигурации на каждом пакете нет. C++ при этой проверке также
 ограничивает maxPacketBytes диапазоном int для protobuf ParseFromArray/SerializeToArray.
 Сам размер каждого входного/выходного сообщения всё равно сравнивается с лимитом.
-Серверный загрузчик TOML заполняет конфигурацию перед запуском владельца;
-для C++ внешняя загрузка этих настроек остаётся следующим расширением.
+Сервер загружает конфигурацию из `server.toml`, клиент — из своего TOML (образец —
+`client.example.toml`, путь выбирает конечное приложение), перед запуском владельца.
 ENet не согласует эти прикладные лимиты между
 сторонами: пока развёртывание должно задавать совместимые настройки клиента и
 сервера. Согласование по сети — отдельное расширение входа в сессию.
 
 F# decodeClient проверяет форму SessionTicket и использует доменные фабрики для
-ChatChannelId и ChatMessageText. Username и DisplayName проверяются на HTTP-границе. Лимиты строк задаёт приложение через ServerConfig.ChatInput; текущие
-defaults — 32 / 64 / 2000 Unicode scalar values соответственно. Username нормализуется
+ChatChannelId, ChatMessageText и остальных полей команд (DisplayName в ChangeDisplayName,
+тексты меток и объявлений, причина и срок наказания). Username и DisplayName при регистрации
+проверяются на HTTP-границе. Лимиты строк задаёт приложение через ServerConfig.ChatInput; текущие
+defaults для Username / DisplayName / MessageText — 32 / 64 / 2000 Unicode scalar values. Username нормализуется
 в нижний ASCII, DisplayName — Trim/NFC, текст чата сохраняется как был принят фабрикой.
 C++ не повторяет эти бизнес-проверки и не нормализует серверные строки.
 
@@ -493,7 +505,7 @@ ProtocolError. Realtime не порождает коррелированные �
 | 10 | RateLimited | Слишком часто или повтор; лимиты чата и объявлений раздельные |
 | 11 | AnnouncementNotAllowed | Сервер не принимает объявления заявленного источника |
 | 12 | GroundMarkAreaFull | Ячейка пространственного индекса уже содержит предельное число меток |
-| 13 | GroundMarkNotFound | Нет такой метки этого автора |
+| 13 | GroundMarkNotFound | Нет такой метки этого автора (у модератора — нет такой метки вообще) |
 | 14 | HiddenIdentityNotAllowed | Сервер не разрешает скрывать имя (открытие со скрытым именем или переключение) |
 | 15 | DisplayNameChangeNotAllowed | Сервер не разрешает игрокам менять отображаемое имя |
 | 16 | Muted | Игрок в муте: писать нельзя, пока мут не истёк или не снят |
@@ -520,26 +532,26 @@ F# использует тип, сгенерированный protoc для .NE
 внутри веток, без общего `_ -> None`. В Server.Core FS0025 включён как ошибка сборки.
 Входной protobuf PayloadOneofCase перечисляется явно, включая None. Неименованные
 числовые значения обрабатываются веткой `unknown when not (Enum.IsDefined unknown)`.
-В ProtocolCodec.fs, PlayerCodec.fs и ChatCodec.fs подавлен только FS0104 о неименованных enum-значениях; новый именованный
-вариант по-прежнему требует обработки и вызывает FS0025.
+В ProtocolCodec.fs, PlayerCodec.fs, ChatCodec.fs, SessionCodec.fs и ModerationCodec.fs подавлен только FS0104
+о неименованных enum-значениях; новый именованный вариант по-прежнему требует обработки и вызывает FS0025.
 
 В C++ реализациях кодека включены ошибки C4061/C4062 после generated headers.
 PAYLOAD_NOT_SET обработан явно; default оставлен для неизвестных значений, но не
 скрывает новые именованные enum-варианты. Visitor ClientRequest также явно отличает
-OpenSession и SendChat через две перегрузки RequestWriter::operator(), без generic
-fallback. Новая альтернатива требует перегрузки; проверено отдельной компиляцией
+каждую альтернативу (OpenSession, SendChat … DeleteChatMessage) своей перегрузкой
+RequestWriter::operator(), без generic fallback. Новая альтернатива требует перегрузки; проверено отдельной компиляцией
 с /O2 /DNDEBUG: существующие типы собираются, добавленный ProbeAdded даёт C2672.
 Сгенерированные файлы не редактируются ради этих проверок.
 
-Проверено отдельными компиляциями копий в build: добавление DU-варианта ломает все
-три F#-матчинга ответа, пропуск именованного protobuf-enum — входной match;
+Проверено отдельными компиляциями копий в build: добавление DU-варианта ломает
+F#-матчинги ответа (`ProtocolCodec.delivery` и `encode`), пропуск именованного protobuf-enum — входной match;
 добавление C++ enum-варианта ломает switch даже с default. Неизвестный wire-payload
 возвращает ошибку codec, неизвестное добавочное поле при известном payload допускается.
 
 ## Реализация и генерация
 
 - C++: [ProtocolCodec.ixx](../src/Dreamsleeve.Client.Core/Protocol/ProtocolCodec.ixx),
-  Codec::TryCreate(config), Encode(OpenSession | SendChat) → DreamNetPacket, Decode(bytes) → ServerResponse.
+  ProtocolCodec{config}, Encode(ClientRequest | MovementSample) → DreamNetPacket, Decode(bytes, channel) → ServerResponse.
 - F#: [ProtocolCodec.fs](../src/Dreamsleeve.Server.Core/Protocol/ProtocolCodec.fs),
   create config → codec, decodeClient codec → проверенная команда, encode codec budget → пакеты.
 - C++ protobuf headers подключаются только в .cpp реализации. Они не попадают
@@ -555,13 +567,15 @@ python Scripts/run_tests.py
 
 Использован установленный protoc 33.2; runtime — protobuf-cpp 33.2 и Google.Protobuf
 3.33.2. Сгенерированные .pb.h/.pb.cc/.g.cs хранятся в Protocol.Native/Protocol.Dotnet
-и не редактируются вручную. Этот же скрипт извлекает DisconnectReason и
-RequestRejectionCode, ActivityKind и LockDifficulty из вывода protoc в Dreamsleeve.Protocol.Native.ixx и генерирует
-ProtocolContract.cpp со static_assert для всех значений (также AnnouncementSource, AnnouncementKind, ClientAnnouncementSource, GroundMarkKind). Оба файла также generated;
+и не редактируются вручную. Этот же скрипт извлекает выбранные enum (DisconnectReason,
+RequestRejectionCode, ActivityKind, LockDifficulty, ChatChannelKind, AnnouncementSource, AnnouncementKind,
+ClientAnnouncementSource, GroundMarkKind, HiddenIdentity, SessionEndReason, PlayerRole, SanctionKind)
+из вывода protoc в Dreamsleeve.Protocol.Native.ixx и генерирует ProtocolContract.cpp со static_assert
+для всех значений. Оба файла также generated;
 ручного списка числовых кодов на стороне клиента нет. Неожиданный формат enum
 в выводе protoc останавливает генерацию с ошибкой.
 Кодеки используются C++ ClientRuntime/Client.Dev и F# ServerRuntime по настоящему ENet.
-PlayerSession собирает SessionOpened из независимых снимков ChatRoomAgent и PresenceAgent,
+PlayerSession собирает SessionOpened из независимых снимков обоих ChatRoomAgent и PresenceAgent,
 буферизует дельты до активации и сохраняет исходящий порядок. Канал сам назначает
 ID/время, принимает текст от зарегистрированного ConnectionId и возвращает одно
 серверное сообщение каждому получателю. Автор получает ChatAccepted с RequestId,
@@ -619,8 +633,9 @@ ReplicationIntervalMs — период серверной рассылки ак�
 Публичная точка входа — ProtocolCodec (F# type/module и C++ Wire::ProtocolCodec,
 модуль Dreamsleeve.Client.ProtocolCodec). Она владеет одной проверенной конфигурацией,
 парсингом/сериализацией оболочки, версией, лимитом пакета, корреляцией и диспетчеризацией.
-Внутренние ChatCodec, PlayerCodec и SessionCodec выполняют преобразования своих
-сообщений; SessionCodec использует преобразования игроков и истории чата. Отдельных
+Внутренние ChatCodec, PlayerCodec, SessionCodec, кодек меток (F# GroundMarkCodec, C++ GroundCodec)
+и ModerationCodec выполняют преобразования своих сообщений; SessionCodec использует
+преобразования игроков и истории чата. Отдельных
 экземпляров, DI или конфигураций на каждую часть нет. Серверные общие типы находятся
 в Protocol/ProtocolTypes.fs: ClientCommand, ClientRequest, ServerResponse, SessionWelcome
 и RequestRejection; ошибки — ProtocolCodecError/ProtocolCodecFailure.

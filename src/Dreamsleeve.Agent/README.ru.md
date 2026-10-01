@@ -26,6 +26,8 @@ dotnet run --project src/Dreamsleeve.Agent/examples/Dreamsleeve.Agent.Examples.f
 dotnet run --project tests/Dreamsleeve.Server.Tests -c Release -- --filter-test-list Dreamsleeve.Agent
 ```
 
+Остальные проверки библиотеки — списки `Background`, `Outbox`, `AsyncDispatcher`, `Admission`, `Lifetimes` и `AgentTicker` того же проекта.
+
 Программа примеров запускает обычный агент исходящих действий, неизменяемое состояние партии и изменяемый реестр присутствия со снимками. Вывод детерминирован, все агенты завершаются. Исходники: [Outbound.fs](examples/Outbound.fs), [Party.fs](examples/Party.fs), [Presence.fs](examples/Presence.fs).
 
 ## Минимальный запрос с ответом
@@ -154,6 +156,10 @@ SemaphoreSlim синхронизирует только библиотечные
 PipeToSelf остаётся для фоновых операций, результат которых нужен владельцу,
 а для наблюдения Completion ребёнка есть Own/Watch; обычная отправка его больше не требует.
 
+Готовая отправка outbox использует синхронный admission, если предыдущие отправки
+уже завершены. При ожидании места работает bounded tracked путь; mapper
+вызывается один раз. Завершение отправки означает admission, не выполнение получателем.
+
 ## Обработчики запросов с ответами
 
 `AgentOutbox.createHandler capacity output execute` сохраняет порядок ответов одному
@@ -265,16 +271,13 @@ AgentOutbox. Его владелец отдельно ограничивает �
 оставляет место для Stop/Detach в своём ordered outbox и закрывает обычный допуск
 перед завершением. Порядок между независимыми конкурирующими отправителями
 определяется фактическим приёмом, а не временем начала PostAsync.
+TCS общего admission notification создаётся только при реальном ожидании writers.
 
+## Периодический тикер
 
 `AgentTicker.start interval context toMessage` создаёт один owned PeriodicTimer.
 После обработки tick владелец вызывает `Acknowledge()`: до этого новые периоды
-объединяются. Callback строит только сообщение, не читает mutable state агента.
-Complete/Abort останавливают worker. `startWithTimeProvider` позволяет проверять
-расписание без wall-clock sleeps. Timestamp поля AgentTick относятся к TimeProvider.
-
-
-Готовая отправка outbox использует синхронный admission, если предыдущие отправки
-уже завершены. При ожидании места работает прежний bounded tracked путь; mapper
-вызывается один раз. Completion означает admission, не выполнение получателем.
-TCS общего admission notification создаётся только при реальном ожидании writers.
+объединяются, пропущенные периоды не догоняются пачкой. Callback строит только сообщение,
+не читает mutable state агента. Нужен non-dropping mailbox. Complete/Abort останавливают
+worker. `startWithTimeProvider` позволяет проверять расписание без wall-clock sleeps.
+Timestamp поля AgentTick относятся к TimeProvider.
