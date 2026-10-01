@@ -196,7 +196,12 @@ let private withService run = task {
     use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System
     let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value))
     equal AgentPostResult.Posted targeted
-    let! registered = access service (AccountAccessCommand.Register(Username.create 32 "player" |> ok, DisplayName.create 64 "Player" |> ok, password))
+    // A runtime first learns the IP range bans in force: none here.
+    let settled = Environment.TickCount64 + 5000L
+    while changes.IsEmpty && Environment.TickCount64 < settled do
+        do! Task.Delay 10
+    equal (true, AccountChange.AddressBans []) (changes.TryDequeue())
+    let! registered = access service (AccountAccessCommand.Register(Username.create 32 "player" |> ok, DisplayName.create 64 "Player" |> ok, password, SignInOrigin.none))
     let profile = match registered with Ok (AccountAccessResult.Registered profile) -> profile | other -> failtestf "%A" other
     // The runtime takes them asynchronously, after the reply.
     let received count = task {
@@ -211,12 +216,12 @@ let private withService run = task {
     do! awaitUnit service.Completion
 }
 
-let private login service = access service (AccountAccessCommand.Login(Username.create 32 "player" |> ok, password))
+let private login service = access service (AccountAccessCommand.Login(Username.create 32 "player" |> ok, password, SignInOrigin.none))
 
 let private serviceTests = testList "Account service sanctions" [
     case "a ban refuses sign-in and resume, drops outstanding tickets and ends the live session; lifting it lets the player in" (fun () ->
         withService (fun database service profile changes -> task {
-            let! remembered = access service (AccountAccessCommand.RememberLogin(Username.create 32 "player" |> ok, password))
+            let! remembered = access service (AccountAccessCommand.RememberLogin(Username.create 32 "player" |> ok, password, SignInOrigin.none))
             let saved = grant remembered
             let issuer = SanctionIssuer.Admin(admin database)
             let! banned = access service (AccountAccessCommand.Sanction(order profile.PlayerId SanctionKind.Ban (SanctionTerm.For(TimeSpan.FromDays 1.)) issuer))
@@ -225,14 +230,14 @@ let private serviceTests = testList "Account service sanctions" [
             equal (Error SessionAuthenticationError.InvalidTicket) outstanding
             let! refused = login service
             equal (Error (AccountAccessError.Banned ban)) refused
-            let! resumed = access service (AccountAccessCommand.Resume saved.RememberToken)
+            let! resumed = access service (AccountAccessCommand.Resume(saved.RememberToken, SignInOrigin.none))
             equal (Error (AccountAccessError.Banned ban)) resumed
             let! told = changes 1
             equal [ AccountChange.Banned ban ] told
             let! lifted = access service (AccountAccessCommand.LiftSanction(profile.PlayerId, SanctionKind.Ban, issuer))
             equal (Ok (AccountAccessResult.SanctionLifted ban)) lifted
             // The saved login was kept: it works again.
-            let! back = access service (AccountAccessCommand.Resume saved.RememberToken)
+            let! back = access service (AccountAccessCommand.Resume(saved.RememberToken, SignInOrigin.none))
             grant back |> ignore
         }))
 
@@ -247,7 +252,7 @@ let private serviceTests = testList "Account service sanctions" [
         use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System
         let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(stopped.Ref.TryReliable().Value))
         equal AgentPostResult.Posted targeted
-        let! registered = access service (AccountAccessCommand.Register(Username.create 32 "player" |> ok, DisplayName.create 64 "Player" |> ok, password))
+        let! registered = access service (AccountAccessCommand.Register(Username.create 32 "player" |> ok, DisplayName.create 64 "Player" |> ok, password, SignInOrigin.none))
         let profile = match registered with Ok (AccountAccessResult.Registered profile) -> profile | other -> failtestf "%A" other
         stopped.Complete() |> ignore
         do! awaitUnit stopped.Completion
@@ -295,7 +300,7 @@ let private serviceTests = testList "Account service sanctions" [
 let private moderationTests = testList "Account service moderation" [
     case "a moderator's kick, list and audit line go through the account service; a kick reaches the runtime" (fun () ->
         withService (fun database service profile changes -> task {
-            let! registered = access service (AccountAccessCommand.Register(Username.create 32 "moderator" |> ok, DisplayName.create 64 "Mod" |> ok, password))
+            let! registered = access service (AccountAccessCommand.Register(Username.create 32 "moderator" |> ok, DisplayName.create 64 "Mod" |> ok, password, SignInOrigin.none))
             let mod' = match registered with Ok (AccountAccessResult.Registered mod') -> mod' | other -> failtestf "%A" other
             database.Execute $"INSERT INTO player_roles(player_id, role, granted_at) VALUES ({PlayerId.value mod'.PlayerId}, 1, 0)"
             let replies = Channel.CreateUnbounded<ModerationReply>()

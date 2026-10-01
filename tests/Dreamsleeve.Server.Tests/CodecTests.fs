@@ -326,6 +326,13 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (kicked.Reason, kicked.Text) (Dreamsleeve.Protocol.Chat.SessionEndReason.Kicked, "Остынь") "kicked with the reason"
         let revoked = (packet (ServerResponse.SessionEnded SessionEnd.AccessRevoked)).SessionEnded
         Expect.equal (revoked.Reason, revoked.Text) (Dreamsleeve.Protocol.Chat.SessionEndReason.AccessRevoked, "") "revoked without words"
+        let addressBan : AddressBan = {
+            Id = 3L; Range = AddressRange.parse "203.0.113.0/24" |> ok; Reason = SanctionReason.create "Рейд" |> ok
+            IssuedBy = ValueNone; IssuedAt = now; Expires = ValueSome (now + TimeSpan.FromHours 1.)
+        }
+        let addressBanned = (packet (ServerResponse.SessionEnded(SessionEnd.AddressBanned addressBan))).SessionEnded
+        Expect.equal (addressBanned.Reason, addressBanned.Text, addressBanned.UntilUnixMs)
+                     (Dreamsleeve.Protocol.Chat.SessionEndReason.AddressBanned, "Рейд", 1_000_000L + 3_600_000L) "the address ban with its reason and end"
 
     testCase "send chat preserves text and full uint64 request IDs" <| fun _ ->
         let result = send UInt64.MaxValue "Привет\nworld" |> decode |> ok

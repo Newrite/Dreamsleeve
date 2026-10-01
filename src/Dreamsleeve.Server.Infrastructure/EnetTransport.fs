@@ -5,6 +5,7 @@ namespace Dreamsleeve.Server.Infrastructure
 
 open System
 open System.Collections.Generic
+open System.Net
 open System.Net.Sockets
 open Microsoft.Extensions.Logging
 open Enet
@@ -139,7 +140,9 @@ module EnetTransport =
             }
             state.Connections.Add(connection.Id, connection)
             state.Slots.Add(peer.IncomingPeerId, connection)
-            events.Add(ServerTransportEvent.Connected connection.Id)
+            let mutable address: IPAddress = null
+            let known = peer.Address.ToIpAddress(&address) = SocketError.Success && not (isNull address)
+            events.Add(ServerTransportEvent.Connected(connection.Id, if known then address else IPAddress.IPv6None))
 
     let private disconnected state (events: ResizeArray<ServerTransportEvent>) (peer: EnetPeer) =
         // ENet may reset connectID before delivering Disconnect; the slot remains valid.

@@ -187,6 +187,12 @@ TEST_CASE("A mute and the end of a session decode without correlation, with the 
   decoded = codec.Decode(Bytes(ended));
   REQUIRE(decoded);
   CHECK(std::get<W::SessionEnded>(*decoded).end == Domain::SessionEnd{Domain::SessionEndReason::Banned, "Читы", std::nullopt});
+  ended.mutable_session_ended()->set_reason(P::SESSION_END_REASON_ADDRESS_BANNED);
+  ended.mutable_session_ended()->set_text("Рейд");
+  ended.mutable_session_ended()->set_until_unix_ms(1800000000000);
+  decoded = codec.Decode(Bytes(ended));
+  REQUIRE(decoded);
+  CHECK(std::get<W::SessionEnded>(*decoded).end == Domain::SessionEnd{Domain::SessionEndReason::AddressBanned, "Рейд", 1800000000000});
   ended.mutable_session_ended()->set_reason(P::SESSION_END_REASON_UNSPECIFIED);
   CHECK_FALSE(codec.Decode(Bytes(ended)));
   ended.mutable_session_ended()->set_reason(static_cast<P::SessionEndReason>(9));

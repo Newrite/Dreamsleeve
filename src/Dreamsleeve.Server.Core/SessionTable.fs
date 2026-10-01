@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Core
 
 open System
 open System.Collections.Generic
+open System.Net
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
@@ -16,6 +17,8 @@ type RuntimeSessionPhase = Waiting | Guest | Opening | Ready | Closing
 module internal SessionTable =
     type Entry = {
         ConnectionId: Guid
+        /// Shown only in the panel; IP range bans apply to it.
+        Address: IPAddress
         ConnectedAt: DateTimeOffset
         mutable Phase: RuntimeSessionPhase
         mutable Deadline: int64
@@ -50,9 +53,9 @@ module internal SessionTable =
         { Connections = Dictionary(); Players = Dictionary(); Names = PseudonymBook.create dictionary
           Roles = Dictionary(); Profiles = Dictionary(); Mutes = Dictionary() }
 
-    let add connectionId connectedAt deadline state =
+    let add connectionId address connectedAt deadline state =
         let entry = {
-            ConnectionId = connectionId; ConnectedAt = connectedAt; Phase = RuntimeSessionPhase.Waiting; Deadline = deadline
+            ConnectionId = connectionId; Address = address; ConnectedAt = connectedAt; Phase = RuntimeSessionPhase.Waiting; Deadline = deadline
             PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
             ChatDetached = false; SystemDetached = false; PresenceDetached = false; GroundMarksDetached = false
         }

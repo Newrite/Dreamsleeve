@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Web.Admin
 
 open System
 open System.IO
+open System.Net
 open System.Reflection
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
@@ -82,7 +83,7 @@ module AdminRoutes =
         | AccountAccessError.SanctionRefused SanctionError.NotActive -> errorPage 409 "У игрока нет такого действующего наказания." admin
         | AccountAccessError.SanctionRefused SanctionError.NotAllowed -> errorPage 403 "Это наказание нельзя выдать или снять." admin
         | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ | AccountAccessError.Banned _
-        | AccountAccessError.RegistrationClosed _ ->
+        | AccountAccessError.RegistrationClosed _ | AccountAccessError.AddressBanned _ ->
             errorPage 503 "Сервис аккаунтов недоступен." admin
 
     // --- Ports -----------------------------------------------------------
@@ -386,7 +387,9 @@ module AdminRoutes =
         let names = match names with Ok (AdminReply.Names changes) -> changes |> List.map AdminModels.nameChange | Ok _ | Error _ -> []
         let! sanctions = ask routes context (AdminCommand.PlayerSanctions record.Profile.PlayerId)
         let sanctions = match sanctions with Ok (AdminReply.Sanctions active) -> active |> List.map AdminModels.sanction | Ok _ | Error _ -> []
-        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names; Sanctions = sanctions }
+        let! addresses = account routes context (AccountAccessCommand.AddressHistory record.Profile.PlayerId)
+        let addresses = match addresses with Ok (AccountAccessResult.Addresses entries) -> entries |> List.map AdminModels.signInAddress | Ok _ | Error _ -> []
+        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names; Sanctions = sanctions; Addresses = addresses }
     }
 
     let private notices =
@@ -398,6 +401,8 @@ module AdminRoutes =
             "lifted", "Наказание снято."
             "kicked", "Сессия игрока закрыта."
             "registration", "Режим регистрации сохранён."
+            "address-banned", "Диапазон забанен; соединения из него закрыты."
+            "address-lifted", "Бан диапазона снят."
             "announced", "Объявление отправлено."
             "token-revoked", "Токен отозван."
         ]
@@ -411,7 +416,8 @@ module AdminRoutes =
         match! findPlayer routes context playerId with
         | Ok (Some record) ->
             let! model = card routes context record
-            let page = AdminViews.player admin model (if failure.IsNone && resetCode.IsNone then notice context else None) failure resetCode routes.Settings.Input.DisplayName
+            let page = AdminViews.player admin model (if failure.IsNone && resetCode.IsNone then notice context else None) failure resetCode
+                           routes.Settings.Input.DisplayName routes.Settings.AddressHistoryDays
             return! html status page context
         | Ok None -> return! errorPage 404 "Игрок не найден." (Some admin) context
         | Error error -> return! serviceFailure (Some admin) error context
@@ -619,6 +625,90 @@ module AdminRoutes =
                 | Error error -> return! accountFailure (Some admin) error context
         })
 
+    // --- IP range bans ------------------------------------------------------
+
+    let private addressBanList routes context = task {
+        match! account routes context AccountAccessCommand.ListAddressBans with
+        | Ok (AccountAccessResult.AddressBans bans) -> return Ok (bans |> List.map AdminModels.addressBan)
+        | Ok _ -> return Error AccountAccessError.Unavailable
+        | Error error -> return Error error
+    }
+
+    let private showAddressBans routes admin status (failure: string option) (range: string) (check: RangeCheckModel option) : HttpHandler = fun context -> task {
+        match! addressBanList routes context with
+        | Ok bans ->
+            let message = if failure.IsNone && check.IsNone then notice context else None
+            let page = AdminViews.addressBans admin bans message failure range check routes.Settings.AddressHistoryDays
+            return! html status page context
+        | Error error -> return! accountFailure (Some admin) error context
+    }
+
+    let private addressBansPage routes admin : HttpHandler = fun context ->
+        let range = context.Request.Query["range"].ToString().Trim()
+        showAddressBans routes admin 200 None (if range.Length > 64 then "" else range) None context
+
+    // Range, term and reason by the rules of their domain types.
+    let private banOrder (form: IFormCollection) =
+        match AddressRange.parse (value form "range"), sanctionTerm form, SanctionReason.create (value form "reason") with
+        | Error _, _, _ -> Error $"Диапазон: адрес или CIDR; IPv4 не шире /{AddressRange.MinIpv4Prefix}, IPv6 не шире /{AddressRange.MinIpv6Prefix}."
+        | _, Error _, _ -> Error $"Срок: от 1 до {SanctionTerm.MaxMinutes} минут или бессрочно."
+        | _, _, Error _ -> Error reasonHint
+        | Ok range, Ok term, Ok reason -> Ok (range, term, reason)
+
+    /// Before a ban: who it would hit, online now and in the sign-in history.
+    let private checkRange routes =
+        mutation routes (fun admin form context -> task {
+            match banOrder form with
+            | Error message -> return! showAddressBans routes admin 400 (Some message) (value form "range") None context
+            | Ok (range, _, _) ->
+                let! rows = sessions routes context
+                let covered = rows |> Option.defaultValue [] |> List.filter (fun row -> AddressRange.contains range row.Address)
+                let! online = describe routes covered
+                match! account routes context (AccountAccessCommand.PlayersInRange range) with
+                | Ok (AccountAccessResult.PlayersAt players) ->
+                    let check = {
+                        Range = AddressRange.key range; Reason = value form "reason"; Term = value form "term"; Minutes = value form "minutes"
+                        Online = online; Players = players |> List.map AdminModels.addressMatch
+                    }
+                    return! showAddressBans routes admin 200 None (AddressRange.key range) (Some check) context
+                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                | Error error -> return! accountFailure (Some admin) error context
+        })
+
+    /// The account service stores the ban with its audit line and hands the
+    /// bans in force to the runtime, which closes the connections they cover.
+    let private banRange routes =
+        mutation routes (fun admin form context -> task {
+            let refuse message = showAddressBans routes admin 400 (Some message) (value form "range") None context
+            match banOrder form with
+            | _ when not (confirmed form) -> return! refuse "Проверьте диапазон и отметьте подтверждение бана."
+            | Error message -> return! refuse message
+            | Ok (range, term, reason) ->
+                match! account routes context (AccountAccessCommand.BanAddresses(range, reason, term, admin.Id)) with
+                | Ok (AccountAccessResult.AddressesBanned _) -> return! redirect "/address-bans?done=address-banned" context
+                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                | Error error -> return! accountFailure (Some admin) error context
+        })
+
+    let private routeBan (context: HttpContext) =
+        match Int64.TryParse(string context.Request.RouteValues["id"]) with
+        | true, id when id > 0L -> Some id
+        | true, _ | false, _ -> None
+
+    let private liftRange routes =
+        mutation routes (fun admin form context -> task {
+            match routeBan context with
+            | None -> return! errorPage 404 "Бан не найден." (Some admin) context
+            | Some _ when not (confirmed form) -> return! showAddressBans routes admin 400 (Some "Отметьте подтверждение снятия.") "" None context
+            | Some id ->
+                match! account routes context (AccountAccessCommand.LiftAddressBan(id, admin.Id)) with
+                | Ok (AccountAccessResult.AddressBanLifted _) -> return! redirect "/address-bans?done=address-lifted" context
+                | Error (AccountAccessError.SanctionRefused SanctionError.NotActive) ->
+                    return! showAddressBans routes admin 409 (Some "Этот бан уже снят или истёк.") "" None context
+                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                | Error error -> return! accountFailure (Some admin) error context
+        })
+
     // --- Announcements, audit, tokens, configuration -----------------------
 
     let private announcePage routes admin : HttpHandler = fun context ->
@@ -773,6 +863,13 @@ module AdminRoutes =
         | Error error -> return! apiFailure error context
     }
 
+    let private apiAddressBans routes (_: AdminAccount) : HttpHandler = fun context -> task {
+        match! addressBanList routes context with
+        | Ok bans -> return! apiJson bans context
+        | Error AccountAccessError.Busy -> return! apiError 503 "busy" "The panel is busy. Try again later." context
+        | Error _ -> return! apiError 503 "unavailable" "The panel is temporarily unavailable." context
+    }
+
     // --- Host --------------------------------------------------------------
 
     let private endpoints routes = [
@@ -799,6 +896,10 @@ module AdminRoutes =
         get "/registration" (withAdmin routes (fun admin -> showRegistration routes admin 200 None None))
         post "/registration/mode" (setRegistration routes)
         post "/registration/players" (createPlayer routes)
+        get "/address-bans" (withAdmin routes (addressBansPage routes))
+        post "/address-bans/check" (checkRange routes)
+        post "/address-bans" (banRange routes)
+        post "/address-bans/{id}/lift" (liftRange routes)
         get "/announce" (withAdmin routes (announcePage routes))
         post "/announce" (announce routes)
         get "/audit" (withAdmin routes (auditPage routes))
@@ -811,6 +912,7 @@ module AdminRoutes =
         get "/api/v1/players" (withApi routes (apiPlayers routes))
         get "/api/v1/players/{id}" (withApi routes (apiPlayer routes))
         get "/api/v1/sanctions" (withApi routes (apiSanctions routes))
+        get "/api/v1/address-bans" (withApi routes (apiAddressBans routes))
     ]
 
     let private isApi (context: HttpContext) = context.Request.Path.StartsWithSegments(PathString "/api")

@@ -183,7 +183,7 @@ let private incoming (id, bytes) =
 
 let private connect fixture name =
     let id = Guid.NewGuid()
-    fixture.Input.Enqueue(ServerTransportEvent.Connected id)
+    fixture.Input.Enqueue(ServerTransportEvent.Connected(id, Net.IPAddress.Loopback))
     fixture.Input.Enqueue(incoming(id, opening name))
     id
 
@@ -236,6 +236,40 @@ let tests = testList "ServerRuntime" [
             equal 1 state.Ready
             do! post fixture.Runtime ServerRuntimeMessage.Stop
             do! awaitUnit fixture.Runtime.Completion
+        })
+    }
+
+    testTask "an IP range ban ends the sessions it covers saying why, refuses new connections from it and spares others" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
+            let alice = connect fixture "alice"
+            let! _ = welcome fixture alice
+            let bob = Guid.NewGuid()
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(bob, Net.IPAddress.Parse "203.0.113.9"))
+            fixture.Input.Enqueue(incoming(bob, opening "bob"))
+            let! _ = welcome fixture bob
+            let! rows = fixture.Runtime.AskAsync(fun reply -> ServerRuntimeMessage.ListSessions reply) |> awaitResult
+            equal (set [ "127.0.0.1"; "203.0.113.9" ]) (rows |> List.map (fun row -> Dreamsleeve.Server.Domain.ClientAddress.text row.Address) |> set)
+            let now = DateTimeOffset.UtcNow
+            let ban : Dreamsleeve.Server.Domain.AddressBan = {
+                Id = 1L; Range = Dreamsleeve.Server.Domain.AddressRange.parse "203.0.113.0/24" |> ok
+                Reason = Dreamsleeve.Server.Domain.SanctionReason.create "Рейд" |> ok; IssuedBy = ValueNone
+                IssuedAt = now; Expires = ValueSome (DateTimeOffset.FromUnixTimeMilliseconds((now.AddHours 1.).ToUnixTimeMilliseconds()))
+            }
+            do! post fixture.Runtime (ServerRuntimeMessage.AccountChanged(AccountChange.AddressBans [ ban ]))
+            let! _, ended = nextWhere fixture (fun id packet -> id = bob && packet.PayloadCase = ServerPacket.PayloadOneofCase.SessionEnded)
+            equal SessionEndReason.AddressBanned ended.SessionEnded.Reason
+            equal "Рейд" ended.SessionEnded.Text
+            equal (ban.Expires.Value.ToUnixTimeMilliseconds()) ended.SessionEnded.UntilUnixMs
+            let! closed = receive fixture.Closed
+            equal bob closed
+            let guest = Guid.NewGuid()
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(guest, Net.IPAddress.Parse "::ffff:203.0.113.50"))
+            fixture.Notify() |> ignore
+            let! refused = receive fixture.Closed
+            equal guest refused
+            let! state = stats fixture
+            equal 1 state.Ready
+            equal 1 state.Connections
         })
     }
 
@@ -393,7 +427,7 @@ let tests = testList "ServerRuntime" [
         let options = { ServerRuntimeOptions.defaults with OpenTimeoutMs = 30 }
         do! withRuntime options (fun fixture -> task {
             let id = Guid.NewGuid()
-            fixture.Input.Enqueue(ServerTransportEvent.Connected id)
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(id, Net.IPAddress.Loopback))
             let! closed = receive fixture.Closed
             equal id closed
             do! empty fixture
@@ -403,7 +437,7 @@ let tests = testList "ServerRuntime" [
         let options = { ServerRuntimeOptions.defaults with OpenTimeoutMs = 50 }
         do! withRuntime options (fun fixture -> task {
             let guest = Guid.NewGuid()
-            fixture.Input.Enqueue(ServerTransportEvent.Connected guest)
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(guest, Net.IPAddress.Loopback))
             fixture.Input.Enqueue(incoming(guest, joinAsGuest 1UL))
             fixture.Notify() |> ignore
             // Several deadlines of a connection that never announces itself.
@@ -433,7 +467,7 @@ let tests = testList "ServerRuntime" [
     testTask "a guest that leaves frees its connection" {
         do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
             let guest = Guid.NewGuid()
-            fixture.Input.Enqueue(ServerTransportEvent.Connected guest)
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(guest, Net.IPAddress.Loopback))
             fixture.Input.Enqueue(incoming(guest, joinAsGuest 1UL))
             fixture.Input.Enqueue(ServerTransportEvent.Disconnected guest)
             fixture.Notify() |> ignore
@@ -448,7 +482,7 @@ let tests = testList "ServerRuntime" [
             let first = connect fixture "healthy"
             let! _ = welcome fixture first
             let malformed = Guid.NewGuid()
-            fixture.Input.Enqueue(ServerTransportEvent.Connected malformed)
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(malformed, Net.IPAddress.Loopback))
             fixture.Input.Enqueue(incoming(malformed, [|255uy|]))
             let! closed = receive fixture.Closed
             equal malformed closed
@@ -670,7 +704,7 @@ let private namedAuthentication (accounts: (string * string * string) list) () =
 
 let private connectHidden fixture name =
     let id = Guid.NewGuid()
-    fixture.Input.Enqueue(ServerTransportEvent.Connected id)
+    fixture.Input.Enqueue(ServerTransportEvent.Connected(id, Net.IPAddress.Loopback))
     fixture.Input.Enqueue(incoming(id, packet 1UL (fun packet -> packet.OpenSession <- OpenSession(SessionTicket = ticket name, HiddenIdentity = HiddenIdentity.Everywhere))))
     id
 

@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Core
 
 open System
 open System.Diagnostics
+open System.Net
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging
@@ -25,6 +26,8 @@ type ServerRuntimeSnapshot = {
 /// for details (Describe); the row itself carries no names.
 type RuntimeSessionRow = {
     ConnectionId: Guid
+    /// For the panel only.
+    Address: IPAddress
     PlayerId: PlayerId option
     Phase: RuntimeSessionPhase
     ConnectedAt: DateTimeOffset
@@ -91,6 +94,8 @@ module ServerRuntime =
         mutable SourcesStopping: bool
         mutable Ticker: AgentTicker option
         mutable LastTick: int64
+        /// From the account service (AccountChange.AddressBans); empty until it sends them.
+        mutable AddressBans: AddressBan list
     }
 
     let private now () = Environment.TickCount64
@@ -407,7 +412,8 @@ module ServerRuntime =
 
     let private transportEvent (options: ServerRuntimeOptions) authenticator state context event =
         match event with
-        | ServerTransportEvent.Connected connectionId ->
+        | ServerTransportEvent.Connected(connectionId, address) ->
+            let banned = AddressBan.find DateTimeOffset.UtcNow address state.AddressBans
             if state.Stopping then
                 state.Logger.LogDebug("Refusing connection {ConnectionId}: the server is stopping", connectionId)
                 state.Transport.Close connectionId
@@ -416,8 +422,12 @@ module ServerRuntime =
                 state.Transport.Close connectionId
             elif state.Table.Connections.ContainsKey connectionId then
                 state.Logger.LogWarning("Transport reported connection {ConnectionId} twice", connectionId)
+            elif banned.IsSome then
+                state.Logger.LogInformation("Refusing connection {ConnectionId} from {Address}: the range {Range} is banned",
+                                            connectionId, ClientAddress.text address, AddressRange.key banned.Value.Range)
+                state.Transport.Close connectionId
             else
-                SessionTable.add connectionId DateTimeOffset.UtcNow (now () + int64 options.OpenTimeoutMs) state.Table |> ignore
+                SessionTable.add connectionId address DateTimeOffset.UtcNow (now () + int64 options.OpenTimeoutMs) state.Table |> ignore
                 state.Logger.LogDebug("Connection {ConnectionId} accepted ({Connections} connections)", connectionId, state.Table.Connections.Count)
         | ServerTransportEvent.Received(connectionId, lane, bytes) ->
             match SessionTable.find connectionId state.Table with
@@ -530,7 +540,7 @@ module ServerRuntime =
     let private endSessions (options: ServerRuntimeOptions) state context playerId reason =
         let tickets =
             match reason with
-            | SessionEnd.AccessRevoked | SessionEnd.Banned _ -> true
+            | SessionEnd.AccessRevoked | SessionEnd.Banned _ | SessionEnd.AddressBanned _ -> true
             | SessionEnd.Kicked _ -> false
         let affected =
             state.Table.Connections.Values
@@ -542,6 +552,20 @@ module ServerRuntime =
             if entry.PlayerId = Some playerId && entry.Phase <> RuntimeSessionPhase.Closing then
                 send options state context entry (ServerResponse.SessionEnded reason)
             close options state context entry
+
+    /// The bans in force from now on. Every connection they cover ends; a
+    /// session first hears why, like an account ban.
+    let private banAddresses (options: ServerRuntimeOptions) state context (bans: AddressBan list) =
+        state.AddressBans <- bans
+        let time = DateTimeOffset.UtcNow
+        visitRoutes state (fun entry ->
+            match AddressBan.find time entry.Address bans with
+            | ValueSome ban when entry.Phase <> RuntimeSessionPhase.Closing ->
+                state.Logger.LogInformation("Closing {ConnectionId} from {Address}: the range {Range} is banned",
+                                            entry.ConnectionId, ClientAddress.text entry.Address, AddressRange.key ban.Range)
+                if entry.PlayerId.IsSome then send options state context entry (ServerResponse.SessionEnded(SessionEnd.AddressBanned ban))
+                close options state context entry
+            | ValueSome _ | ValueNone -> ())
 
     let private stop (options: ServerRuntimeOptions) state context =
         if not state.Stopping then
@@ -640,6 +664,7 @@ module ServerRuntime =
                 state.Table.Mutes[playerId] <- mute
                 online state playerId |> Option.iter (fun entry -> tell state entry (PlayerSessionMessage.MuteChanged mute))
             | AccountChange.Kicked(playerId, reason) -> endSessions options state context playerId (SessionEnd.Kicked reason)
+            | AccountChange.AddressBans bans -> banAddresses options state context bans
         | ServerRuntimeMessage.Announce announcement -> announce state announcement
         | ServerRuntimeMessage.SetPlayerRole(playerId, role) ->
             state.Logger.LogDebug("Role of player {PlayerId} is now {Role}; online: {Online}", PlayerId.value playerId, role, state.Table.Players.ContainsKey playerId)
@@ -653,7 +678,7 @@ module ServerRuntime =
         | ServerRuntimeMessage.ListSessions reply ->
             reply.Reply [
                 for entry in state.Table.Connections.Values do
-                    { ConnectionId = entry.ConnectionId; PlayerId = entry.PlayerId; Phase = entry.Phase
+                    { ConnectionId = entry.ConnectionId; Address = entry.Address; PlayerId = entry.PlayerId; Phase = entry.Phase
                       ConnectedAt = entry.ConnectedAt; Session = entry.Child |> Option.map _.Ref }
             ]
         | ServerRuntimeMessage.Stop -> stop options state context
@@ -698,6 +723,7 @@ module ServerRuntime =
             Schedule = AnnouncementSchedule.create (now ()) settings.Schedule
             Transport = transport; Logger = logger
             Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
+            AddressBans = []
         }
         let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
         let agent = Agent.Start(agentOptions, handle options authenticator state, isControl = isControl)

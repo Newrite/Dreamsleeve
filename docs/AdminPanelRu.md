@@ -10,7 +10,7 @@ composition root: поднимает оба хоста и связывает и�
 Панель — окно администратора в работающий сервер ([ProductSpecRu.MD §16](ProductSpecRu.MD),
 [TechnicalHandbookRu.MD §13](TechnicalHandbookRu.MD)): состояние сервера и онлайн, поиск
 игроков, роль, переименование display name, сброс пароля и отзыв доступа, муты, баны и кик,
-режим регистрации и создание игроков, объявления, аудит (в том числе действий модераторов в игре), токены REST API и конфигурация
+режим регистрации и создание игроков, баны диапазонов IP, объявления, аудит (в том числе действий модераторов в игре), токены REST API и конфигурация
 только на чтение.
 
 Панель не источник бизнес-логики (§15.5). Каждое действие идёт через владельца, у которого
@@ -23,6 +23,7 @@ composition root: поднимает оба хоста и связывает и�
 | Роль | `AdminService` (SQLite + аудит), затем runtime → живая `PlayerSession` |
 | Мут, бан, снятие, кик | `AuthService`: `Sanction` / `LiftSanction` / `Kick` (SQLite + аудит), затем runtime (`AccountChanged`) |
 | Режим регистрации, создание игрока | `AuthService`: `SetRegistration` / `CreateAccount` (SQLite), затем строка аудита |
+| Бан диапазона IP, снятие | `AuthService`: `BanAddresses` / `LiftAddressBan` (SQLite + аудит), затем runtime (`AccountChange.AddressBans`) |
 | Объявление | `ServerRuntimeMessage.Announce` → владелец системного канала, как `announce <текст>` |
 | Онлайн | `ServerRuntimeMessage.ListSessions` + `PlayerSessionMessage.Describe` |
 | Администраторы, сессии, токены, аудит, поиск | `AdminService` (bounded workers `admin-storage`) |
@@ -173,10 +174,11 @@ presence-обновление; остальные получают обновл�
 | Путь | Что делает |
 |---|---|
 | `/setup`, `/reset`, `/login`, `POST /logout` | Первичная настройка, смена пароля по коду, вход, выход |
-| `/` | `ServerRuntimeSnapshot` и таблица онлайна; htmx обновляет её раз в 5 с (`/partials/online`) |
+| `/` | `ServerRuntimeSnapshot` и таблица онлайна с IP-адресом соединения; htmx обновляет её раз в 5 с (`/partials/online`) |
 | `/players?q=&page=` | Поиск по username, display name (подстрока, `%` и `_` буквальные) или точному PlayerId; страницы по 50 |
-| `/players/{id}` | Карточка: профиль из БД, роль, живые сессии, действующие наказания; формы роли, переименования, сброса пароля (код показывается один раз), отзыва доступа, наказания и его снятия, кика |
+| `/players/{id}` | Карточка: профиль из БД, роль, живые сессии, действующие наказания, адреса входа за `SignInHistoryDays` со ссылкой «Бан …»; формы роли, переименования, сброса пароля (код показывается один раз), отзыва доступа, наказания и его снятия, кика |
 | `/sanctions` | Действующие муты и баны со ссылкой на карточку |
+| `/address-bans` | Действующие баны диапазонов IP со снятием; новый бан — сначала «Проверить диапазон» (кто онлайн из него и кто входил из него), затем подтверждение ([AuthenticationRu.md](AuthenticationRu.md#адреса-входа-и-баны-ip)) |
 | `/registration` | Режим регистрации (`open`, `steam`, `manual`; действует сразу) и создание игрока: аккаунт без пароля и одноразовый код установки пароля на `SetupLifetimeHours`, показывается один раз ([AuthenticationRu.md](AuthenticationRu.md#режим-регистрации)) |
 | `/announce` | Текст (лимит `MessageText`) и вид `admin`/`announcement`/`event`; `periodic` принадлежит расписанию |
 | `/audit` | Последние 200 строк: кто (администратор или модератор), действие, цель, подробности |
@@ -205,6 +207,7 @@ presence-обновление; остальные получают обновл�
 | `GET /api/v1/players?page=&q=` | `{query, page, pageSize, total, players[]}` |
 | `GET /api/v1/players/{id}` | `{player, sessions[], names[], sanctions[]}`; наказание — `{kind, reason, issuedAt, expires, issuedBy}` (`expires` — `null` для бессрочного, `issuedBy` — `admin:3` или `player:42`) |
 | `GET /api/v1/sanctions` | Действующие наказания: `[{playerId, username, displayName, sanction}]` |
+| `GET /api/v1/address-bans` | Действующие баны диапазонов: `[{id, range, reason, issuedAt, expires, issuedBy}]` |
 
 Доступ — cookie панели или `Authorization: Bearer <token>`. Токены создаются на странице
 «Токены API»; в БД — SHA-256 и метка (1–64 символа). Ошибки — тот же `{code, message}`, что у

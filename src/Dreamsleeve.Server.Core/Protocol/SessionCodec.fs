@@ -82,6 +82,10 @@ module internal SessionCodec =
         | SessionEnd.Kicked reason ->
             result.Reason <- Dreamsleeve.Protocol.Chat.SessionEndReason.Kicked
             result.Text <- SanctionReason.value reason
+        | SessionEnd.AddressBanned ban ->
+            result.Reason <- Dreamsleeve.Protocol.Chat.SessionEndReason.AddressBanned
+            result.Text <- SanctionReason.value ban.Reason
+            untilMs ban.Expires |> ValueOption.iter (fun until -> result.UntilUnixMs <- until)
         result
 
     let welcome (config: ServerConfig) (value: SessionWelcome) =

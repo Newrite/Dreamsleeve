@@ -39,11 +39,12 @@ let private downSql file =
     text.Substring(text.IndexOf("MIGRONDI:DOWN", StringComparison.Ordinal)).Split('\n', 2)[1]
 
 let tests = testList "SQLite admin" [
-    testCase "migrations 5 to 10 apply over schema 4, keep players and roll back" (fun () ->
+    testCase "migrations 5 to 11 apply over schema 4, keep players and roll back" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = player database "alice" "Alice"
-        database.Execute ((downSql "1791244800000_registration.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%';"
+        database.Execute ((downSql "1791331200000_addresses.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%';"
+                          + (downSql "1791244800000_registration.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%';"
                           + (downSql "1791158400000_moderator_audit.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%';"
                           + (downSql "1791072000000_sanctions.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%';"
                           + (downSql "1790985600000_ground_mark_game_date.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%game_date%';"
@@ -52,10 +53,12 @@ let tests = testList "SQLite admin" [
                           + "DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; PRAGMA user_version = 4")
         equal 0L (tableCount database)
         SqliteAccountStore.initialize database.Config |> ok
-        equal 10L (database.Scalar "PRAGMA user_version")
+        equal 11L (database.Scalar "PRAGMA user_version")
         equal 5L (tableCount database)
         equal (Some alice.PlayerId) (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.map _.Profile.PlayerId)
-        // The DOWN sections return to schemas 9, 8, 7, 6, 5 and 4 without touching player data.
+        // The DOWN sections return to schemas 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        database.Execute (downSql "1791331200000_addresses.sql")
+        equal 10L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791244800000_registration.sql")
         equal 9L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791158400000_moderator_audit.sql")
@@ -222,4 +225,40 @@ let tests = testList "SQLite admin" [
         equal (ValueSome(AuditActor.Admin root.Id)) entries.Head.Actor
         equal (ValueSome "root") (entries.Head.ActorName |> ValueOption.map Username.value)
         equal (now + TimeSpan.FromSeconds 2.) entries.Head.At)
+
+    testCase "sign-in addresses are counted per player, expire after the kept days and are found by range" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let alice = player database "alice" "Alice"
+        let bob = player database "bob" "Bob"
+        let ip (text: string) = Net.IPAddress.Parse text
+        SqliteAddressStore.record database.Config alice.PlayerId (ip "203.0.113.7") (now.AddDays -40.) 30 token |> ok
+        SqliteAddressStore.record database.Config alice.PlayerId (ip "198.51.100.4") now 30 token |> ok
+        SqliteAddressStore.record database.Config alice.PlayerId (ip "::ffff:198.51.100.4") (now.AddMinutes 1.) 30 token |> ok
+        SqliteAddressStore.record database.Config bob.PlayerId (ip "198.51.100.200") now 30 token |> ok
+        let history = SqliteAddressStore.history database.Config alice.PlayerId token |> ok
+        // The row older than 30 days went with the next sign-in; the mapped form is the same address.
+        equal [ "198.51.100.4", 2L, now, now.AddMinutes 1. ] (history |> List.map (fun entry -> ClientAddress.text entry.Address, entry.SignIns, entry.FirstSeen, entry.LastSeen))
+        let players = SqliteAddressStore.playersIn database.Config (AddressRange.parse "198.51.100.0/24" |> ok) token |> ok
+        equal (set [ "alice"; "bob" ]) (players |> List.map (fun entry -> Username.value entry.Player.Username) |> set)
+        equal [] (SqliteAddressStore.playersIn database.Config (AddressRange.parse "203.0.113.0/24" |> ok) token |> ok))
+
+    testCase "an address ban is stored with its audit line, listed while in force and lifted once" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let root = firstAdmin database
+        let range = AddressRange.parse "203.0.113.0/24" |> ok
+        let reason = SanctionReason.create "Рейд" |> ok
+        let ban = SqliteAddressStore.ban database.Config range reason (SanctionTerm.For(TimeSpan.FromHours 1.)) root.Id now token |> ok
+        let lasting = SqliteAddressStore.ban database.Config (AddressRange.parse "2001:db8::/48" |> ok) reason SanctionTerm.UntilLifted root.Id now token |> ok
+        equal (ValueSome (now.AddHours 1.)) ban.Expires
+        equal [ ban.Id; lasting.Id ] (SqliteAddressStore.active database.Config now token |> ok |> List.map _.Id |> List.sort)
+        equal [ lasting ] (SqliteAddressStore.active database.Config (now.AddHours 2.) token |> ok)
+        equal (Some ban) (SqliteAddressStore.lift database.Config ban.Id root.Id now token |> ok)
+        equal None (SqliteAddressStore.lift database.Config ban.Id root.Id now token |> ok)
+        equal [ lasting ] (SqliteAddressStore.active database.Config now token |> ok)
+        let audit = SqliteAdminStore.recentAudit database.Config 10 token |> ok
+        equal [ AdminAction.LiftedAddressBan, "range:203.0.113.0/24"; AdminAction.BannedAddresses, "range:2001:db8::/48"
+                AdminAction.BannedAddresses, "range:203.0.113.0/24"; AdminAction.CreatedAdmin, $"admin:{AdminId.value root.Id}" ]
+              (audit |> List.map (fun entry -> entry.Action, entry.Target)))
 ]

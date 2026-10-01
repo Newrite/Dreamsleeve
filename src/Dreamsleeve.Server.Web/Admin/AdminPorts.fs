@@ -46,4 +46,6 @@ type AdminRouteSettings = {
     Moderation: ModerationRules
     /// Lifetime of the code of a player created on the registration page.
     SetupCodeHours: int
+    /// Days the sign-in addresses of a player are kept.
+    AddressHistoryDays: int
 }

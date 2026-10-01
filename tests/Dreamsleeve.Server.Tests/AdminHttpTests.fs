@@ -64,7 +64,7 @@ type private FakeAdmin() =
 
 // One hidden player online; its real names only the panel may show.
 let private hiddenRow = {
-    ConnectionId = Guid.NewGuid(); PlayerId = Some (PlayerId.create 7UL |> ok); Phase = RuntimeSessionPhase.Ready
+    ConnectionId = Guid.NewGuid(); Address = IPAddress.Parse "203.0.113.7"; PlayerId = Some (PlayerId.create 7UL |> ok); Phase = RuntimeSessionPhase.Ready
     ConnectedAt = DateTimeOffset.UtcNow; Session = None
 }
 
@@ -293,6 +293,49 @@ let tests = testSequenced (testList "Admin HTTP" [
                 "The canonical names reach the account service."
             let audit = panel.Admin.Audit.ToArray() |> Array.map (fun (_, entry) -> entry.Action, AuditTarget.key entry.Target, entry.Details)
             equal [| AdminAction.SetRegistrationMode, "server", "manual"; AdminAction.CreatedPlayer, "player:9", "newcomer" |] audit
+        }))
+
+    case "an IP range ban is first checked against whom it would hit, then confirmed and lifted" (fun () ->
+        withPanel id (fun panel -> task {
+            let bans = ref []
+            let range = AddressRange.parse "203.0.113.0/24" |> ok
+            let reason = SanctionReason.create "Рейд" |> ok
+            let ban : AddressBan = { Id = 5L; Range = range; Reason = reason; IssuedBy = ValueSome root.Id; IssuedAt = DateTimeOffset.UtcNow; Expires = ValueNone }
+            let bob = PlayerData.create (PlayerId.create 8UL |> ok) (Username.create 32 "bob" |> ok) (DisplayName.create 64 "Боб" |> ok)
+            let seen : SignInAddress = { Address = IPAddress.Parse "203.0.113.9"; FirstSeen = DateTimeOffset.UtcNow; LastSeen = DateTimeOffset.UtcNow; SignIns = 3L }
+            panel.AccountReply.Value <- (function
+                | AccountAccessCommand.ListAddressBans -> Ok (AccountAccessResult.AddressBans bans.Value)
+                | AccountAccessCommand.PlayersInRange _ -> Ok (AccountAccessResult.PlayersAt [ ({ Player = bob; Address = seen } : AddressMatch) ])
+                | AccountAccessCommand.BanAddresses _ ->
+                    bans.Value <- [ ban ]
+                    Ok (AccountAccessResult.AddressesBanned ban)
+                | AccountAccessCommand.LiftAddressBan(5L, _) when not bans.Value.IsEmpty ->
+                    bans.Value <- []
+                    Ok (AccountAccessResult.AddressBanLifted ban)
+                | AccountAccessCommand.LiftAddressBan _ -> Error (AccountAccessError.SanctionRefused SanctionError.NotActive)
+                | _ -> Error AccountAccessError.Unavailable)
+            do! signIn panel
+            use! page = panel.Http.GetAsync "/address-bans?range=203.0.113.7"
+            status 200 page
+            use! wide = submit panel "/address-bans/check" [ "range", "203.0.0.0/7"; "term", ""; "reason", "Рейд" ] []
+            status 400 wide
+            use! checkedRange = submit panel "/address-bans/check" [ "range", "203.0.113.77/24"; "term", ""; "reason", "Рейд" ] []
+            status 200 checkedRange
+            let! html = checkedRange.Content.ReadAsStringAsync()
+            // The hidden player is online from 203.0.113.7; bob signed in from the range before.
+            check (html.Contains "203.0.113.0/24" && html.Contains "alice.real" && html.Contains "Боб") "The check shows whom the ban would hit."
+            use! unconfirmed = submit panel "/address-bans" [ "range", "203.0.113.0/24"; "term", ""; "reason", "Рейд" ] []
+            status 400 unconfirmed
+            use! confirmed = submit panel "/address-bans" [ "range", "203.0.113.0/24"; "term", ""; "reason", "Рейд"; "confirm", "yes" ] []
+            status 303 confirmed
+            check (panel.Accounts.ToArray() |> Array.contains (AccountAccessCommand.BanAddresses(range, reason, SanctionTerm.UntilLifted, root.Id))) "The order reaches the account service."
+            use! listed = panel.Http.GetAsync "/address-bans"
+            let! listing = listed.Content.ReadAsStringAsync()
+            check (listing.Contains "/address-bans/5/lift") "The ban is listed with its lift form."
+            use! lifted = submit panel "/address-bans/5/lift" [ "confirm", "yes" ] []
+            status 303 lifted
+            use! again = submit panel "/address-bans/5/lift" [ "confirm", "yes" ] []
+            status 409 again
         }))
 
     case "sign-in attempts are limited per address and forwarded addresses are ignored unless trusted" (fun () ->

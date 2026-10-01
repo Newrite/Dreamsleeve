@@ -23,6 +23,7 @@ Username, DisplayName может совпадать. Регистрация со
 | `player_roles` | Роль игрока: 0 — игрок, 1 — модератор |
 | `sanctions` | Муты и баны со сроком, причиной и выдавшим |
 | `server_settings` | Настройки, которые панель и консоль меняют на ходу: режим регистрации |
+| `sign_in_addresses`, `address_bans` | Адреса входа игроков за `SignInHistoryDays` и баны диапазонов IP |
 
 Друзей, блоклиста, партий, гильдий, сессий и ключей идентичности в БД нет. Время —
 Unix-миллисекунды UTC. SQL живёт в `SqliteAccountStore`, `SqliteGroundMarkStore`,

@@ -173,7 +173,7 @@ let private start count (probe: Probe) = task {
                       Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance
     for index in 0 .. count - 1 do
         let welcome = probe.Expect(ids[index], 1UL)
-        deliver (ServerTransportEvent.Connected ids[index])
+        deliver (ServerTransportEvent.Connected(ids[index], Net.IPAddress.Loopback))
         let packet = Dreamsleeve.Protocol.Chat.ClientPacket(
                          ProtocolVersion = ProtocolCodec.Version, RequestId = 1UL,
                          OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(SessionTicket = tickets[index]))

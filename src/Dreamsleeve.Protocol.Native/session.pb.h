@@ -163,6 +163,7 @@ enum SessionEndReason : int {
   SESSION_END_REASON_ACCESS_REVOKED = 1,
   SESSION_END_REASON_BANNED = 2,
   SESSION_END_REASON_KICKED = 3,
+  SESSION_END_REASON_ADDRESS_BANNED = 4,
   SessionEndReason_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   SessionEndReason_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -173,11 +174,11 @@ extern const uint32_t SessionEndReason_internal_data_[];
 inline constexpr SessionEndReason SessionEndReason_MIN =
     static_cast<SessionEndReason>(0);
 inline constexpr SessionEndReason SessionEndReason_MAX =
-    static_cast<SessionEndReason>(3);
+    static_cast<SessionEndReason>(4);
 inline bool SessionEndReason_IsValid(int value) {
-  return 0 <= value && value <= 3;
+  return 0 <= value && value <= 4;
 }
-inline constexpr int SessionEndReason_ARRAYSIZE = 3 + 1;
+inline constexpr int SessionEndReason_ARRAYSIZE = 4 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL SessionEndReason_descriptor();
 template <typename T>
 const ::std::string& SessionEndReason_Name(T value) {
@@ -188,7 +189,7 @@ const ::std::string& SessionEndReason_Name(T value) {
 }
 template <>
 inline const ::std::string& SessionEndReason_Name(SessionEndReason value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<SessionEndReason_descriptor, 0, 3>(
+  return ::google::protobuf::internal::NameOfDenseEnum<SessionEndReason_descriptor, 0, 4>(
       static_cast<int>(value));
 }
 inline bool SessionEndReason_Parse(

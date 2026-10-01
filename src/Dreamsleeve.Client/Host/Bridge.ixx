@@ -54,13 +54,14 @@ export namespace Dreamsleeve::Host::Bridge
       "nameNotAllowed",
       "banned",
       "registrationSteamOnly",
+      "addressBanned",
   });
   constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
   constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
   constexpr auto MarkKindNames    = std::to_array<std::string_view>({"note", "death"});
   constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "system"});
   // Domain::SessionEndReason from AccessRevoked.
-  constexpr auto EndNames = std::to_array<std::string_view>({"revoked", "banned", "kicked"});
+  constexpr auto EndNames = std::to_array<std::string_view>({"revoked", "banned", "kicked", "addressBanned"});
   // Domain::SanctionKind from Mute.
   constexpr auto SanctionKindNames = std::to_array<std::string_view>({"mute", "ban"});
 

@@ -33,6 +33,7 @@ module AdminViews =
         | Players
         | Registration
         | Sanctions
+        | AddressBans
         | Announce
         | Audit
         | Tokens
@@ -52,6 +53,7 @@ module AdminViews =
                     link "/players" "Игроки" Players
                     link "/registration" "Регистрация" Registration
                     link "/sanctions" "Наказания" Sanctions
+                    link "/address-bans" "Баны IP" AddressBans
                     link "/announce" "Объявление" Announce
                     link "/audit" "Аудит" Audit
                     link "/tokens" "Токены API" Tokens
@@ -183,7 +185,7 @@ module AdminViews =
             Elem.table [] [
                 Elem.thead [] [
                     Elem.tr [] [
-                        for heading in [ "PlayerId"; "Username"; "Display name"; "Персонаж"; "Имя для других"; "Роль"; "Место"; "Фаза"; "Подключён" ] do
+                        for heading in [ "PlayerId"; "IP"; "Username"; "Display name"; "Персонаж"; "Имя для других"; "Роль"; "Место"; "Фаза"; "Подключён" ] do
                             Elem.th [] [ text heading ]
                     ]
                 ]
@@ -191,6 +193,7 @@ module AdminViews =
                     for row in rows do
                         Elem.tr [] [
                             Elem.td [] [ playerLink row.PlayerId ]
+                            Elem.td [] [ Elem.code [] [ text row.Address ] ]
                             if row.Described then
                                 Elem.td [] [ text row.Username ]
                                 Elem.td [] [ text row.DisplayName ]
@@ -259,7 +262,10 @@ module AdminViews =
             ]
         ]
 
-    let player admin (card: PlayerCardModel) (notice: string option) (failure: string option) (resetCode: string option) (displayNameLimit: int) =
+    let private rangeLink (range: string) label =
+        Elem.a [ attr "href" ("/address-bans?" + query [ "range", range ]) ] [ text label ]
+
+    let player admin (card: PlayerCardModel) (notice: string option) (failure: string option) (resetCode: string option) (displayNameLimit: int) (historyDays: int) =
         let id = card.Player.PlayerId
         let action path = attr "action" $"/players/{id}/{path}"
         page $"Игрок {id}" Players (Some admin) notice [
@@ -299,6 +305,24 @@ module AdminViews =
                                             submit "Снять"
                                         ]
                                     ]
+                                ]
+                        ]
+                    ]
+            ]
+            Elem.section [] [
+                Elem.h2 [] [ text $"Адреса входа (за {historyDays} дн.)" ]
+                if card.Addresses.IsEmpty then Elem.p [ css "muted" ] [ text "Входов с записанным адресом нет." ]
+                else
+                    Elem.table [] [
+                        Elem.thead [] [ Elem.tr [] [ for heading in [ "IP"; "Первый вход"; "Последний вход"; "Входов"; "" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.tbody [] [
+                            for address in card.Addresses do
+                                Elem.tr [] [
+                                    Elem.td [] [ Elem.code [] [ text address.Address ] ]
+                                    Elem.td [] [ text (time address.FirstSeen) ]
+                                    Elem.td [] [ text (time address.LastSeen) ]
+                                    Elem.td [] [ text (string address.SignIns) ]
+                                    Elem.td [] [ rangeLink address.Range $"Бан {address.Range}…" ]
                                 ]
                         ]
                     ]
@@ -381,6 +405,113 @@ module AdminViews =
                         field "Причина (видна игроку)" "reason" "text" "" [ flag "required"; attr "maxlength" (string SanctionReason.MaxLength) ]
                         confirm "Подтверждаю кик"
                         submit "Кикнуть"
+                    ]
+            ]
+        ]
+
+    let private termLabel (term: string) (minutes: string) =
+        match term with
+        | "" -> "бессрочно"
+        | "custom" -> $"{minutes} мин"
+        | preset ->
+            AdminModels.sanctionTerms
+            |> List.tryPick (fun (label, value) -> match value with ValueSome value when string value = preset -> Some label | _ -> None)
+            |> Option.defaultValue $"{preset} мин"
+
+    let addressBans admin (bans: AddressBanModel list) (notice: string option) (failure: string option) (range: string)
+                    (check: RangeCheckModel option) (historyDays: int) =
+        page "Баны IP" AddressBans (Some admin) notice [
+            error failure
+            match check with
+            | Some check ->
+                Elem.section [ css "secret" ] [
+                    Elem.h2 [] [ text $"Проверка диапазона {check.Range}" ]
+                    Elem.p [] [
+                        text $"Сейчас онлайн из диапазона: {check.Online.Length}. Входили из него за {historyDays} дн.: {check.Players.Length} игроков. "
+                        text "Если среди них есть посторонние, это общий адрес (NAT оператора, общежитие): сузьте диапазон или баньте аккаунт."
+                    ]
+                    if not check.Online.IsEmpty then
+                        Elem.table [] [
+                            Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "IP"; "Username"; "Фаза" ] do Elem.th [] [ text heading ] ] ]
+                            Elem.tbody [] [
+                                for row in check.Online do
+                                    Elem.tr [] [
+                                        Elem.td [] [ playerLink row.PlayerId ]
+                                        Elem.td [] [ Elem.code [] [ text row.Address ] ]
+                                        Elem.td [] [ text (if isNull row.Username then "—" else row.Username) ]
+                                        Elem.td [] [ text row.Phase ]
+                                    ]
+                            ]
+                        ]
+                    if not check.Players.IsEmpty then
+                        Elem.table [] [
+                            Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Display name"; "IP"; "Последний вход" ] do Elem.th [] [ text heading ] ] ]
+                            Elem.tbody [] [
+                                for player in check.Players do
+                                    Elem.tr [] [
+                                        Elem.td [] [ Elem.a [ attr "href" $"/players/{player.PlayerId}" ] [ text (string player.PlayerId) ] ]
+                                        Elem.td [] [ text player.Username ]
+                                        Elem.td [] [ text player.DisplayName ]
+                                        Elem.td [] [ Elem.code [] [ text player.Address ] ]
+                                        Elem.td [] [ text (time player.LastSeen) ]
+                                    ]
+                            ]
+                        ]
+                    Elem.form [ attr "method" "post"; attr "action" "/address-bans"; css "stack" ] [
+                        Elem.input [ attr "type" "hidden"; attr "name" "range"; attr "value" check.Range ]
+                        Elem.input [ attr "type" "hidden"; attr "name" "term"; attr "value" check.Term ]
+                        Elem.input [ attr "type" "hidden"; attr "name" "minutes"; attr "value" check.Minutes ]
+                        Elem.input [ attr "type" "hidden"; attr "name" "reason"; attr "value" check.Reason ]
+                        Elem.p [] [ text $"Срок: {termLabel check.Term check.Minutes}. Причина: {check.Reason}" ]
+                        confirm "Подтверждаю бан диапазона"
+                        submit "Забанить диапазон"
+                    ]
+                ]
+            | None -> ()
+            Elem.section [] [
+                Elem.h2 [] [ text "Новый бан" ]
+                Elem.p [ css "hint" ] [
+                    text $"Адрес или CIDR: IPv4 не шире /{AddressRange.MinIpv4Prefix}, IPv6 не шире /{AddressRange.MinIpv6Prefix}. "
+                    text "Один IPv6-адрес банится обычно целым /64. Бан закрывает вход, регистрацию и подключение игры из диапазона, "
+                    text "открытые сессии из него сразу завершаются. Сначала панель покажет, кого он заденет."
+                ]
+                Elem.form [ attr "method" "post"; attr "action" "/address-bans/check"; css "stack" ] [
+                    field "Диапазон" "range" "text" range [ flag "required"; attr "placeholder" "203.0.113.0/24"; attr "autocomplete" "off" ]
+                    Elem.label [] [
+                        Elem.span [] [ text "Срок" ]
+                        Elem.select [ attr "name" "term" ] [
+                            for label, minutes in AdminModels.sanctionTerms do
+                                Elem.option [ attr "value" (match minutes with ValueSome minutes -> string minutes | ValueNone -> "") ] [ text label ]
+                            Elem.option [ attr "value" "custom" ] [ text "Своё число минут" ]
+                        ]
+                    ]
+                    field "Минут (для своего срока)" "minutes" "number" "" [ attr "min" "1"; attr "max" (string SanctionTerm.MaxMinutes) ]
+                    field "Причина (видна игроку при попытке входа)" "reason" "text" "" [ flag "required"; attr "maxlength" (string SanctionReason.MaxLength) ]
+                    submit "Проверить диапазон"
+                ]
+            ]
+            Elem.section [] [
+                Elem.h2 [] [ text "Действующие баны" ]
+                if bans.IsEmpty then Elem.p [ css "muted" ] [ text "Действующих банов диапазонов нет." ]
+                else
+                    Elem.table [] [
+                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Диапазон"; "До"; "Причина"; "Выдано"; "Выдал"; "" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.tbody [] [
+                            for ban in bans do
+                                Elem.tr [] [
+                                    Elem.td [] [ Elem.code [] [ text ban.Range ] ]
+                                    Elem.td [] [ text (if ban.Expires.HasValue then time ban.Expires.Value else "бессрочно") ]
+                                    Elem.td [] [ text ban.Reason ]
+                                    Elem.td [] [ text (time ban.IssuedAt) ]
+                                    Elem.td [] [ text (if isNull ban.IssuedBy then "—" else ban.IssuedBy) ]
+                                    Elem.td [] [
+                                        Elem.form [ attr "method" "post"; attr "action" $"/address-bans/{ban.Id}/lift"; css "inline" ] [
+                                            confirm "Подтверждаю"
+                                            submit "Снять"
+                                        ]
+                                    ]
+                                ]
+                        ]
                     ]
             ]
         ]

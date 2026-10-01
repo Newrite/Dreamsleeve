@@ -56,12 +56,12 @@ let private factory fake () =
 let private setup settings = task {
     let fake = { Id = Guid.NewGuid(); Events = ConcurrentQueue(); Calls = ConcurrentQueue()
                  Send = (fun () -> Ok ()); PollFailure = None; ThrowPoll = false }
-    fake.Events.Enqueue(ServerTransportEvent.Connected fake.Id)
+    fake.Events.Enqueue(ServerTransportEvent.Connected(fake.Id, Net.IPAddress.Loopback))
     let owner = TransportOwner.create settings (factory fake) |> ok
     do! eventually (fun () -> owner.MaxUnfragmentedPayloadBytes fake.Id = 1200)
     let mutable connected = false
     do! eventually (fun () ->
-        owner.Poll() |> ok |> List.iter (function ServerTransportEvent.Connected id when id = fake.Id -> connected <- true | _ -> ())
+        owner.Poll() |> ok |> List.iter (function ServerTransportEvent.Connected(id, _) when id = fake.Id -> connected <- true | _ -> ())
         connected)
     return fake, owner
 }
@@ -256,7 +256,7 @@ let tests = testList "TransportOwner" [
         use entered = new ManualResetEventSlim(false)
         use release = new ManualResetEventSlim(false)
         try
-            fake.Events.Enqueue(ServerTransportEvent.Connected other)
+            fake.Events.Enqueue(ServerTransportEvent.Connected(other, Net.IPAddress.Loopback))
             do! eventually (fun () -> owner.MaxUnfragmentedPayloadBytes other = 1200)
             owner.Poll() |> ok |> ignore
             fake.Send <- fun () -> entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore; Ok ()

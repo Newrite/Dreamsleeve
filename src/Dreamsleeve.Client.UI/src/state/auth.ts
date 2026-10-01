@@ -13,6 +13,7 @@ export const failureLabels: Record<Exclude<AuthFailure, "none">, string> = {
   nameNotAllowed: "Имя содержит недопустимые слова",
   banned: "Аккаунт заблокирован",
   registrationSteamOnly: "Регистрация только через Steam",
+  addressBanned: "IP-адрес заблокирован",
 };
 export const operationLabels: Record<Exclude<AuthOperation, "none">, string> = {
   passwordLogin: "Вход по паролю…",

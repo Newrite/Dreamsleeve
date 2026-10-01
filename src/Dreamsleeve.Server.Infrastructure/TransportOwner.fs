@@ -194,7 +194,7 @@ module TransportOwner =
         | Ok events ->
             for event in events do
                 match event with
-                | ServerTransportEvent.Connected id ->
+                | ServerTransportEvent.Connected(id, _) ->
                     let payload = transport.MaxUnfragmentedPayloadBytes id
                     lock state.Gate (fun () ->
                         state.Peers[id] <- { Packets = 0; Bytes = 0L; Closing = false; ResetQueued = false; IncomingPackets = 0; IncomingBytes = 0L }

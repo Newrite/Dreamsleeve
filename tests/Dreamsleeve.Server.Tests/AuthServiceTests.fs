@@ -35,14 +35,14 @@ let private access (service: Agent<AuthMessage>) command =
     service.AskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitResult
 
 let private register service = task {
-    let! result = access service (AccountAccessCommand.Register(username "player", display, password))
+    let! result = access service (AccountAccessCommand.Register(username "player", display, password, SignInOrigin.none))
     match result with
     | Ok (AccountAccessResult.Registered profile) -> return profile
     | other -> return failtestf "Registration failed: %A" other
 }
 
 let private login service = task {
-    let! result = access service (AccountAccessCommand.Login(username "PLAYER", password))
+    let! result = access service (AccountAccessCommand.Login(username "PLAYER", password, SignInOrigin.none))
     match result with
     | Ok (AccountAccessResult.SignedIn grant) -> return grant
     | other -> return failtestf "Login failed: %A" other
@@ -74,7 +74,7 @@ let private stop (service: Agent<AuthMessage>) = task {
 }
 
 let private remember service = task {
-    let! result = access service (AccountAccessCommand.RememberLogin(username "player", password))
+    let! result = access service (AccountAccessCommand.RememberLogin(username "player", password, SignInOrigin.none))
     match result with
     | Ok (AccountAccessResult.SignedIn grant) -> return grant
     | other -> return failtestf "Remember failed: %A" other
@@ -91,13 +91,13 @@ let tests = testList "Authentication service" [
         do! stop first
 
         use second = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
-        let! resumed = access second (AccountAccessCommand.Resume saved.RememberToken)
+        let! resumed = access second (AccountAccessCommand.Resume(saved.RememberToken, SignInOrigin.none))
         let grant = match resumed with Ok (AccountAccessResult.SignedIn value) -> value | other -> failtestf "%A" other
         equal profile grant.Profile
         let! independent = login second
         let! signedOut = access second (AccountAccessCommand.Logout saved.RememberToken)
         equal (Ok AccountAccessResult.Completed) signedOut
-        let! denied = access second (AccountAccessCommand.Resume saved.RememberToken)
+        let! denied = access second (AccountAccessCommand.Resume(saved.RememberToken, SignInOrigin.none))
         equal (Error AccountAccessError.InvalidCredentials) denied
         let! ticketDenied = consume second grant.SessionTicket
         equal (Error SessionAuthenticationError.InvalidTicket) ticketDenied
@@ -116,16 +116,16 @@ let tests = testList "Authentication service" [
         let code = match issued with Ok (AccountAccessResult.PasswordResetCreated code) -> code | other -> failtestf "%A" other
         let! oldTicket = consume service saved.SessionTicket
         equal (Error SessionAuthenticationError.InvalidTicket) oldTicket
-        let! oldSaved = access service (AccountAccessCommand.Resume saved.RememberToken)
+        let! oldSaved = access service (AccountAccessCommand.Resume(saved.RememberToken, SignInOrigin.none))
         equal (Error AccountAccessError.InvalidCredentials) oldSaved
         let replacement = "replacement-password-2026"
         let! changed = access service (AccountAccessCommand.ResetPassword(code, replacement))
         equal (Ok AccountAccessResult.Completed) changed
         let! duplicate = access service (AccountAccessCommand.ResetPassword(code, password))
         equal (Error AccountAccessError.InvalidCredentials) duplicate
-        let! oldPassword = access service (AccountAccessCommand.Login(username "player", password))
+        let! oldPassword = access service (AccountAccessCommand.Login(username "player", password, SignInOrigin.none))
         equal (Error AccountAccessError.InvalidCredentials) oldPassword
-        let! newPassword = access service (AccountAccessCommand.Login(username "player", replacement))
+        let! newPassword = access service (AccountAccessCommand.Login(username "player", replacement, SignInOrigin.none))
         match newPassword with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
         do! stop service
     })
@@ -154,10 +154,10 @@ let tests = testList "Authentication service" [
         let! _ = register service
         let! old = remember service
         let! current = remember service
-        let! evicted = access service (AccountAccessCommand.Resume old.RememberToken)
+        let! evicted = access service (AccountAccessCommand.Resume(old.RememberToken, SignInOrigin.none))
         equal (Error AccountAccessError.InvalidCredentials) evicted
         database.Execute "UPDATE auth_tokens SET expires_at=0"
-        let! expired = access service (AccountAccessCommand.Resume current.RememberToken)
+        let! expired = access service (AccountAccessCommand.Resume(current.RememberToken, SignInOrigin.none))
         equal (Error AccountAccessError.InvalidCredentials) expired
         do! stop service
     })
@@ -176,11 +176,11 @@ let tests = testList "Authentication service" [
         SqliteAccountStore.initialize database.Config |> ok
         use service = start database.Config settings TimeProvider.System
         let! profile = register service
-        let! duplicate = access service (AccountAccessCommand.Register(username "PLAYER", display, password))
+        let! duplicate = access service (AccountAccessCommand.Register(username "PLAYER", display, password, SignInOrigin.none))
         equal (Error AccountAccessError.UsernameTaken) duplicate
-        let! wrong = access service (AccountAccessCommand.Login(username "player", "incorrect-password"))
-        let! absent = access service (AccountAccessCommand.Login(username "absent", password))
-        let! trimmed = access service (AccountAccessCommand.Login(username "player", password.Trim()))
+        let! wrong = access service (AccountAccessCommand.Login(username "player", "incorrect-password", SignInOrigin.none))
+        let! absent = access service (AccountAccessCommand.Login(username "absent", password, SignInOrigin.none))
+        let! trimmed = access service (AccountAccessCommand.Login(username "player", password.Trim(), SignInOrigin.none))
         equal (Error AccountAccessError.InvalidCredentials) wrong
         equal wrong absent
         equal wrong trimmed
@@ -230,7 +230,7 @@ let tests = testList "Authentication service" [
         use service = start database.Config { settings with MaxTickets = 1 } clock
         let! profile = register service
         let! first = login service
-        let! saturated = access service (AccountAccessCommand.Login(username "player", password))
+        let! saturated = access service (AccountAccessCommand.Login(username "player", password, SignInOrigin.none))
         equal (Error AccountAccessError.Busy) saturated
         let! consumed = consume service first.SessionTicket
         equal (Ok (player profile)) consumed
@@ -270,8 +270,8 @@ let tests = testList "Authentication service" [
         SqliteAccountStore.initialize database.Config |> ok
         use service = start database.Config settings TimeProvider.System
         let! _ = register service
-        let first = service.TryAskAsync(fun reply -> AuthMessage.Access(AccountAccessCommand.Login(username "player", password), reply))
-        let second = service.TryAskAsync(fun reply -> AuthMessage.Access(AccountAccessCommand.Login(username "player", password), reply))
+        let first = service.TryAskAsync(fun reply -> AuthMessage.Access(AccountAccessCommand.Login(username "player", password, SignInOrigin.none), reply))
+        let second = service.TryAskAsync(fun reply -> AuthMessage.Access(AccountAccessCommand.Login(username "player", password, SignInOrigin.none), reply))
         do! stop service
         let! replies = Task.WhenAll [| first; second |] |> awaitResult
         for response in replies do
@@ -279,7 +279,7 @@ let tests = testList "Authentication service" [
             | AgentAskResult.Replied(Ok (AccountAccessResult.SignedIn _))
             | AgentAskResult.Replied(Error AccountAccessError.Unavailable) -> ()
             | other -> failtestf "Accepted operation was not settled during graceful stop: %A" other
-        let! late = service.TryAskAsync(fun reply -> AuthMessage.Access(AccountAccessCommand.Login(username "player", password), reply))
+        let! late = service.TryAskAsync(fun reply -> AuthMessage.Access(AccountAccessCommand.Login(username "player", password, SignInOrigin.none), reply))
         equal AgentAskResult.Closed late
     })
     case "a ticket carries the stored role and a rename refreshes outstanding tickets" (fun () -> task {
@@ -342,7 +342,7 @@ let tests = testList "Authentication service" [
         let! _ = register first
         let! closed = access first (AccountAccessCommand.SetRegistration(RegistrationMode.Manual, ValueNone))
         equal (Ok (AccountAccessResult.Registration RegistrationMode.Manual)) closed
-        let! refused = access first (AccountAccessCommand.Register(username "second", display, password))
+        let! refused = access first (AccountAccessCommand.Register(username "second", display, password, SignInOrigin.none))
         equal (Error (AccountAccessError.RegistrationClosed RegistrationMode.Manual)) refused
         let! _ = access first (AccountAccessCommand.SetRegistration(RegistrationMode.Steam, ValueNone))
         do! stop first
@@ -350,7 +350,7 @@ let tests = testList "Authentication service" [
         use second = start database.Config settings TimeProvider.System
         let! stored = access second AccountAccessCommand.ReadRegistration
         equal (Ok (AccountAccessResult.Registration RegistrationMode.Steam)) stored
-        let! steamOnly = access second (AccountAccessCommand.Register(username "second", display, password))
+        let! steamOnly = access second (AccountAccessCommand.Register(username "second", display, password, SignInOrigin.none))
         equal (Error (AccountAccessError.RegistrationClosed RegistrationMode.Steam)) steamOnly
         let! _ = login second
         equal 1L (database.Scalar "SELECT count(*) FROM accounts")
@@ -375,17 +375,99 @@ let tests = testList "Authentication service" [
         check (abs (lifetime - 72L * 3600L) < 300L) $"Setup code lifetime: {lifetime} s"
         let! duplicate = access service (AccountAccessCommand.CreateAccount(username "invited", display))
         equal (Error AccountAccessError.UsernameTaken) duplicate
-        let! noPassword = access service (AccountAccessCommand.Login(username "invited", password))
+        let! noPassword = access service (AccountAccessCommand.Login(username "invited", password, SignInOrigin.none))
         equal (Error AccountAccessError.InvalidCredentials) noPassword
         let! chosen = access service (AccountAccessCommand.ResetPassword(code, password))
         equal (Ok AccountAccessResult.Completed) chosen
         let! again = access service (AccountAccessCommand.ResetPassword(code, password))
         equal (Error AccountAccessError.InvalidCredentials) again
-        let! signedIn = access service (AccountAccessCommand.Login(username "invited", password))
+        let! signedIn = access service (AccountAccessCommand.Login(username "invited", password, SignInOrigin.none))
         match signedIn with
         | Ok (AccountAccessResult.SignedIn grant) -> equal profile grant.Profile
         | other -> failtestf "%A" other
         equal 1L (database.Scalar "SELECT count(*) FROM account_identities WHERE provider='password' AND subject='invited'")
         do! stop service
+    })
+
+    case "a banned range refuses public sign-in and registration, never trusted callers; addresses are recorded" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let root = SqliteAdminStore.createFirstAdmin database.Config (username "root") "hash" (fun id -> PanelSession.create "s" id DateTimeOffset.UtcNow (TimeSpan.FromHours 1.)) DateTimeOffset.UtcNow CancellationToken.None |> ok |> Option.get
+        use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
+        let! profile = register service
+        let from (text: string) = SignInOrigin.ofAddress (Net.IPAddress.Parse text)
+        let signIn origin = access service (AccountAccessCommand.Login(username "player", password, origin))
+        let! first = signIn (from "198.51.100.7")
+        match first with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
+        let! history = access service (AccountAccessCommand.AddressHistory profile.PlayerId)
+        match history with
+        | Ok (AccountAccessResult.Addresses [ entry ]) -> equal ("198.51.100.7", 1L) (ClientAddress.text entry.Address, entry.SignIns)
+        | other -> failtestf "%A" other
+        let reason = SanctionReason.create "Рейд" |> ok
+        let! banned = access service (AccountAccessCommand.BanAddresses(AddressRange.parse "198.51.100.0/24" |> ok, reason, SanctionTerm.UntilLifted, root.Id))
+        let ban = match banned with Ok (AccountAccessResult.AddressesBanned ban) -> ban | other -> failtestf "%A" other
+        let! refused = signIn (from "198.51.100.99")
+        equal (Error (AccountAccessError.AddressBanned ban)) refused
+        let! registering = access service (AccountAccessCommand.Register(username "second", display, password, from "::ffff:198.51.100.1"))
+        equal (Error (AccountAccessError.AddressBanned ban)) registering
+        let! elsewhere = signIn (from "203.0.113.1")
+        match elsewhere with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
+        let! trusted = signIn SignInOrigin.none
+        match trusted with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
+        let! listed = access service AccountAccessCommand.ListAddressBans
+        equal (Ok (AccountAccessResult.AddressBans [ ban ])) listed
+        let! lifted = access service (AccountAccessCommand.LiftAddressBan(ban.Id, root.Id))
+        equal (Ok (AccountAccessResult.AddressBanLifted ban)) lifted
+        let! again = signIn (from "198.51.100.99")
+        match again with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
+        let! twice = access service (AccountAccessCommand.LiftAddressBan(ban.Id, root.Id))
+        equal (Error (AccountAccessError.SanctionRefused SanctionError.NotActive)) twice
+        do! stop service
+    })
+
+    case "a runtime learns the bans in force when it attaches, then each change, also after a service restart" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let root = SqliteAdminStore.createFirstAdmin database.Config (username "root") "hash" (fun id -> PanelSession.create "s" id DateTimeOffset.UtcNow (TimeSpan.FromHours 1.)) DateTimeOffset.UtcNow CancellationToken.None |> ok |> Option.get
+        let reason = SanctionReason.create "Рейд" |> ok
+        let order range = AccountAccessCommand.BanAddresses(AddressRange.parse range |> ok, reason, SanctionTerm.UntilLifted, root.Id)
+        let attach (service: Agent<AuthMessage>) = task {
+            let changes = System.Collections.Concurrent.ConcurrentQueue<AccountChange>()
+            let runtime = Agent.Start(AgentOptions.create "ban-test-runtime", fun _ change -> task { changes.Enqueue change })
+            let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value))
+            equal AgentPostResult.Posted targeted
+            let next () = task {
+                let deadline = Environment.TickCount64 + 5000L
+                while changes.IsEmpty && Environment.TickCount64 < deadline do
+                    do! Task.Delay 10
+                match changes.TryDequeue() with
+                | true, AccountChange.AddressBans bans -> return bans |> List.map (fun ban -> AddressRange.key ban.Range)
+                | true, other -> return failtestf "Unexpected change: %A" other
+                | false, _ -> return failtest "No change arrived."
+            }
+            return runtime, next
+        }
+        use first = start database.Config settings TimeProvider.System
+        let! _ = access first (order "203.0.113.0/24")
+        let! runtime, next = attach first
+        let! initial = next ()
+        equal [ "203.0.113.0/24" ] initial
+        let! _ = access first (order "198.51.100.0/24")
+        let! added = next ()
+        equal [ "198.51.100.0/24"; "203.0.113.0/24" ] added
+        let! listed = access first AccountAccessCommand.ListAddressBans
+        let oldest = match listed with Ok (AccountAccessResult.AddressBans bans) -> bans |> List.minBy _.Id | other -> failtestf "%A" other
+        let! _ = access first (AccountAccessCommand.LiftAddressBan(oldest.Id, root.Id))
+        let! remaining = next ()
+        equal [ "198.51.100.0/24" ] remaining
+        do! stop first
+        runtime.Complete() |> ignore
+
+        use second = start database.Config settings TimeProvider.System
+        let! restarted, nextAfterRestart = attach second
+        let! loaded = nextAfterRestart ()
+        equal [ "198.51.100.0/24" ] loaded
+        do! stop second
+        restarted.Complete() |> ignore
     })
 ]

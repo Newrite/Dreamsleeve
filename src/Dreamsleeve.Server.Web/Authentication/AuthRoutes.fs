@@ -52,14 +52,14 @@ module AuthRoutes =
         | true, value when value.ValueKind = JsonValueKind.String -> value.GetString()
         | true, _ | false, _ -> null
 
-    let private command settings moderation operation (body: JsonElement) =
+    let private command settings moderation origin operation (body: JsonElement) =
         if body.ValueKind <> JsonValueKind.Object then Error (invalid ())
         else
             match operation with
             | Operation.Resume | Operation.Logout ->
                 let secret = field body "token"
                 if not (AuthService.validToken secret) then Error (invalid ())
-                elif operation = Operation.Resume then Ok (AccountAccessCommand.Resume secret)
+                elif operation = Operation.Resume then Ok (AccountAccessCommand.Resume(secret, origin))
                 else Ok (AccountAccessCommand.Logout secret)
             | Operation.ResetPassword ->
                 let code, password = field body "code", field body "password"
@@ -80,12 +80,12 @@ module AuthRoutes =
                             | Ok _ when not (Moderation.allowsUsername moderation username) -> Error (nameNotAllowed "username")
                             | Ok displayName when not (Moderation.allows moderation (DisplayName.value displayName)) ->
                                 Error (nameNotAllowed "display_name")
-                            | Ok displayName -> Ok (AccountAccessCommand.Register(username, displayName, password))
+                            | Ok displayName -> Ok (AccountAccessCommand.Register(username, displayName, password, origin))
                         else
                             match body.TryGetProperty "rememberMe" with
-                            | false, _ -> Ok (AccountAccessCommand.Login(username, password))
-                            | true, value when value.ValueKind = JsonValueKind.False -> Ok (AccountAccessCommand.Login(username, password))
-                            | true, value when value.ValueKind = JsonValueKind.True -> Ok (AccountAccessCommand.RememberLogin(username, password))
+                            | false, _ -> Ok (AccountAccessCommand.Login(username, password, origin))
+                            | true, value when value.ValueKind = JsonValueKind.False -> Ok (AccountAccessCommand.Login(username, password, origin))
+                            | true, value when value.ValueKind = JsonValueKind.True -> Ok (AccountAccessCommand.RememberLogin(username, password, origin))
                             | true, _ -> Error (invalid ())
 
     let private read settings moderation operation (context: HttpContext) token = task {
@@ -96,7 +96,9 @@ module AuthRoutes =
             | Error WebHost.BodyError.TooLarge | Error WebHost.BodyError.UnsupportedType -> return Error (tooLarge ())
             | Ok bytes ->
                 use body = JsonDocument.Parse(bytes, JsonDocumentOptions(MaxDepth = 8))
-                return command settings moderation operation body.RootElement
+                // After the forwarded-headers middleware: a trusted proxy's client address.
+                let origin = SignInOrigin.ofAddress context.Connection.RemoteIpAddress
+                return command settings moderation origin operation body.RootElement
     }
 
     let private response = function
@@ -111,10 +113,16 @@ module AuthRoutes =
         // Trusted results never come from a public route.
         | Ok (AccountAccessResult.PasswordResetCreated _) | Ok (AccountAccessResult.Renamed _)
         | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
-        | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _) -> unavailable ()
+        | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
+        | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)
+        | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) -> unavailable ()
         // 403, not 401: a saved login stays saved and works again once the ban ends.
         | Error (AccountAccessError.Banned ban) ->
             WebHost.json 403 {| code = "banned"; message = "The account is banned."; reason = SanctionReason.value ban.Reason
+                                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
+        // Like an account ban: the client shows the reason and the end and stops retrying.
+        | Error (AccountAccessError.AddressBanned ban) ->
+            WebHost.json 403 {| code = "address_banned"; message = "Connections from this address are banned."; reason = SanctionReason.value ban.Reason
                                 untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
         | Error AccountAccessError.InvalidCredentials -> WebHost.error 401 "invalid_credentials" "Invalid or expired credentials."
         | Error AccountAccessError.UsernameTaken -> WebHost.error 409 "username_taken" "Username is already registered."

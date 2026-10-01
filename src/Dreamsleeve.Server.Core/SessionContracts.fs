@@ -1,6 +1,7 @@
 namespace Dreamsleeve.Server.Core
 
 open System
+open System.Net
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
@@ -22,7 +23,8 @@ type PlayerStateError =
 /// Managed events handed off by the transport owner.
 [<RequireQualifiedAccess>]
 type ServerTransportEvent =
-    | Connected of Guid
+    /// The peer's IP address; IPAddress.IPv6None when the transport cannot tell.
+    | Connected of Guid * IPAddress
     | Received of Guid * DeliveryLane * byte array
     | Disconnected of Guid
     | Failed of Guid * reason: string

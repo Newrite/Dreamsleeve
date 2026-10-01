@@ -30,7 +30,8 @@ export namespace Dreamsleeve::Client::Auth
     Canceled,
     NameNotAllowed,        // Registration: the server word list refused a name.
     Banned,                // Sign-in and resume while a ban holds; see Failure::ban.
-    RegistrationSteamOnly  // New accounts come only from a Steam sign-in.
+    RegistrationSteamOnly,  // New accounts come only from a Steam sign-in.
+    AddressBanned           // The server banned the IP range of this computer; see Failure::ban.
   };
 
   struct Failure
@@ -91,7 +92,7 @@ namespace Dreamsleeve::Client::Auth
     std::string code;
   };
 
-  // 403 "banned" of /auth/login and /auth/resume.
+  // 403 "banned" (the account) or "address_banned" (its IP range) of a sign-in or a registration.
   struct BanResponse
   {
     std::string                 code;
@@ -268,7 +269,8 @@ namespace Dreamsleeve::Client::Auth
   export bool NeedsUser(FailureCode code)
   {
     return code == FailureCode::InvalidCredentials || code == FailureCode::CredentialStorage || code == FailureCode::InvalidRequest ||
-           code == FailureCode::RegistrationClosed || code == FailureCode::RegistrationSteamOnly || code == FailureCode::Banned;
+           code == FailureCode::RegistrationClosed || code == FailureCode::RegistrationSteamOnly || code == FailureCode::Banned ||
+           code == FailureCode::AddressBanned;
   }
 
   export Result<void> ValidatePassword(std::string_view password)
@@ -319,6 +321,18 @@ namespace Dreamsleeve::Client::Auth
     return {code, "Authentication failed (HTTP " + std::to_string(status) + ")"};
   }
 
+  // A 403 from a banned IP range: the reason and the end, shown like an account ban.
+  std::optional<Failure> AddressBan(std::string_view body)
+  {
+    BanResponse ban;
+    if (glz::read<glz::opts{.error_on_unknown_keys = false}>(ban, body) || ban.code != "address_banned") return std::nullopt;
+    return Failure{
+        FailureCode::AddressBanned,
+        ban.reason,
+        Domain::SessionEnd{Domain::SessionEndReason::AddressBanned, ban.reason, ban.untilUnixMs}
+    };
+  }
+
   export std::expected<void, Failure> RegisterAccount(
     std::string_view   url,
     const Credentials& credentials,
@@ -357,6 +371,7 @@ namespace Dreamsleeve::Client::Auth
     }
     if (response->status == 403)
     {
+      if (auto banned = AddressBan(response->body)) return std::unexpected{std::move(*banned)};
       ErrorResponse error;
       if (!glz::read<glz::opts{.error_on_unknown_keys = false}>(error, response->body) && error.code == "registration_steam_only")
         return std::unexpected{
@@ -388,6 +403,7 @@ namespace Dreamsleeve::Client::Auth
       };
     if (response->status == 403)
     {
+      if (auto banned = AddressBan(response->body)) return std::unexpected{std::move(*banned)};
       BanResponse ban;
       if (!glz::read<glz::opts{.error_on_unknown_keys = false}>(ban, response->body) && ban.code == "banned")
         return std::unexpected{

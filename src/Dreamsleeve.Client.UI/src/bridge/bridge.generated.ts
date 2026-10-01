@@ -87,6 +87,7 @@ export const authFailures = [
   "nameNotAllowed",
   "banned",
   "registrationSteamOnly",
+  "addressBanned",
 ] as const;
 export const announcementOrigins = [
   "server",
@@ -116,6 +117,7 @@ export const sessionEndReasons = [
   "revoked",
   "banned",
   "kicked",
+  "addressBanned",
 ] as const;
 export const sanctionKinds = [
   "mute",

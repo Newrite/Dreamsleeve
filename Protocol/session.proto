@@ -70,14 +70,15 @@ enum SessionEndReason {
   SESSION_END_REASON_ACCESS_REVOKED = 1; // An administrator revoked the saved logins.
   SESSION_END_REASON_BANNED = 2;
   SESSION_END_REASON_KICKED = 3;
+  SESSION_END_REASON_ADDRESS_BANNED = 4; // The administrator banned the IP range of the connection.
 }
 
 // Why the server ends the session; the connection closes right after. Control
 // lane, no request_id. A banned player may still connect as a guest.
 message SessionEnded {
   SessionEndReason reason = 1;
-  string text = 2; // The moderator's reason; empty when access was revoked.
-  optional int64 until_unix_ms = 3; // A ban with an end.
+  string text = 2; // The moderator's or administrator's reason; empty when access was revoked.
+  optional int64 until_unix_ms = 3; // A ban (of the account or of the address) with an end.
 }
 
 // Choose where the sender's names are hidden from other players. Control lane;

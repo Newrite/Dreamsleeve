@@ -24,11 +24,12 @@ let tests = testList "Admin domain" [
 
     testCase "audit actions have distinct stored keys that read back" <| fun _ ->
         let keys = AdminAction.all |> List.map AdminAction.key
-        equal 17 (List.length keys)
+        equal 19 (List.length keys)
         equal (List.length keys) (keys |> List.distinct |> List.length)
         for action in AdminAction.all do equal (Some action) (AdminAction.ofKey (AdminAction.key action))
         equal "player:42" (AuditTarget.key (AuditTarget.Player(PlayerId.create 42UL |> ok)))
         equal "admin:3" (AuditTarget.key (AuditTarget.Admin(AdminId.create 3L |> ok)))
+        equal "range:203.0.113.0/24" (AuditTarget.key (AuditTarget.Range "203.0.113.0/24"))
         let long = AuditRecord.create AdminAction.Announced AuditTarget.Server (String('x', 2000))
         equal AuditRecord.MaxDetails long.Details.Length
         equal "" (AuditRecord.create AdminAction.RevokePlayerAccess AuditTarget.Server null).Details
@@ -40,6 +41,38 @@ let tests = testList "Admin domain" [
         equal RegistrationMode.Open RegistrationMode.initial
         equal [ true; false; false ] (RegistrationMode.all |> List.map RegistrationMode.allowsPassword)
         equal None (RegistrationMode.ofKey "closed")
+
+    testCase "an address range keeps its network, matches both families and refuses ranges that ban too much" <| fun _ ->
+        let range text = AddressRange.parse text |> ok
+        let ip (text: string) = Net.IPAddress.Parse text
+        equal "203.0.113.0/24" (AddressRange.key (range " 203.0.113.77/24 "))
+        equal "203.0.113.7/32" (AddressRange.key (range "203.0.113.7"))
+        equal "2001:db8::/48" (AddressRange.key (range "2001:db8::1/48"))
+        check (AddressRange.contains (range "203.0.113.0/24") (ip "203.0.113.200")) "Inside the range."
+        check (AddressRange.contains (range "203.0.113.0/24") (ip "::ffff:203.0.113.5")) "An IPv4-mapped address is the same address."
+        check (not (AddressRange.contains (range "203.0.113.0/24") (ip "203.0.114.1"))) "Outside the range."
+        check (not (AddressRange.contains (range "10.0.0.0/8") (ip "2001:db8::1"))) "The families never mix."
+        check (AddressRange.contains (range "2001:db8:aa::/48") (ip "2001:db8:aa:ff::9")) "IPv6 inside."
+        for typo in [ "203.0.113.0/7"; "2001:db8::/23"; "203.0.113.0/33"; "not-an-ip"; "203.0.113.0/x"; "203.0.113.0/-1"; ""; null ] do
+            check (AddressRange.parse typo |> Result.isError) $"Refused: {typo}"
+        equal "203.0.113.7/32" (AddressRange.key (AddressRange.around (ip "203.0.113.7")))
+        equal "2001:db8:1:2::/64" (AddressRange.key (AddressRange.around (ip "2001:db8:1:2:3:4:5:6")))
+        let first, last = AddressRange.bounds (range "203.0.113.0/24")
+        equal (ClientAddress.bytes (ip "203.0.113.0")) first
+        equal (ClientAddress.bytes (ip "203.0.113.255")) last
+        let stored = range "198.51.100.0/24"
+        equal (Some stored) (AddressRange.ofStored (AddressRange.network stored) (AddressRange.prefix stored))
+        equal None (AddressRange.ofStored (ClientAddress.bytes (ip "198.51.100.9")) (AddressRange.prefix stored))
+        equal "203.0.113.5" (ClientAddress.text (ip "::ffff:203.0.113.5"))
+
+    testCase "an address ban covers its range only while in force" <| fun _ ->
+        let reason = SanctionReason.create "Рейд" |> ok
+        let ban id range expires =
+            { Id = id; Range = AddressRange.parse range |> ok; Reason = reason; IssuedBy = ValueNone; IssuedAt = now; Expires = expires }
+        let bans = [ ban 1L "203.0.113.0/24" (ValueSome (now.AddMinutes -1.)); ban 2L "198.51.100.0/24" ValueNone ]
+        equal ValueNone (AddressBan.find now (Net.IPAddress.Parse "203.0.113.9") bans)
+        equal (ValueSome 2L) (AddressBan.find now (Net.IPAddress.Parse "198.51.100.9") bans |> ValueOption.map _.Id)
+        equal ValueNone (AddressBan.find now (Net.IPAddress.Parse "192.0.2.1") bans)
 
     testCase "a one-time code opens its purpose once, expires and is replaced by the next one" <| fun _ ->
         let lifetime = TimeSpan.FromMinutes 15.

@@ -38,7 +38,8 @@ module WebPorts =
           RequestsPerMinute = admin.Listener.RequestsPerMinute; RequestTimeoutSeconds = admin.Listener.RequestTimeoutSeconds
           MaxConnections = admin.MaxConnections; DescribeTimeoutMs = DescribeTimeoutMs
           Input = settings.Server.ChatInput; Moderation = moderation
-          SetupCodeHours = settings.Authentication.Service.SetupLifetimeHours }
+          SetupCodeHours = settings.Authentication.Service.SetupLifetimeHours
+          AddressHistoryDays = settings.Authentication.Service.SignInHistoryDays }
 
     let auth (authentication: Agent<AuthMessage>) : AuthPorts =
         { Access = fun command timeout token ->

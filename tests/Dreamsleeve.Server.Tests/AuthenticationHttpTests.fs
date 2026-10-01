@@ -85,7 +85,9 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
-            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ -> failtest "Unexpected public command"
+            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
+            | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> failtest "Unexpected public command"
         withHost id execute (fun http received -> task {
             use! remembered = post http "auth/login" {| username = "player"; password = password; rememberMe = true |}
             status 200 remembered
@@ -95,8 +97,10 @@ let tests = testSequenced (testList "Authentication HTTP" [
             status 204 loggedOut
             use! reset = post http "auth/reset-password" {| code = ticket; password = password |}
             status 204 reset
-            equal [| AccountAccessCommand.RememberLogin(Username.create 32 "player" |> ok, password)
-                     AccountAccessCommand.Resume ticket; AccountAccessCommand.Logout ticket
+            // The host passes the client address it saw: loopback here.
+            let local = SignInOrigin.ofAddress Net.IPAddress.Loopback
+            equal [| AccountAccessCommand.RememberLogin(Username.create 32 "player" |> ok, password, local)
+                     AccountAccessCommand.Resume(ticket, local); AccountAccessCommand.Logout ticket
                      AccountAccessCommand.ResetPassword(ticket, password) |] (received.ToArray())
             use! invalidRemember = post http "auth/login" {| username = "player"; password = password; rememberMe = "true" |}
             status 400 invalidRemember
@@ -114,7 +118,9 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
-            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ -> failtest "Unexpected command"
+            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
+            | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> failtest "Unexpected command"
         withHost id execute (fun http received -> task {
             use! created = post http "auth/register" {|
                 username = " PLAYER "; displayName = " e\u0301 "; password = password
@@ -125,7 +131,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
             use body = JsonDocument.Parse createdText
             equal 42UL (body.RootElement.GetProperty("playerId").GetUInt64())
             match received.ToArray()[0] with
-            | AccountAccessCommand.Register(username, displayName, actualPassword) ->
+            | AccountAccessCommand.Register(username, displayName, actualPassword, _) ->
                 equal "player" (Username.value username)
                 equal "é" (DisplayName.value displayName)
                 equal password actualPassword
@@ -134,7 +140,9 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
-            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ -> failwith "Wrong registration command."
+            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
+            | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> failwith "Wrong registration command."
 
             use! loggedIn = post http "auth/login" credentials
             status 200 loggedIn
@@ -221,6 +229,21 @@ let tests = testSequenced (testList "Authentication HTTP" [
                 equal 1 received.Count
             })
     })
+
+    case "a banned address answers 403 with the reason and the end, like an account ban" (fun () ->
+        let ban : AddressBan = {
+            Id = 1L; Range = AddressRange.parse "127.0.0.0/8" |> ok; Reason = SanctionReason.create "Рейд" |> ok; IssuedBy = ValueNone
+            IssuedAt = DateTimeOffset.UtcNow; Expires = ValueSome (DateTimeOffset.FromUnixTimeMilliseconds 1_800_000_000_000L)
+        }
+        withHost id (reply (Error (AccountAccessError.AddressBanned ban))) (fun http _ -> task {
+            use! response = post http "auth/login" credentials
+            status 403 response
+            let! text = response.Content.ReadAsStringAsync()
+            use body = JsonDocument.Parse text
+            equal "address_banned" (body.RootElement.GetProperty("code").GetString())
+            equal "Рейд" (body.RootElement.GetProperty("reason").GetString())
+            equal 1_800_000_000_000L (body.RootElement.GetProperty("untilUnixMs").GetInt64())
+        }))
 
     case "per-IP rate limit has no waiting queue and ignores spoofed forwarded addresses" (fun () ->
         let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestsPerMinute = 1 } } }

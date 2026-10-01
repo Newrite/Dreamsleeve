@@ -451,11 +451,12 @@ const char descriptor_table_protodef_session_2eproto[] ABSL_ATTRIBUTE_SECTION_VA
     "y_name\030\001 \001(\t*s\n\016HiddenIdentity\022\030\n\024HIDDEN"
     "_IDENTITY_NONE\020\000\022\036\n\032HIDDEN_IDENTITY_EVER"
     "YWHERE\020\001\022\'\n#HIDDEN_IDENTITY_EXCEPT_GROUN"
-    "D_MARKS\020\002*\233\001\n\020SessionEndReason\022\"\n\036SESSIO"
+    "D_MARKS\020\002*\302\001\n\020SessionEndReason\022\"\n\036SESSIO"
     "N_END_REASON_UNSPECIFIED\020\000\022%\n!SESSION_EN"
     "D_REASON_ACCESS_REVOKED\020\001\022\035\n\031SESSION_END"
     "_REASON_BANNED\020\002\022\035\n\031SESSION_END_REASON_K"
-    "ICKED\020\003b\006proto3"
+    "ICKED\020\003\022%\n!SESSION_END_REASON_ADDRESS_BA"
+    "NNED\020\004b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_session_2eproto_deps[3] = {
@@ -467,7 +468,7 @@ static ::absl::once_flag descriptor_table_session_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_session_2eproto = {
     false,
     false,
-    1695,
+    1734,
     descriptor_table_protodef_session_2eproto,
     "session.proto",
     &descriptor_table_session_2eproto_once,
@@ -494,7 +495,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL SessionEndReason_desc
   return file_level_enum_descriptors_session_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t SessionEndReason_internal_data_[] = {
-    262144u, 0u, };
+    327680u, 0u, };
 // ===================================================================
 
 class OpenSession::_Internal {

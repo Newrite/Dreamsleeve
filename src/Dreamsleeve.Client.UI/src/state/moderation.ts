@@ -21,5 +21,7 @@ export function sessionEndText(end: SessionEndState): string {
       return `Аккаунт заблокирован ${term(end.until)}: ${end.text}`;
     case "revoked":
       return "Администратор отозвал доступ; войдите заново";
+    case "addressBanned":
+      return `IP-адрес заблокирован ${term(end.until)}: ${end.text}`;
   }
 }

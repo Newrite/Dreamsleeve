@@ -22,6 +22,8 @@ type StatusModel = {
 /// player who hides them; see AdminPlayerView.
 type OnlineModel = {
     ConnectionId: string
+    /// The connection's IP address (ClientAddress.text); the panel alone shows it.
+    Address: string
     PlayerId: Nullable<uint64>
     Phase: string
     ConnectedAt: DateTimeOffset
@@ -81,11 +83,51 @@ type SanctionEntryModel = {
     Sanction: SanctionModel
 }
 
+/// An address the player signed in from; Range is what a ban of it suggests.
+type SignInAddressModel = {
+    Address: string
+    FirstSeen: DateTimeOffset
+    LastSeen: DateTimeOffset
+    SignIns: int64
+    Range: string
+}
+
 type PlayerCardModel = {
     Player: PlayerModel
     Sessions: OnlineModel list
     Names: NameChangeModel list
     Sanctions: SanctionModel list
+    Addresses: SignInAddressModel list
+}
+
+/// An IP range ban in force; issuedBy is "admin:3", null once that account is gone.
+type AddressBanModel = {
+    Id: int64
+    Range: string
+    Reason: string
+    IssuedAt: DateTimeOffset
+    Expires: Nullable<DateTimeOffset>
+    IssuedBy: string
+}
+
+/// A player who signed in from a range being checked.
+type AddressMatchModel = {
+    PlayerId: uint64
+    Username: string
+    DisplayName: string
+    Address: string
+    LastSeen: DateTimeOffset
+}
+
+/// What a ban of Range would hit, shown before it is confirmed; the form
+/// fields come back as they were sent.
+type RangeCheckModel = {
+    Range: string
+    Reason: string
+    Term: string
+    Minutes: string
+    Online: OnlineModel list
+    Players: AddressMatchModel list
 }
 
 /// A player just created on the registration page, with the setup code shown once.
@@ -178,11 +220,12 @@ module AdminModels =
         let playerId = row.PlayerId |> Option.map PlayerId.value |> Option.toNullable
         match view with
         | None ->
-            { ConnectionId = string row.ConnectionId; PlayerId = playerId; Phase = phase row.Phase; ConnectedAt = row.ConnectedAt
-              Described = false; Username = null; DisplayName = null; CharacterName = null; CharacterWithheld = false
+            { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address; PlayerId = playerId; Phase = phase row.Phase
+              ConnectedAt = row.ConnectedAt; Described = false; Username = null; DisplayName = null; CharacterName = null; CharacterWithheld = false
               Hidden = null; Pseudonym = null; Role = null; Location = null; Level = Nullable() }
         | Some view ->
-            { ConnectionId = string row.ConnectionId; PlayerId = Nullable(PlayerId.value view.PlayerId); Phase = phase row.Phase
+            { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address
+              PlayerId = Nullable(PlayerId.value view.PlayerId); Phase = phase row.Phase
               ConnectedAt = row.ConnectedAt; Described = true
               Username = Username.value view.Username; DisplayName = DisplayName.value view.DisplayName
               CharacterName = view.CharacterName |> ValueOption.map CharacterName.value |> ValueOption.defaultValue null
@@ -209,6 +252,20 @@ module AdminModels =
     let audit (entry: AuditEntry) : AuditModel =
         { Actor = actor entry; Action = AdminAction.key entry.Action; Target = entry.Target
           Details = entry.Details; At = entry.At }
+
+    let signInAddress (entry: SignInAddress) : SignInAddressModel =
+        { Address = ClientAddress.text entry.Address; FirstSeen = entry.FirstSeen; LastSeen = entry.LastSeen; SignIns = entry.SignIns
+          Range = AddressRange.key (AddressRange.around entry.Address) }
+
+    let addressBan (ban: AddressBan) : AddressBanModel =
+        { Id = ban.Id; Range = AddressRange.key ban.Range; Reason = SanctionReason.value ban.Reason; IssuedAt = ban.IssuedAt
+          Expires = ban.Expires |> ValueOption.toNullable
+          IssuedBy = ban.IssuedBy |> ValueOption.map (fun admin -> AuditTarget.key (AuditTarget.Admin admin)) |> ValueOption.defaultValue null }
+
+    let addressMatch (entry: AddressMatch) : AddressMatchModel =
+        { PlayerId = PlayerId.value entry.Player.PlayerId; Username = Username.value entry.Player.Username
+          DisplayName = DisplayName.value entry.Player.DisplayName; Address = ClientAddress.text entry.Address.Address
+          LastSeen = entry.Address.LastSeen }
 
     let token (info: ApiTokenInfo) : TokenModel =
         { Id = info.TokenHash; Prefix = info.TokenHash.Substring(0, min 8 info.TokenHash.Length); Label = ApiTokenLabel.value info.Label

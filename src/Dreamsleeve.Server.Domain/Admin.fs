@@ -133,6 +133,8 @@ type AdminAction =
     | KickedPlayer
     | SetRegistrationMode
     | CreatedPlayer
+    | BannedAddresses
+    | LiftedAddressBan
     // Content a moderator removed in the game.
     | RemovedGroundMark
     | ClearedGroundMarks
@@ -145,7 +147,7 @@ module AdminAction =
         AdminAction.Announced; AdminAction.CreatedApiToken; AdminAction.RevokedApiToken
         AdminAction.ResetAdminPassword; AdminAction.CreatedAdmin
         AdminAction.SanctionedPlayer; AdminAction.LiftedSanction; AdminAction.KickedPlayer
-        AdminAction.SetRegistrationMode; AdminAction.CreatedPlayer
+        AdminAction.SetRegistrationMode; AdminAction.CreatedPlayer; AdminAction.BannedAddresses; AdminAction.LiftedAddressBan
         AdminAction.RemovedGroundMark; AdminAction.ClearedGroundMarks; AdminAction.DeletedChatMessage
     ]
 
@@ -165,6 +167,8 @@ module AdminAction =
         | AdminAction.KickedPlayer -> "kick_player"
         | AdminAction.SetRegistrationMode -> "set_registration_mode"
         | AdminAction.CreatedPlayer -> "create_player"
+        | AdminAction.BannedAddresses -> "ban_addresses"
+        | AdminAction.LiftedAddressBan -> "lift_address_ban"
         | AdminAction.RemovedGroundMark -> "remove_ground_mark"
         | AdminAction.ClearedGroundMarks -> "clear_ground_marks"
         | AdminAction.DeletedChatMessage -> "delete_chat_message"
@@ -172,12 +176,14 @@ module AdminAction =
     let ofKey (text: string) = all |> List.tryFind (fun action -> key action = text)
 
 /// What an action was applied to, written as "player:42", "admin:3",
-/// "token:<hash prefix>" or "server".
+/// "token:<hash prefix>", "range:203.0.113.0/24" or "server".
 [<RequireQualifiedAccess>]
 type AuditTarget =
     | Player of PlayerId
     | Admin of AdminId
     | ApiToken of hashPrefix: string
+    /// An IP range, by its canonical CIDR (AddressRange.key).
+    | Range of cidr: string
     | Server
 
 [<RequireQualifiedAccess>]
@@ -187,6 +193,7 @@ module AuditTarget =
         | AuditTarget.Player id -> $"player:{PlayerId.value id}"
         | AuditTarget.Admin id -> $"admin:{AdminId.value id}"
         | AuditTarget.ApiToken prefix -> $"token:{prefix}"
+        | AuditTarget.Range cidr -> $"range:{cidr}"
         | AuditTarget.Server -> "server"
 
 /// Details never contain passwords, codes or tokens; the caller passes only

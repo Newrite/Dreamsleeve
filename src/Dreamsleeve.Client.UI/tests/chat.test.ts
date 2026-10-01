@@ -766,5 +766,8 @@ describe("moderation", () => {
     expect(sessionEndText({ reason: "revoked", text: "" })).toBe(
       "Администратор отозвал доступ; войдите заново",
     );
+    expect(sessionEndText({ reason: "addressBanned", text: "Рейд" })).toBe(
+      "IP-адрес заблокирован бессрочно: Рейд",
+    );
   });
 });

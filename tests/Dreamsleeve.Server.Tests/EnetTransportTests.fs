@@ -89,7 +89,7 @@ let private withAdapter settings run =
                     use packet = event.Packet
                     packets.Add(packet.AsSpan().ToArray()))
         until (fun () -> events |> Seq.exists (function ServerTransportEvent.Connected _ -> true | _ -> false)) pump
-        let connection = events |> Seq.pick (function ServerTransportEvent.Connected id -> Some id | _ -> None)
+        let connection = events |> Seq.pick (function ServerTransportEvent.Connected(id, _) -> Some id | _ -> None)
         run config transport client peer connection events packets pump
     finally
         transport.Dispose()
@@ -301,7 +301,7 @@ let tests = testSequenced <| testList "ENet transport" [
             let mutable replacement = Unchecked.defaultof<EnetPeer>
             Expect.isTrue (client.TryConnect(address settings.Port, 3un, 0u, &replacement)) "reconnect"
             until (fun () -> events |> Seq.filter (function ServerTransportEvent.Connected _ -> true | _ -> false) |> Seq.length = 2) pump
-            let next = events |> Seq.pick (function ServerTransportEvent.Connected id when id <> connection -> Some id | _ -> None)
+            let next = events |> Seq.pick (function ServerTransportEvent.Connected(id, _) when id <> connection -> Some id | _ -> None)
             transport.Close connection
             transport.Reset connection
             Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = [|1uy|] })) "old route stays invalid"

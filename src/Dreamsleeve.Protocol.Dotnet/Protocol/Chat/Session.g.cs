@@ -58,10 +58,11 @@ namespace Dreamsleeve.Protocol.Chat {
             "aXNwbGF5X25hbWUYASABKAkqcwoOSGlkZGVuSWRlbnRpdHkSGAoUSElEREVO",
             "X0lERU5USVRZX05PTkUQABIeChpISURERU5fSURFTlRJVFlfRVZFUllXSEVS",
             "RRABEicKI0hJRERFTl9JREVOVElUWV9FWENFUFRfR1JPVU5EX01BUktTEAIq",
-            "mwEKEFNlc3Npb25FbmRSZWFzb24SIgoeU0VTU0lPTl9FTkRfUkVBU09OX1VO",
+            "wgEKEFNlc3Npb25FbmRSZWFzb24SIgoeU0VTU0lPTl9FTkRfUkVBU09OX1VO",
             "U1BFQ0lGSUVEEAASJQohU0VTU0lPTl9FTkRfUkVBU09OX0FDQ0VTU19SRVZP",
             "S0VEEAESHQoZU0VTU0lPTl9FTkRfUkVBU09OX0JBTk5FRBACEh0KGVNFU1NJ",
-            "T05fRU5EX1JFQVNPTl9LSUNLRUQQA2IGcHJvdG8z"));
+            "T05fRU5EX1JFQVNPTl9LSUNLRUQQAxIlCiFTRVNTSU9OX0VORF9SRUFTT05f",
+            "QUREUkVTU19CQU5ORUQQBGIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.ModerationReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.HiddenIdentity), typeof(global::Dreamsleeve.Protocol.Chat.SessionEndReason), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -109,6 +110,10 @@ namespace Dreamsleeve.Protocol.Chat {
     [pbr::OriginalName("SESSION_END_REASON_ACCESS_REVOKED")] AccessRevoked = 1,
     [pbr::OriginalName("SESSION_END_REASON_BANNED")] Banned = 2,
     [pbr::OriginalName("SESSION_END_REASON_KICKED")] Kicked = 3,
+    /// <summary>
+    /// The administrator banned the IP range of the connection.
+    /// </summary>
+    [pbr::OriginalName("SESSION_END_REASON_ADDRESS_BANNED")] AddressBanned = 4,
   }
 
   #endregion
@@ -1618,7 +1623,7 @@ namespace Dreamsleeve.Protocol.Chat {
     public const int TextFieldNumber = 2;
     private string text_ = "";
     /// <summary>
-    /// The moderator's reason; empty when access was revoked.
+    /// The moderator's or administrator's reason; empty when access was revoked.
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1635,7 +1640,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
     private long untilUnixMs_;
     /// <summary>
-    /// A ban with an end.
+    /// A ban (of the account or of the address) with an end.
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]

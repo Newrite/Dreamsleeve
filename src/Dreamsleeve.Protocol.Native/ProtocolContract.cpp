@@ -260,7 +260,10 @@ static_assert(
 static_assert(
   static_cast<long long>(Protocol::Chat::SessionEndReason::Kicked) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_KICKED));
-static_assert(Dreamsleeve::Protocol::Chat::SessionEndReason_ARRAYSIZE == 4);
+static_assert(
+  static_cast<long long>(Protocol::Chat::SessionEndReason::AddressBanned) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_ADDRESS_BANNED));
+static_assert(Dreamsleeve::Protocol::Chat::SessionEndReason_ARRAYSIZE == 5);
 
 static_assert(
   static_cast<long long>(Protocol::Chat::PlayerRole::Player) == static_cast<long long>(Dreamsleeve::Protocol::Chat::PLAYER_ROLE_PLAYER));

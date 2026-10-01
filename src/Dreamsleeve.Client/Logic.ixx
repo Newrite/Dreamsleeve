@@ -210,12 +210,14 @@ namespace Logic
       runtime.manualDisconnect = true;
       logger::warn("The server does not allow hidden names; automatic reconnect stopped");
     }
-    // A moderator ended the session: coming straight back would undo a kick,
-    // and a ban refuses it anyway. The player signs in again by hand.
-    if (frame.sessionEnded == Domain::SessionEndReason::Kicked || frame.sessionEnded == Domain::SessionEndReason::Banned)
+    // A moderator or an administrator ended the session: coming straight back
+    // would undo a kick, and a ban refuses it anyway. The player signs in again by hand.
+    if (
+      frame.sessionEnded == Domain::SessionEndReason::Kicked || frame.sessionEnded == Domain::SessionEndReason::Banned ||
+      frame.sessionEnded == Domain::SessionEndReason::AddressBanned)
     {
       runtime.manualDisconnect = true;
-      logger::info("A moderator ended the session; automatic reconnect stopped");
+      logger::info("The server ended the session; automatic reconnect stopped");
     }
     PrismaUI::Dispatch(frame.events);
     // New pseudonyms are batched: at most one ui.toml write per interval.

@@ -151,6 +151,8 @@ type SessionEnd =
     | AccessRevoked
     | Banned of Sanction
     | Kicked of SanctionReason
+    /// The IP range of the connection was banned.
+    | AddressBanned of AddressBan
 
 type RequestRejectionCode = Dreamsleeve.Protocol.Chat.RequestRejectionCode
 

@@ -177,6 +177,7 @@ export namespace Protocol::Chat
     AccessRevoked = 1,
     Banned        = 2,
     Kicked        = 3,
+    AddressBanned = 4,
   };
 
 }

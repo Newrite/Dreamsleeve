@@ -30,6 +30,9 @@ type AccountChange =
     | MuteChanged of PlayerId * Sanction voption
     /// The player's session ends now; nothing stops the next one.
     | Kicked of PlayerId * SanctionReason
+    /// Every IP range ban in force, sent whole after each change and to a
+    /// restarted runtime: connections from these ranges end, new ones are refused.
+    | AddressBans of AddressBan list
 
 /// What a moderator in the game asks of the account service, which checks the
 /// rank against the stored roles and writes the audit line.

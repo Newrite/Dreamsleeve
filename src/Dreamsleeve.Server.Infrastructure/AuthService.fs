@@ -5,6 +5,7 @@ namespace Dreamsleeve.Server.Infrastructure
 
 open System
 open System.Collections.Generic
+open System.Net
 open System.Security.Cryptography
 open System.Threading
 open System.Threading.Tasks
@@ -27,7 +28,21 @@ type AccountServiceOptions = {
     DisplayNameHistory: int
     /// How long the one-time code of an account created in the panel lets the player choose a password.
     SetupLifetimeHours: int
+    /// Days a sign-in address stays in the player's history after the last sign-in from it.
+    SignInHistoryDays: int
 }
+
+/// Where a public request came from, as the HTTP host saw it (behind a
+/// trusted proxy, the forwarded address). Trusted callers have none.
+type SignInOrigin = {
+    Address: IPAddress voption
+}
+
+[<RequireQualifiedAccess>]
+module SignInOrigin =
+    let none = { Address = ValueNone }
+
+    let ofAddress (address: IPAddress) = { Address = if isNull address then ValueNone else ValueSome address }
 
 [<RequireQualifiedAccess>]
 type AccountAccessError =
@@ -42,6 +57,8 @@ type AccountAccessError =
     | SanctionRefused of SanctionError
     /// A password registration while the mode allows none.
     | RegistrationClosed of RegistrationMode
+    /// A public request from a banned IP range.
+    | AddressBanned of AddressBan
 
 type SessionGrant = {
     Profile: PlayerData
@@ -52,10 +69,10 @@ type SessionGrant = {
 
 [<RequireQualifiedAccess>]
 type AccountAccessCommand =
-    | Register of Username * DisplayName * password: string
-    | Login of Username * password: string
-    | RememberLogin of Username * password: string
-    | Resume of token: string
+    | Register of Username * DisplayName * password: string * SignInOrigin
+    | Login of Username * password: string * SignInOrigin
+    | RememberLogin of Username * password: string * SignInOrigin
+    | Resume of token: string * SignInOrigin
     | Logout of token: string
     | ResetPassword of code: string * password: string
     // Trusted server callers only. Never map these directly to public HTTP input.
@@ -81,6 +98,15 @@ type AccountAccessCommand =
     | ReadRegistration
     /// Changes who may create accounts; changedBy is absent for the console.
     | SetRegistration of RegistrationMode * changedBy: AdminId voption
+    /// Bans an IP range for a term; the audit line is written with it.
+    | BanAddresses of AddressRange * SanctionReason * SanctionTerm * AdminId
+    | LiftAddressBan of banId: int64 * AdminId
+    /// The IP range bans in force, newest first.
+    | ListAddressBans
+    /// Where the player signed in from recently.
+    | AddressHistory of PlayerId
+    /// Players who signed in from the range recently: whom a ban of it would also hit.
+    | PlayersInRange of AddressRange
 
 [<RequireQualifiedAccess>]
 type AccountAccessResult =
@@ -95,6 +121,11 @@ type AccountAccessResult =
     | ActiveSanctions of Sanction list
     | AccountCreated of PlayerData * setupCode: string
     | Registration of RegistrationMode
+    | AddressesBanned of AddressBan
+    | AddressBanLifted of AddressBan
+    | AddressBans of AddressBan list
+    | Addresses of SignInAddress list
+    | PlayersAt of AddressMatch list
 
 [<RequireQualifiedAccess>]
 type AccountWorkResult =
@@ -110,6 +141,11 @@ type AccountWorkResult =
     | Recorded
     | Created of PlayerData * setupCode: string
     | Registration of RegistrationMode
+    | AddressesBanned of AddressBan
+    | AddressBanLifted of AddressBan
+    | AddressBans of AddressBan list
+    | Addresses of SignInAddress list
+    | PlayersAt of AddressMatch list
 
 type AccountWorkReply = {
     OperationId: Guid
@@ -166,13 +202,16 @@ module AuthService =
         mutable ChangeTarget: int
         mutable Stopping: bool
         mutable WorkersStopped: bool
+        /// IP range bans in force, read at startup and kept with every change;
+        /// public requests are checked against them before any work.
+        mutable AddressBans: AddressBan list
     }
 
     let defaults = {
         MailboxCapacity = 256; MaxConcurrentOperations = 4; MaxTickets = 4096
         TicketLifetimeSeconds = 60; PasswordIterations = 210000
         SavedLoginDays = 30; MaxSavedLogins = 8; ResetLifetimeMinutes = 15; DisplayNameHistory = 20
-        SetupLifetimeHours = 72
+        SetupLifetimeHours = 72; SignInHistoryDays = 30
     }
 
     let validate options = [
@@ -180,6 +219,7 @@ module AuthService =
         if options.MaxSavedLogins < 1 || options.MaxSavedLogins > 32 then "Saved logins per account must be 1..32."
         if options.ResetLifetimeMinutes < 1 || options.ResetLifetimeMinutes > 60 then "Reset lifetime must be 1..60 minutes."
         if options.SetupLifetimeHours < 1 || options.SetupLifetimeHours > 720 then "Authentication.Service.SetupLifetimeHours must be 1..720."
+        if options.SignInHistoryDays < 1 || options.SignInHistoryDays > 3650 then "Authentication.Service.SignInHistoryDays must be 1..3650."
         if options.DisplayNameHistory < 1 || options.DisplayNameHistory > 1000 then "Display name history per player must be 1..1000."
         if options.MailboxCapacity < 1 || options.MailboxCapacity > 65536 then "Account mailbox capacity must be 1..65536."
         if options.MaxConcurrentOperations < 1 || options.MaxConcurrentOperations > 64 then "Account workers must be 1..64."
@@ -261,6 +301,23 @@ module AuthService =
         | Ok (RenameOutcome.TooSoon wait) -> Error (AccountAccessError.TooSoon wait)
         | Error error -> Error (storageError logger error)
 
+    // The address of a sign-in or registration that succeeded; failing to keep
+    // it is logged and never fails the sign-in.
+    let private noteAddress options database (logger: ILogger) (clock: TimeProvider) token (origin: SignInOrigin) (playerId: PlayerId) =
+        match origin.Address with
+        | ValueNone -> ()
+        | ValueSome address ->
+            match SqliteAddressStore.record database playerId address (clock.GetUtcNow()) options.SignInHistoryDays token with
+            | Ok () -> ()
+            | Error error -> logger.LogWarning("Sign-in address of player {PlayerId} not recorded: {Error}", PlayerId.value playerId, error)
+
+    let private signedIn options database logger clock token origin (result: Result<AccountWorkResult, AccountAccessError>) =
+        match result with
+        | Ok (AccountWorkResult.Verified(player, _)) -> noteAddress options database logger clock token origin player.Profile.PlayerId
+        | Ok (AccountWorkResult.Registered profile) -> noteAddress options database logger clock token origin profile.PlayerId
+        | Ok _ | Error _ -> ()
+        result
+
     let private sanctioned logger result outcome =
         match outcome with
         | Ok (SanctionOutcome.Applied sanction) -> Ok (result sanction)
@@ -274,7 +331,7 @@ module AuthService =
                 token.ThrowIfCancellationRequested()
                 let now = clock.GetUtcNow().ToUnixTimeSeconds()
                 match request.Command with
-                | AccountAccessCommand.Register(username, displayName, password) ->
+                | AccountAccessCommand.Register(username, displayName, password, origin) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else
                         // The mode is checked before the costly hash; changing it runs alone.
@@ -286,22 +343,26 @@ module AuthService =
                             SqliteAccountStore.create database username displayName passwordHash token
                             |> Result.map AccountWorkResult.Registered
                             |> Result.mapError (storageError logger)
-                | AccountAccessCommand.Login(username, password) ->
+                            |> signedIn options database logger clock token origin
+                | AccountAccessCommand.Login(username, password, origin) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else verify options database dummyHash logger token username password
                          |> Result.bind (admit database clock logger token)
                          |> Result.map (fun player -> AccountWorkResult.Verified(player, ""))
-                | AccountAccessCommand.RememberLogin(username, password) ->
+                         |> signedIn options database logger clock token origin
+                | AccountAccessCommand.RememberLogin(username, password, origin) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else verify options database dummyHash logger token username password
                          |> Result.bind (fun account ->
                              admit database clock logger token account |> Result.bind (savedLogin options database now logger token account))
-                | AccountAccessCommand.Resume secret ->
+                         |> signedIn options database logger clock token origin
+                | AccountAccessCommand.Resume(secret, origin) ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
                     else SqliteAccountStore.resume database (ticketKey secret) now token
                          |> Result.mapError (storageError logger)
                          |> Result.bind (admit database clock logger token)
                          |> Result.map (fun player -> AccountWorkResult.Verified(player, secret))
+                         |> signedIn options database logger clock token origin
                 | AccountAccessCommand.Logout secret ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
                     else SqliteAccountStore.logout database (ticketKey secret) token
@@ -352,6 +413,27 @@ module AuthService =
                     SqliteAccountStore.setRegistrationMode database mode changedBy (clock.GetUtcNow()) token
                     |> Result.map AccountWorkResult.Registration
                     |> Result.mapError (storageError logger)
+                | AccountAccessCommand.BanAddresses(range, reason, term, admin) ->
+                    SqliteAddressStore.ban database range reason term admin (clock.GetUtcNow()) token
+                    |> Result.map AccountWorkResult.AddressesBanned
+                    |> Result.mapError (storageError logger)
+                | AccountAccessCommand.LiftAddressBan(banId, admin) ->
+                    match SqliteAddressStore.lift database banId admin (clock.GetUtcNow()) token with
+                    | Ok (Some ban) -> Ok (AccountWorkResult.AddressBanLifted ban)
+                    | Ok None -> Error (AccountAccessError.SanctionRefused SanctionError.NotActive)
+                    | Error error -> Error (storageError logger error)
+                | AccountAccessCommand.ListAddressBans ->
+                    SqliteAddressStore.active database (clock.GetUtcNow()) token
+                    |> Result.map AccountWorkResult.AddressBans
+                    |> Result.mapError (storageError logger)
+                | AccountAccessCommand.AddressHistory playerId ->
+                    SqliteAddressStore.history database playerId token
+                    |> Result.map AccountWorkResult.Addresses
+                    |> Result.mapError (storageError logger)
+                | AccountAccessCommand.PlayersInRange range ->
+                    SqliteAddressStore.playersIn database range token
+                    |> Result.map AccountWorkResult.PlayersAt
+                    |> Result.mapError (storageError logger)
             with
             | :? OperationCanceledException -> Error AccountAccessError.Unavailable
             | error ->
@@ -400,15 +482,17 @@ module AuthService =
         | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _
         | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.Logout _ | AccountAccessCommand.RenamePlayer _
         | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
-        // No registration in flight passes under the mode it replaces.
-        | AccountAccessCommand.SetRegistration _ -> true
+        // No registration in flight passes under the mode it replaces, and no
+        // sign-in under the bans a change replaces.
+        | AccountAccessCommand.SetRegistration _ | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ -> true
         // The player is online: no second session of theirs can open with a stale
         // ticket, and outstanding tickets are updated when the change settles.
         | AccountAccessCommand.Register _ | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _
         | AccountAccessCommand.Resume _ | AccountAccessCommand.ChangeOwnDisplayName _
         // A kick issues no ticket; a list and an audit line change no account.
         | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
-        | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration -> false
+        | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration
+        | AccountAccessCommand.ListAddressBans | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> false
 
     let private settle (logger: ILogger) (requester: Requester) (result: Result<AccountAccessResult, AccountAccessError>) =
         match requester with
@@ -449,8 +533,28 @@ module AuthService =
         | Requester.Caller reply -> reply.IsCompleted
         | Requester.Session _ | Requester.Moderator _ -> false
 
-    let private access options (logger: ILogger) state (context: AgentContext<AuthMessage>) command (requester: Requester) =
+    // The origin of a public request; trusted commands have none.
+    let private originOf = function
+        | AccountAccessCommand.Register(_, _, _, origin) | AccountAccessCommand.Login(_, _, origin)
+        | AccountAccessCommand.RememberLogin(_, _, origin) | AccountAccessCommand.Resume(_, origin) -> origin
+        | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _
+        | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
+        | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ | AccountAccessCommand.Kick _
+        | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ | AccountAccessCommand.CreateAccount _
+        | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ | AccountAccessCommand.BanAddresses _
+        | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans | AccountAccessCommand.AddressHistory _
+        | AccountAccessCommand.PlayersInRange _ -> SignInOrigin.none
+
+    let private access options (clock: TimeProvider) (logger: ILogger) state (context: AgentContext<AuthMessage>) command (requester: Requester) =
+        let banned =
+            match (originOf command).Address with
+            | ValueSome address -> AddressBan.find (clock.GetUtcNow()) address state.AddressBans
+            | ValueNone -> ValueNone
         if state.Stopping then settle logger requester (Error AccountAccessError.Unavailable)
+        elif banned.IsSome then
+            logger.LogInformation("Request from {Address} refused: the range {Range} is banned",
+                                  ClientAddress.text (originOf command).Address.Value, AddressRange.key banned.Value.Range)
+            settle logger requester (Error (AccountAccessError.AddressBanned banned.Value))
         elif state.Exclusive || (exclusive command && state.Pending.Count <> 0) || state.Pending.Count >= options.MaxConcurrentOperations then
             settle logger requester (Error AccountAccessError.Busy)
         else
@@ -474,7 +578,9 @@ module AuthService =
         | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _
         | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
         | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
-        | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ -> "other"
+        | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
+        | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
+        | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> "other"
 
     let private until (sanction: Sanction) =
         match sanction.Expires with
@@ -489,22 +595,22 @@ module AuthService =
     // Names are logged, secrets never: no password, token, code or ticket.
     let private logOutcome (logger: ILogger) (command: AccountAccessCommand) (result: Result<AccountWorkResult, AccountAccessError>) =
         match command, result with
-        | (AccountAccessCommand.Login(username, _) | AccountAccessCommand.RememberLogin(username, _)), Error (AccountAccessError.Banned ban) ->
+        | (AccountAccessCommand.Login(username, _, _) | AccountAccessCommand.RememberLogin(username, _, _)), Error (AccountAccessError.Banned ban) ->
             logger.LogInformation("Sign-in refused for {Username}: banned until {Until}", Username.value username, until ban)
         | AccountAccessCommand.Resume _, Error (AccountAccessError.Banned ban) ->
             logger.LogInformation("Saved login of player {PlayerId} refused: banned until {Until}", PlayerId.value ban.Target, until ban)
         | (AccountAccessCommand.Sanction { Target = target } | AccountAccessCommand.LiftSanction(target, _, _) | AccountAccessCommand.Kick(target, _, _)),
           Error (AccountAccessError.SanctionRefused refused) ->
             logger.LogInformation("Sanction on player {PlayerId} refused: {Refusal}", PlayerId.value target, refused)
-        | (AccountAccessCommand.Login(username, _) | AccountAccessCommand.RememberLogin(username, _)), Error AccountAccessError.InvalidCredentials ->
+        | (AccountAccessCommand.Login(username, _, _) | AccountAccessCommand.RememberLogin(username, _, _)), Error AccountAccessError.InvalidCredentials ->
             logger.LogInformation("Sign-in refused for {Username}: wrong username or password", Username.value username)
         | AccountAccessCommand.Resume _, Error AccountAccessError.InvalidCredentials ->
             logger.LogInformation("Saved login refused: unknown, revoked or expired token")
         | AccountAccessCommand.ResetPassword _, Error AccountAccessError.InvalidCredentials ->
             logger.LogInformation("Password reset refused: unknown, used or expired code")
-        | AccountAccessCommand.Register(username, _, _), Error AccountAccessError.UsernameTaken ->
+        | AccountAccessCommand.Register(username, _, _, _), Error AccountAccessError.UsernameTaken ->
             logger.LogInformation("Registration refused: {Username} is taken", Username.value username)
-        | AccountAccessCommand.Register(username, _, _), Error (AccountAccessError.RegistrationClosed mode) ->
+        | AccountAccessCommand.Register(username, _, _, _), Error (AccountAccessError.RegistrationClosed mode) ->
             logger.LogInformation("Registration of {Username} refused: the registration mode is {Mode}", Username.value username, RegistrationMode.key mode)
         | AccountAccessCommand.ChangeOwnDisplayName(playerId, displayName, _), Error (AccountAccessError.TooSoon wait) ->
             logger.LogInformation("Display name change of player {PlayerId} to {DisplayName} refused: allowed again in {Minutes} min",
@@ -596,6 +702,21 @@ module AuthService =
                     logger.LogInformation("Account created in the panel: player {PlayerId} {Username} ({DisplayName}), setup code issued",
                                           PlayerId.value profile.PlayerId, Username.value profile.Username, DisplayName.value profile.DisplayName)
                     Ok (AccountAccessResult.AccountCreated(profile, code))
+                | Ok (AccountWorkResult.AddressesBanned ban) ->
+                    let now = clock.GetUtcNow()
+                    state.AddressBans <- ban :: state.AddressBans |> List.filter (AddressBan.activeAt now)
+                    logger.LogInformation("IP range {Range} banned until {Until}: {Reason}", AddressRange.key ban.Range,
+                                          (match ban.Expires with ValueSome expires -> expires.ToString("u") | ValueNone -> "lifted"),
+                                          SanctionReason.value ban.Reason)
+                    delivered state context (AccountChange.AddressBans state.AddressBans) (Ok (AccountAccessResult.AddressesBanned ban))
+                | Ok (AccountWorkResult.AddressBanLifted ban) ->
+                    let now = clock.GetUtcNow()
+                    state.AddressBans <- state.AddressBans |> List.filter (fun held -> held.Id <> ban.Id && AddressBan.activeAt now held)
+                    logger.LogInformation("Ban of IP range {Range} lifted", AddressRange.key ban.Range)
+                    delivered state context (AccountChange.AddressBans state.AddressBans) (Ok (AccountAccessResult.AddressBanLifted ban))
+                | Ok (AccountWorkResult.AddressBans bans) -> Ok (AccountAccessResult.AddressBans bans)
+                | Ok (AccountWorkResult.Addresses addresses) -> Ok (AccountAccessResult.Addresses addresses)
+                | Ok (AccountWorkResult.PlayersAt players) -> Ok (AccountAccessResult.PlayersAt players)
                 | Ok (AccountWorkResult.Registration mode) ->
                     match pending.Command with
                     | AccountAccessCommand.SetRegistration(_, changedBy) ->
@@ -618,7 +739,13 @@ module AuthService =
         match message with
         | AuthMessage.SetChangeTarget target ->
             state.ChangeTarget <- state.ChangeTarget + 1
-            state.Changes <- Some (AgentOutbox(options.MailboxCapacity, target))
+            let outbox = AgentOutbox(options.MailboxCapacity, target)
+            state.Changes <- Some outbox
+            // A runtime starts without bans: it learns the ones in force first.
+            let generation = state.ChangeTarget
+            if not (outbox.TrySend(context, AccountChange.AddressBans state.AddressBans, fun failure -> AuthMessage.ChangeFailed(generation, failure))) then
+                logger.LogError("The game runtime did not take the IP range bans in force")
+                context.Abort()
         // The runtime stopped and its sessions with it; the change is stored and
         // applies at the next sign-in. Its restart sets a new target.
         | AuthMessage.ChangeFailed(target, AgentSendFailure.Closed) ->
@@ -629,10 +756,10 @@ module AuthService =
             logger.LogError("Account change delivery failed: {Failure}", failure)
             context.Abort()
         | AuthMessage.Start -> context.Own(state.Workers, AuthMessage.WorkersStopped)
-        | AuthMessage.Access(command, reply) -> access options logger state context command (Requester.Caller reply)
+        | AuthMessage.Access(command, reply) -> access options clock logger state context command (Requester.Caller reply)
         | AuthMessage.ChangeDisplayName request ->
             let command = AccountAccessCommand.ChangeOwnDisplayName(request.PlayerId, request.DisplayName, request.MinInterval)
-            access options logger state context command (Requester.Session request)
+            access options clock logger state context command (Requester.Session request)
         | AuthMessage.Moderate request ->
             let command =
                 match request.Command with
@@ -641,7 +768,7 @@ module AuthService =
                 | ModerationCommand.Kick(target, reason, moderator) -> AccountAccessCommand.Kick(target, reason, SanctionIssuer.Moderator moderator)
                 | ModerationCommand.ListSanctions -> AccountAccessCommand.ListSanctions
                 | ModerationCommand.Record(moderator, record) -> AccountAccessCommand.RecordModeration(moderator, record)
-            access options logger state context command (Requester.Moderator request)
+            access options clock logger state context command (Requester.Moderator request)
         | AuthMessage.Finished reply -> finished options clock logger state context reply
         | AuthMessage.ConsumeTicket request -> do! consumeRequest context request
         | AuthMessage.WorkersStopped outcome ->
@@ -667,6 +794,11 @@ module AuthService =
 
     /// The options come checked with the configuration.
     let start options database (logger: ILogger) (clock: TimeProvider) =
+        // Read before the first request; the caller runs start off the request path.
+        let bans =
+            match SqliteAddressStore.active database (clock.GetUtcNow()) CancellationToken.None with
+            | Ok bans -> bans
+            | Error error -> failwithf "Cannot read the IP range bans: %A" error
         let dummyHash = (hasher options).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
         let workerOptions = { AgentOptions.create "account-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
         let work = AgentReplyDispatcher.createAsyncHandler options.MaxConcurrentOperations (fun (request: AccountWorkRequest) -> request.ReplyTo)
@@ -676,6 +808,7 @@ module AuthService =
             Tickets = Dictionary(); Pending = Dictionary(); Workers = workers
             Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
             Exclusive = false; Changes = None; ChangeTarget = 0; Stopping = false; WorkersStopped = false
+            AddressBans = bans
         }
         let consumeRequest = AgentReplyDispatcher.createHandler options.MailboxCapacity
                                  (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) (consume options clock state)

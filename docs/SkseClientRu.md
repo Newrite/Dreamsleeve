@@ -176,7 +176,7 @@ Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIde
 подтверждений; `ClientStatus::hiding` — применённый вариант); host шлёт UI событие `identity`
 (`mode`, `pending`, `pseudonym`, `error`) при каждом изменении. Отказ открытия с
 `HIDDEN_IDENTITY_NOT_ALLOWED` (`Frame::identityRefused`) останавливает автоматические
-переподключения: игрок выключает режим и входит сам. Так же после кика и бана
+переподключения: игрок выключает режим и входит сам. Так же после кика, бана и бана диапазона IP
 (`Frame::sessionEnded`, уведомление `SessionEnded`): игрок входит вручную; причину и срок host
 шлёт странице событием `sessionEnded`, мут — событием `mute` (поле ввода закрыто до конца срока). Профили `pseudonymous` приходят в
 проекции UI без username и персонажа (`UiPlayer.pseudonymous`); `NameFor` называет их
