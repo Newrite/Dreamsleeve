@@ -1,5 +1,7 @@
 namespace Dreamsleeve.Server
 
+open System
+open System.Net.Http
 open System.Threading.Tasks
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Core
@@ -23,9 +25,14 @@ module WebPorts =
 
     let authListener (settings: ApplicationConfig) = listener "DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD" settings.Authentication.Listener
 
+    /// The optional Steam Web API key: an environment variable, never a setting.
+    [<Literal>]
+    let SteamKeyVariable = "DREAMSLEEVE_STEAM_WEB_API_KEY"
+
     let authRoutes (settings: ApplicationConfig) : AuthRouteSettings =
         let authentication = settings.Authentication
-        { RequestsPerMinute = authentication.Listener.RequestsPerMinute
+        { SteamPublicUrl = if authentication.Steam.Enabled then ValueSome (authentication.Steam.PublicUrl.TrimEnd('/')) else ValueNone
+          RequestsPerMinute = authentication.Listener.RequestsPerMinute
           RequestTimeoutSeconds = authentication.Listener.RequestTimeoutSeconds
           MaxConnections = 2 * authentication.Service.MailboxCapacity + authentication.Service.MaxConcurrentOperations
           Input = settings.Server.ChatInput }
@@ -41,9 +48,21 @@ module WebPorts =
           SetupCodeHours = settings.Authentication.Service.SetupLifetimeHours
           AddressHistoryDays = settings.Authentication.Service.SignInHistoryDays }
 
-    let auth (authentication: Agent<AuthMessage>) : AuthPorts =
+    // One client for every Steam call; each call has its own deadline as well.
+    let private steamHttp = lazy (new HttpClient(Timeout = TimeSpan.FromSeconds 15.))
+
+    let steam (settings: ApplicationConfig) : SteamPorts =
+        let publicUrl = settings.Authentication.Steam.PublicUrl.TrimEnd('/')
+        let key = Environment.GetEnvironmentVariable SteamKeyVariable
+        { Verify = fun flow fields token -> SteamOpenId.verify steamHttp.Value publicUrl flow fields token
+          Profile = fun steamId token ->
+            if String.IsNullOrWhiteSpace key then Task.FromResult { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
+            else SteamOpenId.profile steamHttp.Value key steamId token }
+
+    let auth (settings: ApplicationConfig) (authentication: Agent<AuthMessage>) : AuthPorts =
         { Access = fun command timeout token ->
-            authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token) }
+            authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token)
+          Steam = steam settings }
 
     let private posted result =
         match result with

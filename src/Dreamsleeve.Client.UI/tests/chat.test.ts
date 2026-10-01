@@ -5,8 +5,10 @@ import { defaults } from "../src/bridge/settings.generated";
 import {
   accountActions,
   authStatus,
+  canRegister,
   canResetPassword,
   idleAuth,
+  registrationNote,
 } from "../src/state/auth";
 import { sessionEndText } from "../src/state/moderation";
 import type {
@@ -377,6 +379,8 @@ const authEvent = (patch: Partial<AuthEvent> = {}): AuthEvent => ({
   error: "",
   savedLogin: false,
   savedUsername: "",
+  registration: "unknown",
+  steam: false,
   phase: "disconnected",
   ...patch,
 });
@@ -426,6 +430,58 @@ describe("account", () => {
       operation: "resetPassword",
     });
     expect(JSON.stringify(chat.store.getState())).not.toContain("new-password");
+  });
+  it("signs in through Steam only where the server offers it and cancels only that wait", () => {
+    const send = vi.fn((_command: Command) => true);
+    const chat = makeChat(send);
+    chat.signInSteam(true);
+    expect(send).not.toHaveBeenCalled();
+    chat.receive(authEvent({ registration: "steam", steam: true }));
+    expect(chat.store.getState().auth).toMatchObject({
+      registration: "steam",
+      steam: true,
+    });
+    chat.cancelSteam();
+    expect(send).not.toHaveBeenCalled();
+    chat.signInSteam(false);
+    expect(send.mock.calls[0][0]).toEqual({
+      type: "signInSteam",
+      remember: false,
+    });
+    expect(chat.store.getState().auth).toMatchObject({
+      authenticating: true,
+      operation: "steamLogin",
+    });
+    expect(authStatus(chat.store.getState().auth)).toBe(
+      "Вход через Steam: завершите вход в открывшемся браузере…",
+    );
+    chat.cancelSteam();
+    expect(send.mock.calls[1][0]).toEqual({ type: "disconnect" });
+    chat.receive(
+      authEvent({ steam: true, operation: "steamLogin", failure: "canceled" }),
+    );
+    expect(authStatus(chat.store.getState().auth)).toBe("Операция отменена");
+  });
+  it("offers registration unless the server closed it and says why", () => {
+    const form = { username: "northern", password: "x", displayName: "Дов" };
+    expect(accountActions(idleAuth, false, form).register).toBe(true);
+    expect(registrationNote(idleAuth)).toBe("");
+    const open = { ...idleAuth, registration: "open" as const };
+    expect(canRegister(open)).toBe(true);
+    expect(registrationNote(open)).toBe("");
+    for (const registration of ["steam", "manual"] as const) {
+      const closed = { ...idleAuth, registration, steam: true };
+      expect(canRegister(closed)).toBe(false);
+      expect(accountActions(closed, false, form)).toMatchObject({
+        register: false,
+        signIn: true,
+        steam: true,
+      });
+      expect(registrationNote(closed)).not.toBe("");
+    }
+    expect(accountActions({ ...idleAuth, steam: true }, true, form).steam).toBe(
+      false,
+    );
   });
   it("refuses empty credentials and stays idle when the host listener is missing", () => {
     const chat = makeChat(() => false);
@@ -496,6 +552,7 @@ describe("account", () => {
       false,
       false,
       false,
+      false,
     ]);
     expect(accountActions(idleAuth, false, form)).toEqual({
       signIn: true,
@@ -504,6 +561,7 @@ describe("account", () => {
       disconnect: false,
       signOut: false,
       forget: false,
+      steam: false,
     });
     expect(
       accountActions({ ...idleAuth, savedLogin: true }, true, {
@@ -518,6 +576,7 @@ describe("account", () => {
       disconnect: true,
       signOut: true,
       forget: true,
+      steam: false,
     });
   });
   it("mirrors the phase from auth events and guards the saved-login commands", () => {

@@ -53,6 +53,7 @@ export const commandTypes = [
   "clearPlayerMarks",
   "deleteChatMessage",
   "resetPassword",
+  "signInSteam",
 ] as const;
 
 // Enum strings of the events.
@@ -72,6 +73,7 @@ export const authOperations = [
   "signOut",
   "forgetSavedLogin",
   "resetPassword",
+  "steamLogin",
 ] as const;
 export const authFailures = [
   "none",
@@ -89,6 +91,7 @@ export const authFailures = [
   "registrationSteamOnly",
   "addressBanned",
   "deviceBanned",
+  "steamExpired",
 ] as const;
 export const announcementOrigins = [
   "server",
@@ -123,6 +126,12 @@ export const sessionEndReasons = [
 export const sanctionKinds = [
   "mute",
   "ban",
+] as const;
+export const registrationModes = [
+  "unknown",
+  "open",
+  "steam",
+  "manual",
 ] as const;
 
 // Bounds of text the host sends: chat and mark text, snapshot lines per

@@ -876,7 +876,8 @@ private:
       const bool authChanged = first || lastStatus->authSequence != status.authSequence ||
                                lastStatus->authenticating != status.authenticating || lastStatus->authOperation != status.authOperation ||
                                lastStatus->authFailure != status.authFailure || lastStatus->error != status.error ||
-                               lastStatus->savedLogin != status.savedLogin || lastStatus->savedUsername != status.savedUsername;
+                               lastStatus->savedLogin != status.savedLogin || lastStatus->savedUsername != status.savedUsername ||
+                               lastStatus->methods != status.methods;
       if (connectionChanged) Emit(frame, Bridge::ConnectionState(status));
       if (authChanged || connectionChanged) Emit(frame, Bridge::AuthState(status, settings.streamerMode));
       // The page starts unmuted and without moderator tools: only a mute, the

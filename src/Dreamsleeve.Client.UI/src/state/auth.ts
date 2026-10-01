@@ -15,6 +15,7 @@ export const failureLabels: Record<Exclude<AuthFailure, "none">, string> = {
   registrationSteamOnly: "Регистрация только через Steam",
   addressBanned: "IP-адрес заблокирован",
   deviceBanned: "Устройство заблокировано",
+  steamExpired: "Вход через Steam не завершён вовремя",
 };
 export const operationLabels: Record<Exclude<AuthOperation, "none">, string> = {
   passwordLogin: "Вход по паролю…",
@@ -22,6 +23,7 @@ export const operationLabels: Record<Exclude<AuthOperation, "none">, string> = {
   signOut: "Выход…",
   forgetSavedLogin: "Удаление сохранённого входа…",
   resetPassword: "Сброс пароля…",
+  steamLogin: "Вход через Steam: завершите вход в открывшемся браузере…",
 };
 export const idleAuth: AuthState = {
   authenticating: false,
@@ -30,6 +32,8 @@ export const idleAuth: AuthState = {
   error: "",
   savedLogin: false,
   savedUsername: "",
+  registration: "unknown",
+  steam: false,
 };
 // One human-readable line: the operation in progress, or the failure with the
 // raw host text when present. Empty when there is nothing to report.
@@ -48,6 +52,21 @@ export interface AccountForm {
   password: string;
   displayName: string;
 }
+// Registration in the game is offered unless the server said it is closed.
+export function canRegister(auth: AuthState) {
+  return auth.registration === "open" || auth.registration === "unknown";
+}
+// Why there is no registration form, in the server's words.
+export function registrationNote(auth: AuthState): string {
+  if (auth.registration === "manual")
+    return "Регистрация закрыта: аккаунт создаёт администратор сервера и выдаёт код для пароля.";
+  if (auth.registration === "steam")
+    return "Новые аккаунты создаются только входом через Steam.";
+  return "";
+}
+export function canCancelSteam(auth: AuthState) {
+  return auth.authenticating && auth.operation === "steamLogin";
+}
 // Which account buttons may act right now; the view only mirrors this.
 export function accountActions(
   auth: AuthState,
@@ -59,11 +78,16 @@ export function accountActions(
     form.username.trim().length > 0 && form.password.length > 0;
   return {
     signIn: idle && credentials,
-    register: idle && credentials && form.displayName.trim().length > 0,
+    register:
+      idle &&
+      credentials &&
+      form.displayName.trim().length > 0 &&
+      canRegister(auth),
     resume: idle && auth.savedLogin,
     disconnect: idle && connected,
     signOut: idle && (connected || auth.savedLogin),
     forget: idle && auth.savedLogin,
+    steam: idle && !connected && auth.steam,
   };
 }
 // A password from an administrator's code is set outside a session, before signing in.

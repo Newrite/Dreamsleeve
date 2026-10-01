@@ -192,7 +192,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -345,7 +345,9 @@ namespace
       console << "auth=Pending\n";
     else
       console << "auth=Idle operation=" << static_cast<int>(output.status.authOperation)
-              << " failure=" << static_cast<int>(output.status.authFailure) << " saved=" << output.status.savedLogin << '\n';
+              << " failure=" << static_cast<int>(output.status.authFailure) << " saved=" << output.status.savedLogin
+              << " registration=" << static_cast<int>(output.status.methods.registration) << " steam=" << output.status.methods.steam
+              << '\n';
     if (!output.status.error.empty()) console << "Client: " << output.status.error << '\n';
 
     for (const auto& update : output.state.updates)
@@ -612,6 +614,11 @@ int RunNetworkConsole(int argc, char* argv[])
                   : line == "signout" ? (*application)->SignOut()
                                       : (*application)->ForgetSavedLogin();
       if (!result) std::cout << result.error() << '\n';
+    }
+    // The browser opens Steam; "disconnect" cancels the wait.
+    else if (line == "steam")
+    {
+      if (auto result = (*application)->ConnectSteam(true); !result) std::cout << result.error() << '\n';
     }
     else if (line.starts_with("reset-password "))
     {

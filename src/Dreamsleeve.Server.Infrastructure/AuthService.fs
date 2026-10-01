@@ -30,6 +30,8 @@ type AccountServiceOptions = {
     SetupLifetimeHours: int
     /// Days a sign-in address stays in the player's history after the last sign-in from it.
     SignInHistoryDays: int
+    /// How long a started Steam sign-in waits for the browser and then for the client.
+    SteamFlowSeconds: int
 }
 
 /// Where a public request came from, as the HTTP host saw it (behind a
@@ -63,6 +65,8 @@ type AccountAccessError =
     | AddressBanned of AddressBan
     /// A sign-in or registration from a device an account ban covers.
     | DeviceBanned of Sanction
+    /// A Steam sign-in that does not exist, expired or was already collected.
+    | FlowUnknown
 
 type SessionGrant = {
     Profile: PlayerData
@@ -113,6 +117,16 @@ type AccountAccessCommand =
     | PlayersInRange of AddressRange
     /// The devices the player signed in from recently.
     | DeviceHistory of PlayerId
+    /// Starts a Steam sign-in: a flow the browser completes and the client polls.
+    | BeginSteam of SignInOrigin * remember: bool
+    /// The browser came back with this account, verified with Steam, and the
+    /// display name a new account takes (the caller moderated it).
+    | CompleteSteam of flow: string * SteamProfile * DisplayName
+    /// How the Steam sign-in ended, asked by the client that began it.
+    | PollSteam of flow: string * secret: string
+    /// The work of CompleteSteam with the origin and the choice the flow began
+    /// with; the service makes it, callers never send it.
+    | SignInSteam of SteamProfile * DisplayName * SignInOrigin * remember: bool
 
 [<RequireQualifiedAccess>]
 type AccountAccessResult =
@@ -133,6 +147,10 @@ type AccountAccessResult =
     | Addresses of SignInAddress list
     | PlayersAt of AddressMatch list
     | Devices of SignInDevice list
+    /// flow goes into the browser's URL; secret stays with the client for polling.
+    | SteamStarted of flow: string * secret: string * expiresInSeconds: int
+    /// The browser has not come back yet.
+    | SteamPending
 
 [<RequireQualifiedAccess>]
 type AccountWorkResult =
@@ -199,8 +217,26 @@ module AuthService =
 
     type private Pending = { Command: AccountAccessCommand; Requester: Requester }
 
+    /// A Steam sign-in between its start and the client collecting how it ended.
+    type private SteamFlow = {
+        SecretKey: string
+        Origin: SignInOrigin
+        Remember: bool
+        Started: int64
+        mutable Completing: bool
+        mutable Outcome: Result<AccountAccessResult, AccountAccessError> voption
+    }
+
+    /// What a request comes to before the workers: an answer, or work for them.
+    [<RequireQualifiedAccess>]
+    type private Admission =
+        | Settled of Result<AccountAccessResult, AccountAccessError>
+        | Work of AccountAccessCommand
+
     type private State = {
         Tickets: Dictionary<string, Ticket>
+        /// Steam sign-ins by flow; bounded by MaxTickets and SteamFlowSeconds.
+        Flows: Dictionary<string, SteamFlow>
         Pending: Dictionary<Guid, Pending>
         Workers: Agent<AccountWorkRequest>
         Outbox: AgentOutbox<AccountWorkRequest>
@@ -219,7 +255,7 @@ module AuthService =
         MailboxCapacity = 256; MaxConcurrentOperations = 4; MaxTickets = 4096
         TicketLifetimeSeconds = 60; PasswordIterations = 210000
         SavedLoginDays = 30; MaxSavedLogins = 8; ResetLifetimeMinutes = 15; DisplayNameHistory = 20
-        SetupLifetimeHours = 72; SignInHistoryDays = 30
+        SetupLifetimeHours = 72; SignInHistoryDays = 30; SteamFlowSeconds = 600
     }
 
     let validate options = [
@@ -228,6 +264,7 @@ module AuthService =
         if options.ResetLifetimeMinutes < 1 || options.ResetLifetimeMinutes > 60 then "Reset lifetime must be 1..60 minutes."
         if options.SetupLifetimeHours < 1 || options.SetupLifetimeHours > 720 then "Authentication.Service.SetupLifetimeHours must be 1..720."
         if options.SignInHistoryDays < 1 || options.SignInHistoryDays > 3650 then "Authentication.Service.SignInHistoryDays must be 1..3650."
+        if options.SteamFlowSeconds < 60 || options.SteamFlowSeconds > 3600 then "Authentication.Service.SteamFlowSeconds must be 60..3600."
         if options.DisplayNameHistory < 1 || options.DisplayNameHistory > 1000 then "Display name history per player must be 1..1000."
         if options.MailboxCapacity < 1 || options.MailboxCapacity > 65536 then "Account mailbox capacity must be 1..65536."
         if options.MaxConcurrentOperations < 1 || options.MaxConcurrentOperations > 64 then "Account workers must be 1..64."
@@ -346,6 +383,10 @@ module AuthService =
             | Ok ValueNone -> Ok ()
             | Ok (ValueSome ban) -> Error (AccountAccessError.DeviceBanned ban)
             | Error error -> Error (storageError logger error)
+
+    /// The provider name of Steam accounts in account_identities.
+    [<Literal>]
+    let SteamProvider = "steam"
 
     let private sanctioned logger result outcome =
         match outcome with
@@ -471,6 +512,38 @@ module AuthService =
                     SqliteDeviceStore.history database playerId token
                     |> Result.map AccountWorkResult.Devices
                     |> Result.mapError (storageError logger)
+                | AccountAccessCommand.SignInSteam(profile, name, origin, remember) ->
+                    let subject = string profile.SteamId
+                    let signIn account =
+                        admit database clock logger token account
+                        |> Result.bind (fun player ->
+                            if remember then savedLogin options database now logger token account player
+                            else Ok (AccountWorkResult.Verified(player, "")))
+                    // An existing Steam account signs in in any mode; a new one only where the mode allows it.
+                    deviceRefusal database clock logger token origin
+                    |> Result.bind (fun () ->
+                        match SqliteAccountStore.findIdentity database SteamProvider subject token with
+                        | Error error -> Error (storageError logger error)
+                        | Ok (Some account) -> signIn account
+                        | Ok None ->
+                            match SqliteAccountStore.registrationMode database token with
+                            | Error error -> Error (storageError logger error)
+                            | Ok mode when not (RegistrationMode.allowsSteam mode) -> Error (AccountAccessError.RegistrationClosed mode)
+                            | Ok _ ->
+                                match Username.create Int32.MaxValue (Moderation.SteamUsernamePrefix + subject) with
+                                | Error _ -> Error AccountAccessError.Unavailable
+                                | Ok username ->
+                                    match SqliteAccountStore.createExternal database username name SteamProvider subject token with
+                                    | Error error -> Error (storageError logger error)
+                                    | Ok account ->
+                                        let created = profile.Created |> ValueOption.map (fun time -> time.ToString("yyyy-MM-dd")) |> ValueOption.defaultValue "unknown"
+                                        logger.LogInformation("Account registered through Steam: player {PlayerId} {Username} ({DisplayName}), Steam account created {Created}",
+                                                              PlayerId.value account.Profile.PlayerId, Username.value username, DisplayName.value name, created)
+                                        signIn account)
+                    |> signedIn options database logger clock token origin
+                // Answered by the agent itself; they never reach a worker.
+                | AccountAccessCommand.BeginSteam _ | AccountAccessCommand.CompleteSteam _ | AccountAccessCommand.PollSteam _ ->
+                    Error AccountAccessError.Unavailable
             with
             | :? OperationCanceledException -> Error AccountAccessError.Unavailable
             | error ->
@@ -530,7 +603,8 @@ module AuthService =
         | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
         | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration
         | AccountAccessCommand.ListAddressBans | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _
-        | AccountAccessCommand.DeviceHistory _ -> false
+        | AccountAccessCommand.DeviceHistory _ | AccountAccessCommand.SignInSteam _
+        | AccountAccessCommand.BeginSteam _ | AccountAccessCommand.CompleteSteam _ | AccountAccessCommand.PollSteam _ -> false
 
     let private settle (logger: ILogger) (requester: Requester) (result: Result<AccountAccessResult, AccountAccessError>) =
         match requester with
@@ -574,39 +648,110 @@ module AuthService =
     // The origin of a public request; trusted commands have none.
     let private originOf = function
         | AccountAccessCommand.Register(_, _, _, origin) | AccountAccessCommand.Login(_, _, origin)
-        | AccountAccessCommand.RememberLogin(_, _, origin) | AccountAccessCommand.Resume(_, origin) -> origin
+        | AccountAccessCommand.RememberLogin(_, _, origin) | AccountAccessCommand.Resume(_, origin)
+        | AccountAccessCommand.BeginSteam(origin, _) | AccountAccessCommand.SignInSteam(_, _, origin, _) -> origin
         | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _
         | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
         | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ | AccountAccessCommand.Kick _
         | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ | AccountAccessCommand.CreateAccount _
         | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ | AccountAccessCommand.BanAddresses _
         | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans | AccountAccessCommand.AddressHistory _
-        | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> SignInOrigin.none
+        | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _
+        | AccountAccessCommand.CompleteSteam _ | AccountAccessCommand.PollSteam _ -> SignInOrigin.none
+
+    let private isSteam = function
+        | AccountAccessCommand.CompleteSteam _ -> true
+        | _ -> false
+
+    // How the work of a Steam sign-in ended is kept for its client, whoever else
+    // waits for it. A refused repeat of the completion did no work and keeps nothing.
+    let private settleCommand logger state command requester (result: Result<AccountAccessResult, AccountAccessError>) =
+        match command with
+        | AccountAccessCommand.CompleteSteam(flow, _, _) ->
+            match state.Flows.TryGetValue flow with
+            | true, entry ->
+                entry.Completing <- false
+                entry.Outcome <- ValueSome result
+            | false, _ -> ()
+        | _ -> ()
+        settle logger requester result
+
+    let private pruneFlows options (clock: TimeProvider) state =
+        let expired =
+            state.Flows
+            |> Seq.filter (fun entry -> clock.GetElapsedTime(entry.Value.Started).TotalSeconds >= float options.SteamFlowSeconds)
+            |> Seq.map _.Key
+            |> Seq.toArray
+        for key in expired do state.Flows.Remove key |> ignore
+
+    // Steam sign-ins live in this agent: starting and polling need no storage;
+    // completing becomes SignInSteam with the origin the flow began with.
+    let private steam options (clock: TimeProvider) state command =
+        match command with
+        | AccountAccessCommand.BeginSteam(origin, remember) ->
+            pruneFlows options clock state
+            if state.Flows.Count >= options.MaxTickets then Admission.Settled(Error AccountAccessError.Busy)
+            else
+                let flow, secret = newToken (), newToken ()
+                state.Flows.Add(flow, { SecretKey = ticketKey secret; Origin = origin; Remember = remember; Started = clock.GetTimestamp()
+                                        Completing = false; Outcome = ValueNone })
+                Admission.Settled(Ok (AccountAccessResult.SteamStarted(flow, secret, options.SteamFlowSeconds)))
+        | AccountAccessCommand.PollSteam(flow, secret) ->
+            pruneFlows options clock state
+            match state.Flows.TryGetValue flow with
+            | true, entry when entry.SecretKey = ticketKey secret ->
+                match entry.Outcome with
+                | ValueNone -> Admission.Settled(Ok AccountAccessResult.SteamPending)
+                | ValueSome outcome ->
+                    state.Flows.Remove flow |> ignore
+                    Admission.Settled outcome
+            | true, _ | false, _ -> Admission.Settled(Error AccountAccessError.FlowUnknown)
+        | AccountAccessCommand.CompleteSteam(flow, profile, name) ->
+            pruneFlows options clock state
+            match state.Flows.TryGetValue flow with
+            | true, entry when not entry.Completing && entry.Outcome.IsNone ->
+                entry.Completing <- true
+                Admission.Work(AccountAccessCommand.SignInSteam(profile, name, entry.Origin, entry.Remember))
+            | true, _ | false, _ -> Admission.Settled(Error AccountAccessError.FlowUnknown)
+        | other -> Admission.Work other
+
+    // The ban in force on the address of a public request, logged.
+    let private bannedAddress (clock: TimeProvider) (logger: ILogger) state command =
+        match (originOf command).Address with
+        | ValueNone -> ValueNone
+        | ValueSome address ->
+            let ban = AddressBan.find (clock.GetUtcNow()) address state.AddressBans
+            ban |> ValueOption.iter (fun ban ->
+                logger.LogInformation("Request from {Address} refused: the range {Range} is banned", ClientAddress.text address, AddressRange.key ban.Range))
+            ban
 
     let private access options (clock: TimeProvider) (logger: ILogger) state (context: AgentContext<AuthMessage>) command (requester: Requester) =
-        let banned =
-            match (originOf command).Address with
-            | ValueSome address -> AddressBan.find (clock.GetUtcNow()) address state.AddressBans
-            | ValueNone -> ValueNone
-        if state.Stopping then settle logger requester (Error AccountAccessError.Unavailable)
-        elif banned.IsSome then
-            logger.LogInformation("Request from {Address} refused: the range {Range} is banned",
-                                  ClientAddress.text (originOf command).Address.Value, AddressRange.key banned.Value.Range)
-            settle logger requester (Error (AccountAccessError.AddressBanned banned.Value))
-        elif state.Exclusive || (exclusive command && state.Pending.Count <> 0) || state.Pending.Count >= options.MaxConcurrentOperations then
-            settle logger requester (Error AccountAccessError.Busy)
+        let settleWith = settle logger requester
+        if state.Stopping then settleWith (Error AccountAccessError.Unavailable)
         else
-            let operationId = Guid.NewGuid()
-            let request = {
-                OperationId = operationId; Command = command
-                ReplyTo = context.Ref.TryReliable().Value.Map AuthMessage.Finished
-            }
-            state.Exclusive <- exclusive command
-            state.Pending.Add(operationId, { Command = command; Requester = requester })
-            if not (state.Outbox.TrySend(context, request)) then
-                state.Exclusive <- false
-                state.Pending.Remove operationId |> ignore
-                settle logger requester (Error AccountAccessError.Busy)
+            match bannedAddress clock logger state command with
+            | ValueSome ban -> settleWith (Error (AccountAccessError.AddressBanned ban))
+            | ValueNone ->
+                match steam options clock state command with
+                | Admission.Settled result -> settleWith result
+                | Admission.Work work ->
+                    let settleWith = settleCommand logger state command requester
+                    match bannedAddress clock logger state work with
+                    | ValueSome ban -> settleWith (Error (AccountAccessError.AddressBanned ban))
+                    | ValueNone when state.Exclusive || (exclusive work && state.Pending.Count <> 0) || state.Pending.Count >= options.MaxConcurrentOperations ->
+                        settleWith (Error AccountAccessError.Busy)
+                    | ValueNone ->
+                        let operationId = Guid.NewGuid()
+                        let request = {
+                            OperationId = operationId; Command = work
+                            ReplyTo = context.Ref.TryReliable().Value.Map AuthMessage.Finished
+                        }
+                        state.Exclusive <- exclusive work
+                        state.Pending.Add(operationId, { Command = command; Requester = requester })
+                        if not (state.Outbox.TrySend(context, request)) then
+                            state.Exclusive <- false
+                            state.Pending.Remove operationId |> ignore
+                            settleWith (Error AccountAccessError.Busy)
 
     let private signInMethod = function
         | AccountAccessCommand.Login _ -> "password"
@@ -618,7 +763,9 @@ module AuthService =
         | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
         | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
         | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
-        | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> "other"
+        | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _
+        | AccountAccessCommand.BeginSteam _ | AccountAccessCommand.PollSteam _ | AccountAccessCommand.SignInSteam _ -> "other"
+        | AccountAccessCommand.CompleteSteam _ -> "Steam"
 
     let private until (sanction: Sanction) =
         match sanction.Expires with
@@ -643,6 +790,8 @@ module AuthService =
                                   Username.value username, PlayerId.value ban.Target, until ban)
         | AccountAccessCommand.Resume _, Error (AccountAccessError.DeviceBanned ban) ->
             logger.LogInformation("Saved login refused: the device is banned with player {PlayerId} until {Until}", PlayerId.value ban.Target, until ban)
+        | AccountAccessCommand.CompleteSteam(_, profile, _), Error error ->
+            logger.LogInformation("Steam sign-in of {SteamId} refused: {Error}", profile.SteamId, error)
         | AccountAccessCommand.Resume _, Error (AccountAccessError.Banned ban) ->
             logger.LogInformation("Saved login of player {PlayerId} refused: banned until {Until}", PlayerId.value ban.Target, until ban)
         | (AccountAccessCommand.Sanction { Target = target } | AccountAccessCommand.LiftSanction(target, _, _) | AccountAccessCommand.Kick(target, _, _)),
@@ -698,7 +847,9 @@ module AuthService =
                     logger.LogInformation("Account registered: player {PlayerId} {Username} ({DisplayName})", PlayerId.value profile.PlayerId,
                                           Username.value profile.Username, DisplayName.value profile.DisplayName)
                     Ok (AccountAccessResult.Registered profile)
-                | Ok (AccountWorkResult.Verified _) when state.Stopping || abandoned pending.Requester -> Error AccountAccessError.Unavailable
+                // A Steam sign-in keeps its outcome for the client even when the browser left.
+                | Ok (AccountWorkResult.Verified _) when state.Stopping || (abandoned pending.Requester && not (isSteam pending.Command)) ->
+                    Error AccountAccessError.Unavailable
                 | Ok (AccountWorkResult.Verified(player, rememberToken)) ->
                     logger.LogInformation("Player {PlayerId} {Username} signed in ({Method})", PlayerId.value player.Profile.PlayerId,
                                           Username.value player.Profile.Username, signInMethod pending.Command)
@@ -779,7 +930,7 @@ module AuthService =
                         withMute ValueNone state sanction.Target
                         delivered state context (AccountChange.MuteChanged(sanction.Target, ValueNone)) (Ok (AccountAccessResult.SanctionLifted sanction))
                 | Error error -> Error error
-            settle logger pending.Requester result
+            settleCommand logger state pending.Command pending.Requester result
             completeIfStopped state context
 
     let private handle options clock (logger: ILogger) state consumeRequest (context: AgentContext<AuthMessage>) message = task {
@@ -831,6 +982,7 @@ module AuthService =
         | AuthMessage.Stop ->
             state.Stopping <- true
             state.Tickets.Clear()
+            state.Flows.Clear()
             completeIfStopped state context
     }
 
@@ -852,7 +1004,7 @@ module AuthService =
                        (execute options database dummyHash clock logger)
         let workers = Agent.Start(workerOptions, work)
         let state = {
-            Tickets = Dictionary(); Pending = Dictionary(); Workers = workers
+            Tickets = Dictionary(); Flows = Dictionary(); Pending = Dictionary(); Workers = workers
             Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
             Exclusive = false; Changes = None; ChangeTarget = 0; Stopping = false; WorkersStopped = false
             AddressBans = bans

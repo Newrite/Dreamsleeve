@@ -150,6 +150,12 @@ export namespace Dreamsleeve::Host
         Admitted(context.exchange.PostAuthentication(std::move(request)));
       }
 
+      void operator()(Commands::SignInSteam& command)
+      {
+        context.manualDisconnect = false;
+        Admitted(context.exchange.PostAuthentication(Client::SteamLogin{command.remember}));
+      }
+
       void operator()(Commands::SignInSaved&)
       {
         context.manualDisconnect = false;

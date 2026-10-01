@@ -205,6 +205,15 @@ TEST_CASE("Session reports every authentication completion, even an identical re
     CHECK(auth["authenticating"].get<bool>() == false);
     CHECK(auth["error"].get<std::string>() == "Password must be 12 to 128 UTF-8 bytes");
   }
+
+  // What the server offers is news of its own: the page shows the Steam button.
+  exchange->PublishMethods({Auth::RegistrationMode::Manual, true});
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  REQUIRE(frame.events.size() == 1);
+  auto auth = Parse(frame.events[0]);
+  CHECK(auth["registration"].get<std::string>() == "manual");
+  CHECK(auth["steam"].get<bool>());
 }
 
 TEST_CASE("Session tells the page of a mute and its lift, and of each end of a session once")
@@ -283,6 +292,8 @@ TEST_CASE("Bridge parses each command into its own checked type")
   const auto reset = CommandOf<Bridge::Commands::ResetPassword>(R"({"type":"resetPassword","code":"c","password":"p"})");
   CHECK(reset.code == "c");
   CHECK(reset.password == "p");
+  CHECK(CommandOf<Bridge::Commands::SignInSteam>(R"({"type":"signInSteam","remember":true})").remember);
+  CHECK_FALSE(CommandOf<Bridge::Commands::SignInSteam>(R"({"type":"signInSteam","remember":false})").remember);
   CHECK(CommandOf<Bridge::Commands::Ignore>(R"({"type":"ignore","playerId":"18446744073709551615"})").playerId.value == 18446744073709551615ull);
 }
 

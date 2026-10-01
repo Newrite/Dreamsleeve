@@ -27,6 +27,7 @@
     <Compile Include="ProfileStoreTests.fs" />
     <Compile Include="SqliteAccountStoreTests.fs" />
     <Compile Include="AuthServiceTests.fs" />
+    <Compile Include="SteamOpenIdTests.fs" />
     <Compile Include="SanctionTests.fs" />
     <Compile Include="AdminStoreTests.fs" />
     <Compile Include="AdminServiceTests.fs" />

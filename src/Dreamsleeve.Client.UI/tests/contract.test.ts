@@ -95,6 +95,7 @@ const commands: { [K in Command["type"]]: Extract<Command, { type: K }> } = {
     code: "one-time-code",
     password: "correct horse battery",
   },
+  signInSteam: { type: "signInSteam", remember: true },
 };
 
 describe("bridge contract with the host", () => {

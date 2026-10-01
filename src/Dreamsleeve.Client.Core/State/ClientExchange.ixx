@@ -346,7 +346,8 @@ export namespace Dreamsleeve::Client
     Resume,
     SignOut,
     ForgetSavedLogin,
-    ResetPassword
+    ResetPassword,
+    SteamLogin
   };
 
   struct ClientStatus
@@ -361,6 +362,8 @@ export namespace Dreamsleeve::Client
     bool              savedLogin{};
     std::string       savedUsername;
     std::uint32_t     authSequence{};  // Bumped per completion so an identical repeat is still observable.
+    // What the server offers: who may register, whether Steam sign-in is on.
+    Auth::Methods methods;
     // The server pseudonym the others see for this session and where; absent
     // while the names are shown or outside a session.
     std::optional<std::string> pseudonym;
@@ -416,7 +419,14 @@ export namespace Dreamsleeve::Client
     std::string           password;
   };
 
-  using AuthenticationRequest = std::variant<PasswordLogin, ResumeLogin, SignOutAccount, ForgetLogin, ResetAccountPassword>;
+  // Sign-in in the browser through Steam; remember saves the login like a password sign-in.
+  struct SteamLogin
+  {
+    static constexpr auto Operation = AuthOperation::SteamLogin;
+    bool                  remember{true};
+  };
+
+  using AuthenticationRequest = std::variant<PasswordLogin, ResumeLogin, SignOutAccount, ForgetLogin, ResetAccountPassword, SteamLogin>;
 
   struct ClientControl
   {
@@ -559,6 +569,12 @@ public:
       std::lock_guard lock{mutex};
       status.savedLogin    = available;
       status.savedUsername = std::move(username);
+    }
+
+    void PublishMethods(Auth::Methods methods)
+    {
+      std::lock_guard lock{mutex};
+      status.methods = methods;
     }
 
     void PublishError(std::string error)

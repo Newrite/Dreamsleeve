@@ -234,6 +234,17 @@ TEST_CASE("Account commands go to the Core and decide the manual disconnect")
   CHECK(code->password == "password-long");
   fixture.exchange->CompleteAuthentication();
 
+  // Steam: the browser sign-in may follow a manual disconnect.
+  fixture.manualDisconnect = true;
+  CHECK(fixture.Run(R"({"type":"signInSteam","remember":false})").events.empty());
+  CHECK_FALSE(fixture.manualDisconnect);
+  const auto steam = fixture.exchange->TakeControl().authentication;
+  REQUIRE(steam);
+  const auto* browser = std::get_if<SteamLogin>(&*steam);
+  REQUIRE(browser);
+  CHECK_FALSE(browser->remember);
+  fixture.exchange->CompleteAuthentication();
+
   fixture.Run(R"({"type":"disconnect"})");
   CHECK(fixture.manualDisconnect);
   CHECK(fixture.exchange->TakeControl().disconnect);

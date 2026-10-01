@@ -83,7 +83,8 @@ module AdminRoutes =
         | AccountAccessError.SanctionRefused SanctionError.NotActive -> errorPage 409 "У игрока нет такого действующего наказания." admin
         | AccountAccessError.SanctionRefused SanctionError.NotAllowed -> errorPage 403 "Это наказание нельзя выдать или снять." admin
         | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ | AccountAccessError.Banned _
-        | AccountAccessError.RegistrationClosed _ | AccountAccessError.AddressBanned _ | AccountAccessError.DeviceBanned _ ->
+        | AccountAccessError.RegistrationClosed _ | AccountAccessError.AddressBanned _ | AccountAccessError.DeviceBanned _
+        | AccountAccessError.FlowUnknown ->
             errorPage 503 "Сервис аккаунтов недоступен." admin
 
     // --- Ports -----------------------------------------------------------

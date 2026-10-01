@@ -296,6 +296,13 @@ let tests = testList "Server configuration" [
         Expect.isFalse Configuration.defaults.Authentication.Listener.TrustForwardedHeaders "same for authentication"
         withFile "[Authentication.Service]\nSetupLifetimeHours = 24\n" (fun path ->
             Expect.equal (parsed path).Admin admin "a file without [Admin] gets the defaults")
+        // Steam needs the public origin browsers come back to.
+        withFile "[Authentication.Steam]\nEnabled = true\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "Steam without a public URL is refused")
+        withFile "[Authentication.Steam]\nEnabled = true\nPublicUrl = \"http://auth.example.org\"\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "plain HTTP outside loopback is refused")
+        withFile "[Authentication.Steam]\nEnabled = true\nPublicUrl = \"https://auth.example.org\"\n" (fun path ->
+            Expect.isOk (Configuration.parse [|"--config"; path|]) "an HTTPS origin is accepted")
         // Who may register is the run-time registration mode, not a setting.
         withFile "[Authentication]\nAllowRegistration = false\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "AllowRegistration is an unknown setting")

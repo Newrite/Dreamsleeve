@@ -248,5 +248,9 @@
     "type": "resetPassword",
     "code": "one-time-code",
     "password": "correct horse battery"
+  },
+  {
+    "type": "signInSteam",
+    "remember": true
   }
 ]

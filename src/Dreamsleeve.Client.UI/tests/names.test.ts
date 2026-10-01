@@ -162,6 +162,8 @@ describe("bridge contract", () => {
           error: "",
           savedLogin: false,
           savedUsername: "",
+          registration: "open",
+          steam: false,
           phase: "disconnected",
         }),
       ),

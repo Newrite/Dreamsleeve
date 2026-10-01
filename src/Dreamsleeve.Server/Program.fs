@@ -105,7 +105,8 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
                             | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
                             | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
                             | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)
-                            | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _) ->
+                            | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _)
+                            | Ok (AccountAccessResult.SteamStarted _) | Ok AccountAccessResult.SteamPending ->
                                 printfn "Unexpected administrative result."
                             | Error error -> printfn "Administrative operation failed: %A" error
                     elif parts[0] = "registration" then
@@ -272,7 +273,11 @@ let private gameEvents settings (logger: ILogger) (firstStart: TaskCompletionSou
         firstStart.TrySetResult false |> ignore
 
 let private serve settings game moderation configuration pseudonyms authentication admin (logger: ILogger) (log: Serilog.ILogger) = task {
-    let web = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth authentication) log
+    let steam = settings.Authentication.Steam
+    if steam.Enabled then
+        let key = not (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable WebPorts.SteamKeyVariable))
+        log.Information("Steam sign-in returns browsers to {PublicUrl}; Web API key {Key}", steam.PublicUrl, (if key then "set" else "not set"))
+    let web = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth settings authentication) log
     let describer = SessionDescriber.start 64
     let mutable panel = None
     let supervisor = ref None

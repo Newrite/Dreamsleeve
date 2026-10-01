@@ -309,6 +309,20 @@ module SqliteAccountStore =
                         | Error error -> Error error
                 | _ -> Ok RenameOutcome.NotFound)
 
+    /// An account that signs in only through a provider, with no password: its
+    /// identity row maps (provider, subject) to it. The caller verified the subject.
+    let createExternal config (username: Username) (displayName: DisplayName) (provider: string) (subject: string) token =
+        withContext config token (fun context ->
+            use transaction = context.Connection.BeginTransaction()
+            context.Transaction <- Some transaction
+            match insertPlayer context username displayName with
+            | Error error -> Error error
+            | Ok (accountId, profile) ->
+                execute context "INSERT INTO account_identities(provider, subject, account_id) VALUES (@provider, @subject, @id)"
+                    [ "@provider", box provider; "@subject", box subject; "@id", box accountId ] |> ignore
+                transaction.Commit()
+                Ok { AccountId = accountId; Profile = profile; Role = PlayerRole.Player })
+
     /// An account an administrator created: no password yet, only a one-time
     /// setup code, stored like a reset code (auth_tokens kind 1). The player
     /// redeems it with /auth/reset-password, which also adds the password identity.

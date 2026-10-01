@@ -115,6 +115,9 @@ module RegistrationMode =
     /// Whether a password registration from the game may create an account.
     let allowsPassword mode = mode = RegistrationMode.Open
 
+    /// Whether a first Steam sign-in may create an account.
+    let allowsSteam mode = mode <> RegistrationMode.Manual
+
 /// Every mutation made from the panel, with a key that is stored in the audit
 /// table and never changes once written.
 [<RequireQualifiedAccess>]

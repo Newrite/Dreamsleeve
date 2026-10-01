@@ -2,6 +2,8 @@ module;
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <objbase.h>
+#include <shellapi.h>
 #include <winhttp.h>
 #include <glaze/glaze.hpp>
 
@@ -32,7 +34,36 @@ export namespace Dreamsleeve::Client::Auth
     Banned,                // Sign-in and resume while a ban holds; see Failure::ban.
     RegistrationSteamOnly,  // New accounts come only from a Steam sign-in.
     AddressBanned,          // The server banned the IP range of this computer; see Failure::ban.
-    DeviceBanned            // An account ban covers this computer.
+    DeviceBanned,           // An account ban covers this computer.
+    SteamExpired            // The Steam sign-in was not finished in the browser in time.
+  };
+
+  // Who may create an account on the server (GET /auth/methods); Unknown until
+  // the server answers or for a mode this client does not know.
+  enum class RegistrationMode
+  {
+    Unknown,
+    Open,    // Registration in the game and the first Steam sign-in.
+    Steam,   // New accounts only from a Steam sign-in.
+    Manual   // Administrators create accounts in the admin panel.
+  };
+
+  struct Methods
+  {
+    RegistrationMode registration{};
+    bool             steam{};  // The server signs in through Steam.
+
+    bool operator==(const Methods&) const = default;
+  };
+
+  // A Steam sign-in begun on the server: the browser opens page, the client
+  // polls with flow and secret until the server says how it ended.
+  struct SteamFlow
+  {
+    std::string          flow;
+    std::string          secret;
+    std::string          page;
+    std::chrono::seconds lifetime{};
   };
 
   struct Failure
@@ -97,9 +128,35 @@ namespace Dreamsleeve::Client::Auth
     std::optional<std::string> device;
   };
 
+  struct SteamBeginRequest
+  {
+    bool                       rememberMe{};
+    std::optional<std::string> device;
+  };
+
+  struct SteamPollRequest
+  {
+    std::string_view flow;
+    std::string_view secret;
+  };
+
   struct ErrorResponse
   {
     std::string code;
+  };
+
+  struct MethodsResponse
+  {
+    std::string registration;
+    bool        steam{};
+  };
+
+  struct SteamBeginResponse
+  {
+    std::string   flow;
+    std::string   secret;
+    std::string   browserUrl;
+    std::uint64_t expiresInSeconds{};
   };
 
   // 403 "banned" (the account) or "address_banned" (its IP range) of a sign-in or a registration.
@@ -193,7 +250,8 @@ namespace Dreamsleeve::Client::Auth
       return result;
     }
 
-    Result<HttpResponse> Post(std::string_view url, const wchar_t* path, const std::string& body, bool allowInsecureRemote = false)
+    // A request without a body is a GET.
+    Result<HttpResponse> Send(std::string_view url, const wchar_t* path, const std::string& body, bool allowInsecureRemote = false)
     {
       auto endpoint = ParseUrl(url, allowInsecureRemote);
       if (!endpoint) return std::unexpected{endpoint.error()};
@@ -211,7 +269,7 @@ namespace Dreamsleeve::Client::Auth
       if (!connection) return SystemError("WinHttpConnect");
       Handle request{WinHttpOpenRequest(
         connection.get(),
-        L"POST",
+        body.empty() ? L"GET" : L"POST",
         path,
         nullptr,
         WINHTTP_NO_REFERER,
@@ -226,14 +284,14 @@ namespace Dreamsleeve::Client::Auth
         !WinHttpSetOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)))
         return SystemError("Auth request policy");
       // HTTPS uses WinHTTP's normal certificate and hostname validation.
-      const auto        deadline  = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-      constexpr wchar_t headers[] = L"Content-Type: application/json\r\nAccept: application/json\r\n";
+      const auto     deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+      const wchar_t* headers  = body.empty() ? L"Accept: application/json\r\n" : L"Content-Type: application/json\r\nAccept: application/json\r\n";
       if (
         !WinHttpSendRequest(
           request.get(),
           headers,
           static_cast<DWORD>(-1),
-          const_cast<char*>(body.data()),
+          body.empty() ? WINHTTP_NO_REQUEST_DATA : const_cast<char*>(body.data()),
           static_cast<DWORD>(body.size()),
           static_cast<DWORD>(body.size()),
           0) ||
@@ -280,7 +338,29 @@ namespace Dreamsleeve::Client::Auth
   {
     return code == FailureCode::InvalidCredentials || code == FailureCode::CredentialStorage || code == FailureCode::InvalidRequest ||
            code == FailureCode::RegistrationClosed || code == FailureCode::RegistrationSteamOnly || code == FailureCode::Banned ||
-           code == FailureCode::AddressBanned || code == FailureCode::DeviceBanned;
+           code == FailureCode::AddressBanned || code == FailureCode::DeviceBanned || code == FailureCode::SteamExpired;
+  }
+
+  // The answer of GET /auth/methods; a registration mode this client does not
+  // know stays Unknown.
+  export std::optional<Methods> DecodeMethods(std::string_view body)
+  {
+    MethodsResponse decoded;
+    if (glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, body)) return std::nullopt;
+    Methods result{.steam = decoded.steam};
+    if (decoded.registration == "open") result.registration = RegistrationMode::Open;
+    if (decoded.registration == "steam") result.registration = RegistrationMode::Steam;
+    if (decoded.registration == "manual") result.registration = RegistrationMode::Manual;
+    return result;
+  }
+
+  // The only page a Steam sign-in opens: Steam's OpenID login, so a server
+  // cannot have the client open anything else.
+  export bool SteamPage(std::string_view url)
+  {
+    constexpr std::string_view Login = "https://steamcommunity.com/openid/login?";
+    return url.size() > Login.size() && url.size() <= 4096 && url.starts_with(Login) &&
+           std::ranges::all_of(url, [](unsigned char c) { return c > ' ' && c < 0x7f && c != '#'; });
   }
 
   export Result<void> ValidatePassword(std::string_view password)
@@ -361,7 +441,7 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode registration request"}
       };
-    auto response = Post(url, L"/auth/register", *body, allowInsecureRemote);
+    auto response = Send(url, L"/auth/register", *body, allowInsecureRemote);
     SecureZeroMemory(body->data(), body->size());
     if (!response)
       return std::unexpected{
@@ -406,28 +486,23 @@ namespace Dreamsleeve::Client::Auth
     return {};
   }
 
-  GrantResult RequestGrant(std::string_view url, const wchar_t* path, std::string body, bool allowInsecureRemote = false)
+  // A sign-in answer: 200 with the grant, a 403 ban or another failure.
+  GrantResult DecodeGrant(HttpResponse& response)
   {
-    auto response = Post(url, path, body, allowInsecureRemote);
-    SecureZeroMemory(body.data(), body.size());
-    if (!response)
-      return std::unexpected{
-          Failure{FailureCode::Unavailable, response.error()}
-      };
-    if (response->status == 403)
+    if (response.status == 403)
     {
-      if (auto banned = AddressBan(response->body)) return std::unexpected{std::move(*banned)};
+      if (auto banned = AddressBan(response.body)) return std::unexpected{std::move(*banned)};
       BanResponse ban;
-      if (!glz::read<glz::opts{.error_on_unknown_keys = false}>(ban, response->body) && ban.code == "banned")
+      if (!glz::read<glz::opts{.error_on_unknown_keys = false}>(ban, response.body) && ban.code == "banned")
         return std::unexpected{
             Failure{FailureCode::Banned, ban.reason, Domain::SessionEnd{Domain::SessionEndReason::Banned, ban.reason, ban.untilUnixMs}}
         };
     }
-    if (response->status != 200) return std::unexpected{HttpFailure(response->status)};
+    if (response.status != 200) return std::unexpected{HttpFailure(response.status)};
 
     LoginResponse decoded;
-    const auto    error = glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, response->body);
-    SecureZeroMemory(response->body.data(), response->body.size());
+    const auto    error = glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, response.body);
+    SecureZeroMemory(response.body.data(), response.body.size());
     if (
       error || decoded.playerId == Domain::InvalidId || decoded.expiresInSeconds == 0 || !ValidToken(decoded.sessionTicket) ||
       (!decoded.rememberToken.empty() && !ValidToken(decoded.rememberToken)))
@@ -435,6 +510,17 @@ namespace Dreamsleeve::Client::Auth
           Failure{FailureCode::InvalidResponse, "Invalid authentication response"}
       };
     return Grant{std::move(decoded.sessionTicket), std::move(decoded.rememberToken), std::move(decoded.username)};
+  }
+
+  GrantResult RequestGrant(std::string_view url, const wchar_t* path, std::string body, bool allowInsecureRemote = false)
+  {
+    auto response = Send(url, path, body, allowInsecureRemote);
+    SecureZeroMemory(body.data(), body.size());
+    if (!response)
+      return std::unexpected{
+          Failure{FailureCode::Unavailable, response.error()}
+      };
+    return DecodeGrant(*response);
   }
 
   export GrantResult LoginGrant(
@@ -481,13 +567,111 @@ namespace Dreamsleeve::Client::Auth
     std::string      body,
     bool             allowInsecureRemote = false)
   {
-    auto response = Post(url, path, body, allowInsecureRemote);
+    auto response = Send(url, path, body, allowInsecureRemote);
     SecureZeroMemory(body.data(), body.size());
     if (!response)
       return std::unexpected{
           Failure{FailureCode::Unavailable, response.error()}
       };
     if (response->status != 204) return std::unexpected{HttpFailure(response->status)};
+    return {};
+  }
+
+  // Who may register and whether Steam sign-in is on.
+  export std::expected<Methods, Failure> ReadMethods(std::string_view url, bool allowInsecureRemote = false)
+  {
+    auto response = Send(url, L"/auth/methods", {}, allowInsecureRemote);
+    if (!response)
+      return std::unexpected{
+          Failure{FailureCode::Unavailable, response.error()}
+      };
+    if (response->status != 200) return std::unexpected{HttpFailure(response->status)};
+    auto methods = DecodeMethods(response->body);
+    if (!methods)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Invalid authentication methods"}
+      };
+    return *methods;
+  }
+
+  // Starts a Steam sign-in; the page goes to the browser (OpenSteamPage).
+  export std::expected<SteamFlow, Failure> BeginSteam(
+    std::string_view                  url,
+    bool                              remember,
+    bool                              allowInsecureRemote = false,
+    const std::optional<std::string>& device              = std::nullopt)
+  {
+    auto body = glz::write_json(SteamBeginRequest{remember, device});
+    if (!body)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Cannot encode Steam sign-in request"}
+      };
+    auto response = Send(url, L"/auth/steam/begin", *body, allowInsecureRemote);
+    if (!response)
+      return std::unexpected{
+          Failure{FailureCode::Unavailable, response.error()}
+      };
+    if (response->status == 403)
+      if (auto banned = AddressBan(response->body)) return std::unexpected{std::move(*banned)};
+    if (response->status == 404)
+      return std::unexpected{
+          Failure{FailureCode::Unavailable, "Steam sign-in is not enabled on this server"}
+      };
+    if (response->status != 200) return std::unexpected{HttpFailure(response->status)};
+    SteamBeginResponse decoded;
+    if (
+      glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, response->body) || !ValidToken(decoded.flow) ||
+      !ValidToken(decoded.secret) || !SteamPage(decoded.browserUrl) || decoded.expiresInSeconds == 0 || decoded.expiresInSeconds > 3600)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Invalid Steam sign-in response"}
+      };
+    return SteamFlow{
+        std::move(decoded.flow),
+        std::move(decoded.secret),
+        std::move(decoded.browserUrl),
+        std::chrono::seconds{decoded.expiresInSeconds}
+    };
+  }
+
+  // How a Steam sign-in ended; empty while the player is still in the browser.
+  export std::expected<std::optional<Grant>, Failure> PollSteam(
+    std::string_view url,
+    std::string_view flow,
+    std::string_view secret,
+    bool             allowInsecureRemote = false)
+  {
+    auto body = glz::write_json(SteamPollRequest{flow, secret});
+    if (!body)
+      return std::unexpected{
+          Failure{FailureCode::InvalidResponse, "Cannot encode Steam sign-in poll"}
+      };
+    auto response = Send(url, L"/auth/steam/poll", *body, allowInsecureRemote);
+    SecureZeroMemory(body->data(), body->size());
+    if (!response)
+      return std::unexpected{
+          Failure{FailureCode::Unavailable, response.error()}
+      };
+    if (response->status == 202) return std::optional<Grant>{};
+    if (response->status == 410)
+      return std::unexpected{
+          Failure{FailureCode::SteamExpired, "The Steam sign-in expired"}
+      };
+    auto grant = DecodeGrant(*response);
+    if (!grant) return std::unexpected{std::move(grant.error())};
+    return std::optional<Grant>{std::move(*grant)};
+  }
+
+  // The default browser opens the Steam page; nothing else is opened.
+  export Result<void> OpenSteamPage(std::string_view page)
+  {
+    if (!SteamPage(page)) return std::unexpected{"Not a Steam sign-in page"};
+    auto wide = Wide(page);
+    if (!wide) return std::unexpected{wide.error()};
+    // The shell may use COM on this thread.
+    const HRESULT com    = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    const auto    opened = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", wide->c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+    if (SUCCEEDED(com)) CoUninitialize();
+    if (opened <= 32) return std::unexpected{"Cannot open the browser (Windows " + std::to_string(opened) + ")"};
     return {};
   }
 

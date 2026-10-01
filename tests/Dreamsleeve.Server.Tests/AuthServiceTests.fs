@@ -501,4 +501,55 @@ let tests = testList "Authentication service" [
         match back with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
         do! stop service
     })
+
+    case "a Steam flow creates the account once, signs it in again and hands the grant to its client only" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
+        let steamId = 76561198000000042UL
+        let profile = { SteamId = steamId; PersonaName = ValueSome "Довакин"; Created = ValueSome (DateTimeOffset(2015, 1, 1, 0, 0, 0, TimeSpan.Zero)) }
+        let name = DisplayName.create 64 "Довакин" |> ok
+        let startFlow () = task {
+            let! started = access service (AccountAccessCommand.BeginSteam(SignInOrigin.none, true))
+            match started with
+            | Ok (AccountAccessResult.SteamStarted(flow, secret, seconds)) ->
+                equal 600 seconds
+                return flow, secret
+            | other -> return failtestf "%A" other
+        }
+        let! flow, secret = startFlow ()
+        let! pending = access service (AccountAccessCommand.PollSteam(flow, secret))
+        equal (Ok AccountAccessResult.SteamPending) pending
+        let! stranger = access service (AccountAccessCommand.PollSteam(flow, String('x', 43)))
+        equal (Error AccountAccessError.FlowUnknown) stranger
+        let! completed = access service (AccountAccessCommand.CompleteSteam(flow, profile, name))
+        let grant = match completed with Ok (AccountAccessResult.SignedIn grant) -> grant | other -> failtestf "%A" other
+        equal "steam.76561198000000042" (Username.value grant.Profile.Username)
+        equal "Довакин" (DisplayName.value grant.Profile.DisplayName)
+        equal 43 grant.RememberToken.Length
+        let! twice = access service (AccountAccessCommand.CompleteSteam(flow, profile, name))
+        equal (Error AccountAccessError.FlowUnknown) twice
+        let! collected = access service (AccountAccessCommand.PollSteam(flow, secret))
+        equal (Ok (AccountAccessResult.SignedIn grant)) collected
+        let! gone = access service (AccountAccessCommand.PollSteam(flow, secret))
+        equal (Error AccountAccessError.FlowUnknown) gone
+        let! ticket = consume service grant.SessionTicket
+        equal (Ok (player grant.Profile)) ticket
+        // The same Steam account signs in again in manual mode; a new one is refused there.
+        let! _ = access service (AccountAccessCommand.SetRegistration(RegistrationMode.Manual, ValueNone))
+        let! again, againSecret = startFlow ()
+        let! back = access service (AccountAccessCommand.CompleteSteam(again, profile, name))
+        match back with
+        | Ok (AccountAccessResult.SignedIn second) -> equal grant.Profile second.Profile
+        | other -> failtestf "%A" other
+        let! _ = access service (AccountAccessCommand.PollSteam(again, againSecret))
+        let! newcomer, newcomerSecret = startFlow ()
+        let! closed = access service (AccountAccessCommand.CompleteSteam(newcomer, { profile with SteamId = steamId + 1UL }, name))
+        equal (Error (AccountAccessError.RegistrationClosed RegistrationMode.Manual)) closed
+        let! told = access service (AccountAccessCommand.PollSteam(newcomer, newcomerSecret))
+        equal (Error (AccountAccessError.RegistrationClosed RegistrationMode.Manual)) told
+        equal 1L (database.Scalar "SELECT count(*) FROM account_identities WHERE provider='steam' AND subject='76561198000000042'")
+        equal 0L (database.Scalar "SELECT count(*) FROM account_passwords")
+        do! stop service
+    })
 ]

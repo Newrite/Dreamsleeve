@@ -50,6 +50,8 @@ describe("native bridge", () => {
       error: "Пароль не подошёл",
       savedLogin: true,
       savedUsername: "northern",
+      registration: "manual",
+      steam: true,
       phase: "disconnected",
     };
     expect(parseHostEvent(JSON.stringify(event))).toEqual(event);
@@ -74,6 +76,9 @@ describe("native bridge", () => {
       { ...event, error: undefined },
       { ...event, savedUsername: null },
       { ...event, phase: undefined },
+      { ...event, registration: "invite" },
+      { ...event, registration: undefined },
+      { ...event, steam: "yes" },
     ])
       expect(() => parseHostEvent(JSON.stringify(broken))).toThrow();
   });

@@ -34,7 +34,8 @@ public:
       };
       try
       {
-        app->worker = std::jthread(&ClientApplication::Run, app.get());
+        app->methodsReader = std::jthread([self = app.get()](std::stop_token stop) { self->ReadMethods(stop); });
+        app->worker        = std::jthread(&ClientApplication::Run, app.get());
       }
       catch (const std::system_error&)
       {
@@ -79,6 +80,12 @@ public:
       return exchange->PostAuthentication(ResumeLogin{});
     }
 
+    // The browser opens Steam; the sign-in completes when the player returns.
+    std::expected<void, std::string> ConnectSteam(bool remember = true)
+    {
+      return exchange->PostAuthentication(SteamLogin{remember});
+    }
+
     std::expected<void, std::string> SignOut()
     {
       return exchange->PostAuthentication(SignOutAccount{});
@@ -106,9 +113,18 @@ public:
     {
       exchange->RequestStop();
       if (worker.joinable()) worker.join();
+      methodsReader.request_stop();
+      if (methodsReader.joinable()) methodsReader.join();
     }
 
 private:
+
+    // A Steam sign-in asks the server this often whether the browser finished,
+    // and gives up after this many failed asks in a row.
+    static constexpr auto SteamPollInterval    = std::chrono::seconds{2};
+    static constexpr int  MaxSteamPollFailures = 5;
+    // Unknown sign-in methods are asked again this often.
+    static constexpr auto MethodsRetry = std::chrono::seconds{30};
 
     ClientApplication(ClientSettings options, DreamNetRuntime net, ClientExchange::Ptr boundary, ClientRuntime::Ptr client)
         : settings(std::move(options)),
@@ -236,6 +252,48 @@ private:
       return ConnectGrant(std::move(grant), false);
     }
 
+    // The player signs in in the browser meanwhile; the guest session is
+    // served while the client waits, and a cancel or stop ends the wait.
+    AuthResult Authenticate(const SteamLogin& request)
+    {
+      auto flow = Auth::BeginSteam(settings.authUrl, request.remember, settings.allowInsecureRemoteAuth, device);
+      if (!flow) return std::unexpected{flow.error()};
+      if (auto opened = Auth::OpenSteamPage(flow->page); !opened)
+        return std::unexpected{
+            Auth::Failure{Auth::FailureCode::Unavailable, opened.error()}
+        };
+      const auto deadline = std::chrono::steady_clock::now() + flow->lifetime;
+      auto       next     = std::chrono::steady_clock::now() + SteamPollInterval;
+      int        failures{};
+      while (!exchange->AuthenticationCanceled())
+      {
+        Report(runtime->Poll(10));
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline)
+          return std::unexpected{
+              Auth::Failure{Auth::FailureCode::SteamExpired, "The Steam sign-in was not finished in time"}
+          };
+        if (now < next) continue;
+        next        = now + SteamPollInterval;
+        auto polled = Auth::PollSteam(settings.authUrl, flow->flow, flow->secret, settings.allowInsecureRemoteAuth);
+        if (!polled)
+        {
+          // A dropped request or a busy server may pass while the browser finishes.
+          const auto code = polled.error().code;
+          if ((code == Auth::FailureCode::Unavailable || code == Auth::FailureCode::Busy) && ++failures < MaxSteamPollFailures) continue;
+          return std::unexpected{polled.error()};
+        }
+        failures = 0;
+        if (!*polled) continue;
+        if (request.remember && (**polled).rememberToken.empty())
+          return std::unexpected{
+              Auth::Failure{Auth::FailureCode::InvalidResponse, "Server did not issue a saved login token"}
+          };
+        return ConnectGrant(Auth::GrantResult{std::move(**polled)}, request.remember);
+      }
+      return {};
+    }
+
     AuthResult Authenticate(const SignOutAccount&)
     {
       CloseSession();
@@ -252,6 +310,35 @@ private:
       auto result = Auth::ResetPassword(settings.authUrl, request.code, request.password, settings.allowInsecureRemoteAuth);
       if (!result) return result;
       return ForgetLogin();
+    }
+
+    // What the server offers is asked off the network thread, so a slow server
+    // never delays a sign-in: at start, after a refused sign-in and while
+    // unknown. When the server does not answer, the last known methods stay.
+    void ReadMethods(std::stop_token stop)
+    {
+      std::unique_lock lock{methodsMutex};
+      while (!stop.stop_requested())
+      {
+        methodsWanted = false;
+        lock.unlock();
+        auto methods = Auth::ReadMethods(settings.authUrl, settings.allowInsecureRemoteAuth);
+        if (methods) exchange->PublishMethods(*methods);
+        lock.lock();
+        if (methods)
+          methodsWake.wait(lock, stop, [this] { return methodsWanted; });
+        else
+          methodsWake.wait_for(lock, stop, MethodsRetry, [this] { return methodsWanted; });
+      }
+    }
+
+    void RefreshMethods()
+    {
+      {
+        std::lock_guard lock{methodsMutex};
+        methodsWanted = true;
+      }
+      methodsWake.notify_one();
     }
 
     static void Run(ClientApplication* self)
@@ -280,9 +367,12 @@ private:
                         ? AuthResult{}
                         : std::visit([this](const auto& request) { return Authenticate(request); }, *control.authentication);
           if (!result && result.error().ban) exchange->PublishSessionEnd(result.error().ban);
+          // A refused sign-in may mean the server changed what it offers.
+          const bool refused = !result && result.error().code != Auth::FailureCode::Canceled;
           exchange->CompleteAuthentication(
             result ? std::string{} : std::move(result.error().message),
             result ? Auth::FailureCode::None : result.error().code);
+          if (refused) RefreshMethods();
         }
         if (exchange->StopRequested()) break;
         if (control.disconnect || (control.authentication && exchange->AuthenticationCanceled())) Report(runtime->Disconnect());
@@ -302,6 +392,11 @@ private:
     ClientExchange::Ptr exchange;
     ClientRuntime::Ptr  runtime;
     std::jthread        worker;
+    // ReadMethods: methodsWanted under methodsMutex.
+    std::mutex                  methodsMutex;
+    std::condition_variable_any methodsWake;
+    bool                        methodsWanted{};
+    std::jthread                methodsReader;
   };
 
 }

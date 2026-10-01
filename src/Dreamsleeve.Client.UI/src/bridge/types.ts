@@ -10,6 +10,7 @@ import type {
   eventTypes,
   groundMarkKinds,
   hidingModes,
+  registrationModes,
   sanctionKinds,
   sessionEndReasons,
 } from "./bridge.generated";
@@ -19,6 +20,7 @@ export type Id = string;
 export type ConnectionPhase = (typeof connectionPhases)[number];
 export type AuthOperation = (typeof authOperations)[number];
 export type AuthFailure = (typeof authFailures)[number];
+export type RegistrationMode = (typeof registrationModes)[number];
 // Typed authentication state; no password or token ever crosses the bridge.
 export interface AuthState {
   authenticating: boolean;
@@ -27,6 +29,10 @@ export interface AuthState {
   error: string;
   savedLogin: boolean;
   savedUsername: string;
+  // Who may register on the server ("unknown" until it answers) and whether
+  // it signs in through Steam.
+  registration: RegistrationMode;
+  steam: boolean;
 }
 export type ChannelKind = (typeof channelKinds)[number];
 export interface Channel {
@@ -172,6 +178,8 @@ export type Command =
   // The host takes the instantKeys settings, saves them and re-projects every surface.
   | { type: "displaySettings"; settings: Settings }
   | { type: "signInSaved" }
+  // The browser opens Steam; remember saves the login like a password sign-in.
+  | { type: "signInSteam"; remember: boolean }
   // An administrator's one-time code and the new password; then a normal sign-in.
   | { type: "resetPassword"; code: string; password: string }
   | { type: "signOut" }

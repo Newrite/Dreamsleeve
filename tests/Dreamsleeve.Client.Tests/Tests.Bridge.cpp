@@ -56,8 +56,8 @@ namespace
            List("connectionPhases", Bridge::PhaseNames) + List("authOperations", Bridge::OperationNames) +
            List("authFailures", Bridge::FailureNames) + List("announcementOrigins", Bridge::OriginNames) +
            List("announcementKinds", Bridge::KindNames) + List("groundMarkKinds", Bridge::MarkKindNames) +
-           List("channelKinds", Bridge::ChannelKindNames) + List("hidingModes", HidingNames) +
-           List("sessionEndReasons", Bridge::EndNames) + List("sanctionKinds", Bridge::SanctionKindNames) +
+           List("channelKinds", Bridge::ChannelKindNames) + List("hidingModes", HidingNames) + List("sessionEndReasons", Bridge::EndNames) +
+           List("sanctionKinds", Bridge::SanctionKindNames) + List("registrationModes", Bridge::RegistrationNames) +
            std::format(
              "\n// Bounds of text the host sends: chat and mark text, snapshot lines per\n"
              "// channel, error strings (UTF-8 bytes, never more UTF-16 units).\n"
@@ -157,6 +157,7 @@ namespace
     signedIn.savedLogin    = true;
     signedIn.savedUsername = "seven";
     signedIn.authOperation = AuthOperation::PasswordLogin;
+    signedIn.methods       = {Auth::RegistrationMode::Open, true};
 
     return {
         Bridge::SnapshotEvent{
@@ -208,6 +209,7 @@ TEST_CASE("Bridge name tables follow the enumerators they name")
   CHECK(Strings(Bridge::MarkKindNames) == EnumeratorNames<Domain::GroundMarkKind>());
   CHECK(Strings(Bridge::ChannelKindNames) == EnumeratorNames<Domain::ChatChannelKind>());
   CHECK(Strings(Bridge::SanctionKindNames) == EnumeratorNames<Domain::SanctionKind>());
+  CHECK(Strings(Bridge::RegistrationNames) == EnumeratorNames<Auth::RegistrationMode>());
   // "off" is the ui.toml word for None; the others follow the enumerators.
   auto hiding    = EnumeratorNames<Domain::HiddenIdentity>();
   hiding.front() = "off";

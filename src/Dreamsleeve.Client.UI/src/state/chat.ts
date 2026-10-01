@@ -17,7 +17,7 @@ import type {
   SessionEndState,
   Settings,
 } from "../bridge/types";
-import { idleAuth } from "./auth";
+import { canCancelSteam, idleAuth } from "./auth";
 import { muted, muteText, sessionEndText } from "./moderation";
 import { idleModerator, makeModerator, type ModeratorState } from "./moderator";
 import { defaults, instantKeys } from "../bridge/settings.generated";
@@ -505,6 +505,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
             error: event.error,
             savedLogin: event.savedLogin,
             savedUsername: event.savedUsername,
+            registration: event.registration,
+            steam: event.steam,
           },
           connected: event.phase === "connected",
           connectionPhase: event.phase,
@@ -824,6 +826,17 @@ export function makeChat(send: Send, now = () => Date.now()) {
     signInSaved() {
       if (!store.getState().auth.savedLogin) return;
       authenticate({ type: "signInSaved" }, "resume");
+    },
+    // Sign-in in the browser; the host waits for it until canceled.
+    signInSteam(remember: boolean) {
+      if (!store.getState().auth.steam) return;
+      authenticate({ type: "signInSteam", remember }, "steamLogin");
+    },
+    // Only a Steam sign-in waits long enough to be canceled.
+    cancelSteam() {
+      if (!canCancelSteam(store.getState().auth)) return;
+      if (!send({ type: "disconnect" }))
+        store.setState({ notice: "Команда не принята приложением" });
     },
     // An administrator's one-time code: a new account or a reset password.
     resetPassword(code: string, password: string) {

@@ -16,7 +16,10 @@ ClientExchange. После создания им владеет один сет�
 `KeepGuest(false)` при остановке закрывает соединение штатно, `Closing()` сообщает, что закрытие
 ещё обслуживается.
 `ResetPassword(code, password)` завершает административный сброс.
-Статус содержит типизированные authOperation/authFailure и savedLogin/savedUsername;
+`ConnectSteam(remember)` открывает браузер со страницей Steam и ждёт, пока сервер не скажет, чем
+кончился вход (опрос раз в 2 с, гость обслуживается; `Disconnect()` отменяет ожидание).
+Статус содержит типизированные authOperation/authFailure, savedLogin/savedUsername и `methods`
+(режим регистрации и включён ли Steam; их читает отдельный поток из `GET /auth/methods`);
 пароль и токен UI обратно не выдаются. [Полный контракт](../../docs/AuthenticationRu.md).
 
 ## Общий запуск и конфигурационный файл

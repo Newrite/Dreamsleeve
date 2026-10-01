@@ -11,6 +11,7 @@ import {
   maxError,
   maxSnapshotRows,
   maxText,
+  registrationModes,
   sanctionKinds,
   sessionEndReasons,
 } from "./bridge.generated";
@@ -179,6 +180,8 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     error(v.error) &&
     flag(v.savedLogin) &&
     label(v.savedUsername) &&
+    oneOf(registrationModes)(v.registration) &&
+    flag(v.steam) &&
     oneOf(connectionPhases)(v.phase),
   settings: (v) => object(v.settings),
   groundMarks: (v) => marks(256)(v.marks),

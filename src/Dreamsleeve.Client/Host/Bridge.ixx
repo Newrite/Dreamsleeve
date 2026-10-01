@@ -39,7 +39,7 @@ export namespace Dreamsleeve::Host::Bridge
   constexpr auto PhaseNames =
     std::to_array<std::string_view>({"disconnected", "authenticating", "connecting", "opening", "connected", "disconnecting", "faulted"});
   constexpr auto OperationNames =
-    std::to_array<std::string_view>({"none", "passwordLogin", "resume", "signOut", "forgetSavedLogin", "resetPassword"});
+    std::to_array<std::string_view>({"none", "passwordLogin", "resume", "signOut", "forgetSavedLogin", "resetPassword", "steamLogin"});
   constexpr auto FailureNames     = std::to_array<std::string_view>({
       "none",
       "invalidCredentials",
@@ -56,7 +56,10 @@ export namespace Dreamsleeve::Host::Bridge
       "registrationSteamOnly",
       "addressBanned",
       "deviceBanned",
+      "steamExpired",
   });
+  // Auth::RegistrationMode from GET /auth/methods.
+  constexpr auto RegistrationNames = std::to_array<std::string_view>({"unknown", "open", "steam", "manual"});
   constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
   constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
   constexpr auto MarkKindNames    = std::to_array<std::string_view>({"note", "death"});
@@ -249,6 +252,12 @@ export namespace Dreamsleeve::Host::Bridge
       std::string password;
     };
 
+    // Sign-in through Steam in the browser; remember saves the login.
+    struct SignInSteam
+    {
+      bool remember{};
+    };
+
   }
 
   using UiCommand = std::variant<
@@ -274,7 +283,8 @@ export namespace Dreamsleeve::Host::Bridge
     Commands::ListPlayerMarks,
     Commands::ClearPlayerMarks,
     Commands::DeleteChatMessage,
-    Commands::ResetPassword>;
+    Commands::ResetPassword,
+    Commands::SignInSteam>;
 
   // The "type" of each UiCommand alternative, in variant order.
   constexpr auto CommandNames = std::to_array<std::string_view>({
@@ -301,6 +311,7 @@ export namespace Dreamsleeve::Host::Bridge
       "clearPlayerMarks",
       "deleteChatMessage",
       "resetPassword",
+      "signInSteam",
   });
   static_assert(CommandNames.size() == std::variant_size_v<UiCommand>);
 
@@ -487,6 +498,9 @@ export namespace Dreamsleeve::Host::Bridge
     std::string error;
     bool        savedLogin{};
     std::string savedUsername;
+    // Who may register on the server and whether it signs in through Steam.
+    std::string registration{RegistrationNames.front()};
+    bool        steam{};
     std::string phase{PhaseNames.front()};
   };
 
@@ -1264,6 +1278,8 @@ export namespace Dreamsleeve::Host::Bridge
     event.error          = ClipError(status.error);
     event.savedLogin     = status.savedLogin;
     event.savedUsername  = ShownUsername(status, streamerMode);
+    event.registration   = NameOf(RegistrationNames, status.methods.registration, ClientAuth::RegistrationMode::Unknown, RegistrationNames.front());
+    event.steam          = status.methods.steam;
     event.phase          = PhaseName(status);
     return event;
   }

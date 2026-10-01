@@ -1,6 +1,7 @@
 namespace Dreamsleeve.Server.Web.Authentication
 
 open System
+open System.Net
 open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
@@ -15,13 +16,25 @@ open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure
 open Dreamsleeve.Server.Web
 
+/// Steam's side of a sign-in. The composition root connects it to SteamOpenId
+/// with one HttpClient; tests pass functions.
+type SteamPorts = {
+    /// The SteamID of the answer the browser brought back for a flow, confirmed by Steam.
+    Verify: string -> (string * string) list -> CancellationToken -> Task<Result<uint64, string>>
+    /// The public profile with a Web API key; unknown fields without one.
+    Profile: uint64 -> CancellationToken -> Task<SteamProfile>
+}
+
 /// The account service as the public routes see it. The composition root
 /// connects it to the AuthService agent; tests pass functions.
 type AuthPorts = {
     Access: AccountAccessCommand -> TimeSpan -> CancellationToken -> Task<AgentAskResult<Result<AccountAccessResult, AccountAccessError>>>
+    Steam: SteamPorts
 }
 
 type AuthRouteSettings = {
+    /// The public origin Steam sends browsers back to; absent: Steam sign-in is off.
+    SteamPublicUrl: string voption
     RequestsPerMinute: int
     RequestTimeoutSeconds: int
     /// Service admission bounds the useful number of open connections.
@@ -37,7 +50,7 @@ module AuthRoutes =
     let MaxBodyBytes = 4096
 
     [<RequireQualifiedAccess>]
-    type private Operation = Register | Login | Resume | Logout | ResetPassword
+    type private Operation = Register | Login | Resume | Logout | ResetPassword | SteamBegin | SteamPoll
 
     let private unavailable () = WebHost.error 503 "unavailable" "Authentication is temporarily unavailable."
     let private invalid () = WebHost.error 400 "invalid_request" "Invalid authentication request."
@@ -56,6 +69,17 @@ module AuthRoutes =
         if body.ValueKind <> JsonValueKind.Object then Error (invalid ())
         else
             match operation with
+            | Operation.SteamBegin ->
+                // A Steam sign-in is remembered unless the client says otherwise.
+                match body.TryGetProperty "rememberMe" with
+                | false, _ -> Ok (AccountAccessCommand.BeginSteam(origin, true))
+                | true, value when value.ValueKind = JsonValueKind.True || value.ValueKind = JsonValueKind.False ->
+                    Ok (AccountAccessCommand.BeginSteam(origin, value.ValueKind = JsonValueKind.True))
+                | true, _ -> Error (invalid ())
+            | Operation.SteamPoll ->
+                let flow, secret = field body "flow", field body "secret"
+                if AuthService.validToken flow && AuthService.validToken secret then Ok (AccountAccessCommand.PollSteam(flow, secret))
+                else Error (invalid ())
             | Operation.Resume | Operation.Logout ->
                 let secret = field body "token"
                 if not (AuthService.validToken secret) then Error (invalid ())
@@ -116,7 +140,13 @@ module AuthRoutes =
                 return command settings moderation origin operation body.RootElement
     }
 
-    let private response = function
+    let private response settings = function
+        | Ok (AccountAccessResult.SteamStarted(flow, secret, seconds)) ->
+            match settings.SteamPublicUrl with
+            | ValueSome publicUrl ->
+                WebHost.json 200 {| flow = flow; secret = secret; browserUrl = SteamOpenId.loginUrl publicUrl flow; expiresInSeconds = seconds |}
+            | ValueNone -> unavailable ()
+        | Ok AccountAccessResult.SteamPending -> WebHost.json 202 {| status = "pending" |}
         | Ok (AccountAccessResult.Registered profile) ->
             WebHost.json 201 {| playerId = PlayerId.value profile.PlayerId; username = Username.value profile.Username
                                 displayName = DisplayName.value profile.DisplayName |}
@@ -149,6 +179,7 @@ module AuthRoutes =
         | Error (AccountAccessError.RegistrationClosed _) ->
             WebHost.error 403 "registration_closed" "Registration is closed; an administrator creates accounts."
         | Error AccountAccessError.Busy -> busy ()
+        | Error AccountAccessError.FlowUnknown -> WebHost.error 410 "steam_flow_unknown" "The Steam sign-in expired or was already collected."
         // Only a game session can be refused as too soon, only a trusted caller's sanction; never a public route.
         | Error AccountAccessError.Unavailable | Error (AccountAccessError.TooSoon _) | Error (AccountAccessError.SanctionRefused _) -> unavailable ()
 
@@ -159,11 +190,13 @@ module AuthRoutes =
         deadline.CancelAfter timeout
         let! result = task {
             try
-                match! read settings moderation operation context deadline.Token with
+                let steamOff = (operation = Operation.SteamBegin || operation = Operation.SteamPoll) && settings.SteamPublicUrl.IsNone
+                match! (if steamOff then Task.FromResult(Error (WebHost.error 404 "steam_disabled" "Steam sign-in is not enabled on this server."))
+                        else read settings moderation operation context deadline.Token) with
                 | Error failure -> return failure
                 | Ok command ->
                     match! ports.Access command timeout deadline.Token with
-                    | AgentAskResult.Replied value -> return response value
+                    | AgentAskResult.Replied value -> return response settings value
                     | AgentAskResult.Full | AgentAskResult.Dropped -> return busy ()
                     | AgentAskResult.Closed | AgentAskResult.TimedOut -> return unavailable ()
                     | AgentAskResult.Canceled ->
@@ -186,12 +219,90 @@ module AuthRoutes =
         do! WebHost.write context result
     }
 
+    // The page the browser shows after Steam: plain text, no script or style.
+    let private page (status: int) (message: string) : IResult =
+        let html = $"<!doctype html><html lang=\"ru\"><head><meta charset=\"utf-8\"><title>Dreamsleeve</title></head><body><p>{WebUtility.HtmlEncode message}</p></body></html>"
+        Results.Content(html, "text/html; charset=utf-8", Text.Encoding.UTF8, Nullable status)
+
+    let private steamOutcome = function
+        | Ok (AccountAccessResult.SignedIn _) -> 200, "Вход через Steam выполнен. Вернитесь в игру, это окно можно закрыть."
+        | Error (AccountAccessError.Banned ban) | Error (AccountAccessError.DeviceBanned ban) ->
+            403, $"Вход запрещён баном: {SanctionReason.value ban.Reason}"
+        | Error (AccountAccessError.AddressBanned ban) -> 403, $"IP-адрес заблокирован: {SanctionReason.value ban.Reason}"
+        | Error (AccountAccessError.RegistrationClosed _) -> 403, "Регистрация на сервере закрыта: аккаунт создаёт администратор."
+        | Error AccountAccessError.FlowUnknown -> 410, "Ссылка входа устарела или уже использована. Начните вход из игры заново."
+        | Error AccountAccessError.Busy -> 503, "Сервер занят. Начните вход из игры ещё раз."
+        | Ok _ | Error _ -> 503, "Вход через Steam сейчас недоступен."
+
+    // A new Steam account is named after its persona when the word list allows it.
+    let private steamName settings moderation (profile: SteamProfile) =
+        let fallback () = DisplayName.create settings.Input.DisplayName $"Steam {profile.SteamId % 10000UL:D4}" |> Result.toOption |> Option.get
+        match profile.PersonaName |> ValueOption.map (DisplayName.create settings.Input.DisplayName) with
+        | ValueSome (Ok name) when Moderation.allows moderation (DisplayName.value name) -> name
+        | ValueSome _ | ValueNone -> fallback ()
+
+    /// Steam sends the browser here; the client that began the flow learns the
+    /// outcome by polling, the browser shows it as text.
+    let private steamReturn settings moderation ports (logger: ILogger) : HttpHandler = fun context -> task {
+        WebHost.noStore context
+        let timeout = TimeSpan.FromSeconds(float settings.RequestTimeoutSeconds)
+        use deadline = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted)
+        deadline.CancelAfter timeout
+        let! status, message = task {
+            let flow = context.Request.Query["flow"].ToString()
+            if settings.SteamPublicUrl.IsNone then return 404, "Вход через Steam на этом сервере выключен."
+            elif not (AuthService.validToken flow) then return 400, "Ссылка входа повреждена. Начните вход из игры заново."
+            else
+                try
+                    let fields = [ for pair in context.Request.Query do if pair.Key.StartsWith("openid.", StringComparison.Ordinal) then pair.Key, pair.Value.ToString() ]
+                    match! ports.Steam.Verify flow fields deadline.Token with
+                    | Error "canceled" -> return 200, "Вход через Steam отменён. Вернитесь в игру."
+                    | Error reason ->
+                        logger.Information("Steam sign-in not verified: {Reason}", reason)
+                        return 400, "Steam не подтвердил вход. Начните вход из игры заново."
+                    | Ok steamId ->
+                        let! profile = ports.Steam.Profile steamId deadline.Token
+                        match! ports.Access (AccountAccessCommand.CompleteSteam(flow, profile, steamName settings moderation profile)) timeout deadline.Token with
+                        | AgentAskResult.Replied result -> return steamOutcome result
+                        | AgentAskResult.Full | AgentAskResult.Dropped -> return steamOutcome (Error AccountAccessError.Busy)
+                        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return steamOutcome (Error AccountAccessError.Unavailable)
+                        | AgentAskResult.Faulted failure ->
+                            logger.Error(failure, "Steam sign-in failed")
+                            return steamOutcome (Error AccountAccessError.Unavailable)
+                with
+                | :? OperationCanceledException -> return 504, "Steam не ответил вовремя. Начните вход из игры заново."
+                | :? Net.Http.HttpRequestException -> return 502, "Steam недоступен. Попробуйте позже."
+        }
+        do! WebHost.write context (page status message)
+    }
+
+    /// What the client offers: who may register here and whether Steam is on.
+    let private methods settings ports (logger: ILogger) : HttpHandler = fun context -> task {
+        WebHost.noStore context
+        let timeout = TimeSpan.FromSeconds(float settings.RequestTimeoutSeconds)
+        let! result = ports.Access AccountAccessCommand.ReadRegistration timeout context.RequestAborted
+        let answer =
+            match result with
+            | AgentAskResult.Replied (Ok (AccountAccessResult.Registration mode)) ->
+                WebHost.json 200 {| registration = RegistrationMode.key mode; steam = settings.SteamPublicUrl.IsSome |}
+            | AgentAskResult.Faulted failure ->
+                logger.Error(failure, "Authentication methods request failed")
+                unavailable ()
+            | AgentAskResult.Replied _ | AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed
+            | AgentAskResult.TimedOut | AgentAskResult.Canceled -> unavailable ()
+        do! WebHost.write context answer
+    }
+
     let endpoints settings moderation ports logger = [
         post "/auth/register" (handle settings moderation ports logger Operation.Register)
         post "/auth/login" (handle settings moderation ports logger Operation.Login)
         post "/auth/resume" (handle settings moderation ports logger Operation.Resume)
         post "/auth/logout" (handle settings moderation ports logger Operation.Logout)
         post "/auth/reset-password" (handle settings moderation ports logger Operation.ResetPassword)
+        get "/auth/methods" (methods settings ports logger)
+        post "/auth/steam/begin" (handle settings moderation ports logger Operation.SteamBegin)
+        post "/auth/steam/poll" (handle settings moderation ports logger Operation.SteamPoll)
+        get "/auth/steam/return" (steamReturn settings moderation ports logger)
     ]
 
     /// The caller starts and stops this host and owns the account service.

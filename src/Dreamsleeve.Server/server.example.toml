@@ -211,6 +211,17 @@ BusyTimeoutSeconds = 5
 # "Регистрация" or the console command registration <mode>; a new server is open.
 [Authentication]
 
+# "Sign in through Steam" (OpenID, docs/AuthenticationRu.md): the game opens a browser at Steam, Steam
+# sends it back to PublicUrl, and the account of that SteamID signs in or, where the registration mode
+# allows it (open or steam), is created as "steam.<SteamID>". Optional Steam Web API key in the
+# DREAMSLEEVE_STEAM_WEB_API_KEY environment variable: new accounts then take the Steam persona name.
+[Authentication.Steam]
+# true turns it on; clients show "Войти через Steam".
+Enabled = false
+# The origin of the authentication host as players' browsers reach it, "https://auth.example.org"
+# (the authUrl of clients); plain HTTP only on literal loopback or with AllowInsecureRemote.
+PublicUrl = ""
+
 # The public HTTP host of /auth/*. Clients set its origin as authUrl.
 # The same keys describe the admin panel listener ([Admin.Listener]).
 [Authentication.Listener]
@@ -262,6 +273,8 @@ SetupLifetimeHours = 72
 # Days a player's sign-in IP address stays in their history (admin panel, IP bans) after the
 # last sign-in from it, 1..3650.
 SignInHistoryDays = 30
+# How long a started Steam sign-in waits for the browser and then for the game, seconds, 60..3600.
+SteamFlowSeconds = 600
 
 # Web admin panel (docs/AdminPanelRu.md). Loopback only by default: reach it through an SSH tunnel
 # or a reverse proxy. Without administrators the server prints a one-time setup code to the console.

@@ -39,7 +39,14 @@ const auth: AuthState = {
   error: "",
   savedLogin: true,
   savedUsername: players[0].username,
+  // ?registration=manual|steam shows a closed registration.
+  registration:
+    (new URLSearchParams(location.search).get(
+      "registration",
+    ) as AuthState["registration"]) ?? "open",
+  steam: true,
 };
+let steamTimer: ReturnType<typeof setTimeout> | undefined;
 function connection(phase: ConnectionPhase) {
   chat.receive({ type: "connection", connected: phase === "connected", phase });
 }
@@ -420,8 +427,41 @@ function command(c: Command) {
     return true;
   }
   if (c.type === "disconnect") {
+    if (steamTimer !== undefined) {
+      clearTimeout(steamTimer);
+      steamTimer = undefined;
+      emitAuth({ authenticating: false, failure: "canceled" }, "disconnected");
+      return true;
+    }
     connection("disconnected");
     emitAuth({}, "disconnected");
+    return true;
+  }
+  // The browser "returns" after three seconds unless canceled.
+  if (c.type === "signInSteam") {
+    emitAuth(
+      {
+        authenticating: true,
+        operation: "steamLogin",
+        failure: "none",
+        error: "",
+      },
+      chat.store.getState().connectionPhase,
+    );
+    steamTimer = setTimeout(() => {
+      steamTimer = undefined;
+      connection("connected");
+      emitAuth(
+        {
+          authenticating: false,
+          operation: "none",
+          savedLogin: c.remember,
+          savedUsername: c.remember ? "steam.76561198000000042" : "",
+        },
+        "connected",
+      );
+      snapshot();
+    }, 3000);
     return true;
   }
   // The code "bad" fails; any other sets the password.

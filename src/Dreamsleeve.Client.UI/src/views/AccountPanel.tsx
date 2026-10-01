@@ -1,6 +1,13 @@
 import { useState, type FormEvent } from "react";
 import type { Chat, ChatState } from "../state/chat";
-import { accountActions, authStatus, canResetPassword } from "../state/auth";
+import {
+  accountActions,
+  authStatus,
+  canCancelSteam,
+  canRegister,
+  canResetPassword,
+  registrationNote,
+} from "../state/auth";
 import { connectionLabels } from "../state/connection";
 import { identityStatus } from "../state/identity";
 import { sessionEndText } from "../state/moderation";
@@ -53,6 +60,8 @@ export function AccountPanel({
     displayName,
   });
   const status = authStatus(s.auth);
+  const registration = canRegister(s.auth);
+  const note = registrationNote(s.auth);
   function signIn(register: boolean) {
     chat.signIn(username, password, remember, register ? displayName : "");
     // The secret leaves with the command; the form never keeps it.
@@ -168,15 +177,17 @@ export function AccountPanel({
             onChange={(e) => setPassword(e.target.value)}
           />
         </label>
-        <label>
-          Отображаемое имя (для регистрации)
-          <input
-            name="displayName"
-            maxLength={128}
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-        </label>
+        {registration && (
+          <label>
+            Отображаемое имя (для регистрации)
+            <input
+              name="displayName"
+              maxLength={128}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          </label>
+        )}
         <label className={styles.check}>
           <span>Запомнить меня</span>
           <input
@@ -193,13 +204,15 @@ export function AccountPanel({
           >
             Войти
           </button>
-          <button
-            type="button"
-            disabled={!can.register}
-            onClick={() => signIn(true)}
-          >
-            Зарегистрироваться и войти
-          </button>
+          {registration && (
+            <button
+              type="button"
+              disabled={!can.register}
+              onClick={() => signIn(true)}
+            >
+              Зарегистрироваться и войти
+            </button>
+          )}
           <button
             type="button"
             disabled={!can.resume}
@@ -208,7 +221,36 @@ export function AccountPanel({
             Войти сохранённой сессией
           </button>
         </div>
+        {note && (
+          <p className={styles.muted} data-part="registration-note">
+            {note}
+          </p>
+        )}
       </form>
+      {s.auth.steam && (
+        <div className={styles.form} data-part="steam">
+          <div className={styles.actions}>
+            {canCancelSteam(s.auth) ? (
+              <button type="button" onClick={chat.cancelSteam}>
+                Отменить вход через Steam
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!can.steam}
+                onClick={() => chat.signInSteam(remember)}
+              >
+                Войти через Steam
+              </button>
+            )}
+          </div>
+          <p className={styles.muted}>
+            Откроется браузер со страницей Steam; пароль Steam вводится только
+            там. После входа вернитесь в игру. «Запомнить меня» сохраняет вход и
+            для Steam.
+          </p>
+        </div>
+      )}
       <details data-part="password-code">
         <summary>Пароль по коду</summary>
         <form className={styles.form} onSubmit={resetPassword}>

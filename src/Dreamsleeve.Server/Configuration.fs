@@ -27,9 +27,20 @@ type HttpListenerSettings = {
     RequestTimeoutSeconds: int
 }
 
+/// "Sign in through Steam" (docs/AuthenticationRu.md, «Вход через Steam»). The
+/// Web API key is not a setting: the optional DREAMSLEEVE_STEAM_WEB_API_KEY
+/// environment variable, so it never shows on the panel's configuration page.
+type SteamSettings = {
+    Enabled: bool
+    /// The origin of the authentication host as players' browsers reach it,
+    /// "https://auth.example.org"; Steam sends the browser back there.
+    PublicUrl: string
+}
+
 /// Who may register is not a setting: the panel and the console change the
 /// registration mode at run time (RegistrationMode, stored in the database).
 type AuthenticationSettings = {
+    Steam: SteamSettings
     Listener: HttpListenerSettings
     Service: AccountServiceOptions
 }
@@ -89,6 +100,7 @@ module Configuration =
         Recovery = { InitialDelayMs = 1000; MaxDelayMs = 30000; MaxRestarts = 5; WindowSeconds = 600 }
         Database = SqliteAccountStoreConfig.defaults
         Authentication = {
+            Steam = { Enabled = false; PublicUrl = "" }
             Listener = {
                 ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
                 TrustForwardedHeaders = false; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
@@ -293,6 +305,12 @@ module Configuration =
             yield! recovery config.Recovery
             yield! listener "Authentication.Listener" authentication.Listener
             yield! AuthService.validate authentication.Service
+            if authentication.Steam.Enabled then
+                match listenUrl "Authentication.Steam.PublicUrl" authentication.Steam.PublicUrl true authentication.Listener.AllowInsecureRemote with
+                | Error _ ->
+                    "Authentication.Steam.PublicUrl must be an origin (scheme, host and port) that players' browsers reach; "
+                    + "plain HTTP only on literal loopback or with Authentication.Listener.AllowInsecureRemote."
+                | Ok _ -> ()
             if admin.Enabled then
                 yield! listener "Admin.Listener" admin.Listener
                 yield! AdminService.validate admin.Service

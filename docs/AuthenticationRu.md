@@ -53,6 +53,12 @@ HTTP-адаптер живёт в `src/Dreamsleeve.Server.Web/Authentication/Aut
 | POST /auth/resume | token | 200: тот же grant с новым одноразовым билетом |
 | POST /auth/logout | token | 204: токен отозван (повторный вызов допустим) |
 | POST /auth/reset-password | code, password | 204: пароль заменён, прежний доступ отозван |
+| GET /auth/methods | — | 200: registration (`open`/`steam`/`manual`), steam (bool) |
+| POST /auth/steam/begin | rememberMe (optional bool, по умолчанию true) | 200: flow, secret, browserUrl, expiresInSeconds |
+| POST /auth/steam/poll | flow, secret | 202 `{status: "pending"}`; затем один раз ответ `/auth/login` или его ошибка |
+| GET /auth/steam/return | flow и поля `openid.*` от Steam | HTML-страница с итогом для браузера |
+
+Маршруты Steam — раздел «Вход через Steam».
 
 Регистрация проверяет username и displayName по серверному словарю: отказ — 400
 `username_not_allowed` / `display_name_not_allowed` (клиент показывает «Имя содержит
@@ -105,8 +111,8 @@ SQLite имеет WAL, foreign keys, конечный busy timeout; каждая
 
 Билет не делает ENet зашифрованным транспортом: перехват игровых UDP-пакетов
 остаётся вне этой реализации. Для открытой сети потребуется отдельное решение
-защиты игрового канала. Реализованы сохранённый вход и административный сброс пароля; MFA,
-подтверждения почты и проверенного Steam-провайдера пока нет.
+защиты игрового канала. Реализованы сохранённый вход, административный сброс пароля и вход через
+Steam; MFA и подтверждения почты пока нет.
 
 ## Логирование
 
@@ -205,6 +211,7 @@ DREAMSLEEVE_PASSWORD остаётся только в Dev; игровой UI п�
 | `SignOut()` | Закрыть сессию, отозвать сохранённый токен на сервере и удалить его локально; клиент остаётся гостем |
 | `ForgetSavedLogin()` | Удалить только локальную запись, работает без сети |
 | `ResetPassword(code, password)` | Установить пароль по коду администратора; затем нужен обычный вход |
+| `ConnectSteam(remember)` | Вход через Steam в браузере (раздел «Вход через Steam»); `remember` сохраняет вход |
 
 До входа и после выхода `ClientApplication` держит гостевое ENet-соединение (`JoinAsGuest`):
 сервер считает запущенную игру в онлайне без имён. Вход открывает сессию на этом же соединении;
@@ -213,12 +220,14 @@ DREAMSLEEVE_PASSWORD остаётся только в Dev; игровой UI п�
 только с остановкой приложения; отдельного флага отказа нет — выключается сам мод.
 
 `Drain().status` / `Status()` возвращают `authenticating`, `authOperation`,
-`authFailure`, `savedLogin`, `savedUsername`, phase и диагностический error.
+`authFailure`, `savedLogin`, `savedUsername`, `methods` (режим регистрации и включён ли Steam),
+phase и диагностический error.
 Результат вызова означает admission, не успешный вход. UI ожидает окончания
 `authenticating`; готовность игровой сессии означает `phase == Ready`.
 `InvalidCredentials` требует повторного ввода; `UsernameTaken`, `InvalidRequest`,
-`RegistrationClosed`, `RegistrationSteamOnly`, `NameNotAllowed`, `Banned`, `Busy`, `Unavailable`,
-`InvalidResponse`, `CredentialStorage` и `Canceled` различимы без разбора строки. При transient HTTP-ошибке запись сохраняется.
+`RegistrationClosed`, `RegistrationSteamOnly`, `NameNotAllowed`, `Banned`, `AddressBanned`, `DeviceBanned`,
+`SteamExpired`, `Busy`, `Unavailable`, `InvalidResponse`, `CredentialStorage` и `Canceled` различимы
+без разбора строки. При transient HTTP-ошибке запись сохраняется.
 При 401 на resume она удаляется. SignOut при недоступном сервере сохраняет запись
 для повторного отзыва; отдельный Forget позволяет явно убрать её офлайн.
 
@@ -232,8 +241,8 @@ HTTP и HTTPS разделены. Blob содержит username и токен, 
 Первый запуск Dev: `--config client.toml player --remember` (при необходимости
 `--register "Player"`). Далее достаточно `--config client.toml`, без username,
 пароля или env. Без `--remember` старый dev-сценарий остаётся одноразовым входом.
-Команды: `resume`, `signout`, `forget`, `reset-password <code>` (новый пароль
-запрашивается скрыто). Переменная пароля оставлена только для автоматизации тестов.
+Команды: `resume`, `steam` (вход через Steam в браузере, `disconnect` отменяет ожидание),
+`signout`, `forget`, `reset-password <code>` (новый пароль запрашивается скрыто). Переменная пароля оставлена только для автоматизации тестов.
 
 Сохранённый токен имеет абсолютный срок `SavedLoginDays` (30 по умолчанию).
 Resume не продлевает срок и не меняет секрет, поэтому потеря HTTP-ответа не лишает
@@ -351,19 +360,73 @@ runtime доставляют ему полный список (`AccountChange.Ad
 Ограничения честные: код клиента открыт, пересобранный клиент пришлёт что угодно. Бан
 устройства отсекает тех, кто просто заводит новые аккаунты; переустановка Windows UUID не меняет.
 
-## Будущий Steam
+## Вход через Steam
 
-`accounts` и `profiles` описывают аккаунт, `account_passwords` — необязательные
-парольные credentials, `account_identities(provider, subject)` — привязки способов
-входа. Миграция v1 → v2 сохраняет аккаунты, ID и хеши паролей, создаёт password identity.
-У будущего Steam-only аккаунта не требуется фиктивный пароль.
+Включается в `server.toml`:
 
-Steam-адаптер должен серверно проверить доказательство Steam, разрешить
-(provider, subject) в аккаунт и передать подтверждённый профиль в общую выдачу grant.
-Имя/SteamID от клиента сами по себе доказательством не являются. Привязка к уже
-существующему аккаунту требует подтверждения обоих способов входа; автоматического
-объединения по display name/username нет. ENet, игровые агенты и сохранённый вход
-не зависят от провайдера. Steam SDK/endpoints/linking UI в этой работе не реализованы.
+```toml
+[Authentication.Steam]
+Enabled = true
+PublicUrl = "https://auth.example.org"   # origin HTTP-хоста входа, как его видит браузер игрока
+```
+
+`PublicUrl` — обычно тот же адрес, что `authUrl` клиентов; HTTP допустим только на буквальном
+loopback или с `[Authentication.Listener] AllowInsecureRemote`. Регистрировать сайт в Steam не
+нужно: это OpenID 2.0 Steam (`https://steamcommunity.com/openid/login`), который подтверждает
+только SteamID. Браузер игрока должен достать до `PublicUrl` (Steam сам на него не ходит), поэтому
+для проверки на своей машине достаточно `http://127.0.0.1:8779`.
+
+**Поток.**
+
+1. Клиент: `POST /auth/steam/begin` → `{flow, secret, browserUrl, expiresInSeconds}`. Поток живёт
+   в памяти `AuthService` `[Authentication.Service] SteamFlowSeconds` (600) секунд, одновременно —
+   не больше `MaxTickets`; адрес и устройство запроса запоминаются вместе с ним. Бан IP проверяется
+   уже здесь.
+2. Клиент открывает `browserUrl` браузером по умолчанию (`ShellExecuteW`) — только если это
+   `https://steamcommunity.com/openid/login?…` (`Auth::SteamPage`): сервер не может заставить
+   клиент открыть что-то другое. Пароль Steam вводится только на сайте Steam, игра его не видит.
+3. Steam возвращает браузер на `GET /auth/steam/return?flow=…&openid.*`. Сервер проверяет, что ответ
+   относится к этому потоку (`openid.return_to`, `op_endpoint`, `claimed_id` = `identity` вида
+   `https://steamcommunity.com/openid/id/7656119…`), и спрашивает у Steam `check_authentication` —
+   подпись проверяет сам Steam (`SteamOpenId.verify`). Браузер получает простую страницу с итогом
+   («Вход через Steam выполнен. Вернитесь в игру…», отмена, бан, закрытая регистрация).
+4. Аккаунт находится по `account_identities(provider = "steam", subject = SteamID)` и входит с
+   обычными проверками бана аккаунта, IP и устройства, адрес и устройство пишутся в историю. Если
+   его нет и режим регистрации `open` или `steam`, создаётся аккаунт без пароля с username
+   `steam.<SteamID>` (префикс `steam.` зарезервирован: ни регистрация, ни панель его не дадут); в
+   `manual` — отказ «Регистрация закрыта». Отображаемое имя — имя профиля Steam, если задан ключ
+   Web API и имя проходит словарь, иначе «Steam NNNN» (последние цифры SteamID); игрок меняет его
+   как обычно.
+5. Клиент каждые 2 с вызывает `POST /auth/steam/poll`: 202, пока браузер не вернулся; затем один раз
+   ответ `/auth/login` (grant, `rememberToken` при `rememberMe`) или его ошибка (403 `banned`,
+   `address_banned`, `device_banned`, `registration_closed`); дальше 410 `steam_flow_unknown`.
+   Истечение потока — `Auth::FailureCode::SteamExpired` («Вход через Steam не завершён вовремя»);
+   пять неудачных опросов подряд (сеть, 429, 503) завершают попытку. Ожидание прерывают «Отменить
+   вход через Steam» (команда `disconnect`, итог `Canceled`) и остановка игры. Пока клиент ждёт,
+   гостевое соединение обслуживается.
+
+`secret` знает только клиент, начавший поток: `flow` виден в адресе браузера, но без `secret` итог
+не забрать. Повторный возврат того же потока — 410. Сохранённый вход Steam-аккаунта работает как
+у парольного (`/auth/resume`).
+
+**Что предлагать в UI.** `GET /auth/methods` → `{registration, steam}`. Клиент спрашивает это
+отдельным потоком (медленный сервер не задерживает вход): при старте, после каждого отказа во
+входе и каждые 30 с, пока ответа нет; без ответа остаются последние известные значения. Включён
+Steam — во вкладке «Аккаунт» кнопка «Войти через Steam»; регистрация закрыта (`steam`, `manual`) —
+поля регистрации скрыты и сказано почему.
+
+**Ключ Web API** (необязательный) — переменная окружения `DREAMSLEEVE_STEAM_WEB_API_KEY`, не
+настройка: его нет в `server.toml`, в логах и на странице конфигурации панели; лог при старте
+говорит только «set»/«not set». С ключом сервер запрашивает `ISteamUser/GetPlayerSummaries`: имя
+профиля и дату создания аккаунта Steam (`timecreated`, только у публичного профиля); дата пишется
+в лог при создании аккаунта. Порога «аккаунту Steam не меньше N дней» нет, но дата уже доходит до
+`AuthService` (`SteamProfile.Created`). Ключ выдаёт <https://steamcommunity.com/dev/apikey>; домен
+в форме ни на что не влияет.
+
+**Ограничения.** SteamID подтверждает владение аккаунтом Steam, а не покупку Skyrim. Привязки
+Steam к существующему парольному аккаунту нет: автоматического объединения по имени не будет,
+привязка потребует подтверждения обоих способов входа. ENet, игровые агенты и сохранённый вход
+от провайдера не зависят.
 
 ## Проверки сохранённого входа
 

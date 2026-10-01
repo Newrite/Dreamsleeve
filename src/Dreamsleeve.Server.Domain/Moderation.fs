@@ -256,11 +256,16 @@ module Moderation =
     let fallbackUsername (playerId: PlayerId) : Username =
         UMX.tag $"{HiddenUsernamePrefix}{PlayerId.value playerId}"
 
-    /// Names a new account cannot take: placeholders and the names of the
-    /// system source, so no player passes for the server in any client.
+    /// The usernames of accounts created by a Steam sign-in: "steam.<SteamID>".
+    [<Literal>]
+    let SteamUsernamePrefix = "steam."
+
+    /// Names a new account cannot take: placeholders, the names of Steam
+    /// accounts and of the system source, so no player passes for another or
+    /// for the server in any client.
     let reservedUsername (username: Username) =
         let text = Username.value username
-        text.StartsWith HiddenUsernamePrefix || text = "server" || text = "system"
+        text.StartsWith HiddenUsernamePrefix || text.StartsWith SteamUsernamePrefix || text = "server" || text = "system"
 
     /// A name a new account may take: not reserved and allowed by the block
     /// rules. Registration and accounts created in the panel check it; sign-in never does.

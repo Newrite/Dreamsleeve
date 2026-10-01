@@ -28,7 +28,8 @@ let private signedIn = Ok (AccountAccessResult.SignedIn { Profile = profile; Ses
 
 let private moderation = Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
 
-let private withHost customize execute run = task {
+// steam replaces the Steam ports of the composition root.
+let private withHostUsing (steam: SteamPorts option) customize execute run = task {
     let received = ConcurrentQueue<AccountAccessCommand>()
     let handle (_: AgentContext<AuthMessage>) message = task {
         match message with
@@ -48,7 +49,9 @@ let private withHost customize execute run = task {
     }
     let settings = customize initial
     // The host exactly as Program builds it: the same settings mapping and ports.
-    let app = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth auth) logger
+    let ports = WebPorts.auth settings auth
+    let ports = match steam with Some steam -> { ports with Steam = steam } | None -> ports
+    let app = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation ports logger
     let! outcome = task {
         try
             do! app.StartAsync()
@@ -63,6 +66,8 @@ let private withHost customize execute run = task {
     do! awaitUnit auth.Completion
     match outcome with Ok () -> () | Error failure -> return raise failure
 }
+
+let private withHost customize execute run = withHostUsing None customize execute run
 
 let private reply result _ (response: ReplyChannel<_>) = response.Reply result
 let private credentials = {| username = "player"; password = password |}
@@ -87,7 +92,9 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
             | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
-            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> failtest "Unexpected public command"
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _
+            | AccountAccessCommand.BeginSteam _ | AccountAccessCommand.CompleteSteam _ | AccountAccessCommand.PollSteam _
+            | AccountAccessCommand.SignInSteam _ -> failtest "Unexpected public command"
         withHost id execute (fun http received -> task {
             use! remembered = post http "auth/login" {| username = "player"; password = password; rememberMe = true |}
             status 200 remembered
@@ -120,7 +127,9 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
             | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
-            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> failtest "Unexpected command"
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _
+            | AccountAccessCommand.BeginSteam _ | AccountAccessCommand.CompleteSteam _ | AccountAccessCommand.PollSteam _
+            | AccountAccessCommand.SignInSteam _ -> failtest "Unexpected command"
         withHost id execute (fun http received -> task {
             use! created = post http "auth/register" {|
                 username = " PLAYER "; displayName = " e\u0301 "; password = password
@@ -142,7 +151,9 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
             | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
-            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> failwith "Wrong registration command."
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _
+            | AccountAccessCommand.BeginSteam _ | AccountAccessCommand.CompleteSteam _ | AccountAccessCommand.PollSteam _
+            | AccountAccessCommand.SignInSteam _ -> failwith "Wrong registration command."
 
             use! loggedIn = post http "auth/login" credentials
             status 200 loggedIn
@@ -163,6 +174,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
                                                      "hidden.7", "Fine", "username_not_allowed"
                                                      "Server", "Fine", "username_not_allowed"
                                                      "system", "Fine", "username_not_allowed"
+                                                     "steam.76561198000000000", "Fine", "username_not_allowed"
                                                      "player", "B4DW0RD", "display_name_not_allowed" ] do
                 use! response = post http "auth/register" {| username = username; displayName = displayName; password = password |}
                 status 400 response
@@ -275,6 +287,99 @@ let tests = testSequenced (testList "Authentication HTTP" [
                 equal "device_banned" actual
             })
         })
+
+    case "Steam sign-in starts a flow with Steam's URL, is polled by the client and is off unless enabled" (fun () -> task {
+        let flow, secret = String('f', 43), String('s', 43)
+        let steamOn (config: ApplicationConfig) =
+            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779/" } } }
+        let execute command (response: ReplyChannel<_>) =
+            match command with
+            | AccountAccessCommand.BeginSteam(origin, true) when origin.Address.IsSome -> response.Reply(Ok (AccountAccessResult.SteamStarted(flow, secret, 600)))
+            | AccountAccessCommand.BeginSteam(_, false) -> response.Reply(Ok (AccountAccessResult.SteamStarted(flow, secret, 600)))
+            | AccountAccessCommand.PollSteam(f, s) when f = flow && s = secret -> response.Reply(Ok AccountAccessResult.SteamPending)
+            | AccountAccessCommand.PollSteam _ -> response.Reply(Error AccountAccessError.FlowUnknown)
+            | AccountAccessCommand.ReadRegistration -> response.Reply(Ok (AccountAccessResult.Registration RegistrationMode.Steam))
+            | _ -> failtest "Unexpected command"
+        do! withHost steamOn execute (fun http received -> task {
+            use! started = post http "auth/steam/begin" {| device = String.replicate 4 "0123456789abcdef" |}
+            status 200 started
+            let! text = started.Content.ReadAsStringAsync()
+            use body = JsonDocument.Parse text
+            equal flow (body.RootElement.GetProperty("flow").GetString())
+            equal secret (body.RootElement.GetProperty("secret").GetString())
+            let url = body.RootElement.GetProperty("browserUrl").GetString()
+            check (url.StartsWith "https://steamcommunity.com/openid/login?") "The browser goes to Steam."
+            check (url.Contains(Uri.EscapeDataString $"http://127.0.0.1:8779/auth/steam/return?flow={flow}")) "Steam returns to this server's flow."
+            check (url.Contains "openid.realm=http%3A%2F%2F127.0.0.1%3A8779&") "The realm is the public origin."
+            use! once = post http "auth/steam/begin" {| rememberMe = false |}
+            status 200 once
+            use! pending = post http "auth/steam/poll" {| flow = flow; secret = secret |}
+            status 202 pending
+            use! unknown = post http "auth/steam/poll" {| flow = flow; secret = String('x', 43) |}
+            status 410 unknown
+            use! methods = http.GetAsync "auth/methods"
+            status 200 methods
+            let! methodsText = methods.Content.ReadAsStringAsync()
+            use offered = JsonDocument.Parse methodsText
+            equal "steam" (offered.RootElement.GetProperty("registration").GetString())
+            check (offered.RootElement.GetProperty("steam").GetBoolean()) "Steam is offered."
+            match received.ToArray() |> Array.head with
+            | AccountAccessCommand.BeginSteam(origin, _) -> check origin.Device.IsSome "The device goes into the flow."
+            | other -> failtestf "%A" other
+        })
+        do! withHost id execute (fun http received -> task {
+            use! off = post http "auth/steam/begin" {| |}
+            status 404 off
+            let! actual = code off
+            equal "steam_disabled" actual
+            use! methods = http.GetAsync "auth/methods"
+            let! methodsText = methods.Content.ReadAsStringAsync()
+            use offered = JsonDocument.Parse methodsText
+            check (not (offered.RootElement.GetProperty("steam").GetBoolean())) "Steam is not offered."
+            equal [| AccountAccessCommand.ReadRegistration |] (received.ToArray())
+        })
+    })
+
+    case "the browser's return is verified with Steam, named from a clean persona and answered with a page" (fun () -> task {
+        let flow = String('f', 43)
+        let steamOn (config: ApplicationConfig) =
+            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779" } } }
+        let steamId = 76561198000000042UL
+        let persona = ref "Довакин"
+        let steam = {
+            Verify = fun f fields _ ->
+                let mode = fields |> List.tryFind (fun (key, _) -> key = "openid.mode") |> Option.map snd
+                Task.FromResult(if f = flow && mode = Some "id_res" then Ok steamId elif mode = Some "cancel" then Error "canceled" else Error "bad")
+            Profile = fun id _ -> Task.FromResult { SteamId = id; PersonaName = ValueSome persona.Value; Created = ValueNone }
+        }
+        let execute command (response: ReplyChannel<_>) =
+            match command with
+            | AccountAccessCommand.CompleteSteam(f, _, _) when f = flow -> response.Reply signedIn
+            | AccountAccessCommand.CompleteSteam _ -> response.Reply(Error AccountAccessError.FlowUnknown)
+            | _ -> failtest "Unexpected command"
+        do! withHostUsing (Some steam) steamOn execute (fun http received -> task {
+            use! done' = http.GetAsync $"auth/steam/return?flow={flow}&openid.mode=id_res"
+            status 200 done'
+            let! page = done'.Content.ReadAsStringAsync()
+            check (page.Contains "Вернитесь в игру") "The page sends the player back to the game."
+            check (done'.Content.Headers.ContentType.MediaType = "text/html") "A page for the browser."
+            persona.Value <- "badword fan"
+            use! clean = http.GetAsync $"auth/steam/return?flow={flow}&openid.mode=id_res"
+            status 200 clean
+            match received.ToArray() with
+            | [| AccountAccessCommand.CompleteSteam(_, profile, first); AccountAccessCommand.CompleteSteam(_, _, second) |] ->
+                equal steamId profile.SteamId
+                equal "Довакин" (DisplayName.value first)
+                equal "Steam 0042" (DisplayName.value second)
+            | other -> failtestf "%A" other
+            use! canceled = http.GetAsync $"auth/steam/return?flow={flow}&openid.mode=cancel"
+            let! canceledPage = canceled.Content.ReadAsStringAsync()
+            check (canceledPage.Contains "отменён") "A canceled sign-in says so."
+            use! forged = http.GetAsync "auth/steam/return?flow=short&openid.mode=id_res"
+            status 400 forged
+            equal 2 received.Count
+        })
+    })
 
     case "per-IP rate limit has no waiting queue and ignores spoofed forwarded addresses" (fun () ->
         let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestsPerMinute = 1 } } }
