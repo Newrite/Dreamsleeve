@@ -319,37 +319,39 @@
   inset: 0;
   z-index: 40;
 }
+/* Drawn like the dropdown list of Select, from the theme tokens of its own root. */
 .authorMenu {
   position: fixed;
   display: flex;
   flex-direction: column;
   min-width: 180px;
   max-width: 220px;
-  padding: 6px;
-  border: 1px solid #747365;
-  background: rgb(12 12 10 / 0.96);
-  color: #e8e2cf;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  background: rgba(var(--surface), 0.98);
+  color: var(--ink);
   font:
-    14px "Segoe UI",
+    14px/1.45 "Segoe UI",
+    Arial,
     sans-serif;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
 }
 .authorMenu strong {
-  padding: 4px 8px 6px;
+  padding: 6px 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-bottom: 1px solid #3a3a33;
+  border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
 }
 .authorMenu .menuNote {
-  padding: 0 8px 6px;
-  color: #a8a28f;
+  padding: 0 12px 6px;
+  color: var(--muted);
   font-size: 12px;
   font-style: italic;
 }
 .authorMenu button {
-  padding: 6px 8px;
+  padding: 6px 12px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -358,12 +360,12 @@
 }
 .authorMenu button:hover,
 .authorMenu button:focus-visible {
-  background: rgb(255 255 255 / 0.1);
+  background: #ffffff18;
+  color: var(--accent);
   outline: none;
 }
-/* The moderator's items, set apart from the personal ones. */
 .authorMenu .menuModerator {
-  color: #e3b877;
+  color: var(--moderator);
 }
 /* Announcement kind as a small tag and its origin as a label. A mod's own
    signature is not vouched for by the server, so it stays subdued. */

@@ -1,5 +1,7 @@
-[data-part="chat"],
-[data-part="workspace"] {
+/* Every root that names a theme carries its tokens: the chat window, the
+   workspace, the moderation dialog and the author menu, which all render side
+   by side rather than inside one another. */
+[data-theme] {
   --ink: #eeeef0;
   --muted: #aaaeb2;
   --accent: #eeeeee;
@@ -12,6 +14,8 @@
   --whisper: #d6ace4;
   --system: #dfc482;
   --error: #e39685;
+  /* A moderator's actions, set apart from the personal ones. */
+  --moderator: #e3b877;
 }
 [data-theme="contrast"] {
   --ink: #fff;

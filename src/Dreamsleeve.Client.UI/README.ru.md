@@ -197,7 +197,7 @@ Layout выбирается в `views/App.tsx`; `layouts/SkyrimLayout.tsx` мо�
 CSS-тему можно установить без пересборки, изменив `dist/theme.user.css`:
 
 ```css
-[data-part="chat"] {
+[data-theme] {
   --accent: #aad0e0;
   --ink: #f4f4ef;
   --border: #6c929f;
@@ -207,6 +207,9 @@ CSS-тему можно установить без пересборки, изм
 [data-part="message"][data-channel="guild"] { --channel-color: #a3d3a3; }
 ```
 
+Токены темы есть у каждого корня с `data-theme`: окна чата, рабочей области с панелями, диалога
+модерации и контекстного меню автора. Они рисуются рядом, а не друг в друге, поэтому `[data-theme]`
+меняет палитру везде, а `[data-part="chat"]` — только в окне чата.
 Публичные части: `chat`, `header`, `messages`, `message`. Атрибуты:
 `data-channel`, `data-source`, `data-active`, `data-theme`, `data-full-color`,
 у объявлений также `data-origin` и `data-kind`.

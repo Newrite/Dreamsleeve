@@ -6,7 +6,7 @@ import styles from "../styles/Chat.module.css";
 const WIDTH = 220;
 // The header and the profile and ignore items; each further item adds a row.
 const HEIGHT = 110;
-const ROW = 30;
+const ROW = 32;
 // Context menu of a chat author. A transparent layer closes it on any click
 // outside; Escape closes it through useChat.
 export function AuthorMenu({
@@ -39,6 +39,7 @@ export function AuthorMenu({
     <div
       className={styles.menuLayer}
       data-part="author-menu-layer"
+      data-theme={s.settings.theme}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) chat.closeAuthorMenu();
       }}
