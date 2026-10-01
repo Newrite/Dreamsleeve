@@ -5,6 +5,7 @@ module;
 export module Dreamsleeve.Runtime;
 
 import std;
+import Dreamsleeve.Client.Utils;
 export import Dreamsleeve.Client.Application;
 export import Dreamsleeve.Client.MovementView;
 export import Dreamsleeve.Host.Session;
@@ -273,12 +274,16 @@ export namespace Runtime
     else
       logger::warn("UI settings ignored: {}", ui.error());
 
-    // Account IDs are unique per server: the address scopes pseudonyms and ignores.
+    // Account IDs are unique per server: "host:port" as configured scopes
+    // pseudonyms and ignores (DNS names fold ASCII case).
     auto dictionary = Host::LoadAliasDictionary(state.aliasPath);
     if (!dictionary.warning.empty()) logger::warn("{}", dictionary.warning);
     auto& names = state.session.PlayerNames();
     names.Configure(
-      std::format("{}:{}", settings->client.serverAddress.ToIpString().value_or("?"), settings->client.serverAddress.GetPort()),
+      std::format(
+        "{}:{}",
+        settings->client.serverHost | std::views::transform(Dreamsleeve::Utils::Text::AsciiLower) | std::ranges::to<std::string>(),
+        settings->client.serverPort),
       std::move(dictionary.names));
     names.Load(std::move(state.ui.names));
 
@@ -286,10 +291,7 @@ export namespace Runtime
     state.app      = std::move(*app);
     // The first session already opens with the saved "hide my name" choice.
     state.app->Exchange().SetHideIdentity(Host::Bridge::HidingOf(state.ui.ui.hideIdentity));
-    logger::info(
-      "Client application started; server {}:{}",
-      settings->client.serverAddress.ToIpString().value_or("?"),
-      settings->client.serverAddress.GetPort());
+    logger::info("Client application started; server {}:{}", settings->client.serverHost, settings->client.serverPort);
     return true;
   }
 

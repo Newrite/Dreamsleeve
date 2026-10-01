@@ -112,7 +112,7 @@ def client_readme() -> str:
 - SKSE Menu Framework (необязательно: страница настроек, F1).
 
 Настройка: в `SKSE/Plugins/Dreamsleeve/client.toml` три значения даёт владелец сервера —
-`serverIp` (IPv4-адрес, не имя хоста), `serverPort` и `authUrl` (`https://…` без пути).
+`serverHost` (IPv4-адрес или DNS-имя), `serverPort` и `authUrl` (`https://…` без пути).
 Остальные ключи с пояснениями и допустимыми значениями описаны в самом файле.
 Вход и регистрация выполняются из окна чата (Enter → ☰ → «Аккаунт»); сохранённый вход
 хранится в Windows Credential Manager, пароль в файлы не записывается.

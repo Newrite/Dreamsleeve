@@ -266,9 +266,14 @@ private:
       return {};
     }
 
+    // Every new connection resolves the host again, so a changed DNS record
+    // applies on the next attempt. A name blocks this thread on the resolver,
+    // as the HTTP sign-in does; a failure is a failed attempt, retried as one.
     std::expected<DreamNetClient::Ptr, DreamNetError> NewTransport() const
     {
-      return DreamNetClient::TryCreate({config.network, config.serverAddress, config.connectTimeoutMs, config.disconnectTimeoutMs});
+      auto address = DreamNetAddress::TryResolve(config.serverHost, config.serverPort);
+      if (!address) return std::unexpected{std::move(address.error())};
+      return DreamNetClient::TryCreate({config.network, *address, config.connectTimeoutMs, config.disconnectTimeoutMs});
     }
 
     // The state of the connection kept without a session; Disconnected when

@@ -219,7 +219,8 @@ def smoke(args, log, directory: Path):
     def start_client(name: str, username: str, display_name: str | None = None, hidden: str | None = None):
         if name == "alice":
             client_config = directory / "client settings.toml"
-            client_config.write_text(tomli_w.dumps({"version": 1, "serverIp": "127.0.0.1", "serverPort": port,
+            # A DNS name rather than the literal: the client resolves it when it connects.
+            client_config.write_text(tomli_w.dumps({"version": 1, "serverHost": "localhost", "serverPort": port,
                                                   "authUrl": auth_url}), encoding="utf-8")
             command = [str(args.client), "--config", str(client_config), username]
         else:

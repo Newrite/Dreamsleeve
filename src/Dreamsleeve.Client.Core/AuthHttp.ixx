@@ -187,7 +187,7 @@ namespace Dreamsleeve::Client::Auth
       if (!endpoint) return std::unexpected{endpoint.error()};
       if (body.size() > 16384) return std::unexpected{"Authentication request is too large"};
 
-      Handle session{WinHttpOpen(L"Dreamsleeve.Client/6", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0)};
+      Handle session{WinHttpOpen(L"Dreamsleeve.Client/" DREAMSLEEVE_VERSION, WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0)};
       if (!session) return SystemError("WinHttpOpen");
       if (!WinHttpSetTimeouts(session.get(), 5000, 5000, 5000, 5000)) return SystemError("Auth timeout configuration");
       Handle connection{WinHttpConnect(session.get(), endpoint->host.c_str(), endpoint->port, 0)};

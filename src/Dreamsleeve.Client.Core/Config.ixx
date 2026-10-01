@@ -42,7 +42,9 @@ export namespace Dreamsleeve::Client
     }()};
     std::size_t     maxInitialPlayers{4096};
     std::size_t     maxRecentMessages{512};
-    DreamNetAddress serverAddress{DreamNetAddress::Loopback(DefaultServerPort)};
+    // An IPv4 literal or a DNS name, resolved again on every connection attempt.
+    std::string     serverHost{DreamNetAddress::LoopbackIp};
+    Port            serverPort{DefaultServerPort};
     TimeOutMs       connectTimeoutMs{5000};
     TimeOutMs       disconnectTimeoutMs{2000};
     TimeOutMs       sessionTimeoutMs{5000};
@@ -88,7 +90,8 @@ export namespace Dreamsleeve::Client
 
       if (network.channelLimit < MinChannels) return "network.channelLimit";
       if (network.maxPacketBytes > MaxProtobufCount) return "network.maxPacketBytes";
-      if (serverAddress.GetPort() == 0) return "serverPort";
+      if (!DreamNetAddress::IsHostSyntax(serverHost)) return "serverHost";
+      if (serverPort == 0) return "serverPort";
       if (!count(maxInitialPlayers)) return "maxInitialPlayers";
       if (maxRecentMessages > MaxProtobufCount) return "maxRecentMessages";
       if (!count(maxActorValues)) return "maxActorValues";

@@ -3,13 +3,15 @@
 # The plugin writes this file on first run and never rewrites it; ranges are checked
 # at start (Configuration::InvalidSetting); with an invalid file the plugin does not start
 # and DreamsleeveClient.log names the reason. Chat, name and mark looks live in ui.toml.
-# Usually only serverIp, serverPort and authUrl change: the server owner publishes them.
+# Usually only serverHost, serverPort and authUrl change: the server owner publishes them.
 # "World units" are Skyrim game units: about 1.43 cm, an exterior cell is 4096.
 
 # File format version; must be 1.
 version = 1
-# Game server address: an IPv4 literal such as "203.0.113.10" (host names are not resolved).
-serverIp = "127.0.0.1"
+# Game server: an IPv4 address ("203.0.113.10") or a DNS name with an A record
+# ("play.example.org"), resolved again on every connection attempt, so a changed
+# record applies on the next reconnect. International names in punycode (xn--...).
+serverHost = "127.0.0.1"
 # Game server UDP port, 1..65535 (the server's [Server] Port).
 serverPort = 8778
 # Origin of the account service: "https://host[:port]" with no path, e.g. "https://auth.example.org".

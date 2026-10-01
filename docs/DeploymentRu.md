@@ -40,20 +40,45 @@
 
 ## Что понадобится
 
-- **Машина** с Linux x64 (примеры для Ubuntu 24.04 и systemd) или Windows x64. Сервер —
-  framework-dependent .NET-приложение: нужен **ASP.NET Core Runtime 10.0** (не SDK). ENet в сервере
-  управляемый (yENet), SQLite поставляется в публикации (`runtimes/*/native`), других нативных
-  зависимостей нет. Сервер регулярно запускается на Windows; на Linux первым делом проверьте
-  запуск (шаг 4).
-- **Статический публичный IPv4.** В `client.toml` игрока `serverIp` — только IPv4-литерал: имена
-  хостов клиент не разрешает. Если адрес сменится, игрокам придётся поменять конфиг.
+- **Машина** с Linux x64 (примеры для Ubuntu 24.04 и systemd) или Windows x64. ENet в сервере
+  управляемый (yENet), SQLite поставляется в публикации. На Linux проверено на Ubuntu 24.04
+  (x86_64): все серверные тесты, публикация обоих видов, вход по HTTP, игровые ENet-сессии с чатом
+  и онлайном, служба systemd с FIFO и остановка по SIGTERM. Что поставить на хост — в
+  «Требования к Linux-хосту» ниже.
+- **Публичный IPv4.** В `client.toml` игрока `serverHost` — IPv4-адрес или DNS-имя с A-записью
+  (`play.example.org`). Имя клиент разрешает заново при каждой попытке подключения, поэтому при
+  смене адреса достаточно обновить запись (с учётом её TTL); с IPv4-литералом игрокам придётся
+  поменять конфиг. IPv6 (AAAA) клиент не использует.
 - **Домен** с A-записью на этот адрес для `auth.example.org` (и `admin.example.org`, если админка
-  будет за nginx). Нужен для сертификата, которому доверяет Windows у игроков.
+  будет за nginx). Нужен для сертификата, которому доверяет Windows у игроков. Для игрового
+  адреса подойдёт то же имя или отдельное, например `play.example.org`.
 - **nginx** и **certbot** (Let's Encrypt) — или другой сертификат от доверенного центра.
 - **Открытые порты:** UDP 8778; TCP 80 (выпуск сертификата и редирект) и 443. Порты 8779 и 8780 наружу
   не открывать.
 - **Ресурсы:** на десятки игроков хватит 1 vCPU и 1 ГБ памяти. Ориентиры для сотен и тысячи
   клиентов — в разделе «Ёмкость».
+
+## Требования к Linux-хосту
+
+Сервер бывает в двух видах публикации, обе работают на одной и той же машине:
+
+| Вид | Чем запускать | Что нужно на хосте |
+|---|---|---|
+| Framework-dependent, переносимая (`dist/Server`) | `dotnet Dreamsleeve.Server.dll` | ASP.NET Core Runtime 10 |
+| Самодостаточная `linux-x64` | `./Dreamsleeve.Server` | только системные библиотеки ниже |
+
+- **ASP.NET Core Runtime 10.** В Ubuntu 24.04 он есть в обычном репозитории:
+  `sudo apt install aspnetcore-runtime-10.0`; пакет сам ставит ICU и OpenSSL. Для других
+  дистрибутивов — [инструкция Microsoft](https://learn.microsoft.com/dotnet/core/install/linux).
+- **Системные библиотеки** (самодостаточной сборке их надо поставить самому): glibc, libstdc++ и
+  libgcc; **ICU** (`libicu74` в Ubuntu 24.04) — сервер нормализует тексты (NFC, NFKC в словаре), и
+  invariant-режим .NET ему не подходит; **OpenSSL 3** (`libssl3t64`) — на нём в .NET на Linux
+  работают хеширование паролей (PBKDF2) и TLS; `ca-certificates` и `tzdata` — по желанию.
+- **Архитектура и libc:** проверена x86_64 с glibc. Под ARM64 — публикация `linux-arm64`
+  (собирается, около 145 МБ; на ARM не запускалась). Alpine (musl) — `linux-musl-x64` плюс пакет
+  `icu-libs`.
+- **Каталог данных** — на локальной файловой системе: SQLite в режиме WAL не работает надёжно на
+  NFS, SMB и дисках Windows, подключённых в WSL (`/mnt/c`).
 
 ## 1. Сборка публикации
 
@@ -71,11 +96,28 @@ dotnet publish src/Dreamsleeve.Server -c Release -o dist/Server   # только
 
 Содержимое `dist/Server`: `Dreamsleeve.Server.dll` и зависимости, `db/migrations/*.sql` (применяются
 при запуске, путь — рядом с DLL), примеры конфигов. `server.toml`, база и логи появляются у вас.
+Эта публикация переносимая: на Linux её запускают через `dotnet Dreamsleeve.Server.dll`
+(`Dreamsleeve.Server.exe` — только для Windows).
+
+Самодостаточная сборка под Linux собирается на любой ОС, в том числе на Windows:
+
+```bash
+dotnet publish src/Dreamsleeve.Server -c Release -r linux-x64 --self-contained true -o build/linux-x64
+```
+
+Около 136 МБ, внутри весь runtime .NET; запускается `./Dreamsleeve.Server`, `db/migrations` лежит
+рядом. С `--self-contained false` выходит 31 МБ с тем же запускателем, но на хосте нужен ASP.NET
+Core Runtime. Обе публикации проверены и при сборке на Linux: SDK из репозитория Ubuntu
+(`dotnet-sdk-10.0`) собирает проект и тянет пакеты под `linux-x64` с nuget.org. Версия
+`FSharp.Core` закреплена в `Directory.Build.props`, поэтому SDK любой полосы даёт одну и ту же
+сборку. Сервер пишет свою версию первой строкой лога и в `--help`.
 
 ## 2. Установка на Linux
 
-ASP.NET Core Runtime 10 — по [инструкции Microsoft для дистрибутива](https://learn.microsoft.com/dotnet/core/install/linux).
-Проверка: `dotnet --list-runtimes` показывает `Microsoft.AspNetCore.App 10.x`.
+Для переносимой публикации — ASP.NET Core Runtime 10 (`sudo apt install aspnetcore-runtime-10.0` в
+Ubuntu 24.04; проверка: `dotnet --list-runtimes` показывает `Microsoft.AspNetCore.App 10.x`). Для
+самодостаточной — `sudo apt install libicu74 libssl3t64 ca-certificates`, а в юните службы ниже
+`ExecStart=/opt/dreamsleeve/Dreamsleeve.Server --config /opt/dreamsleeve/server.toml`.
 
 ```bash
 sudo useradd --system --home-dir /opt/dreamsleeve --shell /usr/sbin/nologin dreamsleeve
@@ -221,10 +263,10 @@ journalctl -u dreamsleeve | grep "setup code"                     # код пе�
 sudo systemctl stop dreamsleeve                                   # SIGTERM: штатная остановка
 ```
 
-Схема FIFO проверена на systemd 255 (Ubuntu 24.04) с заглушкой, которая, как сервер, выходит по
-EOF: без FIFO она завершается сразу; с FIFO команды доходят, закрытие пишущей стороны не даёт EOF,
-`stop` приходит как SIGTERM. SIGTERM сервер получает через ASP.NET Core, как Ctrl+C: закрывает
-HTTP, завершает сессии и выходит с кодом 0.
+Схема проверена с настоящим сервером на systemd 255 (Ubuntu 24.04): команда через FIFO доходит
+(`announce` публикуется), закрытие пишущей стороны не даёт EOF, `systemctl stop` присылает SIGTERM,
+и сервер, как от Ctrl+C, закрывает HTTP, завершает сессии и выходит с кодом 0. Без FIFO служба
+останавливается сразу после старта.
 
 Команды консоли: `quit`, `announce <текст>`, `reset-password <username>` (одноразовый код сброса
 для игрока), `revoke-access <username>` (отзыв сохранённых входов и билетов), `admin-setup`
@@ -387,7 +429,7 @@ sudo ufw enable
 Мод из `dist/Client` и три значения в `SKSE/Plugins/Dreamsleeve/client.toml`:
 
 ```toml
-serverIp = "203.0.113.10"          # IPv4 вашего сервера, не имя хоста
+serverHost = "play.example.org"    # A-запись на сервер или IPv4, например "203.0.113.10"
 serverPort = 8778                  # [Server] Port
 authUrl = "https://auth.example.org"
 ```
@@ -561,10 +603,12 @@ sudo sysctl --system
 | Сервер: `Runtime.ControlReserve must allow 4 * MaxSessions + 4...` | увеличили `MaxSessions`, не увеличив резерв |
 | Лог клиента: `Plain HTTP authentication is permitted only on loopback; use HTTPS remotely` | `authUrl` начинается с `http://` |
 | Лог клиента: `Auth URL must be an origin without a path` | в `authUrl` есть путь, например `/auth` |
-| Лог клиента: `Invalid serverIp; expected an IPv4 address` | в `serverIp` имя хоста или IPv6 |
+| Лог клиента: `Invalid client setting: serverHost` | в `serverHost` пусто, пробел, `_`, IPv6, точка в конце или число больше 255 в IPv4; имена с не-ASCII символами — в punycode (`xn--…`) |
+| Лог клиента: `Invalid client TOML: …: unknown_key` под строкой `serverIp = …` | конфиг до версии 1.0: переименуйте `serverIp` в `serverHost` |
+| Вход в игре: `Cannot resolve host …` | у имени нет A-записи, опечатка или DNS недоступен у игрока; проверьте `nslookup play.example.org` |
 | Ошибка TLS при входе в игре | цепочка не доверена Windows, имя не совпадает с SAN, нет TLS 1.2 или `authUrl` ведёт на редирект |
 | Игроки массово получают 429 `rate_limited` | за nginx не включён `TrustForwardedHeaders`: все запросы с одного адреса |
 | Админка: изменения отвечают 403 | нет `TrustForwardedHeaders = true` в `[Admin.Listener]` или nginx не передаёт `Host` |
 | 502 Bad Gateway | сервер не запущен или `ListenUrl` не совпадает с `proxy_pass` |
-| Вход проходит, игровое соединение нет | UDP 8778 закрыт в firewall/облаке, неверные `serverIp`/`serverPort`, `BindAddress = "127.0.0.1"` |
+| Вход проходит, игровое соединение нет | UDP 8778 закрыт в firewall/облаке, неверные `serverHost`/`serverPort`, `BindAddress = "127.0.0.1"` |
 | Клиент сразу отключается, в логе сервера `the server is full` | достигнут `Runtime.MaxSessions` (не вошедшие клиенты тоже считаются) |

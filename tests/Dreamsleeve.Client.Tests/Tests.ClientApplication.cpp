@@ -60,7 +60,7 @@ TEST_CASE("Configuration path is caller-owned and partial TOML preserves default
   CHECK(defaults->client.playerSampleIntervalMs == 50);
   CHECK(defaults->client.network.channelLimit == 3);
 
-  auto loaded = fixture.Load(R"(serverIp = "127.0.0.2"
+  auto loaded = fixture.Load(R"(serverHost = "127.0.0.2"
 serverPort = 9000
 commandCapacity = 12
 
@@ -76,8 +76,12 @@ delayMs = 75
 historyCapacity = 16
 )");
   REQUIRE(loaded);
-  CHECK(loaded->client.serverAddress.GetPort() == 9000);
-  CHECK(loaded->client.serverAddress.ToIpString().value() == "127.0.0.2");
+  CHECK(loaded->client.serverPort == 9000);
+  CHECK(loaded->client.serverHost == "127.0.0.2");
+  // A DNS name is kept as written and resolved only when a connection is made.
+  auto named = fixture.Load("serverHost = \"Play.Example.org\"\n");
+  REQUIRE(named);
+  CHECK(named->client.serverHost == "Play.Example.org");
   CHECK(loaded->commandCapacity == 12);
   CHECK_FALSE(loaded->client.showFireflies);
   CHECK(loaded->client.playerSampleIntervalMs == 25);
@@ -164,7 +168,15 @@ typo = 3
 )",
      R"(serverPort = 65536
 )",
-     R"(serverIp = "not-an-ip"
+     R"(serverHost = ""
+)",
+     R"(serverHost = "bad host"
+)",
+     R"(serverHost = "-bad.example.org"
+)",
+     R"(serverHost = "999.1.1.1"
+)",
+     R"(serverIp = "127.0.0.1"
 )",
      R"([client]
 playerSampleIntervalMs = 0
@@ -206,7 +218,7 @@ TEST_CASE("TOML supports comments inline tables and rejects ambiguous scalar val
   REQUIRE(fixture.Load(""));
   auto loaded = fixture.Load("serverPort = 9_001 # comment\nclient = { showFireflies = false }\n");
   REQUIRE(loaded);
-  CHECK(loaded->client.serverAddress.GetPort() == 9001);
+  CHECK(loaded->client.serverPort == 9001);
   CHECK_FALSE(loaded->client.showFireflies);
   for (
     const auto source :
@@ -336,8 +348,8 @@ TEST_CASE("The bundled client.example.toml is the first-run file and holds every
   REQUIRE(loaded);
   const ClientSettings defaults;
   CHECK(glz::write_json(loaded->client).value_or("") == glz::write_json(defaults.client).value_or(""));
-  CHECK(loaded->client.serverAddress.ToIpString().value_or("") == defaults.client.serverAddress.ToIpString().value_or(""));
-  CHECK(loaded->client.serverAddress.GetPort() == defaults.client.serverAddress.GetPort());
+  CHECK(loaded->client.serverHost == defaults.client.serverHost);
+  CHECK(loaded->client.serverPort == defaults.client.serverPort);
   CHECK(glz::write_json(SettingsDetail::InterpolationFile{
                             loaded->client.movement.delay.count(), loaded->client.movement.maxGap.count(),
                             loaded->client.movement.historyCapacity, loaded->client.movement.teleportDistance})

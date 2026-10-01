@@ -15,7 +15,15 @@ open Dreamsleeve.Server.Web.Authentication
 [<Literal>]
 let private Commands = "quit | reset-password <username> | revoke-access <username> | announce <text> | admin-setup | admin-reset <admin>"
 
+/// This build's version as Directory.Build.props sets it; the SDK appends the commit.
+let private version =
+    let assembly = Reflection.Assembly.GetExecutingAssembly()
+    match Reflection.CustomAttributeExtensions.GetCustomAttribute<Reflection.AssemblyInformationalVersionAttribute> assembly with
+    | null -> string (assembly.GetName().Version)
+    | attribute -> attribute.InformationalVersion
+
 let private printHelp () =
+    printfn "Dreamsleeve.Server %s, protocol %d" version ProtocolCodec.Version
     printfn "Dreamsleeve.Server [--config path.toml] [--port 8778]"
     printfn "Dreamsleeve.Server --write-config path.toml"
     printfn "Configuration is read at startup. Commands: %s." Commands
@@ -352,6 +360,7 @@ let private run (settings: ApplicationConfig, game: GameSettings) = task {
     use log = ServerLogging.create settings.Logging
     use factory = new SerilogLoggerFactory(log, dispose = false)
     let logger = factory.CreateLogger("Dreamsleeve.Server")
+    logger.LogInformation("Dreamsleeve.Server {Version}, protocol {Protocol}", version, ProtocolCodec.Version)
 
     match Configuration.loadModeration settings.Moderation with
     | Error error ->

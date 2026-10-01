@@ -1,4 +1,5 @@
-set_version("0.1.0")
+-- One version for the client and the server: Directory.Build.props and the UI package.json repeat it.
+set_version("1.0.0")
 
 add_rules("mode.debug", "mode.releasedbg")
 set_defaultplat("windows")
@@ -120,6 +121,10 @@ target("Dreamsleeve.Client.Core")
 
     add_deps("Dreamsleeve.Protocol.Native")
     add_syslinks("winhttp", "advapi32", {public = true})
+    -- The client's version, sent as its HTTP User-Agent.
+    on_load(function (target)
+        target:add("defines", "DREAMSLEEVE_VERSION=\"" .. (target:version() or "0.0.0") .. "\"")
+    end)
     -- The documented client.toml doubles as the file written on first run.
     add_rules("dreamsleeve.embed")
     add_files("src/Dreamsleeve.Client.Core/client.example.toml")

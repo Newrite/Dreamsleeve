@@ -47,7 +47,7 @@ namespace
     explicit Fixture(TimeOutMs sessionTimeout = 2000, std::size_t maxPending = 2, std::size_t packetBytes = 1024 * 1024, std::size_t resultCapacity = 8)
         : exchange{Value(ClientExchange::TryCreate(resultCapacity, 16))}
     {
-      config.serverAddress       = Value(server.GetHostInfo()).address;
+      config.serverPort          = Value(server.GetHostInfo()).address.GetPort();
       config.sessionTimeoutMs    = sessionTimeout;
       config.connectTimeoutMs    = 100;
       config.disconnectTimeoutMs = 100;
@@ -299,6 +299,17 @@ TEST_CASE("Real transport opens publishes a complete session and reconnects with
   const auto secondId = fixture.Open('B');
   CHECK(secondId > firstId);
   fixture.Send(Welcome(secondId));
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("A DNS name as the server host is resolved when the connection is made")
+{
+  Fixture fixture;
+  fixture.config.serverHost = "localhost";
+  fixture.client            = ClientRuntime::Create(fixture.config, *fixture.exchange);
+  const auto requestId      = fixture.Open();
+  fixture.Send(Welcome(requestId));
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
   CHECK(fixture.errors.empty());
 }

@@ -159,7 +159,7 @@ namespace Dreamsleeve::Client
       }
     };
 
-    // The file shape: chrono values in milliseconds, the address as ip and port.
+    // The file shape: chrono values in milliseconds, the server as host and port.
     export struct InterpolationFile
     {
       std::int64_t delayMs{MovementSettings{}.delay.count()};
@@ -171,8 +171,8 @@ namespace Dreamsleeve::Client
     export struct SettingsFile
     {
       int               version{ClientSettingsVersion};
-      std::string       serverIp{"127.0.0.1"};
-      Port              serverPort{DefaultServerPort};
+      std::string       serverHost{Configuration{}.serverHost};
+      Port              serverPort{Configuration{}.serverPort};
       std::string       authUrl{ClientSettings{}.authUrl};
       Configuration     client{};
       InterpolationFile interpolation{};
@@ -191,9 +191,10 @@ namespace Dreamsleeve::Client
     if (auto field = client.InvalidSetting()) return std::unexpected{"Invalid client setting: " + std::string{*field}};
     if (auto field = ClientExchange::InvalidCapacity(settings.commandCapacity, settings.stateCapacity))
       return std::unexpected{"Invalid client setting: " + std::string{*field}};
+    // The host is resolved per connection; the transport check covers the ENet host and the timeouts.
     if (
-      auto transport =
-        DreamNetClient::ValidateConfig({client.network, client.serverAddress, client.connectTimeoutMs, client.disconnectTimeoutMs});
+      auto transport = DreamNetClient::ValidateConfig(
+        {client.network, DreamNetAddress::Loopback(client.serverPort), client.connectTimeoutMs, client.disconnectTimeoutMs});
       !transport)
       return std::unexpected{"Invalid client network setting: " + transport.error().message};
     return Auth::ValidateUrl(settings.authUrl, settings.allowInsecureRemoteAuth);
@@ -243,12 +244,10 @@ namespace Dreamsleeve::Client
     if (auto error = glz::read_toml(file, source); !source.empty() && error)
       return std::unexpected{"Invalid client TOML: " + glz::format_error(error, source)};
     if (file.version != ClientSettingsVersion) return std::unexpected{"Unsupported client configuration version"};
-    if (file.serverIp.find('\0') != std::string::npos) return std::unexpected{"Invalid serverIp"};
-    auto address = DreamNetAddress::TryParseIp(file.serverIp, file.serverPort);
-    if (!address) return std::unexpected{"Invalid serverIp; expected an IPv4 address"};
 
-    file.client.serverAddress = *address;
-    const auto& view          = file.interpolation;
+    file.client.serverHost = std::move(file.serverHost);
+    file.client.serverPort = file.serverPort;
+    const auto& view       = file.interpolation;
     file.client.movement =
       {std::chrono::milliseconds{view.delayMs}, std::chrono::milliseconds{view.maxGapMs}, view.historyCapacity, view.teleportDistance};
     return ClientSettings{

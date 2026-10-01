@@ -15,11 +15,6 @@ namespace
 
   using namespace Dreamsleeve::Client;
 
-  void PrintError(const DreamNetError& error)
-  {
-    std::osyncstream(std::cerr) << error.ToLogString() << '\n';
-  }
-
   std::string_view PhaseName(SessionPhase phase)
   {
     switch (phase)
@@ -559,13 +554,9 @@ int RunNetworkConsole(int argc, char* argv[])
     const std::string_view rawPort{argv[3]};
     const auto             parsed = std::from_chars(rawPort.data(), rawPort.data() + rawPort.size(), port);
     if (parsed.ec != std::errc{} || parsed.ptr != rawPort.data() + rawPort.size() || port == 0 || port > 65535) return 2;
-    auto address = DreamNetAddress::TryParseIp(argv[2], static_cast<Port>(port));
-    if (!address)
-    {
-      PrintError(address.error());
-      return 2;
-    }
-    settings.client.serverAddress = *address;
+    // Checked with every other setting when the application is created.
+    settings.client.serverHost = argv[2];
+    settings.client.serverPort = static_cast<Port>(port);
   }
   Credentials credentials;
   if (!saved)

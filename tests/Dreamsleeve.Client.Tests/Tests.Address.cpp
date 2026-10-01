@@ -24,6 +24,68 @@ TEST_CASE("DreamNetAddress.TryParseIp - invalid IP")
   REQUIRE(result.error().code == DreamNetErrorCode::InvalidIp);
 }
 
+TEST_CASE("DreamNetAddress.IsIpv4Literal - four decimal parts up to 255")
+{
+  for (const auto text : {"127.0.0.1", "0.0.0.0", "255.255.255.255", "010.1.1.1"})
+  {
+    CAPTURE(std::string_view{text});
+    CHECK(DreamNetAddress::IsIpv4Literal(text));
+  }
+  for (const auto text : {"", "256.0.0.1", "1.2.3", "1.2.3.4.5", "1..2.3", "a.b.c.d", "1.2.3.4 ", "1234.1.1.1"})
+  {
+    CAPTURE(std::string_view{text});
+    CHECK_FALSE(DreamNetAddress::IsIpv4Literal(text));
+  }
+}
+
+TEST_CASE("DreamNetAddress.IsHostSyntax - IPv4 literals and DNS names")
+{
+  static_assert(DreamNetAddress::IsHostSyntax("play.example.org"));
+  for (const auto host : {"127.0.0.1", "localhost", "play.example.org", "Play.Example.Org", "xn--80ak6aa92e.com", "a-b.c1"})
+  {
+    CAPTURE(std::string_view{host});
+    CHECK(DreamNetAddress::IsHostSyntax(host));
+  }
+  const std::string label(DreamNetAddress::MaxLabelLength, 'a');
+  const auto        longest = label + "." + label + "." + label + "." + std::string(61, 'b');
+  REQUIRE(longest.size() == DreamNetAddress::MaxHostNameLength);
+  CHECK(DreamNetAddress::IsHostSyntax(longest));
+  const auto             tooLong   = longest + "b";
+  const auto             longLabel = label + "a.org";
+  const std::string_view invalid[]{
+      {},
+      "bad host",
+      "-x.org",
+      "x-.org",
+      "x..org",
+      "x.org.",
+      ".x.org",
+      "999.1.1.1",
+      "1.2.3",
+      "a_b.org",
+      "\xD0\xB8\xD0\xBC\xD1\x8F.\xD1\x80\xD1\x84",
+      tooLong,
+      longLabel
+  };
+  for (const auto host : invalid)
+  {
+    CAPTURE(host);
+    CHECK_FALSE(DreamNetAddress::IsHostSyntax(host));
+  }
+}
+
+TEST_CASE("DreamNetAddress.TryResolve - a literal is parsed, a name is resolved")
+{
+  auto runtime = DreamNetRuntime::TryInitialize();
+  REQUIRE(runtime.has_value());
+  auto literal = DreamNetAddress::TryResolve("10.0.0.1", 7777);
+  REQUIRE(literal.has_value());
+  CHECK(literal->ToString() == "10.0.0.1:7777");
+  auto named = DreamNetAddress::TryResolve("localhost", 7777);
+  REQUIRE(named.has_value());
+  CHECK(named->ToString() == "127.0.0.1:7777");
+}
+
 TEST_CASE("DreamNetAddress.TryParseIp - empty string")
 {
   auto result = DreamNetAddress::TryParseIp("", 7777);
