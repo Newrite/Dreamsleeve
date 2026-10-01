@@ -470,4 +470,35 @@ let tests = testList "Authentication service" [
         do! stop second
         restarted.Complete() |> ignore
     })
+
+    case "a ban with devices refuses every account on those devices, never a client that sends none" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let root = SqliteAdminStore.createFirstAdmin database.Config (username "root") "hash" (fun id -> PanelSession.create "s" id DateTimeOffset.UtcNow (TimeSpan.FromHours 1.)) DateTimeOffset.UtcNow CancellationToken.None |> ok |> Option.get
+        use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
+        let device = DeviceId.create (String.replicate 64 "d") |> ok
+        let onDevice = { SignInOrigin.none with Device = ValueSome device }
+        let! cheater = access service (AccountAccessCommand.Register(username "cheater", display, password, onDevice))
+        let cheater = match cheater with Ok (AccountAccessResult.Registered profile) -> profile | other -> failtestf "%A" other
+        let! history = access service (AccountAccessCommand.DeviceHistory cheater.PlayerId)
+        match history with
+        | Ok (AccountAccessResult.Devices [ entry ]) -> equal device entry.Device
+        | other -> failtestf "%A" other
+        let order = { Target = cheater.PlayerId; Kind = SanctionKind.Ban; Term = SanctionTerm.UntilLifted; Reason = SanctionReason.create "Спам" |> ok
+                      IssuedBy = SanctionIssuer.Admin root.Id; Devices = true }
+        let! banned = access service (AccountAccessCommand.Sanction order)
+        let ban = match banned with Ok (AccountAccessResult.Sanctioned ban) -> ban | other -> failtestf "%A" other
+        let! fresh = access service (AccountAccessCommand.Register(username "fresh", display, password, onDevice))
+        equal (Error (AccountAccessError.DeviceBanned ban)) fresh
+        let! _ = register service
+        let! other = access service (AccountAccessCommand.Login(username "player", password, onDevice))
+        equal (Error (AccountAccessError.DeviceBanned ban)) other
+        let! elsewhere = access service (AccountAccessCommand.Login(username "player", password, SignInOrigin.none))
+        match elsewhere with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
+        let! lifted = access service (AccountAccessCommand.LiftSanction(cheater.PlayerId, SanctionKind.Ban, SanctionIssuer.Admin root.Id))
+        match lifted with Ok (AccountAccessResult.SanctionLifted _) -> () | other -> failtestf "%A" other
+        let! back = access service (AccountAccessCommand.Login(username "player", password, onDevice))
+        match back with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
+        do! stop service
+    })
 ]

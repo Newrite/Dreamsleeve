@@ -39,11 +39,12 @@ let private downSql file =
     text.Substring(text.IndexOf("MIGRONDI:DOWN", StringComparison.Ordinal)).Split('\n', 2)[1]
 
 let tests = testList "SQLite admin" [
-    testCase "migrations 5 to 11 apply over schema 4, keep players and roll back" (fun () ->
+    testCase "migrations 5 to 12 apply over schema 4, keep players and roll back" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = player database "alice" "Alice"
-        database.Execute ((downSql "1791331200000_addresses.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%';"
+        database.Execute ((downSql "1791417600000_devices.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%devices%';"
+                          + (downSql "1791331200000_addresses.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%';"
                           + (downSql "1791244800000_registration.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%';"
                           + (downSql "1791158400000_moderator_audit.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%';"
                           + (downSql "1791072000000_sanctions.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%';"
@@ -53,10 +54,12 @@ let tests = testList "SQLite admin" [
                           + "DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; PRAGMA user_version = 4")
         equal 0L (tableCount database)
         SqliteAccountStore.initialize database.Config |> ok
-        equal 11L (database.Scalar "PRAGMA user_version")
+        equal 12L (database.Scalar "PRAGMA user_version")
         equal 5L (tableCount database)
         equal (Some alice.PlayerId) (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.map _.Profile.PlayerId)
-        // The DOWN sections return to schemas 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        // The DOWN sections return to schemas 11, 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        database.Execute (downSql "1791417600000_devices.sql")
+        equal 11L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791331200000_addresses.sql")
         equal 10L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791244800000_registration.sql")
@@ -261,4 +264,33 @@ let tests = testList "SQLite admin" [
         equal [ AdminAction.LiftedAddressBan, "range:203.0.113.0/24"; AdminAction.BannedAddresses, "range:2001:db8::/48"
                 AdminAction.BannedAddresses, "range:203.0.113.0/24"; AdminAction.CreatedAdmin, $"admin:{AdminId.value root.Id}" ]
               (audit |> List.map (fun entry -> entry.Action, entry.Target)))
+
+    testCase "a ban with devices covers the devices the player signed in from exactly as long as it holds" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let root = firstAdmin database
+        let alice = player database "alice" "Alice"
+        let device text = DeviceId.create (String.replicate 64 text) |> ok
+        SqliteDeviceStore.record database.Config alice.PlayerId (device "a") now 30 token |> ok
+        SqliteDeviceStore.record database.Config alice.PlayerId (device "a") (now.AddMinutes 1.) 30 token |> ok
+        SqliteDeviceStore.record database.Config alice.PlayerId (device "b") now 30 token |> ok
+        equal [ "aaaaaaaaaaaa", 2L; "bbbbbbbbbbbb", 1L ]
+              (SqliteDeviceStore.history database.Config alice.PlayerId token |> ok |> List.map (fun entry -> DeviceId.short entry.Device, entry.SignIns))
+        let order kind devices =
+            { Target = alice.PlayerId; Kind = kind; Term = SanctionTerm.For(TimeSpan.FromHours 1.); Reason = SanctionReason.create "Спам" |> ok
+              IssuedBy = SanctionIssuer.Admin root.Id; Devices = devices }
+        // A mute never bans devices, even when asked.
+        SqliteSanctionStore.issue database.Config (order SanctionKind.Mute true) now token |> ok |> ignore
+        equal ValueNone (SqliteSanctionStore.bannedDevice database.Config (device "a") now token |> ok)
+        let ban =
+            match SqliteSanctionStore.issue database.Config (order SanctionKind.Ban true) now token |> ok with
+            | SanctionOutcome.Applied ban -> ban
+            | other -> failtestf "%A" other
+        equal (ValueSome ban) (SqliteSanctionStore.bannedDevice database.Config (device "b") now token |> ok)
+        equal ValueNone (SqliteSanctionStore.bannedDevice database.Config (device "c") now token |> ok)
+        equal ValueNone (SqliteSanctionStore.bannedDevice database.Config (device "a") (now.AddHours 2.) token |> ok)
+        let audit = SqliteAdminStore.recentAudit database.Config 1 token |> ok
+        check (audit.Head.Details.Contains "devices: 2") $"The audit line counts the devices: {audit.Head.Details}"
+        SqliteSanctionStore.lift database.Config alice.PlayerId SanctionKind.Ban (SanctionIssuer.Admin root.Id) now token |> ok |> ignore
+        equal ValueNone (SqliteSanctionStore.bannedDevice database.Config (device "a") now token |> ok))
 ]

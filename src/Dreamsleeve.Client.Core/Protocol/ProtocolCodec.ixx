@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 17;
+  inline constexpr std::uint32_t Version = 18;
 
   enum class ErrorCode
   {

@@ -193,6 +193,8 @@ export type Command =
       kind: SanctionKind;
       minutes?: number;
       reason: string;
+      // A ban also covers the player's devices; never sent for a mute.
+      devices?: boolean;
     }
   | {
       type: "liftSanction";

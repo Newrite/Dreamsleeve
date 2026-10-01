@@ -115,7 +115,7 @@ type ChatSubmission = {
 /// account service the rank against the target.
 [<RequireQualifiedAccess>]
 type ModerationAction =
-    | Sanction of PlayerId * SanctionKind * SanctionTerm * SanctionReason
+    | Sanction of PlayerId * SanctionKind * SanctionTerm * SanctionReason * devices: bool
     | Lift of PlayerId * SanctionKind
     | Kick of PlayerId * SanctionReason
     | ListSanctions

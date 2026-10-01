@@ -309,7 +309,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let issue id kind term =
             Sanction.issue (SanctionId.create id |> ok) now
                 { Target = pid 7UL; Kind = kind; Term = term; Reason = SanctionReason.create " Флуд " |> ok
-                  IssuedBy = SanctionIssuer.Admin(AdminId.create 1L |> ok) }
+                  IssuedBy = SanctionIssuer.Admin(AdminId.create 1L |> ok); Devices = false }
         let packet response = Packets.single codec response |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         let mute = issue 1L SanctionKind.Mute (SanctionTerm.For(TimeSpan.FromMinutes 15.))
         let muted = (packet (ServerResponse.MuteChanged(ValueSome mute))).MuteChanged.Mute
@@ -828,15 +828,15 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             decode value
         let command result = (result |> ok).Command
         let sanction minutes reason =
-            let value = Dreamsleeve.Protocol.Chat.SanctionPlayer(PlayerId = 9UL, Kind = Dreamsleeve.Protocol.Chat.SanctionKind.Mute, Reason = reason)
+            let value = Dreamsleeve.Protocol.Chat.SanctionPlayer(PlayerId = 9UL, Kind = Dreamsleeve.Protocol.Chat.SanctionKind.Mute, Reason = reason, Devices = true)
             minutes |> Option.iter (fun minutes -> value.Minutes <- minutes)
             packet (fun p -> p.SanctionPlayer <- value)
         match command (sanction (Some 15u) " Флуд ") with
-        | ClientCommand.SanctionPlayer(target, SanctionKind.Mute, term, reason) ->
-            Expect.equal (target, term, SanctionReason.value reason) (pid 9UL, SanctionTerm.For(TimeSpan.FromMinutes 15.), "Флуд") "a term and a trimmed reason"
+        | ClientCommand.SanctionPlayer(target, SanctionKind.Mute, term, reason, devices) ->
+            Expect.equal (target, term, SanctionReason.value reason, devices) (pid 9UL, SanctionTerm.For(TimeSpan.FromMinutes 15.), "Флуд", true) "a term, a trimmed reason and the devices flag"
         | other -> failtestf "%A" other
         match command (sanction None "Флуд") with
-        | ClientCommand.SanctionPlayer(_, _, SanctionTerm.UntilLifted, _) -> ()
+        | ClientCommand.SanctionPlayer(_, _, SanctionTerm.UntilLifted, _, _) -> ()
         | other -> failtestf "no minutes is until lifted: %A" other
         Expect.isError (sanction (Some 0u) "Флуд") "a term is at least a minute"
         Expect.isError (sanction (Some 15u) "   ") "a reason is required"
@@ -857,7 +857,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let issued =
             Sanction.issue (SanctionId.create 1L |> ok) (DateTimeOffset.FromUnixTimeMilliseconds 1_000L)
                 { Target = pid 9UL; Kind = SanctionKind.Ban; Term = SanctionTerm.UntilLifted; Reason = SanctionReason.create "Читы" |> ok
-                  IssuedBy = SanctionIssuer.Moderator(pid 7UL) }
+                  IssuedBy = SanctionIssuer.Moderator(pid 7UL); Devices = false }
         let listed = (encoded (ServerResponse.SanctionList(6UL, [ issued ]))).SanctionList.Sanctions |> Seq.exactlyOne
         Expect.equal (listed.PlayerId, listed.Kind, listed.Reason, listed.IssuedAtUnixMs, listed.HasUntilUnixMs)
                      (9UL, Dreamsleeve.Protocol.Chat.SanctionKind.Ban, "Читы", 1_000L, false) "the entry names the player, not the issuer"

@@ -368,6 +368,7 @@ class SanctionPlayer final : public ::google::protobuf::Message
     kPlayerIdFieldNumber = 1,
     kKindFieldNumber = 2,
     kMinutesFieldNumber = 3,
+    kDevicesFieldNumber = 5,
   };
   // string reason = 4;
   void clear_reason() ;
@@ -415,11 +416,21 @@ class SanctionPlayer final : public ::google::protobuf::Message
   void _internal_set_minutes(::uint32_t value);
 
   public:
+  // bool devices = 5;
+  void clear_devices() ;
+  bool devices() const;
+  void set_devices(bool value);
+
+  private:
+  bool _internal_devices() const;
+  void _internal_set_devices(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SanctionPlayer)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
                                    0, 55,
                                    2>
       _table_;
@@ -445,6 +456,7 @@ class SanctionPlayer final : public ::google::protobuf::Message
     ::uint64_t player_id_;
     int kind_;
     ::uint32_t minutes_;
+    bool devices_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3793,6 +3805,31 @@ inline void SanctionPlayer::set_allocated_reason(::std::string* PROTOBUF_NULLABL
     _impl_.reason_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.SanctionPlayer.reason)
+}
+
+// bool devices = 5;
+inline void SanctionPlayer::clear_devices() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.devices_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline bool SanctionPlayer::devices() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SanctionPlayer.devices)
+  return _internal_devices();
+}
+inline void SanctionPlayer::set_devices(bool value) {
+  _internal_set_devices(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SanctionPlayer.devices)
+}
+inline bool SanctionPlayer::_internal_devices() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.devices_;
+}
+inline void SanctionPlayer::_internal_set_devices(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.devices_ = value;
 }
 
 // -------------------------------------------------------------------

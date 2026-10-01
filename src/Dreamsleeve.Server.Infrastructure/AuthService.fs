@@ -36,13 +36,15 @@ type AccountServiceOptions = {
 /// trusted proxy, the forwarded address). Trusted callers have none.
 type SignInOrigin = {
     Address: IPAddress voption
+    /// The device the client reported, if it could tell.
+    Device: DeviceId voption
 }
 
 [<RequireQualifiedAccess>]
 module SignInOrigin =
-    let none = { Address = ValueNone }
+    let none = { Address = ValueNone; Device = ValueNone }
 
-    let ofAddress (address: IPAddress) = { Address = if isNull address then ValueNone else ValueSome address }
+    let ofAddress (address: IPAddress) = { none with Address = if isNull address then ValueNone else ValueSome address }
 
 [<RequireQualifiedAccess>]
 type AccountAccessError =
@@ -59,6 +61,8 @@ type AccountAccessError =
     | RegistrationClosed of RegistrationMode
     /// A public request from a banned IP range.
     | AddressBanned of AddressBan
+    /// A sign-in or registration from a device an account ban covers.
+    | DeviceBanned of Sanction
 
 type SessionGrant = {
     Profile: PlayerData
@@ -107,6 +111,8 @@ type AccountAccessCommand =
     | AddressHistory of PlayerId
     /// Players who signed in from the range recently: whom a ban of it would also hit.
     | PlayersInRange of AddressRange
+    /// The devices the player signed in from recently.
+    | DeviceHistory of PlayerId
 
 [<RequireQualifiedAccess>]
 type AccountAccessResult =
@@ -126,6 +132,7 @@ type AccountAccessResult =
     | AddressBans of AddressBan list
     | Addresses of SignInAddress list
     | PlayersAt of AddressMatch list
+    | Devices of SignInDevice list
 
 [<RequireQualifiedAccess>]
 type AccountWorkResult =
@@ -146,6 +153,7 @@ type AccountWorkResult =
     | AddressBans of AddressBan list
     | Addresses of SignInAddress list
     | PlayersAt of AddressMatch list
+    | Devices of SignInDevice list
 
 type AccountWorkReply = {
     OperationId: Guid
@@ -311,12 +319,33 @@ module AuthService =
             | Ok () -> ()
             | Error error -> logger.LogWarning("Sign-in address of player {PlayerId} not recorded: {Error}", PlayerId.value playerId, error)
 
+    let private noteDevice options database (logger: ILogger) (clock: TimeProvider) token (origin: SignInOrigin) (playerId: PlayerId) =
+        match origin.Device with
+        | ValueNone -> ()
+        | ValueSome device ->
+            match SqliteDeviceStore.record database playerId device (clock.GetUtcNow()) options.SignInHistoryDays token with
+            | Ok () -> ()
+            | Error error -> logger.LogWarning("Device of player {PlayerId} not recorded: {Error}", PlayerId.value playerId, error)
+
     let private signedIn options database logger clock token origin (result: Result<AccountWorkResult, AccountAccessError>) =
+        let note playerId =
+            noteAddress options database logger clock token origin playerId
+            noteDevice options database logger clock token origin playerId
         match result with
-        | Ok (AccountWorkResult.Verified(player, _)) -> noteAddress options database logger clock token origin player.Profile.PlayerId
-        | Ok (AccountWorkResult.Registered profile) -> noteAddress options database logger clock token origin profile.PlayerId
+        | Ok (AccountWorkResult.Verified(player, _)) -> note player.Profile.PlayerId
+        | Ok (AccountWorkResult.Registered profile) -> note profile.PlayerId
         | Ok _ | Error _ -> ()
         result
+
+    // A device that an account ban in force covers refuses every account.
+    let private deviceRefusal database (clock: TimeProvider) logger token (origin: SignInOrigin) =
+        match origin.Device with
+        | ValueNone -> Ok ()
+        | ValueSome device ->
+            match SqliteSanctionStore.bannedDevice database device (clock.GetUtcNow()) token with
+            | Ok ValueNone -> Ok ()
+            | Ok (ValueSome ban) -> Error (AccountAccessError.DeviceBanned ban)
+            | Error error -> Error (storageError logger error)
 
     let private sanctioned logger result outcome =
         match outcome with
@@ -339,27 +368,31 @@ module AuthService =
                         | Error error -> Error (storageError logger error)
                         | Ok mode when not (RegistrationMode.allowsPassword mode) -> Error (AccountAccessError.RegistrationClosed mode)
                         | Ok _ ->
-                            let passwordHash = (hasher options).HashPassword(null, password)
-                            SqliteAccountStore.create database username displayName passwordHash token
-                            |> Result.map AccountWorkResult.Registered
-                            |> Result.mapError (storageError logger)
+                            deviceRefusal database clock logger token origin
+                            |> Result.bind (fun () ->
+                                let passwordHash = (hasher options).HashPassword(null, password)
+                                SqliteAccountStore.create database username displayName passwordHash token
+                                |> Result.map AccountWorkResult.Registered
+                                |> Result.mapError (storageError logger))
                             |> signedIn options database logger clock token origin
                 | AccountAccessCommand.Login(username, password, origin) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
-                    else verify options database dummyHash logger token username password
+                    else deviceRefusal database clock logger token origin
+                         |> Result.bind (fun () -> verify options database dummyHash logger token username password)
                          |> Result.bind (admit database clock logger token)
                          |> Result.map (fun player -> AccountWorkResult.Verified(player, ""))
                          |> signedIn options database logger clock token origin
                 | AccountAccessCommand.RememberLogin(username, password, origin) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
-                    else verify options database dummyHash logger token username password
+                    else deviceRefusal database clock logger token origin
+                         |> Result.bind (fun () -> verify options database dummyHash logger token username password)
                          |> Result.bind (fun account ->
                              admit database clock logger token account |> Result.bind (savedLogin options database now logger token account))
                          |> signedIn options database logger clock token origin
                 | AccountAccessCommand.Resume(secret, origin) ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
-                    else SqliteAccountStore.resume database (ticketKey secret) now token
-                         |> Result.mapError (storageError logger)
+                    else deviceRefusal database clock logger token origin
+                         |> Result.bind (fun () -> SqliteAccountStore.resume database (ticketKey secret) now token |> Result.mapError (storageError logger))
                          |> Result.bind (admit database clock logger token)
                          |> Result.map (fun player -> AccountWorkResult.Verified(player, secret))
                          |> signedIn options database logger clock token origin
@@ -434,6 +467,10 @@ module AuthService =
                     SqliteAddressStore.playersIn database range token
                     |> Result.map AccountWorkResult.PlayersAt
                     |> Result.mapError (storageError logger)
+                | AccountAccessCommand.DeviceHistory playerId ->
+                    SqliteDeviceStore.history database playerId token
+                    |> Result.map AccountWorkResult.Devices
+                    |> Result.mapError (storageError logger)
             with
             | :? OperationCanceledException -> Error AccountAccessError.Unavailable
             | error ->
@@ -492,7 +529,8 @@ module AuthService =
         // A kick issues no ticket; a list and an audit line change no account.
         | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
         | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration
-        | AccountAccessCommand.ListAddressBans | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> false
+        | AccountAccessCommand.ListAddressBans | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _
+        | AccountAccessCommand.DeviceHistory _ -> false
 
     let private settle (logger: ILogger) (requester: Requester) (result: Result<AccountAccessResult, AccountAccessError>) =
         match requester with
@@ -543,7 +581,7 @@ module AuthService =
         | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ | AccountAccessCommand.CreateAccount _
         | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ | AccountAccessCommand.BanAddresses _
         | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans | AccountAccessCommand.AddressHistory _
-        | AccountAccessCommand.PlayersInRange _ -> SignInOrigin.none
+        | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> SignInOrigin.none
 
     let private access options (clock: TimeProvider) (logger: ILogger) state (context: AgentContext<AuthMessage>) command (requester: Requester) =
         let banned =
@@ -580,7 +618,7 @@ module AuthService =
         | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
         | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
         | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
-        | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> "other"
+        | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> "other"
 
     let private until (sanction: Sanction) =
         match sanction.Expires with
@@ -597,6 +635,14 @@ module AuthService =
         match command, result with
         | (AccountAccessCommand.Login(username, _, _) | AccountAccessCommand.RememberLogin(username, _, _)), Error (AccountAccessError.Banned ban) ->
             logger.LogInformation("Sign-in refused for {Username}: banned until {Until}", Username.value username, until ban)
+        | (AccountAccessCommand.Login(username, _, _) | AccountAccessCommand.RememberLogin(username, _, _)), Error (AccountAccessError.DeviceBanned ban) ->
+            logger.LogInformation("Sign-in refused for {Username}: the device is banned with player {PlayerId} until {Until}",
+                                  Username.value username, PlayerId.value ban.Target, until ban)
+        | AccountAccessCommand.Register(username, _, _, _), Error (AccountAccessError.DeviceBanned ban) ->
+            logger.LogInformation("Registration of {Username} refused: the device is banned with player {PlayerId} until {Until}",
+                                  Username.value username, PlayerId.value ban.Target, until ban)
+        | AccountAccessCommand.Resume _, Error (AccountAccessError.DeviceBanned ban) ->
+            logger.LogInformation("Saved login refused: the device is banned with player {PlayerId} until {Until}", PlayerId.value ban.Target, until ban)
         | AccountAccessCommand.Resume _, Error (AccountAccessError.Banned ban) ->
             logger.LogInformation("Saved login of player {PlayerId} refused: banned until {Until}", PlayerId.value ban.Target, until ban)
         | (AccountAccessCommand.Sanction { Target = target } | AccountAccessCommand.LiftSanction(target, _, _) | AccountAccessCommand.Kick(target, _, _)),
@@ -717,6 +763,7 @@ module AuthService =
                 | Ok (AccountWorkResult.AddressBans bans) -> Ok (AccountAccessResult.AddressBans bans)
                 | Ok (AccountWorkResult.Addresses addresses) -> Ok (AccountAccessResult.Addresses addresses)
                 | Ok (AccountWorkResult.PlayersAt players) -> Ok (AccountAccessResult.PlayersAt players)
+                | Ok (AccountWorkResult.Devices devices) -> Ok (AccountAccessResult.Devices devices)
                 | Ok (AccountWorkResult.Registration mode) ->
                     match pending.Command with
                     | AccountAccessCommand.SetRegistration(_, changedBy) ->

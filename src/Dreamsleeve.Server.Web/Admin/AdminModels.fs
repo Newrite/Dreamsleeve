@@ -92,12 +92,21 @@ type SignInAddressModel = {
     Range: string
 }
 
+/// A device the player signed in from, by the start of its hash.
+type SignInDeviceModel = {
+    Device: string
+    FirstSeen: DateTimeOffset
+    LastSeen: DateTimeOffset
+    SignIns: int64
+}
+
 type PlayerCardModel = {
     Player: PlayerModel
     Sessions: OnlineModel list
     Names: NameChangeModel list
     Sanctions: SanctionModel list
     Addresses: SignInAddressModel list
+    Devices: SignInDeviceModel list
 }
 
 /// An IP range ban in force; issuedBy is "admin:3", null once that account is gone.
@@ -256,6 +265,9 @@ module AdminModels =
     let signInAddress (entry: SignInAddress) : SignInAddressModel =
         { Address = ClientAddress.text entry.Address; FirstSeen = entry.FirstSeen; LastSeen = entry.LastSeen; SignIns = entry.SignIns
           Range = AddressRange.key (AddressRange.around entry.Address) }
+
+    let signInDevice (entry: SignInDevice) : SignInDeviceModel =
+        { Device = DeviceId.short entry.Device; FirstSeen = entry.FirstSeen; LastSeen = entry.LastSeen; SignIns = entry.SignIns }
 
     let addressBan (ban: AddressBan) : AddressBanModel =
         { Id = ban.Id; Range = AddressRange.key ban.Range; Reason = SanctionReason.value ban.Reason; IssuedAt = ban.IssuedAt

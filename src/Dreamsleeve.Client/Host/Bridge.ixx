@@ -55,6 +55,7 @@ export namespace Dreamsleeve::Host::Bridge
       "banned",
       "registrationSteamOnly",
       "addressBanned",
+      "deviceBanned",
   });
   constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
   constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
@@ -197,6 +198,7 @@ export namespace Dreamsleeve::Host::Bridge
       std::string                  kind;
       std::optional<std::uint32_t> minutes;
       std::string                  reason;
+      bool                         devices{};
     };
 
     struct LiftSanction

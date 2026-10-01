@@ -88,6 +88,7 @@ export const authFailures = [
   "banned",
   "registrationSteamOnly",
   "addressBanned",
+  "deviceBanned",
 ] as const;
 export const announcementOrigins = [
   "server",

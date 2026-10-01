@@ -272,6 +272,7 @@ Control-канале ENet.
   `BANNED`, `KICKED`; последний пакет перед закрытием), код `MUTED = 16`.
 - v17: причина `ADDRESS_BANNED = 4` — администратор забанил диапазон IP соединения; `text` — причина,
   `until_unix_ms` — конец бана.
+- v18: `SanctionPlayer.devices = 5` — бан распространяется на устройства игрока; для мута игнорируется.
 - v15: `SessionOpened.role = 12` (`PlayerRole`: `PLAYER = 0`, `MODERATOR = 1`) и уведомление
   `ServerPacket.role_changed = 29` (Control, без RequestId), когда панель меняет роль в живой сессии.
 - Запросы модератора (Control, RequestId): `sanction_player = 20`

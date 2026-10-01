@@ -83,7 +83,7 @@ module AdminRoutes =
         | AccountAccessError.SanctionRefused SanctionError.NotActive -> errorPage 409 "У игрока нет такого действующего наказания." admin
         | AccountAccessError.SanctionRefused SanctionError.NotAllowed -> errorPage 403 "Это наказание нельзя выдать или снять." admin
         | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ | AccountAccessError.Banned _
-        | AccountAccessError.RegistrationClosed _ | AccountAccessError.AddressBanned _ ->
+        | AccountAccessError.RegistrationClosed _ | AccountAccessError.AddressBanned _ | AccountAccessError.DeviceBanned _ ->
             errorPage 503 "Сервис аккаунтов недоступен." admin
 
     // --- Ports -----------------------------------------------------------
@@ -389,7 +389,10 @@ module AdminRoutes =
         let sanctions = match sanctions with Ok (AdminReply.Sanctions active) -> active |> List.map AdminModels.sanction | Ok _ | Error _ -> []
         let! addresses = account routes context (AccountAccessCommand.AddressHistory record.Profile.PlayerId)
         let addresses = match addresses with Ok (AccountAccessResult.Addresses entries) -> entries |> List.map AdminModels.signInAddress | Ok _ | Error _ -> []
-        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names; Sanctions = sanctions; Addresses = addresses }
+        let! devices = account routes context (AccountAccessCommand.DeviceHistory record.Profile.PlayerId)
+        let devices = match devices with Ok (AccountAccessResult.Devices entries) -> entries |> List.map AdminModels.signInDevice | Ok _ | Error _ -> []
+        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names; Sanctions = sanctions
+                 Addresses = addresses; Devices = devices }
     }
 
     let private notices =
@@ -520,7 +523,8 @@ module AdminRoutes =
             | _, Error _, _ -> return! refuse $"Срок: от 1 до {SanctionTerm.MaxMinutes} минут или бессрочно."
             | _, _, Error _ -> return! refuse reasonHint
             | Some kind, Ok term, Ok reason ->
-                let order = { Target = playerId; Kind = kind; Term = term; Reason = reason; IssuedBy = SanctionIssuer.Admin admin.Id }
+                let order = { Target = playerId; Kind = kind; Term = term; Reason = reason; IssuedBy = SanctionIssuer.Admin admin.Id
+                              Devices = value form "devices" = "yes" }
                 match! account routes context (AccountAccessCommand.Sanction order) with
                 | Ok (AccountAccessResult.Sanctioned _) -> return! redirect $"/players/{PlayerId.value playerId}?done=sanctioned" context
                 | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context

@@ -15,6 +15,7 @@
     <Compile Include="SqliteAdminStore.fs" />
     <Compile Include="SqliteSanctionStore.fs" />
     <Compile Include="SqliteAddressStore.fs" />
+    <Compile Include="SqliteDeviceStore.fs" />
     <Compile Include="AuthService.fs" />
     <Compile Include="AdminService.fs" />
     <Compile Include="TransportOwner.fs" />

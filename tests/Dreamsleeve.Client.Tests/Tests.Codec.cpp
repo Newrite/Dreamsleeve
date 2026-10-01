@@ -988,7 +988,10 @@ TEST_CASE("Moderator requests encode as asked and their answers decode with corr
   CHECK(mute.kind() == P::SANCTION_KIND_MUTE);
   CHECK(mute.minutes() == 15);
   CHECK(mute.reason() == "Флуд");
-  CHECK_FALSE(sent(SanctionPlayer{6, 9, Domain::SanctionKind::Ban, std::nullopt, "Читы"}).sanction_player().has_minutes());
+  CHECK_FALSE(mute.devices());
+  const auto ban = sent(SanctionPlayer{6, 9, Domain::SanctionKind::Ban, std::nullopt, "Читы", true}).sanction_player();
+  CHECK_FALSE(ban.has_minutes());
+  CHECK(ban.devices());
   const auto clear = sent(ClearPlayerMarks{7, 9, false, true}).clear_player_marks();
   CHECK((clear.player_id() == 9 && !clear.notes() && clear.deaths()));
   CHECK(sent(DeleteChatMessage{8, 1, 3}).delete_chat_message().message_id() == 3);

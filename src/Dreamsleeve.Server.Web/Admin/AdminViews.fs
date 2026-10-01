@@ -328,6 +328,23 @@ module AdminViews =
                     ]
             ]
             Elem.section [] [
+                Elem.h2 [] [ text $"Устройства (за {historyDays} дн.)" ]
+                if card.Devices.IsEmpty then Elem.p [ css "muted" ] [ text "Входов с известным устройством нет." ]
+                else
+                    Elem.table [] [
+                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Устройство"; "Первый вход"; "Последний вход"; "Входов" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.tbody [] [
+                            for device in card.Devices do
+                                Elem.tr [] [
+                                    Elem.td [] [ Elem.code [] [ text device.Device ] ]
+                                    Elem.td [] [ text (time device.FirstSeen) ]
+                                    Elem.td [] [ text (time device.LastSeen) ]
+                                    Elem.td [] [ text (string device.SignIns) ]
+                                ]
+                        ]
+                    ]
+            ]
+            Elem.section [] [
                 Elem.h2 [] [ text "История имён" ]
                 if card.Names.IsEmpty then Elem.p [ css "muted" ] [ text "Display name не менялось." ]
                 else
@@ -396,6 +413,10 @@ module AdminViews =
                     ]
                     field "Минут (для своего срока)" "minutes" "number" "" [ attr "min" "1"; attr "max" (string SanctionTerm.MaxMinutes) ]
                     field "Причина (видна игроку)" "reason" "text" "" [ flag "required"; attr "maxlength" (string SanctionReason.MaxLength) ]
+                    Elem.label [ css "confirm" ] [
+                        Elem.input [ attr "type" "checkbox"; attr "name" "devices"; attr "value" "yes" ]
+                        Elem.span [] [ text "Бан закрывает и устройства игрока: с них не войти и не зарегистрироваться, пока бан действует" ]
+                    ]
                     confirm "Подтверждаю наказание"
                     submit "Наказать"
                 ]

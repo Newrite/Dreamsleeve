@@ -93,6 +93,7 @@ namespace Dreamsleeve::Client::Wire
         sanction.set_kind(static_cast<P::SanctionKind>(value.kind));
         if (value.minutes) sanction.set_minutes(*value.minutes);
         sanction.set_reason(value.reason);
+        sanction.set_devices(value.devices);
       }
 
       void operator()(const LiftSanction& value) const

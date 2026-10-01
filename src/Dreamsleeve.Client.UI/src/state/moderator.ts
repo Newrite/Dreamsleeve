@@ -60,6 +60,8 @@ export interface ModerationForm {
   reason: string;
   notes: boolean;
   deaths: boolean;
+  // A ban also covers the player's devices.
+  devices?: boolean;
 }
 type Request =
   | { action: "sanction"; kind: SanctionKind; name: string }
@@ -268,6 +270,7 @@ export function makeModerator(store: StoreApi<ChatState>, send: Send) {
                 ...(form.minutes === undefined
                   ? {}
                   : { minutes: form.minutes }),
+                ...(action === "ban" && form.devices ? { devices: true } : {}),
               }),
               { action: "sanction", kind: action, name },
             );

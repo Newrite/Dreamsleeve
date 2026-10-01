@@ -64,7 +64,7 @@ type ClientCommand =
     /// The sender's own new display name, already accepted by DisplayName.create.
     | ChangeDisplayName of DisplayName
     // A moderator's; the session and the account service decide who may.
-    | SanctionPlayer of PlayerId * SanctionKind * SanctionTerm * SanctionReason
+    | SanctionPlayer of PlayerId * SanctionKind * SanctionTerm * SanctionReason * devices: bool
     | LiftSanction of PlayerId * SanctionKind
     | KickPlayer of PlayerId * SanctionReason
     | ListSanctions

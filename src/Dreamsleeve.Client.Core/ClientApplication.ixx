@@ -4,6 +4,7 @@ import std;
 export import Dreamsleeve.Client.Auth;
 import DreamNet.Runtime;
 import Dreamsleeve.Client.CredentialStore;
+import Dreamsleeve.Client.Device;
 export import Dreamsleeve.Client.Settings;
 export import Dreamsleeve.Client.Runtime;
 
@@ -114,7 +115,10 @@ private:
           enet(std::move(net)),
           exchange(std::move(boundary)),
           runtime(std::move(client))
-    {}
+    {
+      // One server for the application's lifetime: its credential scope keys the device hash too.
+      if (auto scope = Auth::CredentialTarget(settings.authUrl, settings.allowInsecureRemoteAuth)) device = Device::Identify(*scope);
+    }
 
     // Status text shown to the user: code and message only. ToLogString() adds
     // source locations and full function signatures, which belong in logs.
@@ -204,12 +208,12 @@ private:
       if (request.registerName)
       {
         auto registered =
-          Auth::RegisterAccount(settings.authUrl, request.credentials, *request.registerName, settings.allowInsecureRemoteAuth);
+          Auth::RegisterAccount(settings.authUrl, request.credentials, *request.registerName, settings.allowInsecureRemoteAuth, device);
         if (exchange->AuthenticationCanceled()) return {};
         if (!registered) return registered;
       }
       return ConnectGrant(
-        Auth::LoginGrant(settings.authUrl, request.credentials, request.remember, settings.allowInsecureRemoteAuth),
+        Auth::LoginGrant(settings.authUrl, request.credentials, request.remember, settings.allowInsecureRemoteAuth, device),
         request.remember);
     }
 
@@ -224,7 +228,7 @@ private:
             Auth::Failure{Auth::FailureCode::InvalidCredentials, "Sign in to this server first"}
         };
       }
-      auto grant = Auth::Resume(settings.authUrl, (**saved).token, settings.allowInsecureRemoteAuth);
+      auto grant = Auth::Resume(settings.authUrl, (**saved).token, settings.allowInsecureRemoteAuth, device);
       if (!grant && grant.error().code == Auth::FailureCode::InvalidCredentials)
       {
         if (auto forgotten = ForgetLogin(); !forgotten) return forgotten;
@@ -292,8 +296,9 @@ private:
       exchange->Finish();
     }
 
-    ClientSettings      settings;
-    DreamNetRuntime     enet;
+    ClientSettings             settings;
+    std::optional<std::string> device;
+    DreamNetRuntime            enet;
     ClientExchange::Ptr exchange;
     ClientRuntime::Ptr  runtime;
     std::jthread        worker;

@@ -105,7 +105,7 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
                             | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
                             | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
                             | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)
-                            | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) ->
+                            | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _) ->
                                 printfn "Unexpected administrative result."
                             | Error error -> printfn "Administrative operation failed: %A" error
                     elif parts[0] = "registration" then

@@ -280,7 +280,7 @@ let tests = testList "ServerRuntime" [
             let issue target kind term text =
                 let order : Dreamsleeve.Server.Domain.SanctionOrder =
                     { Target = pid target; Kind = kind; Term = term; Reason = reason text
-                      IssuedBy = Dreamsleeve.Server.Domain.SanctionIssuer.Moderator(pid 9UL) }
+                      IssuedBy = Dreamsleeve.Server.Domain.SanctionIssuer.Moderator(pid 9UL); Devices = false }
                 Dreamsleeve.Server.Domain.Sanction.issue (Dreamsleeve.Server.Domain.SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
             let alice = connect fixture "alice"
             let! _ = welcome fixture alice

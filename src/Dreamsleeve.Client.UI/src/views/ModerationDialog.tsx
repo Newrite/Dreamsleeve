@@ -42,6 +42,7 @@ export function ModerationDialog({
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState(dialog.notes);
   const [deaths, setDeaths] = useState(dialog.deaths);
+  const [devices, setDevices] = useState(false);
   const sanction = dialog.action === "mute" || dialog.action === "ban";
   const waiting = dialog.request !== undefined;
   const custom = choice === CUSTOM;
@@ -55,7 +56,7 @@ export function ModerationDialog({
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!ready) return;
-    chat.moderator.submitDialog({ minutes, reason, notes, deaths });
+    chat.moderator.submitDialog({ minutes, reason, notes, deaths, devices });
   }
   return (
     <div
@@ -116,6 +117,22 @@ export function ModerationDialog({
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
+            </label>
+          )}
+          {dialog.action === "ban" && (
+            <label className={styles.field}>
+              <span>
+                <input
+                  type="checkbox"
+                  checked={devices}
+                  onChange={(e) => setDevices(e.target.checked)}
+                />{" "}
+                Заблокировать и устройство игрока
+              </span>
+              <small>
+                С его компьютера не войти и не завести новый аккаунт, пока
+                действует бан.
+              </small>
             </label>
           )}
           {dialog.action !== "kick" && (

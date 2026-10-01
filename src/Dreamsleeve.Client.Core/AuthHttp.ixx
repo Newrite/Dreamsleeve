@@ -31,7 +31,8 @@ export namespace Dreamsleeve::Client::Auth
     NameNotAllowed,        // Registration: the server word list refused a name.
     Banned,                // Sign-in and resume while a ban holds; see Failure::ban.
     RegistrationSteamOnly,  // New accounts come only from a Steam sign-in.
-    AddressBanned           // The server banned the IP range of this computer; see Failure::ban.
+    AddressBanned,          // The server banned the IP range of this computer; see Failure::ban.
+    DeviceBanned            // An account ban covers this computer.
   };
 
   struct Failure
@@ -62,16 +63,24 @@ export namespace Dreamsleeve::Client::Auth
 namespace Dreamsleeve::Client::Auth
 {
 
+  // device: the hash of this computer for the server (Device::Identify), absent when it has none.
   struct LoginRequest
   {
-    std::string_view username;
-    std::string_view password;
-    bool             rememberMe{};
+    std::string_view           username;
+    std::string_view           password;
+    bool                       rememberMe{};
+    std::optional<std::string> device;
   };
 
   struct TokenRequest
   {
     std::string_view token;
+  };
+
+  struct ResumeRequest
+  {
+    std::string_view           token;
+    std::optional<std::string> device;
   };
 
   struct ResetRequest
@@ -82,9 +91,10 @@ namespace Dreamsleeve::Client::Auth
 
   struct RegisterRequest
   {
-    std::string_view username;
-    std::string_view displayName;
-    std::string_view password;
+    std::string_view           username;
+    std::string_view           displayName;
+    std::string_view           password;
+    std::optional<std::string> device;
   };
 
   struct ErrorResponse
@@ -270,7 +280,7 @@ namespace Dreamsleeve::Client::Auth
   {
     return code == FailureCode::InvalidCredentials || code == FailureCode::CredentialStorage || code == FailureCode::InvalidRequest ||
            code == FailureCode::RegistrationClosed || code == FailureCode::RegistrationSteamOnly || code == FailureCode::Banned ||
-           code == FailureCode::AddressBanned;
+           code == FailureCode::AddressBanned || code == FailureCode::DeviceBanned;
   }
 
   export Result<void> ValidatePassword(std::string_view password)
@@ -321,11 +331,13 @@ namespace Dreamsleeve::Client::Auth
     return {code, "Authentication failed (HTTP " + std::to_string(status) + ")"};
   }
 
-  // A 403 from a banned IP range: the reason and the end, shown like an account ban.
+  // A 403 from a banned IP range or device: the reason, and for a range the end, shown like an account ban.
   std::optional<Failure> AddressBan(std::string_view body)
   {
     BanResponse ban;
-    if (glz::read<glz::opts{.error_on_unknown_keys = false}>(ban, body) || ban.code != "address_banned") return std::nullopt;
+    if (glz::read<glz::opts{.error_on_unknown_keys = false}>(ban, body)) return std::nullopt;
+    if (ban.code == "device_banned") return Failure{FailureCode::DeviceBanned, ban.reason};
+    if (ban.code != "address_banned") return std::nullopt;
     return Failure{
         FailureCode::AddressBanned,
         ban.reason,
@@ -334,16 +346,17 @@ namespace Dreamsleeve::Client::Auth
   }
 
   export std::expected<void, Failure> RegisterAccount(
-    std::string_view   url,
-    const Credentials& credentials,
-    std::string_view   displayName,
-    bool               allowInsecureRemote = false)
+    std::string_view                  url,
+    const Credentials&                credentials,
+    std::string_view                  displayName,
+    bool                              allowInsecureRemote = false,
+    const std::optional<std::string>& device              = std::nullopt)
   {
     if (auto checked = ValidatePassword(credentials.password); !checked)
       return std::unexpected{
           Failure{FailureCode::InvalidRequest, checked.error()}
       };
-    auto body = glz::write_json(RegisterRequest{credentials.username, displayName, credentials.password});
+    auto body = glz::write_json(RegisterRequest{credentials.username, displayName, credentials.password, device});
     if (!body)
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode registration request"}
@@ -424,13 +437,18 @@ namespace Dreamsleeve::Client::Auth
     return Grant{std::move(decoded.sessionTicket), std::move(decoded.rememberToken), std::move(decoded.username)};
   }
 
-  export GrantResult LoginGrant(std::string_view url, const Credentials& credentials, bool remember, bool allowInsecureRemote = false)
+  export GrantResult LoginGrant(
+    std::string_view                  url,
+    const Credentials&                credentials,
+    bool                              remember,
+    bool                              allowInsecureRemote = false,
+    const std::optional<std::string>& device              = std::nullopt)
   {
     if (auto checked = ValidatePassword(credentials.password); !checked)
       return std::unexpected{
           Failure{FailureCode::InvalidCredentials, checked.error()}
       };
-    auto body = glz::write_json(LoginRequest{credentials.username, credentials.password, remember});
+    auto body = glz::write_json(LoginRequest{credentials.username, credentials.password, remember, device});
     if (!body)
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode login request"}
@@ -443,9 +461,13 @@ namespace Dreamsleeve::Client::Auth
     return grant;
   }
 
-  export GrantResult Resume(std::string_view url, std::string_view token, bool allowInsecureRemote = false)
+  export GrantResult Resume(
+    std::string_view                  url,
+    std::string_view                  token,
+    bool                              allowInsecureRemote = false,
+    const std::optional<std::string>& device              = std::nullopt)
   {
-    auto body = glz::write_json(TokenRequest{token});
+    auto body = glz::write_json(ResumeRequest{token, device});
     if (!body)
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode resume request"}

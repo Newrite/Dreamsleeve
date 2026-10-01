@@ -14,6 +14,7 @@ export const failureLabels: Record<Exclude<AuthFailure, "none">, string> = {
   banned: "Аккаунт заблокирован",
   registrationSteamOnly: "Регистрация только через Steam",
   addressBanned: "IP-адрес заблокирован",
+  deviceBanned: "Устройство заблокировано",
 };
 export const operationLabels: Record<Exclude<AuthOperation, "none">, string> = {
   passwordLogin: "Вход по паролю…",

@@ -87,7 +87,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
             | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
-            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> failtest "Unexpected public command"
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> failtest "Unexpected public command"
         withHost id execute (fun http received -> task {
             use! remembered = post http "auth/login" {| username = "player"; password = password; rememberMe = true |}
             status 200 remembered
@@ -120,7 +120,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
             | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
-            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> failtest "Unexpected command"
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> failtest "Unexpected command"
         withHost id execute (fun http received -> task {
             use! created = post http "auth/register" {|
                 username = " PLAYER "; displayName = " e\u0301 "; password = password
@@ -142,7 +142,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
             | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
-            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ -> failwith "Wrong registration command."
+            | AccountAccessCommand.AddressHistory _ | AccountAccessCommand.PlayersInRange _ | AccountAccessCommand.DeviceHistory _ -> failwith "Wrong registration command."
 
             use! loggedIn = post http "auth/login" credentials
             status 200 loggedIn
@@ -244,6 +244,37 @@ let tests = testSequenced (testList "Authentication HTTP" [
             equal "Рейд" (body.RootElement.GetProperty("reason").GetString())
             equal 1_800_000_000_000L (body.RootElement.GetProperty("untilUnixMs").GetInt64())
         }))
+
+    case "a device hash reaches the service with the address; a malformed one is refused; a banned device answers 403" (fun () ->
+        let hash = String.replicate 4 "0123456789abcdef"
+        let execute command (response: ReplyChannel<_>) =
+            match command with
+            | AccountAccessCommand.Login(_, _, origin) when origin.Device.IsSome -> response.Reply signedIn
+            | _ -> failtest "Unexpected command"
+        task {
+            do! withHost id execute (fun http received -> task {
+                use! accepted = post http "auth/login" {| username = "player"; password = password; device = hash |}
+                status 200 accepted
+                match received.ToArray() with
+                | [| AccountAccessCommand.Login(_, _, origin) |] ->
+                    equal (ValueSome (DeviceId.create hash |> ok)) origin.Device
+                    equal (ValueSome Net.IPAddress.Loopback) origin.Address
+                | other -> failtestf "%A" other
+                for wrong in [ box (hash.ToUpperInvariant()); box "short"; box 42 ] do
+                    use! refused = post http "auth/login" {| username = "player"; password = password; device = wrong |}
+                    status 400 refused
+                equal 1 received.Count
+            })
+            let ban = Sanction.issue (SanctionId.create 3L |> ok) DateTimeOffset.UtcNow
+                          { Target = PlayerId.create 9UL |> ok; Kind = SanctionKind.Ban; Term = SanctionTerm.UntilLifted
+                            Reason = SanctionReason.create "Спам" |> ok; IssuedBy = SanctionIssuer.Admin(AdminId.create 1L |> ok); Devices = true }
+            do! withHost id (reply (Error (AccountAccessError.DeviceBanned ban))) (fun http _ -> task {
+                use! response = post http "auth/register" {| username = "fresh"; displayName = "Fresh"; password = password; device = hash |}
+                status 403 response
+                let! actual = code response
+                equal "device_banned" actual
+            })
+        })
 
     case "per-IP rate limit has no waiting queue and ignores spoofed forwarded addresses" (fun () ->
         let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestsPerMinute = 1 } } }

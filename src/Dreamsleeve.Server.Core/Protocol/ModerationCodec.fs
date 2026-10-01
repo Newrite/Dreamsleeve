@@ -42,7 +42,7 @@ module internal ModerationCodec =
         | Ok target, Ok kind, Ok minutes, Ok reason ->
             SanctionTerm.create minutes
             |> Result.mapError ProtocolCodecFailure.InvalidDomain
-            |> Result.map (fun term -> ClientCommand.SanctionPlayer(target, kind, term, reason))
+            |> Result.map (fun term -> ClientCommand.SanctionPlayer(target, kind, term, reason, source.Devices))
         | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error
 
     let decodeLift (source: Dreamsleeve.Protocol.Chat.LiftSanction) =

@@ -345,8 +345,8 @@ module ServerRuntime =
         | ClientCommand.RemoveGroundMark id -> CommandRoute.Session(PlayerSessionMessage.RemoveGroundMark(requestId, id))
         | ClientCommand.SetIdentityVisibility hiding -> CommandRoute.Session(PlayerSessionMessage.SetIdentityVisibility(requestId, hiding))
         | ClientCommand.ChangeDisplayName name -> CommandRoute.Session(PlayerSessionMessage.ChangeDisplayName(requestId, name))
-        | ClientCommand.SanctionPlayer(target, kind, term, reason) ->
-            CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Sanction(target, kind, term, reason)))
+        | ClientCommand.SanctionPlayer(target, kind, term, reason, devices) ->
+            CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Sanction(target, kind, term, reason, devices)))
         | ClientCommand.LiftSanction(target, kind) -> CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Lift(target, kind)))
         | ClientCommand.KickPlayer(target, reason) -> CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Kick(target, reason)))
         | ClientCommand.ListSanctions -> CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.ListSanctions))

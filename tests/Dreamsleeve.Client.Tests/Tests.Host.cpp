@@ -273,6 +273,13 @@ TEST_CASE("Bridge parses each command into its own checked type")
   CHECK(save.revision == 4);
   CommandOf<Bridge::Commands::Close>(R"({"type":"close"})");
   CommandOf<Bridge::Commands::SignInSaved>(R"({"type":"signInSaved"})");
+  CHECK(
+    CommandOf<Bridge::Commands::SanctionPlayer>(
+      R"({"type":"sanctionPlayer","requestId":"m1","playerId":"7","kind":"ban","reason":"r","devices":true})")
+      .devices);
+  CHECK_FALSE(
+    CommandOf<Bridge::Commands::SanctionPlayer>(R"({"type":"sanctionPlayer","requestId":"m1","playerId":"7","kind":"ban","reason":"r"})")
+      .devices);
   const auto reset = CommandOf<Bridge::Commands::ResetPassword>(R"({"type":"resetPassword","code":"c","password":"p"})");
   CHECK(reset.code == "c");
   CHECK(reset.password == "p");

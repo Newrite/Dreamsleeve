@@ -61,6 +61,9 @@ type SanctionOrder = {
     Term: SanctionTerm
     Reason: SanctionReason
     IssuedBy: SanctionIssuer
+    /// A ban also covers the devices the player signed in from, for as long as
+    /// it holds; ignored for a mute.
+    Devices: bool
 }
 
 [<RequireQualifiedAccess>]

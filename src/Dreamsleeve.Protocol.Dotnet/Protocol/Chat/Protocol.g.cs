@@ -225,7 +225,8 @@ namespace Dreamsleeve.Protocol.Chat {
 
   #region Messages
   /// <summary>
-  /// Control/chat envelope. Version 17 ends sessions from a banned IP range;
+  /// Control/chat envelope. Version 18 lets a moderator's ban cover the player's devices;
+  /// version 17 ends sessions from a banned IP range;
   /// version 16 batches presence per replication tick,
   /// numbers actor value kinds and sends whole-point resources and metadata patches;
   /// version 15 gives moderators their tools in the game;

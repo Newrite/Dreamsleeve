@@ -52,7 +52,7 @@ module AuthRoutes =
         | true, value when value.ValueKind = JsonValueKind.String -> value.GetString()
         | true, _ | false, _ -> null
 
-    let private command settings moderation origin operation (body: JsonElement) =
+    let private request settings moderation origin operation (body: JsonElement) =
         if body.ValueKind <> JsonValueKind.Object then Error (invalid ())
         else
             match operation with
@@ -88,6 +88,21 @@ module AuthRoutes =
                             | true, value when value.ValueKind = JsonValueKind.True -> Ok (AccountAccessCommand.RememberLogin(username, password, origin))
                             | true, _ -> Error (invalid ())
 
+    // "device" is optional; when present it must be a device hash.
+    let private device (body: JsonElement) (origin: SignInOrigin) =
+        if body.ValueKind <> JsonValueKind.Object then Ok origin
+        else
+            match body.TryGetProperty "device" with
+            | false, _ -> Ok origin
+            | true, value when value.ValueKind = JsonValueKind.String ->
+                DeviceId.create (value.GetString()) |> Result.map (fun device -> { origin with Device = ValueSome device })
+            | true, _ -> Error (DomainError.InvalidText("DeviceId", TextError.InvalidFormat))
+
+    let private command settings moderation origin operation (body: JsonElement) =
+        match device body origin with
+        | Error _ -> Error (invalid ())
+        | Ok origin -> request settings moderation origin operation body
+
     let private read settings moderation operation (context: HttpContext) token = task {
         if not (context.Request.HasJsonContentType()) then
             return Error (WebHost.error 415 "unsupported_content_type" "Use application/json.")
@@ -115,10 +130,13 @@ module AuthRoutes =
         | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
         | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
         | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)
-        | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) -> unavailable ()
+        | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _) -> unavailable ()
         // 403, not 401: a saved login stays saved and works again once the ban ends.
         | Error (AccountAccessError.Banned ban) ->
             WebHost.json 403 {| code = "banned"; message = "The account is banned."; reason = SanctionReason.value ban.Reason
+                                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
+        | Error (AccountAccessError.DeviceBanned ban) ->
+            WebHost.json 403 {| code = "device_banned"; message = "This device is banned."; reason = SanctionReason.value ban.Reason
                                 untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
         // Like an account ban: the client shows the reason and the end and stops retrying.
         | Error (AccountAccessError.AddressBanned ban) ->

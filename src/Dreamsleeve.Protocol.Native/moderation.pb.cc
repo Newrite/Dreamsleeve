@@ -36,7 +36,8 @@ inline constexpr SanctionPlayer::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
         kind_{static_cast< ::Dreamsleeve::Protocol::Chat::SanctionKind >(0)},
-        minutes_{0u} {}
+        minutes_{0u},
+        devices_{false} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR SanctionPlayer::SanctionPlayer(::_pbi::ConstantInitialized)
@@ -472,15 +473,17 @@ const ::uint32_t
         3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SanctionPlayer, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SanctionPlayer, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SanctionPlayer, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SanctionPlayer, _impl_.minutes_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SanctionPlayer, _impl_.reason_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SanctionPlayer, _impl_.devices_),
         1,
         2,
         3,
         0,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SanctionIssued, _impl_._has_bits_),
         4, // hasbit index offset
@@ -567,19 +570,19 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::Dreamsleeve::Protocol::Chat::RoleChanged)},
         {5, sizeof(::Dreamsleeve::Protocol::Chat::SanctionEntry)},
         {18, sizeof(::Dreamsleeve::Protocol::Chat::SanctionPlayer)},
-        {29, sizeof(::Dreamsleeve::Protocol::Chat::SanctionIssued)},
-        {34, sizeof(::Dreamsleeve::Protocol::Chat::LiftSanction)},
-        {41, sizeof(::Dreamsleeve::Protocol::Chat::SanctionLifted)},
-        {48, sizeof(::Dreamsleeve::Protocol::Chat::KickPlayer)},
-        {55, sizeof(::Dreamsleeve::Protocol::Chat::PlayerKicked)},
-        {60, sizeof(::Dreamsleeve::Protocol::Chat::ListSanctions)},
-        {61, sizeof(::Dreamsleeve::Protocol::Chat::SanctionList)},
-        {66, sizeof(::Dreamsleeve::Protocol::Chat::ListPlayerMarks)},
-        {71, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMarks)},
-        {78, sizeof(::Dreamsleeve::Protocol::Chat::ClearPlayerMarks)},
-        {87, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMarksCleared)},
-        {94, sizeof(::Dreamsleeve::Protocol::Chat::DeleteChatMessage)},
-        {101, sizeof(::Dreamsleeve::Protocol::Chat::ChatMessageRemoved)},
+        {31, sizeof(::Dreamsleeve::Protocol::Chat::SanctionIssued)},
+        {36, sizeof(::Dreamsleeve::Protocol::Chat::LiftSanction)},
+        {43, sizeof(::Dreamsleeve::Protocol::Chat::SanctionLifted)},
+        {50, sizeof(::Dreamsleeve::Protocol::Chat::KickPlayer)},
+        {57, sizeof(::Dreamsleeve::Protocol::Chat::PlayerKicked)},
+        {62, sizeof(::Dreamsleeve::Protocol::Chat::ListSanctions)},
+        {63, sizeof(::Dreamsleeve::Protocol::Chat::SanctionList)},
+        {68, sizeof(::Dreamsleeve::Protocol::Chat::ListPlayerMarks)},
+        {73, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMarks)},
+        {80, sizeof(::Dreamsleeve::Protocol::Chat::ClearPlayerMarks)},
+        {89, sizeof(::Dreamsleeve::Protocol::Chat::PlayerMarksCleared)},
+        {96, sizeof(::Dreamsleeve::Protocol::Chat::DeleteChatMessage)},
+        {103, sizeof(::Dreamsleeve::Protocol::Chat::ChatMessageRemoved)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_RoleChanged_default_instance_._instance,
@@ -608,35 +611,36 @@ const char descriptor_table_protodef_moderation_2eproto[] ABSL_ATTRIBUTE_SECTION
     " \001(\004\0225\n\004kind\030\002 \001(\0162\'.Dreamsleeve.Protoco"
     "l.Chat.SanctionKind\022\016\n\006reason\030\003 \001(\t\022\031\n\021i"
     "ssued_at_unix_ms\030\004 \001(\003\022\032\n\runtil_unix_ms\030"
-    "\005 \001(\003H\000\210\001\001B\020\n\016_until_unix_ms\"\214\001\n\016Sanctio"
+    "\005 \001(\003H\000\210\001\001B\020\n\016_until_unix_ms\"\235\001\n\016Sanctio"
     "nPlayer\022\021\n\tplayer_id\030\001 \001(\004\0225\n\004kind\030\002 \001(\016"
     "2\'.Dreamsleeve.Protocol.Chat.SanctionKin"
-    "d\022\024\n\007minutes\030\003 \001(\rH\000\210\001\001\022\016\n\006reason\030\004 \001(\tB"
-    "\n\n\010_minutes\"L\n\016SanctionIssued\022:\n\010sanctio"
-    "n\030\001 \001(\0132(.Dreamsleeve.Protocol.Chat.Sanc"
-    "tionEntry\"X\n\014LiftSanction\022\021\n\tplayer_id\030\001"
-    " \001(\004\0225\n\004kind\030\002 \001(\0162\'.Dreamsleeve.Protoco"
-    "l.Chat.SanctionKind\"Z\n\016SanctionLifted\022\021\n"
-    "\tplayer_id\030\001 \001(\004\0225\n\004kind\030\002 \001(\0162\'.Dreamsl"
-    "eeve.Protocol.Chat.SanctionKind\"/\n\nKickP"
-    "layer\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006reason\030\002 \001(\t"
-    "\"!\n\014PlayerKicked\022\021\n\tplayer_id\030\001 \001(\004\"\017\n\rL"
-    "istSanctions\"K\n\014SanctionList\022;\n\tsanction"
-    "s\030\001 \003(\0132(.Dreamsleeve.Protocol.Chat.Sanc"
-    "tionEntry\"$\n\017ListPlayerMarks\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\"V\n\013PlayerMarks\022\021\n\tplayer_id\030\001 \001("
-    "\004\0224\n\005marks\030\002 \003(\0132%.Dreamsleeve.Protocol."
-    "Chat.GroundMark\"D\n\020ClearPlayerMarks\022\021\n\tp"
-    "layer_id\030\001 \001(\004\022\r\n\005notes\030\002 \001(\010\022\016\n\006deaths\030"
-    "\003 \001(\010\"8\n\022PlayerMarksCleared\022\021\n\tplayer_id"
-    "\030\001 \001(\004\022\017\n\007removed\030\002 \001(\r\";\n\021DeleteChatMes"
-    "sage\022\022\n\nchannel_id\030\001 \001(\004\022\022\n\nmessage_id\030\002"
-    " \001(\004\"<\n\022ChatMessageRemoved\022\022\n\nchannel_id"
-    "\030\001 \001(\004\022\022\n\nmessage_id\030\002 \001(\004*\?\n\nPlayerRole"
-    "\022\026\n\022PLAYER_ROLE_PLAYER\020\000\022\031\n\025PLAYER_ROLE_"
-    "MODERATOR\020\001*\\\n\014SanctionKind\022\035\n\031SANCTION_"
-    "KIND_UNSPECIFIED\020\000\022\026\n\022SANCTION_KIND_MUTE"
-    "\020\001\022\025\n\021SANCTION_KIND_BAN\020\002b\006proto3"
+    "d\022\024\n\007minutes\030\003 \001(\rH\000\210\001\001\022\016\n\006reason\030\004 \001(\t\022"
+    "\017\n\007devices\030\005 \001(\010B\n\n\010_minutes\"L\n\016Sanction"
+    "Issued\022:\n\010sanction\030\001 \001(\0132(.Dreamsleeve.P"
+    "rotocol.Chat.SanctionEntry\"X\n\014LiftSancti"
+    "on\022\021\n\tplayer_id\030\001 \001(\004\0225\n\004kind\030\002 \001(\0162\'.Dr"
+    "eamsleeve.Protocol.Chat.SanctionKind\"Z\n\016"
+    "SanctionLifted\022\021\n\tplayer_id\030\001 \001(\004\0225\n\004kin"
+    "d\030\002 \001(\0162\'.Dreamsleeve.Protocol.Chat.Sanc"
+    "tionKind\"/\n\nKickPlayer\022\021\n\tplayer_id\030\001 \001("
+    "\004\022\016\n\006reason\030\002 \001(\t\"!\n\014PlayerKicked\022\021\n\tpla"
+    "yer_id\030\001 \001(\004\"\017\n\rListSanctions\"K\n\014Sanctio"
+    "nList\022;\n\tsanctions\030\001 \003(\0132(.Dreamsleeve.P"
+    "rotocol.Chat.SanctionEntry\"$\n\017ListPlayer"
+    "Marks\022\021\n\tplayer_id\030\001 \001(\004\"V\n\013PlayerMarks\022"
+    "\021\n\tplayer_id\030\001 \001(\004\0224\n\005marks\030\002 \003(\0132%.Drea"
+    "msleeve.Protocol.Chat.GroundMark\"D\n\020Clea"
+    "rPlayerMarks\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005notes"
+    "\030\002 \001(\010\022\016\n\006deaths\030\003 \001(\010\"8\n\022PlayerMarksCle"
+    "ared\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007removed\030\002 \001(\r"
+    "\";\n\021DeleteChatMessage\022\022\n\nchannel_id\030\001 \001("
+    "\004\022\022\n\nmessage_id\030\002 \001(\004\"<\n\022ChatMessageRemo"
+    "ved\022\022\n\nchannel_id\030\001 \001(\004\022\022\n\nmessage_id\030\002 "
+    "\001(\004*\?\n\nPlayerRole\022\026\n\022PLAYER_ROLE_PLAYER\020"
+    "\000\022\031\n\025PLAYER_ROLE_MODERATOR\020\001*\\\n\014Sanction"
+    "Kind\022\035\n\031SANCTION_KIND_UNSPECIFIED\020\000\022\026\n\022S"
+    "ANCTION_KIND_MUTE\020\001\022\025\n\021SANCTION_KIND_BAN"
+    "\020\002b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_moderation_2eproto_deps[1] = {
@@ -646,7 +650,7 @@ static ::absl::once_flag descriptor_table_moderation_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_moderation_2eproto = {
     false,
     false,
-    1433,
+    1450,
     descriptor_table_protodef_moderation_2eproto,
     "moderation.proto",
     &descriptor_table_moderation_2eproto_once,
@@ -1373,9 +1377,9 @@ SanctionPlayer::SanctionPlayer(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, minutes_) -
+           offsetof(Impl_, devices_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::minutes_));
+               sizeof(Impl_::devices_));
 
   // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.SanctionPlayer)
 }
@@ -1390,9 +1394,9 @@ inline void SanctionPlayer::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, minutes_) -
+           offsetof(Impl_, devices_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::minutes_));
+               sizeof(Impl_::devices_));
 }
 SanctionPlayer::~SanctionPlayer() {
   // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.SanctionPlayer)
@@ -1452,16 +1456,16 @@ SanctionPlayer::GetClassData() const {
   return SanctionPlayer_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 4, 0, 55, 2>
+const ::_pbi::TcParseTable<3, 5, 0, 55, 2>
 SanctionPlayer::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_._has_bits_),
     0, // no _extensions_
-    4, 24,  // max_field_number, fast_idx_mask
+    5, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967280,  // skipmap
+    4294967264,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    4,  // num_field_entries
+    5,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     SanctionPlayer_class_data_.base(),
@@ -1471,10 +1475,7 @@ SanctionPlayer::_table_ = {
     ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SanctionPlayer>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // string reason = 4;
-    {::_pbi::TcParser::FastUS1,
-     {34, 0, 0,
-      PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.reason_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // uint64 player_id = 1;
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SanctionPlayer, _impl_.player_id_), 1>(),
      {8, 1, 0,
@@ -1487,6 +1488,16 @@ SanctionPlayer::_table_ = {
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SanctionPlayer, _impl_.minutes_), 3>(),
      {24, 3, 0,
       PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.minutes_)}},
+    // string reason = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 0, 0,
+      PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.reason_)}},
+    // bool devices = 5;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SanctionPlayer, _impl_.devices_), 4>(),
+     {40, 4, 0,
+      PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.devices_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
@@ -1498,6 +1509,8 @@ SanctionPlayer::_table_ = {
     {PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.minutes_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // string reason = 4;
     {PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bool devices = 5;
+    {PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.devices_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
   }},
   // no aux_entries
   {{
@@ -1517,10 +1530,10 @@ PROTOBUF_NOINLINE void SanctionPlayer::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.reason_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.minutes_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.minutes_));
+        reinterpret_cast<char*>(&_impl_.devices_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.devices_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1580,6 +1593,15 @@ PROTOBUF_NOINLINE void SanctionPlayer::Clear() {
     }
   }
 
+  // bool devices = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_devices() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_devices(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1605,7 +1627,7 @@ PROTOBUF_NOINLINE void SanctionPlayer::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string reason = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_reason().empty()) {
@@ -1632,6 +1654,12 @@ PROTOBUF_NOINLINE void SanctionPlayer::Clear() {
       total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
           this_._internal_minutes());
     }
+    // bool devices = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_devices() != 0) {
+        total_size += 2;
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -1651,7 +1679,7 @@ void SanctionPlayer::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_reason().empty()) {
         _this->_internal_set_reason(from._internal_reason());
@@ -1673,6 +1701,11 @@ void SanctionPlayer::MergeImpl(::google::protobuf::MessageLite& to_msg,
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _this->_impl_.minutes_ = from._impl_.minutes_;
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_devices() != 0) {
+        _this->_impl_.devices_ = from._impl_.devices_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1696,8 +1729,8 @@ void SanctionPlayer::InternalSwap(SanctionPlayer* PROTOBUF_RESTRICT PROTOBUF_NON
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.minutes_)
-      + sizeof(SanctionPlayer::_impl_.minutes_)
+      PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.devices_)
+      + sizeof(SanctionPlayer::_impl_.devices_)
       - PROTOBUF_FIELD_OFFSET(SanctionPlayer, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));

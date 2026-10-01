@@ -146,10 +146,29 @@ module SqliteSanctionStore =
                     match SanctionId.create (id :?> int64) with
                     | Ok id ->
                         let sanction = Sanction.issue id now order
+                        // The devices the player signed in from (kept SignInHistoryDays) share the ban.
+                        let devices =
+                            if order.Kind = SanctionKind.Ban && order.Devices then
+                                let count =
+                                    execute context "INSERT INTO device_bans(sanction_id, device) SELECT @id, device FROM player_devices WHERE player_id=@player"
+                                        [ "@id", box (SanctionId.value id); "@player", player order.Target ]
+                                $", devices: {count}"
+                            else ""
                         audit context order.IssuedBy AdminAction.SanctionedPlayer order.Target
-                            $"{SanctionKind.key sanction.Kind} until {term sanction}: {SanctionReason.value sanction.Reason}" now
+                            $"{SanctionKind.key sanction.Kind} until {term sanction}{devices}: {SanctionReason.value sanction.Reason}" now
                         Ok(SanctionOutcome.Applied sanction)
                     | Error _ -> invalidData ())))
+
+    /// The ban in force at now whose devices include device: a device ban
+    /// holds exactly as long as the account ban it came with.
+    let bannedDevice config (device: DeviceId) (now: DateTimeOffset) token =
+        SqliteAccountStore.withContext config token (fun context ->
+            use statement =
+                command context
+                    $"SELECT {Columns} FROM device_bans d JOIN sanctions s ON s.id=d.sanction_id WHERE d.device=@device AND {InForce} ORDER BY s.issued_at DESC LIMIT 1"
+                    [ "@device", box (DeviceId.value device); "@now", box (milliseconds now) ]
+            use reader = statement.ExecuteReader()
+            readAll reader read |> Result.map (function [] -> ValueNone | ban :: _ -> ValueSome ban))
 
     /// Lifts the sanction of kind in force on target at now.
     let lift config target kind issuer now token =

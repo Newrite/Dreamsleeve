@@ -237,7 +237,8 @@ export namespace Dreamsleeve::Host
               .playerId = command.playerId.value,
               .kind     = Bridge::SanctionKindOf(command.kind),
               .minutes  = command.minutes,
-              .reason   = std::move(command.reason)
+              .reason   = std::move(command.reason),
+              .devices  = command.devices
           });
       }
 

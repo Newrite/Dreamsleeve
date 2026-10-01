@@ -813,8 +813,8 @@ module PlayerSession =
                 refuse RequestRejectionCode.Overloaded "Too many pending requests."
             else
                 match action with
-                | ModerationAction.Sanction(target, kind, term, reason) ->
-                    ask (ModerationCommand.Sanction { Target = target; Kind = kind; Term = term; Reason = reason; IssuedBy = SanctionIssuer.Moderator self })
+                | ModerationAction.Sanction(target, kind, term, reason, devices) ->
+                    ask (ModerationCommand.Sanction { Target = target; Kind = kind; Term = term; Reason = reason; IssuedBy = SanctionIssuer.Moderator self; Devices = devices })
                 | ModerationAction.Lift(target, kind) -> ask (ModerationCommand.Lift(target, kind, self))
                 | ModerationAction.Kick(target, reason) -> ask (ModerationCommand.Kick(target, reason, self))
                 | ModerationAction.ListSanctions -> ask ModerationCommand.ListSanctions

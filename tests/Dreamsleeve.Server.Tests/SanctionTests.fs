@@ -21,7 +21,7 @@ let private now = DateTimeOffset.FromUnixTimeMilliseconds 1_800_000_000_000L
 let private password = "password-with-spaces  "
 
 let private order target kind term issuer : SanctionOrder =
-    { Target = target; Kind = kind; Term = term; Reason = reason "Флуд"; IssuedBy = issuer }
+    { Target = target; Kind = kind; Term = term; Reason = reason "Флуд"; IssuedBy = issuer; Devices = false }
 
 let private register (database: SqliteAccountStoreTests.Database) name =
     SqliteAccountStore.create database.Config (Username.create 32 name |> ok) (DisplayName.create 64 $"Display {name}" |> ok) "hash" token |> ok

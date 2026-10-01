@@ -71,7 +71,7 @@ export namespace Dreamsleeve::Client
   // act on; a hidden player is named by the public PlayerId.
 
   // A mute or a ban for the minutes given, or until lifted without them. The
-  // short reason is required.
+  // short reason is required; devices: a ban also covers the player's devices.
   struct SanctionPlayer
   {
     std::uint64_t                requestId{};
@@ -79,6 +79,7 @@ export namespace Dreamsleeve::Client
     Domain::SanctionKind         kind{Domain::SanctionKind::Mute};
     std::optional<std::uint32_t> minutes;
     std::string                  reason;
+    bool                         devices{};
   };
 
   struct LiftSanction

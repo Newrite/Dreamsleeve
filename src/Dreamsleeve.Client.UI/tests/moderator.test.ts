@@ -133,6 +133,30 @@ describe("moderator tools", () => {
     expect(chat.store.getState().moderation).toBeNull();
     expect(chat.store.getState().notice).toBe("Мут бессрочно: Мира");
   });
+  it("a ban covers the devices only when ticked; a mute never does", () => {
+    const { chat, sent } = moderator();
+    chat.moderator.openDialog("mute", "7", "Мира");
+    chat.moderator.submitDialog({
+      reason: "Флуд",
+      notes: false,
+      deaths: false,
+      devices: true,
+    });
+    expect(sent()[0]).not.toHaveProperty("devices");
+    chat.moderator.closeDialog();
+    chat.moderator.openDialog("ban", "7", "Мира");
+    chat.moderator.submitDialog({
+      reason: "Спам",
+      notes: false,
+      deaths: false,
+      devices: true,
+    });
+    expect(sent()[1]).toMatchObject({
+      type: "sanctionPlayer",
+      kind: "ban",
+      devices: true,
+    });
+  });
   it("a kick needs a reason; removing marks needs a kind", () => {
     const { chat, sent } = moderator();
     chat.moderator.openDialog("kick", "7", "Мира");

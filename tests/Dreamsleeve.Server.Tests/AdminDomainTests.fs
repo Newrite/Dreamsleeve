@@ -74,6 +74,13 @@ let tests = testList "Admin domain" [
         equal (ValueSome 2L) (AddressBan.find now (Net.IPAddress.Parse "198.51.100.9") bans |> ValueOption.map _.Id)
         equal ValueNone (AddressBan.find now (Net.IPAddress.Parse "192.0.2.1") bans)
 
+    testCase "a device is a 64-character lowercase hex hash and shows by its start" <| fun _ ->
+        let hash = String.replicate 4 "0123456789abcdef"
+        equal hash (DeviceId.value (DeviceId.create hash |> ok))
+        equal "0123456789ab" (DeviceId.short (DeviceId.create hash |> ok))
+        for wrong in [ hash.ToUpperInvariant(); hash.Substring 1; hash + "0"; String('g', 64); ""; null ] do
+            check (DeviceId.create wrong |> Result.isError) $"Refused: {wrong}"
+
     testCase "a one-time code opens its purpose once, expires and is replaced by the next one" <| fun _ ->
         let lifetime = TimeSpan.FromMinutes 15.
         let setup = function AdminCodePurpose.Setup -> true | AdminCodePurpose.ResetPassword _ -> false

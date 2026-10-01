@@ -338,6 +338,22 @@ let tests = testSequenced (testList "Admin HTTP" [
             status 409 again
         }))
 
+    case "a ban from the player card covers the devices only when the box is ticked" (fun () ->
+        withPanel id (fun panel -> task {
+            panel.AccountReply.Value <- (function
+                | AccountAccessCommand.Sanction order ->
+                    Ok (AccountAccessResult.Sanctioned (Sanction.issue (SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order))
+                | _ -> Error AccountAccessError.Unavailable)
+            do! signIn panel
+            let fields devices = [ "kind", "ban"; "term", ""; "reason", "Спам"; "confirm", "yes" ] @ (if devices then [ "devices", "yes" ] else [])
+            use! plain = submit panel "/players/7/sanction" (fields false) []
+            status 303 plain
+            use! withDevices = submit panel "/players/7/sanction" (fields true) []
+            status 303 withDevices
+            let orders = panel.Accounts.ToArray() |> Array.choose (function AccountAccessCommand.Sanction order -> Some order.Devices | _ -> None)
+            equal [| false; true |] orders
+        }))
+
     case "sign-in attempts are limited per address and forwarded addresses are ignored unless trusted" (fun () ->
         let limit (config: ApplicationConfig) = { config with Admin = { config.Admin with Service = { config.Admin.Service with LoginAttemptsPerMinute = 2 } } }
         let wrong = [ "username", "root"; "password", "Wrong-Password-2026" ]

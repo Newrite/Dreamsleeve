@@ -43,6 +43,7 @@ message SanctionPlayer {
   SanctionKind kind = 2;
   optional uint32 minutes = 3; // 1..5256000; absent: until lifted.
   string reason = 4; // Required, one line; the target reads it.
+  bool devices = 5; // A ban also covers the devices the player signed in from; ignored for a mute.
 }
 
 message SanctionIssued {

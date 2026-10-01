@@ -1112,9 +1112,9 @@ let tests = testList "PlayerSession" ([
             equal (ModerationCommand.Kick(bob, reason, profile.PlayerId)) kick.Command
             do! deliver kick.ReplyTo { OperationId = kick.OperationId; Result = Error(ModerationError.Refused SanctionError.NotAllowed) }
             do! refused 3UL RequestRejectionCode.NotPermitted
-            do! post fixture.Player (PlayerSessionMessage.Moderate(4UL, ModerationAction.Sanction(bob, SanctionKind.Mute, SanctionTerm.UntilLifted, reason)))
+            do! post fixture.Player (PlayerSessionMessage.Moderate(4UL, ModerationAction.Sanction(bob, SanctionKind.Mute, SanctionTerm.UntilLifted, reason, false)))
             let! sanction = receive fixture.Moderation
-            let order = { Target = bob; Kind = SanctionKind.Mute; Term = SanctionTerm.UntilLifted; Reason = reason; IssuedBy = SanctionIssuer.Moderator profile.PlayerId }
+            let order = { Target = bob; Kind = SanctionKind.Mute; Term = SanctionTerm.UntilLifted; Reason = reason; IssuedBy = SanctionIssuer.Moderator profile.PlayerId; Devices = false }
             equal (ModerationCommand.Sanction order) sanction.Command
             let mute = Sanction.issue (SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
             do! deliver sanction.ReplyTo { OperationId = sanction.OperationId; Result = Ok(ModerationResult.Sanctioned mute) }
@@ -1177,7 +1177,7 @@ let tests = testList "PlayerSession" ([
         withIdentity IdentityOptions.defaults HiddenIdentity.Shown (fun fixture -> task {
             let! profile, _, _ = ready fixture
             let order = { Target = profile.PlayerId; Kind = SanctionKind.Mute; Term = SanctionTerm.UntilLifted
-                          Reason = SanctionReason.create "Флуд" |> ok; IssuedBy = SanctionIssuer.Moderator(PlayerId.create 99UL |> ok) }
+                          Reason = SanctionReason.create "Флуд" |> ok; IssuedBy = SanctionIssuer.Moderator(PlayerId.create 99UL |> ok); Devices = false }
             let mute = Sanction.issue (SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
             do! post fixture.Player (PlayerSessionMessage.MuteChanged(ValueSome mute))
             let! told = receive fixture.Host
