@@ -1,16 +1,23 @@
 # Dreamsleeve server word list, tuned for stream safety rather than profanity.
 # Copy to moderation.toml next to the server (Moderation.RulesPath in
-# server.toml). Read once at startup. Swearing is deliberately NOT listed:
-# it is allowed on the major streaming platforms; add it yourself if needed.
+# server.toml; [Moderation] Enabled = false turns the list off). Read once at
+# startup: restart the server after editing. A missing file starts the server
+# with an empty list and a warning; a syntax error, an unknown key or a
+# non-string entry stops the start. The admin panel shows the list as read on
+# its configuration page. Swearing is deliberately NOT listed: it is allowed on
+# the major streaming platforms; add it yourself if needed.
 #
 # Two tiers:
-#   [block] — refused. Checked for new usernames and display names at
-#             registration, every chat message before it is stored or relayed,
-#             and the character name before it is published.
+#   [block] — refused. Checked for usernames and display names at registration,
+#             display name changes (from the game and the panel), every chat
+#             message, announcement text and its mod label, and ground note
+#             before it is stored or relayed, and the character name before it
+#             is published. Stored names it now refuses are shown to others as
+#             "hidden.<id>" / "Player <id>"; stored notes it refuses are withheld.
 #   [flag]  — delivered, but the matched ranges are marked. Each player chooses
 #             in the chat settings whether to show them, mask them with stars
 #             or hide the whole message ("Помеченные сообщения"). Flags apply to
-#             chat text only; names use the [block] tier.
+#             chat messages, announcements and notes; names use the [block] tier.
 # Move any entry between the tiers to match your community. Older files with
 # words/substrings/exceptions at the top level are read as [block].
 #

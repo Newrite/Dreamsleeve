@@ -1,6 +1,7 @@
-# client.toml of the plugin (Data/SKSE/Plugins/Dreamsleeve) and of Client.Dev --config:
-# every key with its default. Omitted keys keep the default; keys are case-sensitive.
-# The plugin writes this file on first run and never rewrites it; ranges are checked
+# client.toml shipped with the mod: client.example.toml with the firefly and the ground
+# marks taken from DreamsleeveClient.esp. Omitted keys keep the plugin's built-in defaults
+# (vanilla forms); keys are case-sensitive.
+# The plugin never rewrites this file (without one it writes the vanilla example); ranges are checked
 # at start (Configuration::InvalidSetting); with an invalid file the plugin does not start
 # and DreamsleeveClient.log names the reason. Chat, name and mark looks live in ui.toml.
 # Usually only serverHost, serverPort and authUrl change: the server owner publishes them.
@@ -54,7 +55,7 @@ visibilityDistance = 8192
 # true shows other players as fireflies.
 showFireflies = true
 # Firefly: a STAT base form given as the plugin file name and a plugin-local form ID
-# (1..0xFFFFFF, without the load-order prefix).
+# (1..0xFFFFFF, without the load-order prefix); DreamsleeveClient.esp ships one.
 fireflyPlugin = "DreamsleeveClient.esp"
 # Plugin-local form ID of the firefly static.
 fireflyFormId = 0x800
@@ -62,8 +63,8 @@ fireflyFormId = 0x800
 fireflyScale = 0.25
 # true keeps keyboard events from the game and other SKSE mods while the chat is open.
 captureKeyboard = true
-# Ground marks: STAT base forms without collision, plugin-local IDs. Defaults are
-# flat vanilla glow discs (FXGlowFlatRndBrt / FXGlowFlatRndDim); a missing form
+# Ground marks: STAT base forms without collision, plugin-local IDs, here from
+# DreamsleeveClient.esp (its death marker uses a Dawnguard mesh); a missing form
 # disables that kind of mark with an error in the log.
 # Note marker: plugin file name.
 groundNotePlugin = "DreamsleeveClient.esp"
@@ -78,7 +79,8 @@ deathMarkFormId = 0x801
 # Death marker scale, 0.01..10.0.
 deathMarkScale = 0.5
 # Movement samples buffered for the game thread, >= 1; overflow resynchronizes the view.
-maxPendingMovementSamples = 4096
+# 16384 covers a game-thread pause of about 1.6 s with 512 players in view at 20 Hz.
+maxPendingMovementSamples = 16384
 
 # ENet host of the client.
 [client.network]
@@ -94,6 +96,11 @@ outBwLimit = 0
 maxPacketBytes = 1048576
 # Data waiting for reassembly, bytes, >= maxPacketBytes.
 maxWaitingData = 33554432
+# UDP socket receive buffer, bytes, 1..2147483647: about three seconds of 512 players
+# in view if the network thread is held up (ENet alone sets 262144).
+receiveBufferBytes = 1048576
+# UDP socket send buffer, bytes, 1..2147483647.
+sendBufferBytes = 262144
 
 # Smoothing of other players' movement between samples.
 [interpolation]

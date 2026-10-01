@@ -3,7 +3,8 @@
 
 dist/Client (copy into Skyrim Data or install as a mod):
   SKSE/Plugins/Dreamsleeve.Client.dll (+ .pdb)
-  SKSE/Plugins/Dreamsleeve/client.toml            client.example.toml; edited by the user
+  DreamsleeveClient.esp                           the firefly and ground mark forms (needs Dawnguard)
+  SKSE/Plugins/Dreamsleeve/client.toml            Plugin/client.toml: the example using the ESP forms
   SKSE/Plugins/Dreamsleeve/aliases.toml           streamer-mode pseudonym dictionary
   PrismaUI/views/Dreamsleeve/                     production web UI (index.html, assets, theme.user.css)
   Scripts/DreamsleeveClient.pex, Scripts/Source/DreamsleeveClient.psc   Papyrus API for other mods
@@ -26,6 +27,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -52,6 +54,29 @@ PRESERVED = (
 
 # The documented defaults, also embedded in the plugin as its first-run file.
 CLIENT_TOML = ROOT / "src" / "Dreamsleeve.Client.Core" / "client.example.toml"
+# The mod's own forms and the client.toml shipped with them.
+ESP = ROOT / "Plugin" / "DreamsleeveClient.esp"
+MOD_TOML = ROOT / "Plugin" / "client.toml"
+# The only settings MOD_TOML may change: everything else follows the example.
+ESP_KEYS = {f"client.{name}" for name in (
+    "fireflyPlugin", "fireflyFormId", "groundNotePlugin", "groundNoteFormId", "deathMarkPlugin", "deathMarkFormId")}
+
+
+def settings(path: Path) -> dict[str, object]:
+    def flat(table: dict, prefix: str = ""):
+        for key, value in table.items():
+            if isinstance(value, dict):
+                yield from flat(value, f"{prefix}{key}.")
+            else:
+                yield f"{prefix}{key}", value
+    return dict(flat(tomllib.loads(path.read_text(encoding="utf-8-sig"))))
+
+
+def check_mod_toml() -> None:
+    mod, example = settings(MOD_TOML), settings(CLIENT_TOML)
+    drift = sorted(key for key in mod.keys() | example.keys() if key not in ESP_KEYS and mod.get(key) != example.get(key))
+    if drift:
+        raise SystemExit(f"{MOD_TOML} differs from client.example.toml beyond the ESP forms: {', '.join(drift)}")
 
 
 def run(command: list[str], cwd: Path) -> None:
@@ -107,9 +132,14 @@ def client_readme() -> str:
 
 - SKSE64 / SKSEVR;
 - Address Library for SKSE Plugins (SE и/или AE, для VR — VR Address Library);
+- Dawnguard (мастер `DreamsleeveClient.esp`: модель метки смерти);
 - PrismaUI 1.5.1 или новее (https://www.nexusmods.com/skyrimspecialedition/mods/148718);
 - Media Keys Fix SKSE (требование PrismaUI для клавиатурного ввода);
 - SKSE Menu Framework (необязательно: страница настроек, F1).
+
+`DreamsleeveClient.esp` включите в порядке загрузки: в нём светлячок над другими игроками и
+метки на земле, `client.toml` мода ссылается на его формы. Без плагина удалите эти ключи
+(`fireflyPlugin`, `groundNotePlugin`, `deathMarkPlugin` и их `FormId`) — вернутся ванильные формы.
 
 Настройка: в `SKSE/Plugins/Dreamsleeve/client.toml` три значения даёт владелец сервера —
 `serverHost` (IPv4-адрес или DNS-имя), `serverPort` и `authUrl` (`https://…` без пути).
@@ -167,17 +197,35 @@ def check_server(server: Path) -> None:
         raise SystemExit("dist/Server must not ship a server.toml")
 
 
-def server_readme() -> str:
-    return """# Dreamsleeve Server
+# How each kind of publish starts, and what the host needs for it.
+SERVER_KINDS = {
+    "framework": ("Публикация `dotnet publish -c Release` (framework-dependent): нужен установленный\n"
+                  "ASP.NET Core Runtime 10.0 (https://dotnet.microsoft.com/download/dotnet/10.0).",
+                  "powershell", "dotnet Dreamsleeve.Server.dll"),
+    "win-x64": ("Самодостаточная сборка для Windows x64: .NET и все библиотеки внутри\n"
+                "`Dreamsleeve.Server.exe`, ставить ничего не нужно. Нативные библиотеки (SQLite) при первом\n"
+                "запуске распаковываются в `%TEMP%\\.net` (или в `DOTNET_BUNDLE_EXTRACT_BASE_DIR`).",
+                "powershell", ".\\Dreamsleeve.Server.exe"),
+    "linux-x64": ("Самодостаточная сборка для Linux x64 (glibc): .NET и все библиотеки внутри\n"
+                  "`Dreamsleeve.Server`. От системы нужны только ICU и OpenSSL 3 (Ubuntu 24.04:\n"
+                  "`sudo apt install libicu74 libssl3t64`). Нативные библиотеки (SQLite) при первом запуске\n"
+                  "распаковываются в `~/.net` пользователя службы (или в `DOTNET_BUNDLE_EXTRACT_BASE_DIR`):\n"
+                  "каталог должен быть доступен ему на запись.",
+                  "bash", "./Dreamsleeve.Server"),
+}
 
-Публикация `dotnet publish -c Release` (framework-dependent): нужен установленный
-ASP.NET Core Runtime 10.0 (https://dotnet.microsoft.com/download/dotnet/10.0).
 
-```powershell
-dotnet Dreamsleeve.Server.dll --write-config server.toml   # создать файл настроек
-dotnet Dreamsleeve.Server.dll --config server.toml         # запуск
+def server_readme(kind: str = "framework") -> str:
+    intro, shell, start = SERVER_KINDS[kind]
+    return f"""# Dreamsleeve Server
+
+{intro}
+
+```{shell}
+{start} --write-config server.toml   # создать файл настроек
+{start} --config server.toml         # запуск
 ```
-
+""" + """
 `server.example.toml` рядом — все ключи с пояснениями и допустимыми значениями; скопируйте
 его в `server.toml` (или оставьте в `server.toml` только изменённые ключи). По умолчанию ENet
 слушает 127.0.0.1:8778, HTTP входа — 127.0.0.1:8779, админка — 127.0.0.1:8780. Для игроков из
@@ -265,7 +313,9 @@ def main() -> int:
         shutil.copy2(pdb, plugins / pdb.name)
     config = plugins / "Dreamsleeve"
     config.mkdir()
-    shutil.copy2(CLIENT_TOML, config / "client.toml")
+    check_mod_toml()
+    shutil.copy2(MOD_TOML, config / "client.toml")
+    shutil.copy2(ESP, client / ESP.name)
     shutil.copy2(CLIENT / "aliases.toml", config / "aliases.toml")
 
     views = client / "PrismaUI" / "views" / "Dreamsleeve"
