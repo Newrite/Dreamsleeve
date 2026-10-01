@@ -17,6 +17,8 @@
 Устроено как API PrismaUI и TrueFlasksNG. Заголовок
 `src/Dreamsleeve.Client/API/DreamsleeveAPI.h` (в dist — `Dreamsleeve/API/DreamsleeveAPI.h`)
 копируется в проект мода и подключается после CommonLibSSE-NG (`SKSE::PluginHandle`).
+Заголовок под MIT (текст лицензии в нём самом), в отличие от остального Dreamsleeve
+(GPL-3.0-or-later): его можно подключать в плагин под любой лицензией, сохранив уведомление.
 Модули Dreamsleeve не нужны. `RequestPluginAPI` находит `Dreamsleeve.Client.dll`
 (`GetModuleHandleW`) и вызывает экспортированную функцию `RequestPluginAPI`.
 

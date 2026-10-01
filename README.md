@@ -100,6 +100,10 @@ Corresponding Source)](EXCEPTIONS.md) — те же условия, что у
 у [skyrim-rich-presence](https://github.com/doodlum/skyrim-rich-presence), на который клиент
 опирается как на образец. Modded Code в смысле исключения — Skyrim (и его варианты: SE, AE, VR).
 
+Исключение — заголовок C++ API для других модов
+[`DreamsleeveAPI.h`](src/Dreamsleeve.Client/API/DreamsleeveAPI.h): он под MIT (текст в самом
+файле), чтобы его мог подключить плагин под любой лицензией.
+
 Каждый, кто распространяет сборки Dreamsleeve или основанные на нём, обязан предоставить
 исходный код на тех же условиях. Архивы релизов содержат `LICENSE` и `EXCEPTIONS.md`, их
 исходный код — тег релиза в этом репозитории. Лицензии сторонних компонентов —

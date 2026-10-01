@@ -10,7 +10,7 @@ dist/Client (copy into Skyrim Data or install as a mod):
   Scripts/DreamsleeveClient.pex, Scripts/Source/DreamsleeveClient.psc   Papyrus API for other mods
   Dreamsleeve/README.md, THIRD_PARTY_NOTICES.md   install notes and third-party licenses
   Dreamsleeve/LICENSE, EXCEPTIONS.md              Dreamsleeve's own license (GPL-3.0-or-later with exceptions)
-  Dreamsleeve/API/DreamsleeveAPI.h                C++ API header for other SKSE plugins
+  Dreamsleeve/API/DreamsleeveAPI.h                C++ API header for other SKSE plugins (MIT, notice inside)
 
 dist/Server (framework-dependent `dotnet publish` of Dreamsleeve.Server, Release):
   Dreamsleeve.Server.dll and dependencies, db/migrations, server.example.toml, README.md,
@@ -180,7 +180,8 @@ def client_readme() -> str:
 Объявления: вкладка «Объявления» показывает сообщения сервера и объявления других модов;
 где их показывать и от каких источников — настройки чата → «Объявления». Моды публикуют
 через C++ API (`DreamsleeveAPI.h`) или Papyrus (`Scripts/Source/DreamsleeveClient.psc`),
-см. docs/DreamsleeveModApiRu.md в репозитории.
+см. docs/DreamsleeveModApiRu.md в репозитории. Заголовок `Dreamsleeve/API/DreamsleeveAPI.h` — под
+MIT (текст в нём самом): его можно подключать в плагин под любой лицензией.
 
 Логи: `Documents/My Games/Skyrim Special Edition/SKSE/DreamsleeveClient.log`.
 
