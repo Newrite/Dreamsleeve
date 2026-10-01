@@ -17,6 +17,15 @@ let private guard (work: Task<'a>) = work.WaitAsync(TimeSpan.FromSeconds 30.)
 let private guardUnit (work: Task) = work.WaitAsync(TimeSpan.FromSeconds 30.)
 let private globalId = ChatChannelId.create 1UL |> ok
 let private text = ChatMessageText.create 2000 "same benchmark payload" |> ok
+#if !BASELINE
+let private profile index =
+    PlayerData.create (PlayerId.create (uint64 index + 1UL) |> ok)
+        (Username.create 32 (sprintf "bench%d" index) |> ok)
+        (DisplayName.create 64 (sprintf "Bench %d" index) |> ok)
+// The same text again and again, as fast as admitted: anti-spam would refuse it,
+// and the measurement is routing, not admission.
+let private unlimited = { Burst = Int32.MaxValue; RefillMs = 1; DuplicateWindowMs = 0 }
+#endif
 
 type private Probe() =
     let pending = ConcurrentDictionary<struct (Guid * uint64), TaskCompletionSource<int64>>()
@@ -104,22 +113,32 @@ let private start count (probe: Probe) = task {
     }
 #else
     let tickets = Array.init count (fun index -> (sprintf "bench%d" index).PadRight(43, '_'))
-    let identities =
-        tickets |> Array.mapi (fun index ticket ->
-            ticket, PlayerData.create (PlayerId.create (uint64 index + 1UL) |> ok)
-                        (Username.create 32 (sprintf "bench%d" index) |> ok)
-                        (DisplayName.create 64 (sprintf "Bench %d" index) |> ok))
-        |> Map.ofArray
+    let identities = tickets |> Array.mapi (fun index ticket -> ticket, profile index) |> Map.ofArray
     let authenticate (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
         Result = match Map.tryFind request.Ticket identities with
-                 | Some profile -> Ok { Profile = profile; Role = PlayerRole.Player }
+                 | Some profile -> Ok { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone }
                  | None -> Error SessionAuthenticationError.InvalidTicket
     }
     let authentication = Agent.Start(AgentOptions.create "benchmark-authentication",
                              AgentReplyDispatcher.createHandler 128 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) authenticate)
-    let authenticator = { Requests = authentication.Ref.TryReliable().Value; Completion = authentication.Completion }
+    // The workload never renames or moderates; these owners answer like an unavailable service.
+    let names = Agent.Start(AgentOptions.create "benchmark-names", fun _ (request: DisplayNameChangeRequest) -> task {
+        request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error DisplayNameChangeError.Unavailable } |> ignore })
+    let moderation = Agent.Start(AgentOptions.create "benchmark-moderation", fun _ (request: ModerationRequest) -> task {
+        request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ModerationError.Unavailable } |> ignore })
+    let authenticator = {
+        Requests = authentication.Ref.TryReliable().Value; DisplayNames = names.Ref.TryReliable().Value
+        Moderation = moderation.Ref.TryReliable().Value; Completion = authentication.Completion
+    }
+    // Nothing is placed on the ground; writes would only be discarded.
+    let writer = Agent.Start(AgentOptions.create "benchmark-mark-writer", fun _ (_: GroundMarkWrite) -> task { () })
+    let marks = { Loaded = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value }
     let incoming = ConcurrentQueue<ServerTransportEvent>()
+    let mutable ready = fun () -> false
+    let deliver event =
+        incoming.Enqueue event
+        ready () |> ignore
     let poll () =
         let events = ResizeArray<ServerTransportEvent>()
         let mutable event = Unchecked.defaultof<ServerTransportEvent>
@@ -127,27 +146,34 @@ let private start count (probe: Probe) = task {
         Ok (List.ofSeq events)
     let transport = {
         MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
+        SetReadyHandler = fun handler -> ready <- handler
         Poll = poll
-        Send = fun (id, bytes) -> probe.Receive(id, bytes); Ok ()
-        Close = fun id -> incoming.Enqueue(ServerTransportEvent.Disconnected id)
+        // Poses never flow: no player reports a location.
+        Send = fun (id, packet) ->
+            if packet.Lane <> DeliveryLane.Realtime then probe.Receive(id, packet.Bytes)
+            Ok ()
+        Close = fun id -> deliver (ServerTransportEvent.Disconnected id)
         Reset = ignore
         Dispose = ignore
     }
     let options = {
         ServerRuntimeOptions.defaults with
-            MaxSessions = count; MailboxCapacity = 65536; ControlReserve = 3 * count + 4
+            MaxSessions = count; MailboxCapacity = 65536; ControlReserve = GameSettings.CleanupSources * count + GameSettings.CleanupSources
             OpenTimeoutMs = 30000; ShutdownTimeoutMs = 5000
             Player = { ServerRuntimeOptions.defaults.Player with MailboxCapacity = 1024; MaxPendingOutput = 1024; MaxPendingUpdates = 1024 }
-            Chat = { ServerRuntimeOptions.defaults.Chat with MailboxCapacity = 256; HistoryCapacity = 64 }
+            Chat = { ServerRuntimeOptions.defaults.Chat with MailboxCapacity = 256; HistoryCapacity = 64; Rate = unlimited }
     }
-    let runtime = ServerRuntime.start options settings authenticator transport Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance |> ok
+    let announcements = { AnnouncementOptions.defaults with HistoryCapacity = 64 }
+    let game = GameSettings.create settings options IdentityOptions.defaults announcements GroundMarkOptions.defaults |> ok
+    let runtime = ServerRuntime.start game Moderation.empty PseudonymDictionary.builtIn marks authenticator transport
+                      Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance
     for index in 0 .. count - 1 do
         let welcome = probe.Expect(ids[index], 1UL)
-        incoming.Enqueue(ServerTransportEvent.Connected ids[index])
+        deliver (ServerTransportEvent.Connected ids[index])
         let packet = Dreamsleeve.Protocol.Chat.ClientPacket(
                          ProtocolVersion = ProtocolCodec.Version, RequestId = 1UL,
                          OpenSession = Dreamsleeve.Protocol.Chat.OpenSession(SessionTicket = tickets[index]))
-        incoming.Enqueue(ServerTransportEvent.Received(ids[index], Google.Protobuf.MessageExtensions.ToByteArray packet))
+        deliver (ServerTransportEvent.Received(ids[index], DeliveryLane.Control, Google.Protobuf.MessageExtensions.ToByteArray packet))
         let! _ = guard welcome
         ()
 
@@ -163,13 +189,19 @@ let private start count (probe: Probe) = task {
         if posted <> AgentPostResult.Posted then failwithf "Player admission: %A" posted
     }
     let disconnect index : Task =
-        incoming.Enqueue(ServerTransportEvent.Disconnected ids[index])
+        deliver (ServerTransportEvent.Disconnected ids[index])
         Task.CompletedTask
     let stop () : Task = task {
         do! post runtime ServerRuntimeMessage.Stop
         do! guardUnit runtime.Completion
-        authentication.Complete() |> ignore
-        do! guardUnit authentication.Completion
+        let owners = [
+            (fun () -> authentication.Complete()), authentication.Completion
+            (fun () -> names.Complete()), names.Completion
+            (fun () -> moderation.Complete()), moderation.Completion
+            (fun () -> writer.Complete()), writer.Completion ]
+        for complete, completion in owners do
+            complete () |> ignore
+            do! guardUnit completion
     }
 #endif
 #if BASELINE
@@ -214,40 +246,41 @@ let private start count (probe: Probe) = task {
 
 #if !BASELINE
 let private startRooms roomCount count (probe: Probe) = task {
-    let codec = ProtocolCodec.create ServerConfig.defaults |> ok
+    let codec = ProtocolCodec.create ServerConfig.defaults
     let ids = Array.init count (fun _ -> Guid.NewGuid())
     let ready = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
     let mutable joined = 0
+    let receive index response =
+        for bytes in ProtocolCodec.encode codec Int32.MaxValue response |> ok do probe.Receive(ids[index], bytes)
     let handleRoom index _ event = task {
         match event with
         | ChatRoomEvent.Joined _ ->
             if Interlocked.Increment(&joined) = count * roomCount then ready.TrySetResult() |> ignore
-        | ChatRoomEvent.Accepted(requestId, message) ->
-            probe.Receive(ids[index], ProtocolCodec.encodeServer codec (ServerResponse.ChatAccepted(requestId, message)) |> ok)
-        | ChatRoomEvent.Published message ->
-            probe.Receive(ids[index], ProtocolCodec.encodeServer codec (ServerResponse.ChatPublished message) |> ok)
+        | ChatRoomEvent.Accepted(requestId, message) -> receive index (ServerResponse.ChatAccepted(requestId, message))
+        | ChatRoomEvent.Published message -> receive index (ServerResponse.ChatPublished message)
         | ChatRoomEvent.JoinFailed reason -> ready.TrySetException(InvalidOperationException reason) |> ignore
         | ChatRoomEvent.Rejected(_, reason) -> failwithf "Room benchmark rejected: %A" reason
+        | ChatRoomEvent.Removed(_, message) -> failwithf "Room benchmark removed a message: %A" message.MessageId
     }
     let receivers = Array.init count (fun index ->
         Agent.Start({ AgentOptions.create (sprintf "benchmark-room-client-%d" index) with Mailbox = AgentMailbox.boundedWait 1024 }, handleRoom index))
     let handleControl _ message = task { return failwithf "Unexpected room control: %A" message }
     let host = Agent.Start(AgentOptions.create "benchmark-room-control", handleControl)
-    let rooms = Array.init roomCount (fun index ->
-        ChatRoomAgent.start { MailboxCapacity = 1024; ControlReserve = 64; HistoryCapacity = 64; MaxControlDeliveries = 128 }
-            (ChatChannelId.create (uint64 index + 1UL) |> ok) (host.Ref.TryReliable().Value) |> ok)
+    // Every room is a global channel of its own owner; their equal channel IDs never meet.
+    let rooms = Array.init roomCount (fun _ ->
+        ChatRoomAgent.start { MailboxCapacity = 1024; ControlReserve = 64; HistoryCapacity = 64; MaxControlDeliveries = 128; Rate = unlimited }
+            ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok)
     for room in rooms do
         for index in 0 .. count - 1 do
-            let profile = PlayerData.create (PlayerId.create (uint64 index + 1UL) |> ok)
-                              (Username.create 32 (sprintf "bench%d" index) |> ok)
-                              (DisplayName.create 64 (sprintf "Bench %d" index) |> ok)
             do! post room (ChatRoomCommand.Join {
-                ConnectionId = ids[index]; Profile = profile; Events = receivers[index].Ref.TryReliable().Value })
+                ConnectionId = ids[index]; Profile = profile index; Events = receivers[index].Ref.TryReliable().Value })
     do! guard ready.Task
+    let fingerprint = Moderation.normalize (ChatMessageText.value text)
     let send index requestId : Task =
         let room = rooms[(index + int requestId) % roomCount]
         post room (ChatRoomCommand.Publish {
-            ConnectionId = ids[index]; RequestId = requestId; Text = text
+            ConnectionId = ids[index]; RequestId = requestId; Author = PublicIdentity.Profile(profile index); Text = text
+            CharacterName = ValueNone; Fingerprint = fingerprint; Flagged = []; Announcement = ValueNone
             ReplyTo = receivers[index].Ref.TryReliable().Value })
     let stop () : Task = task {
         for room in rooms do room.Complete() |> ignore

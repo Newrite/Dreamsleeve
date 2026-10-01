@@ -156,7 +156,12 @@ An explicit `--output` must name a new directory. Every case starts a fresh real
 server process and a fresh generator process. Each case uses its own SQLite database
 in the case directory and an unused loopback HTTP port, explicitly enables test
 registration, and sets a finite 6000 requests/minute rate limit without changing
-production defaults. The real configured password hashing cost is retained. The
+production defaults. The generated configuration also turns the admin panel off
+(it is not measured, and its fixed port would collide with a running server) and
+lifts the chat anti-spam limit (`Runtime.Chat.Rate`: unbounded burst, no repeat
+window): with few clients a fixed aggregate rate exceeds what a single account may
+send, and the benchmark measures delivery, not admission. The real configured
+password hashing cost is retained. The
 runner keeps full server and
 client logs, the complete server configuration, client verification JSON, 100ms
 process samples, and summaries. Failed cases remain in the results and make the
@@ -172,7 +177,7 @@ the same capacities at every N to keep the allocated ENet host comparable:
 | Setting | Benchmark value |
 | --- | ---: |
 | Server.PeerLimit / Runtime.MaxSessions | 1000 |
-| Runtime.ControlReserve | 3004 |
+| Runtime.ControlReserve | 4004 (4 × MaxSessions + 4) |
 | Runtime.MailboxCapacity | 8192 |
 | Server.ServiceTimeoutMs / EventBudget | 0 / 512 |
 | Server.MaxOutgoingPackets | 65536 |
@@ -182,14 +187,11 @@ the same capacities at every N to keep the allocated ENet host comparable:
 Other values come from the checked-in `server.example.toml`, including each
 player's mailbox/output limits of 128 and the per-peer outgoing limit of 256 packets.
 Limits are finite and are not automatically raised when a run fails. `minimal`
-changes only peer/session counts and the required lifecycle control reserve,
-leaving all other example values intact. It is a separate configuration, not a
-comparable repetition of `scaled`.
-
-Known gap: the server now requires `Runtime.ControlReserve >= 4 * MaxSessions + 4` (four
-cleanup sources, including ground marks), while `Scripts/benchmark_enet.py` still writes
-3004 for `scaled`/`movement` and max(128, 3 × N + 4) for `minimal`; the server refuses such
-a configuration at startup until the runner is updated.
+changes only peer/session counts and the required lifecycle control reserve
+(4 × sessions + 4: one cleanup acknowledgement per source — chat, system channel,
+presence, ground marks — per session), leaving all other example values intact
+apart from the settings above. It is a separate configuration, not a comparable
+repetition of `scaled`.
 
 Metrics use Windows GetProcessTimes and GetProcessMemoryInfo. CPU is accumulated
 kernel+user CPU time divided by sampled wall time, expressed in **equivalents of

@@ -14,7 +14,7 @@ from pathlib import Path
 import subprocess
 import time
 
-from benchmark_enet import Child, ROOT, SERVER, CLIENT, aggregate, configuration, free_port
+from benchmark_enet import Child, ROOT, SERVER, CLIENT, aggregate, auth_url, configuration, free_port, write_phase
 
 
 def read_json(path):
@@ -37,7 +37,7 @@ def run(args, workers, repetition, destination):
     config_path = case / "server.toml"
     config_path.write_text(tomli_w.dumps(config), encoding="utf-8")
     phase_path = case / "phase.txt"
-    phase_path.write_text("startup", encoding="utf-8")
+    write_phase(phase_path, "startup")
     env = os.environ.copy()
     env["DREAMSLEEVE_BENCH_PHASE"] = str(phase_path)
     env["DREAMSLEEVE_BENCH_WARM_POSITIONS"] = "1" if args.warm_positions else "0"
@@ -71,7 +71,7 @@ def run(args, workers, repetition, destination):
             time.sleep(.05)
         for worker in range(workers):
             worker_env = dict(env, DREAMSLEEVE_BENCH_WORKER=str(worker))
-            children.append(Child(["dotnet", str(CLIENT), "--auth-url", config["Authentication"]["ListenUrl"],
+            children.append(Child(["dotnet", str(CLIENT), "--auth-url", auth_url(config),
                 "--port", str(config["Server"]["Port"]), "--clients", str(args.clients // workers),
                 "--hosts", str(args.hosts // workers), "--seconds", str(args.seconds), "--rate", str(args.rate),
                 "--replication-ms", str(args.replication_ms), "--scenario", args.scenario,
@@ -95,7 +95,7 @@ def run(args, workers, repetition, destination):
                 next_phase = "setup"
             if next_phase != phase:
                 phase = next_phase
-                phase_path.write_text(phase, encoding="utf-8")
+                write_phase(phase_path, phase)
             if args.udp_trace and phase == "load" and not trace_attempted:
                 trace_attempted = True
                 providers = case / "udp-providers.txt"

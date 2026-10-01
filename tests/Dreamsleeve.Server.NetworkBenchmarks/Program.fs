@@ -247,6 +247,13 @@ let private received state client (event: EnetEvent) =
                 match state.Movement with
                 | Some probe -> probe.Receive(client.Index, response, int packet.DataLength)
                 | None -> fail state "Unexpected player update during chat benchmark"
+            // Nobody places marks: the session still reports the empty own list when it
+            // opens and an empty visible set whenever the observer's space changes.
+            | ServerPacket.PayloadOneofCase.OwnGroundMarks ->
+                if response.OwnGroundMarks.Marks.Count <> 0 then fail state (sprintf "Client %d received own ground marks" client.Index)
+            | ServerPacket.PayloadOneofCase.GroundMarksChanged ->
+                if response.GroundMarksChanged.Added.Count <> 0 || response.GroundMarksChanged.RemovedIds.Count <> 0 then
+                    fail state (sprintf "Client %d received ground marks" client.Index)
             | unknown -> fail state (sprintf "Unknown server packet payload: %A" unknown)
 
 let private handle state hostIndex (event: EnetEvent) =

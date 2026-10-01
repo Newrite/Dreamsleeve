@@ -75,7 +75,8 @@ $metadata = [ordered]@{
         "New-only player state: one update plus correlated ACK and snapshot read per operation, one benchmark reply driver per player, N=1/16/32.",
         "P50/P95/P99 end at correlated acknowledgement (or completed state read); Admission percentiles end at awaited PostAsync and are null for player state.",
         "PublishedPackets counts N recipients per chat operation; the author publication also acknowledges request_id. Player state emits ACK/presence packets, excluded from the chat publication count.",
-        "Baseline receiver encodes output; current runtime encodes output and also polls an empty transport.",
+        "Baseline receiver encodes output; current runtime encodes output, is woken by the test transport and also polls it on every tick.",
+        "Current variant lifts channel anti-spam (unbounded burst, no repeat window) and keeps 64 announcements to fit MaxRecentMessages; the workload places no marks and never renames or moderates.",
         "Finite generous benchmark queue limits are not production defaults; observed actor queue sums cover only named public owners, private runtime children excluded.",
         "ThreadPool and named actor queue sums are sampled every 10ms, so peaks between samples can be missed. Slow-consumer bounds/isolation use deterministic tests, not these throughput samples.",
         "DisconnectFanoutMs=-1 for N=1 or room-only cases: no measured presence observer; ShutdownMs covers full teardown."

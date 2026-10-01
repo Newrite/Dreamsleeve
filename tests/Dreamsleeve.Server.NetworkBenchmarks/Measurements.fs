@@ -54,7 +54,10 @@ type Recorder(output: string) =
         lock gate (fun () ->
             if not (String.IsNullOrEmpty phasePath) then
                 try
-                    let text = File.ReadAllText(phasePath).Trim()
+                    // Shared for writing and replacing: the runner rewrites the file at any moment.
+                    use stream = new FileStream(phasePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ||| FileShare.Delete)
+                    use reader = new StreamReader(stream)
+                    let text = reader.ReadToEnd().Trim()
                     if text <> "" then phase <- text
                 with :? IOException -> ()
             let memory = GC.GetGCMemoryInfo()

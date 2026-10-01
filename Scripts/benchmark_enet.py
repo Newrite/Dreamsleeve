@@ -27,6 +27,10 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 SERVER = ROOT / "src/Dreamsleeve.Server/bin/Release/net10.0/Dreamsleeve.Server.dll"
 CLIENT = ROOT / "tests/Dreamsleeve.Server.NetworkBenchmarks/bin/Release/net10.0/Dreamsleeve.Server.NetworkBenchmarks.dll"
+# GameSettings.CleanupSources of the server.
+CLEANUP_SOURCES = 4
+# Int32.MaxValue: the server's chat token bucket never runs dry.
+UNLIMITED_BURST = 2**31 - 1
 
 
 class MemoryCounters(ctypes.Structure):
@@ -122,31 +126,52 @@ class Child:
         self.process.stdout.close()
 
 
+def write_phase(path, phase):
+    """Replaces the phase file at once: the measured processes poll it and never see it half written."""
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(phase, encoding="utf-8")
+    os.replace(temporary, path)
+
+
 def free_port(kind=socket.SOCK_DGRAM):
     with socket.socket(socket.AF_INET, kind) as endpoint:
         endpoint.bind(("127.0.0.1", 0))
         return endpoint.getsockname()[1]
 
 
+def control_reserve(sessions):
+    """Runtime.ControlReserve the server requires: one cleanup acknowledgement per
+    source (chat, system, presence, ground marks) per session, plus one round."""
+    return CLEANUP_SOURCES * sessions + CLEANUP_SOURCES
+
+
+def auth_url(config):
+    return config["Authentication"]["Listener"]["ListenUrl"]
+
+
 def configuration(clients, port, profile, case):
     config = tomllib.loads((ROOT / "src/Dreamsleeve.Server/server.example.toml").read_text(encoding="utf-8-sig"))
-    config.pop("Profiles", None)
     config["Database"] = {"DatabasePath": str((case / "accounts.sqlite").resolve()), "BusyTimeoutSeconds": 5}
     config["Authentication"] = {
-        "ListenUrl": f"http://127.0.0.1:{free_port(socket.SOCK_STREAM)}",
-        "AllowInsecureLoopback": True, "AllowRegistration": True, "CertificatePath": "",
-        "RequestsPerMinute": 6000, "RequestTimeoutSeconds": 15,
+        "AllowRegistration": True,
+        "Listener": {"ListenUrl": f"http://127.0.0.1:{free_port(socket.SOCK_STREAM)}", "AllowInsecureLoopback": True,
+                     "CertificatePath": "", "RequestsPerMinute": 6000, "RequestTimeoutSeconds": 15},
         "Service": {"MailboxCapacity": 64, "MaxConcurrentOperations": 4, "MaxTickets": 4096,
                     "TicketLifetimeSeconds": 60, "PasswordIterations": 210000},
     }
+    # The panel is not measured, and its fixed port would collide with a running server.
+    config["Admin"]["Enabled"] = False
     config["Logging"]["FilePath"] = str((case / "server-.json").resolve())
     server, runtime = config["Server"], config["Runtime"]
-    server.update(Port=port, PeerLimit=max(32, clients))
-    runtime.update(MaxSessions=max(32, clients), ControlReserve=max(128, 3 * clients + 4))
+    sessions = max(32, clients)
+    server.update(Port=port, PeerLimit=sessions)
+    runtime.update(MaxSessions=sessions, ControlReserve=control_reserve(sessions))
+    # The load measures delivery: a few clients may send faster than anti-spam admits.
+    runtime["Chat"]["Rate"] = {"Burst": UNLIMITED_BURST, "RefillMs": 1, "DuplicateWindowMs": 0}
     if profile in ("scaled", "movement"):
         server.update(PeerLimit=1000, ServiceTimeoutMs=0, EventBudget=512,
                       MaxOutgoingPackets=65536, MaxOutgoingBytes=64 * 1024 * 1024)
-        runtime.update(MaxSessions=1000, ControlReserve=3004, MailboxCapacity=8192,
+        runtime.update(MaxSessions=1000, ControlReserve=control_reserve(1000), MailboxCapacity=8192,
                        OpenTimeoutMs=30000, ShutdownTimeoutMs=10000)
     if profile == "movement":
         server.update(MaxOutgoingPacketsPerPeer=4096, MaxOutgoingBytesPerPeer=16 * 1024 * 1024,
@@ -190,7 +215,7 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
     config_path.write_text(tomli_w.dumps(config) + "\n", encoding="utf-8")
     env = os.environ.copy()
     phase_path = case / "phase.txt"
-    phase_path.write_text("startup", encoding="utf-8")
+    write_phase(phase_path, "startup")
     env["DREAMSLEEVE_BENCH_PHASE"] = str(phase_path)
     env["DREAMSLEEVE_BENCH_CLIENT_BUFFER"] = str(args.client_buffer)
     trace = None
@@ -219,14 +244,14 @@ def run_case(args, clients, rate, repetition, destination, scenario="chat"):
         for _ in range(10):
             samples.append({"seconds": time.monotonic() - started, "phase": phase, "server": server.metrics.sample()})
             time.sleep(0.1)
-        client = Child(["dotnet", str(CLIENT), "--auth-url", config["Authentication"]["ListenUrl"], "--port", str(config["Server"]["Port"]),
+        client = Child(["dotnet", str(CLIENT), "--auth-url", auth_url(config), "--port", str(config["Server"]["Port"]),
             "--clients", str(clients), "--hosts", str(args.client_hosts), "--seconds", str(args.seconds), "--rate", str(rate),
             "--replication-ms", str(args.replication_ms), "--scenario", scenario, "--output", str(case / "client.json")], case / "client.log", env)
         while True:
             for line in client.output():
                 if line.startswith("STAGE "):
                     phase = line.split(" ", 1)[1]
-                    phase_path.write_text(phase, encoding="utf-8")
+                    write_phase(phase_path, phase)
                     if phase == "load" and args.trace_server and trace is None:
                         trace_log = (case / "trace.log").open("w", encoding="utf-8")
                         trace = subprocess.Popen([str(args.trace_server.resolve()), "collect", "--process-id", str(server.process.pid),
