@@ -8,14 +8,16 @@ dist/Client (copy into Skyrim Data or install as a mod):
   SKSE/Plugins/Dreamsleeve/aliases.toml           streamer-mode pseudonym dictionary
   PrismaUI/views/Dreamsleeve/                     production web UI (index.html, assets, theme.user.css)
   Scripts/DreamsleeveClient.pex, Scripts/Source/DreamsleeveClient.psc   Papyrus API for other mods
-  Dreamsleeve/README.md, THIRD_PARTY_NOTICES.md   install notes and licenses
+  Dreamsleeve/README.md, THIRD_PARTY_NOTICES.md   install notes and third-party licenses
+  Dreamsleeve/LICENSE, EXCEPTIONS.md              Dreamsleeve's own license (GPL-3.0-or-later with exceptions)
   Dreamsleeve/API/DreamsleeveAPI.h                C++ API header for other SKSE plugins
 
 dist/Server (framework-dependent `dotnet publish` of Dreamsleeve.Server, Release):
   Dreamsleeve.Server.dll and dependencies, db/migrations, server.example.toml, README.md,
   moderation.example.toml and moderation.toml (word list, created only when absent),
   pseudonyms.example.toml and pseudonyms.toml (hidden-name dictionary, created only when absent),
-  THIRD_PARTY_NOTICES.md (the admin panel's htmx is embedded in Dreamsleeve.Server.Web.dll)
+  LICENSE, EXCEPTIONS.md, THIRD_PARTY_NOTICES.md (the admin panel's htmx is embedded in
+  Dreamsleeve.Server.Web.dll)
 
 The script never touches a game folder or a running server: installing is a copy,
 and an existing client.toml/ui.toml/server.toml must not be overwritten on update.
@@ -51,6 +53,12 @@ PRESERVED = (
     "Server/data",
     "Server/logs",
 )
+
+# Dreamsleeve's license, shipped with every build; the source of a build is its release tag there.
+LICENSE_FILES = (ROOT / "LICENSE", ROOT / "EXCEPTIONS.md")
+REPOSITORY = "https://github.com/Newrite/Dreamsleeve"
+LICENSE_NOTE = ("Лицензия: GPL-3.0-or-later с Modding Exception и GPL-3.0 Linking Exception — тексты в\n"
+                f"`LICENSE` и `EXCEPTIONS.md` рядом. Исходный код: {REPOSITORY} (тег релиза с той же версией).\n")
 
 # The documented defaults, also embedded in the plugin as its first-run file.
 CLIENT_TOML = ROOT / "src" / "Dreamsleeve.Client.Core" / "client.example.toml"
@@ -102,14 +110,23 @@ def copy_tree(source: Path, target: Path) -> int:
     return count
 
 
+def copy_licenses(target: Path) -> None:
+    for path in LICENSE_FILES:
+        shutil.copy2(path, target / path.name)
+
+
 def notices() -> str:
     packages = {
         "React / ReactDOM": UI / "node_modules" / "react" / "LICENSE",
         "Zustand": UI / "node_modules" / "zustand" / "LICENSE",
     }
     parts = ["# Third-party notices\n",
-             "Dreamsleeve.Client.dll links CommonLibSSE-NG (MIT), ENet (MIT), protobuf (BSD-3-Clause), "
-             "spdlog (MIT), Glaze (MIT) and magic_enum (MIT); their texts are in the respective upstream repositories.\n",
+             "Dreamsleeve.Client.dll links CommonLibSSE-NG (https://github.com/alandtse/CommonLibSSE-NG, "
+             "GPL-3.0-or-later with the Modding Exception and the GPL-3.0 Linking Exception, the same terms as "
+             "Dreamsleeve: see LICENSE and EXCEPTIONS.md). Parts of the plugin follow skyrim-rich-presence "
+             "(https://github.com/doodlum/skyrim-rich-presence, same terms).\n\n",
+             "It also links ENet (MIT), protobuf (BSD-3-Clause), spdlog (MIT), Glaze (MIT) and magic_enum (MIT); "
+             "their texts are in the respective upstream repositories.\n",
              "The web UI bundle contains the following packages:\n"]
     for name, path in packages.items():
         if path.exists():
@@ -166,7 +183,8 @@ def client_readme() -> str:
 см. docs/DreamsleeveModApiRu.md в репозитории.
 
 Логи: `Documents/My Games/Skyrim Special Edition/SKSE/DreamsleeveClient.log`.
-"""
+
+""" + LICENSE_NOTE
 
 
 def server_notices() -> str:
@@ -269,7 +287,8 @@ username/display name, сообщения и публикуемое имя пе�
 loopback и ходите через SSH-туннель (`ssh -L 8780:127.0.0.1:8780 host`) или обратный
 прокси с HTTPS (`TrustForwardedHeaders = true` только для прокси на этой же машине);
 HTTP без TLS наружу — только явным `AllowInsecureRemote`. Подробно — docs/AdminPanelRu.md.
-"""
+
+""" + LICENSE_NOTE
 
 
 def main() -> int:
@@ -333,6 +352,7 @@ def main() -> int:
     notes.mkdir()
     (notes / "README.md").write_text(client_readme(), encoding="utf-8")
     (notes / "THIRD_PARTY_NOTICES.md").write_text(notices(), encoding="utf-8")
+    copy_licenses(notes)
     (notes / "API").mkdir()
     shutil.copy2(CLIENT / "API" / "DreamsleeveAPI.h", notes / "API" / "DreamsleeveAPI.h")
 
@@ -347,6 +367,7 @@ def main() -> int:
         shutil.copy2(SERVER / "pseudonyms.example.toml", server / "pseudonyms.toml")
         (server / "README.md").write_text(server_readme(), encoding="utf-8")
         (server / "THIRD_PARTY_NOTICES.md").write_text(server_notices(), encoding="utf-8")
+        copy_licenses(server)
         check_server(server)
 
     for item in output.rglob("*"):

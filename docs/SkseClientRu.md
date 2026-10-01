@@ -324,8 +324,8 @@ reliable-снятие позиции; после загрузки отправл
 
 | Каталог | Содержимое |
 |---|---|
-| `dist/Client` | Раскладка мода относительно Data: `SKSE/Plugins/Dreamsleeve.Client.dll(+pdb)`, `SKSE/Plugins/Dreamsleeve/client.toml`, `SKSE/Plugins/Dreamsleeve/aliases.toml`, `PrismaUI/views/Dreamsleeve/*`, `Scripts/DreamsleeveClient.pex`, `Scripts/Source/DreamsleeveClient.psc`, `Dreamsleeve/API/DreamsleeveAPI.h`, `Dreamsleeve/README.md`, `Dreamsleeve/THIRD_PARTY_NOTICES.md` |
-| `dist/Server` | `Dreamsleeve.Server.dll` с зависимостями, `db/migrations`, `server.example.toml`, `moderation.example.toml` и `pseudonyms.example.toml` (рабочие `moderation.toml`/`pseudonyms.toml` создаются, только если их нет), `README.md`, `THIRD_PARTY_NOTICES.md` (нужен ASP.NET Core Runtime 10) |
+| `dist/Client` | Раскладка мода относительно Data: `SKSE/Plugins/Dreamsleeve.Client.dll(+pdb)`, `SKSE/Plugins/Dreamsleeve/client.toml`, `SKSE/Plugins/Dreamsleeve/aliases.toml`, `PrismaUI/views/Dreamsleeve/*`, `Scripts/DreamsleeveClient.pex`, `Scripts/Source/DreamsleeveClient.psc`, `Dreamsleeve/API/DreamsleeveAPI.h`, `Dreamsleeve/README.md`, `Dreamsleeve/THIRD_PARTY_NOTICES.md`, `Dreamsleeve/LICENSE`, `Dreamsleeve/EXCEPTIONS.md`; `DreamsleeveClient.esp` в корне |
+| `dist/Server` | `Dreamsleeve.Server.dll` с зависимостями, `db/migrations`, `server.example.toml`, `moderation.example.toml` и `pseudonyms.example.toml` (рабочие `moderation.toml`/`pseudonyms.toml` создаются, только если их нет), `README.md`, `THIRD_PARTY_NOTICES.md`, `LICENSE`, `EXCEPTIONS.md` (нужен ASP.NET Core Runtime 10) |
 
 `--skip-build` использует готовые DLL и UI, `--no-server` собирает только клиент. Пользовательские
 файлы в dist (`client.toml`, `ui.toml`, `aliases.toml`, `server.toml`, словари, БД, логи) пересборка

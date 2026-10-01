@@ -9,7 +9,7 @@ r"""Build the GitHub release archives in build/release/<version>/.
 Each server is one executable with the .NET runtime and every library inside;
 native ones (SQLite and what other packages bring) unpack on the first start
 into DOTNET_BUNDLE_EXTRACT_BASE_DIR, by default %TEMP%\.net or ~/.net. Next to it
-stay db/migrations, the example configs and the word lists. The version is the one in Directory.Build.props.
+stay db/migrations, the example configs, the word lists and the license. The version is the one in Directory.Build.props.
 """
 from __future__ import annotations
 
@@ -51,6 +51,7 @@ def publish_server(rid: str, target: Path) -> None:
     shutil.copy2(SERVER / "pseudonyms.example.toml", target / "pseudonyms.toml")
     (target / "README.md").write_text(dist.server_readme(rid), encoding="utf-8")
     (target / "THIRD_PARTY_NOTICES.md").write_text(dist.server_notices(), encoding="utf-8")
+    dist.copy_licenses(target)
 
     if not (target / EXECUTABLES[rid]).is_file():
         raise SystemExit(f"Missing {target / EXECUTABLES[rid]}")
