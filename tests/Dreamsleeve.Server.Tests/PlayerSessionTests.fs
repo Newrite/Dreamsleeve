@@ -154,7 +154,7 @@ let private joins fixture = joinsAs ValueNone fixture
 let private ready fixture = task {
     let! profile, chat, presence = joins fixture
     do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
-    do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
+    do! deliver presence.Events (PresenceEvent.Snapshot([playerSnapshot profile], ActorValueKinds.none))
     let! command = receive fixture.Host
     match command with
     | SessionHostCommand.Activate(connectionId, requestId, welcome) ->
@@ -255,7 +255,7 @@ let private strazh = Pseudonym.create "Страж" |> ok
 let private readyAs pseudonym fixture = task {
     let! profile, chat, presence = joinsAs pseudonym fixture
     do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
-    do! deliver presence.Events (PresenceEvent.Snapshot [presence.Snapshot])
+    do! deliver presence.Events (PresenceEvent.Snapshot([presence.Snapshot], ActorValueKinds.none))
     let! command = receive fixture.Host
     match command with
     | SessionHostCommand.Activate(_, _, welcome) -> return profile, chat, presence, welcome
@@ -309,18 +309,20 @@ let private identityTests = [
             equal ValueNone (ok read).CharacterName
 
             // The owner hears about itself through the copy meant for others.
-            do! deliver presence.Events (PresenceEvent.Updated started)
+            do! deliver presence.Events (PresenceEvent.Changed({ PresenceChange.empty with Updated = [ started ] }, ActorValueKinds.none))
             let! own = receive fixture.Host
             match own with
-            | SessionHostCommand.Send(_, ServerResponse.PlayerUpdated value) ->
+            | SessionHostCommand.Send(_, ServerResponse.PresenceChanged(change, _)) ->
+                let value = List.exactlyOne change.Updated
                 equal (PublicIdentity.Profile profile) value.Identity
                 equal (ValueSome name) value.CharacterName
             | other -> failwithf "Expected own update: %A" other
             // Another player's pseudonym passes unchanged.
             let other = PlayerSnapshot.withPseudonym strazh (playerSnapshot (PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "other" |> ok) (DisplayName.create 64 "Other" |> ok)))
-            do! deliver presence.Events (PresenceEvent.Joined other)
+            let arrival = { PresenceChange.empty with Joined = [ other ] }
+            do! deliver presence.Events (PresenceEvent.Changed(arrival, ActorValueKinds.none))
             let! joined = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerJoined other)) joined
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PresenceChanged(arrival, ActorValueKinds.none))) joined
 
             let! message = submitted fixture 3UL "hello"
             equal (PublicIdentity.Pseudonymous(profile.PlayerId, strazh)) message.Author
@@ -455,7 +457,7 @@ let tests = testList "PlayerSession" ([
         withAnnouncements announcements (fun fixture -> task {
             let! profile, chat, presence = joins fixture
             do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
-            do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
+            do! deliver presence.Events (PresenceEvent.Snapshot([playerSnapshot profile], ActorValueKinds.none))
             let! activation = receive fixture.Host
             match activation with
             | SessionHostCommand.Activate(_, _, welcome) -> equal [ClientAnnouncementSource.TrustedClient] welcome.AnnouncementSources
@@ -572,7 +574,7 @@ let tests = testList "PlayerSession" ([
             equal (Error PlayerStateError.NotReady) state
             equal 0 fixture.Host.Reader.Count
 
-            do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
+            do! deliver presence.Events (PresenceEvent.Snapshot([playerSnapshot profile], ActorValueKinds.none))
             let! first = receive fixture.Host
             match first with
             | SessionHostCommand.Activate(_, _, welcome) ->
@@ -581,23 +583,55 @@ let tests = testList "PlayerSession" ([
             | other -> failwithf "Expected welcome first: %A" other
             let! second = receive fixture.Host
             equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.ChatPublished message)) second
-            do! deliver presence.Events (PresenceEvent.Left profile.PlayerId)
+            let departure = { PresenceChange.empty with Left = [ profile.PlayerId ] }
+            do! deliver presence.Events (PresenceEvent.Changed(departure, ActorValueKinds.none))
             let! third = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerLeft profile.PlayerId)) third
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PresenceChanged(departure, ActorValueKinds.none))) third
         }))
 
     case "presence snapshot and later delta remain ordered while chat snapshot is delayed" (fun () ->
         withPlayer options (fun fixture -> task {
             let! profile, chat, presence = joins fixture
-            do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
-            do! deliver presence.Events (PresenceEvent.Left profile.PlayerId)
+            let departure = { PresenceChange.empty with Left = [ profile.PlayerId ] }
+            do! deliver presence.Events (PresenceEvent.Snapshot([playerSnapshot profile], ActorValueKinds.none))
+            do! deliver presence.Events (PresenceEvent.Changed(departure, ActorValueKinds.none))
             do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
             let! welcome = receive fixture.Host
             match welcome with
             | SessionHostCommand.Activate(_, _, value) -> equal [playerSnapshot profile] value.Players
             | other -> failwithf "%A" other
             let! delta = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerLeft profile.PlayerId)) delta
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PresenceChanged(departure, ActorValueKinds.none))) delta
+        }))
+
+    case "the opening kinds reach the welcome and a change keeps the kinds presence chose" (fun () ->
+        withPlayer options (fun fixture -> task {
+            let! profile, chat, presence = joins fixture
+            let key = ActorValueKey.create 128 "skyrim:health" |> ok
+            let name = ActorValueName.create 64 "Health" |> ok
+            let health current = ActorValueInfo.create name (ActorValueState.resource current 100)
+            let neighbour = PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "other" |> ok) (DisplayName.create 64 "Other" |> ok)
+            let healthy = { playerSnapshot neighbour with ActorValues = Map.ofList [ key, health -5 ] }
+            let opening: ActorValueKinds = { Ids = Map.ofList [ struct (key, name), 3UL ]; Defined = [ { Id = 3UL; Key = key; DisplayName = name } ] }
+            do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
+            do! deliver presence.Events (PresenceEvent.Snapshot([ playerSnapshot profile; healthy ], opening))
+            let! activated = receive fixture.Host
+            match activated with
+            | SessionHostCommand.Activate(_, _, welcome) ->
+                equal [ playerSnapshot profile; healthy ] welcome.Players
+                equal opening welcome.Kinds
+            | unexpected -> failwithf "Expected Activate: %A" unexpected
+            // Kinds the session already knows stay known: presence leaves them undefined.
+            let patch: MetadataPatch = {
+                PlayerId = neighbour.PlayerId
+                ActorValues = ValueSome { Removed = []; Set = [ key, health -20 ] }
+                Details = ValueNone
+            }
+            let change = { PresenceChange.empty with Metadata = [ patch ] }
+            let later = { opening with Defined = [] }
+            do! deliver presence.Events (PresenceEvent.Changed(change, later))
+            let! forwarded = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PresenceChanged(change, later))) forwarded
         }))
 
     case "personal quota and rejection settle one request without closing the player" (fun () ->
@@ -640,7 +674,7 @@ let tests = testList "PlayerSession" ([
             let! profile, chat, presence = joins fixture
             do! post fixture.Player PlayerSessionMessage.Stop
             do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
-            do! deliver presence.Events (PresenceEvent.Snapshot [playerSnapshot profile])
+            do! deliver presence.Events (PresenceEvent.Snapshot([playerSnapshot profile], ActorValueKinds.none))
             let! state = read fixture.Player
             equal (Error PlayerStateError.Closed) state
             do! finish fixture
@@ -697,7 +731,7 @@ let tests = testList "PlayerSession" ([
             let key = ActorValueKey.create 128 "skyrim:health" |> ok
             let health value =
                 ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok)
-                    (ActorValueState.resource value 100.0f |> ok)
+                    (ActorValueState.resource value 100)
             let form = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)
             let location = PlayerLocation.create
                                (Location.create form (LocationName.create 128 "Whiterun" |> ok))
@@ -719,17 +753,17 @@ let tests = testList "PlayerSession" ([
 
             do! update (PlayerUpdate.BeginCharacter name)
             do! update (PlayerUpdate.SetLocation(1UL, ValueSome location))
-            do! update (PlayerUpdate.SetActorValues(Map.ofList [(key, health 80.0f)]))
+            do! update (PlayerUpdate.SetActorValues(Map.ofList [(key, health 80)]))
             let! first = read fixture.Player
             let first = ok first
             equal (PublicIdentity.Profile profile) first.Identity
             equal (ValueSome name) first.CharacterName
             equal (ValueSome location) first.Location
 
-            do! update (PlayerUpdate.SetActorValues(Map.ofList [(key, health 20.0f)]))
+            do! update (PlayerUpdate.SetActorValues(Map.ofList [(key, health 20)]))
             let! second = read fixture.Player
-            equal (health 20.0f) (ok second).ActorValues[key]
-            equal (health 80.0f) first.ActorValues[key]
+            equal (health 20) (ok second).ActorValues[key]
+            equal (health 80) first.ActorValues[key]
 
             // Loading another save with the same character name clears its old telemetry.
             do! update (PlayerUpdate.BeginCharacter name)
@@ -874,7 +908,7 @@ let tests = testList "PlayerSession" ([
             let! profile, _, presence = ready fixture
             let name = CharacterName.create 128 "Nerevar" |> ok
             let key = ActorValueKey.create 128 "skyrim:health" |> ok
-            let health = ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok) (ActorValueState.resource 20.0f 100.0f |> ok)
+            let health = ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok) (ActorValueState.resource 20 100)
             do! rejectUpdate fixture 2UL (PlayerUpdate.SetActorValues( Map.ofList [(key, health)]))
             do! rejectUpdate fixture 3UL (PlayerUpdate.RenameCharacter name)
             let! beginning = applyUpdate fixture 4UL (PlayerUpdate.BeginCharacter name)
@@ -890,9 +924,10 @@ let tests = testList "PlayerSession" ([
             equal (PublicIdentity.Profile profile) cleared.Identity
             equal 0 fixture.Host.Reader.Count
             // Only the source's publication updates the author's outbound state.
-            do! deliver presence.Events (PresenceEvent.Updated cleared)
+            let republished = { PresenceChange.empty with Updated = [ cleared ] }
+            do! deliver presence.Events (PresenceEvent.Changed(republished, ActorValueKinds.none))
             let! replicated = receive fixture.Host
-            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PlayerUpdated cleared)) replicated
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.PresenceChanged(republished, ActorValueKinds.none))) replicated
         }))
 
     case "telemetry request ID cannot settle another pending chat command" (fun () ->

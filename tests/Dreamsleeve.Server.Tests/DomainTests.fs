@@ -26,8 +26,9 @@ let private formKey plugin id =
 let private location key name position =
     PlayerLocation.create (Location.create key (LocationName.create 128 name |> ok)) position Rotation.zero
 
-let private health amount =
-    ActorValueInfo.create (ActorValueName.create 64 "Health" |> ok) (ActorValueState.resource amount 100.0f |> ok)
+let private label value = ActorValueName.create 64 value |> ok
+let private reading name amount = ActorValueInfo.create (label name) (ActorValueState.resource amount 100)
+let private health amount = reading "Health" amount
 
 let private chat capacity =
     let value = Chat.create ChatChannelKind.Global capacity |> ok
@@ -213,89 +214,87 @@ let private spatialTests =
 let private stateTests =
     testList "actor-owned player state" [
         testCase "resources preserve negative and above-maximum observations" <| fun _ ->
-            for current, maximum in [ -5.0f, 100.0f; 120.0f, 100.0f; 1.0f, -1.0f ] do
-                let state = ActorValueState.resource current maximum |> ok
-                (ActorValueState.current state |> ActorValue.value).Should().Be(current) |> ignore
-                Expect.equal (ActorValueState.tryMaximum state |> ValueOption.map ActorValue.value) (ValueSome maximum) "Maximum is not recomputed"
+            for current, maximum in [ -5, 100; 120, 100; 1, -1; Int32.MinValue, Int32.MaxValue ] do
+                let state = ActorValueState.resource current maximum
+                let observed = ActorValueState.fold (fun _ -> failtest "Expected a resource") (fun current maximum -> current, maximum) state
+                Expect.equal observed (current, maximum) "Neither part is clamped or recomputed"
 
-        testCase "resource updates preserve their shape while rejecting non-finite readings" <| fun _ ->
-            let resource = ActorValueState.resource 30.0f 80.0f |> ok
-            let changed = ActorValueState.withCurrent -5.0f resource |> ok
-            Expect.equal (ActorValueState.tryMaximum changed |> ValueOption.map ActorValue.value) (ValueSome 80.0f) "Maximum survives current update"
-            Expect.equal (ActorValueState.scalar 42.0f |> ok |> ActorValueState.tryMaximum) ValueNone "Scalar has no maximum"
+        testCase "scalars reject non-finite readings and stay a shape of their own" <| fun _ ->
+            let scalar = ActorValueState.scalar 42.0f |> ok
+            let observed = ActorValueState.fold (fun value -> ValueSome (ActorValue.value value)) (fun _ _ -> ValueNone) scalar
+            Expect.equal observed (ValueSome 42.0f) "Scalar has a value and no maximum"
+            Expect.notEqual scalar (ActorValueState.resource 42 42) "A scalar is not a resource of the same amount"
             for bad in [ Single.NaN; Single.PositiveInfinity; Single.NegativeInfinity ] do
                 Expect.isError (ActorValueState.scalar bad) "Scalar must be finite"
-                Expect.isError (ActorValueState.resource bad 100.0f) "Current must be finite"
-                Expect.isError (ActorValueState.resource 100.0f bad) "Maximum must be finite"
 
         testCase "storage reuses immutable projections and invalidates every mutation" <| fun _ ->
             let key = actorKey "av:health"
             let other = actorKey "av:magicka"
-            let original = Map.ofList [key, health 50.0f]
+            let original = Map.ofList [key, health 50]
             let storage = ActorValueStorage.ofSnapshot original
             let snapshot () = ActorValueStorage.snapshot storage
 
             Expect.isTrue (obj.ReferenceEquals(original, snapshot ())) "The supplied immutable projection is reusable"
-            ActorValueStorage.set key (health 25.0f) storage
+            ActorValueStorage.set key (health 25) storage
             let changed = snapshot ()
-            Expect.equal changed[key] (health 25.0f) "set invalidates the cache"
+            Expect.equal changed[key] (health 25) "set invalidates the cache"
             Expect.isTrue (obj.ReferenceEquals(changed, snapshot ())) "Repeated snapshots reuse their map"
-            Expect.equal original[key] (health 50.0f) "Previously published map stays immutable"
+            Expect.equal original[key] (health 50) "Previously published map stays immutable"
 
-            ActorValueStorage.setMany [| key, health 10.0f; other, health 30.0f |] storage
+            ActorValueStorage.setMany [| key, health 10; other, health 30 |] storage
             Expect.equal (snapshot () |> Map.count) 2 "setMany invalidates the cache"
             ActorValueStorage.remove key storage |> ignore
             Expect.isFalse (snapshot () |> Map.containsKey key) "remove invalidates the cache"
             ActorValueStorage.clear storage
             Expect.isTrue (snapshot () |> Map.isEmpty) "clear publishes an empty map"
-            Expect.equal changed[key] (health 25.0f) "Intermediate snapshots also stay detached"
+            Expect.equal changed[key] (health 25) "Intermediate snapshots also stay detached"
 
         testCase "storage snapshots detach from later updates and removals" <| fun _ ->
             let storage = ActorValueStorage.create ()
             let key = actorKey "skyrim:health"
-            ActorValueStorage.set key (health 50.0f) storage
+            ActorValueStorage.set key (health 50) storage
             let before = ActorValueStorage.snapshot storage
-            ActorValueStorage.set key (health 25.0f) storage
+            ActorValueStorage.set key (health 25) storage
             ActorValueStorage.remove key storage |> ignore
             Expect.equal (ActorValueStorage.count storage) 0 "Live key is gone"
-            Expect.equal before[key] (health 50.0f) "Snapshot keeps the original reading"
+            Expect.equal before[key] (health 50) "Snapshot keeps the original reading"
 
         testCase "setMany merges by key and last duplicate wins" <| fun _ ->
             let storage = ActorValueStorage.create ()
             let key = actorKey "skyrim:health"
             let rareKey = actorKey "avg:rare"
-            ActorValueStorage.set rareKey (health 7.0f) storage
-            ActorValueStorage.setMany [| key, health 10.0f; key, health 20.0f |] storage
+            ActorValueStorage.set rareKey (health 7) storage
+            ActorValueStorage.setMany [| key, health 10; key, health 20 |] storage
             Expect.equal (ActorValueStorage.count storage) 2 "Unchanged readings are retained"
-            Expect.equal (ActorValueStorage.tryFind key storage) (ValueSome (health 20.0f)) "Last update wins"
+            Expect.equal (ActorValueStorage.tryFind key storage) (ValueSome (health 20)) "Last update wins"
 
         testCase "player snapshots detach nested mutable actor values" <| fun _ ->
             let player = Player.create (profile 1UL "First")
             let key = actorKey "skyrim:health"
-            Player.setActorValue key (health 50.0f) player
+            Player.setActorValue key (health 50) player
             let before = Player.snapshot player
-            Player.setActorValue key (health 5.0f) player
-            Expect.equal before.ActorValues[key] (health 50.0f) "Nested state must be detached too"
+            Player.setActorValue key (health 5) player
+            Expect.equal before.ActorValues[key] (health 50) "Nested state must be detached too"
 
         testCase "starting another character clears telemetry even for an identical name" <| fun _ ->
             let name = characterName "Nerevar"
             let player = Player.create (profile 1UL "First") |> Player.withCharacterName name
             let located = player |> Player.withLocation (location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero)
             let key = actorKey "skyrim:health"
-            Player.setActorValue key (health 50.0f) located
+            Player.setActorValue key (health 50) located
             let next = Player.beginCharacter name located
             Expect.equal next.CharacterName (ValueSome name) "New character is named"
             Expect.equal next.Location ValueNone "Previous save's coordinates are cleared"
             Expect.equal (Player.actorValueCount next) 0 "Previous save's stats are cleared"
-            Player.setActorValue key (health 80.0f) next
-            Expect.equal (Player.tryFindActorValue key located) (ValueSome (health 50.0f)) "Old storage is not reused"
+            Player.setActorValue key (health 80) next
+            Expect.equal (Player.tryFindActorValue key located) (ValueSome (health 50)) "Old storage is not reused"
 
         testCase "leaving the world preserves profile but clears character telemetry" <| fun _ ->
             let player =
                 Player.create (profile 1UL "First")
                 |> Player.beginCharacter (characterName "Nerevar")
                 |> Player.withLocation (location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero)
-            Player.setActorValue (actorKey "skyrim:health") (health 50.0f) player
+            Player.setActorValue (actorKey "skyrim:health") (health 50) player
             let cleared = Player.clearGameState player
             Expect.equal cleared.Data player.Data "Server identity survives"
             Expect.equal cleared.CharacterName ValueNone "No active character"
@@ -308,14 +307,14 @@ let private stateTests =
             let extraKey = actorKey "avg:extra"
             let original = Player.create (profile 1UL "First") |> Player.applyUpdate (PlayerUpdate.BeginCharacter name)
             let place = location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero
-            let first = original |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome place)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health 120.0f; extraKey, health 5.0f]))
+            let first = original |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome place)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health 120; extraKey, health 5]))
 
             let before = Player.snapshot first
             let valuesOnly = first |> Player.applyUpdate (PlayerUpdate.SetActorValues Map.empty)
             Expect.equal valuesOnly.Location first.Location "Values do not touch movement."
             let movedOnly = first |> Player.applyUpdate (PlayerUpdate.SetLocation(2UL, ValueNone))
             Expect.equal (Player.actorValuesSnapshot movedOnly) before.ActorValues "Movement does not touch values."
-            let second = first |> Player.applyUpdate (PlayerUpdate.SetLocation(2UL, ValueNone)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health -5.0f]))
+            let second = first |> Player.applyUpdate (PlayerUpdate.SetLocation(2UL, ValueNone)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health -5]))
 
             Expect.equal second.Location ValueNone "unknown position replaces a previous known location"
             Expect.equal (Player.actorValueCount second) 1 "a missing key is removed, not retained forever"
@@ -352,6 +351,38 @@ let private stateTests =
             Expect.equal renamed.Data.PlayerId player.Data.PlayerId "Rename keeps identity"
             Expect.equal (Player.withProfile (profile 2UL "Other") player |> Result.map Player.snapshot)
                 (Error DomainError.PlayerIdentityMismatch) "Cannot replace player identity"
+    ]
+
+let private patchTests =
+    let healthKey, staminaKey, magickaKey = actorKey "skyrim:health", actorKey "skyrim:stamina", actorKey "skyrim:magicka"
+    testList "actor value patches" [
+        testCase "new and changed readings are set while unchanged ones are left out" <| fun _ ->
+            let previous = Map.ofList [ healthKey, health 50; staminaKey, reading "Stamina" 80 ]
+            let latest = Map.ofList [ healthKey, health -20; staminaKey, reading "Stamina" 80; magickaKey, reading "Magicka" 10 ]
+            Expect.equal (ActorValuesPatch.between previous latest)
+                (ValueSome { Removed = []; Set = [ healthKey, health -20; magickaKey, reading "Magicka" 10 ] })
+                "A value change keeps its kind; a negative reading travels as it is"
+
+        testCase "a removed key is listed under the label it had" <| fun _ ->
+            let previous = Map.ofList [ healthKey, health 50; staminaKey, reading "Stamina" 80 ]
+            let latest = Map.ofList [ healthKey, health 50 ]
+            Expect.equal (ActorValuesPatch.between previous latest)
+                (ValueSome { Removed = [ struct (staminaKey, label "Stamina") ]; Set = [] }) "Only the missing kind"
+            Expect.equal (ActorValuesPatch.between previous Map.empty)
+                (ValueSome { Removed = [ struct (healthKey, label "Health"); struct (staminaKey, label "Stamina") ]; Set = [] })
+                "Clearing every reading removes every kind"
+
+        testCase "a changed label removes the old kind and sets the new one" <| fun _ ->
+            let previous = Map.ofList [ healthKey, health 50 ]
+            let latest = Map.ofList [ healthKey, reading "Здоровье" 50 ]
+            Expect.equal (ActorValuesPatch.between previous latest)
+                (ValueSome { Removed = [ struct (healthKey, label "Health") ]; Set = [ healthKey, reading "Здоровье" 50 ] })
+                "A kind is the key with its label"
+
+        testCase "equal readings make no patch" <| fun _ ->
+            let values = Map.ofList [ healthKey, health 50; staminaKey, reading "Stamina" 80 ]
+            Expect.equal (ActorValuesPatch.between values (Map.ofList [ staminaKey, reading "Stamina" 80; healthKey, health 50 ])) ValueNone "Same readings"
+            Expect.equal (ActorValuesPatch.between Map.empty Map.empty) ValueNone "Nothing to nothing"
     ]
 
 let private chatTests =
@@ -475,4 +506,4 @@ let private movementTests = testList "Movement" [
 ]
 
 let tests =
-    testList "Dreamsleeve.Server.Domain" [ textTests; spatialTests; stateTests; chatTests; movementTests ]
+    testList "Dreamsleeve.Server.Domain" [ textTests; spatialTests; stateTests; patchTests; chatTests; movementTests ]

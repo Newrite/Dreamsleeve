@@ -115,8 +115,16 @@ TEST_CASE("PlayerStore snapshots and lookup results own their nested maps and st
   snapshot[0].data.displayName = "Changed locally";
   CHECK(store.Find(1)->actorValues.size() == 2);
   CHECK(store.Find(1)->data.displayName == "Player 1");
-  REQUIRE(store.ReplaceMetadata(1, ActorValueStorage{}, std::nullopt).has_value());
+  REQUIRE(store
+            .ApplyMetadata(
+              1,
+              ActorValuesPatch{
+                  .removed = {"skyrim:health", "skyrim:magicka"}
+  },
+              std::nullopt)
+            .has_value());
   REQUIRE(store.UpdateLocation(1, std::nullopt).has_value());
+  CHECK(store.Find(1)->actorValues.empty());
   CHECK(snapshot[0].actorValues.size() == 2);
   CHECK(snapshot[0].location.has_value());
 }
@@ -138,14 +146,19 @@ TEST_CASE("PlayerStore location and metadata updates replace only what they carr
   CHECK(updated->characterName == initial.characterName);
   CHECK(updated->location == std::optional<PlayerLocation>{location});
 
-  PlayerDetails details;
-  details.level = 12;
-  REQUIRE(store.ReplaceMetadata(1, std::nullopt, details).has_value());
+  PlayerDetailsPatch details;
+  details.level = std::optional<std::uint32_t>{12};
+  REQUIRE(store.ApplyMetadata(1, std::nullopt, details).has_value());
   CHECK(store.Find(1)->details.level == std::optional<std::uint32_t>{12});
   CHECK(store.Find(1)->actorValues == initial.actorValues);
-  const ActorValueStorage values{{"skyrim:stamina", {"Stamina", ScalarActorValue{5}}}};
-  REQUIRE(store.ReplaceMetadata(1, values, std::nullopt).has_value());
-  CHECK(store.Find(1)->actorValues == values);
+  // A patch changes only the readings it names.
+  const ActorValuesPatch values{.removed = {"skyrim:magicka"}, .set = {{"skyrim:stamina", {"Stamina", ScalarActorValue{5}}}}};
+  REQUIRE(store.ApplyMetadata(1, values, std::nullopt).has_value());
+  CHECK(
+    store.Find(1)->actorValues == ActorValueStorage{
+                                      {"skyrim:health",  {"Health", ResourceActorValue{80, 100}}},
+                                      {"skyrim:stamina", {"Stamina", ScalarActorValue{5}}       }
+  });
   CHECK(store.Find(1)->details.level == std::optional<std::uint32_t>{12});
   REQUIRE(store.UpdateLocation(1, std::nullopt).has_value());
   CHECK_FALSE(store.Find(1)->location.has_value());
@@ -154,7 +167,7 @@ TEST_CASE("PlayerStore location and metadata updates replace only what they carr
 TEST_CASE("PlayerStore unknown partial updates cannot create incomplete players")
 {
   PlayerStore store;
-  const std::array results{store.UpdateLocation(42, std::nullopt), store.ReplaceMetadata(42, ActorValueStorage{}, std::nullopt)};
+  const std::array results{store.UpdateLocation(42, std::nullopt), store.ApplyMetadata(42, ActorValuesPatch{}, std::nullopt)};
   for (const auto& result : results)
   {
     REQUIRE_FALSE(result.has_value());
@@ -230,7 +243,8 @@ TEST_CASE("ClientModel routes accepted updates and advances revision only on suc
   const auto generation = model.Generation();
   REQUIRE(model.Apply(generation, OnlinePlayersReplaced{{StateTests::MakePlayer(), StateTests::MakePlayer(2)}}).has_value());
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{1, std::nullopt}).has_value());
-  REQUIRE(model.Apply(generation, PlayerMetadataUpdated{1, ActorValueStorage{}, std::nullopt}).has_value());
+  REQUIRE(model.Apply(generation, PlayerMetadataUpdated{1, ActorValuesPatch{.removed = {"skyrim:health", "skyrim:magicka"}}, std::nullopt})
+            .has_value());
   REQUIRE(model.Apply(generation, ChatMessagesReceived{7, {StateTests::Message(10)}}).has_value());
   const auto accepted = model.Snapshot();
   REQUIRE(accepted.players.size() == 2);

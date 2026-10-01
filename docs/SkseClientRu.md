@@ -253,7 +253,7 @@ sink), геймпад, VR, `CharEvent`, движение мыши и thumbstick 
   для динамических форм — `{"runtime", FormID}` (сессионная идентичность, совпадений между клиентами не будет).
 - Details каждые 250 мс, отправка reliable только при изменении: раса (`NamedForm`), уровень (uint16, 0 допустим),
   activity, place, `gameStartedAtUnixMs` (время начала контекста).
-- Actor values каждые 250 мс при изменении больше чем на 1 единицу или при выходе на 0 либо максимум:
+- Actor values каждые 250 мс, целыми очками (`Domain::Players::Points`), когда целое значение изменилось:
   `skyrim:health/magicka/stamina` как
   Resource{`GetActorValue`, `GetPermanentActorValue + GetActorValueModifier(kTemporary)`}. Диапазоны не ограничиваются.
 - `TESDeathEvent` для игрока ускоряет следующий тик details/AV; сама смерть читается `IsDead()`.

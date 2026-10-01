@@ -197,6 +197,8 @@ private:
       ResetMovement();
       earlyChat.clear();
       model.ResetSession();
+      kinds.Clear();
+      kindSweep = KindSweepFloor;
       exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
       exchange.PublishMute(std::nullopt);
       exchange.PublishRole(Domain::PlayerRole::Player);
@@ -339,7 +341,7 @@ private:
         (channel != Wire::Channel::Realtime && !PacketFlags::HasFlag(flags, PacketFlag::Reliable)))
         return Unexpected("delivery");
 
-      auto response = codec.Decode(received.packet.DataBytesView(), channel);
+      auto response = codec.Decode(received.packet.DataBytesView(), channel, kinds);
       if (!response) return std::unexpected{response.error()};
 
       if (auto* rejected = std::get_if<Wire::RequestRejected>(&*response))
@@ -377,6 +379,9 @@ private:
 
       auto self = model.SetSelfPlayer(generation, opened.selfPlayerId);
       if (!self) return std::unexpected{self.error()};
+
+      for (auto& kind : opened.kinds)
+        kinds.Define(std::move(kind));
 
       serverName         = std::move(opened.serverName);
       announcementPolicy = std::move(opened.announcements);
@@ -516,11 +521,6 @@ private:
       return {};
     }
 
-    Result<void> Receive(PlayerMetadataUpdated& value)
-    {
-      return Apply(value);
-    }
-
     // Correlation settles the command; the visible set changes only through
     // the ordinary delta, so the author sees the mark the way everyone does.
     Result<void> Receive(Wire::GroundMarkPlaced& placed)
@@ -544,7 +544,7 @@ private:
       return Settle(changed.requestId, IdentityChanged{changed.hiding});
     }
 
-    // The own profile changes through the PlayerUpdated that follows; this only settles the request.
+    // The own profile changes through the presence update that follows; this only settles the request.
     Result<void> Receive(Wire::DisplayNameChanged& changed)
     {
       if (!TakePending(changed.requestId, PendingKind::Name)) return Unexpected("request_id");
@@ -564,9 +564,30 @@ private:
       return Apply(value);
     }
 
-    Result<void> Receive(PlayerLocationUpdated& value)
+    // The kinds first, then the updates in wire order, published together.
+    Result<void> Receive(Wire::PresenceChanged& changed)
     {
-      return Apply(value);
+      if (phase != SessionPhase::Ready) return Unexpected("session_not_ready");
+
+      // The decoder already checked these against the same table.
+      for (auto& kind : changed.kinds)
+        kinds.Define(std::move(kind));
+      for (const auto& update : changed.updates)
+      {
+        auto applied = model.Apply(model.Generation(), update);
+        if (!applied) return std::unexpected{applied.error()};
+      }
+      ForgetUnusedKinds();
+      return Publish();
+    }
+
+    // Kinds no online player has are never sent again; the table drops them
+    // once it has doubled since the last sweep.
+    void ForgetUnusedKinds()
+    {
+      if (kinds.Size() < kindSweep) return;
+      kinds.Retain(model.SnapshotPlayers());
+      kindSweep = std::max(KindSweepFloor, 2 * kinds.Size());
     }
 
     Result<void> Receive(Wire::PlayersMoved& batch)
@@ -597,16 +618,6 @@ private:
         return {};
       }
       return Apply(change);
-    }
-
-    Result<void> Receive(PlayerUpserted& value)
-    {
-      return Apply(value);
-    }
-
-    Result<void> Receive(PlayerRemoved& value)
-    {
-      return Apply(value);
     }
 
     template <class T>
@@ -935,6 +946,8 @@ private:
 
     // Control, chat and realtime lanes.
     static constexpr std::size_t MinimumChannels = 3;
+    // The kind table is swept when it reaches this size, then twice the kinds left.
+    static constexpr std::size_t KindSweepFloor = 64;
 
     Configuration                                     config;
     Wire::ProtocolCodec                               codec;
@@ -959,6 +972,8 @@ private:
     bool                                              movementReady{};
     std::vector<ClientUpdate>                         earlyChat;
     std::vector<ClientEvent>                          events;
+    Wire::ActorValueKinds                             kinds;
+    std::size_t                                       kindSweep{KindSweepFloor};
   };
 
 }

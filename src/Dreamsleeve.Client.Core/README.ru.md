@@ -186,8 +186,11 @@ Rename сохраняет generation и остальное состояние. �
 серверную generation в PlayerInfo.
 
 UpdatePlayer не меняет модель. PlayerUpdateAccepted завершает команду. Репликация
-приходит также автору: metadata не откатывает позицию, а reliable PlayerVisibilityChanged
-устанавливает/очищает её контекст. Bootstrap/PlayerJoined включают исходную позу,
+приходит также автору одной пачкой PresenceChanged: патч метаданных не откатывает позицию,
+а reliable запись видимости устанавливает/очищает её контекст. Номера видов actor values
+`ClientRuntime` держит в `Wire::ActorValueKinds` сессии: виды приходят в SessionOpened и в пачке,
+где впервые нужны, а виды, которых нет ни у одного игрока модели, таблица забывает, когда
+вырастает вдвое. Bootstrap и вошедшие игроки включают исходную позу,
 viewRevision и movementSequence. Realtime PlayersMoved содержит только pose с токеном
 видимости и sequence; неизвестные контексты и старые номера молча отбрасываются.
 

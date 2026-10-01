@@ -389,7 +389,7 @@ TEST_CASE("Invalid session responses never publish partially initialized state")
   SUBCASE("presence before welcome")
   {
     packet.clear_request_id();
-    packet.mutable_player_left()->set_player_id(7);
+    packet.mutable_presence_changed()->add_left(7);
   }
   SUBCASE("unknown version")
   {
@@ -771,7 +771,7 @@ TEST_CASE("Player commands and acknowledgements wait for authoritative replicati
 
   P::ServerPacket replication;
   replication.set_protocol_version(Wire::Version);
-  auto* player = replication.mutable_player_updated()->mutable_player();
+  auto* player = replication.mutable_presence_changed()->add_updated();
   player->mutable_profile()->set_player_id(7);
   player->set_character_name("Server canonical name");
   player->set_character_generation(2);
@@ -861,8 +861,11 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
   auto* player = welcome.mutable_session_opened()->mutable_players(0);
   player->set_character_name("Nerevar");
   player->set_character_generation(1);
+  auto* kind = welcome.mutable_session_opened()->add_actor_value_kinds();
+  kind->set_id(1);
+  kind->set_key("health");
   auto* value = player->add_actor_values();
-  value->set_key("health");
+  value->set_kind(1);
   value->mutable_resource()->set_current(0);
   value->mutable_resource()->set_maximum(100);
   player->mutable_details()->set_level(12);
@@ -872,12 +875,13 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
 
   P::ServerPacket moved;
   moved.set_protocol_version(Wire::Version);
-  moved.mutable_player_visibility_changed()->set_player_id(7);
-  moved.mutable_player_visibility_changed()->set_view_revision(1);
-  auto* location = moved.mutable_player_visibility_changed()->mutable_location();
-  location->mutable_location()->mutable_location_id()->set_plugin_name("skyrim.esm");
-  location->mutable_location()->mutable_location_id()->set_local_form_id(0x123);
-  location->mutable_position()->set_x(42);
+  auto* space = moved.mutable_presence_changed()->mutable_space();
+  space->mutable_location_id()->set_plugin_name("skyrim.esm");
+  space->mutable_location_id()->set_local_form_id(0x123);
+  auto* baseline = moved.mutable_presence_changed()->add_visibility();
+  baseline->set_player_id(7);
+  baseline->set_view_revision(1);
+  baseline->mutable_pose()->mutable_position()->set_x(42);
   fixture.Send(moved);
   auto output = fixture.ReceiveOutput();
   auto changed = std::get<ClientStateDelta>(output.state.updates.back()).players.front();
@@ -887,16 +891,18 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
   CHECK(changed.details.level == 12);
   CHECK(changed.characterGeneration == 1);
 
-  moved.mutable_player_visibility_changed()->clear_location();
-  moved.mutable_player_visibility_changed()->set_view_revision(2);
+  moved.mutable_presence_changed()->clear_space();
+  baseline->clear_pose();
+  baseline->set_view_revision(2);
   fixture.Send(moved);
   output = fixture.ReceiveOutput();
   CHECK_FALSE(std::get<ClientStateDelta>(output.state.updates.back()).players.front().location);
 
   P::ServerPacket reset;
   reset.set_protocol_version(Wire::Version);
-  reset.mutable_player_updated()->mutable_player()->mutable_profile()->set_player_id(7);
-  reset.mutable_player_updated()->mutable_player()->set_character_generation(2);
+  auto* restarted = reset.mutable_presence_changed()->add_updated();
+  restarted->mutable_profile()->set_player_id(7);
+  restarted->set_character_generation(2);
   fixture.Send(reset);
   output = fixture.ReceiveOutput();
   changed = std::get<ClientStateDelta>(output.state.updates.back()).players.front();
@@ -905,6 +911,67 @@ TEST_CASE("Compact movement only changes location and full reset replaces game s
   CHECK(changed.actorValues.empty());
   CHECK_FALSE(changed.details.level);
   CHECK(fixture.errors.empty());
+}
+
+TEST_CASE("Actor value kinds of the welcome and of later batches resolve patches; an unknown one faults")
+{
+  Fixture fixture;
+  auto    welcome = Welcome(fixture.Open());
+  auto*   kind    = welcome.mutable_session_opened()->add_actor_value_kinds();
+  kind->set_id(1);
+  kind->set_key("skyrim:health");
+  kind->set_display_name("Health");
+  auto* value = welcome.mutable_session_opened()->mutable_players(0)->add_actor_values();
+  value->set_kind(1);
+  value->mutable_resource()->set_current(50);
+  value->mutable_resource()->set_maximum(100);
+  fixture.Send(welcome);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  fixture.Drain();
+
+  // A new key appears later: its kind comes with the batch that first uses it.
+  P::ServerPacket batch;
+  batch.set_protocol_version(Wire::Version);
+  auto* added = batch.mutable_presence_changed()->add_actor_value_kinds();
+  added->set_id(2);
+  added->set_key("skyrim:stamina");
+  added->set_display_name("Stamina");
+  auto* patch = batch.mutable_presence_changed()->add_metadata();
+  patch->set_player_id(7);
+  auto* stamina = patch->add_actor_values();
+  stamina->set_kind(2);
+  stamina->mutable_resource()->set_current(-4);
+  stamina->mutable_resource()->set_maximum(90);
+  auto* health = patch->add_actor_values();
+  health->set_kind(1);
+  health->mutable_resource()->set_current(51);
+  health->mutable_resource()->set_maximum(100);
+  fixture.Send(batch);
+  auto output  = fixture.ReceiveOutput();
+  auto changed = std::get<ClientStateDelta>(output.state.updates.back()).players.front();
+  CHECK(
+    changed.actorValues.at("skyrim:stamina").state == Domain::ActorValueState{
+                                                          Domain::ResourceActorValue{-4, 90}
+  });
+  CHECK(
+    changed.actorValues.at("skyrim:health").state == Domain::ActorValueState{
+                                                         Domain::ResourceActorValue{51, 100}
+  });
+
+  // Known by now: a later batch uses kind 2 without defining it again.
+  batch.mutable_presence_changed()->clear_actor_value_kinds();
+  patch->clear_actor_values();
+  patch->add_removed_actor_values(2);
+  fixture.Send(batch);
+  output  = fixture.ReceiveOutput();
+  changed = std::get<ClientStateDelta>(output.state.updates.back()).players.front();
+  CHECK_FALSE(changed.actorValues.contains("skyrim:stamina"));
+  CHECK(fixture.errors.empty());
+
+  patch->clear_removed_actor_values();
+  patch->add_removed_actor_values(3);
+  fixture.Send(batch);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
 }
 
 TEST_CASE("Periodic movement repeats the last pose with its capture time after local sampling stops")

@@ -150,9 +150,10 @@ type MovementSample = { ContextRevision: uint64; Sequence: uint64; Pose: Movemen
 [<Struct>]
 type MovementChange = { PlayerId: PlayerId; ViewRevision: uint64; Sequence: uint64; Pose: MovementPose }
 
-/// Reliable baseline or clear for one observer's view of a player.
+/// Reliable baseline or clear for one observer's view of a player. A visible
+/// player shares the observer's place, so only the pose travels; none clears.
 [<Struct>]
-type VisibilityChange = { PlayerId: PlayerId; ViewRevision: uint64; Sequence: uint64; Location: PlayerLocation voption }
+type VisibilityChange = { PlayerId: PlayerId; ViewRevision: uint64; Sequence: uint64; Pose: MovementPose voption }
 
 [<RequireQualifiedAccess>]
 module MovementPose =

@@ -28,6 +28,25 @@ let private pid raw = PlayerId.create raw |> ok
 let private channel = ChatChannelId.create 1UL |> ok
 let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
 let private snapshot = Player.create profile |> Player.snapshot
+let private healthKey = ActorValueKey.create 128 "skyrim:health" |> ok
+let private healthName = ActorValueName.create 64 "Health" |> ok
+let private health current maximum = ActorValueInfo.create healthName (ActorValueState.resource current maximum)
+let private whiterun =
+    PlayerLocation.create
+        (Location.create (FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)) (LocationName.create 128 "Whiterun" |> ok))
+        (Position.create 1.0f 2.0f 3.0f |> ok) Rotation.zero
+
+/// Numbers the readings of these players from one, as presence does for a recipient that knows no kind.
+let private kindsOf (players: PlayerSnapshot list) : ActorValueKinds =
+    let defined =
+        players
+        |> List.collect (fun player -> [ for KeyValue(key, info) in player.ActorValues -> key, info.DisplayName ])
+        |> List.distinct
+        |> List.mapi (fun index (key, name) -> ({ Id = uint64 index + 1UL; Key = key; DisplayName = name }: ActorValueKind))
+    { Ids = defined |> List.map (fun kind -> struct (kind.Key, kind.DisplayName), kind.Id) |> Map.ofList; Defined = defined }
+
+let private joined player = ServerResponse.PresenceChanged({ PresenceChange.empty with Joined = [ player ] }, kindsOf [ player ])
+let private updated player = ServerResponse.PresenceChanged({ PresenceChange.empty with Updated = [ player ] }, kindsOf [ player ])
 let private message =
     ChatMessage.create (ChatMessageId.create UInt64.MaxValue |> ok) channel (PublicIdentity.Profile profile) ValueNone
         (ChatMessageText.create 2000 "Привет\nworld" |> ok) (DateTimeOffset.FromUnixTimeMilliseconds(-1L))
@@ -43,6 +62,7 @@ let private systemChannel = { ChannelId = ChatChannelKind.channelId ChatChannelK
 let private welcomeWith messages = {
     SelfPlayerId = pid 7UL
     Players = [snapshot]
+    Kinds = ActorValueKinds.none
     Channels = [ { ChannelId = channel; Kind = ChatChannelKind.Global; Messages = messages }; systemChannel ]
     AnnouncementSources = [ClientAnnouncementSource.ThirdParty]
     OwnPseudonym = ValueNone
@@ -131,7 +151,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let strict = configured { config with MaxPacketBytes = size - 1 }
         Expect.isError (ProtocolCodec.encode strict 548 (ServerResponse.PlayersMoved single)) "Application cap also applies."
 
-    testCase "source movement timestamp survives domain and both replication shapes" <| fun _ ->
+    testCase "source movement timestamp survives domain and every replication shape" <| fun _ ->
         for stamp in [0UL; 123456789UL; UInt64.MaxValue] do
             let wire = wireLocation()
             wire.SampledAtUs <- stamp
@@ -141,17 +161,119 @@ let tests = testList "Dreamsleeve.Server.Codec" [
 
             let moved = Packets.single codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, state.Location])) |> ok |> parseMovement
             Expect.equal moved.Movements.Players[0].Pose.SampledAtUs stamp "Compact movement retains time."
-            let full = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
-            Expect.equal full.PlayerUpdated.Player.Location.SampledAtUs stamp "Snapshots retain the same measurement."
+            let full = Packets.single codec (joined state) |> ok |> parse
+            Expect.equal full.PresenceChanged.Joined[0].Location.SampledAtUs stamp "Snapshots retain the same measurement."
+            let baseline: VisibilityChange = { PlayerId = pid 7UL; ViewRevision = 1UL; Sequence = 0UL; Pose = ValueSome (MovementPose.ofLocation location) }
+            let change = { PresenceChange.empty with Space = ValueSome location.Location; Visibility = [ baseline ] }
+            let visible = Packets.single codec (ServerResponse.PresenceChanged(change, ActorValueKinds.none)) |> ok |> parse
+            Expect.equal visible.PresenceChanged.Visibility[0].Pose.SampledAtUs stamp "A visibility baseline retains it too."
 
-    testCase "metadata replication encodes omitted and empty components independently" <| fun _ ->
-        let packet = Packets.single codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueSome Map.empty, ValueNone)) |> ok |> parse
-        Expect.isNotNull packet.PlayerMetadataChanged.ActorValues "Present empty means clear."
-        Expect.isNull packet.PlayerMetadataChanged.Details "Absent details means preserve."
-        let packet = Packets.single codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueSome PlayerDetails.empty)) |> ok |> parse
-        Expect.isNull packet.PlayerMetadataChanged.ActorValues "Absent values mean preserve."
-        Expect.isNotNull packet.PlayerMetadataChanged.Details "Details reset is explicit."
-        Expect.isError (Packets.single codec (ServerResponse.PlayerMetadataChanged(pid 7UL, ValueNone, ValueNone))) "Empty patch is not an update."
+    testCase "metadata patches carry removed kinds, set readings, replaced details and cleared components" <| fun _ ->
+        let stamina = ActorValueKey.create 128 "skyrim:stamina" |> ok
+        let staminaName = ActorValueName.create 64 "Stamina" |> ok
+        let kinds: ActorValueKinds = {
+            Ids = Map.ofList [ struct (healthKey, healthName), 4UL; struct (stamina, staminaName), 9UL ]
+            Defined = [ { Id = 9UL; Key = stamina; DisplayName = staminaName } ]
+        }
+        let activity = PlayerActivity.create 256 64 ActivityKind.Combat (ValueSome "Mudcrab") LockDifficulty.Unknown ValueNone |> ok
+        let values: ActorValuesPatch = {
+            Removed = [ struct (healthKey, healthName) ]
+            Set = [ stamina, ActorValueInfo.create staminaName (ActorValueState.resource -3 120) ]
+        }
+        let details: DetailsPatch = {
+            Race = ValueSome ValueNone; Level = ValueSome (ValueSome 12u); Activity = ValueSome activity
+            Place = ValueNone; GameStartedAt = ValueSome ValueNone
+        }
+        let patch: MetadataPatch = { PlayerId = pid 7UL; ActorValues = ValueSome values; Details = ValueSome details }
+        let encode patch kinds =
+            let packet = Packets.single codec (ServerResponse.PresenceChanged({ PresenceChange.empty with Metadata = [ patch ] }, kinds)) |> ok |> parse
+            packet.PresenceChanged
+        let packet = encode patch kinds
+        let kind = packet.ActorValueKinds |> Seq.exactlyOne
+        Expect.equal (kind.Id, kind.Key, kind.DisplayName) (9UL, "skyrim:stamina", "Stamina") "the new kind is defined with its first use"
+        let wire = packet.Metadata |> Seq.exactlyOne
+        Expect.equal wire.PlayerId 7UL "patched player"
+        Expect.sequenceEqual wire.RemovedActorValues [ 4UL ] "removed by number"
+        let set = wire.ActorValues |> Seq.exactlyOne
+        Expect.equal (set.Kind, set.Resource.Current, set.Resource.Maximum) (9UL, -3, 120) "set by number in whole points"
+        Expect.equal wire.Details.Level 12u "replaced level"
+        Expect.equal wire.Details.Activity.TargetName "Mudcrab" "replaced activity"
+        Expect.isNull wire.Details.Race "a cleared component is not sent"
+        Expect.isNull wire.Details.Place "an unchanged component is not sent"
+        Expect.sequenceEqual wire.ClearedDetails
+            [ Dreamsleeve.Protocol.Chat.PlayerDetailsField.Race; Dreamsleeve.Protocol.Chat.PlayerDetailsField.GameStartedAt ] "cleared components are listed"
+
+        let valuesOnly = encode { patch with Details = ValueNone } kinds
+        Expect.isNull valuesOnly.Metadata[0].Details "absent details are unchanged"
+        Expect.isEmpty valuesOnly.Metadata[0].ClearedDetails "and nothing is cleared"
+        let clearing = { details with Race = ValueNone; Level = ValueSome ValueNone; Activity = ValueNone; GameStartedAt = ValueNone }
+        let clearOnly = encode { patch with ActorValues = ValueNone; Details = ValueSome clearing } ActorValueKinds.none
+        Expect.isNull clearOnly.Metadata[0].Details "a pure clearing sends no details"
+        Expect.sequenceEqual clearOnly.Metadata[0].ClearedDetails [ Dreamsleeve.Protocol.Chat.PlayerDetailsField.Level ] "only the level clears"
+        Expect.isEmpty clearOnly.Metadata[0].RemovedActorValues "absent values are unchanged"
+        Expect.isEmpty clearOnly.Metadata[0].ActorValues "absent values set nothing"
+
+    testCase "a presence change defines new kinds and carries every part in its own field" <| fun _ ->
+        let other = PlayerData.create (pid 8UL) profile.Username (DisplayName.create 64 "Other" |> ok) |> Player.create |> Player.snapshot
+        let entering = { other with ActorValues = Map.ofList [ healthKey, health 75 100 ] }
+        let renamed = { snapshot with ActorValues = Map.ofList [ healthKey, health 30 100 ] }
+        let activity = PlayerActivity.create 256 64 ActivityKind.Sneaking ValueNone LockDifficulty.Unknown ValueNone |> ok
+        let details: DetailsPatch = { Race = ValueNone; Level = ValueNone; Activity = ValueSome activity; Place = ValueNone; GameStartedAt = ValueNone }
+        let change: PresenceChange = {
+            Joined = [ entering ]
+            Updated = [ renamed ]
+            Metadata = [ { PlayerId = pid 9UL; ActorValues = ValueNone; Details = ValueSome details } ]
+            Space = ValueSome whiterun.Location
+            Visibility = [
+                { PlayerId = pid 8UL; ViewRevision = 3UL; Sequence = 5UL; Pose = ValueSome (MovementPose.ofLocation whiterun) }
+                { PlayerId = pid 10UL; ViewRevision = 4UL; Sequence = 0UL; Pose = ValueNone }
+            ]
+            Left = [ pid 11UL ]
+        }
+        let encoded = Packets.single codec (ServerResponse.PresenceChanged(change, kindsOf [ entering; renamed ])) |> ok |> parse
+        Expect.isFalse encoded.HasRequestId "a presence change is a notification"
+        let packet = encoded.PresenceChanged
+        Expect.equal (packet.ActorValueKinds |> Seq.map (fun kind -> kind.Id, kind.Key, kind.DisplayName) |> List.ofSeq)
+            [ 1UL, "skyrim:health", "Health" ] "one kind for both players' readings"
+        let reading (player: Dreamsleeve.Protocol.Chat.PlayerInfo) =
+            let value = player.ActorValues |> Seq.exactlyOne
+            player.Profile.PlayerId, value.Kind, value.Resource.Current
+        Expect.equal (reading packet.Joined[0]) (8UL, 1UL, 75) "joined player with numbered readings"
+        Expect.equal (reading packet.Updated[0]) (7UL, 1UL, 30) "updated player with numbered readings"
+        Expect.equal (packet.Metadata[0].PlayerId, packet.Metadata[0].Details.Activity.Kind)
+            (9UL, Dreamsleeve.Protocol.Chat.ActivityKind.Sneaking) "metadata patch"
+        Expect.equal (packet.Space.LocationId.LocalFormId, packet.Space.LocationName) (0x3Cu, "Whiterun") "the recipient's place"
+        let baseline, clear = packet.Visibility[0], packet.Visibility[1]
+        Expect.equal (baseline.PlayerId, baseline.ViewRevision, baseline.Sequence, baseline.Pose.Position.X) (8UL, 3UL, 5UL, 1.0f) "a baseline carries a pose"
+        Expect.equal (clear.PlayerId, clear.ViewRevision) (10UL, 4UL) "a clear advances the view"
+        Expect.isNull clear.Pose "a clear has no pose"
+        Expect.sequenceEqual packet.Left [ 11UL ] "left players"
+
+    testCase "presence changes refuse unnumbered readings, empty parts and a place that disagrees with the poses" <| fun _ ->
+        let refused (change: PresenceChange) kinds message =
+            Expect.equal (Packets.single codec (ServerResponse.PresenceChanged(change, kinds)) |> error).Failure
+                (ProtocolCodecFailure.InvalidPayload "presence_changed") message
+        let healthy = { snapshot with ActorValues = Map.ofList [ healthKey, health 50 100 ] }
+        let kinds = kindsOf [ healthy ]
+        let pose = MovementPose.ofLocation whiterun
+        let view revision pose : VisibilityChange = { PlayerId = pid 8UL; ViewRevision = revision; Sequence = 0UL; Pose = pose }
+        let values patch : MetadataPatch = { PlayerId = pid 7UL; ActorValues = ValueSome patch; Details = ValueNone }
+        refused PresenceChange.empty ActorValueKinds.none "an empty change is not sent"
+        refused { PresenceChange.empty with Joined = [ healthy ] } ActorValueKinds.none "a joined reading needs a number"
+        refused { PresenceChange.empty with Updated = [ healthy ] } ActorValueKinds.none "an updated reading needs a number"
+        refused { PresenceChange.empty with Metadata = [ values { Removed = []; Set = [ healthKey, health 50 100 ] } ] } ActorValueKinds.none "a set reading needs a number"
+        refused { PresenceChange.empty with Metadata = [ values { Removed = [ struct (healthKey, healthName) ]; Set = [] } ] } ActorValueKinds.none "a removed kind needs a number"
+        refused { PresenceChange.empty with Metadata = [ { PlayerId = pid 7UL; ActorValues = ValueNone; Details = ValueNone } ] } ActorValueKinds.none "a patch changes something"
+        refused { PresenceChange.empty with Visibility = [ view 1UL (ValueSome pose) ] } ActorValueKinds.none "a baseline needs the place"
+        refused { PresenceChange.empty with Space = ValueSome whiterun.Location; Visibility = [ view 1UL ValueNone ] } ActorValueKinds.none "clears alone have no place"
+        refused { PresenceChange.empty with Space = ValueSome whiterun.Location; Left = [ pid 8UL ] } ActorValueKinds.none "a place without any visibility"
+        refused { PresenceChange.empty with Visibility = [ view 0UL ValueNone ] } ActorValueKinds.none "a view always has a revision"
+        refused { PresenceChange.empty with Joined = [ healthy ] } { kinds with Defined = [ { kinds.Defined.Head with Id = 0UL } ] } "a defined kind is never zero"
+        Expect.isOk (Packets.single codec (ServerResponse.PresenceChanged({ PresenceChange.empty with Joined = [ healthy ] }, kinds))) "numbered readings pass"
+        Expect.isOk (Packets.single codec (ServerResponse.PresenceChanged({ PresenceChange.empty with Joined = [ healthy ] }, { kinds with Defined = [] })))
+            "a kind the recipient was told earlier needs no definition"
+        let visible = { PresenceChange.empty with Space = ValueSome whiterun.Location; Visibility = [ view 1UL (ValueSome pose); view 2UL ValueNone ] }
+        Expect.isOk (Packets.single codec (ServerResponse.PresenceChanged(visible, ActorValueKinds.none))) "a place with a pose passes next to a clear"
 
 
     testCase "open session carries only an opaque ticket without changing it" <| fun _ ->
@@ -269,9 +391,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal marked.ChatPublished.Message.Flagged.Count 1 "flag ranges"
         Expect.equal (marked.ChatPublished.Message.Flagged[0].Start, marked.ChatPublished.Message.Flagged[0].Length) (1u, 2u) "byte range"
         let withheld = { snapshot with CharacterName = ValueNone; CharacterNameWithheld = true }
-        let player = Packets.single codec (ServerResponse.PlayerJoined withheld) |> ok |> parse
-        Expect.isTrue player.PlayerJoined.Player.CharacterNameWithheld "withheld flag"
-        Expect.isFalse player.PlayerJoined.Player.HasCharacterName "withheld name absent"
+        let player = (Packets.single codec (joined withheld) |> ok |> parse).PresenceChanged.Joined[0]
+        Expect.isTrue player.CharacterNameWithheld "withheld flag"
+        Expect.isFalse player.HasCharacterName "withheld name absent"
         let tooLong = send 3UL (String('x', config.ChatInput.MessageText + 1))
         match (ProtocolCodec.decodeClient codec (tooLong.ToByteArray()) |> error).Failure with
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.TooLong maximum)) ->
@@ -299,13 +421,23 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (Packets.single codec (ServerResponse.SessionOpened(0UL, welcome))) "zero correlation"
         Expect.isError (Packets.single codec (ServerResponse.ChatAccepted(0UL, message))) "zero chat correlation"
 
+    testCase "a welcome defines every kind its players use and numbers their readings" <| fun _ ->
+        let healthy = { snapshot with ActorValues = Map.ofList [ healthKey, health -10 100 ] }
+        let packet = Packets.single codec (ServerResponse.SessionOpened(1UL, { welcome with Players = [ healthy ]; Kinds = kindsOf [ healthy ] })) |> ok |> parse
+        let kind = packet.SessionOpened.ActorValueKinds |> Seq.exactlyOne
+        Expect.equal (kind.Id, kind.Key, kind.DisplayName) (1UL, "skyrim:health", "Health") "the kind travels once, with its strings"
+        let reading = packet.SessionOpened.Players[0].ActorValues |> Seq.exactlyOne
+        Expect.equal (reading.Kind, reading.Resource.Current, reading.Resource.Maximum) (1UL, -10, 100) "the reading names its kind by number"
+        Expect.equal (Packets.single codec (ServerResponse.SessionOpened(1UL, { welcome with Players = [ healthy ] })) |> error).Failure
+            (ProtocolCodecFailure.InvalidPayload "session_opened") "a reading without a number is refused"
+
     testCase "replies require an ID while presence notifications have no correlation" <| fun _ ->
         let rejection = { Code = RequestRejectionCode.AuthenticationFailed; Message = "Отказ"; Field = "text" }
         let packet = Packets.single codec (ServerResponse.RequestRejected(9UL, rejection)) |> ok |> parse
         Expect.equal packet.RequestRejected.Code RequestRejectionCode.AuthenticationFailed "shared protobuf code"
         Expect.equal packet.RequestId 9UL "required correlation"
         Expect.isError (Packets.single codec (ServerResponse.RequestRejected(0UL, rejection))) "zero ID"
-        for response in [ServerResponse.PlayerJoined snapshot; ServerResponse.PlayerLeft (pid 7UL)] do
+        for response in [joined snapshot; ServerResponse.PresenceChanged({ PresenceChange.empty with Left = [ pid 7UL ] }, ActorValueKinds.none)] do
             let packet = Packets.single codec response |> ok |> parse
             Expect.isFalse packet.HasRequestId "notifications cannot carry a request ID"
 
@@ -390,19 +522,20 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         beginAction.BeginCharacter.Name <- " "
         Expect.isError (update beginAction) "character name is required"
 
-    testCase "zero scalar differs from unset and resource values are not clamped" <| fun _ ->
+    testCase "zero scalar differs from unset and whole-point resources are not clamped" <| fun _ ->
         let zero = scalarEntry "Skyrim:SpeedMult" 0.0f
-        let resource = Dreamsleeve.Protocol.Chat.ActorValueEntry(
-            Key = "skyrim:health", DisplayName = "Health",
-            Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = 120.0f, Maximum = 100.0f))
-        let decoded = valuesPacket [zero; resource] |> update |> playerUpdate |> apply
+        let resource key name current maximum =
+            Dreamsleeve.Protocol.Chat.ActorValueEntry(
+                Key = key, DisplayName = name,
+                Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = current, Maximum = maximum))
+        let decoded = valuesPacket [zero; resource "skyrim:health" "Health" 120 100; resource "skyrim:stamina" "Stamina" -40 100] |> update |> playerUpdate |> apply
         Expect.equal decoded.Location ValueNone "absent location is unknown"
-        let speed = decoded.ActorValues[ActorValueKey.create 128 "skyrim:speedmult" |> ok].State
-        Expect.equal (ActorValueState.current speed |> ActorValue.value) 0.0f "zero survived its oneof presence"
-        Expect.equal (ActorValueState.tryMaximum speed) ValueNone "scalar has no maximum"
-        let health = decoded.ActorValues[ActorValueKey.create 128 "skyrim:health" |> ok].State
-        Expect.equal (ActorValueState.current health |> ActorValue.value) 120.0f "above maximum preserved"
-        Expect.equal (ActorValueState.tryMaximum health |> ValueOption.map ActorValue.value) (ValueSome 100.0f) "maximum preserved"
+        let observe key =
+            ActorValueState.fold (fun scalar -> Choice1Of2 (ActorValue.value scalar)) (fun current maximum -> Choice2Of2 (current, maximum))
+                decoded.ActorValues[ActorValueKey.create 128 key |> ok].State
+        Expect.equal (observe "skyrim:speedmult") (Choice1Of2 0.0f) "zero survived its oneof presence and has no maximum"
+        Expect.equal (observe "skyrim:health") (Choice2Of2 (120, 100)) "above maximum preserved"
+        Expect.equal (observe "skyrim:stamina") (Choice2Of2 (-40, 100)) "negative current preserved"
         zero.ClearValue()
         Expect.equal (valuesPacket [zero] |> update |> error).Failure
             (ProtocolCodecFailure.InvalidPayload "actor_value.value") "unset is not scalar zero"
@@ -441,12 +574,16 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 match failure.Failure with
                 | ProtocolCodecFailure.InvalidDomain(DomainError.NonFiniteNumber _) -> ()
                 | value -> failtestf "Unexpected failure %A" value
-            for entry in [
-                scalarEntry "skyrim:health" bad
-                Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = "skyrim:health", Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = bad))
-                Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = "skyrim:health", Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Maximum = bad))
-            ] do
-                Expect.isError (valuesPacket [entry] |> update) "every actor value component must be finite"
+            Expect.isError (valuesPacket [scalarEntry "skyrim:health" bad] |> update) "a scalar reading must be finite"
+
+    testCase "resources travel as whole signed points from the client to observers" <| fun _ ->
+        for current, maximum in [ -250, 100; 0, 0; 150, 100; Int32.MinValue, Int32.MaxValue ] do
+            let entry = Dreamsleeve.Protocol.Chat.ActorValueEntry(
+                Key = "skyrim:health", DisplayName = "Health",
+                Resource = Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = current, Maximum = maximum))
+            let state = valuesPacket [entry] |> update |> playerUpdate |> apply
+            let reading = (Packets.single codec (joined state) |> ok |> parse).PresenceChanged.Joined[0].ActorValues |> Seq.exactlyOne
+            Expect.equal (reading.Resource.Current, reading.Resource.Maximum) (current, maximum) "no rounding, clamping or sign loss"
 
     testCase "sample admission checks count before accepting unique canonical keys" <| fun _ ->
         let first = scalarEntry "Skyrim:Health" 1.0f
@@ -489,14 +626,17 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let started = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Nerevar" |> ok)
         let sampled = valuesPacket [scalarEntry "skyrim:health" 0.0f] |> update |> playerUpdate
         let state = started |> Player.applyUpdate sampled |> Player.snapshot
-        let joined = Packets.single codec (ServerResponse.PlayerJoined state) |> ok |> parse
-        let changed = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
-        let boot = Packets.single codec (ServerResponse.SessionOpened(1UL, {welcome with Players = [state]})) |> ok |> parse
-        Expect.equal joined.PlayerJoined.Player changed.PlayerUpdated.Player "same complete state"
-        Expect.equal boot.SessionOpened.Players[0] joined.PlayerJoined.Player "bootstrap agrees with replication"
-        Expect.equal changed.PlayerUpdated.Player.CharacterGeneration 1UL "save generation retained"
-        Expect.equal changed.PlayerUpdated.Player.CharacterName "Nerevar" "name retained"
-        Expect.equal changed.PlayerUpdated.Player.ActorValues[0].ValueCase Dreamsleeve.Protocol.Chat.ActorValueEntry.ValueOneofCase.Scalar "zero is a present scalar"
+        let entered = Packets.single codec (joined state) |> ok |> parse
+        let changed = Packets.single codec (updated state) |> ok |> parse
+        let boot = Packets.single codec (ServerResponse.SessionOpened(1UL, {welcome with Players = [state]; Kinds = kindsOf [state]})) |> ok |> parse
+        let player = changed.PresenceChanged.Updated[0]
+        Expect.equal entered.PresenceChanged.Joined[0] player "same complete state"
+        Expect.equal boot.SessionOpened.Players[0] player "bootstrap agrees with replication"
+        Expect.sequenceEqual boot.SessionOpened.ActorValueKinds changed.PresenceChanged.ActorValueKinds "and defines the same kinds"
+        Expect.equal player.CharacterGeneration 1UL "save generation retained"
+        Expect.equal player.CharacterName "Nerevar" "name retained"
+        Expect.equal player.ActorValues[0].ValueCase Dreamsleeve.Protocol.Chat.ActorValue.ValueOneofCase.Scalar "zero is a present scalar"
+        Expect.equal player.ActorValues[0].Kind 1UL "the reading names its kind"
         Expect.isFalse changed.HasRequestId "periodic replication is a notification"
 
         let ack = Packets.single codec (ServerResponse.PlayerUpdateAccepted 91UL) |> ok |> parse
@@ -507,9 +647,10 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let moved = Packets.single codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone])) |> ok |> parseMovement
         Expect.equal moved.Movements.Players[0].PlayerId 7UL "Realtime identity."
         Expect.equal moved.Movements.Players[0].ViewRevision 1UL "Visibility revision."
-        let clear = Packets.single codec (ServerResponse.PlayerVisibilityChanged {
-            PlayerId = pid 7UL; ViewRevision = 2UL; Sequence = 0UL; Location = ValueNone }) |> ok |> parse
-        Expect.isNull clear.PlayerVisibilityChanged.Location "Visibility clears are reliable control."
+        let cleared: VisibilityChange = { PlayerId = pid 7UL; ViewRevision = 2UL; Sequence = 0UL; Pose = ValueNone }
+        let clear = Packets.single codec (ServerResponse.PresenceChanged({ PresenceChange.empty with Visibility = [ cleared ] }, ActorValueKinds.none)) |> ok |> parse
+        Expect.isNull clear.PresenceChanged.Visibility[0].Pose "Visibility clears are reliable control."
+        Expect.isNull clear.PresenceChanged.Space "A clear needs no place."
 
     testCase "rich details roundtrip preserves optional zero time and descriptive places" <| fun _ ->
         let source = Dreamsleeve.Protocol.Chat.PlayerDetails(
@@ -522,9 +663,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 NearbyMarkerName = "", MarkerKind = "CITY", IsInterior = true),
             GameStartedAtUnixMs = 0L)
         let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-        let encoded = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
+        let encoded = Packets.single codec (updated state) |> ok |> parse
 
-        let actual = encoded.PlayerUpdated.Player.Details
+        let actual = encoded.PresenceChanged.Updated[0].Details
         Expect.equal actual.Race.Form.PluginName "skyrim.esm" "race key is canonical"
         Expect.equal actual.Race.Name "  Breton  " "display label preserved"
         Expect.equal actual.Level UInt32.MaxValue "level is not clamped to vanilla gameplay"
@@ -544,14 +685,14 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             if kind = Dreamsleeve.Protocol.Chat.ActivityKind.Menu then activity.MenuKey <- "InventoryMenu"
             let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = activity)
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-            let encoded = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
-            Expect.equal encoded.PlayerUpdated.Player.Details.Activity.Kind kind "activity mapping"
+            let encoded = Packets.single codec (updated state) |> ok |> parse
+            Expect.equal encoded.PresenceChanged.Updated[0].Details.Activity.Kind kind "activity mapping"
         for difficulty in Enum.GetValues<Dreamsleeve.Protocol.Chat.LockDifficulty>() do
             let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = Dreamsleeve.Protocol.Chat.PlayerActivity(
                 Kind = Dreamsleeve.Protocol.Chat.ActivityKind.Lockpicking, LockDifficulty = difficulty))
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
-            let encoded = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
-            Expect.equal encoded.PlayerUpdated.Player.Details.Activity.LockDifficulty difficulty "difficulty mapping"
+            let encoded = Packets.single codec (updated state) |> ok |> parse
+            Expect.equal encoded.PresenceChanged.Updated[0].Details.Activity.LockDifficulty difficulty "difficulty mapping"
 
     testCase "zero and absent level survive client command and server replication" <| fun _ ->
         for level in [ValueNone; ValueSome 0u; ValueSome UInt32.MaxValue] do
@@ -559,8 +700,8 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             level |> ValueOption.iter (fun value -> source.Level <- value)
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
             Expect.equal state.Details.Level level "Client-reported level is preserved."
-            let encoded = Packets.single codec (ServerResponse.PlayerUpdated state) |> ok |> parse
-            let actual = encoded.PlayerUpdated.Player.Details
+            let encoded = Packets.single codec (updated state) |> ok |> parse
+            let actual = encoded.PresenceChanged.Updated[0].Details
             Expect.equal actual.HasLevel level.IsSome "Presence survives replication."
             level |> ValueOption.iter (fun value -> Expect.equal actual.Level value "Level survives replication.")
 
@@ -620,15 +761,15 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let rejection = { Code = RequestRejectionCode.Overloaded; Message = "busy"; Field = "" }
         for response in [ServerResponse.ChatPublished message; ServerResponse.ChatAccepted(1UL, message); ServerResponse.ChatRejected(1UL, rejection)] do
             Expect.equal (ProtocolCodec.delivery response).Lane DeliveryLane.Chat "Chat response remains on chat channel."
-        for response in [ServerResponse.PlayerJoined snapshot; ServerResponse.PlayerUpdateAccepted 1UL; ServerResponse.RequestRejected(1UL, rejection)] do
+        for response in [joined snapshot; ServerResponse.PlayerUpdateAccepted 1UL; ServerResponse.RequestRejected(1UL, rejection)] do
             Expect.equal (ProtocolCodec.delivery response).Lane DeliveryLane.Control "Lifecycle and command replies."
         Expect.equal (ProtocolCodec.delivery (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone]))).Lane DeliveryLane.Realtime "Movement envelope is independent."
     testCase "a pseudonymous identity leaves with no username or character and a flag" <| fun _ ->
         let pseudonym = Pseudonym.create "Страж" |> ok |> Pseudonym.numbered 2
         let character = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Lydia" |> ok)
         let hidden = PlayerSnapshot.withPseudonym pseudonym (Player.snapshot character)
-        let joined = Packets.single codec (ServerResponse.PlayerJoined hidden) |> ok
-        let player = (parse joined).PlayerJoined.Player
+        let entered = Packets.single codec (joined hidden) |> ok
+        let player = (parse entered).PresenceChanged.Joined[0]
         Expect.isTrue player.Profile.Pseudonymous "flagged"
         Expect.equal player.Profile.Username "" "no username"
         Expect.equal player.Profile.DisplayName "Страж 2" "pseudonym as display name"
@@ -636,9 +777,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isFalse player.HasCharacterName "no character name"
         for secret in [ "player"; "Игрок"; "Lydia" ] do
             let bytes = Text.Encoding.UTF8.GetBytes secret
-            Expect.isFalse (Seq.windowed bytes.Length joined |> Seq.exists (fun window -> window = bytes)) $"no {secret} in the packet"
-        let shown = Packets.single codec (ServerResponse.PlayerJoined snapshot) |> ok |> parse
-        Expect.isFalse shown.PlayerJoined.Player.Profile.Pseudonymous "a shown profile is not flagged"
+            Expect.isFalse (Seq.windowed bytes.Length entered |> Seq.exists (fun window -> window = bytes)) $"no {secret} in the packet"
+        let shown = Packets.single codec (joined snapshot) |> ok |> parse
+        Expect.isFalse shown.PresenceChanged.Joined[0].Profile.Pseudonymous "a shown profile is not flagged"
 
     testCase "hidden identity travels in OpenSession, SetIdentityVisibility and its settlement" <| fun _ ->
         let opening = Dreamsleeve.Protocol.Chat.ClientPacket(

@@ -6,6 +6,12 @@ open Dreamsleeve.Server.Domain
 
 let private ok = function Ok value -> value | Error error -> failtestf "Unexpected error: %A" error
 
+let private race = NamedForm.create 256 (FormKey.create (PluginName.create 260 "Skyrim.esm" |> ok) (LocalFormId.create 0x13746u |> ok)) "Nord" |> ok
+let private place = PlaceDescription.create 256 64 "Skyrim" "Whiterun Hold" "Western Watchtower" "imperial_tower" false |> ok
+let private start = DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L
+let private full = PlayerDetails.create (ValueSome race) (ValueSome 10u) PlayerActivity.unknown (ValueSome place) (ValueSome start)
+let private unchanged = { Race = ValueNone; Level = ValueNone; Activity = ValueNone; Place = ValueNone; GameStartedAt = ValueNone }
+
 let tests = testList "Player details" [
     testCase "activities preserve target labels and validate their shape" <| fun _ ->
         let combat = PlayerActivity.create 256 64 ActivityKind.Combat (ValueSome "Mudcrab") LockDifficulty.Unknown ValueNone |> ok
@@ -47,4 +53,26 @@ let tests = testList "Player details" [
         Expect.isError (PlayerActivity.create 256 64 ActivityKind.Combat (ValueSome "bad\n") LockDifficulty.Unknown ValueNone) "Control characters rejected before any trimming."
         Expect.isError (PlaceDescription.create 256 64 "" "" "" "bad key" false) "Marker key format."
         Expect.isError (PlaceDescription.create 256 64 "" "" (string (char 0xD800)) "" false) "Malformed UTF-16 rejected."
+
+    testCase "a details patch carries only the components that changed" <| fun _ ->
+        let combat = PlayerActivity.create 256 64 ActivityKind.Combat (ValueSome "Mudcrab") LockDifficulty.Unknown ValueNone |> ok
+        let fighting = PlayerDetails.create (ValueSome race) (ValueSome 10u) combat (ValueSome place) (ValueSome start)
+        Expect.equal (DetailsPatch.between full fighting) (ValueSome { unchanged with Activity = ValueSome combat }) "Activity alone."
+        let levelled = PlayerDetails.create (ValueSome race) (ValueSome 11u) PlayerActivity.unknown (ValueSome place) (ValueSome start)
+        Expect.equal (DetailsPatch.between full levelled) (ValueSome { unchanged with Level = ValueSome (ValueSome 11u) }) "A new level replaces the old one."
+
+    testCase "optional components that became unknown are cleared" <| fun _ ->
+        Expect.equal (DetailsPatch.between full PlayerDetails.empty)
+            (ValueSome { Race = ValueSome ValueNone; Level = ValueSome ValueNone; Activity = ValueNone
+                         Place = ValueSome ValueNone; GameStartedAt = ValueSome ValueNone })
+            "Every optional component clears; the unchanged activity is left out."
+        Expect.equal (DetailsPatch.between PlayerDetails.empty full)
+            (ValueSome { unchanged with Race = ValueSome (ValueSome race); Level = ValueSome (ValueSome 10u)
+                                        Place = ValueSome (ValueSome place); GameStartedAt = ValueSome (ValueSome start) })
+            "Components that became known are set."
+
+    testCase "equal details make no patch" <| fun _ ->
+        let copy = PlayerDetails.create (ValueSome race) (ValueSome 10u) PlayerActivity.unknown (ValueSome place) (ValueSome start)
+        Expect.equal (DetailsPatch.between full copy) ValueNone "Same components."
+        Expect.equal (DetailsPatch.between PlayerDetails.empty PlayerDetails.empty) ValueNone "Nothing known on either side."
 ]

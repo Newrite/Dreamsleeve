@@ -47,7 +47,7 @@ MaxOutgoingPacketsPerPeer = 4096
 MaxOutgoingBytesPerPeer = 16777216
 # Packets held the same way for all connections together, >= MaxOutgoingPacketsPerPeer.
 # These are limits, not reservations: memory follows the actual queue.
-MaxOutgoingPackets = 1048576
+MaxOutgoingPackets = 262144
 # Bytes held for all connections together, >= MaxOutgoingBytesPerPeer.
 MaxOutgoingBytes = 268435456
 # Players one session-opening snapshot may list, >= Runtime.MaxSessions.
@@ -59,11 +59,10 @@ MaxRecentMessages = 512
 
 # Handoff between the runtime and the dedicated ENet thread.
 [Server.Worker]
-# Packets waiting in the handoff queue, >= 1. Hundreds of players appearing in one radius
-# at once queue one visibility packet per pair (N * N); a full queue closes connections.
-QueueCapacity = 524288
+# Packets waiting in the handoff queue, >= 1.
+QueueCapacity = 65536
 # Bytes waiting in the handoff queue, >= Server.MaxPacketBytes.
-QueueBytes = 67108864
+QueueBytes = 16777216
 # Send commands the ENet thread takes per pass, >= 1.
 SendCommandsPerPass = 2048
 # Bytes the ENet thread sends per pass, >= 1.

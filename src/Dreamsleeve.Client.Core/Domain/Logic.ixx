@@ -269,30 +269,31 @@ export namespace Domain::Players
     return next;
   }
 
-  // Actor values worth sending again: another key, name or kind, a resource
-  // moved by more than epsilon, or one that reached or left an end of its range,
-  // so a bar never stops a fraction short of empty or full.
-  bool SameActorValues(const ActorValueStorage& left, const ActorValueStorage& right, float epsilon)
+  // A finite game reading as whole points: rounded to the nearest, kept in the
+  // wire's range, and negative when the game says so.
+  std::int32_t Points(float value)
   {
-    const auto atEnd = [](const ResourceActorValue& value) {
-      return value.current <= 0 || value.current >= value.maximum;
-    };
-    if (left.size() != right.size()) return false;
-    for (const auto& [key, info] : left)
-    {
-      const auto found = right.find(key);
-      if (found == right.end() || found->second.displayName != info.displayName) return false;
-      const auto* a = std::get_if<ResourceActorValue>(&info.state);
-      const auto* b = std::get_if<ResourceActorValue>(&found->second.state);
-      if (!a || !b)
-      {
-        if (!(info.state == found->second.state)) return false;
-        continue;
-      }
-      if (std::abs(a->current - b->current) > epsilon || std::abs(a->maximum - b->maximum) > epsilon || atEnd(*a) != atEnd(*b))
-        return false;
-    }
-    return true;
+    constexpr auto low  = static_cast<double>((std::numeric_limits<std::int32_t>::min)());
+    constexpr auto high = static_cast<double>((std::numeric_limits<std::int32_t>::max)());
+    return static_cast<std::int32_t>(std::llround(std::clamp(static_cast<double>(value), low, high)));
+  }
+
+  // Removed keys first, then the new and changed readings.
+  void Apply(ActorValueStorage& values, const ActorValuesPatch& patch)
+  {
+    for (const auto& key : patch.removed)
+      values.erase(key);
+    for (const auto& [key, info] : patch.set)
+      values.insert_or_assign(key, info);
+  }
+
+  void Apply(PlayerDetails& details, const PlayerDetailsPatch& patch)
+  {
+    if (patch.race) details.race = *patch.race;
+    if (patch.level) details.level = *patch.level;
+    if (patch.activity) details.activity = *patch.activity;
+    if (patch.place) details.place = *patch.place;
+    if (patch.gameStartedAtUnixMs) details.gameStartedAtUnixMs = *patch.gameStartedAtUnixMs;
   }
 
   // A movement sample applies to a placed player of the same view, and only

@@ -34,11 +34,12 @@ export namespace Dreamsleeve::Client
     PlayerId playerId;
   };
 
+  // What changed in a player's actor values and details; absent parts are unchanged.
   struct PlayerMetadataUpdated
   {
-    Domain::PlayerId                         playerId;
-    std::optional<Domain::ActorValueStorage> actorValues;
-    std::optional<Domain::PlayerDetails>     details;
+    Domain::PlayerId                          playerId;
+    std::optional<Domain::ActorValuesPatch>   actorValues;
+    std::optional<Domain::PlayerDetailsPatch> details;
   };
 
   struct PlayerLocationUpdated
@@ -424,7 +425,7 @@ private:
 
     Domain::OperationResult ApplyOne(const PlayerMetadataUpdated& update)
     {
-      return players.ReplaceMetadata(update.playerId, update.actorValues, update.details);
+      return players.ApplyMetadata(update.playerId, update.actorValues, update.details);
     }
 
     Domain::OperationResult ApplyOne(const PlayerLocationUpdated& update)

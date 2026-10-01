@@ -46,9 +46,13 @@ namespace Dreamsleeve::Client::Wire::Detail
     auto role = Role(source.role());
     if (!role) return std::unexpected{role.error()};
     result.role = *role;
+    ActorValueKinds kinds;
+    auto            defined = ReadKinds(source.actor_value_kinds(), kinds);
+    if (!defined) return std::unexpected{defined.error()};
+    result.kinds = std::move(*defined);
     for (const auto& player : source.players())
     {
-      auto decoded = Player(config, player);
+      auto decoded = Player(config, player, kinds);
       if (!decoded) return std::unexpected{decoded.error()};
 
       result.players.push_back(std::move(*decoded));

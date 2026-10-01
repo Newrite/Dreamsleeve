@@ -47,6 +47,7 @@ module internal SessionCodec =
 
         value.Players.Length <= config.MaxInitialPlayers
         && Set.count (Set.ofList ids) = ids.Length && selfShown
+        && PlayerCodec.numberedPlayers value.Kinds value.Players
         && not channels.IsEmpty && Set.count (Set.ofList channels) = channels.Length
         && List.forall validChannel value.Channels
 
@@ -92,6 +93,7 @@ module internal SessionCodec =
         value.Mute |> ValueOption.iter (fun sanction -> result.Mute <- mute sanction)
         result.Role <- ModerationCodec.role value.Role
         result.HiddenIdentity <- hiding value.Hiding
-        result.Players.AddRange(value.Players |> Seq.map PlayerCodec.player)
+        result.ActorValueKinds.AddRange(value.Kinds.Defined |> Seq.map PlayerCodec.kind)
+        result.Players.AddRange(value.Players |> Seq.map (PlayerCodec.player value.Kinds))
         result.Channels.AddRange(value.Channels |> Seq.map ChatCodec.channel)
         result

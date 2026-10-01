@@ -411,7 +411,8 @@ export namespace World
         std::string{
             key
       },
-        Domain::ActorValueInfo{std::string{label}, Domain::ResourceActorValue{current, maximum}});
+        Domain::ActorValueInfo{
+          std::string{label}, Domain::ResourceActorValue{Domain::Players::Points(current), Domain::Players::Points(maximum)}});
     }
     return values;
   }

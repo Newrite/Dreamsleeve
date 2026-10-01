@@ -228,49 +228,48 @@ TEST_CASE("Players merge a lagging profile with the motion already known and tak
   CHECK(Players::Merge(known, newer) == newer);
 }
 
-TEST_CASE("Players compare actor values by key, name and kind, and resources within epsilon")
+TEST_CASE("Game readings become whole points, negative ones included, within the wire range")
 {
-  const ActorValueStorage health{
-      {"skyrim:health", {"Здоровье", ResourceActorValue{100, 150}}}
-  };
-  auto moved                                                          = health;
-  std::get<ResourceActorValue>(moved["skyrim:health"].state).current += 0.04f;
-  CHECK(Players::SameActorValues(health, moved, 0.05f));
-  std::get<ResourceActorValue>(moved["skyrim:health"].state).current += 0.02f;
-  CHECK_FALSE(Players::SameActorValues(health, moved, 0.05f));
+  CHECK(Players::Points(149.4f) == 149);
+  CHECK(Players::Points(149.5f) == 150);
+  CHECK(Players::Points(-15.6f) == -16);  // The game does not clamp a hit to zero health.
+  CHECK(Players::Points(-0.4f) == 0);
+  CHECK(Players::Points(1e12f) == (std::numeric_limits<std::int32_t>::max)());
+  CHECK(Players::Points(-1e12f) == (std::numeric_limits<std::int32_t>::min)());
+}
 
-  auto renamed                         = health;
-  renamed["skyrim:health"].displayName = "Health";
-  CHECK_FALSE(Players::SameActorValues(health, renamed, 0.05f));
-
-  // Steps below epsilon are the same until the resource reaches an end of its range.
-  const ActorValueStorage almostFull{
-      {"skyrim:health", {"Здоровье", ResourceActorValue{149.5f, 150}}}
+TEST_CASE("Actor value patches remove keys before setting readings; details patches replace and clear components")
+{
+  ActorValueStorage values{
+      {"skyrim:health",  {"Здоровье", ResourceActorValue{100, 150}}},
+      {"skyrim:magicka", {"Магия", ResourceActorValue{50, 80}}     }
   };
-  auto full                                                         = almostFull;
-  std::get<ResourceActorValue>(full["skyrim:health"].state).current = 150;
-  CHECK(Players::SameActorValues(health, moved, 1.0f));
-  CHECK_FALSE(Players::SameActorValues(almostFull, full, 1.0f));
-  auto empty                                                         = almostFull;
-  std::get<ResourceActorValue>(empty["skyrim:health"].state).current = 0.5f;
-  auto dead                                                          = empty;
-  std::get<ResourceActorValue>(dead["skyrim:health"].state).current  = 0;
-  CHECK_FALSE(Players::SameActorValues(empty, dead, 1.0f));
-  CHECK(Players::SameActorValues(full, full, 1.0f));
+  Players::Apply(
+    values,
+    ActorValuesPatch{
+        .removed = {"skyrim:health", "skyrim:magicka"},
+        .set     = {{"skyrim:health", {"Health", ResourceActorValue{-5, 150}}}}
+  });
+  CHECK(
+    values == ActorValueStorage{
+                  {"skyrim:health", {"Health", ResourceActorValue{-5, 150}}}
+  });
 
-  // A scalar is compared exactly, and a later resource is still compared.
-  ActorValueStorage left{
-      {"mod:scalar",    {"Scalar", ScalarActorValue{1}}           },
-      {"skyrim:health", {"Здоровье", ResourceActorValue{100, 150}}}
+  PlayerDetails details{
+      .race  = NamedForm{{"Skyrim.esm", 0x13746}, "Nord"},
+      .level = 10
   };
-  auto right                                                         = left;
-  std::get<ResourceActorValue>(right["skyrim:health"].state).current = 50;
-  CHECK_FALSE(Players::SameActorValues(left, right, 0.05f));
-  right                                                       = left;
-  std::get<ScalarActorValue>(right["mod:scalar"].state).value = 1.01f;
-  CHECK_FALSE(Players::SameActorValues(left, right, 0.05f));
-  CHECK(Players::SameActorValues(left, left, 0.05f));
-  CHECK_FALSE(Players::SameActorValues(left, health, 0.05f));
+  details.place = PlaceDescription{"Skyrim", "Whiterun", "", "", false};
+  PlayerDetailsPatch patch;
+  patch.level    = std::optional<std::uint32_t>{11};
+  patch.place    = std::optional<PlaceDescription>{};
+  patch.activity = PlayerActivity{.kind = ActivityKind::Combat};
+  Players::Apply(details, patch);
+  CHECK(details.level == 11u);
+  CHECK_FALSE(details.place.has_value());
+  CHECK(details.activity.kind == ActivityKind::Combat);
+  REQUIRE(details.race.has_value());
+  CHECK(details.race->name == "Nord");  // Absent from the patch: unchanged.
 }
 
 TEST_CASE("Chat channels carry announcements exactly when they are system channels")

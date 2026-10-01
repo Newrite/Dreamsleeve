@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 15;
+  inline constexpr std::uint32_t Version = 16;
 
   enum class ErrorCode
   {
@@ -92,6 +92,59 @@ export namespace Dreamsleeve::Client::Wire
     ClearPlayerMarks,
     DeleteChatMessage>;
 
+  // A server number for one key and label of actor values, defined to the
+  // session before the first message that uses it.
+  struct ActorValueKind
+  {
+    std::uint64_t          id{};
+    Domain::ActorValueKey  key;
+    Domain::ActorValueName displayName;
+  };
+
+  // The kinds one session knows. The server never reuses a number, and never
+  // sends again a kind that no online player has, so Retain may forget those.
+  class ActorValueKinds
+  {
+public:
+
+    const ActorValueKind* Find(std::uint64_t id) const
+    {
+      const auto found = kinds.find(id);
+      return found == kinds.end() ? nullptr : &found->second;
+    }
+
+    // False for a zero or already defined number.
+    bool Define(ActorValueKind kind)
+    {
+      const auto id = kind.id;
+      return id != 0 && kinds.try_emplace(id, std::move(kind)).second;
+    }
+
+    std::size_t Size() const noexcept
+    {
+      return kinds.size();
+    }
+
+    void Clear() noexcept
+    {
+      kinds.clear();
+    }
+
+    // Keeps the kinds some of these players still have.
+    void Retain(std::span<const Domain::Player> players)
+    {
+      std::set<std::pair<std::string_view, std::string_view>> used;
+      for (const auto& player : players)
+        for (const auto& [key, info] : player.actorValues)
+          used.emplace(key, info.displayName);
+      std::erase_if(kinds, [&](const auto& entry) { return !used.contains({entry.second.key, entry.second.displayName}); });
+    }
+
+private:
+
+    std::unordered_map<std::uint64_t, ActorValueKind> kinds;
+  };
+
   // A channel of the session with its retained tail, ascending MessageId.
   struct ChannelOpened
   {
@@ -115,6 +168,16 @@ export namespace Dreamsleeve::Client::Wire
     // The receiver's mute when the session opened.
     std::optional<Domain::MuteState> mute;
     Domain::PlayerRole               role{Domain::PlayerRole::Player};
+    // Every kind the players use: the session's table starts from these.
+    std::vector<ActorValueKind> kinds;
+  };
+
+  // Everything that changed in the online list in one server message: the
+  // kinds it defines, then the model updates in their wire order.
+  struct PresenceChanged
+  {
+    std::vector<ActorValueKind> kinds;
+    std::vector<ClientUpdate>   updates;
   };
 
   // The receiver's role changed while the session is open.
@@ -244,11 +307,8 @@ export namespace Dreamsleeve::Client::Wire
     ChatAccepted,
     ChatMessagesReceived,
     RequestRejected,
-    PlayerUpserted,
-    PlayerRemoved,
+    PresenceChanged,
     PlayersMoved,
-    PlayerMetadataUpdated,
-    PlayerLocationUpdated,
     PlayerUpdateAccepted,
     GroundMarksChanged,
     GroundMarkPlaced,
@@ -277,7 +337,11 @@ public:
     // Serializes directly into the owning ENet packet; send with PushPacket/Send.
     Result<DreamNetPacket> Encode(const ClientRequest& request) const;
     Result<DreamNetPacket> Encode(const MovementSample& sample, std::size_t maxPayloadBytes) const;
-    Result<ServerResponse> Decode(std::span<const std::byte> packet, Channel channel = Channel::Control) const;
+    // Presence resolves actor value numbers through the session's kinds.
+    Result<ServerResponse> Decode(
+      std::span<const std::byte> packet,
+      Channel                    channel = Channel::Control,
+      const ActorValueKinds&     kinds   = ActorValueKinds{}) const;
 
 private:
 

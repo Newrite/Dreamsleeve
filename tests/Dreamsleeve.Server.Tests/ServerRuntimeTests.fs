@@ -86,6 +86,17 @@ let private telemetry requestId x =
     packet requestId (fun packet ->
         packet.UpdatePlayer <- UpdatePlayer(SetLocation = SetPlayerLocation(ContextRevision = requestId, Location = playerLocation x)))
 
+let private healthReading requestId current maximum =
+    packet requestId (fun packet ->
+        let values = ActorValues()
+        values.Values.Add(ActorValueEntry(Key = "skyrim:health", DisplayName = "Health", Resource = ResourceActorValue(Current = current, Maximum = maximum)))
+        packet.UpdatePlayer <- UpdatePlayer(SetActorValues = values))
+
+/// The player of a presence change that republishes this player's identity.
+let private updatedPlayer (value: ServerPacket) playerId =
+    if value.PayloadCase <> ServerPacket.PayloadOneofCase.PresenceChanged then None
+    else value.PresenceChanged.Updated |> Seq.tryFind (fun player -> player.Profile.PlayerId = playerId)
+
 
 type private Fixture = {
     Runtime: Agent<ServerRuntimeMessage>
@@ -566,9 +577,10 @@ let tests = testList "ServerRuntime" [
             }
             fixture.SendFailures[DeliveryLane.Realtime] <- "Outgoing budget full"
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayersMoved [|change|])))
-            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayerLeft pid)))
-            let! _, response = nextWhere fixture (fun _ p -> p.PayloadCase = ServerPacket.PayloadOneofCase.PlayerLeft)
-            equal 1UL response.PlayerLeft.PlayerId
+            let left = ServerResponse.PresenceChanged({ PresenceChange.empty with Left = [ pid ] }, ActorValueKinds.none)
+            do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, left)))
+            let! _, response = nextWhere fixture (fun _ p -> p.PayloadCase = ServerPacket.PayloadOneofCase.PresenceChanged && p.PresenceChanged.Left.Count > 0)
+            equal [ 1UL ] (List.ofSeq response.PresenceChanged.Left)
             let! state = stats fixture
             equal 1 state.Ready
             equal 0 state.Closing
@@ -607,6 +619,33 @@ let tests = testList "ServerRuntime" [
             let! initial = welcome fixture late
             let current = initial.Players |> Seq.find (fun value -> value.Profile.PlayerId = a.SelfPlayerId)
             check (isNull current.Location) "Unlocated late join must not receive remote coordinates."
+        })
+    }
+
+    testTask "actor values reach other players as numbered readings and a later welcome defines their kinds" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
+            let alice = connect fixture "alice"
+            let! a = welcome fixture alice
+            let bob = connect fixture "bob"
+            let! _ = welcome fixture bob
+            fixture.Input.Enqueue(incoming(alice, beginCharacter 2UL "Character"))
+            let! _ = nextWhere fixture (fun target value ->
+                target = bob && updatedPlayer value a.SelfPlayerId |> Option.exists (fun player -> player.CharacterGeneration > 0UL))
+            fixture.Input.Enqueue(incoming(alice, healthReading 3UL -12 100))
+            let readings (value: ServerPacket) =
+                if value.PayloadCase <> ServerPacket.PayloadOneofCase.PresenceChanged then Seq.empty
+                else value.PresenceChanged.Metadata |> Seq.filter (fun patch -> patch.PlayerId = a.SelfPlayerId) |> Seq.collect _.ActorValues
+            let! _, changed = nextWhere fixture (fun target value -> target = bob && not (Seq.isEmpty (readings value)))
+            let kind = changed.PresenceChanged.ActorValueKinds |> Seq.exactlyOne
+            let reading = readings changed |> Seq.exactlyOne
+            equal ("skyrim:health", "Health") (kind.Key, kind.DisplayName)
+            equal kind.Id reading.Kind
+            equal (-12, 100) (reading.Resource.Current, reading.Resource.Maximum)
+            let late = connect fixture "healthy"
+            let! initial = welcome fixture late
+            equal [ kind ] (List.ofSeq initial.ActorValueKinds)
+            let current = initial.Players |> Seq.find (fun value -> value.Profile.PlayerId = a.SelfPlayerId)
+            equal [ reading ] (List.ofSeq current.ActorValues)
         })
     }
 ]
@@ -699,12 +738,13 @@ let hiddenIdentityTests = testList "ServerRuntime hidden identity" [
                                 equal "Страж" added.Author.DisplayName
                                 check (not added.HasCharacterName) "No character snapshot on the mark."
                                 mark <- true
-                    | ServerPacket.PayloadOneofCase.PlayerUpdated when value.PlayerUpdated.Player.Profile.PlayerId = opened.SelfPlayerId ->
-                        let player = value.PlayerUpdated.Player
-                        if player.CharacterGeneration > 0UL then
+                    | ServerPacket.PayloadOneofCase.PresenceChanged ->
+                        match updatedPlayer value opened.SelfPlayerId with
+                        | Some player when player.CharacterGeneration > 0UL ->
                             check player.Profile.Pseudonymous "Presence shows the pseudonym."
                             check (not player.HasCharacterName) "No character name."
                             character <- true
+                        | Some _ | None -> ()
                     | _ -> ()
 
             // Showing the names again: later copies carry them, retained history does not change.
@@ -713,11 +753,10 @@ let hiddenIdentityTests = testList "ServerRuntime hidden identity" [
             equal 6UL shown.RequestId
             check (not shown.IdentityVisibilityChanged.HasPseudonym) "No pseudonym while shown."
             equal HiddenIdentity.None shown.IdentityVisibilityChanged.Hidden
-            let! _, updated = nextWhere fixture (fun target value ->
-                target = bob && value.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
-                && value.PlayerUpdated.Player.Profile.PlayerId = opened.SelfPlayerId)
-            equal "Алиса Настоящая" updated.PlayerUpdated.Player.Profile.DisplayName
-            equal "Секретная Героиня" updated.PlayerUpdated.Player.CharacterName
+            let! _, updated = nextWhere fixture (fun target value -> target = bob && (updatedPlayer value opened.SelfPlayerId).IsSome)
+            let player = (updatedPlayer updated opened.SelfPlayerId).Value
+            equal "Алиса Настоящая" player.Profile.DisplayName
+            equal "Секретная Героиня" player.CharacterName
             let carol = connect fixture "carol"
             let! late = welcome fixture carol
             let history = late.Channels |> Seq.collect _.RecentMessages |> Seq.find (fun value -> value.Text = "hello from alice")
@@ -864,13 +903,12 @@ let adminTests = testList "ServerRuntime admin panel" [
             let renamed id username display =
                 Dreamsleeve.Server.Domain.PlayerData.create (playerId id) (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
                     (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok)
-            // A shown player: the others get PlayerUpdated with the new name.
+            // A shown player: the others get the player again with the new name.
             do! post fixture.Runtime (ServerRuntimeMessage.RenamePlayer(renamed bobOpened.SelfPlayerId "bob" "Боб Новый"))
             let! _, updated = nextWhere fixture (fun target value ->
-                target = carol && value.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
-                && value.PlayerUpdated.Player.Profile.PlayerId = bobOpened.SelfPlayerId
-                && value.PlayerUpdated.Player.Profile.DisplayName = "Боб Новый")
-            equal "Боб Новый" updated.PlayerUpdated.Player.Profile.DisplayName
+                target = carol
+                && updatedPlayer value bobOpened.SelfPlayerId |> Option.exists (fun player -> player.Profile.DisplayName = "Боб Новый"))
+            equal "Боб Новый" (updatedPlayer updated bobOpened.SelfPlayerId).Value.Profile.DisplayName
             let! view = describeUntil fixture describer (playerId bobOpened.SelfPlayerId) (fun view -> Dreamsleeve.Server.Domain.DisplayName.value view.DisplayName = "Боб Новый")
             equal "bob" (Dreamsleeve.Server.Domain.Username.value view.Username)
             // A hidden player: the panel sees the new name, other players only the pseudonym.
@@ -911,10 +949,9 @@ let displayNameTests = testList "ServerRuntime display names" [
             equal 2UL settled.RequestId
             equal "Боб Новый" settled.DisplayNameChanged.DisplayName
             let! _, updated = nextWhere fixture (fun target value ->
-                target = carol && value.PayloadCase = ServerPacket.PayloadOneofCase.PlayerUpdated
-                && value.PlayerUpdated.Player.Profile.PlayerId = bobOpened.SelfPlayerId
-                && value.PlayerUpdated.Player.Profile.DisplayName = "Боб Новый")
-            check (not updated.PlayerUpdated.Player.Profile.Pseudonymous) "A shown player keeps a real profile."
+                target = carol
+                && updatedPlayer value bobOpened.SelfPlayerId |> Option.exists (fun player -> player.Profile.DisplayName = "Боб Новый"))
+            check (not (updatedPlayer updated bobOpened.SelfPlayerId).Value.Profile.Pseudonymous) "A shown player keeps a real profile."
 
             // Too long: refused by the codec with the field, the session stays open.
             fixture.Input.Enqueue(incoming(bob, changeName 3UL (String('x', ServerConfig.defaults.ChatInput.DisplayName + 1))))

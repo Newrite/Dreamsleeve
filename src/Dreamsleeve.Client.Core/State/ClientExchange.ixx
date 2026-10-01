@@ -60,7 +60,7 @@ export namespace Dreamsleeve::Client
 
   // A new display name for this player's own account; the username and
   // PlayerId never change. The server applies its word list and how often the
-  // name may change; the own profile itself changes through PlayerUpdated.
+  // name may change; the own profile itself changes through a presence update.
   struct ChangeDisplayName
   {
     std::uint64_t requestId{};

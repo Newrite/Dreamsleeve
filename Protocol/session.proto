@@ -49,6 +49,8 @@ message SessionOpened {
   MuteState mute = 11;
   // The receiver's role: a moderator gets the moderation commands.
   PlayerRole role = 12;
+  // Every actor value kind the players above use.
+  repeated ActorValueKind actor_value_kinds = 13;
 }
 
 // A mute in force on the receiver: chat, notes, client announcements and the

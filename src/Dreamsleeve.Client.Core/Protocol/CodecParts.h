@@ -68,12 +68,13 @@ namespace Dreamsleeve::Client::Wire::Detail
   }
 
   void                           WritePose(P::MovementPose&, const Domain::MovementPose&);
-  Result<PlayerLocationUpdated>  ReadVisibility(const P::PlayerVisibilityChanged&);
   void                           WritePlayerUpdate(P::UpdatePlayer&, const PlayerUpdate&);
   Result<Domain::PlayerData>     Profile(const P::PlayerProfile&);
-  Result<Domain::Player>         Player(const Configuration&, const P::PlayerInfo&);
-  Result<PlayerMetadataUpdated>  ReadMetadata(const Configuration&, const P::PlayerMetadataChanged&);
+  Result<Domain::Player>         Player(const Configuration&, const P::PlayerInfo&, const ActorValueKinds&);
   Result<PlayerMovementReceived> ReadMovement(const P::PlayerMoved&);
+  // Defines each kind in kinds; a zero, known or repeated number is invalid.
+  Result<std::vector<ActorValueKind>> ReadKinds(const google::protobuf::RepeatedPtrField<P::ActorValueKind>&, ActorValueKinds&);
+  Result<PresenceChanged>             ReadPresence(const Configuration&, const P::PresenceChanged&, const ActorValueKinds&);
 
   void                        WriteChat(P::SendChat&, const SendChat&);
   void                        WriteAnnouncement(P::PostAnnouncement&, const PostAnnouncement&);

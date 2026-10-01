@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 15u
+    let Version = 16u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -135,8 +135,7 @@ module ProtocolCodec =
         | ServerResponse.ChatAccepted(requestId, _) | ServerResponse.ChatRejected(requestId, _) -> settles DeliveryLane.Chat requestId
         | ServerResponse.ChatPublished _ -> notifies DeliveryLane.Chat
         | ServerResponse.PlayersMoved _ -> notifies DeliveryLane.Realtime
-        | ServerResponse.PlayerJoined _ | ServerResponse.PlayerLeft _ | ServerResponse.PlayerUpdated _
-        | ServerResponse.PlayerVisibilityChanged _ | ServerResponse.PlayerMetadataChanged _
+        | ServerResponse.PresenceChanged _
         | ServerResponse.GroundMarksChanged _ | ServerResponse.OwnGroundMarks _ | ServerResponse.MuteChanged _
         | ServerResponse.RoleChanged _ -> notifies DeliveryLane.Control
         // The last packet before the runtime closes the connection, whatever the phase.
@@ -227,27 +226,14 @@ module ProtocolCodec =
                 else
                     packet.RequestRejected <- Dreamsleeve.Protocol.Chat.RequestRejected(Code = value.Code, Message = value.Message, Field = value.Field)
                     envelope ()
-            | ServerResponse.PlayerJoined value ->
-                packet.PlayerJoined <- Dreamsleeve.Protocol.Chat.PlayerJoined(Player = PlayerCodec.player value)
-                envelope ()
-            | ServerResponse.PlayerUpdated value ->
-                packet.PlayerUpdated <- Dreamsleeve.Protocol.Chat.PlayerUpdated(Player = PlayerCodec.player value)
-                envelope ()
-            | ServerResponse.PlayerMetadataChanged(playerId, values, details) ->
-                if values.IsNone && details.IsNone then invalid "player_metadata_changed"
+            | ServerResponse.PresenceChanged(change, kinds) ->
+                if not (PlayerCodec.validPresence kinds change) then invalid "presence_changed"
                 else
-                    packet.PlayerMetadataChanged <- PlayerCodec.metadataChanged playerId values details
-                    envelope ()
-            | ServerResponse.PlayerVisibilityChanged value ->
-                if value.ViewRevision = 0UL then invalid "view_revision"
-                else
-                    packet.PlayerVisibilityChanged <- PlayerCodec.visibility value
-                    envelope ()
+                    let bytes = PlayerCodec.presencePacket Version kinds change
+                    if bytes.Length > config.MaxPacketBytes then fail requestId ProtocolCodecFailure.PacketTooLarge
+                    else Ok [ bytes ]
             | ServerResponse.PlayerUpdateAccepted _ ->
                 packet.PlayerUpdateAccepted <- Dreamsleeve.Protocol.Chat.PlayerUpdateAccepted()
-                envelope ()
-            | ServerResponse.PlayerLeft value ->
-                packet.PlayerLeft <- Dreamsleeve.Protocol.Chat.PlayerLeft(PlayerId = PlayerId.value value)
                 envelope ()
             | ServerResponse.PlayersMoved movements -> encodeMovementPackets codec maxUnfragmentedPayloadBytes movements
             | ServerResponse.GroundMarksChanged view ->

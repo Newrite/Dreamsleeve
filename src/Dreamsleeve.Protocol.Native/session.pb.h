@@ -2098,6 +2098,7 @@ class SessionOpened final : public ::google::protobuf::Message
   enum : int {
     kPlayersFieldNumber = 5,
     kChannelsFieldNumber = 8,
+    kActorValueKindsFieldNumber = 13,
     kServerNameFieldNumber = 6,
     kOwnPseudonymFieldNumber = 9,
     kAnnouncementsFieldNumber = 7,
@@ -2140,6 +2141,23 @@ class SessionOpened final : public ::google::protobuf::Message
   const ::Dreamsleeve::Protocol::Chat::ChatChannel& channels(int index) const;
   ::Dreamsleeve::Protocol::Chat::ChatChannel* PROTOBUF_NONNULL add_channels();
   const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatChannel>& channels() const;
+  // repeated .Dreamsleeve.Protocol.Chat.ActorValueKind actor_value_kinds = 13;
+  int actor_value_kinds_size() const;
+  private:
+  int _internal_actor_value_kinds_size() const;
+
+  public:
+  void clear_actor_value_kinds() ;
+  ::Dreamsleeve::Protocol::Chat::ActorValueKind* PROTOBUF_NONNULL mutable_actor_value_kinds(int index);
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ActorValueKind>* PROTOBUF_NONNULL mutable_actor_value_kinds();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ActorValueKind>& _internal_actor_value_kinds() const;
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ActorValueKind>* PROTOBUF_NONNULL _internal_mutable_actor_value_kinds();
+  public:
+  const ::Dreamsleeve::Protocol::Chat::ActorValueKind& actor_value_kinds(int index) const;
+  ::Dreamsleeve::Protocol::Chat::ActorValueKind* PROTOBUF_NONNULL add_actor_value_kinds();
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ActorValueKind>& actor_value_kinds() const;
   // string server_name = 6;
   void clear_server_name() ;
   const ::std::string& server_name() const;
@@ -2235,8 +2253,8 @@ class SessionOpened final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<4, 9,
-                                   4, 80,
+  static const ::google::protobuf::internal::TcParseTable<4, 10,
+                                   5, 80,
                                    2>
       _table_;
 
@@ -2259,6 +2277,7 @@ class SessionOpened final : public ::google::protobuf::Message
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::PlayerInfo > players_;
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::ChatChannel > channels_;
+    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::ActorValueKind > actor_value_kinds_;
     ::google::protobuf::internal::ArenaStringPtr server_name_;
     ::google::protobuf::internal::ArenaStringPtr own_pseudonym_;
     ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE announcements_;
@@ -2393,7 +2412,7 @@ inline void SessionOpened::clear_server_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.server_name_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline const ::std::string& SessionOpened::server_name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -2403,13 +2422,13 @@ inline const ::std::string& SessionOpened::server_name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void SessionOpened::set_server_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.server_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.server_name)
 }
 inline ::std::string* PROTOBUF_NONNULL SessionOpened::mutable_server_name()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_server_name();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.server_name)
   return _s;
@@ -2429,10 +2448,10 @@ inline ::std::string* PROTOBUF_NONNULL SessionOpened::_internal_mutable_server_n
 inline ::std::string* PROTOBUF_NULLABLE SessionOpened::release_server_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionOpened.server_name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.server_name_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.server_name_.Set("", GetArena());
@@ -2442,9 +2461,9 @@ inline ::std::string* PROTOBUF_NULLABLE SessionOpened::release_server_name() {
 inline void SessionOpened::set_allocated_server_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.server_name_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.server_name_.IsDefault()) {
@@ -2458,7 +2477,7 @@ inline void SessionOpened::clear_self_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.self_player_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
+                  0x00000080U);
 }
 inline ::uint64_t SessionOpened::self_player_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.self_player_id)
@@ -2466,7 +2485,7 @@ inline ::uint64_t SessionOpened::self_player_id() const {
 }
 inline void SessionOpened::set_self_player_id(::uint64_t value) {
   _internal_set_self_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.self_player_id)
 }
 inline ::uint64_t SessionOpened::_internal_self_player_id() const {
@@ -2530,7 +2549,7 @@ SessionOpened::_internal_mutable_players() {
 
 // .Dreamsleeve.Protocol.Chat.AnnouncementPolicy announcements = 7;
 inline bool SessionOpened::has_announcements() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
   PROTOBUF_ASSUME(!value || _impl_.announcements_ != nullptr);
   return value;
 }
@@ -2551,16 +2570,16 @@ inline void SessionOpened::unsafe_arena_set_allocated_announcements(
   }
   _impl_.announcements_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
 }
 inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE SessionOpened::release_announcements() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* released = _impl_.announcements_;
   _impl_.announcements_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -2580,7 +2599,7 @@ inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NULLABLE Sess
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* temp = _impl_.announcements_;
   _impl_.announcements_ = nullptr;
   return temp;
@@ -2595,7 +2614,7 @@ inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL Sessi
 }
 inline ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* PROTOBUF_NONNULL SessionOpened::mutable_announcements()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::Dreamsleeve::Protocol::Chat::AnnouncementPolicy* _msg = _internal_mutable_announcements();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.announcements)
   return _msg;
@@ -2612,9 +2631,9 @@ inline void SessionOpened::set_allocated_announcements(::Dreamsleeve::Protocol::
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
 
   _impl_.announcements_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::AnnouncementPolicy*>(value);
@@ -2673,14 +2692,14 @@ SessionOpened::_internal_mutable_channels() {
 
 // optional string own_pseudonym = 9;
 inline bool SessionOpened::has_own_pseudonym() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
   return value;
 }
 inline void SessionOpened::clear_own_pseudonym() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.own_pseudonym_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000010U);
 }
 inline const ::std::string& SessionOpened::own_pseudonym() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -2690,13 +2709,13 @@ inline const ::std::string& SessionOpened::own_pseudonym() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void SessionOpened::set_own_pseudonym(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   _impl_.own_pseudonym_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.own_pseudonym)
 }
 inline ::std::string* PROTOBUF_NONNULL SessionOpened::mutable_own_pseudonym()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::std::string* _s = _internal_mutable_own_pseudonym();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.own_pseudonym)
   return _s;
@@ -2716,10 +2735,10 @@ inline ::std::string* PROTOBUF_NONNULL SessionOpened::_internal_mutable_own_pseu
 inline ::std::string* PROTOBUF_NULLABLE SessionOpened::release_own_pseudonym() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionOpened.own_pseudonym)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   auto* released = _impl_.own_pseudonym_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.own_pseudonym_.Set("", GetArena());
@@ -2729,9 +2748,9 @@ inline ::std::string* PROTOBUF_NULLABLE SessionOpened::release_own_pseudonym() {
 inline void SessionOpened::set_allocated_own_pseudonym(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   _impl_.own_pseudonym_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.own_pseudonym_.IsDefault()) {
@@ -2745,7 +2764,7 @@ inline void SessionOpened::clear_hidden_identity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hidden_identity_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000080U);
+                  0x00000100U);
 }
 inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::hidden_identity() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.hidden_identity)
@@ -2753,7 +2772,7 @@ inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::hidden_ident
 }
 inline void SessionOpened::set_hidden_identity(::Dreamsleeve::Protocol::Chat::HiddenIdentity value) {
   _internal_set_hidden_identity(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.hidden_identity)
 }
 inline ::Dreamsleeve::Protocol::Chat::HiddenIdentity SessionOpened::_internal_hidden_identity() const {
@@ -2767,7 +2786,7 @@ inline void SessionOpened::_internal_set_hidden_identity(::Dreamsleeve::Protocol
 
 // .Dreamsleeve.Protocol.Chat.MuteState mute = 11;
 inline bool SessionOpened::has_mute() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
   PROTOBUF_ASSUME(!value || _impl_.mute_ != nullptr);
   return value;
 }
@@ -2775,7 +2794,7 @@ inline void SessionOpened::clear_mute() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.mute_ != nullptr) _impl_.mute_->Clear();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000040U);
 }
 inline const ::Dreamsleeve::Protocol::Chat::MuteState& SessionOpened::_internal_mute() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -2794,16 +2813,16 @@ inline void SessionOpened::unsafe_arena_set_allocated_mute(
   }
   _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
 }
 inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE SessionOpened::release_mute() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::Dreamsleeve::Protocol::Chat::MuteState* released = _impl_.mute_;
   _impl_.mute_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -2823,7 +2842,7 @@ inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NULLABLE SessionOpened
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::Dreamsleeve::Protocol::Chat::MuteState* temp = _impl_.mute_;
   _impl_.mute_ = nullptr;
   return temp;
@@ -2838,7 +2857,7 @@ inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL SessionOpened:
 }
 inline ::Dreamsleeve::Protocol::Chat::MuteState* PROTOBUF_NONNULL SessionOpened::mutable_mute()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::Dreamsleeve::Protocol::Chat::MuteState* _msg = _internal_mutable_mute();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.mute)
   return _msg;
@@ -2855,9 +2874,9 @@ inline void SessionOpened::set_allocated_mute(::Dreamsleeve::Protocol::Chat::Mut
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
 
   _impl_.mute_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::MuteState*>(value);
@@ -2869,7 +2888,7 @@ inline void SessionOpened::clear_role() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000100U);
+                  0x00000200U);
 }
 inline ::Dreamsleeve::Protocol::Chat::PlayerRole SessionOpened::role() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.role)
@@ -2877,7 +2896,7 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerRole SessionOpened::role() const {
 }
 inline void SessionOpened::set_role(::Dreamsleeve::Protocol::Chat::PlayerRole value) {
   _internal_set_role(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SessionOpened.role)
 }
 inline ::Dreamsleeve::Protocol::Chat::PlayerRole SessionOpened::_internal_role() const {
@@ -2887,6 +2906,56 @@ inline ::Dreamsleeve::Protocol::Chat::PlayerRole SessionOpened::_internal_role()
 inline void SessionOpened::_internal_set_role(::Dreamsleeve::Protocol::Chat::PlayerRole value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_ = value;
+}
+
+// repeated .Dreamsleeve.Protocol.Chat.ActorValueKind actor_value_kinds = 13;
+inline int SessionOpened::_internal_actor_value_kinds_size() const {
+  return _internal_actor_value_kinds().size();
+}
+inline int SessionOpened::actor_value_kinds_size() const {
+  return _internal_actor_value_kinds_size();
+}
+inline ::Dreamsleeve::Protocol::Chat::ActorValueKind* PROTOBUF_NONNULL SessionOpened::mutable_actor_value_kinds(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.SessionOpened.actor_value_kinds)
+  return _internal_mutable_actor_value_kinds()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ActorValueKind>* PROTOBUF_NONNULL SessionOpened::mutable_actor_value_kinds()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:Dreamsleeve.Protocol.Chat.SessionOpened.actor_value_kinds)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_actor_value_kinds();
+}
+inline const ::Dreamsleeve::Protocol::Chat::ActorValueKind& SessionOpened::actor_value_kinds(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SessionOpened.actor_value_kinds)
+  return _internal_actor_value_kinds().Get(index);
+}
+inline ::Dreamsleeve::Protocol::Chat::ActorValueKind* PROTOBUF_NONNULL SessionOpened::add_actor_value_kinds()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::Dreamsleeve::Protocol::Chat::ActorValueKind* _add =
+      _internal_mutable_actor_value_kinds()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:Dreamsleeve.Protocol.Chat.SessionOpened.actor_value_kinds)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ActorValueKind>& SessionOpened::actor_value_kinds() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:Dreamsleeve.Protocol.Chat.SessionOpened.actor_value_kinds)
+  return _internal_actor_value_kinds();
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ActorValueKind>&
+SessionOpened::_internal_actor_value_kinds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.actor_value_kinds_;
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ActorValueKind>* PROTOBUF_NONNULL
+SessionOpened::_internal_mutable_actor_value_kinds() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.actor_value_kinds_;
 }
 
 // -------------------------------------------------------------------

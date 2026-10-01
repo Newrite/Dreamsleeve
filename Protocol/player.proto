@@ -23,8 +23,10 @@ message PlayerLocation {
   uint64 sampled_at_us = 4;
 }
 
-message ResourceActorValue { float current = 1; float maximum = 2; }
+// Whole points: clients round the game's readings, so smaller steps never travel.
+message ResourceActorValue { sint32 current = 1; sint32 maximum = 2; }
 
+// What a client reports: its own readings under their keys and labels.
 message ActorValueEntry {
   string key = 1;
   string display_name = 2;
@@ -34,11 +36,31 @@ message ActorValueEntry {
   }
 }
 
+// A server-assigned number for one (key, display name) pair. The server
+// defines every kind to a session before the first message that uses it: in
+// SessionOpened or in the PresenceChanged that introduces it. A number lives
+// while some online player has that pair and is never reused for another;
+// one that no player uses any more is never sent again, so clients may drop it.
+message ActorValueKind {
+  uint64 id = 1; // Nonzero.
+  string key = 2;
+  string display_name = 3;
+}
+
+// A reading the server publishes, under a kind number instead of strings.
+message ActorValue {
+  uint64 kind = 1;
+  oneof value {
+    float scalar = 2; // Explicit zero is a present scalar value.
+    ResourceActorValue resource = 3;
+  }
+}
+
 message PlayerInfo {
   PlayerProfile profile = 1;
   optional string character_name = 2;
   PlayerLocation location = 3;
-  repeated ActorValueEntry actor_values = 4;
+  repeated ActorValue actor_values = 4; // At most one reading per key.
   uint64 character_generation = 5;
   PlayerDetails details = 6;
   uint64 view_revision = 7;
@@ -145,15 +167,26 @@ message UpdatePlayer {
   }
 }
 
-message PlayerJoined { PlayerInfo player = 1; }
+// Optional components of PlayerDetails a patch can clear; the activity always has a value.
+enum PlayerDetailsField {
+  PLAYER_DETAILS_FIELD_UNSPECIFIED = 0;
+  PLAYER_DETAILS_FIELD_RACE = 1;
+  PLAYER_DETAILS_FIELD_LEVEL = 2;
+  PLAYER_DETAILS_FIELD_PLACE = 3;
+  PLAYER_DETAILS_FIELD_GAME_STARTED_AT = 4;
+}
 
-message PlayerUpdated { PlayerInfo player = 1; }
-
-// At least one component is present. Absent means unchanged; present replaces that component.
-message PlayerMetadataChanged {
+// What changed in one player's actor values and details since the last tick.
+// Absent parts are unchanged; at least one part is present.
+message PlayerMetadataPatch {
   uint64 player_id = 1;
-  ActorValues actor_values = 2;
-  PlayerDetails details = 3;
+  // Kinds the player no longer has, applied before actor_values; a changed
+  // label is the old kind removed and the new one set.
+  repeated uint64 removed_actor_values = 2;
+  repeated ActorValue actor_values = 3; // New or changed readings.
+  // The components present here replace the old ones.
+  PlayerDetails details = 4;
+  repeated PlayerDetailsField cleared_details = 5; // Components that became absent.
 }
 
 // Location-only replication avoids resending unchanged actor values.
@@ -166,15 +199,29 @@ message PlayerMoved {
   MovementPose pose = 5;
 }
 
-// Reliable baseline/clear. A realtime sample cannot establish visibility.
-message PlayerVisibilityChanged {
+// Reliable baseline or clear. A realtime sample cannot establish visibility.
+// The place is PresenceChanged.space: a visible player shares the recipient's.
+message PlayerVisibility {
   uint64 player_id = 1;
   uint64 view_revision = 2;
   uint64 sequence = 3;
-  PlayerLocation location = 4;
+  MovementPose pose = 4; // Absent: the player is no longer visible.
 }
 
-message PlayerLeft { uint64 player_id = 1; }
+// Everything that changed in the online list for one recipient: one message
+// per replication tick, plus one per joining or leaving player. Parts apply in
+// field order: kinds, joined, updated, metadata, visibility, left.
+message PresenceChanged {
+  repeated ActorValueKind actor_value_kinds = 1; // Kinds new to the recipient.
+  repeated PlayerInfo joined = 2;
+  // Identity or character changes: the whole player again, with no position.
+  repeated PlayerInfo updated = 3;
+  repeated PlayerMetadataPatch metadata = 4;
+  // The recipient's own place; present exactly when a visibility entry has a pose.
+  Location space = 5;
+  repeated PlayerVisibility visibility = 6;
+  repeated uint64 left = 7;
+}
 
 // Independent absolute poses for one recipient. Omission never clears visibility.
 message PlayersMoved {

@@ -79,9 +79,7 @@ ENet-сессии по прежнему билету или history epoch (HTTP 
 | Сервер → клиент | ChatPublished | Одно принятое сообщение |
 | Сервер → клиент | RequestRejected | Общий RequestRejectionCode, объяснение, поле |
 | Клиент → сервер | UpdatePlayer | BeginCharacter / RenameCharacter / SetLocation / SetActorValues / LeaveGame / SetDetails |
-| Сервер → клиент | PlayerJoined / PlayerLeft | Полный PlayerInfo нового игрока / ID ушедшего |
-| Сервер → клиент | PlayerUpdated / PlayerMetadataChanged | Идентичность и компоненты / изменённые actor values и Details |
-| Сервер → клиент | PlayerVisibilityChanged | Reliable baseline/clear с view_revision и sequence |
+| Сервер → клиент | PresenceChanged | Всё изменение онлайна для получателя: новые виды actor values, вошедшие и обновлённые игроки (PlayerInfo), патчи actor values и деталей, свои baseline/clear видимости и ушедшие; один пакет на получателя за такт репликации |
 | Клиент → сервер | ClientMovementPacket.sample | context_revision, sequence, pose без RequestId |
 | Сервер → клиент | ServerMovementPacket.movements | PlayerMoved: player_id, view_revision, sequence, pose |
 | Сервер → клиент | PlayerUpdateAccepted | ACK команды UpdatePlayer |
@@ -108,7 +106,7 @@ ChatMessageId, не серверная последовательность и �
 - SessionOpened, PlayerUpdateAccepted, GroundMarkPlaced, GroundMarkRemoved, IdentityVisibilityChanged, DisplayNameChanged, ответы модератору (SanctionIssued … PlayerMarksCleared) и RequestRejected обязательно возвращают ID исходного запроса.
 - ChatPublished и ChatMessageRemoved содержат RequestId только в копии инициатору. Остальные получают
   то же сообщение без RequestId. ID других клиентов не завершает свои запросы.
-- PlayerJoined/PlayerLeft/PlayerUpdated/PlayerVisibilityChanged/PlayerMetadataChanged/GroundMarksChanged/OwnGroundMarks/MuteChanged/SessionEnded/RoleChanged не содержат RequestId. Явный ноль всегда ошибочен.
+- PresenceChanged/GroundMarksChanged/OwnGroundMarks/MuteChanged/SessionEnded/RoleChanged не содержат RequestId. Явный ноль всегда ошибочен.
 
 Realtime-оболочки вообще не имеют RequestId: samples не занимают pending,
 не требуют PlayerUpdateAccepted, retry или коррелированного отказа.
@@ -118,10 +116,10 @@ Optional RequestId существует только в общей protobuf-об
 
 - F# ServerResponse: SessionOpened, ChatAccepted, ChatRejected, RequestRejected и остальные ответы
   на команды принимают обязательный uint64 ID; ChatMessageRemoved — `voption` (только у копии инициатору).
-- F# ChatPublished, PlayerJoined, PlayerLeft и прочие уведомления — без поля RequestId.
+- F# ChatPublished, PresenceChanged и прочие уведомления — без поля RequestId.
 - C++ ServerResponse — variant; SessionOpened, ChatAccepted, RequestRejected и остальные ответы
-  содержат requestId, ChatMessageRemoved — optional, ChatMessagesReceived, PlayerUpserted,
-  PlayerRemoved и прочие уведомления — без него.
+  содержат requestId, ChatMessageRemoved — optional, ChatMessagesReceived, PresenceChanged
+  и прочие уведомления — без него.
 
 ChatAccepted и ChatPublished на F# кодируются одним wire-payload ChatPublished,
 различаясь корреляцией для получателя. На C++ ChatAccepted содержит обычный
@@ -220,7 +218,7 @@ Control-канале ENet.
   при нём нет. `character_name_withheld` сохраняет прежний смысл (имя не прошло словарь) и
   для псевдонима не используется. Клиент отвергает псевдонимный профиль с username или
   пустым `display_name`. Так приходят все проекции скрытого игрока другим: bootstrap
-  `SessionOpened.players`, `PlayerJoined`/`PlayerUpdated`, автор `ChatMessage` (чат и
+  `SessionOpened.players`, `PresenceChanged.joined`/`updated`, автор `ChatMessage` (чат и
   объявления клиента) и автор `GroundMark` (надписи, места смерти, `OwnGroundMarks`).
 - Свою запись игрок всегда получает с настоящим профилем (кодек сервера отвергает
   приветствие, где запись получателя псевдонимна); свой псевдоним — в
@@ -231,7 +229,7 @@ Control-канале ENet.
   земле; `EXCEPT_GROUND_MARKS = 2` — присутствие и чат, новые метки несут настоящий профиль и
   имя персонажа. Неизвестное значение — `INVALID_REQUEST` (сервер) или ошибка codec (клиент).
 - `OpenSession.hidden_identity = 4`: сессия открывается уже со скрытым именем, первый
-  `PlayerJoined` не несёт настоящего профиля. Сервер, запрещающий режим, отвечает на такое
+  `PresenceChanged.joined` не несёт настоящего профиля. Сервер, запрещающий режим, отвечает на такое
   открытие `RequestRejected` с `HIDDEN_IDENTITY_NOT_ALLOWED` до погашения билета.
   `SessionOpened.hidden_identity = 10` — применённый вариант; `own_pseudonym` есть ровно тогда,
   когда он не `NONE`.
@@ -259,8 +257,8 @@ Control-канале ENet.
   собственными сменами (`RATE_LIMITED`, message «The display name can be changed again in N min.»).
   Запрос текущего имени подтверждается сразу и сменой не считается.
 - Ответ — `ServerPacket.display_name_changed = 26` (`DisplayNameChanged{display_name}`) с сохранённым
-  именем. Сам профиль приходит обычным `PlayerUpdated` — и автору, и остальным; у игрока со
-  скрытым именем другие по-прежнему видят псевдоним, `PlayerUpdated` им не приходит.
+  именем. Сам профиль приходит обычным `PresenceChanged.updated` — и автору, и остальным; у
+  игрока со скрытым именем другие по-прежнему видят псевдоним, обновление им не приходит.
 - Клиентский кодек отвергает пустое имя в запросе и в ответе и ответ без RequestId.
 
 ## Модерация
@@ -300,13 +298,15 @@ character_name — снимок опубликованного имени пер
 истории его нет. `ChatMessage.flagged` — диапазоны (байты UTF-8), которые словарь
 пометил, не отклонив сообщение. Коды отказа TEXT_NOT_ALLOWED (9) и RATE_LIMITED (10) добавлены
 совместимо в рамках v6; см. [модерация и имена](../docs/ModerationAndNamesRu.md). SessionOpened
-содержит PlayerInfo в поле players=5; старое поле 3 зарезервировано. PlayerJoined тоже
-несёт PlayerInfo. Это несовместимое изменение, закреплённое protocol_version=3.
+содержит PlayerInfo в поле players=5; старое поле 3 зарезервировано. PresenceChanged.joined и
+updated тоже несут PlayerInfo.
 
 PlayerLocation содержит Location(FormKey(plugin_name/local_form_id), location_name),
-Position XYZ в world units и Rotation XYZ в радианах. ActorValueEntry имеет key,
-display_name и oneof scalar/resource(current/maximum). Scalar 0 присутствует явно;
-отсутствующий oneof — ошибка. Reliable SetLocation устанавливает пространство и
+Position XYZ в world units и Rotation XYZ в радианах. Клиент шлёт свои показания как
+ActorValueEntry: key, display_name и oneof scalar (float) / resource (current/maximum, sint32 —
+целые очки, отрицательные допустимы: игра не обрезает удар, превысивший здоровье). Scalar 0
+присутствует явно; отсутствующий oneof — ошибка. Сервер публикует их как ActorValue с номером
+вида вместо строк (раздел «Пачка присутствия»). Reliable SetLocation устанавливает пространство и
 начальную позу; отсутствие location очищает положение. SetActorValues независимо заменяет карту показаний; пустая
 карта очищает её. Зарезервирован старый номер 3 объединённого sample_player_state.
 
@@ -320,10 +320,42 @@ Discord-строка. Движение и actor values не стирают detai
 
 PlayerUpdateAccepted завершает reliable-команду, не создавая локальное эхо.
 Автор применяет серверное состояние тем же путём, что остальные наблюдатели.
-PlayerUpdated с view_revision=0 обновляет идентичность/компоненты без переустановки
-позиции текущего персонажа. Новая character_generation сразу сбрасывает старую
-позицию и контекст. Reliable PlayerVisibilityChanged устанавливает baseline/clear;
-PlayerMetadataChanged никогда не меняет позицию.
+Обновлённый игрок (PresenceChanged.updated) с view_revision=0 обновляет идентичность и
+компоненты без переустановки позиции текущего персонажа. Новая character_generation сразу
+сбрасывает старую позицию и контекст. Видимость (PresenceChanged.visibility) устанавливает
+baseline/clear; патч метаданных никогда не меняет позицию.
+
+### Пачка присутствия (v16)
+
+`ServerPacket.presence_changed = 37` (Control, без RequestId) — единственное уведомление онлайна.
+Сервер шлёт получателю не больше одной пачки за такт `ReplicationIntervalMs` со всеми
+изменениями этого такта, плюс по пачке на каждого вошедшего или ушедшего игрока. Части
+применяются в порядке полей: `actor_value_kinds`, `joined`, `updated`, `metadata`, `visibility`,
+`left`; пустая пачка недопустима. Прежние `player_joined`/`player_left`/`player_updated`/
+`player_metadata_changed`/`player_visibility_changed` (13–15, 18, 20) зарезервированы.
+
+**Виды actor values.** `ActorValueKind{id, key, display_name}` — серверный номер (uint64, не 0)
+пары «ключ + подпись». Подпись приходит от клиента, у игроков с разной локализацией один ключ даёт
+разные виды. Сервер определяет вид получателю до первого сообщения, которое его использует:
+в `SessionOpened.actor_value_kinds` (все виды игроков снимка) или в той пачке, где вид впервые
+нужен (номера, которых получатель ещё не знает, по возрастанию). Номер живёт, пока какой-нибудь
+онлайн-игрок публикует эту пару, и никогда не переходит к другой: пара, опубликованная заново
+после забвения, получает новый номер. Поэтому клиент может забыть вид, которого нет ни у одного
+игрока его модели, — сервер такой номер больше не пришлёт. Неизвестный или повторно определённый
+номер — ошибка codec.
+
+**Патч метаданных.** `PlayerMetadataPatch{player_id, removed_actor_values, actor_values, details,
+cleared_details}` — что изменилось у игрока с прошлого такта; хотя бы одна часть есть. Сначала
+удаляются виды из `removed_actor_values`, затем ставятся новые и изменившиеся `actor_values`
+(смена подписи — удаление старого вида и новый). В `details` присутствующие компоненты (раса,
+уровень, занятие, место, начало игры) заменяют прежние, отсутствующие не меняются;
+`cleared_details` (`PlayerDetailsField`) перечисляет необязательные компоненты, ставшие
+неизвестными. Один компонент не может быть одновременно заменён и очищен.
+
+**Видимость.** `PlayerVisibility{player_id, view_revision, sequence, pose}`: поза — baseline,
+её отсутствие — clear. Видимый игрок всегда в пространстве получателя, поэтому место одно на пачку:
+`PresenceChanged.space` (собственная Location получателя на сервере); оно есть ровно тогда, когда
+хотя бы у одной записи есть поза.
 
 ### Контекст движения и порядок v6
 
@@ -382,7 +414,7 @@ OnlinePlayersReplaced, назначает self и передаёт истори�
 и отдельная публикация не позволяют потребителю увидеть промежуточные изменения.
 C++ ClientRuntime реализует этот обработчик, сверяет фазу Opening и RequestId,
 публикует снимок вместе с Ready. Client.Dev --connect использует настоящий транспорт. Модель не содержит специальной
-транзакции для этого сценария. PlayerJoined может содержать отфильтрованный baseline.
+транзакции для этого сценария. PresenceChanged.joined может содержать отфильтрованный baseline.
 
 ChatPublished способен обогнать SessionOpened по своему каналу: runtime хранит такие
 публикации в bounded bootstrap-буфере и применяет после истории через ChatCache.
@@ -583,7 +615,7 @@ ID/время, принимает текст от зарегистрирован
 MessageId упорядочен внутри канала, идентичность сообщения — (ChannelId, MessageId).
 Отказ Overloaded до принятия команды не изменяет историю; перегруженный получатель
 рассылки закрывается отдельно. Чат и онлайн сохраняют порядок внутри своих источников,
-но не обещают общего порядка между PlayerJoined/PlayerLeft и сообщениями чата.
+но не обещают общего порядка между пачками присутствия и сообщениями чата.
 
 Параметры сервера загружаются из TOML при старте. Настройки и запуск:
 [Server.Core README](../src/Dreamsleeve.Server.Core/README.ru.md).
@@ -598,7 +630,7 @@ MessageId упорядочен внутри канала, идентичност
 означает положение, доступное конкретному получателю. Сервер передаёт чужие позиции
 только при известной позиции получателя, совпадении WRLD/CELL FormKey и расстоянии
 XYZ <= Runtime.Presence.VisibilityDistance. Себе игрок получает положение всегда.
-На выходе reliable PlayerVisibilityChanged без location очищает положение, сохраняя
+На выходе reliable запись видимости без позы очищает положение, сохраняя
 метаданные. Вход устанавливает baseline с новым токеном, в том числе когда двигался
 только наблюдатель. Joined и начальный снимок содержат доступные позиции;
 metadata не обходит AOI.
@@ -617,9 +649,8 @@ metadata не обходит AOI.
 отсутствие записи не означает clear. Срок восстановления при произвольных потерях
 не гарантируется.
 
-PlayerMetadataChanged включает изменившиеся actor_values/details: отсутствующий
-блок не меняет компонент, присутствующий заменяет целиком. Пакет без обоих блоков
-недопустим. PlayerUpdated применяется для идентичности/имени/поколения персонажа;
+Патч метаданных несёт только изменившиеся показания и компоненты деталей (раздел «Пачка
+присутствия»). Обновлённый игрок применяется для идентичности/имени/поколения персонажа;
 Location=None/ViewRevision=0 не очищает позицию того же персонажа. Lifecycle
 координат устанавливает отдельная reliable-граница.
 
@@ -663,6 +694,6 @@ bootstrap может фрагментироваться, realtime — нет. П
 атомарной и не требует ожидания окончания всего прикладного тика.
 
 Старые UpdatePlayer.sample_movement=6, ServerPacket.players_moved=19 и
-PlayerMoved.location=2 зарезервированы. SetLocation использует tag8,
-PlayerVisibilityChanged — tag20; pose/token/sequence движения — отдельные realtime
-оболочки. Старые ветки и v5 одновременно не поддерживаются.
+PlayerMoved.location=2 зарезервированы. SetLocation использует tag8, видимость — часть
+PresenceChanged; pose/token/sequence движения — отдельные realtime оболочки. Старые ветки
+одновременно не поддерживаются.

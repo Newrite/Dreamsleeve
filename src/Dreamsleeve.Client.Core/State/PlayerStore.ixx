@@ -99,15 +99,15 @@ public:
       return snapshot;
     }
 
-    Domain::OperationResult ReplaceMetadata(
-      PlayerId                                id,
-      const std::optional<ActorValueStorage>& values,
-      const std::optional<PlayerDetails>&     details)
+    Domain::OperationResult ApplyMetadata(
+      PlayerId                                  id,
+      const std::optional<ActorValuesPatch>&    values,
+      const std::optional<PlayerDetailsPatch>&  details)
     {
       const auto found = players.find(id);
       if (found == players.end()) return UnknownPlayer();
-      if (values) found->second.actorValues = *values;
-      if (details) found->second.details = *details;
+      if (values) Domain::Players::Apply(found->second.actorValues, *values);
+      if (details) Domain::Players::Apply(found->second.details, *details);
       return {};
     }
 

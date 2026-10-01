@@ -123,3 +123,29 @@ module PlayerDetails =
 
     let create race level activity place gameStartedAt =
         { race = race; level = level; activity = activity; place = place; gameStartedAt = gameStartedAt }
+
+/// The components that changed between two details of one player. ValueSome
+/// replaces a component; for an optional one, ValueSome ValueNone clears it.
+type DetailsPatch = {
+    Race: NamedForm voption voption
+    Level: uint32 voption voption
+    Activity: PlayerActivity voption
+    Place: PlaceDescription voption voption
+    GameStartedAt: DateTimeOffset voption voption
+}
+
+[<RequireQualifiedAccess>]
+module DetailsPatch =
+    /// ValueNone when nothing changed.
+    let between (previous: PlayerDetails) (latest: PlayerDetails) =
+        let changed old next = if old = next then ValueNone else ValueSome next
+        let patch = {
+            Race = changed previous.Race latest.Race
+            Level = changed previous.Level latest.Level
+            Activity = changed previous.Activity latest.Activity
+            Place = changed previous.Place latest.Place
+            GameStartedAt = changed previous.GameStartedAt latest.GameStartedAt
+        }
+        if patch.Race.IsNone && patch.Level.IsNone && patch.Activity.IsNone && patch.Place.IsNone && patch.GameStartedAt.IsNone then
+            ValueNone
+        else ValueSome patch

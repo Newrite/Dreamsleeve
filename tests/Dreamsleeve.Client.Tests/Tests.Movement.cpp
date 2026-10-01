@@ -159,7 +159,7 @@ TEST_CASE("Metadata updates and duplicate state batches do not add measurements"
   fixture.Move(0, 0, 100);
   fixture.Move(10, 100, 200);
   fixture.view->Apply(fixture.output.state, At(210));
-  REQUIRE(fixture.model.Apply(1, PlayerMetadataUpdated{7, Domain::ActorValueStorage{}, std::nullopt}));
+  REQUIRE(fixture.model.Apply(1, PlayerMetadataUpdated{7, Domain::ActorValuesPatch{}, std::nullopt}));
   REQUIRE(fixture.exchange->Publish(fixture.model));
   fixture.Drain(220);
   CHECK(fixture.view->HistorySize(7) == 2);

@@ -38,10 +38,12 @@ export namespace Domain
     bool operator==(const ScalarActorValue&) const = default;
   };
 
+  // Whole points, as the protocol carries them. The game does not clamp
+  // readings: a hit larger than the health left makes current negative.
   struct ResourceActorValue
   {
-    ActorValue current{};
-    ActorValue maximum{};
+    std::int32_t current{};
+    std::int32_t maximum{};
 
     bool operator==(const ResourceActorValue&) const = default;
   };
@@ -149,6 +151,27 @@ export namespace Domain
     std::optional<PlaceDescription> place;
     std::optional<std::int64_t>     gameStartedAtUnixMs;
     bool                            operator==(const PlayerDetails&) const = default;
+  };
+
+  // What changed in a player's actor values: keys removed first, then the new
+  // and changed readings.
+  struct ActorValuesPatch
+  {
+    std::vector<ActorValueKey>                            removed;
+    std::vector<std::pair<ActorValueKey, ActorValueInfo>> set;
+    bool                                                  operator==(const ActorValuesPatch&) const = default;
+  };
+
+  // Present components replace the old ones; an empty inner value clears an
+  // optional component.
+  struct PlayerDetailsPatch
+  {
+    std::optional<std::optional<NamedForm>>        race;
+    std::optional<std::optional<std::uint32_t>>    level;
+    std::optional<PlayerActivity>                  activity;
+    std::optional<std::optional<PlaceDescription>> place;
+    std::optional<std::optional<std::int64_t>>     gameStartedAtUnixMs;
+    bool                                           operator==(const PlayerDetailsPatch&) const = default;
   };
 
   // A pseudonymous profile is what others see of a player who hides their

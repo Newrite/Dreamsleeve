@@ -8,7 +8,9 @@ import "player.proto";
 import "ground.proto";
 import "moderation.proto";
 
-// Control/chat envelope. Version 15 gives moderators their tools in the game;
+// Control/chat envelope. Version 16 batches presence per replication tick,
+// numbers actor value kinds and sends whole-point resources and metadata patches;
+// version 15 gives moderators their tools in the game;
 // version 14 mutes, bans and kicks players; version 13
 // keeps a client connected as a guest before it signs in; version 12 dates
 // marks with the in-game calendar;
@@ -47,18 +49,15 @@ message ClientPacket {
 message ServerPacket {
   uint32 protocol_version = 1;
   optional uint64 request_id = 2;
-  reserved 17, 19;
-  reserved "player_moved", "players_moved";
+  reserved 13, 14, 15, 17, 18, 19, 20;
+  reserved "player_moved", "players_moved", "player_joined", "player_left", "player_updated",
+    "player_visibility_changed", "player_metadata_changed";
   oneof payload {
     SessionOpened session_opened = 10;
     ChatPublished chat_published = 11;
     RequestRejected request_rejected = 12;
-    PlayerJoined player_joined = 13;
-    PlayerLeft player_left = 14;
-    PlayerUpdated player_updated = 15;
     PlayerUpdateAccepted player_update_accepted = 16;
-    PlayerVisibilityChanged player_visibility_changed = 20;
-    PlayerMetadataChanged player_metadata_changed = 18;
+    PresenceChanged presence_changed = 37; // Control lane, no request_id.
     GroundMarksChanged ground_marks_changed = 21; // Control lane, no request_id.
     GroundMarkPlaced ground_mark_placed = 22; // Control lane, request_id required.
     GroundMarkRemoved ground_mark_removed = 23; // Control lane, request_id required.

@@ -245,16 +245,19 @@ TEST_CASE("Rejections retain unknown codes and correlation while presence events
   CHECK(rejected9.requestId == 9);
   CHECK(static_cast<std::int32_t>(rejected9.rejection.code) == 0x7FFF0001);
   CHECK(rejected9.rejection.message == "Отказ");
-  packet.mutable_player_left()->set_player_id(7);
+  auto* presence = packet.mutable_presence_changed();
+  presence->add_left(7);
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.clear_request_id();
   result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
-  CHECK(std::get<PlayerRemoved>(*result).playerId == 7);
-  *packet.mutable_player_joined()->mutable_player()->mutable_profile() = Published().chat_published().message().author();
+  REQUIRE(std::get<W::PresenceChanged>(*result).updates.size() == 1);
+  CHECK(std::get<PlayerRemoved>(std::get<W::PresenceChanged>(*result).updates[0]).playerId == 7);
+  presence->clear_left();
+  *presence->add_joined()->mutable_profile() = Published().chat_published().message().author();
   result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
-  CHECK(std::get<PlayerUpserted>(*result).player.data.playerId == 7);
+  CHECK(std::get<PlayerUpserted>(std::get<W::PresenceChanged>(*result).updates.at(0)).player.data.playerId == 7);
 }
 
 TEST_CASE("Malformed unsupported and structurally incomplete server packets return errors")
@@ -279,7 +282,7 @@ TEST_CASE("Malformed unsupported and structurally incomplete server packets retu
   packet = Published();
   packet.mutable_chat_published()->mutable_message()->clear_author();
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
-  packet.mutable_player_joined();  // Absent profile exposes the default zero ID.
+  packet.mutable_presence_changed()->add_joined();  // Absent profile exposes the default zero ID.
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet = Published();
   packet.mutable_chat_published()->mutable_message()->set_sent_at_unix_ms(std::numeric_limits<std::int64_t>::max());
@@ -472,12 +475,27 @@ TEST_CASE("Full PlayerInfo preserves optional data zero scalars and generation f
   source->mutable_details()->mutable_activity()->set_kind(P::ACTIVITY_KIND_COMBAT);
   source->mutable_details()->mutable_activity()->set_target_name("Dragon");
   source->mutable_details()->set_game_started_at_unix_ms(123);
+  auto* zero = packet.mutable_session_opened()->add_actor_value_kinds();
+  zero->set_id(1);
+  zero->set_key("zero");
+  zero->set_display_name("Zero");
   auto* scalar = source->add_actor_values();
-  scalar->set_key("zero");
+  scalar->set_kind(1);
   scalar->set_scalar(0);
+  auto* health = source->add_actor_values();
+  auto* kind   = packet.mutable_session_opened()->add_actor_value_kinds();
+  kind->set_id(2);
+  kind->set_key("skyrim:health");
+  kind->set_display_name("Health");
+  health->set_kind(2);
+  health->mutable_resource()->set_current(-15);  // A hit larger than the health left.
+  health->mutable_resource()->set_maximum(300);
   auto result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(result);
-  const auto& player = std::get<W::SessionOpened>(*result).players.front();
+  const auto& opened = std::get<W::SessionOpened>(*result);
+  REQUIRE(opened.kinds.size() == 2);
+  CHECK(opened.kinds[1].key == "skyrim:health");
+  const auto& player = opened.players.front();
   CHECK(player.characterName == "Nerevar");
   CHECK(player.characterGeneration == 5);
   CHECK(player.details.level == 25);
@@ -486,10 +504,28 @@ TEST_CASE("Full PlayerInfo preserves optional data zero scalars and generation f
   CHECK(player.details.activity.targetName == "Dragon");
   CHECK(player.details.gameStartedAtUnixMs == 123);
   CHECK(std::get<Domain::ScalarActorValue>(player.actorValues.at("zero").state).value == 0);
+  CHECK(player.actorValues.at("zero").displayName == "Zero");
+  CHECK(
+    player.actorValues.at("skyrim:health").state == Domain::ActorValueState{
+                                                        Domain::ResourceActorValue{-15, 300}
+  });
 
   SUBCASE("missing actor value")
   {
     scalar->clear_value();
+  }
+  SUBCASE("undefined kind")
+  {
+    scalar->set_kind(3);
+  }
+  SUBCASE("kind defined twice")
+  {
+    *packet.mutable_session_opened()->add_actor_value_kinds() = *zero;
+  }
+  SUBCASE("zero kind")
+  {
+    zero->set_id(0);
+    scalar->set_kind(0);
   }
   SUBCASE("nonfinite actor value")
   {
@@ -501,10 +537,13 @@ TEST_CASE("Full PlayerInfo preserves optional data zero scalars and generation f
   }
   SUBCASE("too many values")
   {
-    for (int index = 0; index < 64; ++index)
+    for (int index = 3; index < 66; ++index)
     {
+      auto* defined = packet.mutable_session_opened()->add_actor_value_kinds();
+      defined->set_id(index);
+      defined->set_key(std::to_string(index));
       auto* value = source->add_actor_values();
-      value->set_key(std::to_string(index));
+      value->set_kind(index);
       value->set_scalar(0);
     }
   }
@@ -521,12 +560,16 @@ TEST_CASE("Actor value limits are configured for both outgoing samples and incom
   sample.actorValues.emplace("skyrim:stamina", Domain::ActorValueInfo{"Stamina", Domain::ScalarActorValue{1}});
   // Outgoing, the server applies its own limit and refuses the update.
   CHECK(codec.Encode(W::UpdatePlayer{1, sample}));
-  auto  packet = Welcome();
-  auto* player = packet.mutable_session_opened()->mutable_players(0);
+  auto          packet = Welcome();
+  auto*         player = packet.mutable_session_opened()->mutable_players(0);
+  std::uint32_t id     = 0;
   for (const auto* key : {"skyrim:health", "skyrim:stamina"})
   {
+    auto* kind = packet.mutable_session_opened()->add_actor_value_kinds();
+    kind->set_id(++id);
+    kind->set_key(key);
     auto* value = player->add_actor_values();
-    value->set_key(key);
+    value->set_kind(id);
     value->set_scalar(0);
   }
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
@@ -545,46 +588,141 @@ TEST_CASE("Player update correlation is distinct from uncorrelated full and comp
   auto accepted = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
   REQUIRE(accepted);
   CHECK(std::get<W::PlayerUpdateAccepted>(*accepted).requestId == 1);
-  auto* boundary = packet.mutable_player_visibility_changed();
+  auto* boundary = packet.mutable_presence_changed()->add_visibility();
   boundary->set_player_id(7);
   boundary->set_view_revision(1);
   CHECK_FALSE(codec.Decode(Bytes(packet)));
   packet.clear_request_id();
   auto moved = codec.Decode(Bytes(packet));
   REQUIRE(moved);
-  CHECK(std::get<PlayerLocationUpdated>(*moved).playerId == 7);
-  CHECK_FALSE(std::get<PlayerLocationUpdated>(*moved).location);
-  packet.mutable_player_updated()->mutable_player()->mutable_profile()->set_player_id(7);
+  const auto& cleared = std::get<PlayerLocationUpdated>(std::get<W::PresenceChanged>(*moved).updates.at(0));
+  CHECK(cleared.playerId == 7);
+  CHECK_FALSE(cleared.location);
+  packet.mutable_presence_changed()->add_updated()->mutable_profile()->set_player_id(7);
   REQUIRE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
   packet.set_request_id(1);
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
 }
 
-TEST_CASE("Metadata notifications distinguish omitted components from empty replacements")
+TEST_CASE("Presence baselines take the place of their batch; a pose needs it and it needs a pose")
 {
   const auto      codec = MakeCodec();
   P::ServerPacket packet;
   packet.set_protocol_version(W::Version);
-  auto* patch = packet.mutable_player_metadata_changed();
+  auto* presence = packet.mutable_presence_changed();
+  auto* entry    = presence->add_visibility();
+  entry->set_player_id(7);
+  entry->set_view_revision(3);
+  entry->set_sequence(9);
+  entry->mutable_pose()->mutable_position()->set_x(10);
+  entry->mutable_pose()->set_sampled_at_us(55);
+  CHECK_FALSE(codec.Decode(Bytes(packet)));  // No space for the pose.
+  presence->mutable_space()->mutable_location_id()->set_plugin_name("Skyrim.esm");
+  presence->mutable_space()->mutable_location_id()->set_local_form_id(0x3C);
+  presence->mutable_space()->set_location_name("Skyrim");
+  auto result = codec.Decode(Bytes(packet));
+  REQUIRE(result);
+  const auto& baseline = std::get<PlayerLocationUpdated>(std::get<W::PresenceChanged>(*result).updates.at(0));
+  REQUIRE(baseline.location);
+  CHECK(baseline.location->location.locationId == Domain::FormKey{"Skyrim.esm", 0x3C});
+  CHECK(baseline.location->location.locationName == "Skyrim");
+  CHECK(baseline.location->position.X == 10);
+  CHECK(baseline.location->sampledAtUs == 55);
+  CHECK(baseline.viewRevision == 3);
+  CHECK(baseline.sequence == 9);
+  entry->clear_pose();
+  CHECK_FALSE(codec.Decode(Bytes(packet)));  // A space without any pose.
+  presence->Clear();
+  CHECK_FALSE(codec.Decode(Bytes(packet)));  // Nothing changed.
+}
+
+TEST_CASE("Actor value kinds never take a number twice and forget kinds no player has")
+{
+  W::ActorValueKinds kinds;
+  CHECK_FALSE(kinds.Define({0, "zero", ""}));
+  REQUIRE(kinds.Define({1, "skyrim:health", "Health"}));
+  REQUIRE(kinds.Define({2, "skyrim:health", "Здоровье"}));
+  CHECK_FALSE(kinds.Define({2, "skyrim:magicka", "Magicka"}));
+  Domain::Player player;
+  player.actorValues.emplace(
+    "skyrim:health",
+    Domain::ActorValueInfo{
+        "Здоровье",
+        Domain::ResourceActorValue{1, 2}
+  });
+  kinds.Retain(std::span{&player, 1});
+  CHECK(kinds.Size() == 1);
+  CHECK_FALSE(kinds.Find(1));
+  REQUIRE(kinds.Find(2));
+  CHECK(kinds.Find(2)->displayName == "Здоровье");
+}
+
+TEST_CASE("Metadata patches resolve kinds the session knows or the same message defines")
+{
+  const auto         codec = MakeCodec();
+  W::ActorValueKinds known;
+  REQUIRE(known.Define({1, "skyrim:health", "Health"}));
+  P::ServerPacket packet;
+  packet.set_protocol_version(W::Version);
+  auto* presence = packet.mutable_presence_changed();
+  auto* patch    = presence->add_metadata();
   patch->set_player_id(7);
-  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
-  patch->mutable_actor_values();
-  auto result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Control, known));  // Nothing changed.
+
+  // The old label goes and the new one comes: a kind defined in this message.
+  patch->add_removed_actor_values(1);
+  auto* kind = presence->add_actor_value_kinds();
+  kind->set_id(2);
+  kind->set_key("skyrim:health");
+  kind->set_display_name("Здоровье");
+  auto* value = patch->add_actor_values();
+  value->set_kind(2);
+  value->mutable_resource()->set_current(-3);
+  value->mutable_resource()->set_maximum(250);
+  auto result = codec.Decode(Bytes(packet), W::Channel::Control, known);
   REQUIRE(result);
-  const auto& empty = std::get<PlayerMetadataUpdated>(*result);
-  REQUIRE(empty.actorValues);
-  CHECK(empty.actorValues->empty());
-  CHECK_FALSE(empty.details);
+  const auto& changed = std::get<W::PresenceChanged>(*result);
+  REQUIRE(changed.kinds.size() == 1);
+  CHECK(changed.kinds[0].displayName == "Здоровье");
+  const auto& values = std::get<PlayerMetadataUpdated>(changed.updates.at(0));
+  REQUIRE(values.actorValues);
+  CHECK(values.actorValues->removed == std::vector<Domain::ActorValueKey>{"skyrim:health"});
+  REQUIRE(values.actorValues->set.size() == 1);
+  CHECK(values.actorValues->set[0].second.displayName == "Здоровье");
+  CHECK(
+    values.actorValues->set[0].second.state == Domain::ActorValueState{
+                                                   Domain::ResourceActorValue{-3, 250}
+  });
+  CHECK_FALSE(values.details);
+  CHECK_FALSE(codec.Decode(Bytes(packet)));                              // Kind 1 is unknown to an empty table.
+  kind->set_id(1);
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Control, known));  // Numbers are never redefined.
+  kind->set_id(2);
+
+  // Details: present components replace, listed ones clear.
+  patch->clear_removed_actor_values();
   patch->clear_actor_values();
+  presence->clear_actor_value_kinds();
   patch->mutable_details()->set_level(0);
-  result = codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control);
+  patch->mutable_details()->mutable_activity()->set_kind(P::ACTIVITY_KIND_SNEAKING);
+  patch->add_cleared_details(P::PLAYER_DETAILS_FIELD_PLACE);
+  result = codec.Decode(Bytes(packet), W::Channel::Control, known);
   REQUIRE(result);
-  const auto& details = std::get<PlayerMetadataUpdated>(*result);
+  const auto& details = std::get<PlayerMetadataUpdated>(std::get<W::PresenceChanged>(*result).updates.at(0));
   CHECK_FALSE(details.actorValues);
   REQUIRE(details.details);
-  CHECK(details.details->level == 0);
+  CHECK(details.details->level == std::optional<std::optional<std::uint32_t>>{0});
+  CHECK(details.details->place == std::optional<std::optional<Domain::PlaceDescription>>{std::optional<Domain::PlaceDescription>{}});
+  CHECK(details.details->activity->kind == Domain::ActivityKind::Sneaking);
+  CHECK_FALSE(details.details->race);
+  patch->add_cleared_details(P::PLAYER_DETAILS_FIELD_LEVEL);
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Control, known));  // Replaced and cleared at once.
+  patch->clear_cleared_details();
+  patch->add_cleared_details(P::PLAYER_DETAILS_FIELD_UNSPECIFIED);
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Control, known));
+  patch->clear_cleared_details();
   packet.set_request_id(1);
-  CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Control, known));
 }
 
 TEST_CASE("Movement uses a separate unreliable envelope bounded by negotiated payload")

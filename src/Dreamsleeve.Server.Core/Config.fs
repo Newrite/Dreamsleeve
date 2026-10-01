@@ -77,7 +77,7 @@ module ServerConfig =
             ChannelLimit = 3
             ServiceTimeoutMs = 0u
             EventBudget = 256
-            Worker = { QueueCapacity = 524288; QueueBytes = 64 * 1024 * 1024
+            Worker = { QueueCapacity = 65536; QueueBytes = 16 * 1024 * 1024
                        SendCommandsPerPass = 2048; SendBytesPerPass = 4 * 1024 * 1024
                        WorkBudgetMs = 2; IdleWaitMs = 1 }
             MaxPacketBytes = 1024 * 1024
@@ -87,7 +87,7 @@ module ServerConfig =
             MaxWaitingData = 32 * 1024 * 1024
             MaxOutgoingPacketsPerPeer = 4096
             MaxOutgoingBytesPerPeer = 16 * 1024 * 1024
-            MaxOutgoingPackets = 1048576
+            MaxOutgoingPackets = 262144
             MaxOutgoingBytes = 256 * 1024 * 1024
             MaxInitialPlayers = 4096
             MaxRecentMessages = 512

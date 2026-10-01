@@ -134,53 +134,99 @@ namespace Dreamsleeve::Client::Wire::Detail
     return result;
   }
 
-  Result<Domain::ActorValueInfo> ReadActorValue(const P::ActorValueEntry& entry)
+  // A published reading resolves its number through the kinds of the session.
+  Result<std::pair<Domain::ActorValueKey, Domain::ActorValueInfo>> ReadActorValue(const P::ActorValue& entry, const ActorValueKinds& kinds)
   {
-    if (entry.key().empty()) return Invalid("actor_value_key");
+    const auto* kind = kinds.Find(entry.kind());
+    if (!kind) return Invalid("actor_value_kind");
     switch (entry.value_case())
     {
-      case P::ActorValueEntry::kScalar:
+      case P::ActorValue::kScalar:
         if (!Finite(entry.scalar())) return Invalid("actor_value");
-        return Domain::ActorValueInfo{entry.display_name(), Domain::ScalarActorValue{entry.scalar()}};
-      case P::ActorValueEntry::kResource:
-        if (!Finite(entry.resource().current(), entry.resource().maximum())) return Invalid("actor_value");
-        return Domain::ActorValueInfo{
-            entry.display_name(),
-            Domain::ResourceActorValue{entry.resource().current(), entry.resource().maximum()}
+        return std::pair{
+            kind->key,
+            Domain::ActorValueInfo{kind->displayName, Domain::ScalarActorValue{entry.scalar()}}
         };
-      case P::ActorValueEntry::VALUE_NOT_SET:
+      case P::ActorValue::kResource:
+        return std::pair{
+            kind->key,
+            Domain::ActorValueInfo{kind->displayName, Domain::ResourceActorValue{entry.resource().current(), entry.resource().maximum()}}
+        };
+      case P::ActorValue::VALUE_NOT_SET:
         return Invalid("actor_value");
       default:
         return Invalid("actor_value");
     }
   }
 
+  Domain::PlayerActivity ReadActivity(const P::PlayerActivity& source)
+  {
+    Domain::PlayerActivity result;
+    result.kind           = static_cast<Domain::ActivityKind>(source.kind());
+    result.lockDifficulty = static_cast<Domain::LockDifficulty>(source.lock_difficulty());
+    if (source.has_target_name()) result.targetName = source.target_name();
+    if (source.has_menu_key()) result.menuKey = source.menu_key();
+    return result;
+  }
+
+  Domain::PlaceDescription ReadPlace(const P::PlaceDescription& place)
+  {
+    return {place.worldspace_name(), place.location_name(), place.nearby_marker_name(), place.marker_kind(), place.is_interior()};
+  }
+
+  Domain::NamedForm ReadRace(const P::NamedForm& race)
+  {
+    return {KeyOf(race.form()), race.name()};
+  }
+
   Domain::PlayerDetails ReadDetails(const P::PlayerDetails& source)
   {
     Domain::PlayerDetails result;
-    if (source.has_race()) result.race = Domain::NamedForm{KeyOf(source.race().form()), source.race().name()};
+    if (source.has_race()) result.race = ReadRace(source.race());
     if (source.has_level()) result.level = source.level();
-    const auto& activity           = source.activity();
-    result.activity.kind           = static_cast<Domain::ActivityKind>(activity.kind());
-    result.activity.lockDifficulty = static_cast<Domain::LockDifficulty>(activity.lock_difficulty());
-    if (activity.has_target_name()) result.activity.targetName = activity.target_name();
-    if (activity.has_menu_key()) result.activity.menuKey = activity.menu_key();
-    if (source.has_place())
-    {
-      const auto& place = source.place();
-      result.place      = Domain::PlaceDescription{
-          place.worldspace_name(),
-          place.location_name(),
-          place.nearby_marker_name(),
-          place.marker_kind(),
-          place.is_interior()
-      };
-    }
+    result.activity = ReadActivity(source.activity());
+    if (source.has_place()) result.place = ReadPlace(source.place());
     if (source.has_game_started_at_unix_ms()) result.gameStartedAtUnixMs = source.game_started_at_unix_ms();
     return result;
   }
 
-  Result<Domain::Player> Player(const Configuration& config, const P::PlayerInfo& source)
+  // Present components replace, listed ones clear; one component never does both.
+  Result<Domain::PlayerDetailsPatch> ReadDetailsPatch(const P::PlayerMetadataPatch& source)
+  {
+    Domain::PlayerDetailsPatch result;
+    if (source.has_details())
+    {
+      const auto& set = source.details();
+      if (set.has_race()) result.race = std::optional{ReadRace(set.race())};
+      if (set.has_level()) result.level = std::optional{set.level()};
+      if (set.has_activity()) result.activity = ReadActivity(set.activity());
+      if (set.has_place()) result.place = std::optional{ReadPlace(set.place())};
+      if (set.has_game_started_at_unix_ms()) result.gameStartedAtUnixMs = std::optional{set.game_started_at_unix_ms()};
+    }
+    const auto clear = [](auto& component) {
+      if (component) return false;
+      component.emplace();
+      return true;
+    };
+    for (const int field : source.cleared_details())
+    {
+      bool cleared = false;
+      if (field == P::PLAYER_DETAILS_FIELD_RACE)
+        cleared = clear(result.race);
+      else if (field == P::PLAYER_DETAILS_FIELD_LEVEL)
+        cleared = clear(result.level);
+      else if (field == P::PLAYER_DETAILS_FIELD_PLACE)
+        cleared = clear(result.place);
+      else if (field == P::PLAYER_DETAILS_FIELD_GAME_STARTED_AT)
+        cleared = clear(result.gameStartedAtUnixMs);
+      if (!cleared) return Invalid("cleared_details");
+    }
+    if (result.gameStartedAtUnixMs && *result.gameStartedAtUnixMs && !ValidUnixMs(**result.gameStartedAtUnixMs))
+      return Invalid("game_started_at_unix_ms");
+    return result;
+  }
+
+  Result<Domain::Player> Player(const Configuration& config, const P::PlayerInfo& source, const ActorValueKinds& kinds)
   {
     auto profile = Profile(source.profile());
     if (!profile) return std::unexpected{profile.error()};
@@ -200,30 +246,50 @@ namespace Dreamsleeve::Client::Wire::Detail
     }
     for (const auto& entry : source.actor_values())
     {
-      auto value = ReadActorValue(entry);
+      auto value = ReadActorValue(entry, kinds);
       if (!value) return std::unexpected{value.error()};
-      if (!result.actorValues.emplace(entry.key(), std::move(*value)).second) return Invalid("actor_value_key");
+      if (!result.actorValues.emplace(std::move(value->first), std::move(value->second)).second) return Invalid("actor_value_key");
     }
     return result;
   }
 
-  Result<PlayerMetadataUpdated> ReadMetadata(const Configuration& config, const P::PlayerMetadataChanged& source)
+  Result<PlayerMetadataUpdated> ReadMetadata(
+    const Configuration&          config,
+    const P::PlayerMetadataPatch& source,
+    const ActorValueKinds&        kinds)
   {
-    if (source.player_id() == Domain::InvalidId || (!source.has_actor_values() && !source.has_details()))
-      return Invalid("player_metadata_changed");
+    const bool values  = !source.removed_actor_values().empty() || !source.actor_values().empty();
+    const bool details = source.has_details() || !source.cleared_details().empty();
+    if (source.player_id() == Domain::InvalidId || (!values && !details)) return Invalid("player_metadata_patch");
     PlayerMetadataUpdated result{source.player_id()};
-    if (source.has_actor_values())
+    if (values)
     {
-      if (static_cast<std::size_t>(source.actor_values().values_size()) > config.maxActorValues) return Invalid("actor_values");
-      result.actorValues.emplace();
-      for (const auto& entry : source.actor_values().values())
+      if (
+        static_cast<std::size_t>(source.actor_values_size()) > config.maxActorValues ||
+        static_cast<std::size_t>(source.removed_actor_values_size()) > config.maxActorValues)
+        return Invalid("actor_values");
+      auto& patch = result.actorValues.emplace();
+      for (const auto id : source.removed_actor_values())
       {
-        auto value = ReadActorValue(entry);
+        const auto* kind = kinds.Find(id);
+        if (!kind) return Invalid("actor_value_kind");
+        patch.removed.push_back(kind->key);
+      }
+      for (const auto& entry : source.actor_values())
+      {
+        auto value = ReadActorValue(entry, kinds);
         if (!value) return std::unexpected{value.error()};
-        if (!result.actorValues->emplace(entry.key(), std::move(*value)).second) return Invalid("actor_value_key");
+        if (std::ranges::contains(patch.set, value->first, &std::pair<Domain::ActorValueKey, Domain::ActorValueInfo>::first))
+          return Invalid("actor_value_key");
+        patch.set.push_back(std::move(*value));
       }
     }
-    if (source.has_details()) result.details = ReadDetails(source.details());
+    if (details)
+    {
+      auto patch = ReadDetailsPatch(source);
+      if (!patch) return std::unexpected{patch.error()};
+      result.details = std::move(*patch);
+    }
     return result;
   }
 
@@ -243,17 +309,85 @@ namespace Dreamsleeve::Client::Wire::Detail
     return PlayerMovementReceived{source.player_id(), source.view_revision(), source.sequence(), value};
   }
 
-  Result<PlayerLocationUpdated> ReadVisibility(const P::PlayerVisibilityChanged& source)
+  // A baseline's place is the recipient's own: the space of its batch.
+  Result<PlayerLocationUpdated> ReadVisibility(const P::PlayerVisibility& source, const std::optional<Domain::Location>& space)
   {
     if (source.player_id() == Domain::InvalidId || source.view_revision() == 0) return Invalid("visibility");
     std::optional<Domain::PlayerLocation> location;
-    if (source.has_location())
+    if (source.has_pose())
     {
-      auto decoded = ReadLocation(source.location());
-      if (!decoded) return std::unexpected{decoded.error()};
-      location = std::move(*decoded);
+      if (!space) return Invalid("space");
+      const auto& pose = source.pose();
+      location         = Domain::PlayerLocation{*space, PositionOf(pose.position()), RotationOf(pose.rotation()), pose.sampled_at_us()};
+      if (!Finite(location->position) || !Finite(location->rotation)) return Invalid("pose");
     }
     return PlayerLocationUpdated{source.player_id(), std::move(location), source.view_revision(), source.sequence()};
+  }
+
+  Result<std::vector<ActorValueKind>> ReadKinds(const google::protobuf::RepeatedPtrField<P::ActorValueKind>& source, ActorValueKinds& kinds)
+  {
+    std::vector<ActorValueKind> result;
+    result.reserve(source.size());
+    for (const auto& kind : source)
+    {
+      ActorValueKind value{kind.id(), kind.key(), kind.display_name()};
+      if (value.key.empty() || !kinds.Define(value)) return Invalid("actor_value_kind");
+      result.push_back(std::move(value));
+    }
+    return result;
+  }
+
+  Result<PresenceChanged> ReadPresence(const Configuration& config, const P::PresenceChanged& source, const ActorValueKinds& known)
+  {
+    PresenceChanged result;
+    // New kinds may be used later in the same message.
+    std::optional<ActorValueKinds> extended;
+    if (!source.actor_value_kinds().empty())
+    {
+      extended.emplace(known);
+      auto kinds = ReadKinds(source.actor_value_kinds(), *extended);
+      if (!kinds) return std::unexpected{kinds.error()};
+      result.kinds = std::move(*kinds);
+    }
+    const auto& kinds = extended ? *extended : known;
+
+    for (const auto* players : {&source.joined(), &source.updated()})
+      for (const auto& value : *players)
+      {
+        auto player = Player(config, value, kinds);
+        if (!player) return std::unexpected{player.error()};
+        result.updates.emplace_back(PlayerUpserted{std::move(*player)});
+      }
+    for (const auto& value : source.metadata())
+    {
+      auto patch = ReadMetadata(config, value, kinds);
+      if (!patch) return std::unexpected{patch.error()};
+      result.updates.emplace_back(std::move(*patch));
+    }
+
+    std::optional<Domain::Location> space;
+    if (source.has_space())
+    {
+      space = Domain::Location{KeyOf(source.space().location_id()), source.space().location_name()};
+      if (!ValidKey(space->locationId)) return Invalid("space");
+    }
+    bool posed = false;
+    for (const auto& value : source.visibility())
+    {
+      auto location = ReadVisibility(value, space);
+      if (!location) return std::unexpected{location.error()};
+      posed = posed || location->location.has_value();
+      result.updates.emplace_back(std::move(*location));
+    }
+    if (space && !posed) return Invalid("space");
+
+    for (const auto id : source.left())
+    {
+      if (id == Domain::InvalidId) return Invalid("player_id");
+      result.updates.emplace_back(PlayerRemoved{id});
+    }
+    if (result.updates.empty()) return Invalid("presence_changed");
+    return result;
   }
 
 }

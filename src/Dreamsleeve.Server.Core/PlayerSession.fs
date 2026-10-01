@@ -54,7 +54,7 @@ module PlayerSession =
         Player: Player
         mutable Chat: ChatSnapshot option
         mutable System: ChatSnapshot option
-        mutable Online: PlayerSnapshot list option
+        mutable Online: (PlayerSnapshot list * ActorValueKinds) option
         Buffered: ResizeArray<ServerResponse>
     }
 
@@ -351,11 +351,12 @@ module PlayerSession =
         match state.Phase with
         | Opening opening ->
             match opening.Chat, opening.System, opening.Online with
-            | Some chat, Some system, Some online ->
+            | Some chat, Some system, Some (online, kinds) ->
                 let channel (snapshot: ChatSnapshot) = { ChannelId = snapshot.ChannelId; Kind = snapshot.Kind; Messages = snapshot.Messages }
                 let welcome = {
                     SelfPlayerId = opening.Player.Data.PlayerId
                     Players = online
+                    Kinds = kinds
                     Channels = [ channel chat; channel system ]
                     AnnouncementSources = AnnouncementOptions.allowedSources state.Settings.Announcements
                     OwnPseudonym = state.Pseudonym
@@ -430,19 +431,18 @@ module PlayerSession =
 
     let private presenceEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
         match event with
-        | PresenceEvent.Snapshot players ->
+        | PresenceEvent.Snapshot(players, kinds) ->
             match state.Phase with
             | Opening opening when opening.Online.IsNone ->
-                opening.Online <- Some (players |> List.map (ownView state opening.Player))
+                opening.Online <- Some (players |> List.map (ownView state opening.Player), kinds)
                 activate options request state context
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected presence snapshot."
-        | PresenceEvent.Joined player -> publish options request state context (ServerResponse.PlayerJoined(restoreOwn state player))
-        | PresenceEvent.Updated player -> publish options request state context (ServerResponse.PlayerUpdated(restoreOwn state player))
-        | PresenceEvent.MetadataChanged(playerId, values, details) -> publish options request state context (ServerResponse.PlayerMetadataChanged(playerId, values, details))
-        | PresenceEvent.VisibilityChanged change ->
-            publish options request state context (ServerResponse.PlayerVisibilityChanged change)
+        | PresenceEvent.Changed(change, kinds) ->
+            let own = restoreOwn state
+            let change = { change with Joined = List.map own change.Joined; Updated = List.map own change.Updated }
+            publish options request state context (ServerResponse.PresenceChanged(change, kinds))
         | PresenceEvent.Moved movements ->
             // Early realtime can be dropped: opening owns a reliable baseline and
             // the next period repeats all currently visible samples.
@@ -450,7 +450,6 @@ module PlayerSession =
             | Active _ when state.Host.Count < options.MaxPendingOutput ->
                 state.Host.TrySend(context, SessionHostCommand.Send(request.ConnectionId, ServerResponse.PlayersMoved movements)) |> ignore
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
-        | PresenceEvent.Left playerId -> publish options request state context (ServerResponse.PlayerLeft playerId)
 
     let private groundMarkEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
         let settle requestId reply =
@@ -721,7 +720,7 @@ module PlayerSession =
             close request state context "Unexpected identity change."
 
     /// Same path as a pseudonym switch: the host updates the names shown online,
-    /// presence spreads the new identity as PlayerUpdated. own: the player's own
+    /// presence spreads the new identity as an updated player. own: the player's own
     /// change rather than an administrator's.
     let private profileChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state context own (stored: PlayerData) =
         let apply (player: Player) =
@@ -993,7 +992,7 @@ module PlayerSession =
         | PlayerSessionMessage.PresenceEvent (PresenceEvent.Snapshot _) -> true
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Published _)
         | PlayerSessionMessage.ChatEvent (ChatRoomEvent.Removed(ValueNone, _))
-        | PlayerSessionMessage.PresenceEvent (PresenceEvent.Joined _ | PresenceEvent.Updated _ | PresenceEvent.Moved _ | PresenceEvent.VisibilityChanged _ | PresenceEvent.MetadataChanged _ | PresenceEvent.Left _)
+        | PlayerSessionMessage.PresenceEvent (PresenceEvent.Changed _ | PresenceEvent.Moved _)
         | PlayerSessionMessage.SendChat _ | PlayerSessionMessage.PostAnnouncement _
         | PlayerSessionMessage.PlaceGroundNote _ | PlayerSessionMessage.ReportDeath _ | PlayerSessionMessage.RemoveGroundMark _
         | PlayerSessionMessage.Update _ | PlayerSessionMessage.SampleMovement _ | PlayerSessionMessage.SetIdentityVisibility _

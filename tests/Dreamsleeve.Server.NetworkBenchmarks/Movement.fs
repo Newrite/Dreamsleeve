@@ -48,6 +48,8 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
     let mutable metadataSent = 0L
     let mutable metadataReceived = 0L
     let mutable metadataReceivedBytes = 0L
+    // Server kind numbers are global, so one set serves every local client.
+    let healthKinds = HashSet<uint64>()
 
     let submit index action =
         let requestId = nextRequest[index]
@@ -96,7 +98,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
         let values = ActorValues()
         let resource key name (current: float) maximum =
             values.Values.Add(ActorValueEntry(Key = key, DisplayName = name,
-                                              Resource = ResourceActorValue(Current = float32 current, Maximum = float32 maximum)))
+                                              Resource = ResourceActorValue(Current = int current, Maximum = int maximum)))
         resource "skyrim:health" "Здоровье" (floor (stamp / 65536.)) (stamp % 65536.)
         resource "skyrim:magicka" "Магия" (floor (stamp / 250.) % 300.) 300.
         resource "skyrim:stamina" "Запас сил" (float (index % 300)) 300.
@@ -245,12 +247,15 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
                 let target = if metadataRequests[observer].Remove packet.RequestId then metadataAcks else acknowledgements
                 if measured then target.Add(now() - sentAt)
             | false, _ -> fail "Unmatched control acknowledgement"
-        | ServerPacket.PayloadOneofCase.PlayerVisibilityChanged ->
-            let value = packet.PlayerVisibilityChanged
-            baseline observer value.PlayerId value.ViewRevision value.Sequence value.Location
-        | ServerPacket.PayloadOneofCase.PlayerUpdated ->
-            let player = packet.PlayerUpdated.Player
-            if isNull player || isNull player.Profile then fail "Invalid player update"
+        | _ -> fail "Unexpected movement response"
+
+    /// The movement parts of a presence batch; Program keeps the online set.
+    member _.ReceivePresence(observer, presence: PresenceChanged, size) =
+        if measuring then receivedBytes <- receivedBytes + int64 size
+        for kind in presence.ActorValueKinds do
+            if kind.Key = "skyrim:health" then healthKinds.Add kind.Id |> ignore
+        for player in presence.Updated do
+            if isNull player.Profile then fail "Invalid player update"
             else
                 match indices.TryGetValue player.Profile.PlayerId with
                 | true, index when player.CharacterGeneration = 1UL && player.HasCharacterName && player.CharacterName = "Benchmark" ->
@@ -259,17 +264,22 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
                         initializedCount <- initializedCount + 1
                 | _ -> fail "Unexpected character initialization"
                 baseline observer player.Profile.PlayerId player.ViewRevision player.MovementSequence player.Location
-        | ServerPacket.PayloadOneofCase.PlayerMetadataChanged ->
-            let values = packet.PlayerMetadataChanged.ActorValues
-            if measuring && not (isNull values) then
-                match values.Values |> Seq.tryFind (fun entry -> entry.Key = "skyrim:health") with
-                | Some entry when entry.ValueCase = ActorValueEntry.ValueOneofCase.Resource ->
+        if measuring then
+            for patch in presence.Metadata do
+                match patch.ActorValues |> Seq.tryFind (fun entry -> healthKinds.Contains entry.Kind) with
+                | Some entry when entry.ValueCase = ActorValue.ValueOneofCase.Resource ->
                     metadataReceived <- metadataReceived + 1L
-                    metadataReceivedBytes <- metadataReceivedBytes + int64 size
+                    metadataReceivedBytes <- metadataReceivedBytes + int64 (patch.CalculateSize())
                     let sentAt = float entry.Resource.Current * 65536. + float entry.Resource.Maximum
                     metadataAges.Add(max 0. (now() - sentAt))
                 | _ -> ()
-        | _ -> fail "Unexpected movement response"
+        for entry in presence.Visibility do
+            // A baseline is in the recipient's own place, the space of its batch.
+            let location =
+                if isNull entry.Pose then null
+                else PlayerLocation(Location = presence.Space, Position = entry.Pose.Position,
+                                    Rotation = entry.Pose.Rotation, SampledAtUs = entry.Pose.SampledAtUs)
+            baseline observer entry.PlayerId entry.ViewRevision entry.Sequence location
 
     member _.FinalLocations =
         Array.init count (fun index -> latest[globalIndex index]) |> Array.map (fun location -> Convert.ToBase64String(location.ToByteArray()))
@@ -331,9 +341,15 @@ let verifyOracle () =
     probe.Receive(0, acknowledge, 0)
     check (probe.Pending = 0) "Movement must not create pending requests"
 
-    let baseline revision location =
-        probe.Receive(0, ServerPacket(PlayerVisibilityChanged = PlayerVisibilityChanged(
-            PlayerId = 1UL, ViewRevision = revision, Sequence = 0UL, Location = location)), 0)
+    let visibility revision (location: PlayerLocation) =
+        let presence = PresenceChanged()
+        let entry = PlayerVisibility(PlayerId = 1UL, ViewRevision = revision, Sequence = 0UL)
+        if not (isNull location) then
+            presence.Space <- location.Location
+            entry.Pose <- MovementPose(Position = location.Position, Rotation = location.Rotation, SampledAtUs = location.SampledAtUs)
+        presence.Visibility.Add entry
+        presence
+    let baseline revision location = probe.ReceivePresence(0, visibility revision location, 0)
     let movement revision sequence pose =
         let values = PlayersMoved()
         values.Players.Add(PlayerMoved(PlayerId = 1UL, ViewRevision = revision, Sequence = sequence, Pose = pose))
@@ -380,8 +396,7 @@ let verifyOracle () =
     warm.Receive(0, ServerPacket(RequestId = warmControls[0].RequestId, PlayerUpdateAccepted = PlayerUpdateAccepted()), 0)
     let remoteBaseline = context.Location.Clone()
     remoteBaseline.SampledAtUs <- remoteBaseline.SampledAtUs + 999UL
-    warm.Receive(0, ServerPacket(PlayerVisibilityChanged = PlayerVisibilityChanged(
-        PlayerId = 1UL, ViewRevision = 1UL, Sequence = 0UL, Location = remoteBaseline)), 0)
+    warm.ReceivePresence(0, visibility 1UL remoteBaseline, 0)
     check warm.PositionsPrepared "Warmup compares expected coordinates/context, not another worker's timestamp"
     time <- time + 1000.
     warm.Start(time)

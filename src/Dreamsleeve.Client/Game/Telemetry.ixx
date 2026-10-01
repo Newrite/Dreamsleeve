@@ -21,8 +21,6 @@ namespace Telemetry
   constexpr auto  ActorValuesInterval = std::chrono::milliseconds{250};
   constexpr auto  MarkerInterval      = std::chrono::seconds{5};
   constexpr auto  ActivationMemory    = std::chrono::seconds{3};
-  // One resource point: smaller regeneration steps add up until they reach it.
-  constexpr float ValueEpsilon        = 1.0f;
 
   struct Sent
   {
@@ -240,7 +238,8 @@ namespace Telemetry
       state.nextActorValues = now + ActorValuesInterval;
       state.deathHint       = false;
       auto values           = World::ActorValues(player);
-      if (!state.sent.actorValues || !Domain::Players::SameActorValues(*state.sent.actorValues, values, ValueEpsilon))
+      // Whole points: smaller regeneration steps add up until the rounded value moves.
+      if (!state.sent.actorValues || *state.sent.actorValues != values)
         if (Post(Dream::LocalActorValues{values})) state.sent.actorValues = std::move(values);
     }
   }

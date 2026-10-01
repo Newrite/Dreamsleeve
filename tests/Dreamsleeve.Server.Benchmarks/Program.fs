@@ -42,7 +42,11 @@ type private Probe() =
     member _.Receive(connectionId, bytes: byte array) =
         let packet = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes)
         if not (isNull packet.ChatPublished) then Interlocked.Increment &publications |> ignore
+#if BASELINE
         if not (isNull packet.PlayerLeft) then Interlocked.Increment &departures |> ignore
+#else
+        if not (isNull packet.PresenceChanged) then Interlocked.Add(&departures, int64 packet.PresenceChanged.Left.Count) |> ignore
+#endif
 
         if packet.HasRequestId then
             match pending.TryRemove(struct (connectionId, packet.RequestId)) with

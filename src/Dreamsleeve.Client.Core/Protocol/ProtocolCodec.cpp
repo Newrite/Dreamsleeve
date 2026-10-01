@@ -214,7 +214,7 @@ namespace Dreamsleeve::Client::Wire
     return std::move(*result);
   }
 
-  Result<ServerResponse> ProtocolCodec::Decode(std::span<const std::byte> bytes, Channel channel) const
+  Result<ServerResponse> ProtocolCodec::Decode(std::span<const std::byte> bytes, Channel channel, const ActorValueKinds& kinds) const
   {
     if (bytes.empty()) return Failure(ErrorCode::EmptyPacket, "packet");
     if (bytes.size() > config.network.maxPacketBytes) return Failure(ErrorCode::PacketTooLarge, "packet");
@@ -290,40 +290,15 @@ namespace Dreamsleeve::Client::Wire
             {static_cast<RequestRejectionCode>(rejection.code()), rejection.message(), rejection.field()}
         };
       }
-      case P::ServerPacket::kPlayerJoined: {
+      case P::ServerPacket::kPresenceChanged: {
         if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-
-        auto player = Player(config, packet.player_joined().player());
-        if (!player) return std::unexpected{player.error()};
-
-        return PlayerUpserted{std::move(*player)};
-      }
-      case P::ServerPacket::kPlayerUpdated: {
-        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-        auto player = Player(config, packet.player_updated().player());
-        if (!player) return std::unexpected{player.error()};
-        return PlayerUpserted{std::move(*player)};
-      }
-      case P::ServerPacket::kPlayerMetadataChanged: {
-        if (packet.has_request_id()) return Invalid("player_metadata_changed");
-        auto result = ReadMetadata(config, packet.player_metadata_changed());
-        if (!result) return std::unexpected{result.error()};
-        return std::move(*result);
-      }
-      case P::ServerPacket::kPlayerVisibilityChanged: {
-        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-        auto result = ReadVisibility(packet.player_visibility_changed());
+        auto result = ReadPresence(config, packet.presence_changed(), kinds);
         if (!result) return std::unexpected{result.error()};
         return std::move(*result);
       }
       case P::ServerPacket::kPlayerUpdateAccepted:
         if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
         return PlayerUpdateAccepted{packet.request_id()};
-      case P::ServerPacket::kPlayerLeft:
-        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
-        if (packet.player_left().player_id() == Domain::InvalidId) return Invalid("player_id");
-
-        return PlayerRemoved{packet.player_left().player_id()};
       case P::ServerPacket::kGroundMarksChanged: {
         if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
         auto result = ReadMarksChanged(packet.ground_marks_changed());

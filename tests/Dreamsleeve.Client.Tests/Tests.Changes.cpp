@@ -146,8 +146,7 @@ TEST_CASE("ClientModel records every supported player mutation")
   }
   SUBCASE("metadata")
   {
-    ActorValueStorage values;
-    values.emplace("skyrim:health", ActorValueInfo{"Health", ResourceActorValue{50, 100}});
+    ActorValuesPatch values{.set = {{"skyrim:health", ActorValueInfo{"Health", ResourceActorValue{50, 100}}}}};
     REQUIRE(model.Apply(generation, PlayerMetadataUpdated{7, std::move(values), std::nullopt}));
   }
   SUBCASE("player removed")
@@ -360,22 +359,25 @@ TEST_CASE("Metadata replacement preserves movement and publishes the changed pla
   REQUIRE(model.Apply(generation, PlayerUpserted{original}));
   ChangeBatch changes;
   model.TakeChanges(changes);
-  Domain::PlayerDetails details;
-  details.level = 0;
+  Domain::PlayerDetailsPatch details;
+  details.level = std::optional<std::uint32_t>{0};
   REQUIRE(model.Apply(generation, PlayerMetadataUpdated{7, std::nullopt, details}));
   auto player = model.FindPlayer(7);
   REQUIRE(player);
   CHECK(player->location == original.location);
   CHECK(player->actorValues == original.actorValues);
   CHECK(player->details.level == 0);
-  REQUIRE(model.Apply(generation, PlayerMetadataUpdated{7, Domain::ActorValueStorage{}, std::nullopt}));
+  Domain::ActorValuesPatch cleared;
+  for (const auto& [key, info] : original.actorValues)
+    cleared.removed.push_back(key);
+  REQUIRE(model.Apply(generation, PlayerMetadataUpdated{7, cleared, std::nullopt}));
   player = model.FindPlayer(7);
   CHECK(player->actorValues.empty());
   CHECK(player->details.level == 0);
   CHECK(player->location == original.location);
   model.TakeChanges(changes);
   CheckSinglePlayerChange(changes, 7);
-  CHECK_FALSE(model.Apply(generation, PlayerMetadataUpdated{99, Domain::ActorValueStorage{}, std::nullopt}));
+  CHECK_FALSE(model.Apply(generation, PlayerMetadataUpdated{99, Domain::ActorValuesPatch{}, std::nullopt}));
 }
 
 TEST_SUITE_END();

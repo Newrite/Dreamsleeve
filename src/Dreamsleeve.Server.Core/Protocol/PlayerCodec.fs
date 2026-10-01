@@ -43,8 +43,7 @@ module internal PlayerCodec =
             | Dreamsleeve.Protocol.Chat.ActorValueEntry.ValueOneofCase.Scalar ->
                 ActorValueState.scalar source.Scalar |> Result.mapError ProtocolCodecFailure.InvalidDomain
             | Dreamsleeve.Protocol.Chat.ActorValueEntry.ValueOneofCase.Resource ->
-                ActorValueState.resource source.Resource.Current source.Resource.Maximum
-                |> Result.mapError ProtocolCodecFailure.InvalidDomain
+                Ok(ActorValueState.resource source.Resource.Current source.Resource.Maximum)
             | Dreamsleeve.Protocol.Chat.ActorValueEntry.ValueOneofCase.None ->
                 Error(ProtocolCodecFailure.InvalidPayload "actor_value.value")
             | unknown when not (Enum.IsDefined unknown) ->
@@ -210,30 +209,48 @@ module internal PlayerCodec =
             Dreamsleeve.Protocol.Chat.PlayerProfile(
                 PlayerId = PlayerId.value playerId, DisplayName = Pseudonym.value pseudonym, Pseudonymous = true)
 
-    let location (value: PlayerLocation) =
-        let place = value.Location
-        let key = place.LocationId
+    let private place (value: Location) =
+        let key = value.LocationId
+        Dreamsleeve.Protocol.Chat.Location(
+            LocationId = Dreamsleeve.Protocol.Chat.FormKey(
+                PluginName = PluginName.value key.PluginName, LocalFormId = LocalFormId.value key.LocalFormId),
+            LocationName = LocationName.value value.LocationName)
 
+    let location (value: PlayerLocation) =
         Dreamsleeve.Protocol.Chat.PlayerLocation(
             SampledAtUs = value.SampledAtUs,
-            Location = Dreamsleeve.Protocol.Chat.Location(
-                LocationId = Dreamsleeve.Protocol.Chat.FormKey(
-                    PluginName = PluginName.value key.PluginName, LocalFormId = LocalFormId.value key.LocalFormId),
-                LocationName = LocationName.value place.LocationName),
+            Location = place value.Location,
             Position = Dreamsleeve.Protocol.Chat.Position(
                 X = WorldUnit.value value.Position.X, Y = WorldUnit.value value.Position.Y, Z = WorldUnit.value value.Position.Z),
             Rotation = Dreamsleeve.Protocol.Chat.Rotation(
                 X = Radian.value value.Rotation.X, Y = Radian.value value.Rotation.Y, Z = Radian.value value.Rotation.Z))
 
-    let actorValue (key: ActorValueKey, value: ActorValueInfo) =
-        let entry = Dreamsleeve.Protocol.Chat.ActorValueEntry(
-            Key = ActorValueKey.value key, DisplayName = ActorValueName.value value.DisplayName)
+    let private kindOf (key: ActorValueKey) (info: ActorValueInfo) = struct (key, info.DisplayName)
+
+    /// Every reading of these players and patches has a number in the event.
+    let private numbered (kinds: ActorValueKinds) (players: PlayerSnapshot seq) (patches: MetadataPatch seq) =
+        let known kind = Map.containsKey kind kinds.Ids
+        let readings (values: Map<ActorValueKey, ActorValueInfo>) = values |> Map.forall (fun key info -> known (kindOf key info))
+        Seq.forall (fun (player: PlayerSnapshot) -> readings player.ActorValues) players
+        && patches |> Seq.forall (fun patch ->
+            match patch.ActorValues with
+            | ValueNone -> true
+            | ValueSome values ->
+                List.forall known values.Removed && values.Set |> List.forall (fun (key, info) -> known (kindOf key info)))
+        && kinds.Defined |> List.forall (fun kind -> kind.Id <> 0UL)
+
+    let numberedPlayers kinds players = numbered kinds players Seq.empty
+
+    let kind (value: ActorValueKind) =
+        Dreamsleeve.Protocol.Chat.ActorValueKind(
+            Id = value.Id, Key = ActorValueKey.value value.Key, DisplayName = ActorValueName.value value.DisplayName)
+
+    let private actorValue (kinds: ActorValueKinds) (key: ActorValueKey, value: ActorValueInfo) =
+        let entry = Dreamsleeve.Protocol.Chat.ActorValue(Kind = Map.find (kindOf key value) kinds.Ids)
 
         ActorValueState.fold
             (fun scalar -> entry.Scalar <- ActorValue.value scalar)
-            (fun current maximum ->
-                entry.Resource <- Dreamsleeve.Protocol.Chat.ResourceActorValue(
-                    Current = ActorValue.value current, Maximum = ActorValue.value maximum))
+            (fun current maximum -> entry.Resource <- Dreamsleeve.Protocol.Chat.ResourceActorValue(Current = current, Maximum = maximum))
             value.State
 
         entry
@@ -269,33 +286,33 @@ module internal PlayerCodec =
         | LockDifficulty.VeryHard -> Dreamsleeve.Protocol.Chat.LockDifficulty.VeryHard
         | LockDifficulty.RequiresKey -> Dreamsleeve.Protocol.Chat.LockDifficulty.RequiresKey
 
-    let details (value: PlayerDetails) =
-        let activity = Dreamsleeve.Protocol.Chat.PlayerActivity(
-            Kind = encodeActivityKind value.Activity.Kind,
-            LockDifficulty = encodeLockDifficulty value.Activity.LockDifficulty)
-
-        value.Activity.TargetName |> ValueOption.iter (fun target -> activity.TargetName <- target)
-        value.Activity.MenuKey |> ValueOption.iter (fun menu -> activity.MenuKey <- menu)
-
-        let result = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = activity)
-
-        value.Race |> ValueOption.iter (fun race ->
-            result.Race <- Dreamsleeve.Protocol.Chat.NamedForm(
-                Form = Dreamsleeve.Protocol.Chat.FormKey(
-                    PluginName = PluginName.value race.Form.PluginName,
-                    LocalFormId = LocalFormId.value race.Form.LocalFormId),
-                Name = race.Name))
-        value.Level |> ValueOption.iter (fun level -> result.Level <- level)
-        value.Place |> ValueOption.iter (fun place ->
-            result.Place <- Dreamsleeve.Protocol.Chat.PlaceDescription(
-                WorldspaceName = place.WorldspaceName, LocationName = place.LocationName,
-                NearbyMarkerName = place.NearbyMarkerName, MarkerKind = place.MarkerKind,
-                IsInterior = place.IsInterior))
-        value.GameStartedAt |> ValueOption.iter (fun started -> result.GameStartedAtUnixMs <- started.ToUnixTimeMilliseconds())
-
+    let private activity (value: PlayerActivity) =
+        let result = Dreamsleeve.Protocol.Chat.PlayerActivity(
+            Kind = encodeActivityKind value.Kind, LockDifficulty = encodeLockDifficulty value.LockDifficulty)
+        value.TargetName |> ValueOption.iter (fun target -> result.TargetName <- target)
+        value.MenuKey |> ValueOption.iter (fun menu -> result.MenuKey <- menu)
         result
 
-    let player (value: PlayerSnapshot) =
+    let private race (value: NamedForm) =
+        Dreamsleeve.Protocol.Chat.NamedForm(
+            Form = Dreamsleeve.Protocol.Chat.FormKey(
+                PluginName = PluginName.value value.Form.PluginName, LocalFormId = LocalFormId.value value.Form.LocalFormId),
+            Name = value.Name)
+
+    let private placeDescription (value: PlaceDescription) =
+        Dreamsleeve.Protocol.Chat.PlaceDescription(
+            WorldspaceName = value.WorldspaceName, LocationName = value.LocationName,
+            NearbyMarkerName = value.NearbyMarkerName, MarkerKind = value.MarkerKind, IsInterior = value.IsInterior)
+
+    let details (value: PlayerDetails) =
+        let result = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = activity value.Activity)
+        value.Race |> ValueOption.iter (fun form -> result.Race <- race form)
+        value.Level |> ValueOption.iter (fun level -> result.Level <- level)
+        value.Place |> ValueOption.iter (fun description -> result.Place <- placeDescription description)
+        value.GameStartedAt |> ValueOption.iter (fun started -> result.GameStartedAtUnixMs <- started.ToUnixTimeMilliseconds())
+        result
+
+    let player kinds (value: PlayerSnapshot) =
         let result = Dreamsleeve.Protocol.Chat.PlayerInfo(
             Profile = profile value.Identity,
             ViewRevision = value.ViewRevision, MovementSequence = value.MovementSequence, CharacterGeneration = value.CharacterGeneration,
@@ -304,18 +321,33 @@ module internal PlayerCodec =
 
         value.CharacterName |> ValueOption.iter (fun name -> result.CharacterName <- CharacterName.value name)
         value.Location |> ValueOption.iter (fun place -> result.Location <- location place)
-        result.ActorValues.AddRange(value.ActorValues |> Map.toSeq |> Seq.map actorValue)
+        result.ActorValues.AddRange(value.ActorValues |> Map.toSeq |> Seq.map (actorValue kinds))
 
         result
 
-    let metadataChanged playerId values metadata =
-        let changed = Dreamsleeve.Protocol.Chat.PlayerMetadataChanged(PlayerId = PlayerId.value playerId)
-        values |> ValueOption.iter (fun entries ->
-            let replacement = Dreamsleeve.Protocol.Chat.ActorValues()
-            entries |> Map.toSeq |> Seq.map actorValue |> replacement.Values.AddRange
-            changed.ActorValues <- replacement)
-        metadata |> ValueOption.iter (fun value -> changed.Details <- details value)
-        changed
+    /// Changed components go into details; optional ones that became absent are listed.
+    let private detailsPatch (target: Dreamsleeve.Protocol.Chat.PlayerMetadataPatch) (patch: DetailsPatch) =
+        let changes = Dreamsleeve.Protocol.Chat.PlayerDetails()
+        let mutable present = false
+        let replace (field: Dreamsleeve.Protocol.Chat.PlayerDetailsField) encode = function
+            | ValueSome (ValueSome value) -> present <- true; encode value
+            | ValueSome ValueNone -> target.ClearedDetails.Add field
+            | ValueNone -> ()
+        patch.Race |> replace Dreamsleeve.Protocol.Chat.PlayerDetailsField.Race (fun form -> changes.Race <- race form)
+        patch.Level |> replace Dreamsleeve.Protocol.Chat.PlayerDetailsField.Level (fun level -> changes.Level <- level)
+        patch.Place |> replace Dreamsleeve.Protocol.Chat.PlayerDetailsField.Place (fun description -> changes.Place <- placeDescription description)
+        patch.GameStartedAt |> replace Dreamsleeve.Protocol.Chat.PlayerDetailsField.GameStartedAt
+            (fun started -> changes.GameStartedAtUnixMs <- started.ToUnixTimeMilliseconds())
+        patch.Activity |> ValueOption.iter (fun value -> present <- true; changes.Activity <- activity value)
+        if present then target.Details <- changes
+
+    let private metadataPatch kinds (patch: MetadataPatch) =
+        let result = Dreamsleeve.Protocol.Chat.PlayerMetadataPatch(PlayerId = PlayerId.value patch.PlayerId)
+        patch.ActorValues |> ValueOption.iter (fun values ->
+            result.RemovedActorValues.AddRange(values.Removed |> Seq.map (fun kind -> Map.find kind kinds.Ids))
+            result.ActorValues.AddRange(values.Set |> Seq.map (actorValue kinds)))
+        patch.Details |> ValueOption.iter (detailsPatch result)
+        result
 
     let pose (value: MovementPose) =
         Dreamsleeve.Protocol.Chat.MovementPose(
@@ -329,8 +361,57 @@ module internal PlayerCodec =
         Dreamsleeve.Protocol.Chat.PlayerMoved(PlayerId = PlayerId.value value.PlayerId,
             ViewRevision = value.ViewRevision, Sequence = value.Sequence, Pose = pose value.Pose)
 
-    let visibility (value: VisibilityChange) =
-        let result = Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged(
+    let private visibility (value: VisibilityChange) =
+        let result = Dreamsleeve.Protocol.Chat.PlayerVisibility(
             PlayerId = PlayerId.value value.PlayerId, ViewRevision = value.ViewRevision, Sequence = value.Sequence)
-        value.Location |> ValueOption.iter (fun current -> result.Location <- location current)
+        value.Pose |> ValueOption.iter (fun current -> result.Pose <- pose current)
+        result
+
+    /// Cross-part rules of a batch; the parts themselves come from validated domain values.
+    let validPresence kinds (change: PresenceChange) =
+        not (PresenceChange.isEmpty change)
+        && numbered kinds (Seq.append change.Joined change.Updated) change.Metadata
+        && change.Metadata |> List.forall (fun patch -> patch.ActorValues.IsSome || patch.Details.IsSome)
+        && change.Visibility |> List.forall (fun entry -> entry.ViewRevision <> 0UL)
+        && change.Space.IsSome = (change.Visibility |> List.exists (fun entry -> entry.Pose.IsSome))
+
+    /// A tick's patches go to every recipient unchanged, and kind numbers never
+    /// change while in use: each patch is encoded once and its bytes reused.
+    let private encodedPatches = Runtime.CompilerServices.ConditionalWeakTable<MetadataPatch, ByteString>()
+
+    let private encodedPatch kinds patch =
+        encodedPatches.GetValue(
+            patch, Runtime.CompilerServices.ConditionalWeakTable<_, _>.CreateValueCallback(fun value -> (metadataPatch kinds value).ToByteString()))
+
+    let private metadataTag = CodedOutputStream.ComputeTagSize Dreamsleeve.Protocol.Chat.PresenceChanged.MetadataFieldNumber
+
+    /// The whole ServerPacket of a presence change. The recipient's own parts are
+    /// encoded here; the shared patches are spliced in as already encoded fields.
+    let presencePacket (version: uint32) kinds (change: PresenceChange) =
+        let body = Dreamsleeve.Protocol.Chat.PresenceChanged()
+        body.ActorValueKinds.AddRange(kinds.Defined |> Seq.map kind)
+        body.Joined.AddRange(change.Joined |> Seq.map (player kinds))
+        body.Updated.AddRange(change.Updated |> Seq.map (player kinds))
+        change.Space |> ValueOption.iter (fun space -> body.Space <- place space)
+        body.Visibility.AddRange(change.Visibility |> Seq.map visibility)
+        body.Left.AddRange(change.Left |> Seq.map PlayerId.value)
+        let patches = change.Metadata |> List.map (encodedPatch kinds)
+        let bodySize = body.CalculateSize() + (patches |> List.sumBy (fun bytes -> metadataTag + CodedOutputStream.ComputeBytesSize bytes))
+        let size =
+            CodedOutputStream.ComputeTagSize Dreamsleeve.Protocol.Chat.ServerPacket.ProtocolVersionFieldNumber
+            + CodedOutputStream.ComputeUInt32Size version
+            + CodedOutputStream.ComputeTagSize Dreamsleeve.Protocol.Chat.ServerPacket.PresenceChangedFieldNumber
+            + CodedOutputStream.ComputeLengthSize bodySize + bodySize
+        let result = Array.zeroCreate<byte> size
+        let output = new CodedOutputStream(result)
+        output.WriteTag(Dreamsleeve.Protocol.Chat.ServerPacket.ProtocolVersionFieldNumber, WireFormat.WireType.Varint)
+        output.WriteUInt32 version
+        output.WriteTag(Dreamsleeve.Protocol.Chat.ServerPacket.PresenceChangedFieldNumber, WireFormat.WireType.LengthDelimited)
+        output.WriteLength bodySize
+        body.WriteTo output
+        // A length-delimited field: an encoded message has the wire form of bytes.
+        for bytes in patches do
+            output.WriteTag(Dreamsleeve.Protocol.Chat.PresenceChanged.MetadataFieldNumber, WireFormat.WireType.LengthDelimited)
+            output.WriteBytes bytes
+        output.CheckNoSpaceLeft()
         result

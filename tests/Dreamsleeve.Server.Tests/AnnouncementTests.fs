@@ -146,7 +146,7 @@ let tests = testList "Announcements" [
         Expect.equal serverWire.ChatPublished.Message.Announcement.Source Dreamsleeve.Protocol.Chat.AnnouncementSource.Server "server origin"
 
         let welcome = {
-            SelfPlayerId = pid 7UL; Players = [Player.create profile |> Player.snapshot]
+            SelfPlayerId = pid 7UL; Players = [Player.create profile |> Player.snapshot]; Kinds = ActorValueKinds.none
             Channels = [ { ChannelId = channel; Kind = ChatChannelKind.System; Messages = [server] } ]
             AnnouncementSources = [ClientAnnouncementSource.TrustedClient]
             OwnPseudonym = ValueNone

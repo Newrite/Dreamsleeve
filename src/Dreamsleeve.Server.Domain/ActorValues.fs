@@ -9,43 +9,21 @@ open System.Collections.Generic
 type ActorValueState =
     private
     | Scalar of value: ActorValue
-    | Resource of current: ActorValue * maximum: ActorValue
+    | Resource of current: int * maximum: int
 
 [<RequireQualifiedAccess>]
 module ActorValueState =
     let scalar value =
         ActorValue.create value |> Result.map ActorValueState.Scalar
 
-    /// Negative readings or a current value above the maximum are preserved.
-    let resource (current: float32) (maximum: float32) =
-        if not (Single.IsFinite current) then
-            Error (DomainError.NonFiniteNumber "ActorValue.current")
-        elif not (Single.IsFinite maximum) then
-            Error (DomainError.NonFiniteNumber "ActorValue.maximum")
-        else
-            Ok (ActorValueState.Resource (
-                LanguagePrimitives.Float32WithMeasure<actorValue> current,
-                LanguagePrimitives.Float32WithMeasure<actorValue> maximum))
-
-    let current = function
-        | ActorValueState.Scalar value -> value
-        | ActorValueState.Resource (value, _) -> value
-
-    let tryMaximum = function
-        | ActorValueState.Scalar _ -> ValueNone
-        | ActorValueState.Resource (_, maximum) -> ValueSome maximum
+    /// Whole points, as clients round them. Negative readings or a current
+    /// value above the maximum are preserved.
+    let resource (current: int) (maximum: int) = ActorValueState.Resource (current, maximum)
 
     /// Consume either case without exposing constructors that bypass validation.
     let fold onScalar onResource = function
         | ActorValueState.Scalar value -> onScalar value
         | ActorValueState.Resource (current, maximum) -> onResource current maximum
-
-    let withCurrent value state =
-        ActorValue.create value
-        |> Result.map (fun current ->
-            match state with
-            | ActorValueState.Scalar _ -> ActorValueState.Scalar current
-            | ActorValueState.Resource (_, maximum) -> ActorValueState.Resource (current, maximum))
 
 type ActorValueInfo = private {
     displayName: ActorValueName
@@ -60,6 +38,31 @@ module ActorValueInfo =
         { displayName = displayName; state = state }
 
     let withState state (info: ActorValueInfo) = { info with state = state }
+
+/// What changed between two published reading sets of one player. A kind is
+/// a key with its label: a changed label removes the old kind and sets the new.
+type ActorValuesPatch = {
+    Removed: struct (ActorValueKey * ActorValueName) list
+    Set: (ActorValueKey * ActorValueInfo) list
+}
+
+[<RequireQualifiedAccess>]
+module ActorValuesPatch =
+    /// ValueNone when nothing changed.
+    let between (previous: Map<ActorValueKey, ActorValueInfo>) (latest: Map<ActorValueKey, ActorValueInfo>) =
+        let removed = [
+            for KeyValue(key, info) in previous do
+                match Map.tryFind key latest with
+                | Some next when next.DisplayName = info.DisplayName -> ()
+                | Some _ | None -> struct (key, info.DisplayName)
+        ]
+        let set = [
+            for KeyValue(key, info) in latest do
+                match Map.tryFind key previous with
+                | Some old when old = info -> ()
+                | Some _ | None -> key, info
+        ]
+        if removed.IsEmpty && set.IsEmpty then ValueNone else ValueSome { Removed = removed; Set = set }
 
 /// Mutable state owned by one agent. Never share this storage between agents.
 /// Use snapshot or immutable individual readings to publish data.

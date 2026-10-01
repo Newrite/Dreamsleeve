@@ -34,101 +34,119 @@ namespace Dreamsleeve.Protocol.Chat {
             "cG9zaXRpb24YAiABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBv",
             "c2l0aW9uEjUKCHJvdGF0aW9uGAMgASgLMiMuRHJlYW1zbGVldmUuUHJvdG9j",
             "b2wuQ2hhdC5Sb3RhdGlvbhIVCg1zYW1wbGVkX2F0X3VzGAQgASgEIjYKElJl",
-            "c291cmNlQWN0b3JWYWx1ZRIPCgdjdXJyZW50GAEgASgCEg8KB21heGltdW0Y",
-            "AiABKAIikgEKD0FjdG9yVmFsdWVFbnRyeRILCgNrZXkYASABKAkSFAoMZGlz",
+            "c291cmNlQWN0b3JWYWx1ZRIPCgdjdXJyZW50GAEgASgREg8KB21heGltdW0Y",
+            "AiABKBEikgEKD0FjdG9yVmFsdWVFbnRyeRILCgNrZXkYASABKAkSFAoMZGlz",
             "cGxheV9uYW1lGAIgASgJEhAKBnNjYWxhchgDIAEoAkgAEkEKCHJlc291cmNl",
             "GAQgASgLMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5SZXNvdXJjZUFj",
-            "dG9yVmFsdWVIAEIHCgV2YWx1ZSKiAwoKUGxheWVySW5mbxI5Cgdwcm9maWxl",
-            "GAEgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJQcm9m",
-            "aWxlEhsKDmNoYXJhY3Rlcl9uYW1lGAIgASgJSACIAQESOwoIbG9jYXRpb24Y",
-            "AyABKAsyKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckxvY2F0",
-            "aW9uEkAKDGFjdG9yX3ZhbHVlcxgEIAMoCzIqLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLkNoYXQuQWN0b3JWYWx1ZUVudHJ5EhwKFGNoYXJhY3Rlcl9nZW5lcmF0",
-            "aW9uGAUgASgEEjkKB2RldGFpbHMYBiABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90",
-            "b2NvbC5DaGF0LlBsYXllckRldGFpbHMSFQoNdmlld19yZXZpc2lvbhgHIAEo",
-            "BBIZChFtb3ZlbWVudF9zZXF1ZW5jZRgIIAEoBBIfChdjaGFyYWN0ZXJfbmFt",
-            "ZV93aXRoaGVsZBgJIAEoCEIRCg9fY2hhcmFjdGVyX25hbWUiSwoJTmFtZWRG",
-            "b3JtEjAKBGZvcm0YASABKAsyIi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
-            "LkZvcm1LZXkSDAoEbmFtZRgCIAEoCSLZAQoOUGxheWVyQWN0aXZpdHkSNQoE",
-            "a2luZBgBIAEoDjInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQWN0aXZp",
-            "dHlLaW5kEhgKC3RhcmdldF9uYW1lGAIgASgJSACIAQESQgoPbG9ja19kaWZm",
-            "aWN1bHR5GAMgASgOMikuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Mb2Nr",
-            "RGlmZmljdWx0eRIVCghtZW51X2tleRgEIAEoCUgBiAEBQg4KDF90YXJnZXRf",
-            "bmFtZUILCglfbWVudV9rZXkiiAEKEFBsYWNlRGVzY3JpcHRpb24SFwoPd29y",
-            "bGRzcGFjZV9uYW1lGAEgASgJEhUKDWxvY2F0aW9uX25hbWUYAiABKAkSGgoS",
-            "bmVhcmJ5X21hcmtlcl9uYW1lGAMgASgJEhMKC21hcmtlcl9raW5kGAQgASgJ",
-            "EhMKC2lzX2ludGVyaW9yGAUgASgIIpwCCg1QbGF5ZXJEZXRhaWxzEjIKBHJh",
-            "Y2UYASABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk5hbWVkRm9y",
-            "bRISCgVsZXZlbBgCIAEoDUgAiAEBEjsKCGFjdGl2aXR5GAMgASgLMikuRHJl",
-            "YW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJBY3Rpdml0eRI6CgVwbGFj",
-            "ZRgEIAEoCzIrLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxhY2VEZXNj",
-            "cmlwdGlvbhIkChdnYW1lX3N0YXJ0ZWRfYXRfdW5peF9tcxgFIAEoA0gBiAEB",
-            "QggKBl9sZXZlbEIaChhfZ2FtZV9zdGFydGVkX2F0X3VuaXhfbXMiHgoOQmVn",
-            "aW5DaGFyYWN0ZXISDAoEbmFtZRgBIAEoCSIfCg9SZW5hbWVDaGFyYWN0ZXIS",
-            "DAoEbmFtZRgBIAEoCSJqChFTZXRQbGF5ZXJMb2NhdGlvbhIYChBjb250ZXh0",
-            "X3JldmlzaW9uGAEgASgEEjsKCGxvY2F0aW9uGAIgASgLMikuRHJlYW1zbGVl",
-            "dmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJMb2NhdGlvbiKTAQoMTW92ZW1lbnRQ",
-            "b3NlEjUKCHBvc2l0aW9uGAEgASgLMiMuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
-            "Q2hhdC5Qb3NpdGlvbhI1Cghyb3RhdGlvbhgCIAEoCzIjLkRyZWFtc2xlZXZl",
-            "LlByb3RvY29sLkNoYXQuUm90YXRpb24SFQoNc2FtcGxlZF9hdF91cxgDIAEo",
-            "BCJzCg5Nb3ZlbWVudFNhbXBsZRIYChBjb250ZXh0X3JldmlzaW9uGAEgASgE",
-            "EhAKCHNlcXVlbmNlGAIgASgEEjUKBHBvc2UYAyABKAsyJy5EcmVhbXNsZWV2",
-            "ZS5Qcm90b2NvbC5DaGF0Lk1vdmVtZW50UG9zZSJJCgtBY3RvclZhbHVlcxI6",
-            "CgZ2YWx1ZXMYASADKAsyKi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkFj",
-            "dG9yVmFsdWVFbnRyeSILCglMZWF2ZUdhbWUi3wMKDFVwZGF0ZVBsYXllchJE",
-            "Cg9iZWdpbl9jaGFyYWN0ZXIYASABKAsyKS5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
-            "bC5DaGF0LkJlZ2luQ2hhcmFjdGVySAASRgoQcmVuYW1lX2NoYXJhY3RlchgC",
-            "IAEoCzIqLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUmVuYW1lQ2hhcmFj",
-            "dGVySAASRAoMc2V0X2xvY2F0aW9uGAggASgLMiwuRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuQ2hhdC5TZXRQbGF5ZXJMb2NhdGlvbkgAEkIKEHNldF9hY3Rvcl92",
-            "YWx1ZXMYByABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkFjdG9y",
-            "VmFsdWVzSAASOgoKbGVhdmVfZ2FtZRgEIAEoCzIkLkRyZWFtc2xlZXZlLlBy",
-            "b3RvY29sLkNoYXQuTGVhdmVHYW1lSAASPwoLc2V0X2RldGFpbHMYBSABKAsy",
-            "KC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckRldGFpbHNIAEII",
-            "CgZhY3Rpb25KBAgDEARKBAgGEAdSE3NhbXBsZV9wbGF5ZXJfc3RhdGVSD3Nh",
-            "bXBsZV9tb3ZlbWVudCJFCgxQbGF5ZXJKb2luZWQSNQoGcGxheWVyGAEgASgL",
-            "MiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJJbmZvIkYKDVBs",
-            "YXllclVwZGF0ZWQSNQoGcGxheWVyGAEgASgLMiUuRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuQ2hhdC5QbGF5ZXJJbmZvIqMBChVQbGF5ZXJNZXRhZGF0YUNoYW5n",
-            "ZWQSEQoJcGxheWVyX2lkGAEgASgEEjwKDGFjdG9yX3ZhbHVlcxgCIAEoCzIm",
-            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQWN0b3JWYWx1ZXMSOQoHZGV0",
-            "YWlscxgDIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVy",
-            "RGV0YWlscyKQAQoLUGxheWVyTW92ZWQSEQoJcGxheWVyX2lkGAEgASgEEhUK",
-            "DXZpZXdfcmV2aXNpb24YAyABKAQSEAoIc2VxdWVuY2UYBCABKAQSNQoEcG9z",
-            "ZRgFIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuTW92ZW1lbnRQ",
-            "b3NlSgQIAhADUghsb2NhdGlvbiKSAQoXUGxheWVyVmlzaWJpbGl0eUNoYW5n",
-            "ZWQSEQoJcGxheWVyX2lkGAEgASgEEhUKDXZpZXdfcmV2aXNpb24YAiABKAQS",
-            "EAoIc2VxdWVuY2UYAyABKAQSOwoIbG9jYXRpb24YBCABKAsyKS5EcmVhbXNs",
-            "ZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckxvY2F0aW9uIh8KClBsYXllckxl",
-            "ZnQSEQoJcGxheWVyX2lkGAEgASgEIkcKDFBsYXllcnNNb3ZlZBI3CgdwbGF5",
-            "ZXJzGAEgAygLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJN",
-            "b3ZlZCqYBAoMQWN0aXZpdHlLaW5kEhkKFUFDVElWSVRZX0tJTkRfVU5LTk9X",
-            "ThAAEhsKF0FDVElWSVRZX0tJTkRfRVhQTE9SSU5HEAESGAoUQUNUSVZJVFlf",
-            "S0lORF9DT01CQVQQAhIZChVBQ1RJVklUWV9LSU5EX1RBTEtJTkcQAxIbChdB",
-            "Q1RJVklUWV9LSU5EX0JBUlRFUklORxAEEhoKFkFDVElWSVRZX0tJTkRfVFJB",
-            "SU5JTkcQBRIZChVBQ1RJVklUWV9LSU5EX1JFQURJTkcQBhIdChlBQ1RJVklU",
-            "WV9LSU5EX0xPQ0tQSUNLSU5HEAcSGgoWQUNUSVZJVFlfS0lORF9DUkFGVElO",
-            "RxAIEh4KGkFDVElWSVRZX0tJTkRfVVNJTkdfT0JKRUNUEAkSGAoUQUNUSVZJ",
-            "VFlfS0lORF9SSURJTkcQChIaChZBQ1RJVklUWV9LSU5EX1NORUFLSU5HEAsS",
-            "GgoWQUNUSVZJVFlfS0lORF9TV0lNTUlORxAMEhgKFEFDVElWSVRZX0tJTkRf",
-            "RkxZSU5HEA0SFgoSQUNUSVZJVFlfS0lORF9ERUFEEA4SGQoVQUNUSVZJVFlf",
-            "S0lORF9SQUdET0xMEA8SFgoSQUNUSVZJVFlfS0lORF9NRU5VEBASGgoWQUNU",
-            "SVZJVFlfS0lORF9ORVdfR0FNRRAREhkKFUFDVElWSVRZX0tJTkRfTE9BRElO",
-            "RxASKvwBCg5Mb2NrRGlmZmljdWx0eRIbChdMT0NLX0RJRkZJQ1VMVFlfVU5L",
-            "Tk9XThAAEhwKGExPQ0tfRElGRklDVUxUWV9VTkxPQ0tFRBABEh0KGUxPQ0tf",
-            "RElGRklDVUxUWV9WRVJZX0VBU1kQAhIYChRMT0NLX0RJRkZJQ1VMVFlfRUFT",
-            "WRADEhsKF0xPQ0tfRElGRklDVUxUWV9BVkVSQUdFEAQSGAoUTE9DS19ESUZG",
-            "SUNVTFRZX0hBUkQQBRIdChlMT0NLX0RJRkZJQ1VMVFlfVkVSWV9IQVJEEAYS",
-            "IAocTE9DS19ESUZGSUNVTFRZX1JFUVVJUkVTX0tFWRAHYgZwcm90bzM="));
+            "dG9yVmFsdWVIAEIHCgV2YWx1ZSI/Cg5BY3RvclZhbHVlS2luZBIKCgJpZBgB",
+            "IAEoBBILCgNrZXkYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJIngKCkFj",
+            "dG9yVmFsdWUSDAoEa2luZBgBIAEoBBIQCgZzY2FsYXIYAiABKAJIABJBCghy",
+            "ZXNvdXJjZRgDIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUmVz",
+            "b3VyY2VBY3RvclZhbHVlSABCBwoFdmFsdWUinQMKClBsYXllckluZm8SOQoH",
+            "cHJvZmlsZRgBIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxh",
+            "eWVyUHJvZmlsZRIbCg5jaGFyYWN0ZXJfbmFtZRgCIAEoCUgAiAEBEjsKCGxv",
+            "Y2F0aW9uGAMgASgLMikuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5",
+            "ZXJMb2NhdGlvbhI7CgxhY3Rvcl92YWx1ZXMYBCADKAsyJS5EcmVhbXNsZWV2",
+            "ZS5Qcm90b2NvbC5DaGF0LkFjdG9yVmFsdWUSHAoUY2hhcmFjdGVyX2dlbmVy",
+            "YXRpb24YBSABKAQSOQoHZGV0YWlscxgGIAEoCzIoLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLkNoYXQuUGxheWVyRGV0YWlscxIVCg12aWV3X3JldmlzaW9uGAcg",
+            "ASgEEhkKEW1vdmVtZW50X3NlcXVlbmNlGAggASgEEh8KF2NoYXJhY3Rlcl9u",
+            "YW1lX3dpdGhoZWxkGAkgASgIQhEKD19jaGFyYWN0ZXJfbmFtZSJLCglOYW1l",
+            "ZEZvcm0SMAoEZm9ybRgBIAEoCzIiLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
+            "YXQuRm9ybUtleRIMCgRuYW1lGAIgASgJItkBCg5QbGF5ZXJBY3Rpdml0eRI1",
+            "CgRraW5kGAEgASgOMicuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5BY3Rp",
+            "dml0eUtpbmQSGAoLdGFyZ2V0X25hbWUYAiABKAlIAIgBARJCCg9sb2NrX2Rp",
+            "ZmZpY3VsdHkYAyABKA4yKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkxv",
+            "Y2tEaWZmaWN1bHR5EhUKCG1lbnVfa2V5GAQgASgJSAGIAQFCDgoMX3Rhcmdl",
+            "dF9uYW1lQgsKCV9tZW51X2tleSKIAQoQUGxhY2VEZXNjcmlwdGlvbhIXCg93",
+            "b3JsZHNwYWNlX25hbWUYASABKAkSFQoNbG9jYXRpb25fbmFtZRgCIAEoCRIa",
+            "ChJuZWFyYnlfbWFya2VyX25hbWUYAyABKAkSEwoLbWFya2VyX2tpbmQYBCAB",
+            "KAkSEwoLaXNfaW50ZXJpb3IYBSABKAginAIKDVBsYXllckRldGFpbHMSMgoE",
+            "cmFjZRgBIAEoCzIkLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuTmFtZWRG",
+            "b3JtEhIKBWxldmVsGAIgASgNSACIAQESOwoIYWN0aXZpdHkYAyABKAsyKS5E",
+            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckFjdGl2aXR5EjoKBXBs",
+            "YWNlGAQgASgLMisuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGFjZURl",
+            "c2NyaXB0aW9uEiQKF2dhbWVfc3RhcnRlZF9hdF91bml4X21zGAUgASgDSAGI",
+            "AQFCCAoGX2xldmVsQhoKGF9nYW1lX3N0YXJ0ZWRfYXRfdW5peF9tcyIeCg5C",
+            "ZWdpbkNoYXJhY3RlchIMCgRuYW1lGAEgASgJIh8KD1JlbmFtZUNoYXJhY3Rl",
+            "chIMCgRuYW1lGAEgASgJImoKEVNldFBsYXllckxvY2F0aW9uEhgKEGNvbnRl",
+            "eHRfcmV2aXNpb24YASABKAQSOwoIbG9jYXRpb24YAiABKAsyKS5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckxvY2F0aW9uIpMBCgxNb3ZlbWVu",
+            "dFBvc2USNQoIcG9zaXRpb24YASABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
+            "bC5DaGF0LlBvc2l0aW9uEjUKCHJvdGF0aW9uGAIgASgLMiMuRHJlYW1zbGVl",
+            "dmUuUHJvdG9jb2wuQ2hhdC5Sb3RhdGlvbhIVCg1zYW1wbGVkX2F0X3VzGAMg",
+            "ASgEInMKDk1vdmVtZW50U2FtcGxlEhgKEGNvbnRleHRfcmV2aXNpb24YASAB",
+            "KAQSEAoIc2VxdWVuY2UYAiABKAQSNQoEcG9zZRgDIAEoCzInLkRyZWFtc2xl",
+            "ZXZlLlByb3RvY29sLkNoYXQuTW92ZW1lbnRQb3NlIkkKC0FjdG9yVmFsdWVz",
+            "EjoKBnZhbHVlcxgBIAMoCzIqLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQu",
+            "QWN0b3JWYWx1ZUVudHJ5IgsKCUxlYXZlR2FtZSLfAwoMVXBkYXRlUGxheWVy",
+            "EkQKD2JlZ2luX2NoYXJhY3RlchgBIAEoCzIpLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLkNoYXQuQmVnaW5DaGFyYWN0ZXJIABJGChByZW5hbWVfY2hhcmFjdGVy",
+            "GAIgASgLMiouRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5SZW5hbWVDaGFy",
+            "YWN0ZXJIABJECgxzZXRfbG9jYXRpb24YCCABKAsyLC5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5DaGF0LlNldFBsYXllckxvY2F0aW9uSAASQgoQc2V0X2FjdG9y",
+            "X3ZhbHVlcxgHIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQWN0",
+            "b3JWYWx1ZXNIABI6CgpsZWF2ZV9nYW1lGAQgASgLMiQuRHJlYW1zbGVldmUu",
+            "UHJvdG9jb2wuQ2hhdC5MZWF2ZUdhbWVIABI/CgtzZXRfZGV0YWlscxgFIAEo",
+            "CzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyRGV0YWlsc0gA",
+            "QggKBmFjdGlvbkoECAMQBEoECAYQB1ITc2FtcGxlX3BsYXllcl9zdGF0ZVIP",
+            "c2FtcGxlX21vdmVtZW50IoYCChNQbGF5ZXJNZXRhZGF0YVBhdGNoEhEKCXBs",
+            "YXllcl9pZBgBIAEoBBIcChRyZW1vdmVkX2FjdG9yX3ZhbHVlcxgCIAMoBBI7",
+            "CgxhY3Rvcl92YWx1ZXMYAyADKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
+            "aGF0LkFjdG9yVmFsdWUSOQoHZGV0YWlscxgEIAEoCzIoLkRyZWFtc2xlZXZl",
+            "LlByb3RvY29sLkNoYXQuUGxheWVyRGV0YWlscxJGCg9jbGVhcmVkX2RldGFp",
+            "bHMYBSADKA4yLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckRl",
+            "dGFpbHNGaWVsZCKQAQoLUGxheWVyTW92ZWQSEQoJcGxheWVyX2lkGAEgASgE",
+            "EhUKDXZpZXdfcmV2aXNpb24YAyABKAQSEAoIc2VxdWVuY2UYBCABKAQSNQoE",
+            "cG9zZRgFIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuTW92ZW1l",
+            "bnRQb3NlSgQIAhADUghsb2NhdGlvbiKFAQoQUGxheWVyVmlzaWJpbGl0eRIR",
+            "CglwbGF5ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEoBBIQCghz",
+            "ZXF1ZW5jZRgDIAEoBBI1CgRwb3NlGAQgASgLMicuRHJlYW1zbGVldmUuUHJv",
+            "dG9jb2wuQ2hhdC5Nb3ZlbWVudFBvc2UiiwMKD1ByZXNlbmNlQ2hhbmdlZBJE",
+            "ChFhY3Rvcl92YWx1ZV9raW5kcxgBIAMoCzIpLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLkNoYXQuQWN0b3JWYWx1ZUtpbmQSNQoGam9pbmVkGAIgAygLMiUuRHJl",
+            "YW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJJbmZvEjYKB3VwZGF0ZWQY",
+            "AyADKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckluZm8S",
+            "QAoIbWV0YWRhdGEYBCADKAsyLi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
+            "LlBsYXllck1ldGFkYXRhUGF0Y2gSMgoFc3BhY2UYBSABKAsyIy5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0LkxvY2F0aW9uEj8KCnZpc2liaWxpdHkYBiAD",
+            "KAsyKy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllclZpc2liaWxp",
+            "dHkSDAoEbGVmdBgHIAMoBCJHCgxQbGF5ZXJzTW92ZWQSNwoHcGxheWVycxgB",
+            "IAMoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyTW92ZWQq",
+            "mAQKDEFjdGl2aXR5S2luZBIZChVBQ1RJVklUWV9LSU5EX1VOS05PV04QABIb",
+            "ChdBQ1RJVklUWV9LSU5EX0VYUExPUklORxABEhgKFEFDVElWSVRZX0tJTkRf",
+            "Q09NQkFUEAISGQoVQUNUSVZJVFlfS0lORF9UQUxLSU5HEAMSGwoXQUNUSVZJ",
+            "VFlfS0lORF9CQVJURVJJTkcQBBIaChZBQ1RJVklUWV9LSU5EX1RSQUlOSU5H",
+            "EAUSGQoVQUNUSVZJVFlfS0lORF9SRUFESU5HEAYSHQoZQUNUSVZJVFlfS0lO",
+            "RF9MT0NLUElDS0lORxAHEhoKFkFDVElWSVRZX0tJTkRfQ1JBRlRJTkcQCBIe",
+            "ChpBQ1RJVklUWV9LSU5EX1VTSU5HX09CSkVDVBAJEhgKFEFDVElWSVRZX0tJ",
+            "TkRfUklESU5HEAoSGgoWQUNUSVZJVFlfS0lORF9TTkVBS0lORxALEhoKFkFD",
+            "VElWSVRZX0tJTkRfU1dJTU1JTkcQDBIYChRBQ1RJVklUWV9LSU5EX0ZMWUlO",
+            "RxANEhYKEkFDVElWSVRZX0tJTkRfREVBRBAOEhkKFUFDVElWSVRZX0tJTkRf",
+            "UkFHRE9MTBAPEhYKEkFDVElWSVRZX0tJTkRfTUVOVRAQEhoKFkFDVElWSVRZ",
+            "X0tJTkRfTkVXX0dBTUUQERIZChVBQ1RJVklUWV9LSU5EX0xPQURJTkcQEir8",
+            "AQoOTG9ja0RpZmZpY3VsdHkSGwoXTE9DS19ESUZGSUNVTFRZX1VOS05PV04Q",
+            "ABIcChhMT0NLX0RJRkZJQ1VMVFlfVU5MT0NLRUQQARIdChlMT0NLX0RJRkZJ",
+            "Q1VMVFlfVkVSWV9FQVNZEAISGAoUTE9DS19ESUZGSUNVTFRZX0VBU1kQAxIb",
+            "ChdMT0NLX0RJRkZJQ1VMVFlfQVZFUkFHRRAEEhgKFExPQ0tfRElGRklDVUxU",
+            "WV9IQVJEEAUSHQoZTE9DS19ESUZGSUNVTFRZX1ZFUllfSEFSRBAGEiAKHExP",
+            "Q0tfRElGRklDVUxUWV9SRVFVSVJFU19LRVkQByrDAQoSUGxheWVyRGV0YWls",
+            "c0ZpZWxkEiQKIFBMQVlFUl9ERVRBSUxTX0ZJRUxEX1VOU1BFQ0lGSUVEEAAS",
+            "HQoZUExBWUVSX0RFVEFJTFNfRklFTERfUkFDRRABEh4KGlBMQVlFUl9ERVRB",
+            "SUxTX0ZJRUxEX0xFVkVMEAISHgoaUExBWUVSX0RFVEFJTFNfRklFTERfUExB",
+            "Q0UQAxIoCiRQTEFZRVJfREVUQUlMU19GSUVMRF9HQU1FX1NUQVJURURfQVQQ",
+            "BGIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.ActivityKind), typeof(global::Dreamsleeve.Protocol.Chat.LockDifficulty), }, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.ActivityKind), typeof(global::Dreamsleeve.Protocol.Chat.LockDifficulty), typeof(global::Dreamsleeve.Protocol.Chat.PlayerDetailsField), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Location), global::Dreamsleeve.Protocol.Chat.Location.Parser, new[]{ "LocationId", "LocationName" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Position), global::Dreamsleeve.Protocol.Chat.Position.Parser, new[]{ "X", "Y", "Z" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Rotation), global::Dreamsleeve.Protocol.Chat.Rotation.Parser, new[]{ "X", "Y", "Z" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerLocation), global::Dreamsleeve.Protocol.Chat.PlayerLocation.Parser, new[]{ "Location", "Position", "Rotation", "SampledAtUs" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ResourceActorValue), global::Dreamsleeve.Protocol.Chat.ResourceActorValue.Parser, new[]{ "Current", "Maximum" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ActorValueEntry), global::Dreamsleeve.Protocol.Chat.ActorValueEntry.Parser, new[]{ "Key", "DisplayName", "Scalar", "Resource" }, new[]{ "Value" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ActorValueKind), global::Dreamsleeve.Protocol.Chat.ActorValueKind.Parser, new[]{ "Id", "Key", "DisplayName" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ActorValue), global::Dreamsleeve.Protocol.Chat.ActorValue.Parser, new[]{ "Kind", "Scalar", "Resource" }, new[]{ "Value" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerInfo), global::Dreamsleeve.Protocol.Chat.PlayerInfo.Parser, new[]{ "Profile", "CharacterName", "Location", "ActorValues", "CharacterGeneration", "Details", "ViewRevision", "MovementSequence", "CharacterNameWithheld" }, new[]{ "CharacterName" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.NamedForm), global::Dreamsleeve.Protocol.Chat.NamedForm.Parser, new[]{ "Form", "Name" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerActivity), global::Dreamsleeve.Protocol.Chat.PlayerActivity.Parser, new[]{ "Kind", "TargetName", "LockDifficulty", "MenuKey" }, new[]{ "TargetName", "MenuKey" }, null, null, null),
@@ -142,12 +160,10 @@ namespace Dreamsleeve.Protocol.Chat {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ActorValues), global::Dreamsleeve.Protocol.Chat.ActorValues.Parser, new[]{ "Values" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.LeaveGame), global::Dreamsleeve.Protocol.Chat.LeaveGame.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.UpdatePlayer), global::Dreamsleeve.Protocol.Chat.UpdatePlayer.Parser, new[]{ "BeginCharacter", "RenameCharacter", "SetLocation", "SetActorValues", "LeaveGame", "SetDetails" }, new[]{ "Action" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerJoined), global::Dreamsleeve.Protocol.Chat.PlayerJoined.Parser, new[]{ "Player" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerUpdated), global::Dreamsleeve.Protocol.Chat.PlayerUpdated.Parser, new[]{ "Player" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerMetadataChanged), global::Dreamsleeve.Protocol.Chat.PlayerMetadataChanged.Parser, new[]{ "PlayerId", "ActorValues", "Details" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerMetadataPatch), global::Dreamsleeve.Protocol.Chat.PlayerMetadataPatch.Parser, new[]{ "PlayerId", "RemovedActorValues", "ActorValues", "Details", "ClearedDetails" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerMoved), global::Dreamsleeve.Protocol.Chat.PlayerMoved.Parser, new[]{ "PlayerId", "ViewRevision", "Sequence", "Pose" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged), global::Dreamsleeve.Protocol.Chat.PlayerVisibilityChanged.Parser, new[]{ "PlayerId", "ViewRevision", "Sequence", "Location" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerLeft), global::Dreamsleeve.Protocol.Chat.PlayerLeft.Parser, new[]{ "PlayerId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerVisibility), global::Dreamsleeve.Protocol.Chat.PlayerVisibility.Parser, new[]{ "PlayerId", "ViewRevision", "Sequence", "Pose" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PresenceChanged), global::Dreamsleeve.Protocol.Chat.PresenceChanged.Parser, new[]{ "ActorValueKinds", "Joined", "Updated", "Metadata", "Space", "Visibility", "Left" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayersMoved), global::Dreamsleeve.Protocol.Chat.PlayersMoved.Parser, new[]{ "Players" }, null, null, null, null)
           }));
     }
@@ -186,6 +202,17 @@ namespace Dreamsleeve.Protocol.Chat {
     [pbr::OriginalName("LOCK_DIFFICULTY_HARD")] Hard = 5,
     [pbr::OriginalName("LOCK_DIFFICULTY_VERY_HARD")] VeryHard = 6,
     [pbr::OriginalName("LOCK_DIFFICULTY_REQUIRES_KEY")] RequiresKey = 7,
+  }
+
+  /// <summary>
+  /// Optional components of PlayerDetails a patch can clear; the activity always has a value.
+  /// </summary>
+  public enum PlayerDetailsField {
+    [pbr::OriginalName("PLAYER_DETAILS_FIELD_UNSPECIFIED")] Unspecified = 0,
+    [pbr::OriginalName("PLAYER_DETAILS_FIELD_RACE")] Race = 1,
+    [pbr::OriginalName("PLAYER_DETAILS_FIELD_LEVEL")] Level = 2,
+    [pbr::OriginalName("PLAYER_DETAILS_FIELD_PLACE")] Place = 3,
+    [pbr::OriginalName("PLAYER_DETAILS_FIELD_GAME_STARTED_AT")] GameStartedAt = 4,
   }
 
   #endregion
@@ -1322,6 +1349,9 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
+  /// <summary>
+  /// Whole points: clients round the game's readings, so smaller steps never travel.
+  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ResourceActorValue : pb::IMessage<ResourceActorValue>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -1370,10 +1400,10 @@ namespace Dreamsleeve.Protocol.Chat {
 
     /// <summary>Field number for the "current" field.</summary>
     public const int CurrentFieldNumber = 1;
-    private float current_;
+    private int current_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Current {
+    public int Current {
       get { return current_; }
       set {
         current_ = value;
@@ -1382,10 +1412,10 @@ namespace Dreamsleeve.Protocol.Chat {
 
     /// <summary>Field number for the "maximum" field.</summary>
     public const int MaximumFieldNumber = 2;
-    private float maximum_;
+    private int maximum_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Maximum {
+    public int Maximum {
       get { return maximum_; }
       set {
         maximum_ = value;
@@ -1407,8 +1437,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (ReferenceEquals(other, this)) {
         return true;
       }
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Current, other.Current)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Maximum, other.Maximum)) return false;
+      if (Current != other.Current) return false;
+      if (Maximum != other.Maximum) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1416,8 +1446,8 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
-      if (Current != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Current);
-      if (Maximum != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Maximum);
+      if (Current != 0) hash ^= Current.GetHashCode();
+      if (Maximum != 0) hash ^= Maximum.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1436,13 +1466,13 @@ namespace Dreamsleeve.Protocol.Chat {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
-      if (Current != 0F) {
-        output.WriteRawTag(13);
-        output.WriteFloat(Current);
+      if (Current != 0) {
+        output.WriteRawTag(8);
+        output.WriteSInt32(Current);
       }
-      if (Maximum != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Maximum);
+      if (Maximum != 0) {
+        output.WriteRawTag(16);
+        output.WriteSInt32(Maximum);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -1454,13 +1484,13 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (Current != 0F) {
-        output.WriteRawTag(13);
-        output.WriteFloat(Current);
+      if (Current != 0) {
+        output.WriteRawTag(8);
+        output.WriteSInt32(Current);
       }
-      if (Maximum != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Maximum);
+      if (Maximum != 0) {
+        output.WriteRawTag(16);
+        output.WriteSInt32(Maximum);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -1472,11 +1502,11 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
-      if (Current != 0F) {
-        size += 1 + 4;
+      if (Current != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeSInt32Size(Current);
       }
-      if (Maximum != 0F) {
-        size += 1 + 4;
+      if (Maximum != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeSInt32Size(Maximum);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1490,10 +1520,10 @@ namespace Dreamsleeve.Protocol.Chat {
       if (other == null) {
         return;
       }
-      if (other.Current != 0F) {
+      if (other.Current != 0) {
         Current = other.Current;
       }
-      if (other.Maximum != 0F) {
+      if (other.Maximum != 0) {
         Maximum = other.Maximum;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -1515,12 +1545,12 @@ namespace Dreamsleeve.Protocol.Chat {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
-          case 13: {
-            Current = input.ReadFloat();
+          case 8: {
+            Current = input.ReadSInt32();
             break;
           }
-          case 21: {
-            Maximum = input.ReadFloat();
+          case 16: {
+            Maximum = input.ReadSInt32();
             break;
           }
         }
@@ -1542,12 +1572,12 @@ namespace Dreamsleeve.Protocol.Chat {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
-          case 13: {
-            Current = input.ReadFloat();
+          case 8: {
+            Current = input.ReadSInt32();
             break;
           }
-          case 21: {
-            Maximum = input.ReadFloat();
+          case 16: {
+            Maximum = input.ReadSInt32();
             break;
           }
         }
@@ -1557,6 +1587,9 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
+  /// <summary>
+  /// What a client reports: its own readings under their keys and labels.
+  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ActorValueEntry : pb::IMessage<ActorValueEntry>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -1929,6 +1962,626 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
+  /// <summary>
+  /// A server-assigned number for one (key, display name) pair. The server
+  /// defines every kind to a session before the first message that uses it: in
+  /// SessionOpened or in the PresenceChanged that introduces it. A number lives
+  /// while some online player has that pair and is never reused for another;
+  /// one that no player uses any more is never sent again, so clients may drop it.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ActorValueKind : pb::IMessage<ActorValueKind>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ActorValueKind> _parser = new pb::MessageParser<ActorValueKind>(() => new ActorValueKind());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ActorValueKind> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[6]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActorValueKind() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActorValueKind(ActorValueKind other) : this() {
+      id_ = other.id_;
+      key_ = other.key_;
+      displayName_ = other.displayName_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActorValueKind Clone() {
+      return new ActorValueKind(this);
+    }
+
+    /// <summary>Field number for the "id" field.</summary>
+    public const int IdFieldNumber = 1;
+    private ulong id_;
+    /// <summary>
+    /// Nonzero.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong Id {
+      get { return id_; }
+      set {
+        id_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "key" field.</summary>
+    public const int KeyFieldNumber = 2;
+    private string key_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Key {
+      get { return key_; }
+      set {
+        key_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "display_name" field.</summary>
+    public const int DisplayNameFieldNumber = 3;
+    private string displayName_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string DisplayName {
+      get { return displayName_; }
+      set {
+        displayName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ActorValueKind);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ActorValueKind other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Id != other.Id) return false;
+      if (Key != other.Key) return false;
+      if (DisplayName != other.DisplayName) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Id != 0UL) hash ^= Id.GetHashCode();
+      if (Key.Length != 0) hash ^= Key.GetHashCode();
+      if (DisplayName.Length != 0) hash ^= DisplayName.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Id != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(Id);
+      }
+      if (Key.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Key);
+      }
+      if (DisplayName.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(DisplayName);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Id != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(Id);
+      }
+      if (Key.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Key);
+      }
+      if (DisplayName.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(DisplayName);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Id != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Id);
+      }
+      if (Key.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Key);
+      }
+      if (DisplayName.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(DisplayName);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ActorValueKind other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Id != 0UL) {
+        Id = other.Id;
+      }
+      if (other.Key.Length != 0) {
+        Key = other.Key;
+      }
+      if (other.DisplayName.Length != 0) {
+        DisplayName = other.DisplayName;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Id = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Key = input.ReadString();
+            break;
+          }
+          case 26: {
+            DisplayName = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Id = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Key = input.ReadString();
+            break;
+          }
+          case 26: {
+            DisplayName = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A reading the server publishes, under a kind number instead of strings.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ActorValue : pb::IMessage<ActorValue>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ActorValue> _parser = new pb::MessageParser<ActorValue>(() => new ActorValue());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ActorValue> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[7]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActorValue() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActorValue(ActorValue other) : this() {
+      kind_ = other.kind_;
+      switch (other.ValueCase) {
+        case ValueOneofCase.Scalar:
+          Scalar = other.Scalar;
+          break;
+        case ValueOneofCase.Resource:
+          Resource = other.Resource.Clone();
+          break;
+      }
+
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActorValue Clone() {
+      return new ActorValue(this);
+    }
+
+    /// <summary>Field number for the "kind" field.</summary>
+    public const int KindFieldNumber = 1;
+    private ulong kind_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong Kind {
+      get { return kind_; }
+      set {
+        kind_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "scalar" field.</summary>
+    public const int ScalarFieldNumber = 2;
+    /// <summary>
+    /// Explicit zero is a present scalar value.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Scalar {
+      get { return HasScalar ? (float) value_ : 0F; }
+      set {
+        value_ = value;
+        valueCase_ = ValueOneofCase.Scalar;
+      }
+    }
+    /// <summary>Gets whether the "scalar" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasScalar {
+      get { return valueCase_ == ValueOneofCase.Scalar; }
+    }
+    /// <summary> Clears the value of the oneof if it's currently set to "scalar" </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearScalar() {
+      if (HasScalar) {
+        ClearValue();
+      }
+    }
+
+    /// <summary>Field number for the "resource" field.</summary>
+    public const int ResourceFieldNumber = 3;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.ResourceActorValue Resource {
+      get { return valueCase_ == ValueOneofCase.Resource ? (global::Dreamsleeve.Protocol.Chat.ResourceActorValue) value_ : null; }
+      set {
+        value_ = value;
+        valueCase_ = value == null ? ValueOneofCase.None : ValueOneofCase.Resource;
+      }
+    }
+
+    private object value_;
+    /// <summary>Enum of possible cases for the "value" oneof.</summary>
+    public enum ValueOneofCase {
+      None = 0,
+      Scalar = 2,
+      Resource = 3,
+    }
+    private ValueOneofCase valueCase_ = ValueOneofCase.None;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ValueOneofCase ValueCase {
+      get { return valueCase_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearValue() {
+      valueCase_ = ValueOneofCase.None;
+      value_ = null;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ActorValue);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ActorValue other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Kind != other.Kind) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Scalar, other.Scalar)) return false;
+      if (!object.Equals(Resource, other.Resource)) return false;
+      if (ValueCase != other.ValueCase) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Kind != 0UL) hash ^= Kind.GetHashCode();
+      if (HasScalar) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Scalar);
+      if (valueCase_ == ValueOneofCase.Resource) hash ^= Resource.GetHashCode();
+      hash ^= (int) valueCase_;
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Kind != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(Kind);
+      }
+      if (HasScalar) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Scalar);
+      }
+      if (valueCase_ == ValueOneofCase.Resource) {
+        output.WriteRawTag(26);
+        output.WriteMessage(Resource);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Kind != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(Kind);
+      }
+      if (HasScalar) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Scalar);
+      }
+      if (valueCase_ == ValueOneofCase.Resource) {
+        output.WriteRawTag(26);
+        output.WriteMessage(Resource);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Kind != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Kind);
+      }
+      if (HasScalar) {
+        size += 1 + 4;
+      }
+      if (valueCase_ == ValueOneofCase.Resource) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Resource);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ActorValue other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Kind != 0UL) {
+        Kind = other.Kind;
+      }
+      switch (other.ValueCase) {
+        case ValueOneofCase.Scalar:
+          Scalar = other.Scalar;
+          break;
+        case ValueOneofCase.Resource:
+          if (Resource == null) {
+            Resource = new global::Dreamsleeve.Protocol.Chat.ResourceActorValue();
+          }
+          Resource.MergeFrom(other.Resource);
+          break;
+      }
+
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Kind = input.ReadUInt64();
+            break;
+          }
+          case 21: {
+            Scalar = input.ReadFloat();
+            break;
+          }
+          case 26: {
+            global::Dreamsleeve.Protocol.Chat.ResourceActorValue subBuilder = new global::Dreamsleeve.Protocol.Chat.ResourceActorValue();
+            if (valueCase_ == ValueOneofCase.Resource) {
+              subBuilder.MergeFrom(Resource);
+            }
+            input.ReadMessage(subBuilder);
+            Resource = subBuilder;
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Kind = input.ReadUInt64();
+            break;
+          }
+          case 21: {
+            Scalar = input.ReadFloat();
+            break;
+          }
+          case 26: {
+            global::Dreamsleeve.Protocol.Chat.ResourceActorValue subBuilder = new global::Dreamsleeve.Protocol.Chat.ResourceActorValue();
+            if (valueCase_ == ValueOneofCase.Resource) {
+              subBuilder.MergeFrom(Resource);
+            }
+            input.ReadMessage(subBuilder);
+            Resource = subBuilder;
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class PlayerInfo : pb::IMessage<PlayerInfo>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -1944,7 +2597,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[6]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[8]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2034,12 +2687,15 @@ namespace Dreamsleeve.Protocol.Chat {
 
     /// <summary>Field number for the "actor_values" field.</summary>
     public const int ActorValuesFieldNumber = 4;
-    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.ActorValueEntry> _repeated_actorValues_codec
-        = pb::FieldCodec.ForMessage(34, global::Dreamsleeve.Protocol.Chat.ActorValueEntry.Parser);
-    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValueEntry> actorValues_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValueEntry>();
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.ActorValue> _repeated_actorValues_codec
+        = pb::FieldCodec.ForMessage(34, global::Dreamsleeve.Protocol.Chat.ActorValue.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValue> actorValues_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValue>();
+    /// <summary>
+    /// At most one reading per key.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValueEntry> ActorValues {
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValue> ActorValues {
       get { return actorValues_; }
     }
 
@@ -2472,7 +3128,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[7]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2716,7 +3372,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[10]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3053,7 +3709,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[9]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[11]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3400,7 +4056,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[10]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[12]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3804,7 +4460,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[11]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[13]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4002,7 +4658,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[12]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[14]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4203,7 +4859,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[13]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[15]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4450,7 +5106,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[14]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[16]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4740,7 +5396,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[15]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[17]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5021,7 +5677,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[16]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[18]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5208,7 +5864,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[17]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[19]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5369,7 +6025,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[18]; }
+      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[20]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5860,434 +6516,21 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class PlayerJoined : pb::IMessage<PlayerJoined>
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      , pb::IBufferMessage
-  #endif
-  {
-    private static readonly pb::MessageParser<PlayerJoined> _parser = new pb::MessageParser<PlayerJoined>(() => new PlayerJoined());
-    private pb::UnknownFieldSet _unknownFields;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<PlayerJoined> Parser { get { return _parser; } }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[19]; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    pbr::MessageDescriptor pb::IMessage.Descriptor {
-      get { return Descriptor; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerJoined() {
-      OnConstruction();
-    }
-
-    partial void OnConstruction();
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerJoined(PlayerJoined other) : this() {
-      player_ = other.player_ != null ? other.player_.Clone() : null;
-      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerJoined Clone() {
-      return new PlayerJoined(this);
-    }
-
-    /// <summary>Field number for the "player" field.</summary>
-    public const int PlayerFieldNumber = 1;
-    private global::Dreamsleeve.Protocol.Chat.PlayerInfo player_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Chat.PlayerInfo Player {
-      get { return player_; }
-      set {
-        player_ = value;
-      }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override bool Equals(object other) {
-      return Equals(other as PlayerJoined);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(PlayerJoined other) {
-      if (ReferenceEquals(other, null)) {
-        return false;
-      }
-      if (ReferenceEquals(other, this)) {
-        return true;
-      }
-      if (!object.Equals(Player, other.Player)) return false;
-      return Equals(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override int GetHashCode() {
-      int hash = 1;
-      if (player_ != null) hash ^= Player.GetHashCode();
-      if (_unknownFields != null) {
-        hash ^= _unknownFields.GetHashCode();
-      }
-      return hash;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override string ToString() {
-      return pb::JsonFormatter.ToDiagnosticString(this);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void WriteTo(pb::CodedOutputStream output) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      output.WriteRawMessage(this);
-    #else
-      if (player_ != null) {
-        output.WriteRawTag(10);
-        output.WriteMessage(Player);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(output);
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (player_ != null) {
-        output.WriteRawTag(10);
-        output.WriteMessage(Player);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(ref output);
-      }
-    }
-    #endif
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public int CalculateSize() {
-      int size = 0;
-      if (player_ != null) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Player);
-      }
-      if (_unknownFields != null) {
-        size += _unknownFields.CalculateSize();
-      }
-      return size;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(PlayerJoined other) {
-      if (other == null) {
-        return;
-      }
-      if (other.player_ != null) {
-        if (player_ == null) {
-          Player = new global::Dreamsleeve.Protocol.Chat.PlayerInfo();
-        }
-        Player.MergeFrom(other.Player);
-      }
-      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(pb::CodedInputStream input) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      input.ReadRawMessage(this);
-    #else
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-            break;
-          case 10: {
-            if (player_ == null) {
-              Player = new global::Dreamsleeve.Protocol.Chat.PlayerInfo();
-            }
-            input.ReadMessage(Player);
-            break;
-          }
-        }
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-            break;
-          case 10: {
-            if (player_ == null) {
-              Player = new global::Dreamsleeve.Protocol.Chat.PlayerInfo();
-            }
-            input.ReadMessage(Player);
-            break;
-          }
-        }
-      }
-    }
-    #endif
-
-  }
-
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class PlayerUpdated : pb::IMessage<PlayerUpdated>
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      , pb::IBufferMessage
-  #endif
-  {
-    private static readonly pb::MessageParser<PlayerUpdated> _parser = new pb::MessageParser<PlayerUpdated>(() => new PlayerUpdated());
-    private pb::UnknownFieldSet _unknownFields;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<PlayerUpdated> Parser { get { return _parser; } }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor.MessageTypes[20]; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    pbr::MessageDescriptor pb::IMessage.Descriptor {
-      get { return Descriptor; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerUpdated() {
-      OnConstruction();
-    }
-
-    partial void OnConstruction();
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerUpdated(PlayerUpdated other) : this() {
-      player_ = other.player_ != null ? other.player_.Clone() : null;
-      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerUpdated Clone() {
-      return new PlayerUpdated(this);
-    }
-
-    /// <summary>Field number for the "player" field.</summary>
-    public const int PlayerFieldNumber = 1;
-    private global::Dreamsleeve.Protocol.Chat.PlayerInfo player_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Chat.PlayerInfo Player {
-      get { return player_; }
-      set {
-        player_ = value;
-      }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override bool Equals(object other) {
-      return Equals(other as PlayerUpdated);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(PlayerUpdated other) {
-      if (ReferenceEquals(other, null)) {
-        return false;
-      }
-      if (ReferenceEquals(other, this)) {
-        return true;
-      }
-      if (!object.Equals(Player, other.Player)) return false;
-      return Equals(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override int GetHashCode() {
-      int hash = 1;
-      if (player_ != null) hash ^= Player.GetHashCode();
-      if (_unknownFields != null) {
-        hash ^= _unknownFields.GetHashCode();
-      }
-      return hash;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override string ToString() {
-      return pb::JsonFormatter.ToDiagnosticString(this);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void WriteTo(pb::CodedOutputStream output) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      output.WriteRawMessage(this);
-    #else
-      if (player_ != null) {
-        output.WriteRawTag(10);
-        output.WriteMessage(Player);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(output);
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (player_ != null) {
-        output.WriteRawTag(10);
-        output.WriteMessage(Player);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(ref output);
-      }
-    }
-    #endif
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public int CalculateSize() {
-      int size = 0;
-      if (player_ != null) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Player);
-      }
-      if (_unknownFields != null) {
-        size += _unknownFields.CalculateSize();
-      }
-      return size;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(PlayerUpdated other) {
-      if (other == null) {
-        return;
-      }
-      if (other.player_ != null) {
-        if (player_ == null) {
-          Player = new global::Dreamsleeve.Protocol.Chat.PlayerInfo();
-        }
-        Player.MergeFrom(other.Player);
-      }
-      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(pb::CodedInputStream input) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      input.ReadRawMessage(this);
-    #else
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-            break;
-          case 10: {
-            if (player_ == null) {
-              Player = new global::Dreamsleeve.Protocol.Chat.PlayerInfo();
-            }
-            input.ReadMessage(Player);
-            break;
-          }
-        }
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-            break;
-          case 10: {
-            if (player_ == null) {
-              Player = new global::Dreamsleeve.Protocol.Chat.PlayerInfo();
-            }
-            input.ReadMessage(Player);
-            break;
-          }
-        }
-      }
-    }
-    #endif
-
-  }
-
   /// <summary>
-  /// At least one component is present. Absent means unchanged; present replaces that component.
+  /// What changed in one player's actor values and details since the last tick.
+  /// Absent parts are unchanged; at least one part is present.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class PlayerMetadataChanged : pb::IMessage<PlayerMetadataChanged>
+  public sealed partial class PlayerMetadataPatch : pb::IMessage<PlayerMetadataPatch>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
   #endif
   {
-    private static readonly pb::MessageParser<PlayerMetadataChanged> _parser = new pb::MessageParser<PlayerMetadataChanged>(() => new PlayerMetadataChanged());
+    private static readonly pb::MessageParser<PlayerMetadataPatch> _parser = new pb::MessageParser<PlayerMetadataPatch>(() => new PlayerMetadataPatch());
     private pb::UnknownFieldSet _unknownFields;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<PlayerMetadataChanged> Parser { get { return _parser; } }
+    public static pb::MessageParser<PlayerMetadataPatch> Parser { get { return _parser; } }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -6303,7 +6546,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerMetadataChanged() {
+    public PlayerMetadataPatch() {
       OnConstruction();
     }
 
@@ -6311,17 +6554,19 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerMetadataChanged(PlayerMetadataChanged other) : this() {
+    public PlayerMetadataPatch(PlayerMetadataPatch other) : this() {
       playerId_ = other.playerId_;
-      actorValues_ = other.actorValues_ != null ? other.actorValues_.Clone() : null;
+      removedActorValues_ = other.removedActorValues_.Clone();
+      actorValues_ = other.actorValues_.Clone();
       details_ = other.details_ != null ? other.details_.Clone() : null;
+      clearedDetails_ = other.clearedDetails_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerMetadataChanged Clone() {
-      return new PlayerMetadataChanged(this);
+    public PlayerMetadataPatch Clone() {
+      return new PlayerMetadataPatch(this);
     }
 
     /// <summary>Field number for the "player_id" field.</summary>
@@ -6336,21 +6581,41 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
-    /// <summary>Field number for the "actor_values" field.</summary>
-    public const int ActorValuesFieldNumber = 2;
-    private global::Dreamsleeve.Protocol.Chat.ActorValues actorValues_;
+    /// <summary>Field number for the "removed_actor_values" field.</summary>
+    public const int RemovedActorValuesFieldNumber = 2;
+    private static readonly pb::FieldCodec<ulong> _repeated_removedActorValues_codec
+        = pb::FieldCodec.ForUInt64(18);
+    private readonly pbc::RepeatedField<ulong> removedActorValues_ = new pbc::RepeatedField<ulong>();
+    /// <summary>
+    /// Kinds the player no longer has, applied before actor_values; a changed
+    /// label is the old kind removed and the new one set.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Chat.ActorValues ActorValues {
+    public pbc::RepeatedField<ulong> RemovedActorValues {
+      get { return removedActorValues_; }
+    }
+
+    /// <summary>Field number for the "actor_values" field.</summary>
+    public const int ActorValuesFieldNumber = 3;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.ActorValue> _repeated_actorValues_codec
+        = pb::FieldCodec.ForMessage(26, global::Dreamsleeve.Protocol.Chat.ActorValue.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValue> actorValues_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValue>();
+    /// <summary>
+    /// New or changed readings.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValue> ActorValues {
       get { return actorValues_; }
-      set {
-        actorValues_ = value;
-      }
     }
 
     /// <summary>Field number for the "details" field.</summary>
-    public const int DetailsFieldNumber = 3;
+    public const int DetailsFieldNumber = 4;
     private global::Dreamsleeve.Protocol.Chat.PlayerDetails details_;
+    /// <summary>
+    /// The components present here replace the old ones.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::Dreamsleeve.Protocol.Chat.PlayerDetails Details {
@@ -6360,15 +6625,29 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "cleared_details" field.</summary>
+    public const int ClearedDetailsFieldNumber = 5;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.PlayerDetailsField> _repeated_clearedDetails_codec
+        = pb::FieldCodec.ForEnum(42, x => (int) x, x => (global::Dreamsleeve.Protocol.Chat.PlayerDetailsField) x);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerDetailsField> clearedDetails_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerDetailsField>();
+    /// <summary>
+    /// Components that became absent.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override bool Equals(object other) {
-      return Equals(other as PlayerMetadataChanged);
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerDetailsField> ClearedDetails {
+      get { return clearedDetails_; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(PlayerMetadataChanged other) {
+    public override bool Equals(object other) {
+      return Equals(other as PlayerMetadataPatch);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(PlayerMetadataPatch other) {
       if (ReferenceEquals(other, null)) {
         return false;
       }
@@ -6376,8 +6655,10 @@ namespace Dreamsleeve.Protocol.Chat {
         return true;
       }
       if (PlayerId != other.PlayerId) return false;
-      if (!object.Equals(ActorValues, other.ActorValues)) return false;
+      if(!removedActorValues_.Equals(other.removedActorValues_)) return false;
+      if(!actorValues_.Equals(other.actorValues_)) return false;
       if (!object.Equals(Details, other.Details)) return false;
+      if(!clearedDetails_.Equals(other.clearedDetails_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -6386,8 +6667,10 @@ namespace Dreamsleeve.Protocol.Chat {
     public override int GetHashCode() {
       int hash = 1;
       if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
-      if (actorValues_ != null) hash ^= ActorValues.GetHashCode();
+      hash ^= removedActorValues_.GetHashCode();
+      hash ^= actorValues_.GetHashCode();
       if (details_ != null) hash ^= Details.GetHashCode();
+      hash ^= clearedDetails_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -6410,14 +6693,13 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(8);
         output.WriteUInt64(PlayerId);
       }
-      if (actorValues_ != null) {
-        output.WriteRawTag(18);
-        output.WriteMessage(ActorValues);
-      }
+      removedActorValues_.WriteTo(output, _repeated_removedActorValues_codec);
+      actorValues_.WriteTo(output, _repeated_actorValues_codec);
       if (details_ != null) {
-        output.WriteRawTag(26);
+        output.WriteRawTag(34);
         output.WriteMessage(Details);
       }
+      clearedDetails_.WriteTo(output, _repeated_clearedDetails_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -6432,14 +6714,13 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(8);
         output.WriteUInt64(PlayerId);
       }
-      if (actorValues_ != null) {
-        output.WriteRawTag(18);
-        output.WriteMessage(ActorValues);
-      }
+      removedActorValues_.WriteTo(ref output, _repeated_removedActorValues_codec);
+      actorValues_.WriteTo(ref output, _repeated_actorValues_codec);
       if (details_ != null) {
-        output.WriteRawTag(26);
+        output.WriteRawTag(34);
         output.WriteMessage(Details);
       }
+      clearedDetails_.WriteTo(ref output, _repeated_clearedDetails_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -6453,12 +6734,12 @@ namespace Dreamsleeve.Protocol.Chat {
       if (PlayerId != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(PlayerId);
       }
-      if (actorValues_ != null) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(ActorValues);
-      }
+      size += removedActorValues_.CalculateSize(_repeated_removedActorValues_codec);
+      size += actorValues_.CalculateSize(_repeated_actorValues_codec);
       if (details_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Details);
       }
+      size += clearedDetails_.CalculateSize(_repeated_clearedDetails_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -6467,25 +6748,22 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(PlayerMetadataChanged other) {
+    public void MergeFrom(PlayerMetadataPatch other) {
       if (other == null) {
         return;
       }
       if (other.PlayerId != 0UL) {
         PlayerId = other.PlayerId;
       }
-      if (other.actorValues_ != null) {
-        if (actorValues_ == null) {
-          ActorValues = new global::Dreamsleeve.Protocol.Chat.ActorValues();
-        }
-        ActorValues.MergeFrom(other.ActorValues);
-      }
+      removedActorValues_.Add(other.removedActorValues_);
+      actorValues_.Add(other.actorValues_);
       if (other.details_ != null) {
         if (details_ == null) {
           Details = new global::Dreamsleeve.Protocol.Chat.PlayerDetails();
         }
         Details.MergeFrom(other.Details);
       }
+      clearedDetails_.Add(other.clearedDetails_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -6509,18 +6787,25 @@ namespace Dreamsleeve.Protocol.Chat {
             PlayerId = input.ReadUInt64();
             break;
           }
-          case 18: {
-            if (actorValues_ == null) {
-              ActorValues = new global::Dreamsleeve.Protocol.Chat.ActorValues();
-            }
-            input.ReadMessage(ActorValues);
+          case 18:
+          case 16: {
+            removedActorValues_.AddEntriesFrom(input, _repeated_removedActorValues_codec);
             break;
           }
           case 26: {
+            actorValues_.AddEntriesFrom(input, _repeated_actorValues_codec);
+            break;
+          }
+          case 34: {
             if (details_ == null) {
               Details = new global::Dreamsleeve.Protocol.Chat.PlayerDetails();
             }
             input.ReadMessage(Details);
+            break;
+          }
+          case 42:
+          case 40: {
+            clearedDetails_.AddEntriesFrom(input, _repeated_clearedDetails_codec);
             break;
           }
         }
@@ -6546,18 +6831,25 @@ namespace Dreamsleeve.Protocol.Chat {
             PlayerId = input.ReadUInt64();
             break;
           }
-          case 18: {
-            if (actorValues_ == null) {
-              ActorValues = new global::Dreamsleeve.Protocol.Chat.ActorValues();
-            }
-            input.ReadMessage(ActorValues);
+          case 18:
+          case 16: {
+            removedActorValues_.AddEntriesFrom(ref input, _repeated_removedActorValues_codec);
             break;
           }
           case 26: {
+            actorValues_.AddEntriesFrom(ref input, _repeated_actorValues_codec);
+            break;
+          }
+          case 34: {
             if (details_ == null) {
               Details = new global::Dreamsleeve.Protocol.Chat.PlayerDetails();
             }
             input.ReadMessage(Details);
+            break;
+          }
+          case 42:
+          case 40: {
+            clearedDetails_.AddEntriesFrom(ref input, _repeated_clearedDetails_codec);
             break;
           }
         }
@@ -6889,19 +7181,20 @@ namespace Dreamsleeve.Protocol.Chat {
   }
 
   /// <summary>
-  /// Reliable baseline/clear. A realtime sample cannot establish visibility.
+  /// Reliable baseline or clear. A realtime sample cannot establish visibility.
+  /// The place is PresenceChanged.space: a visible player shares the recipient's.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class PlayerVisibilityChanged : pb::IMessage<PlayerVisibilityChanged>
+  public sealed partial class PlayerVisibility : pb::IMessage<PlayerVisibility>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
   #endif
   {
-    private static readonly pb::MessageParser<PlayerVisibilityChanged> _parser = new pb::MessageParser<PlayerVisibilityChanged>(() => new PlayerVisibilityChanged());
+    private static readonly pb::MessageParser<PlayerVisibility> _parser = new pb::MessageParser<PlayerVisibility>(() => new PlayerVisibility());
     private pb::UnknownFieldSet _unknownFields;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<PlayerVisibilityChanged> Parser { get { return _parser; } }
+    public static pb::MessageParser<PlayerVisibility> Parser { get { return _parser; } }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -6917,7 +7210,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerVisibilityChanged() {
+    public PlayerVisibility() {
       OnConstruction();
     }
 
@@ -6925,18 +7218,18 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerVisibilityChanged(PlayerVisibilityChanged other) : this() {
+    public PlayerVisibility(PlayerVisibility other) : this() {
       playerId_ = other.playerId_;
       viewRevision_ = other.viewRevision_;
       sequence_ = other.sequence_;
-      location_ = other.location_ != null ? other.location_.Clone() : null;
+      pose_ = other.pose_ != null ? other.pose_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerVisibilityChanged Clone() {
-      return new PlayerVisibilityChanged(this);
+    public PlayerVisibility Clone() {
+      return new PlayerVisibility(this);
     }
 
     /// <summary>Field number for the "player_id" field.</summary>
@@ -6975,27 +7268,30 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
-    /// <summary>Field number for the "location" field.</summary>
-    public const int LocationFieldNumber = 4;
-    private global::Dreamsleeve.Protocol.Chat.PlayerLocation location_;
+    /// <summary>Field number for the "pose" field.</summary>
+    public const int PoseFieldNumber = 4;
+    private global::Dreamsleeve.Protocol.Chat.MovementPose pose_;
+    /// <summary>
+    /// Absent: the player is no longer visible.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Chat.PlayerLocation Location {
-      get { return location_; }
+    public global::Dreamsleeve.Protocol.Chat.MovementPose Pose {
+      get { return pose_; }
       set {
-        location_ = value;
+        pose_ = value;
       }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
-      return Equals(other as PlayerVisibilityChanged);
+      return Equals(other as PlayerVisibility);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(PlayerVisibilityChanged other) {
+    public bool Equals(PlayerVisibility other) {
       if (ReferenceEquals(other, null)) {
         return false;
       }
@@ -7005,7 +7301,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (PlayerId != other.PlayerId) return false;
       if (ViewRevision != other.ViewRevision) return false;
       if (Sequence != other.Sequence) return false;
-      if (!object.Equals(Location, other.Location)) return false;
+      if (!object.Equals(Pose, other.Pose)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -7016,7 +7312,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
       if (ViewRevision != 0UL) hash ^= ViewRevision.GetHashCode();
       if (Sequence != 0UL) hash ^= Sequence.GetHashCode();
-      if (location_ != null) hash ^= Location.GetHashCode();
+      if (pose_ != null) hash ^= Pose.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -7047,9 +7343,9 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(24);
         output.WriteUInt64(Sequence);
       }
-      if (location_ != null) {
+      if (pose_ != null) {
         output.WriteRawTag(34);
-        output.WriteMessage(Location);
+        output.WriteMessage(Pose);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -7073,9 +7369,9 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(24);
         output.WriteUInt64(Sequence);
       }
-      if (location_ != null) {
+      if (pose_ != null) {
         output.WriteRawTag(34);
-        output.WriteMessage(Location);
+        output.WriteMessage(Pose);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -7096,8 +7392,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (Sequence != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Sequence);
       }
-      if (location_ != null) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Location);
+      if (pose_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Pose);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -7107,7 +7403,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(PlayerVisibilityChanged other) {
+    public void MergeFrom(PlayerVisibility other) {
       if (other == null) {
         return;
       }
@@ -7120,11 +7416,11 @@ namespace Dreamsleeve.Protocol.Chat {
       if (other.Sequence != 0UL) {
         Sequence = other.Sequence;
       }
-      if (other.location_ != null) {
-        if (location_ == null) {
-          Location = new global::Dreamsleeve.Protocol.Chat.PlayerLocation();
+      if (other.pose_ != null) {
+        if (pose_ == null) {
+          Pose = new global::Dreamsleeve.Protocol.Chat.MovementPose();
         }
-        Location.MergeFrom(other.Location);
+        Pose.MergeFrom(other.Pose);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -7158,10 +7454,10 @@ namespace Dreamsleeve.Protocol.Chat {
             break;
           }
           case 34: {
-            if (location_ == null) {
-              Location = new global::Dreamsleeve.Protocol.Chat.PlayerLocation();
+            if (pose_ == null) {
+              Pose = new global::Dreamsleeve.Protocol.Chat.MovementPose();
             }
-            input.ReadMessage(Location);
+            input.ReadMessage(Pose);
             break;
           }
         }
@@ -7196,10 +7492,10 @@ namespace Dreamsleeve.Protocol.Chat {
             break;
           }
           case 34: {
-            if (location_ == null) {
-              Location = new global::Dreamsleeve.Protocol.Chat.PlayerLocation();
+            if (pose_ == null) {
+              Pose = new global::Dreamsleeve.Protocol.Chat.MovementPose();
             }
-            input.ReadMessage(Location);
+            input.ReadMessage(Pose);
             break;
           }
         }
@@ -7209,17 +7505,22 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
+  /// <summary>
+  /// Everything that changed in the online list for one recipient: one message
+  /// per replication tick, plus one per joining or leaving player. Parts apply in
+  /// field order: kinds, joined, updated, metadata, visibility, left.
+  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class PlayerLeft : pb::IMessage<PlayerLeft>
+  public sealed partial class PresenceChanged : pb::IMessage<PresenceChanged>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
   #endif
   {
-    private static readonly pb::MessageParser<PlayerLeft> _parser = new pb::MessageParser<PlayerLeft>(() => new PlayerLeft());
+    private static readonly pb::MessageParser<PresenceChanged> _parser = new pb::MessageParser<PresenceChanged>(() => new PresenceChanged());
     private pb::UnknownFieldSet _unknownFields;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<PlayerLeft> Parser { get { return _parser; } }
+    public static pb::MessageParser<PresenceChanged> Parser { get { return _parser; } }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -7235,7 +7536,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerLeft() {
+    public PresenceChanged() {
       OnConstruction();
     }
 
@@ -7243,45 +7544,132 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerLeft(PlayerLeft other) : this() {
-      playerId_ = other.playerId_;
+    public PresenceChanged(PresenceChanged other) : this() {
+      actorValueKinds_ = other.actorValueKinds_.Clone();
+      joined_ = other.joined_.Clone();
+      updated_ = other.updated_.Clone();
+      metadata_ = other.metadata_.Clone();
+      space_ = other.space_ != null ? other.space_.Clone() : null;
+      visibility_ = other.visibility_.Clone();
+      left_ = other.left_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public PlayerLeft Clone() {
-      return new PlayerLeft(this);
+    public PresenceChanged Clone() {
+      return new PresenceChanged(this);
     }
 
-    /// <summary>Field number for the "player_id" field.</summary>
-    public const int PlayerIdFieldNumber = 1;
-    private ulong playerId_;
+    /// <summary>Field number for the "actor_value_kinds" field.</summary>
+    public const int ActorValueKindsFieldNumber = 1;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.ActorValueKind> _repeated_actorValueKinds_codec
+        = pb::FieldCodec.ForMessage(10, global::Dreamsleeve.Protocol.Chat.ActorValueKind.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValueKind> actorValueKinds_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValueKind>();
+    /// <summary>
+    /// Kinds new to the recipient.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public ulong PlayerId {
-      get { return playerId_; }
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.ActorValueKind> ActorValueKinds {
+      get { return actorValueKinds_; }
+    }
+
+    /// <summary>Field number for the "joined" field.</summary>
+    public const int JoinedFieldNumber = 2;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.PlayerInfo> _repeated_joined_codec
+        = pb::FieldCodec.ForMessage(18, global::Dreamsleeve.Protocol.Chat.PlayerInfo.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerInfo> joined_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerInfo>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerInfo> Joined {
+      get { return joined_; }
+    }
+
+    /// <summary>Field number for the "updated" field.</summary>
+    public const int UpdatedFieldNumber = 3;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.PlayerInfo> _repeated_updated_codec
+        = pb::FieldCodec.ForMessage(26, global::Dreamsleeve.Protocol.Chat.PlayerInfo.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerInfo> updated_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerInfo>();
+    /// <summary>
+    /// Identity or character changes: the whole player again, with no position.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerInfo> Updated {
+      get { return updated_; }
+    }
+
+    /// <summary>Field number for the "metadata" field.</summary>
+    public const int MetadataFieldNumber = 4;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.PlayerMetadataPatch> _repeated_metadata_codec
+        = pb::FieldCodec.ForMessage(34, global::Dreamsleeve.Protocol.Chat.PlayerMetadataPatch.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerMetadataPatch> metadata_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerMetadataPatch>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerMetadataPatch> Metadata {
+      get { return metadata_; }
+    }
+
+    /// <summary>Field number for the "space" field.</summary>
+    public const int SpaceFieldNumber = 5;
+    private global::Dreamsleeve.Protocol.Chat.Location space_;
+    /// <summary>
+    /// The recipient's own place; present exactly when a visibility entry has a pose.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.Location Space {
+      get { return space_; }
       set {
-        playerId_ = value;
+        space_ = value;
       }
+    }
+
+    /// <summary>Field number for the "visibility" field.</summary>
+    public const int VisibilityFieldNumber = 6;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.PlayerVisibility> _repeated_visibility_codec
+        = pb::FieldCodec.ForMessage(50, global::Dreamsleeve.Protocol.Chat.PlayerVisibility.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerVisibility> visibility_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerVisibility>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.PlayerVisibility> Visibility {
+      get { return visibility_; }
+    }
+
+    /// <summary>Field number for the "left" field.</summary>
+    public const int LeftFieldNumber = 7;
+    private static readonly pb::FieldCodec<ulong> _repeated_left_codec
+        = pb::FieldCodec.ForUInt64(58);
+    private readonly pbc::RepeatedField<ulong> left_ = new pbc::RepeatedField<ulong>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<ulong> Left {
+      get { return left_; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
-      return Equals(other as PlayerLeft);
+      return Equals(other as PresenceChanged);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(PlayerLeft other) {
+    public bool Equals(PresenceChanged other) {
       if (ReferenceEquals(other, null)) {
         return false;
       }
       if (ReferenceEquals(other, this)) {
         return true;
       }
-      if (PlayerId != other.PlayerId) return false;
+      if(!actorValueKinds_.Equals(other.actorValueKinds_)) return false;
+      if(!joined_.Equals(other.joined_)) return false;
+      if(!updated_.Equals(other.updated_)) return false;
+      if(!metadata_.Equals(other.metadata_)) return false;
+      if (!object.Equals(Space, other.Space)) return false;
+      if(!visibility_.Equals(other.visibility_)) return false;
+      if(!left_.Equals(other.left_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -7289,7 +7677,13 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
-      if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
+      hash ^= actorValueKinds_.GetHashCode();
+      hash ^= joined_.GetHashCode();
+      hash ^= updated_.GetHashCode();
+      hash ^= metadata_.GetHashCode();
+      if (space_ != null) hash ^= Space.GetHashCode();
+      hash ^= visibility_.GetHashCode();
+      hash ^= left_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -7308,10 +7702,16 @@ namespace Dreamsleeve.Protocol.Chat {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
-      if (PlayerId != 0UL) {
-        output.WriteRawTag(8);
-        output.WriteUInt64(PlayerId);
+      actorValueKinds_.WriteTo(output, _repeated_actorValueKinds_codec);
+      joined_.WriteTo(output, _repeated_joined_codec);
+      updated_.WriteTo(output, _repeated_updated_codec);
+      metadata_.WriteTo(output, _repeated_metadata_codec);
+      if (space_ != null) {
+        output.WriteRawTag(42);
+        output.WriteMessage(Space);
       }
+      visibility_.WriteTo(output, _repeated_visibility_codec);
+      left_.WriteTo(output, _repeated_left_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -7322,10 +7722,16 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (PlayerId != 0UL) {
-        output.WriteRawTag(8);
-        output.WriteUInt64(PlayerId);
+      actorValueKinds_.WriteTo(ref output, _repeated_actorValueKinds_codec);
+      joined_.WriteTo(ref output, _repeated_joined_codec);
+      updated_.WriteTo(ref output, _repeated_updated_codec);
+      metadata_.WriteTo(ref output, _repeated_metadata_codec);
+      if (space_ != null) {
+        output.WriteRawTag(42);
+        output.WriteMessage(Space);
       }
+      visibility_.WriteTo(ref output, _repeated_visibility_codec);
+      left_.WriteTo(ref output, _repeated_left_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -7336,9 +7742,15 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
-      if (PlayerId != 0UL) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(PlayerId);
+      size += actorValueKinds_.CalculateSize(_repeated_actorValueKinds_codec);
+      size += joined_.CalculateSize(_repeated_joined_codec);
+      size += updated_.CalculateSize(_repeated_updated_codec);
+      size += metadata_.CalculateSize(_repeated_metadata_codec);
+      if (space_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Space);
       }
+      size += visibility_.CalculateSize(_repeated_visibility_codec);
+      size += left_.CalculateSize(_repeated_left_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -7347,13 +7759,22 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(PlayerLeft other) {
+    public void MergeFrom(PresenceChanged other) {
       if (other == null) {
         return;
       }
-      if (other.PlayerId != 0UL) {
-        PlayerId = other.PlayerId;
+      actorValueKinds_.Add(other.actorValueKinds_);
+      joined_.Add(other.joined_);
+      updated_.Add(other.updated_);
+      metadata_.Add(other.metadata_);
+      if (other.space_ != null) {
+        if (space_ == null) {
+          Space = new global::Dreamsleeve.Protocol.Chat.Location();
+        }
+        Space.MergeFrom(other.Space);
       }
+      visibility_.Add(other.visibility_);
+      left_.Add(other.left_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -7373,8 +7794,36 @@ namespace Dreamsleeve.Protocol.Chat {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
-          case 8: {
-            PlayerId = input.ReadUInt64();
+          case 10: {
+            actorValueKinds_.AddEntriesFrom(input, _repeated_actorValueKinds_codec);
+            break;
+          }
+          case 18: {
+            joined_.AddEntriesFrom(input, _repeated_joined_codec);
+            break;
+          }
+          case 26: {
+            updated_.AddEntriesFrom(input, _repeated_updated_codec);
+            break;
+          }
+          case 34: {
+            metadata_.AddEntriesFrom(input, _repeated_metadata_codec);
+            break;
+          }
+          case 42: {
+            if (space_ == null) {
+              Space = new global::Dreamsleeve.Protocol.Chat.Location();
+            }
+            input.ReadMessage(Space);
+            break;
+          }
+          case 50: {
+            visibility_.AddEntriesFrom(input, _repeated_visibility_codec);
+            break;
+          }
+          case 58:
+          case 56: {
+            left_.AddEntriesFrom(input, _repeated_left_codec);
             break;
           }
         }
@@ -7396,8 +7845,36 @@ namespace Dreamsleeve.Protocol.Chat {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
-          case 8: {
-            PlayerId = input.ReadUInt64();
+          case 10: {
+            actorValueKinds_.AddEntriesFrom(ref input, _repeated_actorValueKinds_codec);
+            break;
+          }
+          case 18: {
+            joined_.AddEntriesFrom(ref input, _repeated_joined_codec);
+            break;
+          }
+          case 26: {
+            updated_.AddEntriesFrom(ref input, _repeated_updated_codec);
+            break;
+          }
+          case 34: {
+            metadata_.AddEntriesFrom(ref input, _repeated_metadata_codec);
+            break;
+          }
+          case 42: {
+            if (space_ == null) {
+              Space = new global::Dreamsleeve.Protocol.Chat.Location();
+            }
+            input.ReadMessage(Space);
+            break;
+          }
+          case 50: {
+            visibility_.AddEntriesFrom(ref input, _repeated_visibility_codec);
+            break;
+          }
+          case 58:
+          case 56: {
+            left_.AddEntriesFrom(ref input, _repeated_left_codec);
             break;
           }
         }

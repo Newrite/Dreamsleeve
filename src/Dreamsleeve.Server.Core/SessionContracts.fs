@@ -147,13 +147,9 @@ type ChatRoomCommand =
 
 [<RequireQualifiedAccess>]
 type PresenceEvent =
-    | Snapshot of PlayerSnapshot list
-    | Joined of PlayerSnapshot
-    | Updated of PlayerSnapshot
+    | Snapshot of PlayerSnapshot list * ActorValueKinds
+    | Changed of PresenceChange * ActorValueKinds
     | Moved of MovementChange array
-    | VisibilityChanged of VisibilityChange
-    | MetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
-    | Left of PlayerId
 
 type PresenceSubscription = {
     ConnectionId: Guid

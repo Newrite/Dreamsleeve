@@ -232,18 +232,20 @@ let private received state client (event: EnetEvent) =
                 state.Rejections <- state.Rejections + 1
                 fail state (sprintf "Client %d rejected request %d: %A (%s)" client.Index response.RequestId
                                     response.RequestRejected.Code response.RequestRejected.Message)
-            | ServerPacket.PayloadOneofCase.PlayerJoined ->
-                if not client.Ready || isNull response.PlayerJoined.Player
-                   || isNull response.PlayerJoined.Player.Profile
-                   || not (client.Online.Add response.PlayerJoined.Player.Profile.PlayerId) then
-                    fail state (sprintf "Client %d received an invalid/duplicate presence join" client.Index)
-            | ServerPacket.PayloadOneofCase.PlayerLeft ->
-                client.Online.Remove response.PlayerLeft.PlayerId |> ignore
-                if not state.Disconnecting then fail state "A player left before benchmark cleanup"
-            | ServerPacket.PayloadOneofCase.PlayerUpdateAccepted
-            | ServerPacket.PayloadOneofCase.PlayerUpdated
-            | ServerPacket.PayloadOneofCase.PlayerVisibilityChanged
-            | ServerPacket.PayloadOneofCase.PlayerMetadataChanged ->
+            | ServerPacket.PayloadOneofCase.PresenceChanged ->
+                let presence = response.PresenceChanged
+                for player in presence.Joined do
+                    if not client.Ready || isNull player.Profile || not (client.Online.Add player.Profile.PlayerId) then
+                        fail state (sprintf "Client %d received an invalid/duplicate presence join" client.Index)
+                for playerId in presence.Left do
+                    client.Online.Remove playerId |> ignore
+                    if not state.Disconnecting then fail state "A player left before benchmark cleanup"
+                let moving = presence.Updated.Count > 0 || presence.Metadata.Count > 0 || presence.Visibility.Count > 0
+                match state.Movement with
+                | Some probe -> probe.ReceivePresence(client.Index, presence, int packet.DataLength)
+                | None when moving -> fail state "Unexpected player update during chat benchmark"
+                | None -> ()
+            | ServerPacket.PayloadOneofCase.PlayerUpdateAccepted ->
                 match state.Movement with
                 | Some probe -> probe.Receive(client.Index, response, int packet.DataLength)
                 | None -> fail state "Unexpected player update during chat benchmark"

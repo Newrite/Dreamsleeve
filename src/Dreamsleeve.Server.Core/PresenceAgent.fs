@@ -26,7 +26,11 @@ module PresenceAgent =
         mutable Published: PlayerSnapshot
         Views: Dictionary<PlayerId, View>
         mutable NextRevision: uint64
+        /// The highest actor value kind number this member has been told.
+        mutable KnownKind: uint64
     }
+
+    type private KindEntry = { Kind: ActorValueKind; mutable Uses: int }
 
     type private State = {
         Members: Dictionary<Guid, Member>
@@ -35,6 +39,15 @@ module PresenceAgent =
         Candidates: HashSet<Guid>
         Movements: ResizeArray<MovementChange>
         LatestIndex: SpatialIndex.State<Guid>
+        /// Kinds of the published readings, each counted by the members publishing it.
+        Kinds: Dictionary<struct (ActorValueKey * ActorValueName), KindEntry>
+        /// Kinds whose count reached zero in this turn; forgotten at its end.
+        Unused: HashSet<struct (ActorValueKey * ActorValueName)>
+        mutable KindIds: Map<struct (ActorValueKey * ActorValueName), uint64>
+        /// Never reused: even a client renaming every label each tick cannot exhaust it.
+        mutable LastKind: uint64
+        /// Members removed so far; a tick filters its shared parts only after one.
+        mutable Removals: int64
         mutable Ticker: AgentTicker option
         mutable LastFlush: int64
         VisibilityDistanceSquared: double
@@ -45,6 +58,54 @@ module PresenceAgent =
         if not (state.Host.TrySend(context, command)) then
             context.Abort()
 
+    let private kindOf (key: ActorValueKey) (info: ActorValueInfo) = struct (key, info.DisplayName)
+
+    /// Numbers the kinds of these readings that have none yet.
+    let private register state (values: Map<ActorValueKey, ActorValueInfo>) =
+        for KeyValue(key, info) in values do
+            let kind = kindOf key info
+            if not (state.Kinds.ContainsKey kind) then
+                state.LastKind <- state.LastKind + 1UL
+                state.Kinds[kind] <- { Kind = { Id = state.LastKind; Key = key; DisplayName = info.DisplayName }; Uses = 0 }
+                state.KindIds <- Map.add kind state.LastKind state.KindIds
+                state.Unused.Add kind |> ignore
+
+    /// Counts one member's published readings in (+1) or out (-1).
+    let private count state delta (values: Map<ActorValueKey, ActorValueInfo>) =
+        for KeyValue(key, info) in values do
+            let kind = kindOf key info
+            match state.Kinds.TryGetValue kind with
+            | true, entry ->
+                entry.Uses <- entry.Uses + delta
+                if entry.Uses = 0 then state.Unused.Add kind |> ignore
+            | false, _ -> ()
+
+    /// A kind nobody publishes any more is never sent again: the same pair
+    /// published later gets a new number. Clients may drop it the same way.
+    let private forgetUnused state =
+        for kind in state.Unused do
+            match state.Kinds.TryGetValue kind with
+            | true, entry when entry.Uses = 0 ->
+                state.Kinds.Remove kind |> ignore
+                state.KindIds <- Map.remove kind state.KindIds
+            | true, _ | false, _ -> ()
+        state.Unused.Clear()
+
+    /// The numbers for one event and the kinds its recipient has not been told.
+    /// A snapshot replaces whatever the recipient knew, so it gets every kind.
+    let private kindsFor state (recipient: Member) everything =
+        let known = if everything then 0UL else recipient.KnownKind
+        let defined =
+            if state.LastKind = known then []
+            else
+                state.Kinds.Values
+                |> Seq.filter (fun entry -> entry.Kind.Id > known)
+                |> Seq.map _.Kind
+                |> Seq.sortBy _.Id
+                |> List.ofSeq
+        recipient.KnownKind <- state.LastKind
+        { Ids = state.KindIds; Defined = defined }
+
     let private remove state connectionId =
         match state.Members.TryGetValue connectionId with
         | false, _ -> None
@@ -54,6 +115,8 @@ module PresenceAgent =
             state.Players.Remove playerId |> ignore
             state.Dirty.Remove playerId |> ignore
             SpatialIndex.remove connectionId state.LatestIndex
+            count state -1 memberState.Published.ActorValues
+            state.Removals <- state.Removals + 1L
             for observer in state.Members.Values do observer.Views.Remove playerId |> ignore
             Some playerId
 
@@ -66,19 +129,23 @@ module PresenceAgent =
             notifyHost state context (SessionHostCommand.SlowConsumer subscriber.ConnectionId)
             removed
 
-    let private broadcast state (context: AgentContext<PresenceCommand>) exceptConnection event =
+    let private broadcastLeft state (context: AgentContext<PresenceCommand>) playerId =
         // A failed recipient can cause another Left. Each removed member contributes
         // at most one delta, and no healthy recipient waits for the slow one.
-        let pending = Queue<Guid option * PresenceEvent>()
-        pending.Enqueue(exceptConnection, event)
+        let pending = Queue<PlayerId>()
+        pending.Enqueue playerId
         while pending.Count > 0 && not context.CancellationToken.IsCancellationRequested do
-            let exceptConnection, event = pending.Dequeue()
+            let left = PresenceEvent.Changed({ PresenceChange.empty with Left = [ pending.Dequeue() ] }, ActorValueKinds.none)
             let recipients = state.Members.Values |> Seq.toArray
             for recipient in recipients do
-                if Some recipient.ConnectionId <> exceptConnection then
-                    match deliver state context recipient event with
-                    | Some playerId -> pending.Enqueue(None, PresenceEvent.Left playerId)
-                    | None -> ()
+                match deliver state context recipient left with
+                | Some removed -> pending.Enqueue removed
+                | None -> ()
+
+    let private deliverDelta state context subscriber event =
+        match deliver state context subscriber event with
+        | Some playerId -> broadcastLeft state context playerId
+        | None -> ()
 
     // Visibility is symmetric in space, but self always receives its own telemetry.
     // Radius is validated once at startup; double arithmetic avoids float overflow.
@@ -133,31 +200,24 @@ module PresenceAgent =
         |> List.ofSeq
 
     // A switch between the profile and a pseudonym is a change of identity: it
-    // travels as PlayerUpdated, like a rename.
+    // travels as the whole player again, like a rename.
     let private identityEqual (previous: PlayerSnapshot) (latest: PlayerSnapshot) =
         previous.Identity = latest.Identity && previous.CharacterName = latest.CharacterName
         && previous.CharacterNameWithheld = latest.CharacterNameWithheld
         && previous.CharacterGeneration = latest.CharacterGeneration
 
-    let private deliverDelta state context subscriber event =
-        match deliver state context subscriber event with
-        | Some playerId -> broadcast state context None (PresenceEvent.Left playerId)
-        | None -> ()
+    /// The global changes of a tick, shared by every recipient, and their sources.
+    type private TickChanges = {
+        Updated: (Guid * PlayerSnapshot) list
+        Metadata: (Guid * MetadataPatch) list
+        AllUpdated: PlayerSnapshot list
+        AllMetadata: MetadataPatch list
+        Removals: int64
+    }
 
-    let private publishGlobal state context observer source =
-        if state.Members.ContainsKey observer.ConnectionId && state.Members.ContainsKey source.ConnectionId then
-            if not (identityEqual source.Published source.Latest) then
-                deliverDelta state context observer (PresenceEvent.Updated { source.Latest with Location = ValueNone; ViewRevision = 0UL })
-            else
-                let values =
-                    if source.Published.ActorValues = source.Latest.ActorValues then ValueNone
-                    else ValueSome source.Latest.ActorValues
-                let details =
-                    if source.Published.Details = source.Latest.Details then ValueNone
-                    else ValueSome source.Latest.Details
-                deliverDelta state context observer (PresenceEvent.MetadataChanged(source.Latest.Identity.PlayerId, values, details))
-
-    let private publishMovement state context sendSamples observer =
+    /// One observer's turn of a tick: the global changes of the tick with its own
+    /// visibility baselines and clears as one reliable batch, then its poses.
+    let private publishTo state context sendSamples (observer: Member) (tick: TickChanges) =
         let candidates = state.Candidates
         candidates.Clear()
         SpatialIndex.neighbors observer.Latest.Location state.LatestIndex candidates
@@ -170,33 +230,46 @@ module PresenceAgent =
 
         let movements = state.Movements
         movements.Clear()
+        let visibility = ResizeArray<VisibilityChange>()
         for id in candidates do
             match state.Members.TryGetValue id with
-            | true, source when state.Members.ContainsKey observer.ConnectionId ->
+            | true, source ->
                 let playerId = source.Latest.Identity.PlayerId
                 match visibleLocation state observer.Latest source.Latest with
                 | ValueSome location ->
                     let view, changed = establishView observer source
+                    let pose = MovementPose.ofLocation location
                     if changed then
-                        let baseline = {
+                        visibility.Add {
                             PlayerId = playerId; ViewRevision = view.Revision
-                            Sequence = source.Latest.MovementSequence; Location = ValueSome location
+                            Sequence = source.Latest.MovementSequence; Pose = ValueSome pose
                         }
-                        deliverDelta state context observer (PresenceEvent.VisibilityChanged baseline)
-
                     if sendSamples then
                         movements.Add {
                             PlayerId = playerId; ViewRevision = view.Revision
-                            Sequence = source.Latest.MovementSequence; Pose = MovementPose.ofLocation location
+                            Sequence = source.Latest.MovementSequence; Pose = pose
                         }
                 | ValueNone ->
                     if observer.Views.Remove playerId then
-                        let cleared = {
-                            PlayerId = playerId; ViewRevision = nextRevision observer
-                            Sequence = 0UL; Location = ValueNone
-                        }
-                        deliverDelta state context observer (PresenceEvent.VisibilityChanged cleared)
-            | true, _ | false, _ -> ()
+                        visibility.Add { PlayerId = playerId; ViewRevision = nextRevision observer; Sequence = 0UL; Pose = ValueNone }
+            | false, _ -> ()
+        candidates.Clear()
+
+        // A player removed earlier in this tick has already been announced as left.
+        let present (connectionId, _) = state.Members.ContainsKey connectionId
+        let unchanged = state.Removals = tick.Removals
+        let change = {
+            PresenceChange.empty with
+                Updated = if unchanged then tick.AllUpdated else tick.Updated |> List.filter present |> List.map snd
+                Metadata = if unchanged then tick.AllMetadata else tick.Metadata |> List.filter present |> List.map snd
+                Space =
+                    if visibility |> Seq.exists (fun change -> change.Pose.IsSome) then
+                        observer.Latest.Location |> ValueOption.map _.Location
+                    else ValueNone
+                Visibility = List.ofSeq visibility
+        }
+        if not (PresenceChange.isEmpty change) then
+            deliverDelta state context observer (PresenceEvent.Changed(change, kindsFor state observer false))
 
         if movements.Count > 0 && state.Members.ContainsKey observer.ConnectionId then
             let ordered = movements.ToArray()
@@ -205,11 +278,10 @@ module PresenceAgent =
             | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Full -> ()
             | AgentTryDeliveryResult.Closed ->
                 match remove state observer.ConnectionId with
-                | Some playerId -> broadcast state context None (PresenceEvent.Left playerId)
+                | Some playerId -> broadcastLeft state context playerId
                 | None -> ()
 
         movements.Clear()
-        candidates.Clear()
 
     let private publishDirty state context sendSamples =
         // A single agent turn freezes latest state for all observers. Dirty only
@@ -217,19 +289,36 @@ module PresenceAgent =
         let members = state.Members.Values |> Seq.toArray
         let changed = members |> Array.filter (fun memberState -> state.Dirty.Contains memberState.Latest.Identity.PlayerId)
         state.Dirty.Clear()
-        let globalChanges =
-            changed |> Array.filter (fun source ->
-                not (identityEqual source.Published source.Latest)
-                || source.Published.ActorValues <> source.Latest.ActorValues
-                || source.Published.Details <> source.Latest.Details)
+        let updated = [
+            for source in changed do
+                if not (identityEqual source.Published source.Latest) then
+                    register state source.Latest.ActorValues
+                    source.ConnectionId, { source.Latest with Location = ValueNone; ViewRevision = 0UL }
+        ]
+        let metadata = [
+            for source in changed do
+                if identityEqual source.Published source.Latest then
+                    let values = ActorValuesPatch.between source.Published.ActorValues source.Latest.ActorValues
+                    let details = DetailsPatch.between source.Published.Details source.Latest.Details
+                    if values.IsSome || details.IsSome then
+                        register state source.Latest.ActorValues
+                        source.ConnectionId, { PlayerId = source.Latest.Identity.PlayerId; ActorValues = values; Details = details }
+        ]
 
+        let tick = {
+            Updated = updated; Metadata = metadata
+            AllUpdated = List.map snd updated; AllMetadata = List.map snd metadata
+            Removals = state.Removals
+        }
         for observer in members do
-            for source in globalChanges do publishGlobal state context observer source
             if state.Members.ContainsKey observer.ConnectionId then
-                publishMovement state context sendSamples observer
+                publishTo state context sendSamples observer tick
 
         for memberState in changed do
             if state.Members.ContainsKey memberState.ConnectionId then
+                if memberState.Published.ActorValues <> memberState.Latest.ActorValues then
+                    count state 1 memberState.Latest.ActorValues
+                    count state -1 memberState.Published.ActorValues
                 memberState.Published <- memberState.Latest
 
     let private join state context (subscription: PresenceSubscription) =
@@ -259,14 +348,18 @@ module PresenceAgent =
                     | false, _ -> {
                         ConnectionId = subscription.ConnectionId; Events = subscription.Events
                         Latest = subscription.Snapshot; Published = subscription.Snapshot
-                        Views = Dictionary(); NextRevision = 0UL
+                        Views = Dictionary(); NextRevision = 0UL; KnownKind = 0UL
                       }
+                if not existing then
+                    register state memberState.Published.ActorValues
+                    count state 1 memberState.Published.ActorValues
                 state.Members[subscription.ConnectionId] <- memberState
                 state.Players[subscription.Snapshot.Identity.PlayerId] <- subscription.ConnectionId
                 SpatialIndex.set memberState.ConnectionId memberState.Latest.Location state.LatestIndex
 
-                match deliver state context memberState (PresenceEvent.Snapshot(snapshot state memberState)) with
-                | Some playerId when existing -> broadcast state context None (PresenceEvent.Left playerId)
+                let opening = PresenceEvent.Snapshot(snapshot state memberState, kindsFor state memberState true)
+                match deliver state context memberState opening with
+                | Some playerId when existing -> broadcastLeft state context playerId
                 | Some _ -> ()
                 | None when not existing ->
                     let recipients = state.Members.Values |> Seq.toArray
@@ -274,8 +367,8 @@ module PresenceAgent =
                         if recipient.ConnectionId <> subscription.ConnectionId
                            && state.Members.ContainsKey recipient.ConnectionId
                            && state.Members.ContainsKey subscription.ConnectionId then
-                            let joined = project state recipient memberState
-                            deliverDelta state context recipient (PresenceEvent.Joined joined)
+                            let joined = { PresenceChange.empty with Joined = [ project state recipient memberState ] }
+                            deliverDelta state context recipient (PresenceEvent.Changed(joined, kindsFor state recipient false))
                 | None -> ()
 
     let private schedule (config: PresenceOptions) state context =
@@ -295,7 +388,7 @@ module PresenceAgent =
 
     let private detach state (context: AgentContext<PresenceCommand>) (request: SessionDetach) =
         match remove state request.ConnectionId with
-        | Some playerId -> broadcast state context None (PresenceEvent.Left playerId)
+        | Some playerId -> broadcastLeft state context playerId
         | None -> ()
 
         match request.ReplyTo.TryPost request.ConnectionId with
@@ -324,6 +417,7 @@ module PresenceAgent =
             RuntimeMetrics.presenceFlush.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
             state.Ticker |> Option.iter _.Acknowledge()
         | PresenceCommand.Detach request -> detach state context request
+        forgetUnused state
     }
 
     let private isControl = function
@@ -336,6 +430,7 @@ module PresenceAgent =
             Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
             Candidates = HashSet(); Movements = ResizeArray()
             LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
+            Kinds = Dictionary(); Unused = HashSet(); KindIds = Map.empty; LastKind = 0UL; Removals = 0L
             VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
             Ticker = None; LastFlush = 0L; Host = AgentOutbox(config.MaxControlDeliveries, host)
         }

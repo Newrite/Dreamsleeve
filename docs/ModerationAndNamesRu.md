@@ -275,12 +275,12 @@ PlayerId): случайное имя из словаря, никогда не и
 Точка подмены одна — `PlayerSession.publicSnapshot`/`publicIdentity` (рядом с
 `Moderation.publicProfile`): всё, что уходит от сессии к другим владельцам, уже содержит
 псевдоним — снимок и обновления присутствия (bootstrap `SessionOpened.players`,
-`PlayerJoined`/`PlayerUpdated`), автор в `ChatSubmission` (сообщения чата и объявления
+`PresenceChanged.joined`/`updated`), автор в `ChatSubmission` (сообщения чата и объявления
 клиента), псевдоним в `GroundMarkSubmission` (надписи и места смерти; только при варианте
 «везде» — `markPseudonym`/`markCharacterName`). Настоящие имена
 скрытого игрока к другим сессиям не попадают даже в памяти. Сам игрок получает свой
 настоящий профиль: сессия восстанавливает свою запись в приветствии и в
-`PlayerUpdated`, а текущий псевдоним приходит в `SessionOpened.own_pseudonym` и в ответе на
+`PresenceChanged.updated`, а текущий псевдоним приходит в `SessionOpened.own_pseudonym` и в ответе на
 переключение. Смена разъезжается существующим путём личности в `PresenceAgent`
 (`identityEqual` сравнивает публичную личность целиком, конфликт определяется по PlayerId).
 
@@ -293,7 +293,7 @@ PlayerId): случайное имя из словаря, никогда не и
 псевдонимом — как их видят остальные.
 
 Клиент. `hideIdentity` в `ui.toml` пишет только host: при открытии сессии он уходит в
-`OpenSession.hidden_identity`, чтобы настоящий профиль не попал в первый `PlayerJoined`; в
+`OpenSession.hidden_identity`, чтобы настоящий профиль не попал в первый `PresenceChanged.joined`; в
 сессии UI отправляет `setIdentityVisibility{hiding}`, host — `SetIdentityVisibility{hidden}` с
 RequestId, и выбор сохраняется, только когда сервер подтвердил. Без сессии меняется только
 выбор для следующего входа; пока сессия открывается, переключатель отвечает «Дождитесь
@@ -343,9 +343,9 @@ username и PlayerId остаются. Протокол v11: `ChangeDisplayName`
 - Путь: `PlayerSession` → `AuthService` (`DisplayNameChangeRequest`, workers `account-storage`) →
   ответ сессии → тот же путь, что у переименования из панели: `Moderation.publicProfile`,
   `SessionHostCommand.UpdateProfile` (книга имён), `PresenceCommand.Update` и
-  `GroundMarkCommand.Rename`. Остальные получают `PlayerUpdated` (`identityEqual`); новые
+  `GroundMarkCommand.Rename`. Остальные получают обновлённого игрока в `PresenceChanged` (`identityEqual`); новые
   сообщения и метки несут новое имя, старые сообщения сохраняют снимок автора.
-- Скрытое имя: пока игрок скрывает имена, другие видят псевдоним и `PlayerUpdated` не получают;
+- Скрытое имя: пока игрок скрывает имена, другие видят псевдоним и его обновлений не получают;
   настоящее новое имя не уходит ни в один пакет другому игроку (проверено побайтно).
 - Невыкупленные билеты игрока получают новое имя сразу; история смен — `display_name_changes`
   (старое, новое, кто: игрок или администратор, когда) — видна в карточке игрока админки.

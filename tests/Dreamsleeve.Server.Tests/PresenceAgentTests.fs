@@ -35,8 +35,28 @@ let private subscription number (agent: Agent<PresenceEvent>) = {
     ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile number)); Events = agent.Ref.TryReliable().Value
 }
 let private snapshot = function
-    | PresenceEvent.Snapshot profiles -> profiles
+    | PresenceEvent.Snapshot(profiles, _) -> profiles
     | other -> failwithf "Expected presence snapshot: %A" other
+
+/// The reliable change of one tick or membership event, with its kinds.
+let private changeOf = function
+    | PresenceEvent.Changed(change, kinds) -> change, kinds
+    | other -> failwithf "Expected a presence change: %A" other
+
+let private changedBy change = PresenceEvent.Changed(change, ActorValueKinds.none)
+let private joinedEvent player = changedBy { PresenceChange.empty with Joined = [ player ] }
+let private updatedEvent player = changedBy { PresenceChange.empty with Updated = [ player ] }
+let private leftEvent playerId = changedBy { PresenceChange.empty with Left = [ playerId ] }
+let private detailsEvent playerId previous latest =
+    changedBy { PresenceChange.empty with Metadata = [ { PlayerId = playerId; ActorValues = ValueNone; Details = DetailsPatch.between previous latest } ] }
+
+let private actorKey value = ActorValueKey.create 128 value |> ok
+let private actorName value = ActorValueName.create 64 value |> ok
+let private reading name current = ActorValueInfo.create (actorName name) (ActorValueState.resource current 100)
+let private kind id key name : ActorValueKind = { Id = id; Key = actorKey key; DisplayName = actorName name }
+let private idsOf (kinds: ActorValueKind list) = kinds |> List.map (fun kind -> struct (kind.Key, kind.DisplayName), kind.Id) |> Map.ofList
+let private valuesPatch playerId removed set : MetadataPatch =
+    { PlayerId = playerId; Details = ValueNone; ActorValues = ValueSome { Removed = removed; Set = set } }
 
 type private SlowMessage<'T> =
     | Hold of TaskCompletionSource<unit> * TaskCompletionSource<unit>
@@ -105,6 +125,13 @@ let private readSnapshot fixture subscription events = task {
 let private changed fixture value =
     post fixture.Presence (PresenceCommand.Update(fixture.Alice.ConnectionId, value))
 
+let private changedBob fixture value =
+    post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, value))
+
+/// A subscription's player publishing these readings.
+let private publishes subscription (values: (string * string * int) list) =
+    { subscription.Snapshot with ActorValues = values |> List.map (fun (key, name, current) -> actorKey key, reading name current) |> Map.ofList }
+
 let private flushViews fixture expectedAuthor expectedObserver = task {
     do! post fixture.Presence (tick ())
     let! author = receive fixture.AliceEvents
@@ -146,12 +173,27 @@ let private view fixture subscription events = task {
     while result.IsNone do
         let! event = receive events
         match event with
-        | PresenceEvent.Snapshot players -> result <- Some players
+        | PresenceEvent.Snapshot(players, _) -> result <- Some players
         | PresenceEvent.Moved movements ->
             for movement in movements do changes.Add(PresenceEvent.Moved [|movement|])
         | other -> changes.Add other
     return List.ofSeq changes, result.Value
 }
+
+/// The reliable baselines and clears of one source among collected events.
+let private visibilityOf playerId events =
+    events |> List.collect (function
+        | PresenceEvent.Changed(change, _) -> change.Visibility |> List.filter (fun (value: VisibilityChange) -> value.PlayerId = playerId)
+        | PresenceEvent.Snapshot _ | PresenceEvent.Moved _ -> [])
+
+/// The place of every collected change that carries visibility.
+let private spaces events =
+    events |> List.choose (function
+        | PresenceEvent.Changed(change, _) when not change.Visibility.IsEmpty -> Some change.Space
+        | PresenceEvent.Changed _ | PresenceEvent.Snapshot _ | PresenceEvent.Moved _ -> None)
+
+let private changeCount events =
+    events |> List.filter (function PresenceEvent.Changed _ -> true | PresenceEvent.Snapshot _ | PresenceEvent.Moved _ -> false) |> List.length
 
 let private flushViewsNow fixture = task {
     do! post fixture.Presence (tick ())
@@ -179,10 +221,10 @@ let tests = testList "PresenceAgent" [
         let! second = receive bobEvents
         equal [a.Snapshot; b.Snapshot] (snapshot second)
         let! joined = receive aliceEvents
-        equal (PresenceEvent.Joined b.Snapshot) joined
+        equal (joinedEvent b.Snapshot) joined
         do! post presence (PresenceCommand.Detach detach)
         let! left = receive bobEvents
-        equal (PresenceEvent.Left a.Snapshot.Identity.PlayerId) left
+        equal (leftEvent a.Snapshot.Identity.PlayerId) left
         let! ack = receive acknowledgments
         equal a.ConnectionId ack
         do! post presence (PresenceCommand.Detach detach)
@@ -239,10 +281,10 @@ let tests = testList "PresenceAgent" [
         let! initial = receive nextEvents
         equal [a.Snapshot; s.Snapshot; n.Snapshot] (snapshot initial)
         let! joined = receive fastEvents
-        equal (PresenceEvent.Joined n.Snapshot) joined
+        equal (joinedEvent n.Snapshot) joined
         let! leftFast = receive fastEvents
         let! leftNew = receive nextEvents
-        equal (PresenceEvent.Left s.Snapshot.Identity.PlayerId) leftFast
+        equal (leftEvent s.Snapshot.Identity.PlayerId) leftFast
         equal leftFast leftNew
         let! failure = receive hostEvents
         equal (SessionHostCommand.SlowConsumer s.ConnectionId) failure
@@ -295,14 +337,14 @@ let tests = testList "PresenceAgent" [
             do! post fixture.Presence (PresenceCommand.Detach { ConnectionId = fixture.Alice.ConnectionId; ReplyTo = fixture.Cleanup })
             let! _ = receive fixture.Acknowledgments
             let! departed = receive fixture.BobEvents
-            equal (PresenceEvent.Left latest.Identity.PlayerId) departed
+            equal (leftEvent latest.Identity.PlayerId) departed
 
             let replacement = { fixture.Alice with ConnectionId = Guid.NewGuid() }
             do! post fixture.Presence (PresenceCommand.Join replacement)
             let! initial = receive fixture.AliceEvents
             equal [replacement.Snapshot; fixture.Bob.Snapshot] (snapshot initial)
             let! joined = receive fixture.BobEvents
-            equal (PresenceEvent.Joined replacement.Snapshot) joined
+            equal (joinedEvent replacement.Snapshot) joined
             do! changed fixture latest
             do! post fixture.Presence (tick ())
             do! post fixture.Presence (PresenceCommand.Join replacement)
@@ -329,7 +371,7 @@ let tests = testList "PresenceAgent" [
             do! changed fixture latest
             let! author = receive fixture.AliceEvents
             let! observer = receive fixture.BobEvents
-            equal (PresenceEvent.Updated latest) author
+            equal (updatedEvent latest) author
             equal author observer
         }))
 
@@ -345,7 +387,7 @@ let tests = testList "PresenceAgent" [
         withPresence config (fun fixture -> task {
             let original = character fixture.Alice |> Player.snapshot
             do! changed fixture original
-            do! flushBoth fixture (PresenceEvent.Updated original)
+            do! flushBoth fixture (updatedEvent original)
             let activity = PlayerActivity.create 256 64 ActivityKind.Menu ValueNone LockDifficulty.Unknown (ValueSome "inventory") |> ok
             let details = PlayerDetails.create ValueNone ValueNone activity ValueNone ValueNone
             let temporary = { original with Details = details }
@@ -355,14 +397,14 @@ let tests = testList "PresenceAgent" [
             equal temporary (snapshot newcomer |> List.head)
             for events in [fixture.AliceEvents; fixture.BobEvents] do
                 let! published = receive events
-                equal (PresenceEvent.MetadataChanged(original.Identity.PlayerId, ValueNone, ValueSome details)) published
+                equal (detailsEvent original.Identity.PlayerId original.Details details) published
                 let! joined = receive events
-                equal (PresenceEvent.Joined fixture.Late.Snapshot) joined
+                equal (joinedEvent fixture.Late.Snapshot) joined
 
             do! changed fixture original
-            do! flushBoth fixture (PresenceEvent.MetadataChanged(original.Identity.PlayerId, ValueNone, ValueSome original.Details))
+            do! flushBoth fixture (detailsEvent original.Identity.PlayerId details original.Details)
             let! restored = receive fixture.LateEvents
-            equal (PresenceEvent.MetadataChanged(original.Identity.PlayerId, ValueNone, ValueSome original.Details)) restored
+            equal (detailsEvent original.Identity.PlayerId details original.Details) restored
         }))
 
     case "join flush removes a slow existing subscriber without resurrecting its stale snapshot" (fun () -> task {
@@ -385,8 +427,8 @@ let tests = testList "PresenceAgent" [
         do! post presence (PresenceCommand.Join s)
         let! updated = receive fastEvents
         let! left = receive fastEvents
-        equal (PresenceEvent.Updated changed) updated
-        equal (PresenceEvent.Left s.Snapshot.Identity.PlayerId) left
+        equal (updatedEvent changed) updated
+        equal (leftEvent s.Snapshot.Identity.PlayerId) left
         let! failure = receive hostEvents
         equal (SessionHostCommand.SlowConsumer s.ConnectionId) failure
         do! post presence (PresenceCommand.Join a)
@@ -423,16 +465,18 @@ let tests = testList "PresenceAgent" [
             let moved = { fixture.Alice.Snapshot with Location = ValueSome (location -1.0f); MovementSequence = 1UL }
             do! changed fixture moved
             let! _, (events, hiddenSnapshot) = flushViewsNow fixture
-            let clears = events |> List.choose (function PresenceEvent.VisibilityChanged value when value.PlayerId = original.Identity.PlayerId -> Some value | _ -> None)
+            let clears = visibilityOf original.Identity.PlayerId events
             equal 1 clears.Length
-            equal ValueNone clears.Head.Location
+            equal ValueNone clears.Head.Pose
+            equal [ ValueNone ] (spaces events)
             check (clears.Head.ViewRevision > original.ViewRevision) "Clear advances the observer revision."
             equal ValueNone (hiddenSnapshot |> List.find (fun value -> value.Identity.PlayerId = original.Identity.PlayerId)).Location
             do! changed fixture { moved with Location = original.Location; MovementSequence = 2UL }
             let! _, (restoredEvents, _) = flushViewsNow fixture
-            let restored = restoredEvents |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = original.Identity.PlayerId -> Some value | _ -> None)
+            let restored = visibilityOf original.Identity.PlayerId restoredEvents |> List.head
             check (restored.ViewRevision > clears.Head.ViewRevision) "Reentry cannot accept stale packets from the previous view."
-            equal original.Location restored.Location
+            equal (original.Location |> ValueOption.map MovementPose.ofLocation) restored.Pose
+            equal [ fixture.Bob.Snapshot.Location |> ValueOption.map _.Location ] (spaces restoredEvents)
             equal 2UL restored.Sequence
         }))
 
@@ -441,13 +485,16 @@ let tests = testList "PresenceAgent" [
             let observer = { fixture.Bob.Snapshot with Location = ValueSome (location 5.0f); MovementSequence = 1UL }
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, observer))
             let! _, (events, _) = flushViewsNow fixture
-            let baseline = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId -> Some value | _ -> None)
-            equal fixture.Alice.Snapshot.Location baseline.Location
+            let baseline = visibilityOf fixture.Alice.Snapshot.Identity.PlayerId events |> List.head
+            equal (fixture.Alice.Snapshot.Location |> ValueOption.map MovementPose.ofLocation) baseline.Pose
+            equal [ observer.Location |> ValueOption.map _.Location ] (spaces events)
             let key = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 61u |> ok)
             let elsewhere = PlayerLocation.create (Location.create key (LocationName.create 128 "Elsewhere" |> ok)) Position.zero Rotation.zero
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, { observer with Location = ValueSome elsewhere; MovementContext = 2UL; MovementSequence = 0UL }))
             let! _, (events, _) = flushViewsNow fixture
-            check (events |> List.exists (function PresenceEvent.VisibilityChanged value -> value.PlayerId = baseline.PlayerId && value.Location.IsNone | _ -> false)) "Space change clears stationary remote players reliably."
+            check (visibilityOf baseline.PlayerId events |> List.exists _.Pose.IsNone) "Space change clears stationary remote players reliably."
+            // The observer's own baseline in the new space travels with the clear.
+            equal [ ValueSome elsewhere.Location ] (spaces events)
         }))
 
     case "character reset and teleport renew reliable view even at identical coordinates" (fun () ->
@@ -457,14 +504,15 @@ let tests = testList "PresenceAgent" [
             let reset = { fixture.Alice.Snapshot with CharacterGeneration = fixture.Alice.Snapshot.CharacterGeneration + 1UL; MovementContext = 2UL }
             do! changed fixture reset
             let! _, (events, _) = flushViewsNow fixture
-            let baseline = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = before.Identity.PlayerId -> Some value | _ -> None)
+            let baseline = visibilityOf before.Identity.PlayerId events |> List.head
             check (baseline.ViewRevision > before.ViewRevision) "Same coordinates do not preserve the old character's view."
-            let metadata = events |> List.pick (function PresenceEvent.Updated value -> Some value | _ -> None)
+            let metadata = events |> List.pick (function PresenceEvent.Changed(change, _) when not change.Updated.IsEmpty -> Some change.Updated.Head | _ -> None)
             equal ValueNone metadata.Location
             equal 0UL metadata.ViewRevision
+            equal 1 (changeCount events)
             do! changed fixture { reset with MovementContext = 3UL }
             let! _, (events, _) = flushViewsNow fixture
-            let teleport = events |> List.pick (function PresenceEvent.VisibilityChanged value when value.PlayerId = before.Identity.PlayerId -> Some value | _ -> None)
+            let teleport = visibilityOf before.Identity.PlayerId events |> List.head
             check (teleport.ViewRevision > baseline.ViewRevision) "Explicit discontinuity resets interpolation even in the same space."
         }))
 
@@ -488,8 +536,8 @@ let tests = testList "PresenceAgent" [
             let details = PlayerDetails.create ValueNone ValueNone activity ValueNone ValueNone
             do! changed fixture { fixture.Alice.Snapshot with Details = details }
             let! _, (events, latest) = flushViewsNow fixture
-            check (events |> List.exists (function PresenceEvent.MetadataChanged _ -> true | _ -> false)) "Metadata is published reliably."
-            check (events |> List.forall (function PresenceEvent.VisibilityChanged _ -> false | _ -> true)) "Metadata cannot reinstall stale coordinates."
+            check (events |> List.exists (function PresenceEvent.Changed(change, _) -> not change.Metadata.IsEmpty | _ -> false)) "Metadata is published reliably."
+            check (events |> List.forall (function PresenceEvent.Changed(change, _) -> change.Visibility.IsEmpty | _ -> true)) "Metadata cannot reinstall stale coordinates."
             equal (initial |> List.map _.ViewRevision) (latest |> List.map _.ViewRevision)
         }))
 
@@ -504,8 +552,8 @@ let tests = testList "PresenceAgent" [
             do! post fixture.Presence (PresenceCommand.Join replacement)
             let! _ = receive fixture.AliceEvents
             let! joined = receive fixture.BobEvents
-            match joined with
-            | PresenceEvent.Joined value -> check (value.ViewRevision > before.ViewRevision) "Reconnect cannot reuse the old token."
+            match (fst (changeOf joined)).Joined with
+            | [ value ] -> check (value.ViewRevision > before.ViewRevision) "Reconnect cannot reuse the old token."
             | other -> failwithf "%A" other
         }))
     case "a full realtime subscriber drops samples without losing membership" (fun () -> task {
@@ -565,8 +613,149 @@ let tests = testList "PresenceAgent" [
             let! _, (events, players) = flushViewsNow fixture
             let remote = players |> List.find (fun value -> value.Identity.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId)
             equal ValueNone remote.Location
-            check (events |> List.exists (function PresenceEvent.VisibilityChanged value -> value.PlayerId = remote.Identity.PlayerId && value.Location.IsNone | _ -> false)) "Departure is reliable even at radius zero."
+            check (visibilityOf remote.Identity.PlayerId events |> List.exists _.Pose.IsNone) "Departure is reliable even at radius zero."
         })
     })
 
+    case "a tick sends each observer one change with the metadata of every player" (fun () ->
+        withPresence config (fun fixture -> task {
+            let activity = PlayerActivity.create 256 64 ActivityKind.Menu ValueNone LockDifficulty.Unknown (ValueSome "inventory") |> ok
+            let details = PlayerDetails.create ValueNone (ValueSome 3u) activity ValueNone ValueNone
+            do! changed fixture { fixture.Alice.Snapshot with Details = details }
+            do! changedBob fixture (publishes fixture.Bob [ "skyrim:health", "Health", -15 ])
+            let! (alice, _), (bob, _) = flushViewsNow fixture
+            let health = kind 1UL "skyrim:health" "Health"
+            let aliceId, bobId = fixture.Alice.Snapshot.Identity.PlayerId, fixture.Bob.Snapshot.Identity.PlayerId
+            let metadata = [
+                ({ PlayerId = aliceId; ActorValues = ValueNone; Details = DetailsPatch.between PlayerDetails.empty details }: MetadataPatch)
+                valuesPatch bobId [] [ health.Key, reading "Health" -15 ]
+            ]
+            let expected = PresenceEvent.Changed({ PresenceChange.empty with Metadata = metadata }, { Ids = idsOf [ health ]; Defined = [ health ] })
+            equal [ expected ] alice
+            equal [ expected ] bob
+        }))
+
+    case "a kind is defined once to each recipient and keeps its number" (fun () ->
+        withPresence config (fun fixture -> task {
+            let health = kind 1UL "skyrim:health" "Health"
+            let set current = valuesPatch fixture.Alice.Snapshot.Identity.PlayerId [] [ health.Key, reading "Health" current ]
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Health", 50 ])
+            do! flushBoth fixture (PresenceEvent.Changed({ PresenceChange.empty with Metadata = [ set 50 ] }, { Ids = idsOf [ health ]; Defined = [ health ] }))
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Health", 40 ])
+            do! flushBoth fixture (PresenceEvent.Changed({ PresenceChange.empty with Metadata = [ set 40 ] }, { Ids = idsOf [ health ]; Defined = [] }))
+        }))
+
+    case "a key published later gets the next number and every member learns it in that tick" (fun () ->
+        withPresence config (fun fixture -> task {
+            let health, stamina = kind 1UL "skyrim:health" "Health", kind 2UL "skyrim:stamina" "Stamina"
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Health", 50 ])
+            do! post fixture.Presence (tick ())
+            for events in [ fixture.AliceEvents; fixture.BobEvents ] do
+                let! first = receive events
+                equal [ health ] (snd (changeOf first)).Defined
+            do! changedBob fixture (publishes fixture.Bob [ "skyrim:stamina", "Stamina", 70 ])
+            do! post fixture.Presence (tick ())
+            for events in [ fixture.AliceEvents; fixture.BobEvents ] do
+                let! second = receive events
+                let change, kinds = changeOf second
+                equal [ fixture.Bob.Snapshot.Identity.PlayerId ] (change.Metadata |> List.map _.PlayerId)
+                equal [ stamina ] kinds.Defined
+                equal (idsOf [ health; stamina ]) kinds.Ids
+        }))
+
+    case "a joining member's snapshot defines every live kind and its own kinds arrive with it" (fun () ->
+        withPresence config (fun fixture -> task {
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Health", 50 ])
+            do! changedBob fixture (publishes fixture.Bob [ "skyrim:stamina", "Stamina", 70 ])
+            do! post fixture.Presence (tick ())
+            for events in [ fixture.AliceEvents; fixture.BobEvents ] do
+                let! published = receive events
+                equal 2 (fst (changeOf published)).Metadata.Length
+            let late = { fixture.Late with Snapshot = publishes fixture.Late [ "skyrim:magicka", "Magicka", 20 ] }
+            do! post fixture.Presence (PresenceCommand.Join late)
+            let magicka = kind 3UL "skyrim:magicka" "Magicka"
+            let every = [ kind 1UL "skyrim:health" "Health"; kind 2UL "skyrim:stamina" "Stamina"; magicka ]
+            let! opening = receive fixture.LateEvents
+            match opening with
+            | PresenceEvent.Snapshot(players, kinds) ->
+                equal [ fixture.Alice.Snapshot.Identity.PlayerId; fixture.Bob.Snapshot.Identity.PlayerId; late.Snapshot.Identity.PlayerId ]
+                      (players |> List.map _.Identity.PlayerId)
+                equal { Ids = idsOf every; Defined = every } kinds
+            | other -> failwithf "Expected presence snapshot: %A" other
+            // The others already know the first two kinds.
+            for events in [ fixture.AliceEvents; fixture.BobEvents ] do
+                let! arrival = receive events
+                equal (PresenceEvent.Changed({ PresenceChange.empty with Joined = [ late.Snapshot ] }, { Ids = idsOf every; Defined = [ magicka ] })) arrival
+        }))
+
+    case "a kind no player publishes is forgotten and its pair later gets a new number" (fun () ->
+        withPresence config (fun fixture -> task {
+            let alice = fixture.Alice.Snapshot.Identity.PlayerId
+            let first, second = kind 1UL "skyrim:health" "Health", kind 2UL "skyrim:health" "Health"
+            let set = valuesPatch alice [] [ first.Key, reading "Health" 50 ]
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Health", 50 ])
+            do! flushBoth fixture (PresenceEvent.Changed({ PresenceChange.empty with Metadata = [ set ] }, { Ids = idsOf [ first ]; Defined = [ first ] }))
+            // The removal still names the kind by its number.
+            do! changed fixture fixture.Alice.Snapshot
+            let removal = valuesPatch alice [ struct (first.Key, first.DisplayName) ] []
+            do! flushBoth fixture (PresenceEvent.Changed({ PresenceChange.empty with Metadata = [ removal ] }, { Ids = idsOf [ first ]; Defined = [] }))
+
+            do! post fixture.Presence (PresenceCommand.Join fixture.Late)
+            let! opening = receive fixture.LateEvents
+            equal (PresenceEvent.Snapshot([ fixture.Alice.Snapshot; fixture.Bob.Snapshot; fixture.Late.Snapshot ], ActorValueKinds.none)) opening
+            for events in [ fixture.AliceEvents; fixture.BobEvents ] do
+                let! arrival = receive events
+                equal (joinedEvent fixture.Late.Snapshot) arrival
+
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Health", 50 ])
+            do! post fixture.Presence (tick ())
+            let renumbered = PresenceEvent.Changed({ PresenceChange.empty with Metadata = [ set ] }, { Ids = idsOf [ second ]; Defined = [ second ] })
+            for events in [ fixture.AliceEvents; fixture.BobEvents; fixture.LateEvents ] do
+                let! event = receive events
+                equal renumbered event
+        }))
+
+    case "a changed label removes the old kind by its number and defines a new one" (fun () ->
+        withPresence config (fun fixture -> task {
+            let alice = fixture.Alice.Snapshot.Identity.PlayerId
+            let health, relabelled = kind 1UL "skyrim:health" "Health", kind 2UL "skyrim:health" "Здоровье"
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Health", 50 ])
+            do! post fixture.Presence (tick ())
+            for events in [ fixture.AliceEvents; fixture.BobEvents ] do
+                let! published = receive events
+                equal [ health ] (snd (changeOf published)).Defined
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Здоровье", 50 ])
+            do! post fixture.Presence (tick ())
+            let change = { PresenceChange.empty with Metadata = [ valuesPatch alice [ struct (health.Key, health.DisplayName) ] [ relabelled.Key, reading "Здоровье" 50 ] ] }
+            let kinds = { Ids = idsOf [ health; relabelled ]; Defined = [ relabelled ] }
+            for events in [ fixture.AliceEvents; fixture.BobEvents ] do
+                let! event = receive events
+                equal (PresenceEvent.Changed(change, kinds)) event
+            // Both numbers are known while the change is encoded.
+            check (Packets.single (ProtocolCodec.create ServerConfig.defaults) (ServerResponse.PresenceChanged(change, kinds)) |> Result.isOk) "The relabelling is encodable."
+            do! post fixture.Presence (PresenceCommand.Join fixture.Late)
+            let! opening = receive fixture.LateEvents
+            match opening with
+            | PresenceEvent.Snapshot(_, kinds) -> equal { Ids = idsOf [ relabelled ]; Defined = [ relabelled ] } kinds
+            | other -> failwithf "Expected presence snapshot: %A" other
+        }))
+
+    case "a detached member leaves without kinds and takes the kinds only it published" (fun () ->
+        withPresence config (fun fixture -> task {
+            let health, magicka = kind 1UL "skyrim:health" "Health", kind 2UL "skyrim:magicka" "Magicka"
+            do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Health", 50; "skyrim:magicka", "Magicka", 30 ])
+            let bob = publishes fixture.Bob [ "skyrim:health", "Health", 90 ]
+            do! changedBob fixture bob
+            do! post fixture.Presence (tick ())
+            for events in [ fixture.AliceEvents; fixture.BobEvents ] do
+                let! published = receive events
+                equal [ health; magicka ] (snd (changeOf published)).Defined
+            do! post fixture.Presence (PresenceCommand.Detach { ConnectionId = fixture.Alice.ConnectionId; ReplyTo = fixture.Cleanup })
+            let! _ = receive fixture.Acknowledgments
+            let! departed = receive fixture.BobEvents
+            equal (leftEvent fixture.Alice.Snapshot.Identity.PlayerId) departed
+            do! post fixture.Presence (PresenceCommand.Join fixture.Late)
+            let! opening = receive fixture.LateEvents
+            equal (PresenceEvent.Snapshot([ bob; fixture.Late.Snapshot ], { Ids = idsOf [ health ]; Defined = [ health ] })) opening
+        }))
 ]

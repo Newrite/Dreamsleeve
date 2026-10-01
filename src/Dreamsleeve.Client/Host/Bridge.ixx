@@ -1086,7 +1086,7 @@ export namespace Dreamsleeve::Host::Bridge
       {
         UiActorValue value{key, info.displayName};
         if (const auto* resource = std::get_if<Domain::ResourceActorValue>(&info.state))
-          value.value = UiResource{resource->current, resource->maximum};
+          value.value = UiResource{static_cast<double>(resource->current), static_cast<double>(resource->maximum)};
         else
           value.value = static_cast<double>(std::get<Domain::ScalarActorValue>(info.state).value);
         values.push_back(std::move(value));

@@ -77,6 +77,49 @@ type ClientRequest = {
     Command: ClientCommand
 }
 
+/// A server-assigned number for one key and label of actor values. It lives
+/// while some online player publishes that pair and is never given to another.
+type ActorValueKind = { Id: uint64; Key: ActorValueKey; DisplayName: ActorValueName }
+
+/// The kind numbers of one presence event, fixed when presence builds it, and
+/// the kinds its recipient has not been told yet, ascending.
+type ActorValueKinds = {
+    Ids: Map<struct (ActorValueKey * ActorValueName), uint64>
+    Defined: ActorValueKind list
+}
+
+[<RequireQualifiedAccess>]
+module ActorValueKinds =
+    let none = { Ids = Map.empty; Defined = [] }
+
+/// What changed in one player's actor values and details since the last tick.
+type MetadataPatch = {
+    PlayerId: PlayerId
+    ActorValues: ActorValuesPatch voption
+    Details: DetailsPatch voption
+}
+
+/// What changed in the online list for one recipient: one per replication
+/// tick and one per joining or leaving player. Parts apply in field order.
+type PresenceChange = {
+    Joined: PlayerSnapshot list
+    /// Identity or character changes, without a position.
+    Updated: PlayerSnapshot list
+    Metadata: MetadataPatch list
+    /// The recipient's own place: every baseline below is in it.
+    Space: Location voption
+    Visibility: VisibilityChange list
+    Left: PlayerId list
+}
+
+[<RequireQualifiedAccess>]
+module PresenceChange =
+    let empty = { Joined = []; Updated = []; Metadata = []; Space = ValueNone; Visibility = []; Left = [] }
+
+    let isEmpty change =
+        change.Joined.IsEmpty && change.Updated.IsEmpty && change.Metadata.IsEmpty
+        && change.Visibility.IsEmpty && change.Left.IsEmpty
+
 /// A channel of the session with its retained tail, ascending message ID.
 type WelcomeChannel = {
     ChannelId: ChatChannelId
@@ -87,6 +130,8 @@ type WelcomeChannel = {
 type SessionWelcome = {
     SelfPlayerId: PlayerId
     Players: PlayerSnapshot list
+    /// Every kind the players use.
+    Kinds: ActorValueKinds
     Channels: WelcomeChannel list
     /// Client announcement origins this server admits; limits come from ChatInput.
     AnnouncementSources: ClientAnnouncementSource list
@@ -122,12 +167,8 @@ type ServerResponse =
     | ChatPublished of ChatMessage
     | ChatRejected of requestId: uint64 * rejection: RequestRejection
     | RequestRejected of requestId: uint64 * rejection: RequestRejection
-    | PlayerJoined of PlayerSnapshot
-    | PlayerLeft of PlayerId
-    | PlayerUpdated of PlayerSnapshot
+    | PresenceChanged of PresenceChange * ActorValueKinds
     | PlayersMoved of MovementChange array
-    | PlayerVisibilityChanged of VisibilityChange
-    | PlayerMetadataChanged of PlayerId * Map<ActorValueKey, ActorValueInfo> voption * PlayerDetails voption
     | PlayerUpdateAccepted of requestId: uint64
     | GroundMarksChanged of GroundMarkView
     | GroundMarkPlaced of requestId: uint64 * GroundMarkRecord * evicted: GroundMarkId voption
