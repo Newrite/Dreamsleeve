@@ -13,7 +13,8 @@ open Dreamsleeve.Server.Web.Admin
 open Dreamsleeve.Server.Web.Authentication
 
 [<Literal>]
-let private Commands = "quit | reset-password <username> | revoke-access <username> | announce <text> | admin-setup | admin-reset <admin>"
+let private Commands =
+    "quit | reset-password <username> | revoke-access <username> | registration [open|steam|manual] | announce <text> | admin-setup | admin-reset <admin>"
 
 /// This build's version as Directory.Build.props sets it; the SDK appends the commit.
 let private version =
@@ -102,9 +103,25 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
                             | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
                             | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.Renamed _)
                             | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
-                            | Ok (AccountAccessResult.ActiveSanctions _) ->
+                            | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _) ->
                                 printfn "Unexpected administrative result."
                             | Error error -> printfn "Administrative operation failed: %A" error
+                    elif parts[0] = "registration" then
+                        // Without a mode it shows the one in force.
+                        let command =
+                            if parts.Length = 1 then Some AccountAccessCommand.ReadRegistration
+                            else
+                                Dreamsleeve.Server.Domain.RegistrationMode.ofKey (parts[1].Trim())
+                                |> Option.map (fun mode -> AccountAccessCommand.SetRegistration(mode, ValueNone))
+                        match command with
+                        | None -> printfn "Registration modes: open | steam | manual."
+                        | Some command ->
+                            let! result = authentication.AskAsync(fun reply -> AuthMessage.Access(command, reply))
+                            match result with
+                            | Ok (AccountAccessResult.Registration mode) ->
+                                printfn "Registration mode: %s" (Dreamsleeve.Server.Domain.RegistrationMode.key mode)
+                            | Ok _ -> printfn "Unexpected registration result."
+                            | Error error -> printfn "Registration mode not changed: %A" error
                     elif parts.Length = 1 && parts[0] = "admin-setup" then
                         do! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
                     elif parts.Length = 2 && parts[0] = "admin-reset" then

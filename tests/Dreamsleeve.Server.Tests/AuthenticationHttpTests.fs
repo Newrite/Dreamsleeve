@@ -84,7 +84,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
             | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
-            | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ -> failtest "Unexpected public command"
+            | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
+            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ -> failtest "Unexpected public command"
         withHost id execute (fun http received -> task {
             use! remembered = post http "auth/login" {| username = "player"; password = password; rememberMe = true |}
             status 200 remembered
@@ -112,7 +113,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
             | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
-            | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ -> failtest "Unexpected command"
+            | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
+            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ -> failtest "Unexpected command"
         withHost id execute (fun http received -> task {
             use! created = post http "auth/register" {|
                 username = " PLAYER "; displayName = " e\u0301 "; password = password
@@ -131,7 +133,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
             | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
-            | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ -> failwith "Wrong registration command."
+            | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
+            | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ -> failwith "Wrong registration command."
 
             use! loggedIn = post http "auth/login" credentials
             status 200 loggedIn
@@ -207,15 +210,17 @@ let tests = testSequenced (testList "Authentication HTTP" [
             })
     })
 
-    case "disabled registration rejects before contacting the service" (fun () ->
-        let disable config = { config with Authentication = { config.Authentication with AllowRegistration = false } }
-        withHost disable (reply signedIn) (fun http received -> task {
-            use! response = post http "auth/register" {| username = "player"; displayName = "Player"; password = password |}
-            status 403 response
-            let! actual = code response
-            equal "registration_disabled" actual
-            equal 0 received.Count
-        }))
+    case "a closed registration answers 403 with the code of the mode in force" (fun () -> task {
+        for mode, expected in [ RegistrationMode.Manual, "registration_closed"; RegistrationMode.Steam, "registration_steam_only" ] do
+            do! withHost id (reply (Error (AccountAccessError.RegistrationClosed mode))) (fun http received -> task {
+                use! response = post http "auth/register" {| username = "player"; displayName = "Player"; password = password |}
+                status 403 response
+                let! actual = code response
+                equal expected actual
+                // The account service owns the mode: the route asks it every time.
+                equal 1 received.Count
+            })
+    })
 
     case "per-IP rate limit has no waiting queue and ignores spoofed forwarded addresses" (fun () ->
         let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestsPerMinute = 1 } } }

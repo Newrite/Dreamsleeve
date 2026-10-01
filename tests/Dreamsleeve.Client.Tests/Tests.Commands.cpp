@@ -224,6 +224,16 @@ TEST_CASE("Account commands go to the Core and decide the manual disconnect")
   CHECK(std::holds_alternative<ResumeLogin>(*fixture.exchange->TakeControl().authentication));
   fixture.exchange->CompleteAuthentication();
 
+  // An administrator's code: the password is set, the player signs in afterwards.
+  CHECK(fixture.Run(R"({"type":"resetPassword","code":"setup-code","password":"password-long"})").events.empty());
+  const auto reset = fixture.exchange->TakeControl().authentication;
+  REQUIRE(reset);
+  const auto* code = std::get_if<ResetAccountPassword>(&*reset);
+  REQUIRE(code);
+  CHECK(code->code == "setup-code");
+  CHECK(code->password == "password-long");
+  fixture.exchange->CompleteAuthentication();
+
   fixture.Run(R"({"type":"disconnect"})");
   CHECK(fixture.manualDisconnect);
   CHECK(fixture.exchange->TakeControl().disconnect);

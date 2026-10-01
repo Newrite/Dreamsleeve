@@ -24,7 +24,7 @@ let tests = testList "Admin domain" [
 
     testCase "audit actions have distinct stored keys that read back" <| fun _ ->
         let keys = AdminAction.all |> List.map AdminAction.key
-        equal 15 (List.length keys)
+        equal 17 (List.length keys)
         equal (List.length keys) (keys |> List.distinct |> List.length)
         for action in AdminAction.all do equal (Some action) (AdminAction.ofKey (AdminAction.key action))
         equal "player:42" (AuditTarget.key (AuditTarget.Player(PlayerId.create 42UL |> ok)))
@@ -33,6 +33,13 @@ let tests = testList "Admin domain" [
         equal AuditRecord.MaxDetails long.Details.Length
         equal "" (AuditRecord.create AdminAction.RevokePlayerAccess AuditTarget.Server null).Details
         check (AdminId.create 0L |> Result.isError) "IDs are positive."
+
+    testCase "registration modes have stable keys and only an open registration takes passwords" <| fun _ ->
+        for mode in RegistrationMode.all do equal (Some mode) (RegistrationMode.ofKey (RegistrationMode.key mode))
+        equal [ "open"; "steam"; "manual" ] (RegistrationMode.all |> List.map RegistrationMode.key)
+        equal RegistrationMode.Open RegistrationMode.initial
+        equal [ true; false; false ] (RegistrationMode.all |> List.map RegistrationMode.allowsPassword)
+        equal None (RegistrationMode.ofKey "closed")
 
     testCase "a one-time code opens its purpose once, expires and is replaced by the next one" <| fun _ ->
         let lifetime = TimeSpan.FromMinutes 15.

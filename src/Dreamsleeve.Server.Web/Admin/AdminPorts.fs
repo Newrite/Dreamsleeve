@@ -44,4 +44,6 @@ type AdminRouteSettings = {
     DescribeTimeoutMs: int
     Input: ChatInputLimits
     Moderation: ModerationRules
+    /// Lifetime of the code of a player created on the registration page.
+    SetupCodeHours: int
 }

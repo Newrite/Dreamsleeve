@@ -825,6 +825,15 @@ export function makeChat(send: Send, now = () => Date.now()) {
       if (!store.getState().auth.savedLogin) return;
       authenticate({ type: "signInSaved" }, "resume");
     },
+    // An administrator's one-time code: a new account or a reset password.
+    resetPassword(code: string, password: string) {
+      const value = code.trim();
+      if (!value || !password) return;
+      authenticate(
+        { type: "resetPassword", code: value, password },
+        "resetPassword",
+      );
+    },
     signOut() {
       const s = store.getState();
       if (!s.connected && !s.auth.savedLogin) return;

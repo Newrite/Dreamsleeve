@@ -90,6 +90,11 @@ const commands: { [K in Command["type"]]: Extract<Command, { type: K }> } = {
     channelId: "1",
     messageId: "11",
   },
+  resetPassword: {
+    type: "resetPassword",
+    code: "one-time-code",
+    password: "correct horse battery",
+  },
 };
 
 describe("bridge contract with the host", () => {

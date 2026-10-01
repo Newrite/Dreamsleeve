@@ -183,7 +183,7 @@ def smoke(args, log, directory: Path):
         "Moderation": {"Enabled": True, "RulesPath": str(moderation)},
         "Identity": {"AllowHiddenIdentity": True, "ToggleIntervalMs": 30000, "PseudonymsPath": str(pseudonyms)},
         "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
-        "Authentication": {"AllowRegistration": True, "Listener": {"ListenUrl": auth_url, "AllowInsecureLoopback": True}},
+        "Authentication": {"Listener": {"ListenUrl": auth_url, "AllowInsecureLoopback": True}},
         # The admin panel runs in the same process; a free port keeps it off the default 8780.
         "Admin": {"Listener": {"ListenUrl": f"http://127.0.0.1:{free_tcp_port()}"}},
         "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},

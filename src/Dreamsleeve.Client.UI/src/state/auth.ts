@@ -3,7 +3,8 @@ export const failureLabels: Record<Exclude<AuthFailure, "none">, string> = {
   invalidCredentials: "Неверное имя или пароль",
   usernameTaken: "Имя занято",
   invalidRequest: "Некорректный запрос",
-  registrationDisabled: "Регистрация отключена",
+  registrationClosed:
+    "Регистрация закрыта: аккаунт создаёт администратор сервера",
   busy: "Сервер занят, повторите позже",
   unavailable: "Сервер недоступен",
   invalidResponse: "Некорректный ответ сервера",
@@ -11,6 +12,7 @@ export const failureLabels: Record<Exclude<AuthFailure, "none">, string> = {
   canceled: "Операция отменена",
   nameNotAllowed: "Имя содержит недопустимые слова",
   banned: "Аккаунт заблокирован",
+  registrationSteamOnly: "Регистрация только через Steam",
 };
 export const operationLabels: Record<Exclude<AuthOperation, "none">, string> = {
   passwordLogin: "Вход по паролю…",
@@ -61,4 +63,18 @@ export function accountActions(
     signOut: idle && (connected || auth.savedLogin),
     forget: idle && auth.savedLogin,
   };
+}
+// A password from an administrator's code is set outside a session, before signing in.
+export function canResetPassword(
+  auth: AuthState,
+  connected: boolean,
+  code: string,
+  password: string,
+) {
+  return (
+    !auth.authenticating &&
+    !connected &&
+    code.trim().length > 0 &&
+    password.length > 0
+  );
 }

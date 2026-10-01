@@ -29,7 +29,7 @@ module SqliteAccountStoreConfig =
 [<RequireQualifiedAccess>]
 module internal SqliteDatabase =
     [<Literal>]
-    let SchemaVersion = 9L
+    let SchemaVersion = 10L
 
     [<Literal>]
     let ApplicationId = 1146309718L
@@ -73,6 +73,9 @@ module internal SqliteDatabase =
             panel.Close()
             command.CommandText <- "SELECT s.id, s.player_id, s.kind, s.reason, s.issued_by_admin, s.issued_by_player, s.issued_at, s.expires_at, s.lifted_at FROM sanctions s LIMIT 0"
             use sanctions = command.ExecuteReader()
+            sanctions.Close()
+            command.CommandText <- "SELECT s.key, s.value, s.changed_by, s.changed_at FROM server_settings s LIMIT 0"
+            use settings = command.ExecuteReader()
             Ok ()
 
     /// Called before listeners start. SQLite and Migrondi execute synchronously;

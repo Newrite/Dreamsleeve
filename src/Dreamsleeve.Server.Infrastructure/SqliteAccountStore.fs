@@ -109,14 +109,32 @@ module SqliteAccountStore =
         with :? SqliteException as error when error.SqliteExtendedErrorCode = 2067 ->
             Error AccountStoreError.UsernameTaken
 
+    // The account and its profile, inside the caller's transaction.
+    let private insertPlayer (context: QueryContext) (username: Username) (displayName: DisplayName) =
+        match insertAccount context username with
+        | Error error -> Error error
+        | Ok accountId ->
+            let row: main.profiles = {
+                player_id = 0L
+                account_id = accountId
+                display_name = DisplayName.value displayName
+            }
+            let query = insert {
+                for profile in main.profiles do
+                entity row
+                getId profile.player_id
+            }
+            let playerId = context.Insert query
+            toProfile username { row with player_id = playerId } |> Result.map (fun profile -> accountId, profile)
+
     let create config (username: Username) (displayName: DisplayName) passwordHash (token: CancellationToken) =
         withContext config token (fun context ->
             use transaction = context.Connection.BeginTransaction()
             context.Transaction <- Some transaction
 
-            match insertAccount context username with
+            match insertPlayer context username displayName with
             | Error error -> Error error
-            | Ok accountId ->
+            | Ok (accountId, profile) ->
                 let password: main.account_passwords = { account_id = accountId; password_hash = passwordHash }
                 let credential = insert {
                     for row in main.account_passwords do
@@ -124,32 +142,17 @@ module SqliteAccountStore =
                 }
                 context.Insert credential |> ignore
 
-                let row: main.profiles = {
-                    player_id = 0L
-                    account_id = accountId
-                    display_name = DisplayName.value displayName
-                }
-                let query = insert {
-                    for profile in main.profiles do
-                    entity row
-                    getId profile.player_id
-                }
-                let playerId = context.Insert query
-
-                match toProfile username { row with player_id = playerId } with
-                | Error error -> Error error
-                | Ok profile ->
-                    if token.IsCancellationRequested then
-                        Error AccountStoreError.Canceled
-                    else
-                        use identity = context.Connection.CreateCommand()
-                        identity.Transaction <- transaction
-                        identity.CommandText <- "INSERT INTO account_identities(provider, subject, account_id) VALUES ('password', @name, @id)"
-                        identity.Parameters.Add(SqliteParameter("@name", Username.value username)) |> ignore
-                        identity.Parameters.Add(SqliteParameter("@id", accountId)) |> ignore
-                        identity.ExecuteNonQuery() |> ignore
-                        transaction.Commit()
-                        Ok profile)
+                if token.IsCancellationRequested then
+                    Error AccountStoreError.Canceled
+                else
+                    use identity = context.Connection.CreateCommand()
+                    identity.Transaction <- transaction
+                    identity.CommandText <- "INSERT INTO account_identities(provider, subject, account_id) VALUES ('password', @name, @id)"
+                    identity.Parameters.Add(SqliteParameter("@name", Username.value username)) |> ignore
+                    identity.Parameters.Add(SqliteParameter("@id", accountId)) |> ignore
+                    identity.ExecuteNonQuery() |> ignore
+                    transaction.Commit()
+                    Ok profile)
 
     /// Compare-and-swap prevents a stale rehash from overwriting changed credentials.
     let rehash config (username: Username) expectedHash replacementHash token =
@@ -305,3 +308,39 @@ module SqliteAccountStore =
                         | Ok None -> Ok RenameOutcome.NotFound
                         | Error error -> Error error
                 | _ -> Ok RenameOutcome.NotFound)
+
+    /// An account an administrator created: no password yet, only a one-time
+    /// setup code, stored like a reset code (auth_tokens kind 1). The player
+    /// redeems it with /auth/reset-password, which also adds the password identity.
+    let createInvited config (username: Username) (displayName: DisplayName) codeHash expires token =
+        withContext config token (fun context ->
+            use transaction = context.Connection.BeginTransaction()
+            context.Transaction <- Some transaction
+            match insertPlayer context username displayName with
+            | Error error -> Error error
+            | Ok (accountId, profile) ->
+                insertToken context accountId 1 codeHash expires
+                transaction.Commit()
+                Ok profile)
+
+    [<Literal>]
+    let private RegistrationKey = "registration_mode"
+
+    /// The mode in force; a server that never chose one has RegistrationMode.initial.
+    let registrationMode config token =
+        withContext config token (fun context ->
+            match scalar context "SELECT value FROM server_settings WHERE key=@key" [ "@key", box RegistrationKey ] with
+            | :? string as stored ->
+                match RegistrationMode.ofKey stored with
+                | Some mode -> Ok mode
+                | None -> invalidData "The stored registration mode is unknown."
+            | _ -> Ok RegistrationMode.initial)
+
+    /// changedBy is the administrator, absent for the console.
+    let setRegistrationMode config (mode: RegistrationMode) (changedBy: AdminId voption) (now: DateTimeOffset) token =
+        withContext config token (fun context ->
+            execute context "INSERT INTO server_settings(key, value, changed_by, changed_at) VALUES (@key, @value, @by, @at) ON CONFLICT(key) DO UPDATE SET value=excluded.value, changed_by=excluded.changed_by, changed_at=excluded.changed_at"
+                [ "@key", box RegistrationKey; "@value", box (RegistrationMode.key mode)
+                  "@by", (match changedBy with ValueSome admin -> box (AdminId.value admin) | ValueNone -> box DBNull.Value)
+                  "@at", box (now.ToUnixTimeMilliseconds()) ] |> ignore
+            Ok mode)

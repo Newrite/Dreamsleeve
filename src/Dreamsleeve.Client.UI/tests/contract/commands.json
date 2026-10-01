@@ -243,5 +243,10 @@
     "requestId": "m7",
     "channelId": "1",
     "messageId": "11"
+  },
+  {
+    "type": "resetPassword",
+    "code": "one-time-code",
+    "password": "correct horse battery"
   }
 ]

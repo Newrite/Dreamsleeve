@@ -424,6 +424,31 @@ function command(c: Command) {
     emitAuth({}, "disconnected");
     return true;
   }
+  // The code "bad" fails; any other sets the password.
+  if (c.type === "resetPassword") {
+    emitAuth(
+      {
+        authenticating: true,
+        operation: "resetPassword",
+        failure: "none",
+        error: "",
+      },
+      chat.store.getState().connectionPhase,
+    );
+    setTimeout(
+      () =>
+        emitAuth(
+          {
+            authenticating: false,
+            operation: "none",
+            failure: c.code === "bad" ? "invalidCredentials" : "none",
+          },
+          chat.store.getState().connectionPhase,
+        ),
+      400,
+    );
+    return true;
+  }
   if (c.type !== "sendChat") return moderate(c);
   const rejected = rejectNext;
   rejectNext = false;

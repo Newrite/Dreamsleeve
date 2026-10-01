@@ -27,8 +27,9 @@ type HttpListenerSettings = {
     RequestTimeoutSeconds: int
 }
 
+/// Who may register is not a setting: the panel and the console change the
+/// registration mode at run time (RegistrationMode, stored in the database).
 type AuthenticationSettings = {
-    AllowRegistration: bool
     Listener: HttpListenerSettings
     Service: AccountServiceOptions
 }
@@ -88,7 +89,6 @@ module Configuration =
         Recovery = { InitialDelayMs = 1000; MaxDelayMs = 30000; MaxRestarts = 5; WindowSeconds = 600 }
         Database = SqliteAccountStoreConfig.defaults
         Authentication = {
-            AllowRegistration = true
             Listener = {
                 ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
                 TrustForwardedHeaders = false; RequestsPerMinute = 120; RequestTimeoutSeconds = 15

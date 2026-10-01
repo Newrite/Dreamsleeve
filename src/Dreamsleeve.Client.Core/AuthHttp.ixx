@@ -22,14 +22,15 @@ export namespace Dreamsleeve::Client::Auth
     InvalidCredentials,
     UsernameTaken,
     InvalidRequest,
-    RegistrationDisabled,
+    RegistrationClosed,  // The server creates accounts only in its admin panel.
     Busy,
     Unavailable,
     InvalidResponse,
     CredentialStorage,
     Canceled,
-    NameNotAllowed,  // Registration: the server word list refused a name.
-    Banned           // Sign-in and resume while a ban holds; see Failure::ban.
+    NameNotAllowed,        // Registration: the server word list refused a name.
+    Banned,                // Sign-in and resume while a ban holds; see Failure::ban.
+    RegistrationSteamOnly  // New accounts come only from a Steam sign-in.
   };
 
   struct Failure
@@ -267,7 +268,7 @@ namespace Dreamsleeve::Client::Auth
   export bool NeedsUser(FailureCode code)
   {
     return code == FailureCode::InvalidCredentials || code == FailureCode::CredentialStorage || code == FailureCode::InvalidRequest ||
-           code == FailureCode::RegistrationDisabled || code == FailureCode::Banned;
+           code == FailureCode::RegistrationClosed || code == FailureCode::RegistrationSteamOnly || code == FailureCode::Banned;
   }
 
   export Result<void> ValidatePassword(std::string_view password)
@@ -306,7 +307,7 @@ namespace Dreamsleeve::Client::Auth
         code = FailureCode::InvalidCredentials;
         break;
       case 403:
-        code = FailureCode::RegistrationDisabled;
+        code = FailureCode::RegistrationClosed;
         break;
       case 409:
         code = FailureCode::UsernameTaken;
@@ -353,6 +354,14 @@ namespace Dreamsleeve::Client::Auth
               Failure{FailureCode::NameNotAllowed, "Display name contains words that are not allowed"}
           };
       }
+    }
+    if (response->status == 403)
+    {
+      ErrorResponse error;
+      if (!glz::read<glz::opts{.error_on_unknown_keys = false}>(error, response->body) && error.code == "registration_steam_only")
+        return std::unexpected{
+            Failure{FailureCode::RegistrationSteamOnly, "Registration is open only through Steam"}
+        };
     }
     if (response->status != 201) return std::unexpected{HttpFailure(response->status)};
     return {};

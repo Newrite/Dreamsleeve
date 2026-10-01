@@ -10,7 +10,7 @@ composition root: поднимает оба хоста и связывает и�
 Панель — окно администратора в работающий сервер ([ProductSpecRu.MD §16](ProductSpecRu.MD),
 [TechnicalHandbookRu.MD §13](TechnicalHandbookRu.MD)): состояние сервера и онлайн, поиск
 игроков, роль, переименование display name, сброс пароля и отзыв доступа, муты, баны и кик,
-объявления, аудит (в том числе действий модераторов в игре), токены REST API и конфигурация
+режим регистрации и создание игроков, объявления, аудит (в том числе действий модераторов в игре), токены REST API и конфигурация
 только на чтение.
 
 Панель не источник бизнес-логики (§15.5). Каждое действие идёт через владельца, у которого
@@ -22,6 +22,7 @@ composition root: поднимает оба хоста и связывает и�
 | Переименование | `AuthService.RenamePlayer` (SQLite), затем runtime → `PlayerSession` → presence |
 | Роль | `AdminService` (SQLite + аудит), затем runtime → живая `PlayerSession` |
 | Мут, бан, снятие, кик | `AuthService`: `Sanction` / `LiftSanction` / `Kick` (SQLite + аудит), затем runtime (`AccountChanged`) |
+| Режим регистрации, создание игрока | `AuthService`: `SetRegistration` / `CreateAccount` (SQLite), затем строка аудита |
 | Объявление | `ServerRuntimeMessage.Announce` → владелец системного канала, как `announce <текст>` |
 | Онлайн | `ServerRuntimeMessage.ListSessions` + `PlayerSessionMessage.Describe` |
 | Администраторы, сессии, токены, аудит, поиск | `AdminService` (bounded workers `admin-storage`) |
@@ -176,6 +177,7 @@ presence-обновление; остальные получают обновл�
 | `/players?q=&page=` | Поиск по username, display name (подстрока, `%` и `_` буквальные) или точному PlayerId; страницы по 50 |
 | `/players/{id}` | Карточка: профиль из БД, роль, живые сессии, действующие наказания; формы роли, переименования, сброса пароля (код показывается один раз), отзыва доступа, наказания и его снятия, кика |
 | `/sanctions` | Действующие муты и баны со ссылкой на карточку |
+| `/registration` | Режим регистрации (`open`, `steam`, `manual`; действует сразу) и создание игрока: аккаунт без пароля и одноразовый код установки пароля на `SetupLifetimeHours`, показывается один раз ([AuthenticationRu.md](AuthenticationRu.md#режим-регистрации)) |
 | `/announce` | Текст (лимит `MessageText`) и вид `admin`/`announcement`/`event`; `periodic` принадлежит расписанию |
 | `/audit` | Последние 200 строк: кто (администратор или модератор), действие, цель, подробности |
 | `/tokens` | Создание (токен показывается один раз) и отзыв токенов REST |

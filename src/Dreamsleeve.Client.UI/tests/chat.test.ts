@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import { makeChat, HISTORY_LIMIT } from "../src/state/chat";
 import { frame } from "../src/state/settings";
 import { defaults } from "../src/bridge/settings.generated";
-import { accountActions, authStatus, idleAuth } from "../src/state/auth";
+import {
+  accountActions,
+  authStatus,
+  canResetPassword,
+  idleAuth,
+} from "../src/state/auth";
 import { sessionEndText } from "../src/state/moderation";
 import type {
   AuthEvent,
@@ -405,6 +410,23 @@ describe("account", () => {
     });
     expect(JSON.stringify(chat.store.getState())).not.toContain("again");
   });
+  it("sends an administrator's code with the new password once and keeps neither", () => {
+    const send = vi.fn((_command: Command) => true);
+    const chat = makeChat(send);
+    chat.resetPassword("  ", "new-password");
+    chat.resetPassword(" one-time ", "new-password");
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0]).toEqual({
+      type: "resetPassword",
+      code: "one-time",
+      password: "new-password",
+    });
+    expect(chat.store.getState().auth).toMatchObject({
+      authenticating: true,
+      operation: "resetPassword",
+    });
+    expect(JSON.stringify(chat.store.getState())).not.toContain("new-password");
+  });
   it("refuses empty credentials and stays idle when the host listener is missing", () => {
     const chat = makeChat(() => false);
     chat.signIn("", "x", true);
@@ -420,7 +442,9 @@ describe("account", () => {
       invalidCredentials: "Неверное имя или пароль",
       usernameTaken: "Имя занято",
       invalidRequest: "Некорректный запрос",
-      registrationDisabled: "Регистрация отключена",
+      registrationClosed:
+        "Регистрация закрыта: аккаунт создаёт администратор сервера",
+      registrationSteamOnly: "Регистрация только через Steam",
       busy: "Сервер занят, повторите позже",
       unavailable: "Сервер недоступен",
       invalidResponse: "Некорректный ответ сервера",
@@ -444,6 +468,19 @@ describe("account", () => {
     expect(authStatus({ ...idleAuth, failure: "banned", error: "Читы" })).toBe(
       "Аккаунт заблокирован: Читы",
     );
+  });
+  it("sets a password from an administrator's code only outside a session", () => {
+    expect(canResetPassword(idleAuth, false, " code ", "new-password")).toBe(
+      true,
+    );
+    expect(canResetPassword(idleAuth, true, "code", "new-password")).toBe(
+      false,
+    );
+    expect(canResetPassword(idleAuth, false, "  ", "new-password")).toBe(false);
+    expect(canResetPassword(idleAuth, false, "code", "")).toBe(false);
+    expect(
+      canResetPassword({ ...idleAuth, authenticating: true }, false, "c", "p"),
+    ).toBe(false);
   });
   it("disables every account button while authenticating and gates the rest", () => {
     const form = { username: "northern", password: "x", displayName: "Дов" };

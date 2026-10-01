@@ -25,8 +25,7 @@ module WebPorts =
 
     let authRoutes (settings: ApplicationConfig) : AuthRouteSettings =
         let authentication = settings.Authentication
-        { AllowRegistration = authentication.AllowRegistration
-          RequestsPerMinute = authentication.Listener.RequestsPerMinute
+        { RequestsPerMinute = authentication.Listener.RequestsPerMinute
           RequestTimeoutSeconds = authentication.Listener.RequestTimeoutSeconds
           MaxConnections = 2 * authentication.Service.MailboxCapacity + authentication.Service.MaxConcurrentOperations
           Input = settings.Server.ChatInput }
@@ -38,7 +37,8 @@ module WebPorts =
         { SessionHours = admin.Service.SessionHours; LoginAttemptsPerMinute = admin.Service.LoginAttemptsPerMinute
           RequestsPerMinute = admin.Listener.RequestsPerMinute; RequestTimeoutSeconds = admin.Listener.RequestTimeoutSeconds
           MaxConnections = admin.MaxConnections; DescribeTimeoutMs = DescribeTimeoutMs
-          Input = settings.Server.ChatInput; Moderation = moderation }
+          Input = settings.Server.ChatInput; Moderation = moderation
+          SetupCodeHours = settings.Authentication.Service.SetupLifetimeHours }
 
     let auth (authentication: Agent<AuthMessage>) : AuthPorts =
         { Access = fun command timeout token ->

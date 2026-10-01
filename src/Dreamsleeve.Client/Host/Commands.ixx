@@ -142,6 +142,14 @@ export namespace Dreamsleeve::Host
         Emit(context.session.IgnoredList(context.ui.ui.chat));
       }
 
+      void operator()(Commands::ResetPassword& command)
+      {
+        // The Core keeps its own copy; the command's is wiped.
+        Client::ResetAccountPassword request{command.code, command.password};
+        std::ranges::fill(command.password, '\0');
+        Admitted(context.exchange.PostAuthentication(std::move(request)));
+      }
+
       void operator()(Commands::SignInSaved&)
       {
         context.manualDisconnect = false;

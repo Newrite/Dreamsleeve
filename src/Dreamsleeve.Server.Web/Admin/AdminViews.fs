@@ -31,6 +31,7 @@ module AdminViews =
     type Navigation =
         | Overview
         | Players
+        | Registration
         | Sanctions
         | Announce
         | Audit
@@ -49,6 +50,7 @@ module AdminViews =
                     Elem.strong [] [ text "Dreamsleeve" ]
                     link "/" "Обзор" Overview
                     link "/players" "Игроки" Players
+                    link "/registration" "Регистрация" Registration
                     link "/sanctions" "Наказания" Sanctions
                     link "/announce" "Объявление" Announce
                     link "/audit" "Аудит" Audit
@@ -404,6 +406,62 @@ module AdminViews =
                             ]
                     ]
                 ]
+        ]
+
+    let private registrationLabel mode =
+        match mode with
+        | RegistrationMode.Open -> "Открыта — из игры паролем и через Steam"
+        | RegistrationMode.Steam -> "Только Steam — новые аккаунты только входом через Steam"
+        | RegistrationMode.Manual -> "Вручную — аккаунты создаёт администратор на этой странице"
+
+    let registration admin (mode: RegistrationMode) (notice: string option) (failure: string option)
+                     (created: CreatedPlayerModel option) (setupHours: int) (usernameLimit: int) (displayNameLimit: int) =
+        page "Регистрация" Registration (Some admin) notice [
+            error failure
+            match created with
+            | Some player ->
+                Elem.section [ css "secret" ] [
+                    Elem.h2 [] [ text $"Игрок {player.Username} создан" ]
+                    Elem.p [] [ text $"Одноразовый код установки пароля, действует {setupHours} ч. Показывается один раз; передайте его игроку приватно." ]
+                    Elem.pre [] [ text player.SetupCode ]
+                    Elem.p [] [
+                        text "В игре: окно чата → ☰ → «Аккаунт» → «Пароль по коду»: код и новый пароль, затем обычный вход с именем "
+                        Elem.code [] [ text player.Username ]
+                        text ". "
+                        Elem.a [ attr "href" $"/players/{player.PlayerId}" ] [ text "Карточка игрока" ]
+                    ]
+                ]
+            | None -> ()
+            Elem.section [] [
+                Elem.h2 [] [ text "Кто может регистрироваться" ]
+                Elem.form [ attr "method" "post"; attr "action" "/registration/mode"; css "stack" ] [
+                    Elem.label [] [
+                        Elem.span [] [ text "Режим" ]
+                        Elem.select [ attr "name" "mode" ] [
+                            for candidate in RegistrationMode.all do
+                                Elem.option [ attr "value" (RegistrationMode.key candidate); (if candidate = mode then flag "selected" else css "") ] [
+                                    text (registrationLabel candidate)
+                                ]
+                        ]
+                    ]
+                    Elem.p [ css "hint" ] [
+                        text "Действует сразу, без перезапуска. Существующие игроки входят как прежде; созданием игроков ниже режим не ограничивает. "
+                        text "«Только Steam» имеет смысл при включённом входе через Steam."
+                    ]
+                    confirm "Подтверждаю смену режима"
+                    submit "Сохранить режим"
+                ]
+            ]
+            Elem.section [] [
+                Elem.h2 [] [ text "Создать игрока" ]
+                Elem.p [ css "hint" ] [ text "Аккаунт без пароля и одноразовый код, по которому игрок задаёт пароль сам. Имена проверяются словарём, как при регистрации." ]
+                Elem.form [ attr "method" "post"; attr "action" "/registration/players"; css "stack" ] [
+                    field "Имя пользователя (латиница, цифры, _ и точка)" "username" "text" "" [ flag "required"; attr "maxlength" (string usernameLimit); attr "autocomplete" "off" ]
+                    field "Display name" "displayName" "text" "" [ flag "required"; attr "maxlength" (string displayNameLimit) ]
+                    confirm "Подтверждаю создание игрока"
+                    submit "Создать и выдать код"
+                ]
+            ]
         ]
 
     let announce admin (notice: string option) (failure: string option) (maxLength: int) =

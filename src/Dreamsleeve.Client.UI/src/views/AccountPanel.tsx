@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Chat, ChatState } from "../state/chat";
-import { accountActions, authStatus } from "../state/auth";
+import { accountActions, authStatus, canResetPassword } from "../state/auth";
 import { connectionLabels } from "../state/connection";
 import { identityStatus } from "../state/identity";
 import { sessionEndText } from "../state/moderation";
@@ -19,6 +19,9 @@ export function AccountPanel({
   const [displayName, setDisplayName] = useState("");
   const [remember, setRemember] = useState(true);
   const [newName, setNewName] = useState("");
+  const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetSent, setResetSent] = useState(false);
   const self = s.players.find((p) => p.id === s.selfId);
   // Streamer mode keeps even the own names off the screen, like the saved login.
   const current = s.settings.streamerMode ? "" : (self?.displayName ?? "");
@@ -54,7 +57,22 @@ export function AccountPanel({
     chat.signIn(username, password, remember, register ? displayName : "");
     // The secret leaves with the command; the form never keeps it.
     setPassword("");
+    setResetSent(false);
   }
+  const canReset = canResetPassword(s.auth, s.connected, code, newPassword);
+  function resetPassword(e: FormEvent) {
+    e.preventDefault();
+    if (!canReset) return;
+    chat.resetPassword(code, newPassword);
+    setNewPassword("");
+    setCode("");
+    setResetSent(true);
+  }
+  const resetDone =
+    resetSent &&
+    !s.auth.authenticating &&
+    s.auth.failure === "none" &&
+    !s.auth.error;
   function submit(e: FormEvent) {
     e.preventDefault();
     if (can.signIn) signIn(false);
@@ -191,6 +209,49 @@ export function AccountPanel({
           </button>
         </div>
       </form>
+      <details data-part="password-code">
+        <summary>Пароль по коду</summary>
+        <form className={styles.form} onSubmit={resetPassword}>
+          <label>
+            Код от администратора
+            <input
+              name="setupCode"
+              autoComplete="one-time-code"
+              maxLength={128}
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value);
+                setResetSent(false);
+              }}
+            />
+          </label>
+          <label>
+            Новый пароль
+            <input
+              type="password"
+              name="newPassword"
+              autoComplete="new-password"
+              maxLength={512}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </label>
+          <div className={styles.actions}>
+            <button type="submit" disabled={!canReset}>
+              Задать пароль
+            </button>
+          </div>
+          {resetDone && (
+            <p className={styles.status} role="status">
+              Пароль задан. Войдите с именем пользователя и новым паролем.
+            </p>
+          )}
+          <p className={styles.muted}>
+            Код выдаёт администратор сервера — для нового аккаунта или сброса
+            пароля; он одноразовый. Пароль — от 12 до 128 байт.
+          </p>
+        </form>
+      </details>
       <div className={styles.actions}>
         {s.connected && (
           <button disabled={!can.disconnect} onClick={chat.disconnect}>

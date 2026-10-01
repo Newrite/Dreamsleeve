@@ -22,7 +22,6 @@ type AuthPorts = {
 }
 
 type AuthRouteSettings = {
-    AllowRegistration: bool
     RequestsPerMinute: int
     RequestTimeoutSeconds: int
     /// Service admission bounds the useful number of open connections.
@@ -47,10 +46,6 @@ module AuthRoutes =
 
     // Separate codes let the client say which field to change.
     let private nameNotAllowed field = WebHost.error 400 $"{field}_not_allowed" "Name contains words that are not allowed."
-
-    /// Registration only: existing accounts keep signing in with their stored names.
-    let private allowedUsername moderation (username: Username) =
-        not (Moderation.reservedUsername username) && Moderation.allows moderation (Username.value username)
 
     let private field (body: JsonElement) name =
         match body.TryGetProperty(name: string) with
@@ -82,7 +77,7 @@ module AuthRoutes =
                         if operation = Operation.Register then
                             match DisplayName.create settings.Input.DisplayName (field body "displayName") with
                             | Error _ -> Error (invalid ())
-                            | Ok _ when not (allowedUsername moderation username) -> Error (nameNotAllowed "username")
+                            | Ok _ when not (Moderation.allowsUsername moderation username) -> Error (nameNotAllowed "username")
                             | Ok displayName when not (Moderation.allows moderation (DisplayName.value displayName)) ->
                                 Error (nameNotAllowed "display_name")
                             | Ok displayName -> Ok (AccountAccessCommand.Register(username, displayName, password))
@@ -116,13 +111,17 @@ module AuthRoutes =
         // Trusted results never come from a public route.
         | Ok (AccountAccessResult.PasswordResetCreated _) | Ok (AccountAccessResult.Renamed _)
         | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
-        | Ok (AccountAccessResult.ActiveSanctions _) -> unavailable ()
+        | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _) -> unavailable ()
         // 403, not 401: a saved login stays saved and works again once the ban ends.
         | Error (AccountAccessError.Banned ban) ->
             WebHost.json 403 {| code = "banned"; message = "The account is banned."; reason = SanctionReason.value ban.Reason
                                 untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
         | Error AccountAccessError.InvalidCredentials -> WebHost.error 401 "invalid_credentials" "Invalid or expired credentials."
         | Error AccountAccessError.UsernameTaken -> WebHost.error 409 "username_taken" "Username is already registered."
+        | Error (AccountAccessError.RegistrationClosed RegistrationMode.Steam) ->
+            WebHost.error 403 "registration_steam_only" "New accounts are created by signing in through Steam."
+        | Error (AccountAccessError.RegistrationClosed _) ->
+            WebHost.error 403 "registration_closed" "Registration is closed; an administrator creates accounts."
         | Error AccountAccessError.Busy -> busy ()
         // Only a game session can be refused as too soon, only a trusted caller's sanction; never a public route.
         | Error AccountAccessError.Unavailable | Error (AccountAccessError.TooSoon _) | Error (AccountAccessError.SanctionRefused _) -> unavailable ()
@@ -134,22 +133,19 @@ module AuthRoutes =
         deadline.CancelAfter timeout
         let! result = task {
             try
-                if operation = Operation.Register && not settings.AllowRegistration then
-                    return WebHost.error 403 "registration_disabled" "Registration is disabled."
-                else
-                    match! read settings moderation operation context deadline.Token with
-                    | Error failure -> return failure
-                    | Ok command ->
-                        match! ports.Access command timeout deadline.Token with
-                        | AgentAskResult.Replied value -> return response value
-                        | AgentAskResult.Full | AgentAskResult.Dropped -> return busy ()
-                        | AgentAskResult.Closed | AgentAskResult.TimedOut -> return unavailable ()
-                        | AgentAskResult.Canceled ->
-                            if context.RequestAborted.IsCancellationRequested then return Results.StatusCode 499
-                            else return unavailable ()
-                        | AgentAskResult.Faulted failure ->
-                            logger.Error(failure, "Authentication request failed")
-                            return unavailable ()
+                match! read settings moderation operation context deadline.Token with
+                | Error failure -> return failure
+                | Ok command ->
+                    match! ports.Access command timeout deadline.Token with
+                    | AgentAskResult.Replied value -> return response value
+                    | AgentAskResult.Full | AgentAskResult.Dropped -> return busy ()
+                    | AgentAskResult.Closed | AgentAskResult.TimedOut -> return unavailable ()
+                    | AgentAskResult.Canceled ->
+                        if context.RequestAborted.IsCancellationRequested then return Results.StatusCode 499
+                        else return unavailable ()
+                    | AgentAskResult.Faulted failure ->
+                        logger.Error(failure, "Authentication request failed")
+                        return unavailable ()
             with
             | :? OperationCanceledException when context.RequestAborted.IsCancellationRequested -> return Results.StatusCode 499
             | :? OperationCanceledException when deadline.IsCancellationRequested -> return unavailable ()

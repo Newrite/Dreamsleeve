@@ -79,14 +79,21 @@ type private Panel = {
     Cookies: CookieContainer
     Admin: FakeAdmin
     Announcements: ConcurrentQueue<ServerAnnouncement>
+    /// Trusted account commands the panel sent, answered by AccountReply.
+    Accounts: ConcurrentQueue<AccountAccessCommand>
+    AccountReply: (AccountAccessCommand -> Result<AccountAccessResult, AccountAccessError>) ref
 }
 
 let private withPanel customize run = task {
     let admin = FakeAdmin()
     let announcements = ConcurrentQueue<ServerAnnouncement>()
+    let accounts = ConcurrentQueue<AccountAccessCommand>()
+    let accountReply = ref (fun (_: AccountAccessCommand) -> Error AccountAccessError.Unavailable)
     let ports = {
         Admin = fun command _ _ -> Task.FromResult(AgentAskResult.Replied(admin.Handle command))
-        Account = fun _ _ _ -> Task.FromResult(AgentAskResult.Replied(Error AccountAccessError.Unavailable))
+        Account = fun command _ _ ->
+            accounts.Enqueue command
+            Task.FromResult(AgentAskResult.Replied(accountReply.Value command))
         Snapshot = fun _ _ -> Task.FromResult(AgentAskResult.Replied { Connections = 1; Guests = 0; Ready = 1; Reservations = 1; Closing = 0; Stopping = false })
         Sessions = fun _ _ -> Task.FromResult(AgentAskResult.Replied [ hiddenRow ])
         Describe = fun _ row -> Task.FromResult(if row.ConnectionId = hiddenRow.ConnectionId then Some hiddenView else None)
@@ -105,7 +112,7 @@ let private withPanel customize run = task {
             let cookies = CookieContainer()
             use handler = new HttpClientHandler(CookieContainer = cookies, UseCookies = true, AllowAutoRedirect = false)
             use http = new HttpClient(handler, BaseAddress = Uri(Seq.head app.Urls), Timeout = guard)
-            do! run { Http = http; Cookies = cookies; Admin = admin; Announcements = announcements }
+            do! run { Http = http; Cookies = cookies; Admin = admin; Announcements = announcements; Accounts = accounts; AccountReply = accountReply }
             return Ok ()
         with failure -> return Error failure
     }
@@ -247,6 +254,45 @@ let tests = testSequenced (testList "Admin HTTP" [
             check (html.Contains "\"allowEval\":false" || html.Contains "&quot;allowEval&quot;:false") "htmx runs without eval."
             use! script = panel.Http.GetAsync "/static/htmx.min.js"
             status 200 script
+        }))
+
+    case "the registration page changes the mode and creates a player with a one-time code, both audited" (fun () ->
+        withPanel id (fun panel -> task {
+            let mode = ref RegistrationMode.Open
+            let created = PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "newcomer" |> ok) (DisplayName.create 64 "Новичок" |> ok)
+            panel.AccountReply.Value <- (function
+                | AccountAccessCommand.ReadRegistration -> Ok (AccountAccessResult.Registration mode.Value)
+                | AccountAccessCommand.SetRegistration(next, _) ->
+                    mode.Value <- next
+                    Ok (AccountAccessResult.Registration next)
+                | AccountAccessCommand.CreateAccount(username, _) when Username.value username = "taken" -> Error AccountAccessError.UsernameTaken
+                | AccountAccessCommand.CreateAccount _ -> Ok (AccountAccessResult.AccountCreated(created, setupCode))
+                | _ -> Error AccountAccessError.Unavailable)
+            do! signIn panel
+            use! page = panel.Http.GetAsync "/registration"
+            status 200 page
+            use! unconfirmed = submit panel "/registration/mode" [ "mode", "manual" ] []
+            status 400 unconfirmed
+            use! unknown = submit panel "/registration/mode" [ "mode", "closed"; "confirm", "yes" ] []
+            status 400 unknown
+            use! changed = submit panel "/registration/mode" [ "mode", "manual"; "confirm", "yes" ] []
+            status 303 changed
+            equal RegistrationMode.Manual mode.Value
+            // The panel stamps the change with the administrator.
+            check (panel.Accounts.ToArray() |> Array.contains (AccountAccessCommand.SetRegistration(RegistrationMode.Manual, ValueSome root.Id))) "Mode change carries the admin."
+            use! reserved = submit panel "/registration/players" [ "username", "hidden.3"; "displayName", "Кто-то"; "confirm", "yes" ] []
+            status 400 reserved
+            use! taken = submit panel "/registration/players" [ "username", "taken"; "displayName", "Кто-то"; "confirm", "yes" ] []
+            status 409 taken
+            use! made = submit panel "/registration/players" [ "username", " NewComer "; "displayName", "Новичок"; "confirm", "yes" ] []
+            status 200 made
+            check made.Headers.CacheControl.NoStore "The page with the code is not cached."
+            let! html = made.Content.ReadAsStringAsync()
+            check (html.Contains setupCode) "The setup code is shown once."
+            check (panel.Accounts.ToArray() |> Array.contains (AccountAccessCommand.CreateAccount(Username.create 32 "newcomer" |> ok, DisplayName.create 64 "Новичок" |> ok)))
+                "The canonical names reach the account service."
+            let audit = panel.Admin.Audit.ToArray() |> Array.map (fun (_, entry) -> entry.Action, AuditTarget.key entry.Target, entry.Details)
+            equal [| AdminAction.SetRegistrationMode, "server", "manual"; AdminAction.CreatedPlayer, "player:9", "newcomer" |] audit
         }))
 
     case "sign-in attempts are limited per address and forwarded addresses are ignored unless trusted" (fun () ->

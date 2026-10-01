@@ -25,6 +25,8 @@ type AccountServiceOptions = {
     ResetLifetimeMinutes: int
     /// Display name changes kept per player (display_name_changes); older ones are deleted.
     DisplayNameHistory: int
+    /// How long the one-time code of an account created in the panel lets the player choose a password.
+    SetupLifetimeHours: int
 }
 
 [<RequireQualifiedAccess>]
@@ -38,6 +40,8 @@ type AccountAccessError =
     /// Sign-in and resume while a ban holds.
     | Banned of Sanction
     | SanctionRefused of SanctionError
+    /// A password registration while the mode allows none.
+    | RegistrationClosed of RegistrationMode
 
 type SessionGrant = {
     Profile: PlayerData
@@ -71,6 +75,12 @@ type AccountAccessCommand =
     | ListSanctions
     /// The audit line of content a moderator removed in the game.
     | RecordModeration of moderator: PlayerId * AuditRecord
+    /// An administrator's new player: an account without a password and a one-time setup code.
+    | CreateAccount of Username * DisplayName
+    /// The registration mode in force.
+    | ReadRegistration
+    /// Changes who may create accounts; changedBy is absent for the console.
+    | SetRegistration of RegistrationMode * changedBy: AdminId voption
 
 [<RequireQualifiedAccess>]
 type AccountAccessResult =
@@ -83,6 +93,8 @@ type AccountAccessResult =
     | SanctionLifted of Sanction
     | Kicked
     | ActiveSanctions of Sanction list
+    | AccountCreated of PlayerData * setupCode: string
+    | Registration of RegistrationMode
 
 [<RequireQualifiedAccess>]
 type AccountWorkResult =
@@ -96,6 +108,8 @@ type AccountWorkResult =
     | Kicked of PlayerId * SanctionReason
     | ActiveSanctions of Sanction list
     | Recorded
+    | Created of PlayerData * setupCode: string
+    | Registration of RegistrationMode
 
 type AccountWorkReply = {
     OperationId: Guid
@@ -158,12 +172,14 @@ module AuthService =
         MailboxCapacity = 256; MaxConcurrentOperations = 4; MaxTickets = 4096
         TicketLifetimeSeconds = 60; PasswordIterations = 210000
         SavedLoginDays = 30; MaxSavedLogins = 8; ResetLifetimeMinutes = 15; DisplayNameHistory = 20
+        SetupLifetimeHours = 72
     }
 
     let validate options = [
         if options.SavedLoginDays < 1 || options.SavedLoginDays > 365 then "Saved login lifetime must be 1..365 days."
         if options.MaxSavedLogins < 1 || options.MaxSavedLogins > 32 then "Saved logins per account must be 1..32."
         if options.ResetLifetimeMinutes < 1 || options.ResetLifetimeMinutes > 60 then "Reset lifetime must be 1..60 minutes."
+        if options.SetupLifetimeHours < 1 || options.SetupLifetimeHours > 720 then "Authentication.Service.SetupLifetimeHours must be 1..720."
         if options.DisplayNameHistory < 1 || options.DisplayNameHistory > 1000 then "Display name history per player must be 1..1000."
         if options.MailboxCapacity < 1 || options.MailboxCapacity > 65536 then "Account mailbox capacity must be 1..65536."
         if options.MaxConcurrentOperations < 1 || options.MaxConcurrentOperations > 64 then "Account workers must be 1..64."
@@ -261,10 +277,15 @@ module AuthService =
                 | AccountAccessCommand.Register(username, displayName, password) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else
-                        let passwordHash = (hasher options).HashPassword(null, password)
-                        SqliteAccountStore.create database username displayName passwordHash token
-                        |> Result.map AccountWorkResult.Registered
-                        |> Result.mapError (storageError logger)
+                        // The mode is checked before the costly hash; changing it runs alone.
+                        match SqliteAccountStore.registrationMode database token with
+                        | Error error -> Error (storageError logger error)
+                        | Ok mode when not (RegistrationMode.allowsPassword mode) -> Error (AccountAccessError.RegistrationClosed mode)
+                        | Ok _ ->
+                            let passwordHash = (hasher options).HashPassword(null, password)
+                            SqliteAccountStore.create database username displayName passwordHash token
+                            |> Result.map AccountWorkResult.Registered
+                            |> Result.mapError (storageError logger)
                 | AccountAccessCommand.Login(username, password) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
                     else verify options database dummyHash logger token username password
@@ -317,6 +338,20 @@ module AuthService =
                     SqliteAdminStore.recordModeration database moderator record (clock.GetUtcNow()) token
                     |> Result.map (fun () -> AccountWorkResult.Recorded)
                     |> Result.mapError (storageError logger)
+                | AccountAccessCommand.CreateAccount(username, displayName) ->
+                    let code = newToken ()
+                    let expires = now + int64 options.SetupLifetimeHours * 3600L
+                    SqliteAccountStore.createInvited database username displayName (ticketKey code) expires token
+                    |> Result.map (fun profile -> AccountWorkResult.Created(profile, code))
+                    |> Result.mapError (storageError logger)
+                | AccountAccessCommand.ReadRegistration ->
+                    SqliteAccountStore.registrationMode database token
+                    |> Result.map AccountWorkResult.Registration
+                    |> Result.mapError (storageError logger)
+                | AccountAccessCommand.SetRegistration(mode, changedBy) ->
+                    SqliteAccountStore.setRegistrationMode database mode changedBy (clock.GetUtcNow()) token
+                    |> Result.map AccountWorkResult.Registration
+                    |> Result.mapError (storageError logger)
             with
             | :? OperationCanceledException -> Error AccountAccessError.Unavailable
             | error ->
@@ -364,13 +399,16 @@ module AuthService =
     let private exclusive = function
         | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _
         | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.Logout _ | AccountAccessCommand.RenamePlayer _
-        | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ -> true
+        | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
+        // No registration in flight passes under the mode it replaces.
+        | AccountAccessCommand.SetRegistration _ -> true
         // The player is online: no second session of theirs can open with a stale
         // ticket, and outstanding tickets are updated when the change settles.
         | AccountAccessCommand.Register _ | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _
         | AccountAccessCommand.Resume _ | AccountAccessCommand.ChangeOwnDisplayName _
         // A kick issues no ticket; a list and an audit line change no account.
-        | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ -> false
+        | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
+        | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration -> false
 
     let private settle (logger: ILogger) (requester: Requester) (result: Result<AccountAccessResult, AccountAccessError>) =
         match requester with
@@ -435,7 +473,8 @@ module AuthService =
         | AccountAccessCommand.Register _ | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _
         | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _
         | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
-        | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ -> "other"
+        | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
+        | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ -> "other"
 
     let private until (sanction: Sanction) =
         match sanction.Expires with
@@ -465,6 +504,8 @@ module AuthService =
             logger.LogInformation("Password reset refused: unknown, used or expired code")
         | AccountAccessCommand.Register(username, _, _), Error AccountAccessError.UsernameTaken ->
             logger.LogInformation("Registration refused: {Username} is taken", Username.value username)
+        | AccountAccessCommand.Register(username, _, _), Error (AccountAccessError.RegistrationClosed mode) ->
+            logger.LogInformation("Registration of {Username} refused: the registration mode is {Mode}", Username.value username, RegistrationMode.key mode)
         | AccountAccessCommand.ChangeOwnDisplayName(playerId, displayName, _), Error (AccountAccessError.TooSoon wait) ->
             logger.LogInformation("Display name change of player {PlayerId} to {DisplayName} refused: allowed again in {Minutes} min",
                                   PlayerId.value playerId, DisplayName.value displayName, int (ceil wait.TotalMinutes))
@@ -551,6 +592,17 @@ module AuthService =
                     delivered state context (AccountChange.Kicked(target, reason)) (Ok AccountAccessResult.Kicked)
                 | Ok (AccountWorkResult.ActiveSanctions sanctions) -> Ok (AccountAccessResult.ActiveSanctions sanctions)
                 | Ok AccountWorkResult.Recorded -> Ok AccountAccessResult.Completed
+                | Ok (AccountWorkResult.Created(profile, code)) ->
+                    logger.LogInformation("Account created in the panel: player {PlayerId} {Username} ({DisplayName}), setup code issued",
+                                          PlayerId.value profile.PlayerId, Username.value profile.Username, DisplayName.value profile.DisplayName)
+                    Ok (AccountAccessResult.AccountCreated(profile, code))
+                | Ok (AccountWorkResult.Registration mode) ->
+                    match pending.Command with
+                    | AccountAccessCommand.SetRegistration(_, changedBy) ->
+                        let who = match changedBy with ValueSome admin -> $"admin {AdminId.value admin}" | ValueNone -> "the console"
+                        logger.LogInformation("Registration mode set to {Mode} by {Who}", RegistrationMode.key mode, who)
+                    | _ -> ()
+                    Ok (AccountAccessResult.Registration mode)
                 | Ok (AccountWorkResult.SanctionLifted sanction) ->
                     logger.LogInformation("The {Kind} of player {PlayerId} was lifted", SanctionKind.key sanction.Kind, PlayerId.value sanction.Target)
                     match sanction.Kind with

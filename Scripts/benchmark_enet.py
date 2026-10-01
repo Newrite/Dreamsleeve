@@ -153,7 +153,6 @@ def configuration(clients, port, profile, case):
     config = tomllib.loads((ROOT / "src/Dreamsleeve.Server/server.example.toml").read_text(encoding="utf-8-sig"))
     config["Database"] = {"DatabasePath": str((case / "accounts.sqlite").resolve()), "BusyTimeoutSeconds": 5}
     config["Authentication"] = {
-        "AllowRegistration": True,
         "Listener": {"ListenUrl": f"http://127.0.0.1:{free_port(socket.SOCK_STREAM)}", "AllowInsecureLoopback": True,
                      "CertificatePath": "", "RequestsPerMinute": 6000, "RequestTimeoutSeconds": 15},
         "Service": {"MailboxCapacity": 64, "MaxConcurrentOperations": 4, "MaxTickets": 4096,

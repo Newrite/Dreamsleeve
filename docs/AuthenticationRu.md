@@ -65,7 +65,8 @@ HTTP-адаптер живёт в `src/Dreamsleeve.Server.Web/Authentication/Aut
 забаненного аккаунта — 403 `banned` с полями `reason` и `untilUnixMs` (`null` — бессрочно);
 клиент показывает «Аккаунт заблокирован» с причиной и сроком и сам больше не пытается войти
 (`Auth::FailureCode::Banned` входит в `NeedsUser`), сохранённый вход не удаляется.
-Регистрацию можно выключить `[Authentication] AllowRegistration = false` (тогда 403 `registration_disabled`).
+Кто может регистрироваться, решает режим регистрации (раздел «Режим регистрации»): закрытая
+регистрация — 403 `registration_closed` или `registration_steam_only`.
 Username нормализуется доменной фабрикой, DisplayName — Trim/NFC.
 Пароль не обрезается и не нормализуется: 12..128 UTF-8 байт.
 
@@ -216,8 +217,8 @@ DREAMSLEEVE_PASSWORD остаётся только в Dev; игровой UI п�
 Результат вызова означает admission, не успешный вход. UI ожидает окончания
 `authenticating`; готовность игровой сессии означает `phase == Ready`.
 `InvalidCredentials` требует повторного ввода; `UsernameTaken`, `InvalidRequest`,
-`RegistrationDisabled`, `NameNotAllowed`, `Banned`, `Busy`, `Unavailable`, `InvalidResponse`,
-`CredentialStorage` и `Canceled` различимы без разбора строки. При transient HTTP-ошибке запись сохраняется.
+`RegistrationClosed`, `RegistrationSteamOnly`, `NameNotAllowed`, `Banned`, `Busy`, `Unavailable`,
+`InvalidResponse`, `CredentialStorage` и `Canceled` различимы без разбора строки. При transient HTTP-ошибке запись сохраняется.
 При 401 на resume она удаляется. SignOut при недоступном сервере сохраняет запись
 для повторного отзыва; отдельный Forget позволяет явно убрать её офлайн.
 
@@ -249,7 +250,8 @@ Resume не продлевает срок и не меняет секрет, п�
 консоли; его нужно передать пользователю приватно. Произвольный пароль или токен
 администратор в БД/форму не записывает: генерация и хеширование принадлежат сервису.
 
-Операции `CreatePasswordReset`, `RevokeAccount`, `RenamePlayer` и наказания (`Sanction`,
+Операции `CreatePasswordReset`, `RevokeAccount`, `RenamePlayer`, `CreateAccount`, режим регистрации
+(`ReadRegistration`, `SetRegistration`) и наказания (`Sanction`,
 `LiftSanction`, `Kick`, `ListSanctions`) доступны доверенному серверному вызывающему коду; запросы
 модератора из игры приходят к ним через сессию (`AuthMessage.Moderate`). Публичных HTTP-маршрутов для них нет. Веб-админка
 ([AdminPanelRu.md](AdminPanelRu.md)) после проверки сессии администратора вызывает эти команды
@@ -268,6 +270,35 @@ credential reset не дублируется, строка `admin_audit` пиш�
 агент не ждёт SQLite. Это исключает выдачу билета из проверки старых credentials,
 закончившейся после отзыва. Прямые правки БД во время работы сервера обходят эту
 координацию и не являются административным API.
+
+## Режим регистрации
+
+Кто создаёт аккаунты, решает `RegistrationMode` — настройка времени работы, не `server.toml`:
+
+| Режим | Регистрация паролем из игры | Новый аккаунт через Steam | Ответ `/auth/register` |
+|---|---|---|---|
+| `open` (у нового сервера) | да | да | 201 |
+| `steam` | нет | да | 403 `registration_steam_only` |
+| `manual` | нет | нет | 403 `registration_closed` |
+
+Вход существующих аккаунтов (пароль, сохранённый вход, Steam) режим не ограничивает. Режим хранит
+таблица `server_settings` (ключ `registration_mode`, кто и когда сменил; схема 10), владелец —
+`AuthService`: `Register` читает режим в том же worker перед хешированием пароля, а
+`SetRegistration` выполняется монопольно, так что регистрация, начатая при старом режиме, не
+проходит после смены. Меняют режим страница админки «Регистрация» (строка аудита
+`set_registration_mode`) и консольная команда `registration [open|steam|manual]` (без аргумента —
+показать текущий). Клиент различает отказы: `RegistrationClosed` («Регистрация закрыта: аккаунт
+создаёт администратор сервера») и `RegistrationSteamOnly` («Регистрация только через Steam»);
+оба входят в `NeedsUser`.
+
+В любом режиме администратор создаёт игрока на той же странице (`CreateAccount`, аудит
+`create_player`): аккаунт и профиль без пароля и без password identity плюс одноразовый код
+установки пароля — строка `auth_tokens` вида 1, как код сброса, но со сроком
+`[Authentication.Service] SetupLifetimeHours` (72 ч). Имена проверяются словарём так же, как при
+регистрации (`Moderation.allowsUsername`). Код показывается один раз; игрок вводит его в игре:
+«Аккаунт» → «Пароль по коду» (команда моста `resetPassword` → `ResetPassword(code, password)` →
+`POST /auth/reset-password`), после чего входит обычным образом. Та же форма погашает код сброса
+из консоли или карточки игрока. Погашение добавляет password identity.
 
 ## Будущий Steam
 

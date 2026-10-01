@@ -81,7 +81,8 @@ module AdminRoutes =
         | AccountAccessError.InvalidCredentials | AccountAccessError.SanctionRefused SanctionError.PlayerNotFound -> errorPage 404 "Игрок не найден." admin
         | AccountAccessError.SanctionRefused SanctionError.NotActive -> errorPage 409 "У игрока нет такого действующего наказания." admin
         | AccountAccessError.SanctionRefused SanctionError.NotAllowed -> errorPage 403 "Это наказание нельзя выдать или снять." admin
-        | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ | AccountAccessError.Banned _ ->
+        | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ | AccountAccessError.Banned _
+        | AccountAccessError.RegistrationClosed _ ->
             errorPage 503 "Сервис аккаунтов недоступен." admin
 
     // --- Ports -----------------------------------------------------------
@@ -396,6 +397,7 @@ module AdminRoutes =
             "sanctioned", "Наказание выдано."
             "lifted", "Наказание снято."
             "kicked", "Сессия игрока закрыта."
+            "registration", "Режим регистрации сохранён."
             "announced", "Объявление отправлено."
             "token-revoked", "Токен отозван."
         ]
@@ -554,6 +556,68 @@ module AdminRoutes =
         | Ok entries -> return! html 200 (AdminViews.sanctions admin entries) context
         | Error error -> return! serviceFailure (Some admin) error context
     }
+
+    // --- Registration ------------------------------------------------------
+
+    let private registrationMode routes context = task {
+        match! account routes context AccountAccessCommand.ReadRegistration with
+        | Ok (AccountAccessResult.Registration mode) -> return Ok mode
+        | Ok _ -> return Error AccountAccessError.Unavailable
+        | Error error -> return Error error
+    }
+
+    let private showRegistration routes admin status (failure: string option) (created: CreatedPlayerModel option) : HttpHandler = fun context -> task {
+        match! registrationMode routes context with
+        | Ok mode ->
+            let message = if failure.IsNone && created.IsNone then notice context else None
+            let input = routes.Settings.Input
+            let page = AdminViews.registration admin mode message failure created routes.Settings.SetupCodeHours input.Username input.DisplayName
+            return! html status page context
+        | Error error -> return! accountFailure (Some admin) error context
+    }
+
+    /// Stored by the account service, which reads it at every registration.
+    let private setRegistration routes =
+        mutation routes (fun admin form context -> task {
+            let refuse message = showRegistration routes admin 400 (Some message) None context
+            match RegistrationMode.ofKey (value form "mode") with
+            | _ when not (confirmed form) -> return! refuse "Отметьте подтверждение смены режима."
+            | None -> return! refuse "Неизвестный режим регистрации."
+            | Some mode ->
+                match! account routes context (AccountAccessCommand.SetRegistration(mode, ValueSome admin.Id)) with
+                | Ok (AccountAccessResult.Registration stored) ->
+                    let! audited = record routes context admin AdminAction.SetRegistrationMode AuditTarget.Server (RegistrationMode.key stored)
+                    if audited then return! redirect "/registration?done=registration" context
+                    else return! errorPage 503 "Режим сохранён, но строка аудита не записана; см. лог сервера." (Some admin) context
+                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                | Error error -> return! accountFailure (Some admin) error context
+        })
+
+    /// Works in every mode: the account has no password until the player redeems the code.
+    let private createPlayer routes =
+        mutation routes (fun admin form context -> task {
+            let refuse status message = showRegistration routes admin status (Some message) None context
+            let input = routes.Settings.Input
+            let moderation = routes.Settings.Moderation
+            match Username.create input.Username (value form "username"), DisplayName.create input.DisplayName (value form "displayName") with
+            | _ when not (confirmed form) -> return! refuse 400 "Отметьте подтверждение создания игрока."
+            | Error _, _ -> return! refuse 400 $"Имя пользователя: 1–{input.Username} символов, латиница, цифры, _ и точка."
+            | _, Error _ -> return! refuse 400 $"Display name: 1–{input.DisplayName} символов без управляющих."
+            | Ok username, _ when not (Moderation.allowsUsername moderation username) ->
+                return! refuse 400 "Это имя пользователя зарезервировано или содержит недопустимые слова."
+            | _, Ok displayName when not (Moderation.allows moderation (DisplayName.value displayName)) ->
+                return! refuse 400 "Display name содержит недопустимые слова."
+            | Ok username, Ok displayName ->
+                match! account routes context (AccountAccessCommand.CreateAccount(username, displayName)) with
+                | Ok (AccountAccessResult.AccountCreated(profile, code)) ->
+                    let! audited = record routes context admin AdminAction.CreatedPlayer (AuditTarget.Player profile.PlayerId) (Username.value profile.Username)
+                    let failure = if audited then None else Some "Игрок создан, но строка аудита не записана; см. лог сервера."
+                    let created = { PlayerId = PlayerId.value profile.PlayerId; Username = Username.value profile.Username; SetupCode = code }
+                    return! showRegistration routes admin 200 failure (Some created) context
+                | Error AccountAccessError.UsernameTaken -> return! refuse 409 "Это имя пользователя уже занято."
+                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                | Error error -> return! accountFailure (Some admin) error context
+        })
 
     // --- Announcements, audit, tokens, configuration -----------------------
 
@@ -732,6 +796,9 @@ module AdminRoutes =
         post "/players/{id}/lift" (lift routes)
         post "/players/{id}/kick" (kick routes)
         get "/sanctions" (withAdmin routes (sanctionsPage routes))
+        get "/registration" (withAdmin routes (fun admin -> showRegistration routes admin 200 None None))
+        post "/registration/mode" (setRegistration routes)
+        post "/registration/players" (createPlayer routes)
         get "/announce" (withAdmin routes (announcePage routes))
         post "/announce" (announce routes)
         get "/audit" (withAdmin routes (auditPage routes))

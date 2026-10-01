@@ -86,6 +86,35 @@ module PlayerRole =
         | ValueSome profile -> Ok { PlayerId = profile.PlayerId; Role = role }
         | ValueNone -> Error AdminError.PlayerNotFound
 
+/// Who may create player accounts (docs/AuthenticationRu.md, «Режим регистрации»):
+/// anyone from the game, with a password or through Steam; only through Steam;
+/// or only an administrator in the panel. The account service reads the stored
+/// mode at every registration.
+[<RequireQualifiedAccess>]
+type RegistrationMode =
+    | Open
+    | Steam
+    | Manual
+
+[<RequireQualifiedAccess>]
+module RegistrationMode =
+    let all = [ RegistrationMode.Open; RegistrationMode.Steam; RegistrationMode.Manual ]
+
+    /// A server that never chose a mode lets anyone register.
+    let initial = RegistrationMode.Open
+
+    /// Stored form, form value and console argument.
+    let key mode =
+        match mode with
+        | RegistrationMode.Open -> "open"
+        | RegistrationMode.Steam -> "steam"
+        | RegistrationMode.Manual -> "manual"
+
+    let ofKey (text: string) = all |> List.tryFind (fun mode -> key mode = text)
+
+    /// Whether a password registration from the game may create an account.
+    let allowsPassword mode = mode = RegistrationMode.Open
+
 /// Every mutation made from the panel, with a key that is stored in the audit
 /// table and never changes once written.
 [<RequireQualifiedAccess>]
@@ -102,6 +131,8 @@ type AdminAction =
     | SanctionedPlayer
     | LiftedSanction
     | KickedPlayer
+    | SetRegistrationMode
+    | CreatedPlayer
     // Content a moderator removed in the game.
     | RemovedGroundMark
     | ClearedGroundMarks
@@ -114,6 +145,7 @@ module AdminAction =
         AdminAction.Announced; AdminAction.CreatedApiToken; AdminAction.RevokedApiToken
         AdminAction.ResetAdminPassword; AdminAction.CreatedAdmin
         AdminAction.SanctionedPlayer; AdminAction.LiftedSanction; AdminAction.KickedPlayer
+        AdminAction.SetRegistrationMode; AdminAction.CreatedPlayer
         AdminAction.RemovedGroundMark; AdminAction.ClearedGroundMarks; AdminAction.DeletedChatMessage
     ]
 
@@ -131,6 +163,8 @@ module AdminAction =
         | AdminAction.SanctionedPlayer -> "sanction_player"
         | AdminAction.LiftedSanction -> "lift_sanction"
         | AdminAction.KickedPlayer -> "kick_player"
+        | AdminAction.SetRegistrationMode -> "set_registration_mode"
+        | AdminAction.CreatedPlayer -> "create_player"
         | AdminAction.RemovedGroundMark -> "remove_ground_mark"
         | AdminAction.ClearedGroundMarks -> "clear_ground_marks"
         | AdminAction.DeletedChatMessage -> "delete_chat_message"

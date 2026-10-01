@@ -207,9 +207,9 @@ DatabasePath = "data/dreamsleeve.db"
 BusyTimeoutSeconds = 5
 
 # Accounts: registration, password sign-in, saved sign-in and password reset over HTTP(S).
+# Who may register (open, steam or manual) is set at run time: the admin panel page
+# "Регистрация" or the console command registration <mode>; a new server is open.
 [Authentication]
-# false refuses new accounts (HTTP 403 registration_disabled); existing accounts keep working.
-AllowRegistration = true
 
 # The public HTTP host of /auth/*. Clients set its origin as authUrl.
 # The same keys describe the admin panel listener ([Admin.Listener]).
@@ -256,6 +256,9 @@ MaxSavedLogins = 8
 ResetLifetimeMinutes = 15
 # Display name changes kept per player for the admin panel, 1..1000; older ones are deleted.
 DisplayNameHistory = 20
+# Lifetime of the one-time code of a player created in the admin panel, hours, 1..720; the player
+# enters it in the game (Account -> password by code) to choose a password.
+SetupLifetimeHours = 72
 
 # Web admin panel (docs/AdminPanelRu.md). Loopback only by default: reach it through an SSH tunnel
 # or a reverse proxy. Without administrators the server prints a one-time setup code to the console.

@@ -262,6 +262,11 @@ module Moderation =
         let text = Username.value username
         text.StartsWith HiddenUsernamePrefix || text = "server" || text = "system"
 
+    /// A name a new account may take: not reserved and allowed by the block
+    /// rules. Registration and accounts created in the panel check it; sign-in never does.
+    let allowsUsername rules (username: Username) =
+        not (reservedUsername username) && allows rules (Username.value username)
+
     /// Stored profiles are never rewritten. Outbound copies hide names that
     /// fail the current block rules; IDs and the stored account stay unchanged.
     let publicProfile rules (profile: PlayerData) =

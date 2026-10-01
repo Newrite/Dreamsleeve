@@ -34,7 +34,7 @@ def smoke(args, log, directory: Path):
     config = directory / "server.toml"
     config.write_text(tomli_w.dumps({
         "Database": {"DatabasePath": str(database), "BusyTimeoutSeconds": 5},
-        "Authentication": {"AllowRegistration": True, "Listener": {"ListenUrl": auth_url, "AllowInsecureLoopback": True}},
+        "Authentication": {"Listener": {"ListenUrl": auth_url, "AllowInsecureLoopback": True}},
         "Admin": {"Listener": {"ListenUrl": f"http://127.0.0.1:{free_tcp_port()}"}},
         "Logging": {"MinimumLevel": "Debug", "FilePath": str(directory / "server-.json")},
     }), encoding="utf-8")

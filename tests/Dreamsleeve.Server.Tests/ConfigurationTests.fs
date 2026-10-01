@@ -294,8 +294,11 @@ let tests = testList "Server configuration" [
         Expect.equal admin.Listener.ListenUrl "http://127.0.0.1:8780" "loopback only"
         Expect.isFalse admin.Listener.TrustForwardedHeaders "forwarded headers are not trusted"
         Expect.isFalse Configuration.defaults.Authentication.Listener.TrustForwardedHeaders "same for authentication"
-        withFile "[Authentication]\nAllowRegistration = false\n" (fun path ->
+        withFile "[Authentication.Service]\nSetupLifetimeHours = 24\n" (fun path ->
             Expect.equal (parsed path).Admin admin "a file without [Admin] gets the defaults")
+        // Who may register is the run-time registration mode, not a setting.
+        withFile "[Authentication]\nAllowRegistration = false\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "AllowRegistration is an unknown setting")
         withFile "[Admin]\nEnabled = false\n[Admin.Listener]\nListenUrl = \"http://0.0.0.0:8780\"\n" (fun path ->
             Expect.isOk (Configuration.parse [|"--config"; path|]) "a disabled panel is not validated")
 

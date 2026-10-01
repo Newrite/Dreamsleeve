@@ -45,7 +45,7 @@ export namespace Dreamsleeve::Host::Bridge
       "invalidCredentials",
       "usernameTaken",
       "invalidRequest",
-      "registrationDisabled",
+      "registrationClosed",
       "busy",
       "unavailable",
       "invalidResponse",
@@ -53,6 +53,7 @@ export namespace Dreamsleeve::Host::Bridge
       "canceled",
       "nameNotAllowed",
       "banned",
+      "registrationSteamOnly",
   });
   constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
   constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
@@ -237,6 +238,14 @@ export namespace Dreamsleeve::Host::Bridge
       UiId        messageId;
     };
 
+    // An administrator's one-time code (a new account or a reset) and the new
+    // password; the player signs in normally afterwards.
+    struct ResetPassword
+    {
+      std::string code;
+      std::string password;
+    };
+
   }
 
   using UiCommand = std::variant<
@@ -261,7 +270,8 @@ export namespace Dreamsleeve::Host::Bridge
     Commands::ListSanctions,
     Commands::ListPlayerMarks,
     Commands::ClearPlayerMarks,
-    Commands::DeleteChatMessage>;
+    Commands::DeleteChatMessage,
+    Commands::ResetPassword>;
 
   // The "type" of each UiCommand alternative, in variant order.
   constexpr auto CommandNames = std::to_array<std::string_view>({
@@ -287,6 +297,7 @@ export namespace Dreamsleeve::Host::Bridge
       "listPlayerMarks",
       "clearPlayerMarks",
       "deleteChatMessage",
+      "resetPassword",
   });
   static_assert(CommandNames.size() == std::variant_size_v<UiCommand>);
 

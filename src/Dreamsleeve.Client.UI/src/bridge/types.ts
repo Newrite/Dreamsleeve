@@ -172,6 +172,8 @@ export type Command =
   // The host takes the instantKeys settings, saves them and re-projects every surface.
   | { type: "displaySettings"; settings: Settings }
   | { type: "signInSaved" }
+  // An administrator's one-time code and the new password; then a normal sign-in.
+  | { type: "resetPassword"; code: string; password: string }
   | { type: "signOut" }
   | { type: "forgetLogin" }
   | { type: "disconnect" }

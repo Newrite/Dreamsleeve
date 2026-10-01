@@ -332,4 +332,60 @@ let tests = testList "Authentication service" [
         equal 1L (database.Scalar "SELECT count(*) FROM display_name_changes WHERE changed_by IS NULL AND old_name='Persistent Player' AND new_name='Своё Имя'")
         do! stop service
     })
+
+    case "registration follows the stored mode, which survives a restart and never blocks sign-in" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use first = start database.Config settings TimeProvider.System
+        let! initial = access first AccountAccessCommand.ReadRegistration
+        equal (Ok (AccountAccessResult.Registration RegistrationMode.Open)) initial
+        let! _ = register first
+        let! closed = access first (AccountAccessCommand.SetRegistration(RegistrationMode.Manual, ValueNone))
+        equal (Ok (AccountAccessResult.Registration RegistrationMode.Manual)) closed
+        let! refused = access first (AccountAccessCommand.Register(username "second", display, password))
+        equal (Error (AccountAccessError.RegistrationClosed RegistrationMode.Manual)) refused
+        let! _ = access first (AccountAccessCommand.SetRegistration(RegistrationMode.Steam, ValueNone))
+        do! stop first
+
+        use second = start database.Config settings TimeProvider.System
+        let! stored = access second AccountAccessCommand.ReadRegistration
+        equal (Ok (AccountAccessResult.Registration RegistrationMode.Steam)) stored
+        let! steamOnly = access second (AccountAccessCommand.Register(username "second", display, password))
+        equal (Error (AccountAccessError.RegistrationClosed RegistrationMode.Steam)) steamOnly
+        let! _ = login second
+        equal 1L (database.Scalar "SELECT count(*) FROM accounts")
+        equal 1L (database.Scalar "SELECT count(*) FROM server_settings WHERE key='registration_mode' AND value='steam' AND changed_by IS NULL")
+        do! stop second
+    })
+
+    case "a player created in the panel has no password until the setup code is redeemed, in any mode" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        use service = start database.Config settings TimeProvider.System
+        let! _ = access service (AccountAccessCommand.SetRegistration(RegistrationMode.Manual, ValueNone))
+        let! created = access service (AccountAccessCommand.CreateAccount(username "Invited", display))
+        let profile, code =
+            match created with
+            | Ok (AccountAccessResult.AccountCreated(profile, code)) -> profile, code
+            | other -> failtestf "%A" other
+        equal "invited" (Username.value profile.Username)
+        equal 43 code.Length
+        // A setup code lives SetupLifetimeHours, much longer than a reset code.
+        let lifetime = database.Scalar "SELECT expires_at FROM auth_tokens WHERE kind=1" - DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+        check (abs (lifetime - 72L * 3600L) < 300L) $"Setup code lifetime: {lifetime} s"
+        let! duplicate = access service (AccountAccessCommand.CreateAccount(username "invited", display))
+        equal (Error AccountAccessError.UsernameTaken) duplicate
+        let! noPassword = access service (AccountAccessCommand.Login(username "invited", password))
+        equal (Error AccountAccessError.InvalidCredentials) noPassword
+        let! chosen = access service (AccountAccessCommand.ResetPassword(code, password))
+        equal (Ok AccountAccessResult.Completed) chosen
+        let! again = access service (AccountAccessCommand.ResetPassword(code, password))
+        equal (Error AccountAccessError.InvalidCredentials) again
+        let! signedIn = access service (AccountAccessCommand.Login(username "invited", password))
+        match signedIn with
+        | Ok (AccountAccessResult.SignedIn grant) -> equal profile grant.Profile
+        | other -> failtestf "%A" other
+        equal 1L (database.Scalar "SELECT count(*) FROM account_identities WHERE provider='password' AND subject='invited'")
+        do! stop service
+    })
 ]

@@ -52,6 +52,7 @@ export const commandTypes = [
   "listPlayerMarks",
   "clearPlayerMarks",
   "deleteChatMessage",
+  "resetPassword",
 ] as const;
 
 // Enum strings of the events.
@@ -77,7 +78,7 @@ export const authFailures = [
   "invalidCredentials",
   "usernameTaken",
   "invalidRequest",
-  "registrationDisabled",
+  "registrationClosed",
   "busy",
   "unavailable",
   "invalidResponse",
@@ -85,6 +86,7 @@ export const authFailures = [
   "canceled",
   "nameNotAllowed",
   "banned",
+  "registrationSteamOnly",
 ] as const;
 export const announcementOrigins = [
   "server",

@@ -88,6 +88,13 @@ type PlayerCardModel = {
     Sanctions: SanctionModel list
 }
 
+/// A player just created on the registration page, with the setup code shown once.
+type CreatedPlayerModel = {
+    PlayerId: uint64
+    Username: string
+    SetupCode: string
+}
+
 type AuditModel = {
     /// "администратор root" or "модератор alice".
     Actor: string
