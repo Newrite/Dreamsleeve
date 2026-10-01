@@ -31,42 +31,57 @@ void OnSkseMessage(SKSE::MessagingInterface::Message* message)
   if (message->type != SKSE::MessagingInterface::kPostPostLoad) return;
   dreamsleeve = static_cast<DreamsleeveAPI::IVDreamsleeve1*>(DreamsleeveAPI::RequestPluginAPI(DreamsleeveAPI::InterfaceVersion::V1));
   if (!dreamsleeve) return;  // Dreamsleeve не установлен.
-  dreamsleeve->AddAnnouncementResultCallback(SKSE::GetPluginHandle(), [](const DreamsleeveAPI::AnnouncementResult& result) {
-    if (result.source != "MyMod") return;  // Итоги всех модов приходят всем подписчикам.
-    if (result.result != DreamsleeveAPI::APIResult::Published) SKSE::log::warn("Dreamsleeve refused: {}", result.reason);
+  dreamsleeve->AddAnnouncementResultCallback(SKSE::GetPluginHandle(), [](const DreamsleeveAPI::AnnouncementResult* result) {
+    if (std::string_view{result->source} != "MyMod") return;  // Итоги всех модов приходят всем подписчикам.
+    if (result->result != DreamsleeveAPI::APIResult::Published) SKSE::log::warn("Dreamsleeve refused: {}", result->reason);
   });
 }
 
-void AnnounceDeath(std::string_view text)
+void AnnounceDeath(const std::string& text)  // UTF-8
 {
   if (!dreamsleeve) return;
-  const auto result = dreamsleeve->PostAnnouncement(text, DreamsleeveAPI::AnnouncementKind::Event, "MyMod");
+  const auto result = dreamsleeve->PostAnnouncement(text.c_str(), DreamsleeveAPI::AnnouncementKind::Event, "MyMod");
   // Queued — только принято локально; итог придёт в callback.
 }
 ```
+
+Строки в callback (`source`, `text`, `reason`) — `const char*` и живут только до возврата
+из него: сравнивайте через `std::string_view` или `strcmp`, а не указателями, и копируйте то,
+что храните.
 
 ### Версии интерфейса
 
 Интерфейсы только дополняются: `IVDreamsleeve1` не меняет состав, порядок и сигнатуры
 методов. Новые методы появятся в `IVDreamsleeve2 : IVDreamsleeve1` с новым значением
 `InterfaceVersion::V2`; моды, запросившие `V1`, продолжают работать. Значения
-`APIResult` могут добавляться, существующие номера не меняются. Интерфейс передаёт
-`std::string_view`, `std::string` и `std::function`, как TrueFlasksNG: мод должен быть
-собран тем же MSVC toolset (одна ABI стандартной библиотеки), что обычно для SKSE-плагинов.
+`APIResult` и `CallbackResult` могут добавляться, существующие номера не меняются. Через
+границу DLL проходят только простые типы: строки `const char*` с нулём в конце, указатель на
+функцию, перечисления и `bool`. Ни `std::string`, ни `std::function` интерфейс не передаёт,
+поэтому мод может быть собран другим toolset, с другой стандартной библиотекой или в
+отладочной конфигурации.
 
 | Метод `IVDreamsleeve1` | Смысл |
 |---|---|
 | `GetPluginVersion()` | версия DLL: `major << 24 \| minor << 16 \| patch << 4 \| build` |
 | `IsConnected()` | есть готовая сессия с сервером |
-| `PostAnnouncement(text, kind, source)` | поставить объявление в очередь; синхронный `APIResult` |
-| `AddAnnouncementResultCallback(plugin, callback)` | один callback итогов на плагин; `AlreadyRegistered` при повторе |
+| `PostAnnouncement(utf8Text, kind, utf8Source)` | поставить объявление в очередь; синхронный `APIResult` |
+| `AddAnnouncementResultCallback(plugin, callback)` | один callback итогов на плагин: указатель на функцию, лямбда без захвата подходит; `AlreadyRegistered` при повторе, `InvalidCallback` для `nullptr` |
 | `RemoveAnnouncementResultCallback(plugin)` | снять callback; `NotRegistered`, если его нет |
 
 Все методы можно вызывать с любого потока. `PostAnnouncement` копирует строки,
-проверяет кодировку и кладёт запрос в очередь (32 места), если сессия готова;
-игровой поток отправляет его в следующем кадре. Игровые и сетевые объекты вызов не
-трогает. Callback вызывается на игровом потоке без удерживаемых блокировок, поэтому
-внутри него можно регистрировать и снимать callbacks.
+проверяет их и кладёт запрос в очередь (32 места), если сессия готова; игровой поток
+отправляет его в следующем кадре. Игровые и сетевые объекты вызов не трогает. Callback
+вызывается на игровом потоке без удерживаемых блокировок, поэтому внутри него можно
+регистрировать и снимать callbacks.
+
+Ожидается UTF-8 — так строку увидят все игроки. Строка, не являющаяся корректным UTF-8,
+читается в ANSI-кодировке системы игрока (так выглядят узкие литералы, собранные без
+`/utf-8`, и строки из «A»-функций Windows), конвертируется в UTF-8, а в лог клиента пишется
+предупреждение `Announcement text is not UTF-8; read in ANSI code page 1251`. Это догадка:
+если мод собран на машине с другой кодировкой, текст исказится, поэтому передавайте UTF-8
+(`/utf-8` или `u8"..."` с приведением к `const char*`). `nullptr`, строка длиннее 64 КиБ
+(дальше она не читается) и байты, недопустимые и в UTF-8, и в ANSI-кодировке, — синхронный
+`Rejected`.
 
 ### Результаты
 
@@ -75,14 +90,15 @@ void AnnounceDeath(std::string_view text)
 | `Queued` (0) | синхронно | принято локально, итог будет в callback |
 | `Published` (1) | асинхронно | сервер опубликовал |
 | `NotConnected` (2) | оба | нет готовой сессии, запрос не отправлен |
-| `Rejected` (3) | оба | синхронно: текст или подпись не UTF-8, вид не из `AnnouncementKind`; асинхронно: источник запрещён сервером, длиннее лимита, пустые текст или подпись, подпись многострочная, словарь, пробельный текст, игрок в муте |
+| `Rejected` (3) | оба | синхронно: текст или подпись — `nullptr`, длиннее 64 КиБ или не читаются ни как UTF-8, ни в ANSI-кодировке; вид не из `AnnouncementKind`; асинхронно: источник запрещён сервером, длиннее лимита, пустые текст или подпись, подпись многострочная, словарь, пробельный текст, игрок в муте |
 | `Busy` (4) | оба | очередь API или ожидающих ответа запросов Core переполнена |
 | `RateLimited` (5) | асинхронно | слишком часто или повтор; лимит серверный, по аккаунту игрока |
 | `Failed` (6) | асинхронно | доставка неизвестна: сессия сменилась до ответа или запрос не удалось закодировать |
 
 `AnnouncementResult` в callback содержит результат, подпись, текст и причину по-русски
-(пустую при публикации). Итоги получают все зарегистрированные плагины; фильтруйте по
-своей подписи. Синхронный отказ в callback не приходит: он виден по возвращённому
+(пустую при публикации); строки — UTF-8, не `nullptr`. Итоги получают все
+зарегистрированные плагины; фильтруйте по своей подписи (если она была не в UTF-8, в итоге
+она уже сконвертирована). Синхронный отказ в callback не приходит: он виден по возвращённому
 значению и строке лога.
 
 ## Papyrus
@@ -121,9 +137,9 @@ EndEvent
 Нативные функции принимают `std::string` и `std::int32_t` (Papyrus `string`/`int`) и
 зарегистрированы без `callableFromTasklets`: виртуальная машина вызывает их в следующем
 кадре. Итог приходит mod event `Dreamsleeve_AnnouncementResult`: `strArg` — подпись,
-`numArg` — код `APIResult`. Строки Papyrus принимаются как UTF-8, как и все игровые
-строки, которые читает клиент; строка, не являющаяся корректным UTF-8, отклоняется
-(`PostAnnouncement` возвращает `false`).
+`numArg` — код `APIResult`. Строки Papyrus проверяются по тому же правилу, что строки C++:
+UTF-8 принимается как есть, иное читается в ANSI-кодировке системы (с предупреждением в
+логе); строка, не читаемая ни так, ни так, отклоняется (`PostAnnouncement` возвращает `false`).
 
 ## Лимиты и правила
 
@@ -131,7 +147,7 @@ EndEvent
 
 | Где | Что проверяет |
 |---|---|
-| Вход API (`ModApi`, синхронно) | текст и подпись — корректный UTF-8; вид — `Announcement` или `Event`; есть готовая сессия; очередь (32) не полна |
+| Вход API (`ModApi`, синхронно) | текст и подпись — не `nullptr`, не длиннее 64 КиБ, UTF-8 или конвертируемы из ANSI-кодировки; вид — `Announcement` или `Event`; есть готовая сессия; очередь (32) не полна |
 | Core (перед отправкой) | источник разрешён политикой из приветствия; текст и подпись не длиннее лимитов из приветствия; не больше 32 запросов чата и объявлений ждут ответа |
 | Сервер | `[Server.ChatInput] AnnouncementText` = 500 скаляров Unicode, `AnnouncementSignature` = 64 (по умолчанию); правила текста (пустой и пробельный текст, подпись одной строкой, управляющие символы); словарь `[block]` → `TEXT_NOT_ALLOWED`, `[flag]` — помеченные диапазоны; `[Announcements.ThirdParty] Enabled`, иначе `ANNOUNCEMENT_NOT_ALLOWED`; мут игрока → `MUTED`; `[Announcements.Rate] Burst = 3`, `RefillMs = 20000`, `DuplicateWindowMs = 300000` на аккаунт |
 

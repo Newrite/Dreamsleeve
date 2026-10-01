@@ -100,9 +100,9 @@ public:
     }
 
     Domain::OperationResult ApplyMetadata(
-      PlayerId                                  id,
-      const std::optional<ActorValuesPatch>&    values,
-      const std::optional<PlayerDetailsPatch>&  details)
+      PlayerId                                 id,
+      const std::optional<ActorValuesPatch>&   values,
+      const std::optional<PlayerDetailsPatch>& details)
     {
       const auto found = players.find(id);
       if (found == players.end()) return UnknownPlayer();

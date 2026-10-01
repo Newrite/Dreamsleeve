@@ -40,6 +40,24 @@ export namespace Dreamsleeve::Utils::Text
     return result;
   }
 
+  // Text in a Windows code page (CP_ACP = 0 for the system ANSI one) as UTF-8;
+  // nullopt when the bytes are not valid in that code page.
+  std::optional<std::string> FromCodePage(std::string_view text, std::uint32_t codePage)
+  {
+    if (text.empty()) return std::string{};
+    if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) return std::nullopt;
+    const auto size     = static_cast<int>(text.size());
+    const int  wideSize = MultiByteToWideChar(codePage, MB_ERR_INVALID_CHARS, text.data(), size, nullptr, 0);
+    if (wideSize <= 0) return std::nullopt;
+    std::wstring wide(static_cast<std::size_t>(wideSize), L'\0');
+    MultiByteToWideChar(codePage, MB_ERR_INVALID_CHARS, text.data(), size, wide.data(), wideSize);
+    const int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), wideSize, nullptr, 0, nullptr, nullptr);
+    if (bytes <= 0) return std::nullopt;
+    std::string result(static_cast<std::size_t>(bytes), '\0');
+    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), wideSize, result.data(), bytes, nullptr, nullptr);
+    return result;
+  }
+
   // C0 and C1 control characters and DEL, line breaks included, in
   // well-formed UTF-8 (C1 is encoded as C2 80..C2 9F).
   bool HasControl(std::string_view text)

@@ -28,6 +28,10 @@ export namespace ModApi
   namespace Detail
   {
 
+    // Longest string taken from another mod, far above any server limit; a C++
+    // string is read no further, so a missing terminator cannot run on.
+    constexpr std::size_t MaxArgumentBytes = 64 * 1024;
+
     std::optional<Domain::AnnouncementKind> Kind(std::int32_t value)
     {
       if (value == static_cast<std::int32_t>(DreamsleeveAPI::AnnouncementKind::Announcement)) return Domain::AnnouncementKind::Announcement;
@@ -35,21 +39,47 @@ export namespace ModApi
       return std::nullopt;
     }
 
-    // What a mod hands over becomes text only as well-formed UTF-8, refused at
-    // once so the mod learns it synchronously. Lengths and sources are Core's
-    // check against the server policy; words, blank text and one-line labels the server's.
-    Api::Result Post(std::string text, std::int32_t kind, std::string source)
+    // A null-terminated C++ string, read up to one byte past MaxArgumentBytes;
+    // nullopt for null.
+    std::optional<std::string_view> Terminated(const char* value) noexcept
     {
-      using Dreamsleeve::Utils::Text::ValidUtf8;
-      const auto mapped = Kind(kind);
-      if (!mapped || !ValidUtf8(text) || !ValidUtf8(source))
+      if (!value) return std::nullopt;
+      std::size_t size = 0;
+      while (size <= MaxArgumentBytes && value[size] != '\0')
+        ++size;
+      return std::string_view{value, size};
+    }
+
+    // A string from another mod as UTF-8. Well-formed UTF-8 is kept as it is;
+    // other bytes are read in the system ANSI code page, which narrow literals
+    // compiled without /utf-8 and the "A" Windows functions produce. Missing,
+    // overlong and unreadable strings are refused.
+    std::optional<std::string> Utf8Argument(std::optional<std::string_view> value, std::string_view field)
+    {
+      using namespace Dreamsleeve::Utils::Text;
+      if (!value || value->size() > MaxArgumentBytes) return std::nullopt;
+      if (ValidUtf8(*value)) return std::string{*value};
+      auto converted = FromCodePage(*value, CP_ACP);
+      if (converted) logger::warn("Announcement {} is not UTF-8; read in ANSI code page {}", field, GetACP());
+      return converted;
+    }
+
+    // What a mod hands over becomes text only as UTF-8, refused at once so the
+    // mod learns it synchronously. Lengths and sources are Core's check against
+    // the server policy; words, blank text and one-line labels the server's.
+    Api::Result Post(std::optional<std::string_view> text, std::int32_t kind, std::optional<std::string_view> source)
+    {
+      const auto mapped     = Kind(kind);
+      auto       utf8Text   = Utf8Argument(text, "text");
+      auto       utf8Source = Utf8Argument(source, "source label");
+      if (!mapped || !utf8Text || !utf8Source)
       {
         logger::warn("Announcement refused locally: invalid kind, text or source label");
         return Api::Result::Rejected;
       }
-      const auto label = Dreamsleeve::Host::Bridge::ModLabel(source);
+      const auto label = Dreamsleeve::Host::Bridge::ModLabel(*utf8Source);
       const auto result =
-        Runtime::RequestAnnouncement({std::move(text), *mapped, Domain::ClientAnnouncementSource::ThirdParty, std::move(source)});
+        Runtime::RequestAnnouncement({std::move(*utf8Text), *mapped, Domain::ClientAnnouncementSource::ThirdParty, std::move(*utf8Source)});
       if (result == Api::Result::Queued)
         logger::info("Announcement from {} queued", label);
       else
@@ -84,21 +114,22 @@ export namespace ModApi
       }
 
       DreamsleeveAPI::APIResult PostAnnouncement(
-        std::string_view                 text,
+        const char*                      utf8Text,
         DreamsleeveAPI::AnnouncementKind kind,
-        std::string_view                 source) noexcept override
+        const char*                      utf8Source) noexcept override
       {
-        return static_cast<DreamsleeveAPI::APIResult>(Post(std::string{text}, static_cast<std::int32_t>(kind), std::string{source}));
+        return static_cast<DreamsleeveAPI::APIResult>(Post(Terminated(utf8Text), static_cast<std::int32_t>(kind), Terminated(utf8Source)));
       }
 
       DreamsleeveAPI::CallbackResult AddAnnouncementResultCallback(
         SKSE::PluginHandle                         plugin,
         DreamsleeveAPI::AnnouncementResultCallback callback) noexcept override
       {
+        if (!callback) return DreamsleeveAPI::CallbackResult::InvalidCallback;
         auto&           callbacks = ResultCallbacks();
         std::lock_guard lock{callbacks.mutex};
-        return callbacks.byPlugin.try_emplace(plugin, std::move(callback)).second ? DreamsleeveAPI::CallbackResult::OK
-                                                                                  : DreamsleeveAPI::CallbackResult::AlreadyRegistered;
+        return callbacks.byPlugin.try_emplace(plugin, callback).second ? DreamsleeveAPI::CallbackResult::OK
+                                                                       : DreamsleeveAPI::CallbackResult::AlreadyRegistered;
       }
 
       DreamsleeveAPI::CallbackResult RemoveAnnouncementResultCallback(SKSE::PluginHandle plugin) noexcept override
@@ -115,10 +146,10 @@ export namespace ModApi
       return instance;
     }
 
-    // Papyrus strings are taken as UTF-8, like every game string the client reads.
+    // Papyrus strings follow the same rule as C++ ones: UTF-8, else the ANSI code page.
     bool PapyrusPostAnnouncement(RE::StaticFunctionTag*, std::string text, std::int32_t kind, std::string source)
     {
-      return Post(std::move(text), kind, std::move(source)) == Api::Result::Queued;
+      return Post(std::string_view{text}, kind, std::string_view{source}) == Api::Result::Queued;
     }
 
     bool PapyrusIsConnected(RE::StaticFunctionTag*)
@@ -166,10 +197,15 @@ export namespace ModApi
       for (const auto& [plugin, callback] : callbacks.byPlugin)
         targets.push_back(callback);
     }
-    const DreamsleeveAPI::AnnouncementResult
-      result{static_cast<DreamsleeveAPI::APIResult>(outcome.result), outcome.signature, outcome.text, outcome.reason};
-    for (const auto& callback : targets)
-      callback(result);
+    // The strings live in outcome for the whole loop.
+    const DreamsleeveAPI::AnnouncementResult result{
+        static_cast<DreamsleeveAPI::APIResult>(outcome.result),
+        outcome.signature.c_str(),
+        outcome.text.c_str(),
+        outcome.reason.c_str()
+    };
+    for (const auto callback : targets)
+      callback(&result);
 
     if (const auto events = SKSE::GetModCallbackEventSource())
     {

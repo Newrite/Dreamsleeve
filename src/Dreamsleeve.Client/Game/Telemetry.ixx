@@ -17,10 +17,10 @@ namespace Telemetry
   namespace Dream = Dreamsleeve::Client;
   using Clock     = std::chrono::steady_clock;
 
-  constexpr auto  DetailsInterval     = std::chrono::milliseconds{250};
-  constexpr auto  ActorValuesInterval = std::chrono::milliseconds{250};
-  constexpr auto  MarkerInterval      = std::chrono::seconds{5};
-  constexpr auto  ActivationMemory    = std::chrono::seconds{3};
+  constexpr auto DetailsInterval     = std::chrono::milliseconds{250};
+  constexpr auto ActorValuesInterval = std::chrono::milliseconds{250};
+  constexpr auto MarkerInterval      = std::chrono::seconds{5};
+  constexpr auto ActivationMemory    = std::chrono::seconds{3};
 
   struct Sent
   {

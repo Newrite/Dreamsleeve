@@ -57,6 +57,19 @@ TEST_CASE("Text of unknown encoding is repaired into valid UTF-8, valid text kep
     CHECK(ValidUtf8(Repair(invalid)));
 }
 
+TEST_CASE("Text in a code page becomes UTF-8, bytes that code page does not define are refused")
+{
+  using namespace Dreamsleeve::Utils::Text;
+
+  // "Волк" in Windows-1251.
+  CHECK(FromCodePage("\xC2\xEE\xEB\xEA", 1251).value_or("<none>") == "Волк");
+  CHECK(FromCodePage("Dragonborn", 1252).value_or("<none>") == "Dragonborn");
+  CHECK(FromCodePage("", 1251).value_or("<none>") == "");
+  // A Shift-JIS lead byte without its trail byte; malformed UTF-8 read as UTF-8.
+  CHECK_FALSE(FromCodePage("\x82", 932).has_value());
+  CHECK_FALSE(FromCodePage("\xFF", 65001).has_value());
+}
+
 TEST_CASE("Backoff doubles the wait after each attempt up to the maximum and starts over after a reset")
 {
   using namespace std::chrono_literals;

@@ -15,15 +15,14 @@
 
 #include <Windows.h>
 #include <cstdint>
-#include <functional>
-#include <string>
-#include <string_view>
 
 namespace DreamsleeveAPI
 {
 
   // Available interface versions. Versions are append-only: a released
-  // interface keeps its methods, their order and their signatures.
+  // interface keeps its methods, their order and their signatures. Only plain
+  // types cross the DLL boundary (null-terminated UTF-8 strings, function
+  // pointers), so a plugin built with another toolset, STL or debug settings works.
   enum class InterfaceVersion : std::uint8_t
   {
     V1
@@ -43,7 +42,7 @@ namespace DreamsleeveAPI
     Queued       = 0,  // Accepted locally; the outcome follows in the result callback.
     Published    = 1,  // The server published the announcement.
     NotConnected = 2,  // No ready session; the request was not sent.
-    Rejected     = 3,  // Refused; the callback reason tells why (synchronously: not UTF-8 or an unknown kind).
+    Rejected     = 3,  // Refused; the callback reason tells why (synchronously: a null, overlong or unreadable string or an unknown kind).
     Busy         = 4,  // A local queue is full; try later.
     RateLimited  = 5,  // Too frequent or repeated; the server limit is per player account.
     Failed       = 6   // Delivery unknown: the session changed or the request could not be encoded.
@@ -53,21 +52,24 @@ namespace DreamsleeveAPI
   {
     OK                = 0,
     AlreadyRegistered = 1,
-    NotRegistered     = 2
+    NotRegistered     = 2,
+    InvalidCallback   = 3  // The callback is null.
   };
 
-  // Outcome of an announcement that returned Queued.
+  // Outcome of an announcement that returned Queued. The strings are
+  // null-terminated UTF-8, never null, and valid only during the callback:
+  // copy what you keep.
   struct AnnouncementResult
   {
     APIResult   result;
-    std::string source;  // The source label passed to PostAnnouncement.
-    std::string text;
-    std::string reason;  // Readable refusal (Russian UI text); empty when published.
+    const char* source;  // The source label as accepted by PostAnnouncement (converted to UTF-8 if it was not).
+    const char* text;
+    const char* reason;  // Readable refusal (Russian UI text); empty when published.
   };
 
   // Called on the game main thread, once per queued announcement of any mod;
-  // filter by source.
-  using AnnouncementResultCallback = std::function<void(const AnnouncementResult&)>;
+  // filter by source. A capture-less lambda converts to it.
+  using AnnouncementResultCallback = void (*)(const AnnouncementResult* result);
 
   // Dreamsleeve modder interface v1. Every method may be called from any thread.
   class IVDreamsleeve1
@@ -85,14 +87,16 @@ public:
     virtual bool IsConnected() const noexcept = 0;
 
     // Asks the server to publish text in the system channel ("Объявления").
-    // text: UTF-8, up to 500 characters by default (the server announces its
-    // limit), newlines allowed. source: the name of your mod, UTF-8, one line, up
-    // to 64 characters by default; it is shown next to the text and never raises trust.
+    // utf8Text: null-terminated UTF-8, up to 500 characters by default (the
+    // server announces its limit), newlines allowed. utf8Source: the name of your
+    // mod, null-terminated UTF-8, one line, up to 64 characters by default; it is
+    // shown next to the text and never raises trust. A string that is not UTF-8
+    // is read in the system ANSI code page; a null or unreadable one is Rejected.
     // Both are copied before the call returns. Queued is not publication: the
     // outcome arrives in the result callback.
-    virtual APIResult PostAnnouncement(std::string_view text, AnnouncementKind kind, std::string_view source) noexcept = 0;
+    virtual APIResult PostAnnouncement(const char* utf8Text, AnnouncementKind kind, const char* utf8Source) noexcept = 0;
 
-    // One callback per plugin.
+    // One callback per plugin; InvalidCallback for null.
     virtual CallbackResult AddAnnouncementResultCallback(SKSE::PluginHandle plugin, AnnouncementResultCallback callback) noexcept = 0;
 
     virtual CallbackResult RemoveAnnouncementResultCallback(SKSE::PluginHandle plugin) noexcept = 0;

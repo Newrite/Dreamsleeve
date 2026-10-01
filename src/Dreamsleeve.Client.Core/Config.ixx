@@ -34,7 +34,7 @@ export namespace Dreamsleeve::Client
   // then keep fixed for the network owner's lifetime; its parts trust the values.
   struct Configuration
   {
-    NetConfig       network{[] {
+    NetConfig   network{[] {
       auto value         = NetConfig::Default();
       value.maxPeers     = ClientPeers;
       value.channelLimit = MinChannels;
@@ -43,19 +43,19 @@ export namespace Dreamsleeve::Client
       value.receiveBufferBytes = 1024 * 1024;
       return value;
     }()};
-    std::size_t     maxInitialPlayers{4096};
-    std::size_t     maxRecentMessages{512};
+    std::size_t maxInitialPlayers{4096};
+    std::size_t maxRecentMessages{512};
     // An IPv4 literal or a DNS name, resolved again on every connection attempt.
-    std::string     serverHost{DreamNetAddress::LoopbackIp};
-    Port            serverPort{DefaultServerPort};
-    TimeOutMs       connectTimeoutMs{5000};
-    TimeOutMs       disconnectTimeoutMs{2000};
-    TimeOutMs       sessionTimeoutMs{5000};
-    std::size_t     chatCapacity{512};
-    std::size_t     maxPendingChatRequests{32};
-    std::size_t     maxPendingPlayerUpdates{32};
-    std::size_t     maxActorValues{64};
-    TimeOutMs       playerSampleIntervalMs{50};
+    std::string serverHost{DreamNetAddress::LoopbackIp};
+    Port        serverPort{DefaultServerPort};
+    TimeOutMs   connectTimeoutMs{5000};
+    TimeOutMs   disconnectTimeoutMs{2000};
+    TimeOutMs   sessionTimeoutMs{5000};
+    std::size_t chatCapacity{512};
+    std::size_t maxPendingChatRequests{32};
+    std::size_t maxPendingPlayerUpdates{32};
+    std::size_t maxActorValues{64};
+    TimeOutMs   playerSampleIntervalMs{50};
     // Local game view; it does not change server subscriptions.
     double        visibilityDistance{8192.0};
     bool          showFireflies{true};

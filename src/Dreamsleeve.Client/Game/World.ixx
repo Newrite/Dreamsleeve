@@ -412,7 +412,9 @@ export namespace World
             key
       },
         Domain::ActorValueInfo{
-          std::string{label}, Domain::ResourceActorValue{Domain::Players::Points(current), Domain::Players::Points(maximum)}});
+            std::string{label},
+            Domain::ResourceActorValue{Domain::Players::Points(current), Domain::Players::Points(maximum)}
+        });
     }
     return values;
   }

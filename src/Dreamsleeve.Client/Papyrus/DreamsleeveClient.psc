@@ -54,8 +54,9 @@ EndFunction
 ; aiKind: KIND_ANNOUNCEMENT() or KIND_EVENT().
 ; asSource: the name of your mod, one line; shown next to the text.
 ; True means queued, not published: register for the mod event
-; "Dreamsleeve_AnnouncementResult" to learn the outcome. False: not queued
-; (no connection, text or source not UTF-8, a multiline source, a full
+; "Dreamsleeve_AnnouncementResult" to learn the outcome. Text that is not
+; UTF-8 is read in the system ANSI code page. False: not queued (no
+; connection, an unknown kind, text or source readable neither way, a full
 ; queue); the reason is written to DreamsleeveClient.log.
 bool Function PostAnnouncement(string asText, int aiKind, string asSource) global native
 

@@ -21,8 +21,8 @@ export struct NetConfig
   size_t         maxPacketBytes{1024 * 1024};
   size_t         maxWaitingData{32 * 1024 * 1024};
   // UDP socket buffers, bytes; they replace the sizes enet_host_create sets.
-  size_t         receiveBufferBytes{ENET_HOST_RECEIVE_BUFFER_SIZE};
-  size_t         sendBufferBytes{ENET_HOST_SEND_BUFFER_SIZE};
+  size_t receiveBufferBytes{ENET_HOST_RECEIVE_BUFFER_SIZE};
+  size_t sendBufferBytes{ENET_HOST_SEND_BUFFER_SIZE};
 
   static constexpr NetConfig Default() noexcept
   {
@@ -45,10 +45,10 @@ export struct ServerConfig final : NetConfig
     ServerConfig   config{.address = DreamNetAddress::Loopback(loopbackPort)};
     NetConfig      defaultNet = NetConfig::Default();
 
-    config.maxPeers       = defaultNet.maxPeers;
-    config.channelLimit   = defaultNet.channelLimit;
-    config.inBwLimit      = defaultNet.inBwLimit;
-    config.outBwLimit     = defaultNet.outBwLimit;
+    config.maxPeers           = defaultNet.maxPeers;
+    config.channelLimit       = defaultNet.channelLimit;
+    config.inBwLimit          = defaultNet.inBwLimit;
+    config.outBwLimit         = defaultNet.outBwLimit;
     config.maxPacketBytes     = defaultNet.maxPacketBytes;
     config.maxWaitingData     = defaultNet.maxWaitingData;
     config.receiveBufferBytes = defaultNet.receiveBufferBytes;
@@ -99,8 +99,8 @@ export struct HostInfo final
   size_t          maxPacketBytes;
   size_t          maxWaitingData;
   // Read back from the socket: the system may round or cap a requested size.
-  size_t          receiveBufferBytes;
-  size_t          sendBufferBytes;
+  size_t receiveBufferBytes;
+  size_t sendBufferBytes;
 };
 
 export struct HostTelemetry final
@@ -417,13 +417,13 @@ export class DreamNetHost
     }
 
     return HostInfo{
-        .address           = DreamNetAddress::FromNative(host->address),
-        .peerCount         = host->peerCount,
-        .connectedPeers    = host->connectedPeers,
-        .duplicatePeers    = host->duplicatePeers,
-        .channelLimit      = host->channelLimit,
-        .incomingBandwidth = host->incomingBandwidth,
-        .outgoingBandwidth = host->outgoingBandwidth,
+        .address            = DreamNetAddress::FromNative(host->address),
+        .peerCount          = host->peerCount,
+        .connectedPeers     = host->connectedPeers,
+        .duplicatePeers     = host->duplicatePeers,
+        .channelLimit       = host->channelLimit,
+        .incomingBandwidth  = host->incomingBandwidth,
+        .outgoingBandwidth  = host->outgoingBandwidth,
         .maxPacketBytes     = host->maximumPacketSize,
         .maxWaitingData     = host->maximumWaitingData,
         .receiveBufferBytes = SocketBuffer(host->socket, SO_RCVBUF),
@@ -573,8 +573,8 @@ export class DreamNetHost
   // Validated sizes fit in int, the type of the socket option.
   static bool ApplySocketBuffers(ENetHost* native, const NetConfig& config) noexcept
   {
-    return enet_socket_set_option(native->socket, ENET_SOCKOPT_RCVBUF, static_cast<int>(config.receiveBufferBytes)) == 0
-        && enet_socket_set_option(native->socket, ENET_SOCKOPT_SNDBUF, static_cast<int>(config.sendBufferBytes)) == 0;
+    return enet_socket_set_option(native->socket, ENET_SOCKOPT_RCVBUF, static_cast<int>(config.receiveBufferBytes)) == 0 &&
+           enet_socket_set_option(native->socket, ENET_SOCKOPT_SNDBUF, static_cast<int>(config.sendBufferBytes)) == 0;
   }
 
   // ENet reads back only its error and TTL options.
