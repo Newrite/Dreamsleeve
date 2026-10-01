@@ -243,6 +243,21 @@ TEST_CASE("Players compare actor values by key, name and kind, and resources wit
   renamed["skyrim:health"].displayName = "Health";
   CHECK_FALSE(Players::SameActorValues(health, renamed, 0.05f));
 
+  // Steps below epsilon are the same until the resource reaches an end of its range.
+  const ActorValueStorage almostFull{
+      {"skyrim:health", {"Здоровье", ResourceActorValue{149.5f, 150}}}
+  };
+  auto full                                                         = almostFull;
+  std::get<ResourceActorValue>(full["skyrim:health"].state).current = 150;
+  CHECK(Players::SameActorValues(health, moved, 1.0f));
+  CHECK_FALSE(Players::SameActorValues(almostFull, full, 1.0f));
+  auto empty                                                         = almostFull;
+  std::get<ResourceActorValue>(empty["skyrim:health"].state).current = 0.5f;
+  auto dead                                                          = empty;
+  std::get<ResourceActorValue>(dead["skyrim:health"].state).current  = 0;
+  CHECK_FALSE(Players::SameActorValues(empty, dead, 1.0f));
+  CHECK(Players::SameActorValues(full, full, 1.0f));
+
   // A scalar is compared exactly, and a later resource is still compared.
   ActorValueStorage left{
       {"mod:scalar",    {"Scalar", ScalarActorValue{1}}           },

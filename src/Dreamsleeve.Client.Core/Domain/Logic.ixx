@@ -269,10 +269,14 @@ export namespace Domain::Players
     return next;
   }
 
-  // Actor values worth sending again: another key, name or kind, or a
-  // resource moved by more than epsilon.
+  // Actor values worth sending again: another key, name or kind, a resource
+  // moved by more than epsilon, or one that reached or left an end of its range,
+  // so a bar never stops a fraction short of empty or full.
   bool SameActorValues(const ActorValueStorage& left, const ActorValueStorage& right, float epsilon)
   {
+    const auto atEnd = [](const ResourceActorValue& value) {
+      return value.current <= 0 || value.current >= value.maximum;
+    };
     if (left.size() != right.size()) return false;
     for (const auto& [key, info] : left)
     {
@@ -285,7 +289,8 @@ export namespace Domain::Players
         if (!(info.state == found->second.state)) return false;
         continue;
       }
-      if (std::abs(a->current - b->current) > epsilon || std::abs(a->maximum - b->maximum) > epsilon) return false;
+      if (std::abs(a->current - b->current) > epsilon || std::abs(a->maximum - b->maximum) > epsilon || atEnd(*a) != atEnd(*b))
+        return false;
     }
     return true;
   }

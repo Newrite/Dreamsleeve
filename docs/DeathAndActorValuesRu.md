@@ -192,7 +192,8 @@ kRecover) пишется в kTemporary (`Func32` → `damageav(1, …)`), пос
    - перерегистрация Papyrus-нативов — покрывает только скриптовый путь.
 
 Клиент следует пп. 1–2 ([SkseClientRu.md](SkseClientRu.md#телеметрия)): HP/MP/SP игрока
-опрашиваются из кадра каждые 250 мс и уходят при изменении больше 0.05, без heartbeat (максимум —
+опрашиваются из кадра каждые 250 мс и уходят при изменении больше чем на 1 единицу или при выходе
+на 0 либо максимум, без heartbeat (максимум —
 `GetPermanentActorValue + GetActorValueModifier(kTemporary)`); sink `TESDeathEvent` кладёт в
 очередь только флаг `dead` и handle убийцы, кадр ускоряет следующий опрос и ставит метку места
 смерти. `TESEnterBleedoutEvent` не используется.

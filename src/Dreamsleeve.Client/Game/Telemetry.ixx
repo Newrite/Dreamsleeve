@@ -21,7 +21,8 @@ namespace Telemetry
   constexpr auto  ActorValuesInterval = std::chrono::milliseconds{250};
   constexpr auto  MarkerInterval      = std::chrono::seconds{5};
   constexpr auto  ActivationMemory    = std::chrono::seconds{3};
-  constexpr float ValueEpsilon        = 0.05f;
+  // One resource point: smaller regeneration steps add up until they reach it.
+  constexpr float ValueEpsilon        = 1.0f;
 
   struct Sent
   {
