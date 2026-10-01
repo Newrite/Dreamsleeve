@@ -7,6 +7,7 @@ open System.Globalization
 open Microsoft.FSharp.Reflection
 open Tomlyn
 open Tomlyn.Model
+open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
@@ -47,9 +48,21 @@ type ModerationSettings = {
     RulesPath: string
 }
 
+/// Restarting the game part (ENet transport, runtime, mark writer) after it fails;
+/// HTTP, accounts and the admin panel keep running meanwhile.
+type RecoverySettings = {
+    /// Delay before the restart after the first failure in the window; doubles per further failure.
+    InitialDelayMs: int
+    MaxDelayMs: int
+    /// Failures allowed within WindowSeconds; one more stops the server. 0 never restarts.
+    MaxRestarts: int
+    WindowSeconds: int
+}
+
 type ApplicationConfig = {
     Server: ServerConfig
     Runtime: ServerRuntimeOptions
+    Recovery: RecoverySettings
     Database: SqliteAccountStoreConfig
     Authentication: AuthenticationSettings
     Admin: AdminSettings
@@ -72,6 +85,7 @@ module Configuration =
     let defaults = {
         Server = ServerConfig.defaults
         Runtime = ServerRuntimeOptions.defaults
+        Recovery = { InitialDelayMs = 1000; MaxDelayMs = 30000; MaxRestarts = 5; WindowSeconds = 600 }
         Database = SqliteAccountStoreConfig.defaults
         Authentication = {
             AllowRegistration = true
@@ -225,6 +239,35 @@ module Configuration =
     [<Literal>]
     let MaxAdminConnections = 10000
 
+    /// An hour: a longer restart delay only hides the failure.
+    [<Literal>]
+    let MaxRestartDelayMs = 3600000
+
+    [<Literal>]
+    let MaxRestarts = 1000
+
+    /// A day.
+    [<Literal>]
+    let MaxRestartWindowSeconds = 86400
+
+    let private recovery (settings: RecoverySettings) = [
+        if settings.InitialDelayMs < 0 || settings.InitialDelayMs > MaxRestartDelayMs then
+            $"Recovery.InitialDelayMs must be 0..{MaxRestartDelayMs}."
+        if settings.MaxDelayMs < settings.InitialDelayMs || settings.MaxDelayMs > MaxRestartDelayMs then
+            $"Recovery.MaxDelayMs must be InitialDelayMs..{MaxRestartDelayMs}."
+        if settings.MaxRestarts < 0 || settings.MaxRestarts > MaxRestarts then $"Recovery.MaxRestarts must be 0..{MaxRestarts}."
+        if settings.WindowSeconds < 1 || settings.WindowSeconds > MaxRestartWindowSeconds then
+            $"Recovery.WindowSeconds must be 1..{MaxRestartWindowSeconds}."
+    ]
+
+    /// The supervisor's policy; the settings come checked.
+    let restartPolicy (settings: RecoverySettings) : RestartPolicy = {
+        InitialDelay = TimeSpan.FromMilliseconds(float settings.InitialDelayMs)
+        MaxDelay = TimeSpan.FromMilliseconds(float settings.MaxDelayMs)
+        MaxRestarts = settings.MaxRestarts
+        Window = TimeSpan.FromSeconds(float settings.WindowSeconds)
+    }
+
     let private listener section (settings: HttpListenerSettings) = [
         match listenUrl section settings.ListenUrl settings.AllowInsecureLoopback settings.AllowInsecureRemote with
         | Error error -> error
@@ -247,6 +290,7 @@ module Configuration =
         let admin = config.Admin
         let errors = [
             yield! SqliteAccountStoreConfig.validate config.Database
+            yield! recovery config.Recovery
             yield! listener "Authentication.Listener" authentication.Listener
             yield! AuthService.validate authentication.Service
             if admin.Enabled then

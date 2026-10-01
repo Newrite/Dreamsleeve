@@ -175,6 +175,23 @@ ReplicationIntervalMs = 50
 # other's poses, >= 0. Clients cannot draw fireflies farther than this.
 VisibilityDistance = 8192
 
+# Restarting the game part after it fails: the ENet transport, the runtime with
+# its sessions, chat history and online list, and the ground mark writer. HTTP
+# sign-in, accounts, the admin panel and the database keep running; clients
+# reconnect and sign in again on their own. A failure of the very first start
+# (a taken port, a broken database) stops the server at once instead.
+[Recovery]
+# Delay before the restart after the first failure in the window, milliseconds,
+# 0..3600000; each further failure in the window doubles it.
+InitialDelayMs = 1000
+# Longest delay between restarts, milliseconds, InitialDelayMs..3600000.
+MaxDelayMs = 30000
+# Failures allowed within WindowSeconds, 0..1000; one more stops the server with
+# exit code 1 (systemd may then restart the process). 0 never restarts.
+MaxRestarts = 5
+# The window failures are counted in, seconds, 1..86400.
+WindowSeconds = 600
+
 # SQLite database of accounts, profiles, marks, sanctions and the admin panel.
 [Database]
 # Database file, created with its directory on first start; migrations run at startup.

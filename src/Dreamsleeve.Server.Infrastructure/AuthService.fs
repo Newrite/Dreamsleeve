@@ -115,9 +115,11 @@ type AuthMessage =
     | Finished of AccountWorkReply
     | ConsumeTicket of SessionAuthenticationRequest
     | WorkersStopped of Result<unit, exn>
-    /// Where live sessions learn of revocations and sanctions: the game runtime.
+    /// Where live sessions learn of revocations and sanctions: the game runtime,
+    /// again after each of its restarts.
     | SetChangeTarget of ReliableAgentRef<AccountChange>
-    | ChangeFailed of AgentSendFailure
+    /// A change did not reach the target of that generation.
+    | ChangeFailed of target: int * AgentSendFailure
     /// From a game session; settled by a DisplayNameChangeReply.
     | ChangeDisplayName of DisplayNameChangeRequest
     /// A moderator's request from a game session; settled by a ModerationReply.
@@ -146,6 +148,8 @@ module AuthService =
         Outbox: AgentOutbox<AccountWorkRequest>
         mutable Exclusive: bool
         mutable Changes: AgentOutbox<AccountChange> option
+        /// Counts SetChangeTarget, so a late failure of a replaced target is told apart.
+        mutable ChangeTarget: int
         mutable Stopping: bool
         mutable WorkersStopped: bool
     }
@@ -474,12 +478,15 @@ module AuthService =
             state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Mute = mute } }
 
     // Live sessions must follow: an undelivered change stops the service rather
-    // than leave a banned or muted player playing.
+    // than leave a banned or muted player playing. A stopped runtime has no
+    // sessions left; that failure is handled with ChangeFailed.
     let private delivered state (context: AgentContext<AuthMessage>) change result =
         let posted =
             match state.Changes with
-            | None -> true // Service can run without a game runtime (tools/tests).
-            | Some outbox -> outbox.TrySend(context, change, AuthMessage.ChangeFailed)
+            | None -> true // No game runtime: tools, tests, or between its restarts.
+            | Some outbox ->
+                let target = state.ChangeTarget
+                outbox.TrySend(context, change, fun failure -> AuthMessage.ChangeFailed(target, failure))
         if posted then result
         else
             context.Abort()
@@ -557,8 +564,16 @@ module AuthService =
 
     let private handle options clock (logger: ILogger) state consumeRequest (context: AgentContext<AuthMessage>) message = task {
         match message with
-        | AuthMessage.SetChangeTarget target -> state.Changes <- Some (AgentOutbox(options.MailboxCapacity, target))
-        | AuthMessage.ChangeFailed failure ->
+        | AuthMessage.SetChangeTarget target ->
+            state.ChangeTarget <- state.ChangeTarget + 1
+            state.Changes <- Some (AgentOutbox(options.MailboxCapacity, target))
+        // The runtime stopped and its sessions with it; the change is stored and
+        // applies at the next sign-in. Its restart sets a new target.
+        | AuthMessage.ChangeFailed(target, AgentSendFailure.Closed) ->
+            if target = state.ChangeTarget then
+                logger.LogWarning("The game runtime stopped before an account change reached it; the change applies at the next sign-in")
+                state.Changes <- None
+        | AuthMessage.ChangeFailed(_, failure) ->
             logger.LogError("Account change delivery failed: {Failure}", failure)
             context.Abort()
         | AuthMessage.Start -> context.Own(state.Workers, AuthMessage.WorkersStopped)
@@ -608,7 +623,7 @@ module AuthService =
         let state = {
             Tickets = Dictionary(); Pending = Dictionary(); Workers = workers
             Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
-            Exclusive = false; Changes = None; Stopping = false; WorkersStopped = false
+            Exclusive = false; Changes = None; ChangeTarget = 0; Stopping = false; WorkersStopped = false
         }
         let consumeRequest = AgentReplyDispatcher.createHandler options.MailboxCapacity
                                  (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) (consume options clock state)

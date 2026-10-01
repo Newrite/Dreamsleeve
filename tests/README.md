@@ -31,7 +31,7 @@ python Scripts/run_tests.py --suite managed
 | Client.Host, Host.* | Host-модули SKSE-адаптера без Skyrim: JSON bridge (строковые uint64, безопасный текст, команды UI, таблицы и примеры событий для веб-UI), команды UI, ui.toml (правила настроек, round trip, нормализация, атомарная запись), Session (снимок только при Ready, корреляция requestId, отказы, проекция онлайна, сброс view, reconnect), цвета надписей, объявления, фильтр ввода при захвате клавиатуры |
 | DreamNet/Client.Runtime | ENet ownership, лимиты host/peer, коррелированный вход и чат, таймаут/повторный вход, ошибочные и запоздалые ответы |
 | Server Domain/Codec | Правила value objects/хранилищ, bootstrap, доменные ошибки, общий enum отказов, обязательная корреляция, повреждённые пакеты и конфигурация |
-| Agent/Background/Outbox/AsyncDispatcher/Lifetimes/AgentTicker | Последовательный handler, bounded доставка, фоновые запросы, отмена, наблюдение Completion, owned children и независимый Watch, тикер без догоняющих периодов |
+| Agent/Background/Outbox/AsyncDispatcher/Lifetimes/AgentTicker/Supervisor | Последовательный handler, bounded доставка, фоновые запросы, отмена, наблюдение Completion, owned children и независимый Watch, тикер без догоняющих периодов, супервизор (рестарт после сбоя и неудачного запуска, удвоение задержки, отказ сверх лимита в окне и забывание старых отказов, Stop во время задержки и во время запуска) |
 | Admission | Reliable TryPost Posted/Full/Closed; обычная квота и служебный резерв в одной FIFO; возврат допуска при чтении/остановке; mapped refs |
 | SQLite/Auth/HTTP | Миграции, rollback регистрации, restart профиля, пароль, one-use/expiry билета, роль в билете, переименование, лимиты и HTTP boundaries (`AuthRoutes` на общей обвязке `Server.Web`, прежние ожидания) |
 | Profiles (memory fixture) | Атомарный GetOrCreate, уникальные ID, сохранение офлайн-профиля, асинхронные ответы, полный/закрытый получатель |
@@ -45,7 +45,7 @@ python Scripts/run_tests.py --suite managed
 | Наказания и инструменты модератора | Домен (сроки, причина, ранг), SQLite (замена, истечение, аудит под выдавшим, миграция 9), `AuthService` (мут, бан, кик, список), удаление сообщений и меток, сессия и кодеки; native: `ClientRuntime`; UI: vitest и Playwright; `smoke_moderation.py`. Подробно — [ModerationAndNamesRu](../docs/ModerationAndNamesRu.md#проверки) |
 | PlayerSession | Оба порядка bootstrap, ограниченный буфер, персональная квота RequestId, отказ/подтверждение, независимые показания и очистка подписок |
 | ServerRuntime | Реальный обмен агентов через управляемый транспорт: вход, профильный резерв, адресованные пакеты, disconnect/Completion, старые ответы, дедлайны и Stop |
-| EnetTransport | Настоящий yENet loopback: correlation ID/peer lifetime, reliable channel, размеры и исходящие бюджеты, отключение и очистка |
+| EnetTransport | Настоящий yENet loopback: correlation ID/peer lifetime, reliable channel, размеры и исходящие бюджеты, отключение и очистка; `PumpHealth`: отказ отправки одному адресату проходит со сводкой в логе, неизвестная ошибка или минута сплошных сбоев ломают транспорт |
 
 Codec преобразует проверенные доменные значения и wire-структуру. Проверки
 PlayerStore/ChatCache/Domain.Chat находятся у их владельцев. C++ codec сохраняет

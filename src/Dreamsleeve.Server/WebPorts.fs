@@ -49,17 +49,24 @@ module WebPorts =
         | AgentPostResult.Posted -> true
         | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped -> false
 
-    let admin (service: Agent<AdminMessage>) (authentication: Agent<AuthMessage>) (runtime: Agent<ServerRuntimeMessage>)
+    /// runtime is the game runtime now serving, none while it restarts: the panel
+    /// then reports it unavailable, and stored changes apply at the next sign-in.
+    let admin (service: Agent<AdminMessage>) (authentication: Agent<AuthMessage>) (runtime: unit -> Agent<ServerRuntimeMessage> option)
               (describer: Agent<DescribeRequest>) configuration : AdminPorts =
+        let ask message timeout token =
+            match runtime () with
+            | Some agent -> agent.TryAskAsync(message, timeout, token)
+            | None -> Task.FromResult AgentAskResult.Closed
+        let tell message = runtime () |> Option.exists (fun agent -> agent.TryPost message |> posted)
         { Admin = fun command timeout token -> service.TryAskAsync((fun reply -> AdminMessage.Access(command, reply)), timeout, token)
           Account = fun command timeout token -> authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token)
-          Snapshot = fun timeout token -> runtime.TryAskAsync(ServerRuntimeMessage.Read, timeout, token)
-          Sessions = fun timeout token -> runtime.TryAskAsync(ServerRuntimeMessage.ListSessions, timeout, token)
+          Snapshot = ask ServerRuntimeMessage.Read
+          Sessions = ask ServerRuntimeMessage.ListSessions
           Describe = fun timeout row ->
             match row.Session with
             | Some session -> SessionDescriber.describe describer timeout session
             | None -> Task.FromResult None
-          Announce = fun announcement -> runtime.TryPost(ServerRuntimeMessage.Announce announcement) |> posted
-          ApplyRole = fun playerId role -> runtime.TryPost(ServerRuntimeMessage.SetPlayerRole(playerId, role)) |> posted
-          ApplyProfile = fun profile -> runtime.TryPost(ServerRuntimeMessage.RenamePlayer profile) |> posted
+          Announce = fun announcement -> tell (ServerRuntimeMessage.Announce announcement)
+          ApplyRole = fun playerId role -> tell (ServerRuntimeMessage.SetPlayerRole(playerId, role))
+          ApplyProfile = fun profile -> tell (ServerRuntimeMessage.RenamePlayer profile)
           Configuration = configuration }

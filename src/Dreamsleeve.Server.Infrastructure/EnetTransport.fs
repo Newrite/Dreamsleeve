@@ -6,9 +6,76 @@ namespace Dreamsleeve.Server.Infrastructure
 open System
 open System.Collections.Generic
 open System.Net.Sockets
+open Microsoft.Extensions.Logging
 open Enet
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure.Interop
+
+/// How a failed ENet pump is judged. ENet gives up the whole service call when a
+/// single send fails, although the host socket is fine: after a VPN switch or a
+/// lost route, sendto to one player fails with HostUnreachable. Such failures pass,
+/// and that player times out on ENet's own schedule; only an unknown failure, or
+/// failing without a single healthy pump for MaxFailingMs, breaks the transport.
+[<RequireQualifiedAccess>]
+module PumpHealth =
+    /// Passing failures are summarized in the log at most this often.
+    [<Literal>]
+    let ReportIntervalMs = 5000L
+
+    /// Failing on every pump for this long means the socket itself is unusable.
+    [<Literal>]
+    let MaxFailingMs = 60000L
+
+    /// Errors about one destination or a passing network change; the host keeps its socket.
+    let transient error =
+        match error with
+        | SocketError.HostUnreachable | SocketError.NetworkUnreachable | SocketError.HostDown
+        | SocketError.NetworkDown | SocketError.NetworkReset | SocketError.ConnectionReset
+        | SocketError.ConnectionRefused | SocketError.ConnectionAborted | SocketError.TimedOut
+        | SocketError.AddressNotAvailable | SocketError.AccessDenied | SocketError.NoBufferSpaceAvailable
+        | SocketError.MessageSize | SocketError.TryAgain -> true
+        | _ -> false
+
+    type State = {
+        mutable FailingSince: int64 voption
+        /// Failures since the last report.
+        mutable Unreported: int
+        mutable LastError: SocketError
+        mutable LastReport: int64 voption
+    }
+
+    [<RequireQualifiedAccess>]
+    type Verdict =
+        | Healthy
+        | Passing
+        /// Passing failures to log: how many since the last report, and the latest error.
+        | Report of failures: int * last: SocketError
+        | Broken of persistent: bool
+
+    let create () = { FailingSince = ValueNone; Unreported = 0; LastError = SocketError.Success; LastReport = ValueNone }
+
+    let private due state now =
+        state.Unreported > 0 && state.LastReport |> ValueOption.forall (fun last -> now - last >= ReportIntervalMs)
+
+    let private report state now =
+        let failures = state.Unreported
+        state.Unreported <- 0
+        state.LastReport <- ValueSome now
+        Verdict.Report(failures, state.LastError)
+
+    /// One pump at now (milliseconds of a monotonic clock): its result and the socket error.
+    let observe state now result error =
+        if result >= 0 then
+            state.FailingSince <- ValueNone
+            if due state now then report state now else Verdict.Healthy
+        elif not (transient error) then Verdict.Broken false
+        else
+            if state.FailingSince.IsNone then state.FailingSince <- ValueSome now
+            state.Unreported <- state.Unreported + 1
+            state.LastError <- error
+            if now - state.FailingSince.Value >= MaxFailingMs then Verdict.Broken true
+            elif due state now then report state now
+            else Verdict.Passing
 
 /// Raw ENet state stays on its owner. Production create supplies a dedicated thread.
 [<RequireQualifiedAccess>]
@@ -24,6 +91,8 @@ module EnetTransport =
     type private State = {
         Diagnostics: TransportDiagnostics
         Config: ServerConfig
+        Logger: ILogger
+        Pump: PumpHealth.State
         Host: EnetHost
         Connections: Dictionary<Guid, Connection>
         Slots: Dictionary<uint16, Connection>
@@ -108,9 +177,16 @@ module EnetTransport =
             let mutable socketError = SocketError.Success
             let pumpResult = EnetPump.Service(state.Host, &socketError)
             let mutable error =
-                if pumpResult < 0 then
-                    Some $"ENet protocol pump failed (result {pumpResult}; last socket error: {socketError}, code {int socketError}; active peers: {state.Connections.Count})."
-                else None
+                match PumpHealth.observe state.Pump Environment.TickCount64 pumpResult socketError with
+                | PumpHealth.Verdict.Healthy | PumpHealth.Verdict.Passing -> None
+                | PumpHealth.Verdict.Report(failures, last) ->
+                    state.Logger.LogWarning(
+                        "ENet could not send to some peers: {Failures} failed pumps since the last report, last socket error {SocketError} ({Code}); unreachable players time out on their own",
+                        failures, last, int last)
+                    None
+                | PumpHealth.Verdict.Broken persistent ->
+                    let failing = if persistent then $"on every pump for {PumpHealth.MaxFailingMs / 1000L} s" else $"(result {pumpResult})"
+                    Some $"ENet protocol pump failed {failing}; last socket error: {socketError}, code {int socketError}; active peers: {state.Connections.Count}."
 
             while remaining > 0 && error.IsNone do
                 let mutable event = Unchecked.defaultof<EnetEvent>
@@ -185,7 +261,7 @@ module EnetTransport =
                 finally
                     enet.ENET_API.enet_deinitialize()
 
-    let private allocate config =
+    let private allocate config logger =
         let mutable address = Unchecked.defaultof<enet.ENetAddress>
         let resolved = enet.ENetAddress.FromIpAddress(config.BindAddress, config.Port, &address)
 
@@ -209,6 +285,8 @@ module EnetTransport =
                     let state = {
                         Diagnostics = TransportDiagnostics()
                         Config = config
+                        Logger = logger
+                        Pump = PumpHealth.create ()
                         Host = host
                         Connections = Dictionary()
                         Slots = Dictionary()
@@ -233,6 +311,6 @@ module EnetTransport =
                 Error (sprintf "ENet host configuration failed: %s" error.Message)
 
     /// The settings come checked by GameSettings.create.
-    let createInline config = allocate config
+    let createInline config logger = allocate config logger
 
-    let create config = TransportOwner.create config (fun () -> allocate config)
+    let create config logger = TransportOwner.create config (fun () -> allocate config logger)

@@ -111,8 +111,8 @@ Shutdown can still discard unprocessed messages: Posted only acknowledges admiss
 The owner observes `child.Completion` through `context.Own(child, stopped)` or
 `context.Watch(target, stopped)` and receives a termination message. Faults preserve the original exception; observation also works
 after the child has stopped. Restart means creating a new agent after Completion
-and updating consumer addresses. The library does not automatically restart agents,
-restore state or replay accepted commands. Stopped events are not replayed for late
+and updating consumer addresses; `AgentSupervisor` (below) does it by policy. The library
+does not restore state or replay accepted commands. Stopped events are not replayed for late
 subscribers; OnStopped in options is installed before startup but runs before
 Completion settles.
 
@@ -206,7 +206,7 @@ an owner message from `Result<unit, exn>` after the child's actual Completion,
 including for an already stopped child. Parent Abort/fault aborts the child and joins
 its cleanup; cooperative cleanup may delay the parent. Graceful child Stop remains
 application-specific: stop children first, then Complete the parent. Own does not
-restart children or recover their state.
+restart children or recover their state; `AgentSupervisor` restarts.
 
 `context.Watch(target, stopped)` observes a shared dependency without owning it.
 The `Watch(completion: Task, stopped)` overload provides the same observation when
@@ -271,3 +271,23 @@ are coalesced, and missed periods are skipped rather than caught up in a burst. 
 callback only builds a message and never reads the agent's mutable state. It needs a
 non-dropping mailbox. Complete/Abort stop the worker. `startWithTimeProvider` tests the
 schedule without wall-clock sleeps. AgentTick timestamps come from the TimeProvider.
+
+## Supervisor
+
+`AgentSupervisor.start name policy start observe` keeps one child and restarts it by a
+`RestartPolicy`. The supervisor is an agent itself: the child's start, its termination and the
+restart delays reach it as messages. `start` returns a `SupervisedChild`: the value consumers
+use, `Completion` (the full stop including everything the child owns) and `Stop` (the graceful
+stop). Every termination the supervisor did not ask for (fault, Abort, even a graceful one) is a
+failure, and so is an exception from `start`. The restart delay is `InitialDelay`, doubled for
+each further failure within `Window`, capped at `MaxDelay`. More than `MaxRestarts` failures
+within the window and the supervisor gives up: `Completion` faults with
+`SupervisorGaveUpException`, the last failure inside. `MaxRestarts = 0` never restarts.
+
+`Current` is the running child, or nothing while it starts or restarts; consumers read it at
+the moment of use instead of keeping a reference. `StopAsync()` stops the child gracefully and
+ends supervision: a pending restart is canceled, and a child still starting is stopped as soon
+as it starts. `observe` receives the events (`Started`, `StartFailed`, `Stopped`, `Restarting`,
+`GaveUp`) on the supervisor's handler: quick work such as logging only; exceptions are ignored.
+The supervisor neither restores the child's state nor replays its accepted commands.
+`startWithTimeProvider` lets tests drive the failure window without waiting.

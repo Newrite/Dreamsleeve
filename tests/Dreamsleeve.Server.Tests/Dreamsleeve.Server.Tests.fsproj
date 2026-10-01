@@ -21,6 +21,7 @@
     <Compile Include="AdmissionTests.fs" />
     <Compile Include="LifetimeTests.fs" />
     <Compile Include="TickerTests.fs" />
+    <Compile Include="SupervisorTests.fs" />
     <Compile Include="Fixtures/ProfileStore.fs" />
     <Compile Include="Fixtures/MemoryProfileStore.fs" />
     <Compile Include="ProfileStoreTests.fs" />

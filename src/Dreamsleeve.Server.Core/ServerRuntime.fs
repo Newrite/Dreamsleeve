@@ -600,7 +600,8 @@ module ServerRuntime =
 
     let private sourceStopped state context source (outcome: Result<unit, exn>) =
         if not state.SourcesStopping then
-            fail state context $"Source {source} terminated: {outcome}"
+            let reason = match outcome with Ok () -> "completed on its own" | Error error -> error.Message
+            fail state context $"Source {source} terminated: {reason}"
         else
             match outcome with
             | Error error -> fail state context $"Source {source} failed during shutdown: {error.Message}"

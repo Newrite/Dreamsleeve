@@ -19,6 +19,7 @@ let main argv =
         AdmissionTests.tests
         LifetimeTests.tests
         TickerTests.tests
+        SupervisorTests.tests
         ProfileStoreTests.tests
         SqliteAccountStoreTests.tests
         AuthServiceTests.tests

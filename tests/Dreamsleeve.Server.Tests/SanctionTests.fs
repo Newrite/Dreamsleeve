@@ -236,6 +236,39 @@ let private serviceTests = testList "Account service sanctions" [
             grant back |> ignore
         }))
 
+    // Between runtime restarts a change has no live session to reach: it stays in
+    // storage, and the service keeps serving for the runtime that comes next.
+    case "a stopped runtime does not stop the service; the next runtime receives later changes" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let restartedChanges = ConcurrentQueue<AccountChange>()
+        let stopped = Agent.Start(AgentOptions.create "stopped-runtime", fun _ (_: AccountChange) -> task { () })
+        use restarted = Agent.Start(AgentOptions.create "restarted-runtime", fun _ change -> task { restartedChanges.Enqueue change })
+        use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System
+        let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(stopped.Ref.TryReliable().Value))
+        equal AgentPostResult.Posted targeted
+        let! registered = access service (AccountAccessCommand.Register(Username.create 32 "player" |> ok, DisplayName.create 64 "Player" |> ok, password))
+        let profile = match registered with Ok (AccountAccessResult.Registered profile) -> profile | other -> failtestf "%A" other
+        stopped.Complete() |> ignore
+        do! awaitUnit stopped.Completion
+        let issuer = SanctionIssuer.Admin(admin database)
+        let! muted = access service (AccountAccessCommand.Sanction(order profile.PlayerId SanctionKind.Mute SanctionTerm.UntilLifted issuer))
+        let mute = match muted with Ok (AccountAccessResult.Sanctioned mute) -> mute | other -> failtestf "%A" other
+        // The failed delivery comes back asynchronously; the service keeps answering.
+        do! Task.Delay 100
+        let! signedIn = login service
+        grant signedIn |> ignore
+        check (not service.Completion.IsCompleted) "the account service survives a stopped runtime"
+        let! retargeted = service.PostAsync(AuthMessage.SetChangeTarget(restarted.Ref.TryReliable().Value))
+        equal AgentPostResult.Posted retargeted
+        let! lifted = access service (AccountAccessCommand.LiftSanction(profile.PlayerId, SanctionKind.Mute, issuer))
+        equal (Ok (AccountAccessResult.SanctionLifted mute)) lifted
+        do! eventually (fun () -> restartedChanges |> Seq.contains (AccountChange.MuteChanged(profile.PlayerId, ValueNone)))
+        let! stopping = service.PostAsync AuthMessage.Stop
+        equal AgentPostResult.Posted stopping
+        do! awaitUnit service.Completion
+    })
+
     case "a mute goes into new and outstanding tickets and reaches the runtime; a lift clears it" (fun () ->
         withService (fun database service profile changes -> task {
             let! before = login service

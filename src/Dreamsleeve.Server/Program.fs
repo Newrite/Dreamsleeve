@@ -51,7 +51,8 @@ let private readConsole (writer: ChannelWriter<string option>) (token: Cancellat
     | :? OperationCanceledException -> writer.TryComplete() |> ignore
     | error -> writer.TryComplete(error) |> ignore
 
-let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Agent<AdminMessage> option) (runtime: Agent<ServerRuntimeMessage>) (canceled: Task) = task {
+let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Agent<AdminMessage> option)
+                        (game: unit -> Agent<ServerRuntimeMessage> option) (supervision: Task) (canceled: Task) = task {
     let chatInput = settings.Server.ChatInput
     use inputCancellation = new CancellationTokenSource()
     let input = Channel.CreateBounded<string option>(BoundedChannelOptions(1, SingleReader = true, SingleWriter = true))
@@ -59,9 +60,9 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
     let mutable stopping = false
 
     try
-        while not stopping && not runtime.Completion.IsCompleted do
+        while not stopping && not supervision.IsCompleted do
             let next = input.Reader.ReadAsync(inputCancellation.Token).AsTask()
-            let! completed = Task.WhenAny(runtime.Completion, canceled, next)
+            let! completed = Task.WhenAny(supervision, canceled, next)
 
             if Object.ReferenceEquals(completed, next) then
                 let! line = next
@@ -75,10 +76,13 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
                         match Dreamsleeve.Server.Domain.ChatMessageText.create chatInput.MessageText parts[1] with
                         | Error _ -> printfn "Announcement text must have 1..%d characters without control characters." chatInput.MessageText
                         | Ok text ->
-                            match runtime.TryPost(ServerRuntimeMessage.Announce { Text = text; Kind = Dreamsleeve.Server.Domain.AnnouncementKind.Admin }) with
-                            | AgentPostResult.Posted -> printfn "Announcement queued."
-                            | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
-                                printfn "Runtime is busy; announcement not queued."
+                            match game () with
+                            | None -> printfn "The game runtime is restarting; announcement not queued."
+                            | Some runtime ->
+                                match runtime.TryPost(ServerRuntimeMessage.Announce { Text = text; Kind = Dreamsleeve.Server.Domain.AnnouncementKind.Admin }) with
+                                | AgentPostResult.Posted -> printfn "Announcement queued."
+                                | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
+                                    printfn "Runtime is busy; announcement not queued."
                     elif parts.Length = 2 && (parts[0] = "reset-password" || parts[0] = "revoke-access") then
                         match Dreamsleeve.Server.Domain.Username.create chatInput.Username parts[1] with
                         | Error _ -> printfn "Invalid username."
@@ -137,70 +141,6 @@ let private stopHost (host: Microsoft.AspNetCore.Builder.WebApplication option) 
             return false
 }
 
-let private serve settings game moderation configuration pseudonyms marks authentication admin transport (logger: ILogger) (log: Serilog.ILogger) = task {
-    let web = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth authentication) log
-    let describer = SessionDescriber.start 64
-    let mutable panel = None
-    try
-        let runtime = ServerRuntime.start game moderation pseudonyms marks (AuthService.authenticator authentication) transport logger
-        let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-        let handler = ConsoleCancelEventHandler(fun _ event ->
-            event.Cancel <- true
-            canceled.TrySetResult() |> ignore)
-        Console.CancelKeyPress.AddHandler handler
-        use hostStopping = web.Lifetime.ApplicationStopping.Register(fun () -> canceled.TrySetResult() |> ignore)
-
-        try
-            let mutable exitCode = 0
-            try
-                let! _ = authentication.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.AccountChanged))
-                do! web.StartAsync()
-                // The panel starts after authentication and stops before the runtime.
-                match admin with
-                | Some service ->
-                    let ports = WebPorts.admin service authentication runtime describer configuration
-                    let host = AdminRoutes.build (WebPorts.adminListener settings) (WebPorts.adminRoutes settings moderation) ports log
-                    panel <- Some host
-                    do! host.StartAsync()
-                    logger.LogInformation("Admin panel: {AdminUrl}", settings.Admin.Listener.ListenUrl)
-                    let! status = service.AskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
-                    match status with
-                    | Ok (AdminReply.Configured false) -> do! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
-                    | Ok _ -> ()
-                    | Error error -> logger.LogWarning("Admin panel status unavailable: {Error}", error)
-                | None -> logger.LogInformation("Admin panel disabled")
-                logger.LogInformation("Listening on {Address}:{Port}. Authentication: {AuthenticationUrl}. Commands: quit",
-                                      settings.Server.BindAddress, settings.Server.Port, settings.Authentication.Listener.ListenUrl)
-                do! waitForStop settings authentication admin runtime canceled.Task
-            with error ->
-                logger.LogError(error, "Server listener failed")
-                exitCode <- 1
-
-            // Stop HTTP admission before stopping the account and admin agents.
-            // Existing bounded requests may finish while the ENet runtime drains.
-            let! panelStopped = stopHost panel "Admin" logger
-            let! authStopped = stopHost (Some web) "Authentication" logger
-            if not (panelStopped && authStopped) then exitCode <- 1
-
-            try do! stopRuntime settings logger runtime
-            with error ->
-                match error with
-                | :? OperationCanceledException when runtime.Completion.IsCanceled ->
-                    logger.LogError("Game runtime was aborted; see the preceding runtime failure")
-                | _ -> logger.LogError(error, "Game runtime stopped with an error")
-                runtime.Abort()
-                try do! runtime.Completion with _ -> ()
-                exitCode <- 1
-            return exitCode
-        finally
-            Console.CancelKeyPress.RemoveHandler handler
-    finally
-        panel |> Option.iter (fun host -> host.DisposeAsync().AsTask().GetAwaiter().GetResult())
-        web.DisposeAsync().AsTask().GetAwaiter().GetResult()
-        describer.Complete() |> ignore
-        describer.Completion.GetAwaiter().GetResult()
-}
-
 // Marks are moderated with the current word list when loaded: a text that the
 // list now refuses stays in storage but is not handed to the owner, so nobody
 // receives it until the list allows it again; flags are recomputed, and every
@@ -222,9 +162,153 @@ let private loadGroundMarks settings moderation (logger: ILogger) = task {
         return Ok (records, stored.NextId)
 }
 
-let private stopWriter (writer: Agent<GroundMarkWrite>) = task {
+/// Queued mark writes get this long when the game part stops. A database that stays
+/// locked would otherwise hold a restart for MaxPendingWrites * BusyTimeoutSeconds.
+[<Literal>]
+let private MarkWriterDrainSeconds = 30
+
+let private stopWriter (logger: ILogger) (writer: Agent<GroundMarkWrite>) = task {
     writer.Complete() |> ignore
-    do! writer.Completion
+    try do! writer.Completion.WaitAsync(TimeSpan.FromSeconds(float MarkWriterDrainSeconds))
+    with :? TimeoutException ->
+        logger.LogError("Ground mark writes did not finish within {Seconds} s; dropping {Count} queued writes",
+                        MarkWriterDrainSeconds, writer.QueueLength)
+        writer.Abort()
+        try do! writer.Completion with _ -> ()
+}
+
+/// The game part, restarted as one: a fresh load of the marks with their writer,
+/// the ENet transport and the runtime. HTTP, accounts and the panel outlive it.
+/// Completion comes once the transport and the writer are released, so the next
+/// instance binds the port again and loads every mark the last one wrote.
+let private startGame settings (game: GameSettings) moderation pseudonyms (authentication: Agent<AuthMessage>) (logger: ILogger)
+                      (_: CancellationToken) : Task<SupervisedChild<Agent<ServerRuntimeMessage>>> = task {
+    let! loaded = loadGroundMarks settings moderation logger
+    let records, nextId =
+        match loaded with
+        | Ok value -> value
+        | Error error -> raise (InvalidOperationException $"Ground mark storage failed: {error}")
+    let writer = SqliteGroundMarkStore.startWriter settings.Database logger game.GroundMarks.MaxPendingWrites
+    logger.LogInformation("Ground marks loaded: {Count}, next id {NextId}", records.Length, nextId)
+    match EnetTransport.create game.Server logger with
+    | Error error ->
+        do! stopWriter logger writer
+        return raise (InvalidOperationException $"ENet startup failed: {error}")
+    | Ok transport ->
+        let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref.TryReliable().Value }
+        let runtime = ServerRuntime.start game moderation pseudonyms marks (AuthService.authenticator authentication) transport logger
+        let! _ = authentication.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.AccountChanged))
+        let completion = task {
+            let! outcome = task {
+                try
+                    do! runtime.Completion
+                    return None
+                with error -> return Some error
+            }
+            if outcome.IsSome then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark writes")
+            try transport.Dispose()
+            with error -> logger.LogError(error, "ENet transport disposal failed")
+            try do! stopWriter logger writer
+            with error -> logger.LogError(error, "Ground mark writer failed")
+            match outcome with
+            | Some error -> raise error
+            | None -> ()
+        }
+        return { SupervisedChild.Value = runtime; SupervisedChild.Completion = completion
+                 SupervisedChild.Stop = fun () -> stopRuntime settings logger runtime }
+}
+
+/// The supervisor's events in the log. firstStart settles with the first start:
+/// false when it failed, which is a configuration or storage problem, not a crash.
+let private gameEvents settings (logger: ILogger) (firstStart: TaskCompletionSource<bool>) event =
+    let recovery = settings.Recovery
+    match event with
+    | SupervisorEvent.Started(_, 0) ->
+        logger.LogInformation("Listening on {Address}:{Port}. Authentication: {AuthenticationUrl}. Commands: quit",
+                              settings.Server.BindAddress, settings.Server.Port, settings.Authentication.Listener.ListenUrl)
+        firstStart.TrySetResult true |> ignore
+    | SupervisorEvent.Started(_, restarts) ->
+        logger.LogWarning("Game runtime restarted (restart {Restarts}), listening on {Address}:{Port}; players reconnect on their own",
+                          restarts, settings.Server.BindAddress, settings.Server.Port)
+    | SupervisorEvent.StartFailed error ->
+        logger.LogError(error, "Game runtime failed to start")
+        firstStart.TrySetResult false |> ignore
+    | SupervisorEvent.Stopped(Ok ()) -> logger.LogError("Game runtime stopped without being asked")
+    | SupervisorEvent.Stopped(Error(:? OperationCanceledException)) ->
+        logger.LogError("Game runtime stopped after a failure; its reason is logged above")
+    | SupervisorEvent.Stopped(Error error) -> logger.LogError(error, "Game runtime stopped with an error")
+    | SupervisorEvent.Restarting(delay, failures) ->
+        logger.LogWarning("Restarting the game runtime in {DelayMs} ms (failure {Failures}, at most {MaxRestarts} within {WindowSeconds} s); HTTP, accounts and the admin panel keep running",
+                          int64 delay.TotalMilliseconds, failures, recovery.MaxRestarts, recovery.WindowSeconds)
+    | SupervisorEvent.GaveUp failures ->
+        logger.LogCritical("Game runtime failed {Failures} times within {WindowSeconds} s; stopping the server", failures, recovery.WindowSeconds)
+        firstStart.TrySetResult false |> ignore
+
+let private serve settings game moderation configuration pseudonyms authentication admin (logger: ILogger) (log: Serilog.ILogger) = task {
+    let web = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth authentication) log
+    let describer = SessionDescriber.start 64
+    let mutable panel = None
+    let supervisor = ref None
+    let current () = supervisor.Value |> Option.bind (fun (running: AgentSupervisor<Agent<ServerRuntimeMessage>>) -> running.Current)
+    try
+        let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let handler = ConsoleCancelEventHandler(fun _ event ->
+            event.Cancel <- true
+            canceled.TrySetResult() |> ignore)
+        Console.CancelKeyPress.AddHandler handler
+        use hostStopping = web.Lifetime.ApplicationStopping.Register(fun () -> canceled.TrySetResult() |> ignore)
+
+        try
+            let mutable exitCode = 0
+            try
+                do! web.StartAsync()
+                // The panel starts after authentication and stops before the game part.
+                match admin with
+                | Some service ->
+                    let ports = WebPorts.admin service authentication current describer configuration
+                    let host = AdminRoutes.build (WebPorts.adminListener settings) (WebPorts.adminRoutes settings moderation) ports log
+                    panel <- Some host
+                    do! host.StartAsync()
+                    logger.LogInformation("Admin panel: {AdminUrl}", settings.Admin.Listener.ListenUrl)
+                    let! status = service.AskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
+                    match status with
+                    | Ok (AdminReply.Configured false) -> do! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
+                    | Ok _ -> ()
+                    | Error error -> logger.LogWarning("Admin panel status unavailable: {Error}", error)
+                | None -> logger.LogInformation("Admin panel disabled")
+                let firstStart = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+                let running =
+                    AgentSupervisor.start "game-supervisor" (Configuration.restartPolicy settings.Recovery)
+                        (startGame settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
+                supervisor.Value <- Some running
+                let! started = firstStart.Task
+                if started then do! waitForStop settings authentication admin current running.Completion canceled.Task
+                if not started || running.Completion.IsFaulted then exitCode <- 1
+            with error ->
+                logger.LogError(error, "Server listener failed")
+                exitCode <- 1
+
+            // Stop HTTP admission before stopping the account and admin agents.
+            // Existing bounded requests may finish while the ENet runtime drains.
+            let! panelStopped = stopHost panel "Admin" logger
+            let! authStopped = stopHost (Some web) "Authentication" logger
+            if not (panelStopped && authStopped) then exitCode <- 1
+
+            match supervisor.Value with
+            | Some running ->
+                try do! running.StopAsync()
+                with error ->
+                    logger.LogError(error, "Game runtime stopped with an error")
+                    exitCode <- 1
+            | None -> ()
+            return exitCode
+        finally
+            Console.CancelKeyPress.RemoveHandler handler
+    finally
+        panel |> Option.iter (fun host -> host.DisposeAsync().AsTask().GetAwaiter().GetResult())
+        web.DisposeAsync().AsTask().GetAwaiter().GetResult()
+        describer.Complete() |> ignore
+        describer.Completion.GetAwaiter().GetResult()
 }
 
 let private stopAuthentication (authentication: Agent<AuthMessage>) = task {
@@ -297,27 +381,7 @@ let private run (settings: ApplicationConfig, game: GameSettings) = task {
                 if settings.Admin.Enabled then Some (AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System)
                 else None
             let! result = task {
-                try
-                    let! loaded = loadGroundMarks settings moderation logger
-                    match loaded with
-                    | Error error ->
-                        logger.LogError("Ground mark storage failed: {Failure}", error)
-                        return 1
-                    | Ok (records, nextId) ->
-                        let writer = SqliteGroundMarkStore.startWriter settings.Database logger game.GroundMarks.MaxPendingWrites
-                        logger.LogInformation("Ground marks loaded: {Count}, next id {NextId}", records.Length, nextId)
-                        let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref.TryReliable().Value }
-                        try
-                            match EnetTransport.create game.Server with
-                            | Error error ->
-                                logger.LogError("ENet startup failed: {Failure}", error)
-                                return 1
-                            | Ok transport ->
-                                try return! serve settings game moderation (configurationView settings pseudonyms) pseudonyms marks authentication admin transport logger log
-                                finally transport.Dispose()
-                        finally
-                            // The runtime has stopped: queued writes finish before the process exits.
-                            stopWriter writer |> fun work -> work.GetAwaiter().GetResult()
+                try return! serve settings game moderation (configurationView settings pseudonyms) pseudonyms authentication admin logger log
                 with error ->
                     logger.LogError(error, "Server startup failed")
                     return 1

@@ -3,6 +3,7 @@ module Dreamsleeve.Server.Tests.ConfigurationTests
 open System
 open System.IO
 open Expecto
+open Dreamsleeve.Agent
 open Dreamsleeve.Server
 
 let private withFile (text: string) action =
@@ -323,6 +324,16 @@ let tests = testList "Server configuration" [
         ] do
             withFile source (fun path ->
                 Expect.isOk (Configuration.parse [|"--config"; path|]) $"accepted: {source}")
+
+    testCase "restart settings are checked and become the supervisor's policy" <| fun _ ->
+        withFile "[Recovery]\nInitialDelayMs = 500\nMaxDelayMs = 4000\nMaxRestarts = 0\nWindowSeconds = 60\n" (fun path ->
+            let policy = Configuration.restartPolicy (parsed path).Recovery
+            Expect.equal policy { InitialDelay = TimeSpan.FromMilliseconds 500.; MaxDelay = TimeSpan.FromSeconds 4.; MaxRestarts = 0; Window = TimeSpan.FromMinutes 1. }
+                "0 restarts: the first failure stops the server")
+        for invalid in [ "InitialDelayMs = -1"; "MaxDelayMs = 10\nInitialDelayMs = 20"; "MaxDelayMs = 3600001"
+                         "MaxRestarts = -1"; "MaxRestarts = 1001"; "WindowSeconds = 0"; "WindowSeconds = 86401" ] do
+            withFile $"[Recovery]\n{invalid}\n" (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) $"refused: {invalid}")
 
     testCase "the bundled server example names every setting with its default value" <| fun _ ->
         let path = example ()

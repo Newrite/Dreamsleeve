@@ -135,6 +135,12 @@ TrustForwardedHeaders = true             # только если админка 
 cookie. Заголовки принимаются только от `127.0.0.1`/`::1`, поэтому nginx должен быть на той же
 машине. Без прокси (SSH-туннель, локальный сервер) оставляйте `false`.
 
+Восстановление после сбоев — `[Recovery]`: если игровая часть (ENet, runtime, писатель меток)
+падает, сервер перезапускает её сам, а HTTP входа, аккаунты, админка и база продолжают работать;
+клиенты переподключаются сами. По умолчанию задержка 1 с, удваивается до 30 с, больше 5 отказов
+за 10 минут — сервер останавливается с кодом 1, и его поднимает systemd (`Restart=on-failure`).
+Сбой самого первого запуска (занятый порт, сломанная база) останавливает сервер сразу.
+
 Остальное по желанию: антиспам `[Runtime.Chat.Rate]`, словарь `[Moderation]`, скрытое имя и смена
 имени `[Identity]`, объявления `[Announcements]` и расписание `[[Announcements.Scheduled]]`, метки
 `[GroundMarks]`, логи `[Logging]` — всё с пояснениями в `server.example.toml`. Словарь
@@ -548,6 +554,9 @@ sudo sysctl --system
 | Симптом | Причина |
 |---|---|
 | Служба завершается сразу после старта, в логе `Server stopped` без ошибки | stdin закрыт: нет `dreamsleeve.socket` / `StandardInput=socket` |
+| В логе `ENet could not send to some peers ... HostUnreachable` | сеть или VPN сервера переключились, маршрут к игроку пропал; это не сбой, игрок отключится по таймауту ENet и переподключится |
+| В логе `Restarting the game runtime in ... ms` | игровая часть упала (причина строкой выше) и перезапускается; игроки переподключаются сами |
+| `Game runtime failed N times within ... s; stopping the server` | больше `[Recovery] MaxRestarts` отказов за окно; код выхода 1, systemd перезапустит процесс — смотрите причину в логе |
 | Сервер: `Remote HTTP Authentication.Listener requires Authentication.Listener.AllowInsecureRemote...` | `ListenUrl` с `http://` не на `127.0.0.1`/`::1`; за nginx укажите `http://127.0.0.1:8779` |
 | Сервер: `Runtime.ControlReserve must allow 4 * MaxSessions + 4...` | увеличили `MaxSessions`, не увеличив резерв |
 | Лог клиента: `Plain HTTP authentication is permitted only on loopback; use HTTPS remotely` | `authUrl` начинается с `http://` |

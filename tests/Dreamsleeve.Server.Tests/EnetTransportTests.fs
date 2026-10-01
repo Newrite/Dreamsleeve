@@ -7,6 +7,7 @@ open System.Net.Sockets
 open System.Threading
 open Enet
 open Expecto
+open Microsoft.Extensions.Logging.Abstractions
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 open Dreamsleeve.Server.Infrastructure.Interop
@@ -74,7 +75,7 @@ let private withPeers run = withPeersAtMtu 1392u run
 
 let private withAdapter settings run =
     let config = { settings with Port = freePort (); ServiceTimeoutMs = 0u }
-    let transport = EnetTransport.createInline config |> ok
+    let transport = EnetTransport.createInline config NullLogger.Instance |> ok
     try
         use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 3un, 0u, 0u, EnetHostOption.Ipv4)
         let mutable peer = Unchecked.defaultof<EnetPeer>
@@ -107,11 +108,37 @@ let tests = testSequenced <| testList "ENet transport" [
             let mutable socketError = SocketError.Success
             Expect.equal (EnetPump.Service(host, &socketError)) -1 "send error propagated"
             Expect.equal socketError SocketError.AccessDenied "actual socket reason preserved"
+            Expect.isTrue (PumpHealth.transient socketError) "a refused destination does not break the host"
             peer.Reset()
             Expect.equal (EnetPump.Service(host, &socketError)) 0 "healthy host still services"
             Expect.equal socketError SocketError.Success "do not attach stale OS errors to success"
         finally
             enet.ENET_API.enet_deinitialize()
+
+    testCase "a failed send to one destination passes and is summarized; an unknown failure breaks" <| fun _ ->
+        let health = PumpHealth.create ()
+        let observe now result error = PumpHealth.observe health now result error
+        Expect.equal (observe 0L -1 SocketError.HostUnreachable) (PumpHealth.Verdict.Report(1, SocketError.HostUnreachable)) "the first failure is reported at once"
+        Expect.equal (observe 1L -1 SocketError.NetworkUnreachable) PumpHealth.Verdict.Passing "then summarized"
+        Expect.equal (observe 2L 0 SocketError.Success) PumpHealth.Verdict.Healthy "a healthy pump in between"
+        Expect.equal (observe (PumpHealth.ReportIntervalMs + 1L) 0 SocketError.Success)
+            (PumpHealth.Verdict.Report(1, SocketError.NetworkUnreachable)) "the unreported tail once the interval passed"
+        Expect.equal (observe (PumpHealth.ReportIntervalMs + 2L) 0 SocketError.Success) PumpHealth.Verdict.Healthy "nothing left to report"
+        Expect.equal (observe (PumpHealth.ReportIntervalMs + 3L) -1 SocketError.NotSocket) (PumpHealth.Verdict.Broken false) "an unusable socket breaks"
+        Expect.equal (PumpHealth.observe (PumpHealth.create ()) 0L -1 SocketError.Success) (PumpHealth.Verdict.Broken false)
+            "a failure without a socket cause is not a passing network problem"
+
+    testCase "failing without a single healthy pump for MaxFailingMs breaks the transport" <| fun _ ->
+        let health = PumpHealth.create ()
+        for now in [ 0L; PumpHealth.MaxFailingMs / 2L; PumpHealth.MaxFailingMs - 1L ] do
+            Expect.notEqual (PumpHealth.observe health now -1 SocketError.HostUnreachable) (PumpHealth.Verdict.Broken true) "still within the limit"
+        Expect.equal (PumpHealth.observe health PumpHealth.MaxFailingMs -1 SocketError.HostUnreachable)
+            (PumpHealth.Verdict.Broken true) "nothing but failures for the whole limit"
+        let recovering = PumpHealth.create ()
+        PumpHealth.observe recovering 0L -1 SocketError.HostUnreachable |> ignore
+        PumpHealth.observe recovering (PumpHealth.MaxFailingMs - 1L) 0 SocketError.Success |> ignore
+        Expect.notEqual (PumpHealth.observe recovering PumpHealth.MaxFailingMs -1 SocketError.HostUnreachable) (PumpHealth.Verdict.Broken true)
+            "one healthy pump starts the count again"
 
     testCase "payload budget follows negotiated MTU and ENet fragmentation overhead" <| fun _ ->
         for mtu in [576u; 1392u] do
@@ -306,7 +333,7 @@ let tests = testSequenced <| testList "ENet transport" [
 
     testCase "a peer negotiating fewer than three channels is not admitted" <| fun _ ->
         let settings = { ServerConfig.defaults with Port = freePort (); ServiceTimeoutMs = 0u }
-        let transport = EnetTransport.createInline settings |> ok
+        let transport = EnetTransport.createInline settings NullLogger.Instance |> ok
         try
             use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 2un, 0u, 0u, EnetHostOption.Ipv4)
             let mutable peer = Unchecked.defaultof<EnetPeer>
