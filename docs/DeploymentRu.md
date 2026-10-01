@@ -55,8 +55,9 @@
 - **nginx** и **certbot** (Let's Encrypt) — или другой сертификат от доверенного центра.
 - **Открытые порты:** UDP 8778; TCP 80 (выпуск сертификата и редирект) и 443. Порты 8779 и 8780 наружу
   не открывать.
-- **Ресурсы:** на десятки игроков хватит 1 vCPU и 1 ГБ памяти. Ориентиры для сотен и тысячи
-  клиентов — в разделе «Ёмкость».
+- **Ресурсы:** на 512 игроков, разбросанных по миру, — 2 vCPU, 2 ГБ памяти и канал около
+  150 Мбит/с; если все соберутся в одном месте, сервер отдаёт до 720 Мбит/с. Замеры и пределы — в
+  разделе «Ёмкость». Для десятков игроков хватит 1 vCPU и 1 ГБ.
 
 ## Требования к Linux-хосту
 
@@ -79,6 +80,17 @@
   `icu-libs`.
 - **Каталог данных** — на локальной файловой системе: SQLite в режиме WAL не работает надёжно на
   NFS, SMB и дисках Windows, подключённых в WSL (`/mnt/c`).
+- **Буферы UDP-сокета.** Сервер просит по 4 MiB (`Server.ReceiveBufferBytes`/`SendBufferBytes`),
+  а Linux без настройки даёт около 208 KiB и пишет при старте предупреждение `The system granted
+  smaller UDP socket buffers...`. Поднимите предел один раз:
+
+  ```bash
+  echo -e "net.core.rmem_max=8388608\nnet.core.wmem_max=8388608" | sudo tee /etc/sysctl.d/90-dreamsleeve.conf
+  ```
+
+  ```bash
+  sudo sysctl --system
+  ```
 
 ## 1. Сборка публикации
 
@@ -132,18 +144,15 @@ sudo chmod 750 /opt/dreamsleeve/data                 # база: хеши пар
 ## 3. server.toml
 
 Файл читается только при запуске. Отсутствующие ключи берут значения по умолчанию, поэтому
-`server.toml` может содержать только то, что вы меняете. Минимум для публичного сервера за nginx:
+`server.toml` может содержать только то, что вы меняете. Значения по умолчанию рассчитаны на 512
+одновременных клиентов (раздел «Ёмкость»): при меньшем онлайне их менять не нужно, это пределы
+очередей, а не заранее занятая память. Минимум для публичного сервера за nginx:
 
 ```toml
 [Server]
 ServerName = "Мой сервер Dreamsleeve"   # видят игроки
 BindAddress = "0.0.0.0"                  # UDP на всех интерфейсах (или публичный IPv4)
 Port = 8778
-PeerLimit = 72                           # >= MaxSessions, с запасом
-
-[Runtime]
-MaxSessions = 64                         # одновременных клиентов, включая не вошедших
-ControlReserve = 260                     # не меньше 4 * MaxSessions + 4
 
 [Authentication]
 AllowRegistration = true                 # false — только существующие аккаунты
@@ -552,35 +561,57 @@ sqlite3 /opt/dreamsleeve/data/dreamsleeve.db ".backup '/var/backups/dreamsleeve-
 
 ## 14. Ёмкость
 
-По умолчанию сервер рассчитан на 32 клиента. Для большего числа `N`:
+Значения по умолчанию рассчитаны на 512 одновременных клиентов; считаются все запущенные
+клиенты, вошедшие и гости. Прогоны 1 октября 2026 года с этими настройками (одна машина,
+loopback, по сокету на клиента, движение 20 Гц; [отчёт](benchmarks/load-512-2026-10-01.md)):
 
-| Ключ | Правило | N = 1000 (нагрузочные прогоны) |
+| Сценарий | Видит каждый | Итог | Позы, Гц | Возраст p95 | CPU сервера | Трафик сервера |
+|---|---:|---|---:|---:|---:|---:|
+| Группы по 25 | 25 | норма | 19,5 | 56 мс | 0,4 ядра | 66 Мбит/с |
+| 10 пространств | ~51 | норма | 19,6 | 61 мс | 0,5 ядра | 138 Мбит/с |
+| Все в одном месте | 512 | ~10 Гц, без отключений | 10,1 | 141 мс | 2,1 ядра | 715 Мбит/с |
+| то же, `ReplicationIntervalMs = 100` | 512 | ровные 10 Гц | 10,0 | 122 мс | 2 ядра | 700 Мбит/с |
+| Все 512 появляются в одном месте разом | 512 | рывок до ~6 с, затем ~10 Гц, без отключений | — | — | 2,5 ядра | 650 Мбит/с |
+| Группы по 25, ресурсы 1–4 Гц | 25 | **отказ** за 1–3 с | — | — | 2,4–4,1 ядра | — |
+
+- **Движение** стоит пропорционально числу видимых пар. Обычный разброс по миру сервер держит с
+  большим запасом. Такт онлайна однопоточный: при 512 игроках в одном радиусе он занимает ~68 мс,
+  и частота сама падает до ~10 Гц. Если такие сборы обычны, поставьте
+  `[Runtime.Presence] ReplicationIntervalMs = 100`, а игрокам — `[interpolation] delayMs = 250`:
+  те же 10 Гц без очереди и отброшенных пакетов.
+- **Здоровье, магия и запас сил** (и детали персонажа) сервер рассылает каждому онлайн-игроку
+  отдельным пакетом со всей картой значений. Плагин шлёт их до 4 раз в секунду, пока значение
+  меняется, и 512 игроков с меняющимися ресурсами дают до миллиона пакетов в секунду: сервер
+  закрывает соединения уже при 1 Гц на игрока. Настройками это не лечится; пока реальный предел —
+  около 100–150 игроков, у которых ресурсы меняются постоянно. Нужна доработка протокола.
+- **Одновременное появление** N игроков в одном радиусе даёт N² пакетов видимости разом (каждой
+  паре свой). Поэтому очереди отправки рассчитаны на N² с запасом: с прежними пределами такой
+  всплеск отключал всех 512, с нынешними — рывок на несколько секунд и пик памяти ~610 МиБ.
+
+Для другого числа клиентов `N`:
+
+| Ключ | Правило | По умолчанию (N = 512) |
 |---|---|---|
-| `Runtime.MaxSessions` | N | 1000 |
-| `Server.PeerLimit` | ≥ N, с запасом | 1000–1100 |
-| `Runtime.ControlReserve` | ≥ 4N + 4 | 4004 |
-| `Runtime.MailboxCapacity` | растёт с N | 65536 |
-| `Runtime.Player.MailboxCapacity`, `MaxPendingOutput` | ≈ 2N + 128 | 2128 |
-| `Runtime.Player.MaxBootstrapEvents` | ≈ N | 1000 |
-| `Runtime.Presence.MailboxCapacity` / `MaxControlDeliveries` | | 8192 / 1024 |
-| `Server.EventBudget` | | 512 |
-| `Server.MaxOutgoingPacketsPerPeer` / `MaxOutgoingBytesPerPeer` | | 4096 / 16 MiB |
-| `Server.MaxOutgoingPackets` / `MaxOutgoingBytes` | | 262144 / 256 MiB |
-| `Server.ReceiveBufferBytes` / `SendBufferBytes` | больше при плотной видимости: меньше потерь, но длиннее очередь | 256 KiB; контроль с 8 MiB |
+| `Runtime.MaxSessions` | N | 512 |
+| `Server.PeerLimit` | N с запасом | 544 |
+| `Runtime.ControlReserve` | ≥ 4N + 4 | 2052 |
+| `Runtime.MailboxCapacity` | ≈ 64N | 32768 |
+| `Runtime.Player.MailboxCapacity`, `MaxPendingOutput` | ≈ 2N + 128 | 1152 |
+| `Runtime.Player.MaxBootstrapEvents` | ≈ N | 512 |
+| `Runtime.Presence.MailboxCapacity` / `MaxControlDeliveries` | ≈ 8N / N | 4096 / 512 |
+| `Runtime.Chat.MailboxCapacity` | ≈ 2N | 1024 |
+| `GroundMarks.MailboxCapacity` | ≈ 4N | 2048 |
+| `Authentication.Service.MailboxCapacity` | ≈ N / 2 | 256 |
+| `Server.EventBudget` | | 256 |
+| `Server.MaxOutgoingPacketsPerPeer` / `MaxOutgoingBytesPerPeer` | ≈ 8N / 16 MiB | 4096 / 16 MiB |
+| `Server.MaxOutgoingPackets` / `MaxOutgoingBytes` | ≈ 4N² / 256 MiB | 1048576 / 256 MiB |
+| `Server.Worker.QueueCapacity` / `QueueBytes` | ≈ 2N² / 64 MiB | 524288 / 64 MiB |
+| `Server.ReceiveBufferBytes` / `SendBufferBytes` | | 4 MiB; на Linux — sysctl из «Требований к Linux-хосту» |
 
-Столбец N = 1000 — значения из нагрузочных прогонов 27–28 сентября (loopback, протокол того
-времени): [движение v6](benchmarks/movement-v6-owner-2026-09-27.md),
+Все эти значения — пределы очередей, память занимается по факту. Более ранние прогоны на 1000
+клиентов (27–28 сентября, протокол того времени): [движение v6](benchmarks/movement-v6-owner-2026-09-27.md),
 [1000 клиентов при 20 Гц](benchmarks/movement-workers-2026-09-27.md),
-[чат через ENet](benchmarks/enet-2026-09-27.md). Это ориентир, а не гарантия вместимости.
-Нагрузку определяет плотность: сколько игроков видят друг друга в пределах
-`Runtime.Presence.VisibilityDistance`.
-
-Linux молча ограничивает буферы сокета значением `net.core.rmem_max`/`wmem_max`. Для 8 MiB:
-
-```bash
-echo -e "net.core.rmem_max=8388608\nnet.core.wmem_max=8388608" | sudo tee /etc/sysctl.d/90-dreamsleeve.conf
-sudo sysctl --system
-```
+[чат через ENet](benchmarks/enet-2026-09-27.md). Это ориентиры, а не гарантия вместимости.
 
 ## 15. Windows
 
@@ -598,6 +629,8 @@ sudo sysctl --system
 | Служба завершается сразу после старта, в логе `Server stopped` без ошибки | stdin закрыт: нет `dreamsleeve.socket` / `StandardInput=socket` |
 | В логе `ENet could not send to some peers ... HostUnreachable` | сеть или VPN сервера переключились, маршрут к игроку пропал; это не сбой, игрок отключится по таймауту ENet и переподключится |
 | В логе `Restarting the game runtime in ... ms` | игровая часть упала (причина строкой выше) и перезапускается; игроки переподключаются сами |
+| При старте `The system granted smaller UDP socket buffers...` | Linux ограничил буферы сокета; поднимите `net.core.rmem_max`/`wmem_max` («Требования к Linux-хосту») |
+| Массово `Closing ...: Outgoing transport handoff budget exceeded` | сервер не успевает отправлять: слишком много надёжных пакетов разом (раздел «Ёмкость»: ресурсы игроков, сотни игроков в одном месте) |
 | `Game runtime failed N times within ... s; stopping the server` | больше `[Recovery] MaxRestarts` отказов за окно; код выхода 1, systemd перезапустит процесс — смотрите причину в логе |
 | Сервер: `Remote HTTP Authentication.Listener requires Authentication.Listener.AllowInsecureRemote...` | `ListenUrl` с `http://` не на `127.0.0.1`/`::1`; за nginx укажите `http://127.0.0.1:8779` |
 | Сервер: `Runtime.ControlReserve must allow 4 * MaxSessions + 4...` | увеличили `MaxSessions`, не увеличив резерв |

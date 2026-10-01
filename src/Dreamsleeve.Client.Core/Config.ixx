@@ -38,6 +38,9 @@ export namespace Dreamsleeve::Client
       auto value         = NetConfig::Default();
       value.maxPeers     = ClientPeers;
       value.channelLimit = MinChannels;
+      // About three seconds of the densest view (512 players at 20 Hz) while the
+      // network thread is held up; ENet alone sets 256 KiB.
+      value.receiveBufferBytes = 1024 * 1024;
       return value;
     }()};
     std::size_t     maxInitialPlayers{4096};
@@ -69,7 +72,7 @@ export namespace Dreamsleeve::Client
     std::uint32_t    deathMarkFormId{0x075DD9};  // FXGlowFlatRndDim
     float            deathMarkScale{0.5f};
     MovementSettings movement{};
-    std::size_t      maxPendingMovementSamples{4096};
+    std::size_t      maxPendingMovementSamples{16384};
 
     // The first invalid setting of the client itself, named as in client.toml;
     // the ENet bounds of network and the timeouts are DreamNetClient::ValidateConfig's.

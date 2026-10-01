@@ -383,7 +383,11 @@ python -u Scripts/benchmark_enet_workers.py --clients 1000 --hosts 200 --workers
 
 `--clients` and `--hosts` are totals, divisible by every worker count. Each worker
 owns N/P clients and H/P sockets. Socket buffers stay 256 KiB by default. Server
-configuration is the existing finite `movement` profile, with packet target 0.
+configuration is the finite `movement` profile (capacities for 1000 sessions) with
+packet target 0 and the historical handoff queue (`Server.Worker`, 65536 packets);
+`--profile minimal` keeps `server.example.toml`, including `Server.Worker`, and sets
+only the session count, so with N = 512 it measures the shipped defaults apart from
+the socket buffers, which `--server-buffer`/`--client-buffer` always set.
 The client aggregate 16 MiB budget is split between workers, as is the packet
 budget; the per-peer budget stays 16 packets. The per-host
 event budget is max(1,4096/H), independent of worker count. These are independent
@@ -426,6 +430,20 @@ buffer sizes for controlled tests (default 262144 bytes each); `--worker-send-bu
 runs the server from another benchmark DLL. These only alter
 the saved benchmark configuration, not production defaults. Failed runs may have
 missing worker reports; never divide a partial numerator by the total population.
+
+`--server-overlay path.toml` merges a TOML file over the generated configuration
+last, table by table: the capacities under test replace the `movement` profile's
+(sized for 1000 sessions) while ports, database and authentication stay generated.
+Do not put `ReplicationIntervalMs` in it; `--replication-ms` also tells the clients.
+
+`--actor-values-hz R` (default 0) makes every client send `SetActorValues` R times
+per second during load, with the plugin's three resources and Russian labels. The
+server fans these out to **every** online player, not only to visible ones, so the
+load grows with N². The health pair carries the send time (whole milliseconds as two
+float32 halves), and `metadataAgeMs` is send-to-receipt on the shared Stopwatch
+clock; `metadataReceived` counts only deliveries during load, so compare it with
+`actorValuesSent * N` (the sender receives its own change too). The acknowledgements
+are reported separately as `actorValuesAckMs`; `controlAckMs` stays SetLocation only.
 
 ### UDP/ENet disconnect diagnostics (separate from throughput results)
 

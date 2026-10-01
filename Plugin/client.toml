@@ -55,9 +55,9 @@ visibilityDistance = 8192
 showFireflies = true
 # Firefly: a STAT base form given as the plugin file name and a plugin-local form ID
 # (1..0xFFFFFF, without the load-order prefix).
-fireflyPlugin = "Skyrim.esm"
+fireflyPlugin = "DreamsleeveClient.esp"
 # Plugin-local form ID of the firefly static.
-fireflyFormId = 0x02EB0F
+fireflyFormId = 0x800
 # Firefly scale, 0.01..10.0; engine precision is 0.01.
 fireflyScale = 0.25
 # true keeps keyboard events from the game and other SKSE mods while the chat is open.
@@ -66,20 +66,19 @@ captureKeyboard = true
 # flat vanilla glow discs (FXGlowFlatRndBrt / FXGlowFlatRndDim); a missing form
 # disables that kind of mark with an error in the log.
 # Note marker: plugin file name.
-groundNotePlugin = "Skyrim.esm"
+groundNotePlugin = "DreamsleeveClient.esp"
 # Note marker: plugin-local form ID, 1..0xFFFFFF.
-groundNoteFormId = 0x075DDB
+groundNoteFormId = 0x802
 # Note marker scale, 0.01..10.0.
 groundNoteScale = 0.5
 # Death marker: plugin file name.
-deathMarkPlugin = "Skyrim.esm"
+deathMarkPlugin = "DreamsleeveClient.esp"
 # Death marker: plugin-local form ID, 1..0xFFFFFF.
-deathMarkFormId = 0x075DD9
+deathMarkFormId = 0x801
 # Death marker scale, 0.01..10.0.
 deathMarkScale = 0.5
 # Movement samples buffered for the game thread, >= 1; overflow resynchronizes the view.
-# 16384 covers a game-thread pause of about 1.6 s with 512 players in view at 20 Hz.
-maxPendingMovementSamples = 16384
+maxPendingMovementSamples = 4096
 
 # ENet host of the client.
 [client.network]
@@ -95,11 +94,6 @@ outBwLimit = 0
 maxPacketBytes = 1048576
 # Data waiting for reassembly, bytes, >= maxPacketBytes.
 maxWaitingData = 33554432
-# UDP socket receive buffer, bytes, 1..2147483647: about three seconds of 512 players
-# in view if the network thread is held up (ENet alone sets 262144).
-receiveBufferBytes = 1048576
-# UDP socket send buffer, bytes, 1..2147483647.
-sendBufferBytes = 262144
 
 # Smoothing of other players' movement between samples.
 [interpolation]

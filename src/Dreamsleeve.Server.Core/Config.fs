@@ -73,22 +73,22 @@ module ServerConfig =
             ServerName = "Dreamsleeve"
             BindAddress = IPAddress.Loopback
             Port = 8778us
-            PeerLimit = 32
+            PeerLimit = 544
             ChannelLimit = 3
             ServiceTimeoutMs = 0u
-            EventBudget = 64
-            Worker = { QueueCapacity = 65536; QueueBytes = 16 * 1024 * 1024
+            EventBudget = 256
+            Worker = { QueueCapacity = 524288; QueueBytes = 64 * 1024 * 1024
                        SendCommandsPerPass = 2048; SendBytesPerPass = 4 * 1024 * 1024
                        WorkBudgetMs = 2; IdleWaitMs = 1 }
             MaxPacketBytes = 1024 * 1024
             MovementPacketTargetBytes = 0
-            ReceiveBufferBytes = 256 * 1024
-            SendBufferBytes = 256 * 1024
+            ReceiveBufferBytes = 4 * 1024 * 1024
+            SendBufferBytes = 4 * 1024 * 1024
             MaxWaitingData = 32 * 1024 * 1024
-            MaxOutgoingPacketsPerPeer = 256
-            MaxOutgoingBytesPerPeer = 4 * 1024 * 1024
-            MaxOutgoingPackets = 4096
-            MaxOutgoingBytes = 32 * 1024 * 1024
+            MaxOutgoingPacketsPerPeer = 4096
+            MaxOutgoingBytesPerPeer = 16 * 1024 * 1024
+            MaxOutgoingPackets = 1048576
+            MaxOutgoingBytes = 256 * 1024 * 1024
             MaxInitialPlayers = 4096
             MaxRecentMessages = 512
             ChatInput = { Username = 32; DisplayName = 64; MessageText = 2000; AnnouncementText = 500; AnnouncementSignature = 64

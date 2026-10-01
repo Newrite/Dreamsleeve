@@ -20,6 +20,9 @@ export struct NetConfig
   BandwidthLimit outBwLimit;
   size_t         maxPacketBytes{1024 * 1024};
   size_t         maxWaitingData{32 * 1024 * 1024};
+  // UDP socket buffers, bytes; they replace the sizes enet_host_create sets.
+  size_t         receiveBufferBytes{ENET_HOST_RECEIVE_BUFFER_SIZE};
+  size_t         sendBufferBytes{ENET_HOST_SEND_BUFFER_SIZE};
 
   static constexpr NetConfig Default() noexcept
   {
@@ -46,8 +49,10 @@ export struct ServerConfig final : NetConfig
     config.channelLimit   = defaultNet.channelLimit;
     config.inBwLimit      = defaultNet.inBwLimit;
     config.outBwLimit     = defaultNet.outBwLimit;
-    config.maxPacketBytes = defaultNet.maxPacketBytes;
-    config.maxWaitingData = defaultNet.maxWaitingData;
+    config.maxPacketBytes     = defaultNet.maxPacketBytes;
+    config.maxWaitingData     = defaultNet.maxWaitingData;
+    config.receiveBufferBytes = defaultNet.receiveBufferBytes;
+    config.sendBufferBytes    = defaultNet.sendBufferBytes;
     return config;
   }
 };
@@ -93,6 +98,9 @@ export struct HostInfo final
   enet_uint32     outgoingBandwidth;
   size_t          maxPacketBytes;
   size_t          maxWaitingData;
+  // Read back from the socket: the system may round or cap a requested size.
+  size_t          receiveBufferBytes;
+  size_t          sendBufferBytes;
 };
 
 export struct HostTelemetry final
@@ -139,8 +147,12 @@ export class DreamNetHost
     host->maximumPacketSize  = config.maxPacketBytes;
     host->maximumWaitingData = config.maxWaitingData;
 
-    NativePtr enetHost  = NativePtr(host);
-    auto      dreamHost = DreamNetHost(std::move(enetHost));
+    NativePtr enetHost = NativePtr(host);
+    if (!ApplySocketBuffers(host, config))
+    {
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateClient, "Cannot set the UDP socket buffers of the client host");
+    }
+    auto dreamHost = DreamNetHost(std::move(enetHost));
 
     if (runtimeConfig)
     {
@@ -180,8 +192,12 @@ export class DreamNetHost
     host->maximumPacketSize  = config.maxPacketBytes;
     host->maximumWaitingData = config.maxWaitingData;
 
-    NativePtr enetHost  = NativePtr(host);
-    auto      dreamHost = DreamNetHost(std::move(enetHost));
+    NativePtr enetHost = NativePtr(host);
+    if (!ApplySocketBuffers(host, config))
+    {
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateServer, "Cannot set the UDP socket buffers of the server host");
+    }
+    auto dreamHost = DreamNetHost(std::move(enetHost));
 
     if (runtimeConfig)
     {
@@ -408,8 +424,10 @@ export class DreamNetHost
         .channelLimit      = host->channelLimit,
         .incomingBandwidth = host->incomingBandwidth,
         .outgoingBandwidth = host->outgoingBandwidth,
-        .maxPacketBytes    = host->maximumPacketSize,
-        .maxWaitingData    = host->maximumWaitingData,
+        .maxPacketBytes     = host->maximumPacketSize,
+        .maxWaitingData     = host->maximumWaitingData,
+        .receiveBufferBytes = SocketBuffer(host->socket, SO_RCVBUF),
+        .sendBufferBytes    = SocketBuffer(host->socket, SO_SNDBUF),
     };
   }
 
@@ -490,6 +508,11 @@ export class DreamNetHost
       return DreamNetError::MakeUnexpected(
         DreamNetErrorCode::InvalidConfig,
         "NetConfig.maxWaitingData must allow at least one maximum-size packet");
+    constexpr auto maxSocketBuffer = static_cast<size_t>((std::numeric_limits<int>::max)());
+    if (config.receiveBufferBytes == 0 || config.receiveBufferBytes > maxSocketBuffer)
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidConfig, "NetConfig.receiveBufferBytes must be 1..2147483647");
+    if (config.sendBufferBytes == 0 || config.sendBufferBytes > maxSocketBuffer)
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidConfig, "NetConfig.sendBufferBytes must be 1..2147483647");
 
     auto maxPeersValidationResult = ValidateMaxPeers(config.maxPeers);
     if (!maxPeersValidationResult)
@@ -546,6 +569,22 @@ export class DreamNetHost
   private:
 
   explicit DreamNetHost(NativePtr enetHost) : host(std::move(enetHost)) {}
+
+  // Validated sizes fit in int, the type of the socket option.
+  static bool ApplySocketBuffers(ENetHost* native, const NetConfig& config) noexcept
+  {
+    return enet_socket_set_option(native->socket, ENET_SOCKOPT_RCVBUF, static_cast<int>(config.receiveBufferBytes)) == 0
+        && enet_socket_set_option(native->socket, ENET_SOCKOPT_SNDBUF, static_cast<int>(config.sendBufferBytes)) == 0;
+  }
+
+  // ENet reads back only its error and TTL options.
+  static size_t SocketBuffer(ENetSocket socket, int option) noexcept
+  {
+    int value  = 0;
+    int length = sizeof(value);
+    if (getsockopt(socket, SOL_SOCKET, option, reinterpret_cast<char*>(&value), &length) != 0 || value < 0) return 0;
+    return static_cast<size_t>(value);
+  }
 
   NativePtr host = nullptr;
 };

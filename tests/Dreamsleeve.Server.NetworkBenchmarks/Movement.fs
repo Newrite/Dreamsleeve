@@ -7,7 +7,7 @@ open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.NetworkBenchmarks.Measurements
 
 // One owner, no actors/locks. All clocks are the generator's monotonic clock.
-type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array, offset: int, stride: int, count: int, now: unit -> float,
+type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: float, ids: uint64 array, offset: int, stride: int, count: int, now: unit -> float,
            send: int -> ClientPacket -> bool, sendMovement: int -> ClientMovementPacket -> bool, fail: string -> unit) =
     let total = ids.Length
     let globalIndex index = offset + index * stride
@@ -41,6 +41,13 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
     let mutable missed = 0L
     let mutable maxPending = 0
     let mutable finalConverged = false
+    // Actor values as the plugin sends them: global fan-out to every online player.
+    let metadataDue = Array.zeroCreate<float> count
+    let metadataRequests = Array.init count (fun _ -> HashSet<uint64>())
+    let metadataAges, metadataAcks = Distribution(), Distribution()
+    let mutable metadataSent = 0L
+    let mutable metadataReceived = 0L
+    let mutable metadataReceivedBytes = 0L
 
     let submit index action =
         let requestId = nextRequest[index]
@@ -81,6 +88,25 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
         if sendMovement index packet && measuring then
             sent <- sent + 1L
             sentBytes <- sentBytes + int64 (packet.CalculateSize())
+
+    // The plugin's three resources and labels. The health pair carries the send
+    // time: whole milliseconds split into two halves that float32 holds exactly.
+    let actorValues index time =
+        let stamp = floor time
+        let values = ActorValues()
+        let resource key name (current: float) maximum =
+            values.Values.Add(ActorValueEntry(Key = key, DisplayName = name,
+                                              Resource = ResourceActorValue(Current = float32 current, Maximum = float32 maximum)))
+        resource "skyrim:health" "Здоровье" (floor (stamp / 65536.)) (stamp % 65536.)
+        resource "skyrim:magicka" "Магия" (floor (stamp / 250.) % 300.) 300.
+        resource "skyrim:stamina" "Запас сил" (float (index % 300)) 300.
+        values
+
+    let sendActorValues index time =
+        let requestId = nextRequest[index]
+        if submit index (UpdatePlayer(SetActorValues = actorValues index time)) then
+            metadataRequests[index].Add requestId |> ignore
+            if measuring then metadataSent <- metadataSent + 1L
 
     let move index time =
         let source = globalIndex index
@@ -161,6 +187,9 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
         measuring <- true
         started <- startTime
         for index in 0 .. count - 1 do due[index] <- started + float (globalIndex index) * 1000. / (rate * float total)
+        if actorValuesHz > 0. then
+            for index in 0 .. count - 1 do
+                metadataDue[index] <- started + float (globalIndex index) * 1000. / (actorValuesHz * float total)
 
     member _.SendDue() =
         let time = now()
@@ -171,6 +200,11 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
                 missed <- missed + int64 (floor ((time - due[index]) / interval))
                 due[index] <- time + interval
                 move index time
+        if actorValuesHz > 0. then
+            for index in 0 .. count - 1 do
+                if time >= metadataDue[index] then
+                    metadataDue[index] <- time + 1000. / actorValuesHz
+                    sendActorValues index time
 
     member _.RecordIteration(duration) = iterations.Add duration
 
@@ -208,7 +242,8 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
             match pending[observer].TryGetValue packet.RequestId with
             | true, (sentAt, measured) ->
                 pending[observer].Remove packet.RequestId |> ignore
-                if measured then acknowledgements.Add(now() - sentAt)
+                let target = if metadataRequests[observer].Remove packet.RequestId then metadataAcks else acknowledgements
+                if measured then target.Add(now() - sentAt)
             | false, _ -> fail "Unmatched control acknowledgement"
         | ServerPacket.PayloadOneofCase.PlayerVisibilityChanged ->
             let value = packet.PlayerVisibilityChanged
@@ -224,7 +259,16 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
                         initializedCount <- initializedCount + 1
                 | _ -> fail "Unexpected character initialization"
                 baseline observer player.Profile.PlayerId player.ViewRevision player.MovementSequence player.Location
-        | ServerPacket.PayloadOneofCase.PlayerMetadataChanged -> ()
+        | ServerPacket.PayloadOneofCase.PlayerMetadataChanged ->
+            let values = packet.PlayerMetadataChanged.ActorValues
+            if measuring && not (isNull values) then
+                match values.Values |> Seq.tryFind (fun entry -> entry.Key = "skyrim:health") with
+                | Some entry when entry.ValueCase = ActorValueEntry.ValueOneofCase.Resource ->
+                    metadataReceived <- metadataReceived + 1L
+                    metadataReceivedBytes <- metadataReceivedBytes + int64 size
+                    let sentAt = float entry.Resource.Current * 65536. + float entry.Resource.Maximum
+                    metadataAges.Add(max 0. (now() - sentAt))
+                | _ -> ()
         | _ -> fail "Unexpected movement response"
 
     member _.FinalLocations =
@@ -263,6 +307,10 @@ type Probe(scenario: string, rate: float, replicationMs: int, ids: uint64 array,
            finalStateConverged = finalConverged; pending = pending |> Array.sumBy _.Count
            deliveryAgeMs = ages.Summary(); receiveGapMs = receiveGaps.Summary(); controlAckMs = acknowledgements.Summary()
            crossProcessMovements = crossProcess; serviceIterationMs = iterations.Summary()
+           actorValuesHz = actorValuesHz; actorValuesSent = metadataSent; metadataReceived = metadataReceived
+           metadataReceivedPerSecond = float metadataReceived * 1000. / max 1. loadMs
+           metadataReceivedPayloadBytes = metadataReceivedBytes
+           metadataAgeMs = metadataAges.Summary(); actorValuesAckMs = metadataAcks.Summary()
            percentileMethod = "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms" |}
 
 // Deterministic checks of the load generator's oracle, without sockets or load.
@@ -272,7 +320,7 @@ let verifyOracle () =
     let mutable time = 1000.
     let fail message = invalidOp message
     let check condition message = if not condition then fail message
-    let probe = Probe("dense", 20., 50, [| 1UL |], 0, 1, 1, (fun () -> time),
+    let probe = Probe("dense", 20., 50, 0., [| 1UL |], 0, 1, 1, (fun () -> time),
                       (fun packetIndex packet -> check (packetIndex = 0) "Unexpected sender"; controls.Add packet; true),
                       (fun packetIndex packet -> check (packetIndex = 0) "Unexpected sender"; samples.Add packet; true), fail)
     probe.Start(0.)
@@ -322,7 +370,7 @@ let verifyOracle () =
     check (probe.Converged()) "A later repeat must recover the lost final sample"
     let warmControls = ResizeArray<ClientPacket>()
     let warmSamples = ResizeArray<ClientMovementPacket>()
-    let warm = Probe("spaces", 20., 50, [|1UL|], 0, 1, 1, (fun () -> time),
+    let warm = Probe("spaces", 20., 50, 0., [|1UL|], 0, 1, 1, (fun () -> time),
                      (fun _ packet -> warmControls.Add packet; true),
                      (fun _ packet -> warmSamples.Add packet; true), fail)
     check (not warm.PositionsPrepared) "Cold mode must not report warmup completion"

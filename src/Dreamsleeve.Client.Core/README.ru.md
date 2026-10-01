@@ -37,8 +37,10 @@ ClientExchange. После создания им владеет один сет�
 Значения проверяет один раз `ValidateClientSettings` (`Configuration::InvalidSetting` называет
 первый неверный ключ так, как он записан в файле); его вызывает `ClientApplication::TryCreate`,
 поэтому файл, аргументы Client.Dev и прямое создание `ClientSettings` проходят одну проверку.
-Частичный или пустой TOML дополняется defaults: 20 Гц, три канала,
-один peer, прежние лимиты и настройки интерполяции. `serverHost` — IPv4-литерал
+Частичный или пустой TOML дополняется defaults: 20 Гц, три канала, один peer, лимиты под
+сервер на 512 игроков и настройки интерполяции. `client.network.receiveBufferBytes`/`sendBufferBytes`
+заменяют размеры буферов UDP-сокета, которые ставит ENet (256 KiB): приём по умолчанию 1 MiB, это
+около трёх секунд потока 512 видимых игроков, если сетевой поток задержался. `serverHost` — IPv4-литерал
 или DNS-имя (`DreamNetAddress::IsHostSyntax`), которое `ClientRuntime` разрешает заново при каждом
 новом соединении на сетевом потоке; `serverPort` — порт ENet; `authUrl` — HTTP(S) origin без пути. Hot reload отсутствует.
 Файл читается как UTF-8 через Glaze 7.0.2; имена ключей чувствительны к регистру.

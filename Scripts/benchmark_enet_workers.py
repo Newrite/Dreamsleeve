@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import tomli_w
+import tomllib
 import os
 from pathlib import Path
 import subprocess
@@ -21,19 +22,34 @@ def read_json(path):
     return json.loads(path.read_text(encoding="utf-8-sig")) if path.exists() else None
 
 
+def merge(target, overlay):
+    """Overlay tables replace single keys and keep the rest of the generated configuration."""
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            merge(target[key], value)
+        else:
+            target[key] = value
+
+
 def run(args, workers, repetition, destination):
-    name = f"{args.scenario}-n{args.clients}-h{args.hosts}-p{workers}-run{repetition}"
+    name = f"{args.scenario}-n{args.clients}-h{args.hosts}-p{workers}-av{args.actor_values_hz:g}-run{repetition}"
     case = destination / name
     case.mkdir()
     group = case / "group"
     group.mkdir()
-    config = configuration(args.clients, free_port(), "movement", case)
+    config = configuration(args.clients, free_port(), args.profile, case)
     config["Server"].update(ReceiveBufferBytes=args.server_buffer, SendBufferBytes=args.server_buffer, MovementPacketTargetBytes=0)
-    config["Server"]["Worker"] = dict(
-        QueueCapacity=65536, QueueBytes=16 * 1024 * 1024,
-        SendCommandsPerPass=args.worker_send_budget, SendBytesPerPass=4 * 1024 * 1024,
-        WorkBudgetMs=2, IdleWaitMs=1)
+    if args.profile == "movement":
+        # The handoff queue of the historical runs, kept for comparison with them.
+        config["Server"]["Worker"] = dict(
+            QueueCapacity=65536, QueueBytes=16 * 1024 * 1024,
+            SendCommandsPerPass=args.worker_send_budget, SendBytesPerPass=4 * 1024 * 1024,
+            WorkBudgetMs=2, IdleWaitMs=1)
+    else:
+        config["Server"]["Worker"]["SendCommandsPerPass"] = args.worker_send_budget
     config["Runtime"]["Presence"]["ReplicationIntervalMs"] = args.replication_ms
+    if args.server_overlay:
+        merge(config, tomllib.loads(args.server_overlay.read_text(encoding="utf-8-sig")))
     config_path = case / "server.toml"
     config_path.write_text(tomli_w.dumps(config), encoding="utf-8")
     phase_path = case / "phase.txt"
@@ -74,7 +90,8 @@ def run(args, workers, repetition, destination):
             children.append(Child(["dotnet", str(CLIENT), "--auth-url", auth_url(config),
                 "--port", str(config["Server"]["Port"]), "--clients", str(args.clients // workers),
                 "--hosts", str(args.hosts // workers), "--seconds", str(args.seconds), "--rate", str(args.rate),
-                "--replication-ms", str(args.replication_ms), "--scenario", args.scenario,
+                "--replication-ms", str(args.replication_ms), "--actor-values-hz", str(args.actor_values_hz),
+                "--scenario", args.scenario,
                 "--output", str(case / f"client-{worker}.json")], case / f"client-{worker}.log", worker_env))
         (case / "pids.json").write_text(json.dumps({"server": server.process.pid,
             "clients": [c.process.pid for c in children]}), encoding="utf-8")
@@ -180,6 +197,8 @@ def main():
     parser.add_argument("--workers", type=int, nargs="+", default=[1, 4, 10])
     parser.add_argument("--rate", type=float, default=20)
     parser.add_argument("--replication-ms", type=int, default=50)
+    parser.add_argument("--actor-values-hz", type=float, default=0,
+                        help="Per-client actor value updates (the plugin sends up to 4 Hz while a resource changes)")
     parser.add_argument("--seconds", type=int, default=30)
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=600)
@@ -191,6 +210,10 @@ def main():
     parser.add_argument("--server-buffer", type=int, default=262144)
     parser.add_argument("--client-buffer", type=int, default=262144)
     parser.add_argument("--scenario", choices=["sparse", "spaces", "dense", "boundaries"], default="sparse")
+    parser.add_argument("--profile", choices=["movement", "minimal"], default="movement",
+                        help="movement: capacities for 1000 sessions; minimal: server.example.toml with N sessions")
+    parser.add_argument("--server-overlay", type=Path,
+                        help="TOML merged over the generated server configuration last (capacities under test)")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if not 1 <= args.clients <= 1000 or not 1 <= args.hosts <= args.clients:

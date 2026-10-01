@@ -494,9 +494,28 @@ TEST_CASE("Invalid host packet budgets are rejected before creating a socket")
   config.maxPacketBytes = DreamNetPacket::MaxDataSize + 1;
   config.maxWaitingData = config.maxPacketBytes;
   CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+  config                    = NetConfig::Default();
+  config.receiveBufferBytes = 0;
+  CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+  config                 = NetConfig::Default();
+  config.sendBufferBytes = static_cast<std::size_t>((std::numeric_limits<int>::max)()) + 1;
+  CHECK_FALSE(DreamNetHost::TryCreateClient(config));
 }
 
-
+TEST_CASE("Configured socket buffers replace the ENet defaults")
+{
+  auto runtime = DreamNetRuntime::TryInitialize();
+  REQUIRE(runtime);
+  auto config               = NetConfig::Default();
+  config.receiveBufferBytes = 1024 * 1024;
+  config.sendBufferBytes    = 512 * 1024;
+  auto host                 = DreamNetHost::TryCreateClient(config);
+  REQUIRE(host);
+  auto info = host->GetHostInfo();
+  REQUIRE(info);
+  CHECK(info->receiveBufferBytes == config.receiveBufferBytes);
+  CHECK(info->sendBufferBytes == config.sendBufferBytes);
+}
 
 TEST_CASE("Chat codec serializes directly into a transferable reliable ENet packet")
 {

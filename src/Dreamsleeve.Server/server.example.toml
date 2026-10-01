@@ -1,6 +1,7 @@
 # Dreamsleeve server configuration: every key with its default value.
 # Start: dotnet Dreamsleeve.Server.dll --config server.toml
 # (--write-config server.toml writes the same defaults without comments).
+# Defaults are sized for 512 simultaneous clients (docs/DeploymentRu.md, "Capacity").
 # Read once at startup: restart the server to apply a change. Omitted keys keep
 # their defaults; keys are case-sensitive. An unknown or repeated key, a wrong
 # type or a value out of range stops the server with a message naming the key.
@@ -18,34 +19,37 @@ BindAddress = "127.0.0.1"
 Port = 8778
 # ENet connection slots, 1..4095, at least Runtime.MaxSessions. A few spare slots let a full
 # server answer "full" instead of ENet silently dropping the attempt.
-PeerLimit = 32
+PeerLimit = 544
 # ENet channels per connection, 3..255; the protocol uses 3 (control, chat, realtime).
 ChannelLimit = 3
 # Must be 0: the transport thread waits on its own wake-up, never inside ENet.
 ServiceTimeoutMs = 0
 # Network events handed from the transport thread to the runtime per pass, >= 1.
-EventBudget = 64
+EventBudget = 256
 # Largest packet in either direction, bytes, >= 1; a larger incoming packet drops the connection.
 # Client: client.network.maxPacketBytes should be the same.
 MaxPacketBytes = 1048576
 # Target payload of one movement batch, bytes: 0 = the negotiated MTU (recommended), > 0 lowers it.
 MovementPacketTargetBytes = 0
-# UDP socket receive buffer, bytes, >= 1. Raise it for hundreds of players (the OS may cap it).
-ReceiveBufferBytes = 262144
-# UDP socket send buffer, bytes, >= 1.
-SendBufferBytes = 262144
+# UDP socket receive buffer, bytes, >= 1. Linux caps it at net.core.rmem_max (about 208 KiB
+# unless raised) and the server then warns at startup with the size it got.
+ReceiveBufferBytes = 4194304
+# UDP socket send buffer, bytes, >= 1; Linux caps it at net.core.wmem_max.
+SendBufferBytes = 4194304
 # ENet limit of data one connection may have waiting for reassembly, bytes, >= MaxPacketBytes.
 MaxWaitingData = 33554432
 # Packets of one connection held between the runtime and ENet: waiting in the handoff queue
 # (each direction) or kept by ENet until acknowledged, >= 1. Beyond it a movement packet is
-# dropped; any other packet closes the slow connection.
-MaxOutgoingPacketsPerPeer = 256
+# dropped; any other packet closes the slow connection. Every player joining sends each
+# connection several packets, so a burst of joins needs about 8 per session.
+MaxOutgoingPacketsPerPeer = 4096
 # Bytes of one connection held the same way, >= MaxPacketBytes.
-MaxOutgoingBytesPerPeer = 4194304
+MaxOutgoingBytesPerPeer = 16777216
 # Packets held the same way for all connections together, >= MaxOutgoingPacketsPerPeer.
-MaxOutgoingPackets = 4096
+# These are limits, not reservations: memory follows the actual queue.
+MaxOutgoingPackets = 1048576
 # Bytes held for all connections together, >= MaxOutgoingBytesPerPeer.
-MaxOutgoingBytes = 33554432
+MaxOutgoingBytes = 268435456
 # Players one session-opening snapshot may list, >= Runtime.MaxSessions.
 # Client: maxInitialPlayers must be at least this.
 MaxInitialPlayers = 4096
@@ -55,10 +59,11 @@ MaxRecentMessages = 512
 
 # Handoff between the runtime and the dedicated ENet thread.
 [Server.Worker]
-# Packets waiting in the handoff queue, >= 1.
-QueueCapacity = 65536
+# Packets waiting in the handoff queue, >= 1. Hundreds of players appearing in one radius
+# at once queue one visibility packet per pair (N * N); a full queue closes connections.
+QueueCapacity = 524288
 # Bytes waiting in the handoff queue, >= Server.MaxPacketBytes.
-QueueBytes = 16777216
+QueueBytes = 67108864
 # Send commands the ENet thread takes per pass, >= 1.
 SendCommandsPerPass = 2048
 # Bytes the ENet thread sends per pass, >= 1.
@@ -108,25 +113,26 @@ ActivityKey = 64
 [Runtime]
 # Simultaneous game connections, >= 1, at most Server.PeerLimit and Server.MaxInitialPlayers.
 # Every running client counts, signed in or not (a guest connection).
-MaxSessions = 32
-# Runtime mailbox, messages, >= 1.
-MailboxCapacity = 256
+MaxSessions = 512
+# Runtime mailbox, messages, >= 1; every incoming packet passes it.
+MailboxCapacity = 32768
 # Extra mailbox room for control messages, at least 4 * MaxSessions + 4: one cleanup
 # acknowledgement per source (chat, system, presence, ground marks) per session.
-ControlReserve = 160
+ControlReserve = 2052
 # A new connection must send its first request, and a session must finish signing in,
 # within this many milliseconds, >= 1.
 OpenTimeoutMs = 10000
 # Time the runtime gives sessions to close at shutdown, milliseconds, >= 1.
-ShutdownTimeoutMs = 1500
+ShutdownTimeoutMs = 5000
 # Runtime poll period of the transport, milliseconds, >= 1;
 # Server.ServiceTimeoutMs + PollIntervalMs must not exceed OpenTimeoutMs or ShutdownTimeoutMs.
 PollIntervalMs = 1
 
 # One player session.
 [Runtime.Player]
-# Session mailbox, messages, >= 1.
-MailboxCapacity = 128
+# Session mailbox, messages, >= 1; about 2 * MaxSessions + 128 absorbs every other player
+# joining at once (after a restart of the game part everyone reconnects together).
+MailboxCapacity = 1152
 # Extra mailbox room for control messages, >= 1.
 ControlReserve = 32
 # Requests (chat, marks, moderation, name changes) waiting for their owner, >= 1;
@@ -134,15 +140,16 @@ ControlReserve = 32
 MaxPendingChat = 16
 # Character updates waiting for the online list, >= 1; more are refused with OVERLOADED.
 MaxPendingUpdates = 16
-# Events buffered while the session opens, >= 1; overflow closes the session.
-MaxBootstrapEvents = 128
+# Events buffered while the session opens, >= 1; overflow closes the session. About MaxSessions.
+MaxBootstrapEvents = 512
 # Responses waiting to be sent, >= 1; overflow closes the session as a slow consumer.
-MaxPendingOutput = 128
+# About 2 * MaxSessions + 128, like MailboxCapacity.
+MaxPendingOutput = 1152
 
 # The global chat channel.
 [Runtime.Chat]
-# Channel mailbox, messages, >= 1.
-MailboxCapacity = 256
+# Channel mailbox, messages, >= 1; every opening session joins through it.
+MailboxCapacity = 1024
 # Extra mailbox room for control messages, >= 1.
 ControlReserve = 64
 # Messages kept in memory and sent to a joining player, >= 1, at most Server.MaxRecentMessages.
@@ -163,12 +170,12 @@ DuplicateWindowMs = 30000
 
 # The online list and movement replication.
 [Runtime.Presence]
-# Owner mailbox, messages, >= 1.
-MailboxCapacity = 128
+# Owner mailbox, messages, >= 1; every opening session joins through it.
+MailboxCapacity = 4096
 # Extra mailbox room for control messages, >= 1.
-ControlReserve = 64
+ControlReserve = 128
 # Control messages the owner may have in flight to the runtime, >= 1.
-MaxControlDeliveries = 128
+MaxControlDeliveries = 512
 # Period of pose replication, milliseconds, >= 1: 50 = 20 Hz.
 ReplicationIntervalMs = 50
 # Players within this many world units (same worldspace or interior cell) get each
@@ -231,8 +238,9 @@ RequestTimeoutSeconds = 15
 # The account service behind the listener.
 [Authentication.Service]
 # Service mailbox, requests, 1..65536; open HTTP connections are capped at
-# 2 * MailboxCapacity + MaxConcurrentOperations.
-MailboxCapacity = 64
+# 2 * MailboxCapacity + MaxConcurrentOperations. Clients resume their saved sign-in
+# together after a restart of the game part; a full service answers 503 and they retry.
+MailboxCapacity = 256
 # Parallel storage and password-hashing workers, 1..64.
 MaxConcurrentOperations = 4
 # One-time game session tickets waiting to be used, 1..100000.
@@ -380,8 +388,9 @@ Enabled = true
 # Persistent in SQLite; shown to players nearby like poses. Read at
 # startup; a missing section keeps these defaults.
 [GroundMarks]
-# Owner mailbox, messages, >= 1.
-MailboxCapacity = 256
+# Owner mailbox, messages, >= 1; it also takes every accepted pose of every player
+# (a full mailbox only drops a position update, repaired by the next one).
+MailboxCapacity = 2048
 # Extra mailbox room for control messages, >= 1.
 ControlReserve = 64
 # Control messages the owner may have in flight to the runtime, >= 1.

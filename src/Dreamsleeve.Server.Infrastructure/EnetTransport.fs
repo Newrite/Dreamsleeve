@@ -261,7 +261,7 @@ module EnetTransport =
                 finally
                     enet.ENET_API.enet_deinitialize()
 
-    let private allocate config logger =
+    let private allocate config (logger: ILogger) =
         let mutable address = Unchecked.defaultof<enet.ENetAddress>
         let resolved = enet.ENetAddress.FromIpAddress(config.BindAddress, config.Port, &address)
 
@@ -278,6 +278,16 @@ module EnetTransport =
                     enet.ENET_API.enet_deinitialize()
                     Error "Could not configure ENet UDP socket buffers."
                 else
+                    // Linux silently caps the sizes at net.core.rmem_max/wmem_max and
+                    // reports double what it grants; Windows grants them as asked.
+                    let granted value = if OperatingSystem.IsLinux() then value / 2 else value
+                    let struct (receive, sent) = TransportDiagnostics.ReadBuffers host
+                    let receive, sent = granted receive, granted sent
+                    logger.LogInformation("ENet UDP socket buffers: receive {Receive} bytes, send {Send} bytes", receive, sent)
+                    if receive < config.ReceiveBufferBytes || sent < config.SendBufferBytes then
+                        logger.LogWarning(
+                            "The system granted smaller UDP socket buffers than Server.ReceiveBufferBytes {Receive} / SendBufferBytes {Send}; on Linux raise net.core.rmem_max and net.core.wmem_max",
+                            config.ReceiveBufferBytes, config.SendBufferBytes)
                     // Checksums and compression stay disabled, matching the native client.
                     host.SetMaximumPacketSize(unativeint config.MaxPacketBytes)
                     host.SetMaximumWaitingData(unativeint config.MaxWaitingData)

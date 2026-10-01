@@ -312,7 +312,7 @@ module GroundMarkOptions =
     let MinExpiryCheckIntervalMs = 1000
 
     let defaults = {
-        MailboxCapacity = 256; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 256
+        MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 256
         VisibilityDistance = Visibility.DefaultDistance
         MaxNotesPerPlayer = 5; MaxDeathMarksPerPlayer = 10
         NoteTtlDays = 30; DeathMarkTtlDays = 7
@@ -414,16 +414,16 @@ type ServerRuntimeOptions = {
 [<RequireQualifiedAccess>]
 module ServerRuntimeOptions =
     let defaults = {
-        MaxSessions = 32
-        MailboxCapacity = 256
-        ControlReserve = 160
+        MaxSessions = 512
+        MailboxCapacity = 32768
+        ControlReserve = 2052
         OpenTimeoutMs = 10000
-        ShutdownTimeoutMs = 1500
+        ShutdownTimeoutMs = 5000
         PollIntervalMs = 1
-        Player = { MailboxCapacity = 128; ControlReserve = 32; MaxPendingChat = 16; MaxPendingUpdates = 16;
-                   MaxBootstrapEvents = 128; MaxPendingOutput = 128 }
-        Chat = { MailboxCapacity = 256; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128
+        Player = { MailboxCapacity = 1152; ControlReserve = 32; MaxPendingChat = 16; MaxPendingUpdates = 16;
+                   MaxBootstrapEvents = 512; MaxPendingOutput = 1152 }
+        Chat = { MailboxCapacity = 1024; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128
                  Rate = { Burst = 5; RefillMs = 2000; DuplicateWindowMs = 30000 } }
-        Presence = { MailboxCapacity = 128; ControlReserve = 64; MaxControlDeliveries = 128; ReplicationIntervalMs = 50
+        Presence = { MailboxCapacity = 4096; ControlReserve = 128; MaxControlDeliveries = 512; ReplicationIntervalMs = 50
                      VisibilityDistance = Visibility.DefaultDistance }
     }

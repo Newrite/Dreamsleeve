@@ -17,7 +17,7 @@ open Google.Protobuf
 open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.Infrastructure.Interop
 
-type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Hosts: int; Seconds: float; Rate: float; ReplicationMs: int; Scenario: string; Output: string }
+type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Hosts: int; Seconds: float; Rate: float; ReplicationMs: int; ActorValuesHz: float; Scenario: string; Output: string }
 
 type private Client = {
     Index: int
@@ -437,7 +437,7 @@ let private drain state =
     Console.Out.Flush()
 
 let private movementLoad state =
-    let probe = Movement.Probe(state.Options.Scenario, state.Options.Rate, state.Options.ReplicationMs, state.AllPlayerIds, state.Group.Index, state.Group.Workers, state.Clients.Length,
+    let probe = Movement.Probe(state.Options.Scenario, state.Options.Rate, state.Options.ReplicationMs, state.Options.ActorValuesHz, state.AllPlayerIds, state.Group.Index, state.Group.Workers, state.Clients.Length,
                                Coordination.now, (fun index packet -> send state state.Clients[index] packet),
                                (fun index packet -> sendMovement state state.Clients[index] packet), fail state)
     state.Movement <- Some probe
@@ -629,7 +629,7 @@ let private run (options: Options) =
         enet.ENET_API.enet_deinitialize()
 
 let private parse (args: string array) =
-    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Hosts = 1; Seconds = 10.; Rate = 10.; ReplicationMs = 50; Scenario = "chat"; Output = "build/network-benchmark.json" }
+    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Hosts = 1; Seconds = 10.; Rate = 10.; ReplicationMs = 50; ActorValuesHz = 0.; Scenario = "chat"; Output = "build/network-benchmark.json" }
     if args.Length % 2 <> 0 then invalidArg "args" "Expected --auth-url URL --port P --clients N --seconds D --rate R --output path.json"
     for index in 0 .. 2 .. args.Length - 1 do
         let value = args[index + 1]
@@ -641,6 +641,7 @@ let private parse (args: string array) =
         | "--seconds" -> options <- { options with Seconds = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--rate" -> options <- { options with Rate = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--replication-ms" -> options <- { options with ReplicationMs = Int32.Parse(value, CultureInfo.InvariantCulture) }
+        | "--actor-values-hz" -> options <- { options with ActorValuesHz = Double.Parse(value, CultureInfo.InvariantCulture) }
         | "--scenario" -> options <- { options with Scenario = value }
         | "--output" -> options <- { options with Output = value }
         | unknown -> invalidArg "args" ("Unknown option: " + unknown)
@@ -655,6 +656,10 @@ let private parse (args: string array) =
     if not (List.contains options.Scenario ["chat"; "dense"; "spaces"; "sparse"; "boundaries"])
        || (options.Scenario <> "chat" && options.Rate <= 0.) then
         invalidArg "args" "Movement requires dense/spaces/sparse/boundaries and rate > 0 (per-client Hz)."
+    // The plugin sends actor values at most every 250 ms; the server coalesces per replication tick.
+    if not (Double.IsFinite options.ActorValuesHz) || options.ActorValuesHz < 0. || options.ActorValuesHz > 20.
+       || (options.Scenario = "chat" && options.ActorValuesHz > 0.) then
+        invalidArg "args" "Actor values require a movement scenario and 0..20 Hz per client."
     options
 
 [<EntryPoint>]

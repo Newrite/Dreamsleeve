@@ -155,7 +155,7 @@ module AuthService =
     }
 
     let defaults = {
-        MailboxCapacity = 64; MaxConcurrentOperations = 4; MaxTickets = 4096
+        MailboxCapacity = 256; MaxConcurrentOperations = 4; MaxTickets = 4096
         TicketLifetimeSeconds = 60; PasswordIterations = 210000
         SavedLoginDays = 30; MaxSavedLogins = 8; ResetLifetimeMinutes = 15; DisplayNameHistory = 20
     }
