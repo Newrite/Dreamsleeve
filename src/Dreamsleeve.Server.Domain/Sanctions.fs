@@ -23,8 +23,8 @@ type SanctionKind =
     /// No session: sign-in and resume are refused and a live session ends.
     | Ban
 
-/// Where a sanction holds. The server is the only scope now; a guild's own
-/// discipline will be another case carrying its guild.
+/// Where a sanction holds. A guild's own discipline is not a sanction: its
+/// mute belongs to the membership (GuildMute), its exclusion ends the membership.
 [<RequireQualifiedAccess>]
 type SanctionScope = | Server
 

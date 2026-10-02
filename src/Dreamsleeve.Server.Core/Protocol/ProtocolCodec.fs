@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 18u
+    let Version = 19u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -48,6 +48,7 @@ module ProtocolCodec =
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.ListPlayerMarks -> ModerationCodec.decodeListMarks packet.ListPlayerMarks
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.ClearPlayerMarks -> ModerationCodec.decodeClearMarks packet.ClearPlayerMarks
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.DeleteChatMessage -> ModerationCodec.decodeDeleteMessage packet.DeleteChatMessage
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.GuildCommand -> GuildCodec.decode packet.GuildCommand
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.None ->
                 Error(ProtocolCodecFailure.InvalidPayload "payload")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "payload")
@@ -83,7 +84,7 @@ module ProtocolCodec =
         | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.UpdatePlayer _ | ClientCommand.SetIdentityVisibility _
         | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
         | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
-        | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ -> DeliveryLane.Control
+        | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.Guild _ -> DeliveryLane.Control
 
     /// What the client hears for a request this codec refused: the wire field
     /// that was wrong and why, worded for the player.
@@ -109,6 +110,8 @@ module ProtocolCodec =
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidLimit("SanctionTerm", _)) ->
             invalid "minutes" "A term runs from a minute to ten years."
         | ProtocolCodecFailure.InvalidPayload "kinds" -> invalid "kinds" "Choose notes, death marks or both."
+        | ProtocolCodecFailure.InvalidPayload "role" -> invalid "role" "A guild role is member or officer."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidId "GuildId") -> invalid "guild_id" "Invalid guild."
         | _ -> invalid "" "Invalid request."
 
     /// The refusal of a request, sent back on the lane the request came by.
@@ -119,6 +122,11 @@ module ProtocolCodec =
     let private settles lane requestId = { Lane = lane; RequestId = ValueSome requestId; WhileOpening = false }
     let private notifies lane = { Lane = lane; RequestId = ValueNone; WhileOpening = false }
 
+    // A guild's chat travels with its GuildChanged on the control lane: no
+    // message overtakes the guild that holds it or trails the guild's removal.
+    let private chatLane channelId =
+        if ChatChannels.kindOf channelId = ValueSome ChatChannelKind.Guild then DeliveryLane.Control else DeliveryLane.Chat
+
     /// The one table of how each response travels. Only the refusal of the
     /// opening request may leave before SessionOpened.
     let delivery response : ResponseDelivery =
@@ -127,17 +135,19 @@ module ProtocolCodec =
         | ServerResponse.GroundMarkPlaced(requestId, _, _) | ServerResponse.GroundMarkRemoved(requestId, _)
         | ServerResponse.IdentityVisibilityChanged(requestId, _, _) | ServerResponse.DisplayNameChanged(requestId, _)
         | ServerResponse.SanctionIssued(requestId, _) | ServerResponse.SanctionLifted(requestId, _, _) | ServerResponse.PlayerKicked(requestId, _)
-        | ServerResponse.SanctionList(requestId, _) | ServerResponse.PlayerMarks(requestId, _, _) | ServerResponse.PlayerMarksCleared(requestId, _, _) ->
+        | ServerResponse.SanctionList(requestId, _) | ServerResponse.PlayerMarks(requestId, _, _) | ServerResponse.PlayerMarksCleared(requestId, _, _)
+        | ServerResponse.GuildCommandDone(requestId, _) ->
             settles DeliveryLane.Control requestId
-        | ServerResponse.ChatMessageRemoved(ValueSome requestId, _, _) -> settles DeliveryLane.Chat requestId
-        | ServerResponse.ChatMessageRemoved(ValueNone, _, _) -> notifies DeliveryLane.Chat
+        | ServerResponse.ChatMessageRemoved(ValueSome requestId, channel, _) -> settles (chatLane channel) requestId
+        | ServerResponse.ChatMessageRemoved(ValueNone, channel, _) -> notifies (chatLane channel)
         | ServerResponse.RequestRejected(requestId, _) -> { settles DeliveryLane.Control requestId with WhileOpening = true }
-        | ServerResponse.ChatAccepted(requestId, _) | ServerResponse.ChatRejected(requestId, _) -> settles DeliveryLane.Chat requestId
-        | ServerResponse.ChatPublished _ -> notifies DeliveryLane.Chat
+        | ServerResponse.ChatAccepted(requestId, message) -> settles (chatLane message.ChannelId) requestId
+        | ServerResponse.ChatRejected(requestId, _) -> settles DeliveryLane.Chat requestId
+        | ServerResponse.ChatPublished message -> notifies (chatLane message.ChannelId)
         | ServerResponse.PlayersMoved _ -> notifies DeliveryLane.Realtime
         | ServerResponse.PresenceChanged _
         | ServerResponse.GroundMarksChanged _ | ServerResponse.OwnGroundMarks _ | ServerResponse.MuteChanged _
-        | ServerResponse.RoleChanged _ -> notifies DeliveryLane.Control
+        | ServerResponse.RoleChanged _ | ServerResponse.GuildsSnapshot _ | ServerResponse.GuildChanged _ -> notifies DeliveryLane.Control
         // The last packet before the runtime closes the connection, whatever the phase.
         | ServerResponse.SessionEnded _ -> { notifies DeliveryLane.Control with WhileOpening = true }
 
@@ -296,4 +306,17 @@ module ProtocolCodec =
             | ServerResponse.ChatMessageRemoved(_, channel, message) ->
                 packet.ChatMessageRemoved <-
                     Dreamsleeve.Protocol.Chat.ChatMessageRemoved(ChannelId = ChatChannelId.value channel, MessageId = ChatMessageId.value message)
+                envelope ()
+            | ServerResponse.GuildsSnapshot state ->
+                if not (GuildCodec.validSnapshot config state) then invalid "guilds_snapshot"
+                else
+                    packet.GuildsSnapshot <- GuildCodec.snapshot state
+                    envelope ()
+            | ServerResponse.GuildChanged change ->
+                if not (GuildCodec.validChange config change) then invalid "guild_changed"
+                else
+                    packet.GuildChanged <- GuildCodec.changed change
+                    envelope ()
+            | ServerResponse.GuildCommandDone(_, guild) ->
+                packet.GuildCommandDone <- Dreamsleeve.Protocol.Chat.GuildCommandDone(GuildId = GuildId.value guild)
                 envelope ()

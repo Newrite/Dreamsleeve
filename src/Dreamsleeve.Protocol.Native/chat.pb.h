@@ -123,6 +123,7 @@ namespace Chat {
 enum ChatChannelKind : int {
   CHAT_CHANNEL_KIND_UNSPECIFIED = 0,
   CHAT_CHANNEL_KIND_GLOBAL = 1,
+  CHAT_CHANNEL_KIND_GUILD = 3,
   CHAT_CHANNEL_KIND_SYSTEM = 5,
   ChatChannelKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
@@ -136,7 +137,7 @@ inline constexpr ChatChannelKind ChatChannelKind_MIN =
 inline constexpr ChatChannelKind ChatChannelKind_MAX =
     static_cast<ChatChannelKind>(5);
 inline bool ChatChannelKind_IsValid(int value) {
-  return 0 <= value && value <= 5 && ((35u >> value) & 1) != 0;
+  return 0 <= value && value <= 5 && ((43u >> value) & 1) != 0;
 }
 inline constexpr int ChatChannelKind_ARRAYSIZE = 5 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL ChatChannelKind_descriptor();

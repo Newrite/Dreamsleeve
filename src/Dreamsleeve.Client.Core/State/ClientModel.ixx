@@ -131,6 +131,27 @@ public:
       return {};
     }
 
+    // A channel the session no longer has (a guild the player left): its cache
+    // and its content not yet taken go, and the change reports it absent.
+    Domain::OperationResult UnregisterChannel(ChatChannelId channelId)
+    {
+      if (chats.erase(channelId) == 0)
+      {
+        return std::unexpected(Domain::Error{Domain::ErrorCode::UnknownChannel, "channelId"});
+      }
+
+      if (!pendingChanges.requiresSnapshot)
+      {
+        std::erase_if(pendingChanges.chatContent, [channelId](const ChatContentChange& change) {
+          return std::visit([channelId](const auto& value) { return value.channelId == channelId; }, change);
+        });
+        std::erase(pendingChanges.resetChats, channelId);
+      }
+      ++revision;
+      MarkChatState(channelId);
+      return {};
+    }
+
     Domain::OperationResult SetSelfPlayer(std::uint64_t updateGeneration, std::optional<PlayerId> playerId)
     {
       return Apply(updateGeneration, SelfPlayerAssigned{playerId});

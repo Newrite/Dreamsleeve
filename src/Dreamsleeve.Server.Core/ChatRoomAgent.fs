@@ -176,10 +176,16 @@ module ChatRoomAgent =
         | ChatRoomCommand.Remove request -> removeMessage state context request
     }
 
-    /// One owner per channel; its ID follows from the kind. The options come
-    /// checked by GameSettings.create; the history itself is the domain's.
+    /// One owner per server-wide channel; its ID follows from the kind. The
+    /// options come checked by GameSettings.create; the history itself is the domain's.
     let start (config: ChatRoomOptions) kind (host: ReliableAgentRef<SessionHostCommand>) =
-        Chat.create kind config.HistoryCapacity
+        let channelId =
+            match kind with
+            | ChatChannelKind.Global -> Ok ChatChannels.globalId
+            | ChatChannelKind.System -> Ok ChatChannels.systemId
+            | ChatChannelKind.Guild -> Error DomainError.ChannelMismatch
+        channelId
+        |> Result.bind (fun channelId -> Chat.create channelId kind config.HistoryCapacity)
         |> Result.map (fun chat ->
             let state = {
                 Chat = chat
@@ -191,7 +197,7 @@ module ChatRoomAgent =
                 NextMessageId = 1UL
             }
             let options = {
-                AgentOptions.create $"chat-room-{ChatChannelId.value (ChatChannelKind.channelId kind)}" with
+                AgentOptions.create $"chat-room-{ChatChannelId.value chat.ChannelId}" with
                     Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
             }
             Agent.Start(options, handle state, isControl = isControl))

@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 18;
+  inline constexpr std::uint32_t Version = 19;
 
   enum class ErrorCode
   {
@@ -90,7 +90,8 @@ export namespace Dreamsleeve::Client::Wire
     ListSanctions,
     ListPlayerMarks,
     ClearPlayerMarks,
-    DeleteChatMessage>;
+    DeleteChatMessage,
+    GuildRequest>;
 
   // A server number for one key and label of actor values, defined to the
   // session before the first message that uses it.
@@ -300,6 +301,72 @@ private:
     ServerRejection rejection;
   };
 
+  // A guild with its channel's retained tail, ascending MessageId.
+  struct GuildOpened
+  {
+    Domain::Guild                    guild;
+    std::vector<Domain::ChatMessage> recentMessages;
+  };
+
+  // After SessionOpened: every guild and invitation of the player, replacing
+  // what the client knew.
+  struct GuildsSnapshot
+  {
+    std::vector<GuildOpened>         guilds;
+    std::vector<Domain::GuildInvite> invites;
+    Domain::GuildLimits              limits;
+  };
+
+  // The player created or joined it.
+  struct GuildAdded
+  {
+    GuildOpened guild;
+  };
+
+  // The player left, was excluded, or it was disbanded.
+  struct GuildRemoved
+  {
+    Domain::GuildId            guildId{};
+    Domain::GuildRemovalReason reason{Domain::GuildRemovalReason::Left};
+  };
+
+  // A member joined, or their role, mute, online state or name changed.
+  struct GuildMemberUpdated
+  {
+    Domain::GuildId     guildId{};
+    Domain::GuildMember member;
+  };
+
+  struct GuildMemberRemoved
+  {
+    Domain::GuildId            guildId{};
+    Domain::PlayerId           playerId{};
+    Domain::GuildRemovalReason reason{Domain::GuildRemovalReason::Left};
+  };
+
+  struct GuildInvited
+  {
+    Domain::GuildInvite invite;
+  };
+
+  // Accepted, declined, expired or disbanded.
+  struct GuildInviteRemoved
+  {
+    Domain::GuildId guildId{};
+  };
+
+  struct GuildChanged
+  {
+    std::variant<GuildAdded, GuildRemoved, GuildMemberUpdated, GuildMemberRemoved, GuildInvited, GuildInviteRemoved> change;
+  };
+
+  // Settles a GuildRequest; its effect arrived before as GuildChanged.
+  struct GuildCommandDone
+  {
+    std::uint64_t   requestId;
+    Domain::GuildId guildId;
+  };
+
   // Replies carry required correlation; notifications have no request ID.
   // Own and broadcast chat both apply the same ChatMessagesReceived update.
   using ServerResponse = std::variant<
@@ -325,7 +392,10 @@ private:
     SanctionList,
     PlayerMarks,
     PlayerMarksCleared,
-    ChatMessageRemoved>;
+    ChatMessageRemoved,
+    GuildsSnapshot,
+    GuildChanged,
+    GuildCommandDone>;
 
   // One immutable configuration per network owner, checked by ValidateClientSettings.
   class ProtocolCodec

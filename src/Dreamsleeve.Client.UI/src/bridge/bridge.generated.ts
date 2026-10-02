@@ -111,6 +111,7 @@ export const groundMarkKinds = [
 ] as const;
 export const channelKinds = [
   "global",
+  "guild",
   "system",
 ] as const;
 export const hidingModes = [

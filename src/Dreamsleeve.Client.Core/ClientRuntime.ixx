@@ -158,7 +158,7 @@ private:
     static constexpr auto GuestRetryMaximum = std::chrono::seconds{60};
 
     // What a sent request waits for. Chat, announcements and deletions remember
-    // their channel and settle on the chat lane.
+    // their channel and settle with its chat.
     enum class PendingKind
     {
       Chat,
@@ -167,7 +167,8 @@ private:
       Identity,
       Name,
       Moderation,
-      Deletion
+      Deletion,
+      Guild
     };
 
     struct PendingRequest
@@ -196,6 +197,7 @@ private:
       pending.clear();
       ResetMovement();
       earlyChat.clear();
+      guilds.reset();
       model.ResetSession();
       kinds.Clear();
       kindSweep = KindSweepFloor;
@@ -216,7 +218,7 @@ private:
 
     Result<void> Publish(bool requestSnapshot = false, std::optional<CommandResult> result = std::nullopt)
     {
-      if (!exchange.Publish(model, requestSnapshot, phase, serverName, std::move(result)))
+      if (!exchange.Publish(model, requestSnapshot, phase, serverName, std::move(result), guilds))
         return std::unexpected{DreamNetError::Make(DreamNetErrorCode::InvalidOperation, "Command result capacity exhausted")};
 
       return {};
@@ -396,6 +398,97 @@ private:
       }
       earlyChat.clear();
       return Publish(true);
+    }
+
+    // Replaces the guilds; their channels are registered anew with their tails.
+    Result<void> Receive(Wire::GuildsSnapshot& snapshot)
+    {
+      if (phase != SessionPhase::Ready) return Unexpected("guilds_snapshot");
+
+      std::vector<Domain::Guild> list;
+      list.reserve(snapshot.guilds.size());
+      for (const auto& opened : snapshot.guilds)
+        list.push_back(opened.guild);
+      auto book = GuildBook::TryCreate(std::move(list), std::move(snapshot.invites), snapshot.limits);
+      if (!book) return std::unexpected{book.error()};
+
+      if (guilds)
+        for (const auto& guild : guilds->Guilds())
+          if (auto closed = model.UnregisterChannel(guild.channelId); !closed) return std::unexpected{closed.error()};
+      for (auto& opened : snapshot.guilds)
+        if (auto channel = OpenGuildChannel(opened); !channel) return channel;
+
+      guilds = std::make_shared<const GuildBook>(std::move(*book));
+      return Publish();
+    }
+
+    // Every change follows the snapshot and names guilds the book knows; a
+    // guild's channel comes and goes with it.
+    Result<void> Receive(Wire::GuildChanged& changed)
+    {
+      if (phase != SessionPhase::Ready || !guilds) return Unexpected("guild_changed");
+
+      auto book   = std::make_shared<GuildBook>(*guilds);
+      auto result = std::visit([&](auto& change) { return Change(*book, change); }, changed.change);
+      if (!result) return result;
+
+      guilds = std::move(book);
+      return Publish();
+    }
+
+    Result<void> Change(GuildBook& book, Wire::GuildAdded& added)
+    {
+      if (auto stored = book.Add(added.guild.guild); !stored) return std::unexpected{stored.error()};
+      return OpenGuildChannel(added.guild);
+    }
+
+    Result<void> Change(GuildBook& book, const Wire::GuildRemoved& removed)
+    {
+      const auto* guild = book.Find(removed.guildId);
+      if (!guild) return Unexpected("guild_id");
+      if (auto closed = model.UnregisterChannel(guild->channelId); !closed) return std::unexpected{closed.error()};
+      return Checked(book.Remove(removed.guildId));
+    }
+
+    Result<void> Change(GuildBook& book, Wire::GuildMemberUpdated& updated)
+    {
+      return Checked(book.PutMember(updated.guildId, std::move(updated.member)));
+    }
+
+    Result<void> Change(GuildBook& book, const Wire::GuildMemberRemoved& removed)
+    {
+      return Checked(book.RemoveMember(removed.guildId, removed.playerId));
+    }
+
+    Result<void> Change(GuildBook& book, Wire::GuildInvited& invited)
+    {
+      book.PutInvite(std::move(invited.invite));
+      return {};
+    }
+
+    Result<void> Change(GuildBook& book, const Wire::GuildInviteRemoved& removed)
+    {
+      return Checked(book.RemoveInvite(removed.guildId));
+    }
+
+    static Result<void> Checked(Domain::OperationResult result)
+    {
+      if (!result) return std::unexpected{std::move(result.error())};
+      return {};
+    }
+
+    Result<void> OpenGuildChannel(Wire::GuildOpened& opened)
+    {
+      const auto channelId = opened.guild.channelId;
+      if (auto registered = model.RegisterChannel(channelId, config.chatCapacity, Domain::ChatChannelKind::Guild); !registered)
+        return std::unexpected{registered.error()};
+      return Checked(model.Apply(model.Generation(), ChatMessagesReceived{channelId, std::move(opened.recentMessages)}));
+    }
+
+    Result<void> Receive(Wire::GuildCommandDone& done)
+    {
+      if (!TakePending(done.requestId, PendingKind::Guild)) return Unexpected("request_id");
+      return Settle(done.requestId, GuildDone{done.guildId});
     }
 
     Result<void> Receive(Wire::MuteChanged& changed)
@@ -694,15 +787,15 @@ private:
     }
 
     // Chat and announcements share the Chat lane and the pending budget. The
-    // channel must exist and be of the kind that accepts the command; allowed
+    // channel must exist and be of a kind that accepts the command; allowed
     // covers what the session announced for it.
     template <class Command>
-    Result<void> SendToChannel(std::uint64_t generation, Command& command, Domain::ChatChannelKind kind, bool allowed)
+    Result<void> SendToChannel(std::uint64_t generation, Command& command, std::span<const Domain::ChatChannelKind> accepting, bool allowed)
     {
       if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
 
       const auto channel = model.FindChatState(command.channelId);
-      if (!channel || channel->kind != kind || !allowed)
+      if (!channel || !std::ranges::contains(accepting, channel->kind) || !allowed)
         return RejectCommand(generation, command.requestId, CommandFailureCode::InvalidRequest);
       if (PendingCount(PendingKind::Chat) >= config.maxPendingChatRequests)
         return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
@@ -710,17 +803,21 @@ private:
       return SendRequest(generation, command, {PendingKind::Chat, command.channelId}, Wire::Channel::Chat);
     }
 
+    // Players write in the global channel and in their guilds' channels; the
+    // server judges a guild mute like any other.
     Result<void> Process(std::uint64_t generation, SendChat& command)
     {
-      return SendToChannel(generation, command, Domain::ChatChannelKind::Global, true);
+      static constexpr std::array writable{Domain::ChatChannelKind::Global, Domain::ChatChannelKind::Guild};
+      return SendToChannel(generation, command, writable, true);
     }
 
     // The server judges rate, words and text rules; locally only what its
     // welcome announced (sources and lengths), so no doomed packet is sent.
     Result<void> Process(std::uint64_t generation, PostAnnouncement& command)
     {
+      static constexpr std::array announced{Domain::ChatChannelKind::System};
       const bool allowed = Domain::Announcements::Admits(announcementPolicy, command.source, command.text, command.signature);
-      return SendToChannel(generation, command, Domain::ChatChannelKind::System, allowed);
+      return SendToChannel(generation, command, announced, allowed);
     }
 
     Result<void> Process(std::uint64_t, RequestSnapshot&)
@@ -816,7 +913,18 @@ private:
       return SendModeration(generation, command);
     }
 
-    // A deletion settles on the chat lane of its channel, which must exist.
+    // Guild requests share one pending budget on the control lane; the server
+    // judges the roles, the name and the limits.
+    Result<void> Process(std::uint64_t generation, GuildRequest& command)
+    {
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
+      if (PendingCount(PendingKind::Guild) >= config.maxPendingChatRequests)
+        return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      return SendRequest(generation, command, {PendingKind::Guild});
+    }
+
+    // A deletion settles with the chat of its channel, which must exist.
     Result<void> Process(std::uint64_t generation, DeleteChatMessage& command)
     {
       if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
@@ -971,6 +1079,7 @@ private:
     std::uint64_t                                     pendingLocation{Domain::InvalidId};  // The location update in flight.
     bool                                              movementReady{};
     std::vector<ClientUpdate>                         earlyChat;
+    std::shared_ptr<const GuildBook>                  guilds;  // Absent until the session's GuildsSnapshot.
     std::vector<ClientEvent>                          events;
     Wire::ActorValueKinds                             kinds;
     std::size_t                                       kindSweep{KindSweepFloor};

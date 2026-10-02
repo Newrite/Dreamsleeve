@@ -6,6 +6,7 @@
 #include "ground.pb.h"
 #include "session.pb.h"
 #include "moderation.pb.h"
+#include "guild.pb.h"
 
 import Dreamsleeve.Protocol;
 
@@ -88,7 +89,31 @@ static_assert(
 static_assert(
   static_cast<long long>(Protocol::Chat::RequestRejectionCode::TargetNotFound) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_TARGET_NOT_FOUND));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 19);
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildNameTaken) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_NAME_TAKEN));
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildFull) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_FULL));
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildPlayerLimit) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_PLAYER_LIMIT));
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildServerLimit) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_SERVER_LIMIT));
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildInvitesFull) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_INVITES_FULL));
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildAlreadyMember) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_ALREADY_MEMBER));
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildAlreadyInvited) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_ALREADY_INVITED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildMasterStays) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_MASTER_STAYS));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 27);
 
 static_assert(
   static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) ==
@@ -179,6 +204,9 @@ static_assert(
 static_assert(
   static_cast<long long>(Protocol::Chat::ChatChannelKind::Global) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_GLOBAL));
+static_assert(
+  static_cast<long long>(Protocol::Chat::ChatChannelKind::Guild) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_GUILD));
 static_assert(
   static_cast<long long>(Protocol::Chat::ChatChannelKind::System) ==
   static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_SYSTEM));
@@ -280,3 +308,28 @@ static_assert(
 static_assert(
   static_cast<long long>(Protocol::Chat::SanctionKind::Ban) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_BAN));
 static_assert(Dreamsleeve::Protocol::Chat::SanctionKind_ARRAYSIZE == 3);
+
+static_assert(
+  static_cast<long long>(Protocol::Chat::GuildRole::Unspecified) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_UNSPECIFIED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::GuildRole::Member) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_MEMBER));
+static_assert(
+  static_cast<long long>(Protocol::Chat::GuildRole::Officer) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_OFFICER));
+static_assert(
+  static_cast<long long>(Protocol::Chat::GuildRole::Master) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_MASTER));
+static_assert(Dreamsleeve::Protocol::Chat::GuildRole_ARRAYSIZE == 4);
+
+static_assert(
+  static_cast<long long>(Protocol::Chat::GuildRemovalReason::Unspecified) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_UNSPECIFIED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::GuildRemovalReason::Left) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_LEFT));
+static_assert(
+  static_cast<long long>(Protocol::Chat::GuildRemovalReason::Excluded) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_EXCLUDED));
+static_assert(
+  static_cast<long long>(Protocol::Chat::GuildRemovalReason::Disbanded) ==
+  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_DISBANDED));
+static_assert(Dreamsleeve::Protocol::Chat::GuildRemovalReason_ARRAYSIZE == 4);

@@ -8,6 +8,7 @@ let main argv =
         DomainTests.tests
         IdentityTests.tests
         GroundMarkDomainTests.tests
+        GuildDomainTests.tests
         ModerationTests.tests
         AdminDomainTests.tests
         PlayerDetailsTests.tests
@@ -39,6 +40,7 @@ let main argv =
         ConfigurationTests.tests
         AnnouncementTests.tests
         GroundMarkTests.tests
+        GuildTests.tests
         AuthenticationHttpTests.tests
         AdminHttpTests.tests
     ]

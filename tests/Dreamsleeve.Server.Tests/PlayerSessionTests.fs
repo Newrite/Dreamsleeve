@@ -11,8 +11,8 @@ open BackgroundTests
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private playerSnapshot profile = Player.snapshot (Player.create profile)
-let private globalId = ChatChannelKind.channelId ChatChannelKind.Global
-let private systemId = ChatChannelKind.channelId ChatChannelKind.System
+let private globalId = ChatChannels.globalId
+let private systemId = ChatChannels.systemId
 let private options = { ServerRuntimeOptions.defaults.Player with MaxPendingChat = 1; MaxBootstrapEvents = 4; MaxPendingOutput = 16 }
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test output closed."
@@ -38,6 +38,9 @@ type private Fixture = {
     System: Channel<ChatRoomCommand>
     Presence: Channel<PresenceCommand>
     Marks: Channel<GroundMarkCommand>
+    Guilds: Channel<GuildCommand>
+    /// Where the guild owner answers this session, once it joined.
+    GuildEvents: ReliableAgentRef<GuildEvent> option ref
     Host: Channel<SessionHostCommand>
     Names: Channel<DisplayNameChangeRequest>
     Moderation: Channel<ModerationRequest>
@@ -53,6 +56,7 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     let systemCommands = Channel.CreateUnbounded<ChatRoomCommand>()
     let presenceCommands = Channel.CreateUnbounded<PresenceCommand>()
     let markCommands = Channel.CreateUnbounded<GroundMarkCommand>()
+    let guildCommands = Channel.CreateUnbounded<GuildCommand>()
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
     let nameRequests = Channel.CreateUnbounded<DisplayNameChangeRequest>()
     let moderationRequests = Channel.CreateUnbounded<ModerationRequest>()
@@ -63,6 +67,7 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     use system = Agent.Start(AgentOptions.create "system", collect systemCommands)
     use presence = createPresence presenceCommands
     use marks = Agent.Start(AgentOptions.create "marks", collect markCommands)
+    use guilds = Agent.Start(AgentOptions.create "guilds", collect guildCommands)
     use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
     let request = {
         ConnectionId = Guid.NewGuid()
@@ -74,9 +79,11 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     use player = PlayerSession.start game moderation
                      (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (moderation'.Ref.TryReliable().Value)
                      (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
-                     (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
+                     (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (guilds.Ref.TryReliable().Value)
+                     (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
     let fixture = { Request = request; Player = player; Authentication = queries;
-                    Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Host = hostCommands
+                    Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Guilds = guildCommands
+                    GuildEvents = ref None; Host = hostCommands
                     Names = nameRequests; Moderation = moderationRequests }
     do! run fixture
     if not player.Completion.IsCompleted then player.Abort()
@@ -86,12 +93,14 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     system.Complete() |> ignore
     presence.Complete() |> ignore
     marks.Complete() |> ignore
+    guilds.Complete() |> ignore
     host.Complete() |> ignore
     do! awaitUnit authentication.Completion
     do! awaitUnit chat.Completion
     do! awaitUnit system.Completion
     do! awaitUnit presence.Completion
     do! awaitUnit marks.Completion
+    do! awaitUnit guilds.Completion
     do! awaitUnit host.Completion
 }
 
@@ -142,8 +151,10 @@ let private joinsAs pseudonym fixture = task {
     let! systemCommand = receive fixture.System
     let! presenceCommand = receive fixture.Presence
     let! markCommand = receive fixture.Marks
-    match chatCommand, systemCommand, presenceCommand, markCommand with
-    | ChatRoomCommand.Join chat, ChatRoomCommand.Join system, PresenceCommand.Join presence, GroundMarkCommand.Join _ ->
+    let! guildCommand = receive fixture.Guilds
+    match chatCommand, systemCommand, presenceCommand, markCommand, guildCommand with
+    | ChatRoomCommand.Join chat, ChatRoomCommand.Join system, PresenceCommand.Join presence, GroundMarkCommand.Join _, GuildCommand.Join guilds ->
+        fixture.GuildEvents.Value <- Some guilds.Events
         do! deliver system.Events (ChatRoomEvent.Joined { snapshot profile with ChannelId = systemId; Kind = ChatChannelKind.System })
         return profile, chat, presence
     | other -> return failwithf "Expected subscriptions: %A" other
@@ -201,14 +212,18 @@ let private finish fixture = task {
     while (match markCommand with GroundMarkCommand.Detach _ -> false | _ -> true) do
         let! next = receive fixture.Marks
         markCommand <- next
-    match chatCommand, systemCommand, presenceCommand, markCommand with
-    | ChatRoomCommand.Detach chat, ChatRoomCommand.Detach system, PresenceCommand.Detach presence, GroundMarkCommand.Detach marks ->
+    let! guildCommand = receive fixture.Guilds
+    match chatCommand, systemCommand, presenceCommand, markCommand, guildCommand with
+    | ChatRoomCommand.Detach chat, ChatRoomCommand.Detach system, PresenceCommand.Detach presence, GroundMarkCommand.Detach marks,
+      GuildCommand.Detach guilds ->
         do! deliver chat.ReplyTo fixture.Request.ConnectionId
         do! deliver system.ReplyTo fixture.Request.ConnectionId
         check (not fixture.Player.Completion.IsCompleted) "Session skipped presence cleanup."
         do! deliver presence.ReplyTo fixture.Request.ConnectionId
         check (not fixture.Player.Completion.IsCompleted) "Session skipped ground mark cleanup."
         do! deliver marks.ReplyTo fixture.Request.ConnectionId
+        check (not fixture.Player.Completion.IsCompleted) "Session skipped guild cleanup."
+        do! deliver guilds.ReplyTo fixture.Request.ConnectionId
         do! awaitUnit fixture.Player.Completion
     | other -> failwithf "Expected detach: %A" other
 }
@@ -293,6 +308,41 @@ let private identityRefused fixture requestId code = task {
 }
 
 let private identityTests = [
+    case "guild chat leaves with the real profile even while the names are hidden; guild requests settle with the owner's answer" (fun () ->
+        withIdentity IdentityOptions.defaults HiddenIdentity.Everywhere (fun fixture -> task {
+            let! profile, _, _, _ = readyAs (ValueSome strazh) fixture
+            let guild = GuildId.create 4UL |> ok
+            let channel = ChatChannels.ofGuild guild
+            do! post fixture.Player (PlayerSessionMessage.SendChat(3UL, channel, ChatMessageText.create 2000 "Привет, гильдия" |> ok))
+            let! publish = receive fixture.Guilds
+            match publish with
+            | GuildCommand.Publish(target, submission) ->
+                equal guild target
+                // Guildmates see the real names, never the pseudonym.
+                equal (PublicIdentity.Profile profile) submission.Author
+            | other -> failwithf "Expected a guild publication: %A" other
+            do! post fixture.Player (PlayerSessionMessage.Guild(4UL, GuildAction.Leave guild))
+            let! act = receive fixture.Guilds
+            match act with
+            | GuildCommand.Act request ->
+                equal 4UL request.RequestId
+                equal (GuildAction.Leave guild) request.Action
+            | other -> failwithf "Expected a guild request: %A" other
+            let events = fixture.GuildEvents.Value.Value
+            do! deliver events (GuildEvent.Done(4UL, guild))
+            let! settled = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.GuildCommandDone(4UL, guild))) settled
+            // A player without the moderator role removes a guild message: the guild roles decide.
+            let message = ChatMessageId.create 1UL |> ok
+            do! post fixture.Player (PlayerSessionMessage.Moderate(5UL, ModerationAction.DeleteMessage(channel, message)))
+            let! remove = receive fixture.Guilds
+            check (match remove with GuildCommand.Remove(target, removal) -> target = guild && removal.MessageId = message | _ -> false)
+                "the removal goes to the guild owner"
+            do! deliver events (GuildEvent.Changed(GuildChange.InviteRemoved guild))
+            let! changed = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.GuildChanged(GuildChange.InviteRemoved guild))) changed
+        }))
+
     case "a hidden session sends only its pseudonym to others and keeps its own real profile" (fun () ->
         withIdentity IdentityOptions.defaults HiddenIdentity.Everywhere (fun fixture -> task {
             let! profile, _, presence, welcome = readyAs (ValueSome strazh) fixture
@@ -893,10 +943,12 @@ let tests = testList "PlayerSession" ([
         use marks = Agent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
         use names = Agent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<DisplayNameChangeRequest>()))
         use moderation = Agent.Start(AgentOptions.create "account-moderation", collect (Channel.CreateUnbounded<ModerationRequest>()))
+        use guilds = Agent.Start(AgentOptions.create "guilds", collect (Channel.CreateUnbounded<GuildCommand>()))
         let game = Settings.game ServerConfig.defaults { ServerRuntimeOptions.defaults with Player = options } IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults
         use player = PlayerSession.start game Moderation.empty (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (moderation.Ref.TryReliable().Value)
                          (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
-                         (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
+                         (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (guilds.Ref.TryReliable().Value)
+                         (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
         equal 0 chatCommands.Reader.Count

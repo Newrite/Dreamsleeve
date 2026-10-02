@@ -83,6 +83,7 @@ type ApplicationConfig = {
     Identity: IdentityOptions
     Announcements: AnnouncementOptions
     GroundMarks: GroundMarkOptions
+    Guilds: GuildOptions
 }
 
 [<RequireQualifiedAccess>]
@@ -121,6 +122,7 @@ module Configuration =
         Identity = IdentityOptions.defaults
         Announcements = AnnouncementOptions.defaults
         GroundMarks = GroundMarkOptions.defaults
+        Guilds = GuildOptions.defaults
     }
 
     // Each [[table array]] entry starts from these defaults, like a section does.
@@ -324,7 +326,7 @@ module Configuration =
             if config.Moderation.Enabled && String.IsNullOrWhiteSpace config.Moderation.RulesPath then
                 "Moderation.RulesPath must be set when moderation is enabled."
         ]
-        match errors, GameSettings.create config.Server config.Runtime config.Identity config.Announcements config.GroundMarks with
+        match errors, GameSettings.create config.Server config.Runtime config.Identity config.Announcements config.GroundMarks config.Guilds with
         | [], Ok game -> Ok (config, game)
         | errors, Ok _ -> Error (String.concat " " errors)
         | errors, Error game -> Error (String.concat " " (errors @ game))

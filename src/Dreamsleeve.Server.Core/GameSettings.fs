@@ -4,7 +4,7 @@ open System
 open Dreamsleeve.Server.Domain
 
 /// The game part of the configuration ([Server], [Runtime], [Identity],
-/// [Announcements], [GroundMarks]) checked once, with what follows from it.
+/// [Announcements], [GroundMarks], [Guilds]) checked once, with what follows from it.
 /// Only GameSettings.create makes a value, so the runtime and the owners it
 /// starts never check these settings again.
 type GameSettings =
@@ -14,9 +14,11 @@ type GameSettings =
         identity: IdentityOptions
         announcements: AnnouncementOptions
         groundMarks: GroundMarkOptions
+        guilds: GuildOptions
         codec: ProtocolCodec
         schedule: (ServerAnnouncement * ScheduledAnnouncement) list
         groundMarkRules: GroundMarkRules
+        guildLimits: GuildLimits
     }
 
     member this.Server = this.server
@@ -28,13 +30,15 @@ type GameSettings =
     /// The server's own announcements from [[Announcements.Scheduled]].
     member this.Schedule = this.schedule
     member this.GroundMarkRules = this.groundMarkRules
+    member this.Guilds = this.guilds
+    member this.GuildLimits = this.guildLimits
 
 [<RequireQualifiedAccess>]
 module GameSettings =
     /// Sources that acknowledge the cleanup of every session: chat, system
-    /// channel, presence and ground marks.
+    /// channel, presence, ground marks and guilds.
     [<Literal>]
-    let CleanupSources = 4
+    let CleanupSources = 5
 
     // Ordinary capacity plus control reserve of one mailbox must fit Int32.
     let private mailbox section capacity reserve = [
@@ -79,20 +83,24 @@ module GameSettings =
             "Server.ServiceTimeoutMs plus Runtime.PollIntervalMs must fit the runtime deadlines."
     ]
 
-    let create server runtime identity announcements groundMarks : Result<GameSettings, string list> =
+    let create server runtime identity announcements groundMarks (guilds: GuildOptions) : Result<GameSettings, string list> =
         let errors = [
             match ServerConfig.validate server with Ok _ -> () | Error errors -> yield! errors
             yield! runtimeErrors server runtime announcements
             yield! IdentityOptions.validate identity
             yield! GroundMarkOptions.validate groundMarks
+            yield! GuildOptions.validate guilds
+            if guilds.HistoryCapacity > server.MaxRecentMessages then "Server.MaxRecentMessages must include the retained guild chat history."
         ]
         let schedule = AnnouncementOptions.resolve server.ChatInput announcements
         let rules = if errors.IsEmpty then GroundMarkOptions.rules groundMarks |> Result.mapError (fun error -> [ sprintf "GroundMarks: %A" error ]) else Error []
-        match errors, schedule, rules with
-        | [], Ok schedule, Ok rules ->
+        let limits = if errors.IsEmpty then GuildOptions.rules guilds |> Result.mapError (fun error -> [ sprintf "Guilds: %A" error ]) else Error []
+        match errors, schedule, rules, limits with
+        | [], Ok schedule, Ok rules, Ok limits ->
             Ok { server = server; runtime = runtime; identity = identity; announcements = announcements; groundMarks = groundMarks
-                 codec = ProtocolCodec.create server; schedule = schedule; groundMarkRules = rules }
-        | errors, schedule, rules ->
+                 guilds = guilds; codec = ProtocolCodec.create server; schedule = schedule; groundMarkRules = rules; guildLimits = limits }
+        | errors, schedule, rules, limits ->
             let scheduleErrors = match schedule with Error errors -> errors | Ok _ -> []
             let rulesErrors = match rules with Error errors -> errors | Ok _ -> []
-            Error (errors @ scheduleErrors @ rulesErrors)
+            let limitErrors = match limits with Error errors -> errors | Ok _ -> []
+            Error (errors @ scheduleErrors @ rulesErrors @ limitErrors)

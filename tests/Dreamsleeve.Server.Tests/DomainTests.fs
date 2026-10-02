@@ -31,7 +31,7 @@ let private reading name amount = ActorValueInfo.create (label name) (ActorValue
 let private health amount = reading "Health" amount
 
 let private chat capacity =
-    let value = Chat.create ChatChannelKind.Global capacity |> ok
+    let value = Chat.create ChatChannels.globalId ChatChannelKind.Global capacity |> ok
     Chat.join (playerId 1UL) value |> ignore
     value
 
@@ -468,7 +468,7 @@ let private chatTests =
             Expect.equal before.Messages page.Messages "Both keep the original message"
 
         testCase "history and channel limits are validated" <| fun _ ->
-            Expect.isError (Chat.create ChatChannelKind.Global 0) "No unbounded/zero history"
+            Expect.isError (Chat.create ChatChannels.globalId ChatChannelKind.Global 0) "No unbounded/zero history"
             Expect.isError (Chat.historyAfter ValueNone 0 (chat 2)) "Page size must be positive"
             let value = chat 2
             append 10UL value

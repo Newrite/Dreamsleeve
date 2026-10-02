@@ -50,6 +50,8 @@ module DomainUMX =
     type groundNoteText
     [<Measure>]
     type deathMarkText
+    [<Measure>]
+    type guildId
 
 type PluginName = string<pluginName>
 type LocalFormId = uint32<localFormId>
@@ -77,11 +79,14 @@ type GroundMarkId = uint64<groundMarkId>
 type GroundNoteText = string<groundNoteText>
 /// The killer's name or one word of cause, as the author's client saw it.
 type DeathMarkText = string<deathMarkText>
+/// Storage-issued and never reused, so a guild's chat channel never names another guild.
+type GuildId = uint64<guildId>
 
 [<RequireQualifiedAccess>]
 type TextError =
     | Missing
     | TooLong of maximum: int
+    | TooShort of minimum: int
     | InvalidUnicode
     | InvalidCharacters
     | InvalidFormat
@@ -414,6 +419,17 @@ module AnnouncementSignature =
     let create maxLength raw : Result<AnnouncementSignature, DomainError> =
         PrimitiveValidation.text "AnnouncementSignature" maxLength id false PrimitiveValidation.unrestricted raw
         |> Result.map UMX.tag
+
+[<RequireQualifiedAccess>]
+module GuildId =
+    /// Guild IDs stay below this bound, so a guild's channel ID cannot overflow.
+    [<Literal>]
+    let MaxValue = 4611686018427387904UL
+
+    let value (id: GuildId) : uint64 = UMX.untag id
+
+    let create raw : Result<GuildId, DomainError> =
+        if raw = 0UL || raw >= MaxValue then Error(DomainError.InvalidId "GuildId") else Ok(UMX.tag<guildId> raw)
 
 [<RequireQualifiedAccess>]
 module GroundMarkId =

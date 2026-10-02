@@ -140,6 +140,12 @@ namespace Dreamsleeve::Client::Wire
         removal.set_channel_id(value.channelId);
         removal.set_message_id(value.messageId);
       }
+
+      void operator()(const GuildRequest& value) const
+      {
+        packet.set_request_id(value.requestId);
+        WriteGuild(*packet.mutable_guild_command(), value.action);
+      }
     };
 
     // The first string field, nested ones included, that is not well-formed
@@ -243,7 +249,11 @@ namespace Dreamsleeve::Client::Wire
     if (packet.protocol_version() != Version) return Failure(ErrorCode::UnsupportedVersion, "protocol_version");
     if (packet.has_request_id() && packet.request_id() == Domain::InvalidId) return Failure(ErrorCode::InvalidEnvelope, "request_id");
 
-    const auto expected = packet.has_chat_published() || packet.has_chat_message_removed() ? Channel::Chat : Channel::Control;
+    // A guild channel's chat travels with its guild changes on the control lane.
+    const auto chatTarget = packet.has_chat_published()       ? std::optional{packet.chat_published().message().channel_id()}
+                          : packet.has_chat_message_removed() ? std::optional{packet.chat_message_removed().channel_id()}
+                                                              : std::nullopt;
+    const auto expected   = chatTarget && !Domain::IsGuildChannel(*chatTarget) ? Channel::Chat : Channel::Control;
     if (!packet.has_request_rejected() && channel != expected) return Failure(ErrorCode::InvalidEnvelope, "channel");
 
     switch (packet.payload_case())
@@ -401,6 +411,22 @@ namespace Dreamsleeve::Client::Wire
         const auto requestId = packet.has_request_id() ? std::optional{packet.request_id()} : std::nullopt;
         return ChatMessageRemoved{requestId, removed.channel_id(), removed.message_id()};
       }
+      case P::ServerPacket::kGuildsSnapshot: {
+        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        auto result = ReadGuilds(config, packet.guilds_snapshot());
+        if (!result) return std::unexpected{result.error()};
+        return std::move(*result);
+      }
+      case P::ServerPacket::kGuildChanged: {
+        if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        auto result = ReadGuildChanged(config, packet.guild_changed());
+        if (!result) return std::unexpected{result.error()};
+        return std::move(*result);
+      }
+      case P::ServerPacket::kGuildCommandDone:
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        if (packet.guild_command_done().guild_id() == Domain::InvalidId) return Invalid("guild_id");
+        return GuildCommandDone{packet.request_id(), packet.guild_command_done().guild_id()};
       case P::ServerPacket::PAYLOAD_NOT_SET:
         return Invalid("payload");
       default:

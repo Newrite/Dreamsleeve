@@ -30,6 +30,7 @@ module internal SessionTable =
         mutable SystemDetached: bool
         mutable PresenceDetached: bool
         mutable GroundMarksDetached: bool
+        mutable GuildsDetached: bool
     }
 
     type State = {
@@ -58,6 +59,7 @@ module internal SessionTable =
             ConnectionId = connectionId; Address = address; ConnectedAt = connectedAt; Phase = RuntimeSessionPhase.Waiting; Deadline = deadline
             PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
             ChatDetached = false; SystemDetached = false; PresenceDetached = false; GroundMarksDetached = false
+            GuildsDetached = false
         }
         state.Connections.Add(connectionId, entry)
         entry
@@ -98,6 +100,7 @@ module internal SessionTable =
 
     let domainClean (entry: Entry) =
         entry.ChildStopped && entry.ChatDetached && entry.SystemDetached && entry.PresenceDetached && entry.GroundMarksDetached
+        && entry.GuildsDetached
 
     let clean (entry: Entry) = domainClean entry && entry.TransportClosed
 

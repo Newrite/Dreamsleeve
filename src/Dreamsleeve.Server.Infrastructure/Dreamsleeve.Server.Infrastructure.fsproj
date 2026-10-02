@@ -16,6 +16,7 @@
     <Compile Include="SqliteSanctionStore.fs" />
     <Compile Include="SqliteAddressStore.fs" />
     <Compile Include="SqliteDeviceStore.fs" />
+    <Compile Include="SqliteGuildStore.fs" />
     <Compile Include="SteamOpenId.fs" />
     <Compile Include="AuthService.fs" />
     <Compile Include="AdminService.fs" />

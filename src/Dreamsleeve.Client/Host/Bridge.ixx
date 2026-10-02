@@ -63,7 +63,8 @@ export namespace Dreamsleeve::Host::Bridge
   constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
   constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
   constexpr auto MarkKindNames    = std::to_array<std::string_view>({"note", "death"});
-  constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "system"});
+  // Domain::ChatChannelKind from Global; the numbers have gaps, the names follow the enumerators.
+  constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "guild", "system"});
   // Domain::SessionEndReason from AccessRevoked.
   constexpr auto EndNames = std::to_array<std::string_view>({"revoked", "banned", "kicked", "addressBanned"});
   // Domain::SanctionKind from Mute.
@@ -1067,7 +1068,8 @@ export namespace Dreamsleeve::Host::Bridge
   // The UI description of a channel entity; the UI's "all" view is its own aggregate.
   UiChannel ToUiChannel(Domain::ChatChannelId id, Domain::ChatChannelKind kind)
   {
-    if (kind == Domain::ChatChannelKind::System) return {Id(id), std::string{ChannelKindNames[1]}, "Объявления", false};
+    if (kind == Domain::ChatChannelKind::System) return {Id(id), std::string{ChannelKindNames[2]}, "Объявления", false};
+    if (kind == Domain::ChatChannelKind::Guild) return {Id(id), std::string{ChannelKindNames[1]}, "Гильдия", true};
     return {Id(id), std::string{ChannelKindNames[0]}, "Общий", true};
   }
 

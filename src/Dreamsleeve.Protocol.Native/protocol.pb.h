@@ -36,6 +36,7 @@
 #include "player.pb.h"
 #include "ground.pb.h"
 #include "moderation.pb.h"
+#include "guild.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -122,6 +123,14 @@ enum RequestRejectionCode : int {
   REQUEST_REJECTION_CODE_MUTED = 16,
   REQUEST_REJECTION_CODE_NOT_PERMITTED = 17,
   REQUEST_REJECTION_CODE_TARGET_NOT_FOUND = 18,
+  REQUEST_REJECTION_CODE_GUILD_NAME_TAKEN = 19,
+  REQUEST_REJECTION_CODE_GUILD_FULL = 20,
+  REQUEST_REJECTION_CODE_GUILD_PLAYER_LIMIT = 21,
+  REQUEST_REJECTION_CODE_GUILD_SERVER_LIMIT = 22,
+  REQUEST_REJECTION_CODE_GUILD_INVITES_FULL = 23,
+  REQUEST_REJECTION_CODE_GUILD_ALREADY_MEMBER = 24,
+  REQUEST_REJECTION_CODE_GUILD_ALREADY_INVITED = 25,
+  REQUEST_REJECTION_CODE_GUILD_MASTER_STAYS = 26,
   RequestRejectionCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   RequestRejectionCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -132,11 +141,11 @@ extern const uint32_t RequestRejectionCode_internal_data_[];
 inline constexpr RequestRejectionCode RequestRejectionCode_MIN =
     static_cast<RequestRejectionCode>(0);
 inline constexpr RequestRejectionCode RequestRejectionCode_MAX =
-    static_cast<RequestRejectionCode>(18);
+    static_cast<RequestRejectionCode>(26);
 inline bool RequestRejectionCode_IsValid(int value) {
-  return 0 <= value && value <= 18;
+  return 0 <= value && value <= 26;
 }
-inline constexpr int RequestRejectionCode_ARRAYSIZE = 18 + 1;
+inline constexpr int RequestRejectionCode_ARRAYSIZE = 26 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_descriptor();
 template <typename T>
 const ::std::string& RequestRejectionCode_Name(T value) {
@@ -147,7 +156,7 @@ const ::std::string& RequestRejectionCode_Name(T value) {
 }
 template <>
 inline const ::std::string& RequestRejectionCode_Name(RequestRejectionCode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 18>(
+  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 26>(
       static_cast<int>(value));
 }
 inline bool RequestRejectionCode_Parse(
@@ -1010,6 +1019,9 @@ class ServerPacket final : public ::google::protobuf::Message
     kPlayerMarks = 34,
     kPlayerMarksCleared = 35,
     kChatMessageRemoved = 36,
+    kGuildsSnapshot = 38,
+    kGuildChanged = 39,
+    kGuildCommandDone = 40,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 1;
@@ -1122,6 +1134,9 @@ class ServerPacket final : public ::google::protobuf::Message
     kPlayerMarksFieldNumber = 34,
     kPlayerMarksClearedFieldNumber = 35,
     kChatMessageRemovedFieldNumber = 36,
+    kGuildsSnapshotFieldNumber = 38,
+    kGuildChangedFieldNumber = 39,
+    kGuildCommandDoneFieldNumber = 40,
   };
   // optional uint64 request_id = 2;
   bool has_request_id() const;
@@ -1543,6 +1558,63 @@ class ServerPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NONNULL _internal_mutable_chat_message_removed();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.GuildsSnapshot guilds_snapshot = 38;
+  bool has_guilds_snapshot() const;
+  private:
+  bool _internal_has_guilds_snapshot() const;
+
+  public:
+  void clear_guilds_snapshot() ;
+  const ::Dreamsleeve::Protocol::Chat::GuildsSnapshot& guilds_snapshot() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NULLABLE release_guilds_snapshot();
+  ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NONNULL mutable_guilds_snapshot();
+  void set_allocated_guilds_snapshot(::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guilds_snapshot(::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_guilds_snapshot();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::GuildsSnapshot& _internal_guilds_snapshot() const;
+  ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NONNULL _internal_mutable_guilds_snapshot();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.GuildChanged guild_changed = 39;
+  bool has_guild_changed() const;
+  private:
+  bool _internal_has_guild_changed() const;
+
+  public:
+  void clear_guild_changed() ;
+  const ::Dreamsleeve::Protocol::Chat::GuildChanged& guild_changed() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NULLABLE release_guild_changed();
+  ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NONNULL mutable_guild_changed();
+  void set_allocated_guild_changed(::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild_changed(::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NULLABLE unsafe_arena_release_guild_changed();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::GuildChanged& _internal_guild_changed() const;
+  ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NONNULL _internal_mutable_guild_changed();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.GuildCommandDone guild_command_done = 40;
+  bool has_guild_command_done() const;
+  private:
+  bool _internal_has_guild_command_done() const;
+
+  public:
+  void clear_guild_command_done() ;
+  const ::Dreamsleeve::Protocol::Chat::GuildCommandDone& guild_command_done() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NULLABLE release_guild_command_done();
+  ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NONNULL mutable_guild_command_done();
+  void set_allocated_guild_command_done(::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild_command_done(::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NULLABLE unsafe_arena_release_guild_command_done();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::GuildCommandDone& _internal_guild_command_done() const;
+  ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NONNULL _internal_mutable_guild_command_done();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ServerPacket)
@@ -1569,11 +1641,14 @@ class ServerPacket final : public ::google::protobuf::Message
   void set_has_player_marks();
   void set_has_player_marks_cleared();
   void set_has_chat_message_removed();
+  void set_has_guilds_snapshot();
+  void set_has_guild_changed();
+  void set_has_guild_command_done();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 23,
-                                   21, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 26,
+                                   24, 0,
                                    7>
       _table_;
 
@@ -1620,6 +1695,9 @@ class ServerPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE player_marks_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE player_marks_cleared_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE chat_message_removed_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE guilds_snapshot_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE guild_changed_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE guild_command_done_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1704,6 +1782,7 @@ class ClientPacket final : public ::google::protobuf::Message
     kListPlayerMarks = 24,
     kClearPlayerMarks = 25,
     kDeleteChatMessage = 26,
+    kGuildCommand = 27,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -1812,6 +1891,7 @@ class ClientPacket final : public ::google::protobuf::Message
     kListPlayerMarksFieldNumber = 24,
     kClearPlayerMarksFieldNumber = 25,
     kDeleteChatMessageFieldNumber = 26,
+    kGuildCommandFieldNumber = 27,
   };
   // uint64 request_id = 2;
   void clear_request_id() ;
@@ -2156,6 +2236,25 @@ class ClientPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NONNULL _internal_mutable_delete_chat_message();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.GuildCommand guild_command = 27;
+  bool has_guild_command() const;
+  private:
+  bool _internal_has_guild_command() const;
+
+  public:
+  void clear_guild_command() ;
+  const ::Dreamsleeve::Protocol::Chat::GuildCommand& guild_command() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NULLABLE release_guild_command();
+  ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NONNULL mutable_guild_command();
+  void set_allocated_guild_command(::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild_command(::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NULLABLE unsafe_arena_release_guild_command();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::GuildCommand& _internal_guild_command() const;
+  ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NONNULL _internal_mutable_guild_command();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ClientPacket)
@@ -2178,11 +2277,12 @@ class ClientPacket final : public ::google::protobuf::Message
   void set_has_list_player_marks();
   void set_has_clear_player_marks();
   void set_has_delete_chat_message();
+  void set_has_guild_command();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 19,
-                                   17, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 20,
+                                   18, 0,
                                    2>
       _table_;
 
@@ -2225,6 +2325,7 @@ class ClientPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE list_player_marks_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE clear_player_marks_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE delete_chat_message_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE guild_command_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3505,6 +3606,77 @@ inline ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* PROTOBUF_NONNULL Client
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::DeleteChatMessage* _msg = _internal_mutable_delete_chat_message();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.delete_chat_message)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.GuildCommand guild_command = 27;
+inline bool ClientPacket::has_guild_command() const {
+  return payload_case() == kGuildCommand;
+}
+inline bool ClientPacket::_internal_has_guild_command() const {
+  return payload_case() == kGuildCommand;
+}
+inline void ClientPacket::set_has_guild_command() {
+  _impl_._oneof_case_[0] = kGuildCommand;
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NULLABLE ClientPacket::release_guild_command() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.guild_command)
+  if (payload_case() == kGuildCommand) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildCommand*>(_impl_.payload_.guild_command_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.guild_command_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildCommand& ClientPacket::_internal_guild_command() const {
+  return payload_case() == kGuildCommand ? static_cast<const ::Dreamsleeve::Protocol::Chat::GuildCommand&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildCommand*>(_impl_.payload_.guild_command_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::GuildCommand&>(::Dreamsleeve::Protocol::Chat::_GuildCommand_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildCommand& ClientPacket::guild_command() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.guild_command)
+  return _internal_guild_command();
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_guild_command() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.guild_command)
+  if (payload_case() == kGuildCommand) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildCommand*>(_impl_.payload_.guild_command_);
+    _impl_.payload_.guild_command_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_guild_command(
+    ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_guild_command();
+    _impl_.payload_.guild_command_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.guild_command)
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NONNULL ClientPacket::_internal_mutable_guild_command() {
+  if (payload_case() != kGuildCommand) {
+    clear_payload();
+    set_has_guild_command();
+    _impl_.payload_.guild_command_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::GuildCommand>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildCommand*>(_impl_.payload_.guild_command_);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NONNULL ClientPacket::mutable_guild_command()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::GuildCommand* _msg = _internal_mutable_guild_command();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.guild_command)
   return _msg;
 }
 
@@ -5085,6 +5257,219 @@ inline ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* PROTOBUF_NONNULL Serve
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::ChatMessageRemoved* _msg = _internal_mutable_chat_message_removed();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.chat_message_removed)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.GuildsSnapshot guilds_snapshot = 38;
+inline bool ServerPacket::has_guilds_snapshot() const {
+  return payload_case() == kGuildsSnapshot;
+}
+inline bool ServerPacket::_internal_has_guilds_snapshot() const {
+  return payload_case() == kGuildsSnapshot;
+}
+inline void ServerPacket::set_has_guilds_snapshot() {
+  _impl_._oneof_case_[0] = kGuildsSnapshot;
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NULLABLE ServerPacket::release_guilds_snapshot() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.guilds_snapshot)
+  if (payload_case() == kGuildsSnapshot) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildsSnapshot*>(_impl_.payload_.guilds_snapshot_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.guilds_snapshot_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildsSnapshot& ServerPacket::_internal_guilds_snapshot() const {
+  return payload_case() == kGuildsSnapshot ? static_cast<const ::Dreamsleeve::Protocol::Chat::GuildsSnapshot&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildsSnapshot*>(_impl_.payload_.guilds_snapshot_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::GuildsSnapshot&>(::Dreamsleeve::Protocol::Chat::_GuildsSnapshot_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildsSnapshot& ServerPacket::guilds_snapshot() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.guilds_snapshot)
+  return _internal_guilds_snapshot();
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_guilds_snapshot() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.guilds_snapshot)
+  if (payload_case() == kGuildsSnapshot) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildsSnapshot*>(_impl_.payload_.guilds_snapshot_);
+    _impl_.payload_.guilds_snapshot_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_guilds_snapshot(
+    ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_guilds_snapshot();
+    _impl_.payload_.guilds_snapshot_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.guilds_snapshot)
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NONNULL ServerPacket::_internal_mutable_guilds_snapshot() {
+  if (payload_case() != kGuildsSnapshot) {
+    clear_payload();
+    set_has_guilds_snapshot();
+    _impl_.payload_.guilds_snapshot_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::GuildsSnapshot>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildsSnapshot*>(_impl_.payload_.guilds_snapshot_);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* PROTOBUF_NONNULL ServerPacket::mutable_guilds_snapshot()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::GuildsSnapshot* _msg = _internal_mutable_guilds_snapshot();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.guilds_snapshot)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.GuildChanged guild_changed = 39;
+inline bool ServerPacket::has_guild_changed() const {
+  return payload_case() == kGuildChanged;
+}
+inline bool ServerPacket::_internal_has_guild_changed() const {
+  return payload_case() == kGuildChanged;
+}
+inline void ServerPacket::set_has_guild_changed() {
+  _impl_._oneof_case_[0] = kGuildChanged;
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NULLABLE ServerPacket::release_guild_changed() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.guild_changed)
+  if (payload_case() == kGuildChanged) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildChanged*>(_impl_.payload_.guild_changed_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.guild_changed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildChanged& ServerPacket::_internal_guild_changed() const {
+  return payload_case() == kGuildChanged ? static_cast<const ::Dreamsleeve::Protocol::Chat::GuildChanged&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildChanged*>(_impl_.payload_.guild_changed_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::GuildChanged&>(::Dreamsleeve::Protocol::Chat::_GuildChanged_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildChanged& ServerPacket::guild_changed() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.guild_changed)
+  return _internal_guild_changed();
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_guild_changed() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.guild_changed)
+  if (payload_case() == kGuildChanged) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildChanged*>(_impl_.payload_.guild_changed_);
+    _impl_.payload_.guild_changed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_guild_changed(
+    ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_guild_changed();
+    _impl_.payload_.guild_changed_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.guild_changed)
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NONNULL ServerPacket::_internal_mutable_guild_changed() {
+  if (payload_case() != kGuildChanged) {
+    clear_payload();
+    set_has_guild_changed();
+    _impl_.payload_.guild_changed_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::GuildChanged>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildChanged*>(_impl_.payload_.guild_changed_);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildChanged* PROTOBUF_NONNULL ServerPacket::mutable_guild_changed()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::GuildChanged* _msg = _internal_mutable_guild_changed();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.guild_changed)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.GuildCommandDone guild_command_done = 40;
+inline bool ServerPacket::has_guild_command_done() const {
+  return payload_case() == kGuildCommandDone;
+}
+inline bool ServerPacket::_internal_has_guild_command_done() const {
+  return payload_case() == kGuildCommandDone;
+}
+inline void ServerPacket::set_has_guild_command_done() {
+  _impl_._oneof_case_[0] = kGuildCommandDone;
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NULLABLE ServerPacket::release_guild_command_done() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.guild_command_done)
+  if (payload_case() == kGuildCommandDone) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildCommandDone*>(_impl_.payload_.guild_command_done_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.guild_command_done_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildCommandDone& ServerPacket::_internal_guild_command_done() const {
+  return payload_case() == kGuildCommandDone ? static_cast<const ::Dreamsleeve::Protocol::Chat::GuildCommandDone&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildCommandDone*>(_impl_.payload_.guild_command_done_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::GuildCommandDone&>(::Dreamsleeve::Protocol::Chat::_GuildCommandDone_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildCommandDone& ServerPacket::guild_command_done() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.guild_command_done)
+  return _internal_guild_command_done();
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_guild_command_done() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.guild_command_done)
+  if (payload_case() == kGuildCommandDone) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildCommandDone*>(_impl_.payload_.guild_command_done_);
+    _impl_.payload_.guild_command_done_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_guild_command_done(
+    ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_guild_command_done();
+    _impl_.payload_.guild_command_done_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.guild_command_done)
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NONNULL ServerPacket::_internal_mutable_guild_command_done() {
+  if (payload_case() != kGuildCommandDone) {
+    clear_payload();
+    set_has_guild_command_done();
+    _impl_.payload_.guild_command_done_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::GuildCommandDone>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildCommandDone*>(_impl_.payload_.guild_command_done_);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NONNULL ServerPacket::mutable_guild_command_done()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::GuildCommandDone* _msg = _internal_mutable_guild_command_done();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.guild_command_done)
   return _msg;
 }
 

@@ -167,6 +167,135 @@ namespace
     return std::nullopt;
   }
 
+  std::optional<Domain::GuildRole> GuildRoleNamed(std::string_view name)
+  {
+    if (name == "member") return Domain::GuildRole::Member;
+    if (name == "officer") return Domain::GuildRole::Officer;
+    return std::nullopt;
+  }
+
+  std::string_view GuildRoleName(Domain::GuildRole role)
+  {
+    switch (role)
+    {
+      case Domain::GuildRole::Member:
+        return "member";
+      case Domain::GuildRole::Officer:
+        return "officer";
+      case Domain::GuildRole::Master:
+        return "master";
+      case Domain::GuildRole::Unspecified:
+        break;
+    }
+    return "unknown";
+  }
+
+  // guild create <name> | guild invite <guild> <player> | guild accept|decline|leave|disband <guild> |
+  // guild exclude|transfer|unmute <guild> <player> | guild role <guild> <player> <member|officer> |
+  // guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | guild delete <guild> <message id>
+  std::optional<ClientCommand> ParseGuild(std::string_view line, std::uint64_t requestId, const GuildBook* book)
+  {
+    std::istringstream input{std::string{line.substr(6)}};
+    std::string        action, first, second, third;
+    input >> action;
+    const auto rest = [&] {
+      std::string text;
+      std::getline(input >> std::ws, text);
+      return text;
+    };
+    if (action == "create") return GuildRequest{requestId, CreateGuild{rest()}};
+    if (!(input >> first)) return std::nullopt;
+    const auto guild = ParseId(first);
+    if (!guild) return std::nullopt;
+    if (action == "accept" || action == "decline")
+      return GuildRequest{
+          requestId,
+          AnswerGuildInvite{*guild, action == "accept"}
+      };
+    if (action == "leave") return GuildRequest{requestId, LeaveGuild{*guild}};
+    if (action == "disband") return GuildRequest{requestId, DisbandGuild{*guild}};
+    // The guild's channel follows from the book; an unknown guild sends nothing.
+    if (action == "say" || action == "delete")
+    {
+      const auto* found = book ? book->Find(*guild) : nullptr;
+      if (!found) return std::nullopt;
+      if (action == "say") return SendChat{requestId, found->channelId, rest()};
+      if (!(input >> second)) return std::nullopt;
+      const auto message = ParseId(second);
+      if (!message) return std::nullopt;
+      return DeleteChatMessage{requestId, found->channelId, *message};
+    }
+    if (!(input >> second)) return std::nullopt;
+    const auto player = ParseId(second);
+    if (!player) return std::nullopt;
+    if (action == "invite")
+      return GuildRequest{
+          requestId,
+          InviteToGuild{*guild, *player}
+      };
+    if (action == "exclude")
+      return GuildRequest{
+          requestId,
+          ExcludeGuildMember{*guild, *player}
+      };
+    if (action == "transfer")
+      return GuildRequest{
+          requestId,
+          TransferGuild{*guild, *player}
+      };
+    if (action == "unmute")
+      return GuildRequest{
+          requestId,
+          UnmuteGuildMember{*guild, *player}
+      };
+    if (!(input >> third)) return std::nullopt;
+    if (action == "role")
+    {
+      const auto role = GuildRoleNamed(third);
+      if (!role) return std::nullopt;
+      return GuildRequest{
+          requestId,
+          SetGuildRole{*guild, *player, *role}
+      };
+    }
+    if (action == "mute")
+    {
+      std::optional<std::uint32_t> minutes;
+      if (third != "forever")
+      {
+        std::uint32_t value{};
+        if (std::from_chars(third.data(), third.data() + third.size(), value).ec != std::errc{}) return std::nullopt;
+        minutes = value;
+      }
+      return GuildRequest{
+          requestId,
+          MuteGuildMember{*guild, *player, minutes, rest()}
+      };
+    }
+    return std::nullopt;
+  }
+
+  // "guilds <n> invites <n> per-player=<n> members=<n> name=<min>..<max>", then
+  // "guild <id> name=<name> channel=<id> members=<n>" with "member <guild> <player> <role> online=<0|1>[ muted] name=<name>"
+  // per member, and "invite <guild> name=<name> by=<player> expires=<unix ms>" per invitation.
+  void PrintGuilds(std::ostream& output, const GuildBook& book)
+  {
+    const auto& limits = book.Limits();
+    output << "guilds " << book.Guilds().size() << " invites " << book.Invites().size() << " per-player=" << limits.maxGuildsPerPlayer
+           << " members=" << limits.maxMembers << " name=" << limits.nameMinLength << ".." << limits.nameMaxLength << '\n';
+    for (const auto& guild : book.Guilds())
+    {
+      output << "guild " << guild.guildId << " name=" << guild.name << " channel=" << guild.channelId << " members=" << guild.members.size()
+             << '\n';
+      for (const auto& member : guild.members)
+        output << "member " << guild.guildId << ' ' << member.profile.playerId << ' ' << GuildRoleName(member.role)
+               << " online=" << member.online << (member.mute ? " muted" : "") << " name=" << member.profile.displayName << '\n';
+    }
+    for (const auto& invite : book.Invites())
+      output << "invite " << invite.guildId << " name=" << invite.guildName << " by=" << invite.invitedBy
+             << " expires=" << invite.expiresAtUnixMs << '\n';
+  }
+
   void PrintPlayer(std::ostream& output, const Domain::Player& player)
   {
     auto json = glz::write_json(player);
@@ -192,7 +321,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -212,6 +341,9 @@ namespace
 
   // The last position sent by move/location; marks are placed where the player stands.
   std::optional<Domain::PlayerLocation> lastLocation;
+
+  // The guild book last printed, and the newest one seen: a new book is a change.
+  std::shared_ptr<const GuildBook> printedGuilds;
 
   bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
@@ -331,7 +463,9 @@ namespace
     ClientOutput output;
     exchange.Drain(output);
     movement.Apply(output.state);
-    if (!verbose && output.state.updates.empty() && output.results.empty()) return;
+    const bool guildsChanged = output.status.guilds != printedGuilds;
+    printedGuilds            = output.status.guilds;
+    if (!verbose && output.state.updates.empty() && output.results.empty() && !guildsChanged) return;
 
     std::osyncstream console(std::cout);
     console << "session=" << PhaseName(output.status.phase) << '\n';
@@ -351,6 +485,7 @@ namespace
     if (!output.status.error.empty()) console << "Client: " << output.status.error << '\n';
     if (!output.status.steamBrowser.empty()) console << "Browser: " << output.status.steamBrowser << '\n';
     if (!output.status.steamBrowserError.empty()) console << "Browser failed: " << output.status.steamBrowserError << '\n';
+    if (guildsChanged && output.status.guilds) PrintGuilds(console, *output.status.guilds);
 
     for (const auto& update : output.state.updates)
     {
@@ -366,7 +501,10 @@ namespace
 
         channel = {};
         for (const auto& chat : snapshot->chats)
-          (chat.kind == Domain::ChatChannelKind::System ? channel.system : channel.global) = chat.channelId;
+          if (chat.kind == Domain::ChatChannelKind::System)
+            channel.system = chat.channelId;
+          else if (chat.kind == Domain::ChatChannelKind::Global)
+            channel.global = chat.channelId;
         for (const auto& chat : snapshot->chats)
           for (const auto& message : chat.messages)
             PrintMessage(console, message);
@@ -449,6 +587,8 @@ namespace
             console << "cleared " << value.removed << " marks of " << value.playerId;
           else if constexpr (std::is_same_v<Outcome, MessageDeleted>)
             console << "deleted message " << value.messageId;
+          else if constexpr (std::is_same_v<Outcome, GuildDone>)
+            console << "guild done " << value.guildId;
           else if constexpr (std::is_same_v<Outcome, ServerRejection>)
             console << "rejected (" << static_cast<int>(value.code) << "): " << value.message;
           else
@@ -701,6 +841,18 @@ int RunNetworkConsole(int argc, char* argv[])
       Print(exchange, generation, channel, *movement);
       const auto requestId = exchange.NextRequestId();
       auto       command   = requestId ? ParseModeration(line, *requestId, channel.global) : std::nullopt;
+      if (!command)
+        std::cout << Commands;
+      else if (exchange.Post({generation, std::move(*command)}) == CommandPostResult::Queued)
+        std::cout << "request " << *requestId << " queued\n";
+      else
+        std::cout << "Command queue is full or closed\n";
+    }
+    else if (line.starts_with("guild "))
+    {
+      Print(exchange, generation, channel, *movement);
+      const auto requestId = exchange.NextRequestId();
+      auto       command   = requestId ? ParseGuild(line, *requestId, printedGuilds.get()) : std::nullopt;
       if (!command)
         std::cout << Commands;
       else if (exchange.Post({generation, std::move(*command)}) == CommandPostResult::Queued)

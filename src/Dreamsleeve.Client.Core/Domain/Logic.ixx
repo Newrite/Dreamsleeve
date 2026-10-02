@@ -16,6 +16,7 @@ export namespace Domain
     DuplicateKey,
     UnknownPlayer,
     UnknownChannel,
+    UnknownGuild,
     InvalidCursor,
     StaleGeneration
   };

@@ -39,11 +39,12 @@ let private downSql file =
     text.Substring(text.IndexOf("MIGRONDI:DOWN", StringComparison.Ordinal)).Split('\n', 2)[1]
 
 let tests = testList "SQLite admin" [
-    testCase "migrations 5 to 12 apply over schema 4, keep players and roll back" (fun () ->
+    testCase "migrations 5 to 13 apply over schema 4, keep players and roll back" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = player database "alice" "Alice"
-        database.Execute ((downSql "1791417600000_devices.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%devices%';"
+        database.Execute ((downSql "1791504000000_guilds.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%guilds%';"
+                          + (downSql "1791417600000_devices.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%devices%';"
                           + (downSql "1791331200000_addresses.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%';"
                           + (downSql "1791244800000_registration.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%';"
                           + (downSql "1791158400000_moderator_audit.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%';"
@@ -54,10 +55,12 @@ let tests = testList "SQLite admin" [
                           + "DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; PRAGMA user_version = 4")
         equal 0L (tableCount database)
         SqliteAccountStore.initialize database.Config |> ok
-        equal 12L (database.Scalar "PRAGMA user_version")
+        equal 13L (database.Scalar "PRAGMA user_version")
         equal 5L (tableCount database)
         equal (Some alice.PlayerId) (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.map _.Profile.PlayerId)
-        // The DOWN sections return to schemas 11, 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        // The DOWN sections return to schemas 12, 11, 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        database.Execute (downSql "1791504000000_guilds.sql")
+        equal 12L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791417600000_devices.sql")
         equal 11L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791331200000_addresses.sql")

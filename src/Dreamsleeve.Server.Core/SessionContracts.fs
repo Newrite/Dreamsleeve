@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Core
 
 open System
 open System.Net
+open System.Threading.Tasks
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
@@ -346,6 +347,183 @@ module GroundMarkOptions =
             $"GroundMarks.ExpiryCheckIntervalMs must be at least {MinExpiryCheckIntervalMs}."
     ]
 
+/// [Guilds] (docs/GuildsRu.md): the server's guild limits, soft like every
+/// limit (docs/DomainSpecRu.MD §10), and the guild owner's queues. Guild chat
+/// follows Runtime.Chat.Rate.
+type GuildOptions = {
+    /// Guilds on the server.
+    MaxGuilds: int
+    /// Guilds a player is in, the ones they master included.
+    MaxGuildsPerPlayer: int
+    MaxMembers: int
+    /// Pending invitations of one guild.
+    MaxInvites: int
+    /// Bounds of a guild name in Unicode scalar values.
+    NameMinLength: int
+    NameMaxLength: int
+    /// Days an invitation waits for an answer.
+    InviteDays: int
+    /// Chat messages each guild keeps in memory; at most Server.MaxRecentMessages.
+    HistoryCapacity: int
+    MailboxCapacity: int
+    ControlReserve: int
+    MaxControlDeliveries: int
+    /// Pending persistence writes before the owner treats storage as broken.
+    MaxPendingWrites: int
+    /// How often expired invitations are collected.
+    InviteCheckIntervalMs: int
+}
+
+[<RequireQualifiedAccess>]
+module GuildOptions =
+    [<Literal>]
+    let MinInviteCheckIntervalMs = 1000
+
+    /// The longest guild name a server may allow.
+    [<Literal>]
+    let MaxNameLength = 64
+
+    let defaults = {
+        MaxGuilds = 10000; MaxGuildsPerPlayer = 3; MaxMembers = 64; MaxInvites = 32
+        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; HistoryCapacity = 200
+        MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 1024
+        InviteCheckIntervalMs = 60000
+    }
+
+    /// The domain limits of these options.
+    let rules options =
+        GuildLimits.create options.MaxGuilds options.MaxGuildsPerPlayer options.MaxMembers options.MaxInvites
+            options.NameMinLength options.NameMaxLength (TimeSpan.FromDays(float options.InviteDays))
+
+    let validate options = [
+        let range name value low high =
+            if value < low || value > high then Some $"Guilds.{name} must be {low}..{high}." else None
+        yield!
+            [ range "MaxGuilds" options.MaxGuilds 1 1_000_000
+              range "MaxGuildsPerPlayer" options.MaxGuildsPerPlayer 1 100
+              range "MaxMembers" options.MaxMembers 2 10_000
+              range "MaxInvites" options.MaxInvites 1 10_000
+              range "NameMinLength" options.NameMinLength 1 MaxNameLength
+              range "NameMaxLength" options.NameMaxLength (max 1 options.NameMinLength) MaxNameLength
+              range "InviteDays" options.InviteDays 1 365 ]
+            |> List.choose id
+        if options.HistoryCapacity < 1 then "Guilds.HistoryCapacity must be positive."
+        if options.MailboxCapacity < 1 || options.ControlReserve < 1 || options.MaxControlDeliveries < 1 || options.MaxPendingWrites < 1 then
+            "Guilds queue capacities must be positive."
+        if int64 options.MailboxCapacity + int64 options.ControlReserve > int64 Int32.MaxValue then
+            "Guilds mailbox capacity and control reserve overflow."
+        if options.InviteCheckIntervalMs < MinInviteCheckIntervalMs then
+            $"Guilds.InviteCheckIntervalMs must be at least {MinInviteCheckIntervalMs}."
+    ]
+
+/// A member's request for the guild owner; the session settles it with the
+/// owner's answer.
+type GuildRequest = {
+    ConnectionId: Guid
+    RequestId: uint64
+    Action: GuildAction
+}
+
+[<RequireQualifiedAccess>]
+type GuildEvent =
+    /// After Join: every guild of the player and their invitations.
+    | Snapshot of GuildState
+    | Changed of GuildChange
+    | Done of requestId: uint64 * GuildId
+    | Refused of requestId: uint64 * RequestRejection
+    /// A message published in or removed from one of the player's guild channels.
+    | Chat of ChatRoomEvent
+
+/// A guild for the panel: its name, size and master.
+type GuildSummary = {
+    Guild: GuildId
+    Name: GuildName
+    CreatedAt: DateTimeOffset
+    Members: int
+    Master: PlayerData voption
+}
+
+/// A guild in full for the panel: real names, roles, mutes and invitations.
+type GuildCard = {
+    Summary: GuildSummary
+    Members: GuildMemberView list
+    Invites: (GuildInvite * PlayerData voption) list
+}
+
+type GuildPage = {
+    Guilds: GuildSummary list
+    Total: int
+    /// 1-based.
+    Page: int
+}
+
+/// What the panel asks of the guild owner.
+[<RequireQualifiedAccess>]
+type GuildAdminCommand =
+    /// Name substring or exact guild ID; empty lists every guild.
+    | Search of query: string * page: int
+    | Card of GuildId
+    /// The guilds of one player, with their role, for the player card.
+    | PlayerGuilds of PlayerId
+    /// A new master when the old one is banned or gone.
+    | Appoint of GuildId * PlayerId
+    /// Disbands a guild, for one when its name breaks the rules.
+    | Dissolve of GuildId
+
+[<RequireQualifiedAccess>]
+type GuildAdminResult =
+    | Page of GuildPage
+    | Card of GuildCard voption
+    | PlayerGuilds of (GuildSummary * GuildRole) list
+    | Appointed of GuildCard
+    | Dissolved of DisbandedGuild
+    | Refused of GuildError
+
+[<RequireQualifiedAccess>]
+module GuildPage =
+    [<Literal>]
+    let Size = 50
+
+/// Persistence of guilds, executed off the owner by a bounded writer in order.
+[<RequireQualifiedAccess>]
+type GuildWrite =
+    /// The guild with its creator as master.
+    | Create of GuildId * GuildName * DateTimeOffset * master: GuildMember
+    /// The guild, its members and invitations.
+    | Delete of GuildId
+    | PutMember of GuildId * GuildMember
+    | RemoveMember of GuildId * PlayerId
+    | PutInvite of GuildInvite
+    | RemoveInvite of GuildId * PlayerId
+
+/// Stored guilds, the profiles their members and invited players have now,
+/// the storage high-water mark and the writer; supplied at runtime start.
+type GuildPersistence = {
+    Loaded: StoredGuild list
+    /// Moderated profiles of every member and invited player.
+    Profiles: PlayerData list
+    /// One above the highest guild ID storage ever issued, so IDs never repeat.
+    NextId: uint64
+    Writer: ReliableAgentRef<GuildWrite>
+    /// Completes when the writer stops. A failed write stops it, and the
+    /// runtime fails so that the supervisor restarts the game from storage.
+    WriterStopped: Task
+}
+
+[<RequireQualifiedAccess>]
+type GuildCommand =
+    | Join of Subscription<GuildEvent>
+    | Act of GuildRequest
+    /// A member's message for the guild channel; the session checked the word list.
+    | Publish of GuildId * ChatSubmission
+    /// A removal of a guild chat message; the guild roles decide who may.
+    | Remove of GuildId * ChatRemoval
+    /// A player's moderated profile after a rename, from the session or the panel.
+    | Rename of PlayerData
+    | Admin of GuildAdminCommand * ReplyChannel<GuildAdminResult>
+    | Expire of AgentTick
+    | Detach of SessionDetach
+
 type PlayerSessionOptions = {
     MailboxCapacity: int
     ControlReserve: int
@@ -414,7 +592,7 @@ module ServerRuntimeOptions =
     let defaults = {
         MaxSessions = 512
         MailboxCapacity = 32768
-        ControlReserve = 2052
+        ControlReserve = 2565
         OpenTimeoutMs = 10000
         ShutdownTimeoutMs = 5000
         PollIntervalMs = 1

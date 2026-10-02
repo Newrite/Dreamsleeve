@@ -307,6 +307,65 @@ export namespace Domain
     bool operator==(const Sanction&) const = default;
   };
 
+  using GuildId            = std::uint64_t;
+  using GuildRole          = ::Protocol::Chat::GuildRole;
+  using GuildRemovalReason = ::Protocol::Chat::GuildRemovalReason;
+
+  // A guild's chat channel: above every server-wide channel (guild.proto).
+  inline constexpr ChatChannelId GuildChannelBase = 4294967296ULL;
+
+  constexpr bool IsGuildChannel(ChatChannelId channelId) noexcept
+  {
+    return channelId > GuildChannelBase;
+  }
+
+  // A member as guildmates see them: the real profile, never a pseudonym.
+  struct GuildMember
+  {
+    PlayerData               profile{};
+    GuildRole                role{GuildRole::Member};
+    bool                     online{};
+    std::optional<MuteState> mute;  // Muted in this guild: reading only.
+    std::int64_t             joinedAtUnixMs{};
+
+    bool operator==(const GuildMember&) const = default;
+  };
+
+  // A guild of this player; its chat is the channel channelId.
+  struct Guild
+  {
+    GuildId                  guildId{};
+    std::string              name;
+    ChatChannelId            channelId{};
+    std::int64_t             createdAtUnixMs{};
+    std::vector<GuildMember> members;
+
+    bool operator==(const Guild&) const = default;
+  };
+
+  // An invitation waiting for this player's answer. The inviter is a player
+  // ID, resolved like any other: outside the guild a pseudonym stays one.
+  struct GuildInvite
+  {
+    GuildId      guildId{};
+    std::string  guildName;
+    PlayerId     invitedBy{};
+    std::int64_t expiresAtUnixMs{};
+
+    bool operator==(const GuildInvite&) const = default;
+  };
+
+  // The server's guild limits; a lowered limit removes nobody.
+  struct GuildLimits
+  {
+    std::uint32_t maxGuildsPerPlayer{};  // Own guilds included.
+    std::uint32_t maxMembers{};
+    std::uint32_t nameMinLength{};  // Unicode scalar values.
+    std::uint32_t nameMaxLength{};
+
+    bool operator==(const GuildLimits&) const = default;
+  };
+
   // Where a mark stands: the space, the point and the author's heading (Z
   // angle, radians) so the visual can face the way the author looked.
   struct GroundMarkPlacement

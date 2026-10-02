@@ -9,13 +9,15 @@ open FSharp.UMX
 type TextSpan = { Start: int; Length: int }
 
 /// Channel entities. The client "all" view aggregates channels and is not one.
-/// Party, guild and direct channels are planned kinds with their own targets.
+/// Party and direct channels are planned kinds with their own targets.
 [<RequireQualifiedAccess>]
 type ChatChannelKind =
     /// Players write chat messages.
     | Global
     /// System events: server announcements and admitted client announcements.
     | System
+    /// One guild's members write; one channel per guild.
+    | Guild
 
 /// Trust origin of an announcement. Only the server assigns it.
 [<RequireQualifiedAccess>]
@@ -69,21 +71,41 @@ module Announcement =
 
 [<RequireQualifiedAccess>]
 module ChatChannelKind =
-    /// Server-wide kinds exist once, so their channel ID follows from the kind.
-    let channelId kind : ChatChannelId =
-        match kind with
-        | ChatChannelKind.Global -> UMX.tag 1UL
-        | ChatChannelKind.System -> UMX.tag 2UL
-
-    let tryOfChannelId (id: ChatChannelId) =
-        [ ChatChannelKind.Global; ChatChannelKind.System ]
-        |> List.tryFind (fun kind -> channelId kind = id)
-
     /// A system channel carries only announcements; other channels never do.
     let carriesAnnouncements kind =
         match kind with
         | ChatChannelKind.System -> true
-        | ChatChannelKind.Global -> false
+        | ChatChannelKind.Global | ChatChannelKind.Guild -> false
+
+/// Channel IDs. The server-wide channels exist once with fixed IDs; a guild's
+/// channel follows from the guild, above every server-wide ID.
+[<RequireQualifiedAccess>]
+module ChatChannels =
+    let globalId : ChatChannelId = UMX.tag 1UL
+    let systemId : ChatChannelId = UMX.tag 2UL
+
+    /// Guild channel IDs start above it.
+    [<Literal>]
+    let GuildBase = 4294967296UL
+
+    let ofGuild (guild: GuildId) : ChatChannelId = UMX.tag (GuildBase + GuildId.value guild)
+
+    /// The kind of a channel ID and, for a guild channel, its guild; absent
+    /// for an ID that names no channel.
+    let classify (id: ChatChannelId) : struct (ChatChannelKind * GuildId voption) voption =
+        let raw = ChatChannelId.value id
+        if id = globalId then ValueSome(struct (ChatChannelKind.Global, ValueNone))
+        elif id = systemId then ValueSome(struct (ChatChannelKind.System, ValueNone))
+        elif raw > GuildBase then
+            match GuildId.create (raw - GuildBase) with
+            | Ok guild -> ValueSome(struct (ChatChannelKind.Guild, ValueSome guild))
+            | Error _ -> ValueNone
+        else ValueNone
+
+    let kindOf id =
+        match classify id with
+        | ValueSome(struct (kind, _)) -> ValueSome kind
+        | ValueNone -> ValueNone
 
 /// An immutable message with the author's public identity at the time of
 /// sending: the profile, or the pseudonym the author was shown under then.
@@ -189,13 +211,15 @@ type Chat =
 
 [<RequireQualifiedAccess>]
 module Chat =
-    /// The channel ID follows from the kind; see ChatChannelKind.channelId.
-    let create kind historyCapacity =
+    /// The channel ID must name a channel of the kind (ChatChannels.classify).
+    let create channelId kind historyCapacity =
         if historyCapacity <= 0 then
             Error (DomainError.InvalidLimit ("historyCapacity", historyCapacity))
+        elif ChatChannels.kindOf channelId <> ValueSome kind then
+            Error DomainError.ChannelMismatch
         else
             Ok {
-                channelId = ChatChannelKind.channelId kind
+                channelId = channelId
                 kind = kind
                 historyCapacity = historyCapacity
                 players = HashSet<PlayerId>()
@@ -325,25 +349,3 @@ module Chat =
             Messages = List.ofSeq chat.messages
             HistoryCapacity = chat.historyCapacity
         }
-
-/// Named channel backed by a chat owned by the same agent.
-[<NoEquality; NoComparison>]
-type ChatChannel =
-    private {
-        channelName: ChatChannelName
-        chat: Chat
-    }
-
-    member this.ChannelId = this.chat.ChannelId
-    member this.ChannelName = this.channelName
-    member this.ChannelChat = this.chat
-
-[<RequireQualifiedAccess>]
-module ChatChannel =
-    let create kind channelName historyCapacity =
-        Chat.create kind historyCapacity
-        |> Result.map (fun chat -> { channelName = channelName; chat = chat })
-
-    /// Changes channel metadata while retaining the same agent-owned chat state.
-    let withName channelName (channel: ChatChannel) =
-        { channel with channelName = channelName }

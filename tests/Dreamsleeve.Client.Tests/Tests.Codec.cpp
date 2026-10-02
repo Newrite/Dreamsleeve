@@ -1045,6 +1045,130 @@ TEST_CASE("Moderator requests encode as asked and their answers decode with corr
   CHECK(std::get<W::SessionOpened>(*opened).role == Domain::PlayerRole::Moderator);
 }
 
+TEST_CASE(
+  "Guild requests encode as asked; guilds decode with real profiles, the channel the guild implies and their chat on the control lane")
+{
+  const auto codec = MakeCodec();
+  const auto sent  = [&](GuildAction action) {
+    const auto encoded = codec.Encode(GuildRequest{5, std::move(action)});
+    REQUIRE(encoded);
+    P::ClientPacket packet;
+    REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+    CHECK(packet.request_id() == 5);
+    return packet.guild_command();
+  };
+  CHECK(sent(CreateGuild{"Соратники"}).create().name() == "Соратники");
+  const auto role = sent(SetGuildRole{4, 9, Domain::GuildRole::Officer}).set_role();
+  CHECK((role.guild_id() == 4 && role.player_id() == 9 && role.role() == P::GUILD_ROLE_OFFICER));
+  const auto mute = sent(MuteGuildMember{4, 9, std::nullopt, "Флуд"}).mute();
+  CHECK_FALSE(mute.has_minutes());
+  CHECK(mute.reason() == "Флуд");
+  CHECK(sent(AnswerGuildInvite{4, true}).answer().accept());
+  CHECK(sent(DisbandGuild{4}).disband().guild_id() == 4);
+
+  constexpr std::uint64_t channel = Domain::GuildChannelBase + 4;
+  P::ServerPacket         snapshot;
+  snapshot.set_protocol_version(W::Version);
+  auto* guilds = snapshot.mutable_guilds_snapshot();
+  auto* guild  = guilds->add_guilds();
+  guild->set_guild_id(4);
+  guild->set_name("Соратники");
+  guild->set_channel_id(channel);
+  guild->set_created_at_unix_ms(1000);
+  auto* master = guild->add_members();
+  master->mutable_profile()->set_player_id(7);
+  master->mutable_profile()->set_username("player");
+  master->mutable_profile()->set_display_name("Display");
+  master->set_role(P::GUILD_ROLE_MASTER);
+  master->set_online(true);
+  master->mutable_mute()->set_reason("Флуд");
+  master->set_joined_at_unix_ms(1000);
+  auto message = Published().chat_published().message();
+  message.set_channel_id(channel);
+  *guild->add_recent_messages() = message;
+  auto* invite                  = guilds->add_invites();
+  invite->set_guild_id(5);
+  invite->set_guild_name("Гильдия");
+  invite->set_invited_by_player_id(9);
+  invite->set_expires_at_unix_ms(2000);
+  guilds->mutable_limits()->set_max_guilds_per_player(3);
+  guilds->mutable_limits()->set_max_members(64);
+  guilds->mutable_limits()->set_name_min_length(3);
+  guilds->mutable_limits()->set_name_max_length(24);
+  const auto decoded = codec.Decode(Bytes(snapshot));
+  REQUIRE(decoded);
+  const auto& book = std::get<W::GuildsSnapshot>(*decoded);
+  REQUIRE(book.guilds.size() == 1);
+  CHECK(book.guilds[0].guild.channelId == channel);
+  REQUIRE(book.guilds[0].guild.members.size() == 1);
+  const auto& member = book.guilds[0].guild.members[0];
+  CHECK((member.role == Domain::GuildRole::Master && member.online && member.mute && member.profile.username == "player"));
+  REQUIRE(book.guilds[0].recentMessages.size() == 1);
+  CHECK(
+    book.invites == std::vector<Domain::GuildInvite>{
+                        {5, "Гильдия", 9, 2000}
+  });
+  CHECK(book.limits == Domain::GuildLimits{3, 64, 3, 24});
+
+  // The channel follows from the guild; guildmates never see a pseudonym.
+  guild->set_channel_id(channel + 1);
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  guild->set_channel_id(channel);
+  master->mutable_profile()->set_pseudonymous(true);
+  master->mutable_profile()->clear_username();
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  master->mutable_profile()->set_pseudonymous(false);
+  master->mutable_profile()->set_username("player");
+  master->set_role(P::GUILD_ROLE_UNSPECIFIED);
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  master->set_role(P::GUILD_ROLE_MASTER);
+  snapshot.set_request_id(3);
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  snapshot.clear_request_id();
+  guilds->clear_limits();
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+
+  P::ServerPacket changed;
+  changed.set_protocol_version(W::Version);
+  changed.mutable_guild_changed()->mutable_removed()->set_guild_id(4);
+  changed.mutable_guild_changed()->mutable_removed()->set_reason(P::GUILD_REMOVAL_REASON_EXCLUDED);
+  const auto removed = codec.Decode(Bytes(changed));
+  REQUIRE(removed);
+  const auto& removal = std::get<W::GuildRemoved>(std::get<W::GuildChanged>(*removed).change);
+  CHECK((removal.guildId == 4 && removal.reason == Domain::GuildRemovalReason::Excluded));
+  changed.mutable_guild_changed()->mutable_removed()->set_reason(P::GUILD_REMOVAL_REASON_UNSPECIFIED);
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  changed.mutable_guild_changed()->set_invite_removed(0);
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  changed.mutable_guild_changed()->set_invite_removed(5);
+  REQUIRE(codec.Decode(Bytes(changed)));
+  changed.mutable_guild_changed()->clear_change();
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+
+  P::ServerPacket done;
+  done.set_protocol_version(W::Version);
+  done.mutable_guild_command_done()->set_guild_id(4);
+  CHECK_FALSE(codec.Decode(Bytes(done)));
+  done.set_request_id(5);
+  const auto settled = codec.Decode(Bytes(done));
+  REQUIRE(settled);
+  CHECK((std::get<W::GuildCommandDone>(*settled).requestId == 5 && std::get<W::GuildCommandDone>(*settled).guildId == 4));
+  done.mutable_guild_command_done()->set_guild_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(done)));
+
+  // A guild's chat comes with its guild changes on the control lane.
+  auto guildChat = Published();
+  guildChat.mutable_chat_published()->mutable_message()->set_channel_id(channel);
+  CHECK(codec.Decode(Bytes(guildChat), W::Channel::Control));
+  CHECK_FALSE(codec.Decode(Bytes(guildChat), W::Channel::Chat));
+  P::ServerPacket guildRemoval;
+  guildRemoval.set_protocol_version(W::Version);
+  guildRemoval.mutable_chat_message_removed()->set_channel_id(channel);
+  guildRemoval.mutable_chat_message_removed()->set_message_id(3);
+  CHECK(codec.Decode(Bytes(guildRemoval), W::Channel::Control));
+  CHECK_FALSE(codec.Decode(Bytes(guildRemoval), W::Channel::Chat));
+}
+
 TEST_CASE("The codec refuses only what would close the connection: a zero request ID or text that is not UTF-8")
 {
   const auto                        codec = MakeCodec();

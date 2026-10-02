@@ -58,7 +58,7 @@ let private send requestId text =
         SendChat = Dreamsleeve.Protocol.Chat.SendChat(ChannelId = 1UL, Text = text))
 let private decode (packet: Dreamsleeve.Protocol.Chat.ClientPacket) =
     ProtocolCodec.decodeClient codec (packet.ToByteArray())
-let private systemChannel = { ChannelId = ChatChannelKind.channelId ChatChannelKind.System; Kind = ChatChannelKind.System; Messages = [] }
+let private systemChannel = { ChannelId = ChatChannels.systemId; Kind = ChatChannelKind.System; Messages = [] }
 let private welcomeWith messages = {
     SelfPlayerId = pid 7UL
     Players = [snapshot]
@@ -102,7 +102,7 @@ let private playerUpdate result =
     | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _
     | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
     | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
-    | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.DeleteChatMessage _ -> failtest "Expected player update"
+    | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.DeleteChatMessage _ | ClientCommand.Guild _ -> failtest "Expected player update"
 
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
@@ -291,7 +291,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
         | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _
         | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _
-        | ClientCommand.DeleteChatMessage _ -> failtest "Wrong command"
+        | ClientCommand.DeleteChatMessage _ | ClientCommand.Guild _ -> failtest "Wrong command"
 
         for invalid in [ ""; String('a', 42); String('a', 44); String('a', 42) + " "; String('a', 42) + "é" ] do
             packet.OpenSession.SessionTicket <- invalid

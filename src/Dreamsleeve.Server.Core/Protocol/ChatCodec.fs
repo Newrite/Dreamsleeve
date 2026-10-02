@@ -53,6 +53,7 @@ module internal ChatCodec =
                 Kind =
                     match value.Kind with
                     | ChatChannelKind.Global -> Dreamsleeve.Protocol.Chat.ChatChannelKind.Global
+                    | ChatChannelKind.Guild -> Dreamsleeve.Protocol.Chat.ChatChannelKind.Guild
                     | ChatChannelKind.System -> Dreamsleeve.Protocol.Chat.ChatChannelKind.System)
         result.RecentMessages.AddRange(value.Messages |> Seq.map message)
         result

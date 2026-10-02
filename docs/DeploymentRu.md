@@ -176,7 +176,7 @@ TrustForwardedHeaders = true             # только если админка 
 | Правило | Зачем |
 |---|---|
 | `Runtime.MaxSessions` ≤ `Server.PeerLimit` ≤ 4095 | каждому клиенту нужен слот ENet |
-| `Runtime.ControlReserve` ≥ 4 × `MaxSessions` + 4 | место для подтверждений очистки сессий |
+| `Runtime.ControlReserve` ≥ 5 × `MaxSessions` + 5 | место для подтверждений очистки сессий (чат, объявления, присутствие, метки, гильдии) |
 | `Server.MaxInitialPlayers` ≥ `MaxSessions` | начальный снимок вмещает всех онлайн |
 | `Server.MaxRecentMessages` ≥ `Runtime.Chat.HistoryCapacity` и `Announcements.HistoryCapacity` | история влезает в снимок |
 | `Admin.Listener` и `Authentication.Listener` на разных портах | два отдельных HTTP-хоста |
@@ -690,7 +690,7 @@ loopback, по сокету на клиента, движение 20 Гц; [от
 |---|---|---|
 | `Runtime.MaxSessions` | N | 512 |
 | `Server.PeerLimit` | N с запасом | 544 |
-| `Runtime.ControlReserve` | ≥ 4N + 4 | 2052 |
+| `Runtime.ControlReserve` | ≥ 5N + 5 | 2565 |
 | `Runtime.MailboxCapacity` | ≈ 64N | 32768 |
 | `Runtime.Player.MailboxCapacity`, `MaxPendingOutput` | ≈ 2N + 128 | 1152 |
 | `Runtime.Player.MaxBootstrapEvents` | ≈ N | 512 |
@@ -728,7 +728,7 @@ loopback, по сокету на клиента, движение 20 Гц; [от
 | Массово `Closing ...: Outgoing transport handoff budget exceeded` | сервер не успевает отправлять: слишком много надёжных пакетов разом (раздел «Ёмкость»: ресурсы игроков, сотни игроков в одном месте) |
 | `Game runtime failed N times within ... s; stopping the server` | больше `[Recovery] MaxRestarts` отказов за окно; код выхода 1, systemd перезапустит процесс — смотрите причину в логе |
 | Сервер: `Remote HTTP Authentication.Listener requires Authentication.Listener.AllowInsecureRemote...` | `ListenUrl` с `http://` не на `127.0.0.1`/`::1`; за nginx укажите `http://127.0.0.1:8779` |
-| Сервер: `Runtime.ControlReserve must allow 4 * MaxSessions + 4...` | увеличили `MaxSessions`, не увеличив резерв |
+| Сервер: `Runtime.ControlReserve must allow 5 * MaxSessions + 5...` | увеличили `MaxSessions`, не увеличив резерв, или в старом `server.toml` осталось 2052 (до гильдий хватало 4N + 4) |
 | Лог клиента: `Plain HTTP authentication is permitted only on loopback; use HTTPS remotely` | `authUrl` начинается с `http://` |
 | Лог клиента: `Auth URL must be an origin without a path` | в `authUrl` есть путь, например `/auth` |
 | Лог клиента: `Invalid client setting: serverHost` | в `serverHost` пусто, пробел, `_`, IPv6, точка в конце или число больше 255 в IPv4; имена с не-ASCII символами — в punycode (`xn--…`) |

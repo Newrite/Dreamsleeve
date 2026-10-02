@@ -190,25 +190,36 @@ let private loadGroundMarks settings moderation (logger: ILogger) = task {
         return Ok (records, stored.NextId)
 }
 
-/// Queued mark writes get this long when the game part stops. A database that stays
+// Guild names and member profiles leave through the same public projection as
+// in chat; stored names stay, whatever the limits are now.
+let private loadGuilds settings moderation = task {
+    let! loaded = Task.Run(fun () -> SqliteGuildStore.loadAll settings.Database CancellationToken.None)
+    return
+        loaded
+        |> Result.mapError (sprintf "%A")
+        |> Result.map (fun stored ->
+            { stored with Profiles = stored.Profiles |> List.map (Dreamsleeve.Server.Domain.Moderation.publicProfile moderation) })
+}
+
+/// Queued mark and guild writes get this long when the game part stops. A database that stays
 /// locked would otherwise hold a restart for MaxPendingWrites * BusyTimeoutSeconds.
 [<Literal>]
-let private MarkWriterDrainSeconds = 30
+let private WriterDrainSeconds = 30
 
-let private stopWriter (logger: ILogger) (writer: Agent<GroundMarkWrite>) = task {
+let private stopWriter (logger: ILogger) (what: string) (writer: Agent<'Write>) = task {
     writer.Complete() |> ignore
-    try do! writer.Completion.WaitAsync(TimeSpan.FromSeconds(float MarkWriterDrainSeconds))
+    try do! writer.Completion.WaitAsync(TimeSpan.FromSeconds(float WriterDrainSeconds))
     with :? TimeoutException ->
-        logger.LogError("Ground mark writes did not finish within {Seconds} s; dropping {Count} queued writes",
-                        MarkWriterDrainSeconds, writer.QueueLength)
+        logger.LogError("{What} writes did not finish within {Seconds} s; dropping {Count} queued writes",
+                        what, WriterDrainSeconds, writer.QueueLength)
         writer.Abort()
         try do! writer.Completion with _ -> ()
 }
 
-/// The game part, restarted as one: a fresh load of the marks with their writer,
-/// the ENet transport and the runtime. HTTP, accounts and the panel outlive it.
-/// Completion comes once the transport and the writer are released, so the next
-/// instance binds the port again and loads every mark the last one wrote.
+/// The game part, restarted as one: a fresh load of the marks and the guilds with
+/// their writers, the ENet transport and the runtime. HTTP, accounts and the panel
+/// outlive it. Completion comes once the transport and the writers are released,
+/// so the next instance binds the port again and loads everything the last one wrote.
 let private startGame settings (game: GameSettings) moderation pseudonyms (authentication: Agent<AuthMessage>) (logger: ILogger)
                       (_: CancellationToken) : Task<SupervisedChild<Agent<ServerRuntimeMessage>>> = task {
     let! loaded = loadGroundMarks settings moderation logger
@@ -216,15 +227,28 @@ let private startGame settings (game: GameSettings) moderation pseudonyms (authe
         match loaded with
         | Ok value -> value
         | Error error -> raise (InvalidOperationException $"Ground mark storage failed: {error}")
+    let! guilds = loadGuilds settings moderation
+    let guilds =
+        match guilds with
+        | Ok value -> value
+        | Error error -> raise (InvalidOperationException $"Guild storage failed: {error}")
     let writer = SqliteGroundMarkStore.startWriter settings.Database logger game.GroundMarks.MaxPendingWrites
+    let guildWriter = SqliteGuildStore.startWriter settings.Database logger game.Guilds.MaxPendingWrites
     logger.LogInformation("Ground marks loaded: {Count}, next id {NextId}", records.Length, nextId)
+    logger.LogInformation("Guilds loaded: {Count}, next id {NextId}", guilds.Guilds.Length, guilds.NextId)
     match EnetTransport.create game.Server logger with
     | Error error ->
-        do! stopWriter logger writer
+        do! stopWriter logger "Ground mark" writer
+        do! stopWriter logger "Guild" guildWriter
         return raise (InvalidOperationException $"ENet startup failed: {error}")
     | Ok transport ->
         let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref.TryReliable().Value }
-        let runtime = ServerRuntime.start game moderation pseudonyms marks (AuthService.authenticator authentication) transport logger
+        let guildStorage = {
+            Loaded = guilds.Guilds; Profiles = guilds.Profiles; NextId = guilds.NextId
+            Writer = guildWriter.Ref.TryReliable().Value; WriterStopped = guildWriter.Completion
+        }
+        let runtime =
+            ServerRuntime.start game moderation pseudonyms marks guildStorage (AuthService.authenticator authentication) transport logger
         let! _ = authentication.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.AccountChanged))
         let completion = task {
             let! outcome = task {
@@ -233,11 +257,13 @@ let private startGame settings (game: GameSettings) moderation pseudonyms (authe
                     return None
                 with error -> return Some error
             }
-            if outcome.IsSome then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark writes")
+            if outcome.IsSome then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark and guild writes")
             try transport.Dispose()
             with error -> logger.LogError(error, "ENet transport disposal failed")
-            try do! stopWriter logger writer
+            try do! stopWriter logger "Ground mark" writer
             with error -> logger.LogError(error, "Ground mark writer failed")
+            try do! stopWriter logger "Guild" guildWriter
+            with error -> logger.LogError(error, "Guild writer failed")
             match outcome with
             | Some error -> raise error
             | None -> ()

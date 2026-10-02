@@ -13,7 +13,7 @@ open BackgroundTests
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private config = { MailboxCapacity = 4; ControlReserve = 2; HistoryCapacity = 2; MaxControlDeliveries = 4
                        Rate = { Burst = 100; RefillMs = 1000; DuplicateWindowMs = 0 } }
-let private channelId = ChatChannelKind.channelId ChatChannelKind.Global
+let private channelId = ChatChannels.globalId
 let private profile number =
     PlayerData.create (PlayerId.create number |> ok)
         (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok)
@@ -375,7 +375,7 @@ let tests = testList "ChatRoomAgent" [
         equal 1UL (ChatMessageId.value one.MessageId)
         equal 1UL (ChatMessageId.value two.MessageId)
         equal channelId one.ChannelId
-        equal (ChatChannelKind.channelId ChatChannelKind.System) two.ChannelId
+        equal (ChatChannels.systemId) two.ChannelId
         do! stop first
         do! stop second
     })

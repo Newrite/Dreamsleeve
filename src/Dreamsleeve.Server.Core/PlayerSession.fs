@@ -16,10 +16,12 @@ type PlayerSessionMessage =
     | ChatEvent of ChatRoomEvent
     | PresenceEvent of PresenceEvent
     | GroundMarkEvent of GroundMarkEvent
+    | GuildEvent of GuildEvent
     | ChatDetached of Guid
     | SystemDetached of Guid
     | PresenceDetached of Guid
     | GroundMarksDetached of Guid
+    | GuildsDetached of Guid
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
     | PostAnnouncement of requestId: uint64 * AnnouncementRequest
     | PlaceGroundNote of requestId: uint64 * GroundNoteText * GroundMarkPlacement * GameDate
@@ -45,6 +47,8 @@ type PlayerSessionMessage =
     | ProfileChanged of PlayerData
     /// The panel's view of this player; None before the profile is known.
     | Describe of ReplyChannel<AdminPlayerView option>
+    /// A member's guild request from the client.
+    | Guild of requestId: uint64 * GuildAction
     | Stop
 
 /// Owns one player's state, opening barrier and bounded request admission.
@@ -72,6 +76,7 @@ module PlayerSession =
         mutable SystemAttached: bool
         mutable PresenceAttached: bool
         mutable GroundMarksAttached: bool
+        mutable GuildsAttached: bool
         mutable CloseSent: bool
         /// The current character name failed moderation and is not published.
         mutable CharacterWithheld: bool
@@ -104,6 +109,7 @@ module PlayerSession =
         System: AgentOutbox<ChatRoomCommand>
         Presence: AgentOutbox<PresenceCommand>
         GroundMarks: AgentOutbox<GroundMarkCommand>
+        Guilds: AgentOutbox<GuildCommand>
         Host: AgentOutbox<SessionHostCommand>
         Logger: ILogger
     }
@@ -127,6 +133,11 @@ module PlayerSession =
 
     let private publicIdentity state (player: Player) =
         PublicIdentity.ofProfile state.Pseudonym player.Data
+
+    // Guildmates see the real names, whatever the player hides elsewhere; only
+    // a game name the word list refused stays withheld.
+    let private guildCharacterName state (player: Player) =
+        if state.CharacterWithheld then ValueNone else player.CharacterName
 
     // Ground marks may keep the real profile while presence and chat hide it.
     let private markPseudonym state =
@@ -155,7 +166,8 @@ module PlayerSession =
 
     let private completeIfDetached state (context: AgentContext<PlayerSessionMessage>) =
         match state.Phase with
-        | Closing when not state.ChatAttached && not state.SystemAttached && not state.PresenceAttached && not state.GroundMarksAttached ->
+        | Closing when not state.ChatAttached && not state.SystemAttached && not state.PresenceAttached && not state.GroundMarksAttached
+                       && not state.GuildsAttached ->
             context.Complete() |> ignore
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
@@ -189,6 +201,10 @@ module PlayerSession =
                 if state.GroundMarksAttached then
                     let command = GroundMarkCommand.Detach(detach (address.Map PlayerSessionMessage.GroundMarksDetached))
                     if not (state.GroundMarks.TrySend(context, command)) then context.Abort()
+
+                if state.GuildsAttached then
+                    let command = GuildCommand.Detach(detach (address.Map PlayerSessionMessage.GuildsDetached))
+                    if not (state.Guilds.TrySend(context, command)) then context.Abort()
 
                 completeIfDetached state context
 
@@ -333,12 +349,20 @@ module PlayerSession =
                     Snapshot = publicSnapshot state player
                     Events = address.Map PlayerSessionMessage.PresenceEvent
                 }
+                // The guild owner gets the real profile: guildmates see it.
+                let guilds = {
+                    ConnectionId = request.ConnectionId
+                    Profile = player.Data
+                    Events = address.Map PlayerSessionMessage.GuildEvent
+                }
                 state.ChatAttached <- state.Chat.TrySend(context, ChatRoomCommand.Join chat)
                 state.SystemAttached <- state.System.TrySend(context, ChatRoomCommand.Join chat)
                 state.PresenceAttached <- state.Presence.TrySend(context, PresenceCommand.Join presence)
                 state.GroundMarksAttached <- state.GroundMarks.TrySend(context, GroundMarkCommand.Join marks)
+                state.GuildsAttached <- state.Guilds.TrySend(context, GuildCommand.Join guilds)
 
-                if not state.ChatAttached || not state.SystemAttached || not state.PresenceAttached || not state.GroundMarksAttached then
+                if not state.ChatAttached || not state.SystemAttached || not state.PresenceAttached || not state.GroundMarksAttached
+                   || not state.GuildsAttached then
                     close request state context "Subscription admission failed."
             | IdentityAdmission.AlreadyInUse, _ ->
                 rejectOpening options request state context RequestRejectionCode.SessionAlreadyOpen "Player already has a session."
@@ -423,8 +447,10 @@ module PlayerSession =
             match state.Phase with
             | Active _ when state.Pending.Remove requestId ->
                 send options request state context (ServerResponse.ChatMessageRemoved(ValueSome requestId, message.ChannelId, message.MessageId))
-                message.Author |> ValueOption.iter (fun author ->
-                    audit state context AdminAction.DeletedChatMessage author.PlayerId (ChatMessageText.value message.MessageText))
+                // A guild's own discipline is not server moderation: the guild owner logs it.
+                if ChatChannels.kindOf message.ChannelId <> ValueSome ChatChannelKind.Guild then
+                    message.Author |> ValueOption.iter (fun author ->
+                        audit state context AdminAction.DeletedChatMessage author.PlayerId (ChatMessageText.value message.MessageText))
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected chat removal."
@@ -541,15 +567,15 @@ module PlayerSession =
     let private sendChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId channelId text =
         match state.Phase, reliable context with
         | Active player, Some address ->
-            let kind = ChatChannelKind.tryOfChannelId channelId
+            let channel = ChatChannels.classify channelId
             if requestId = 0UL || state.Pending.Contains requestId then
                 // A second reply with this ID could settle the original request.
                 close request state context "Request ID is invalid or already pending."
             elif muted state then
                 sendRefusal options request state context DeliveryLane.Chat requestId mutedRejection
-            elif kind.IsNone then
+            elif channel.IsNone then
                 rejectChat options request state context requestId RequestRejectionCode.ChannelNotFound "Channel does not exist."
-            elif ChatChannelKind.carriesAnnouncements kind.Value then
+            elif (let struct (kind, _) = channel.Value in ChatChannelKind.carriesAnnouncements kind) then
                 rejectChat options request state context requestId RequestRejectionCode.InvalidRequest "The system channel is read-only."
             elif state.Pending.Count >= options.MaxPendingChat then
                 rejectChat options request state context requestId RequestRejectionCode.Overloaded "Too many pending chat requests."
@@ -558,18 +584,23 @@ module PlayerSession =
                 let rejection = { Code = RequestRejectionCode.TextNotAllowed; Message = "Message contains words that are not allowed."; Field = "text" }
                 sendRefusal options request state context DeliveryLane.Chat requestId rejection
             else
+                let guild = match channel with ValueSome(struct (_, guild)) -> guild | ValueNone -> ValueNone
                 let submission = {
                     ConnectionId = request.ConnectionId
                     RequestId = requestId
-                    Author = publicIdentity state player
+                    Author = if guild.IsSome then PublicIdentity.Profile player.Data else publicIdentity state player
                     Text = text
-                    CharacterName = publicCharacterName state player
+                    CharacterName = if guild.IsSome then guildCharacterName state player else publicCharacterName state player
                     Fingerprint = Moderation.normalize (ChatMessageText.value text)
                     Flagged = Moderation.flag state.Moderation (ChatMessageText.value text)
                     Announcement = ValueNone
                     ReplyTo = address.Map PlayerSessionMessage.ChatEvent
                 }
-                if state.Chat.TrySend(context, ChatRoomCommand.Publish submission) then
+                let admitted =
+                    match guild with
+                    | ValueSome guild -> state.Guilds.TrySend(context, GuildCommand.Publish(guild, submission))
+                    | ValueNone -> state.Chat.TrySend(context, ChatRoomCommand.Publish submission)
+                if admitted then
                     state.Pending.Add requestId |> ignore
                 else
                     rejectChat options request state context requestId RequestRejectionCode.Overloaded "Channel admission is full."
@@ -590,7 +621,7 @@ module PlayerSession =
                 close request state context "Request ID is invalid or already pending."
             elif muted state then
                 sendRefusal options request state context DeliveryLane.Chat requestId mutedRejection
-            elif ChatChannelKind.tryOfChannelId announcement.ChannelId <> Some ChatChannelKind.System then
+            elif ChatChannels.kindOf announcement.ChannelId <> ValueSome ChatChannelKind.System then
                 refuse RequestRejectionCode.InvalidRequest "Announcements are published only in the system channel." "channel_id"
             else
                 match AnnouncementOptions.admit state.Settings.Announcements announcement with
@@ -735,6 +766,8 @@ module PlayerSession =
                         close request state context "Presence admission failed."
                     // Marks without a pseudonym show the author's current profile.
                     state.GroundMarks.TrySend(context, GroundMarkCommand.Rename(request.ConnectionId, updated.Data)) |> ignore
+                    // Guildmates see the new name in the member list.
+                    state.Guilds.TrySend(context, GuildCommand.Rename updated.Data) |> ignore
                 Some updated
         match state.Phase with
         | Opening opening when state.Account <> ValueSome stored ->
@@ -805,9 +838,18 @@ module PlayerSession =
                 let sent = state.AccountModeration.TrySend(context, { OperationId = operationId; Command = command; ReplyTo = address.Map PlayerSessionMessage.ModerationReplied })
                 if sent then state.ModerationRequests[operationId] <- struct (requestId, action)
                 admitted sent
+            // The guild roles, not the server role, decide removals in a guild channel.
+            let guildChannel =
+                match action with
+                | ModerationAction.DeleteMessage(channel, _) ->
+                    match ChatChannels.classify channel with
+                    | ValueSome(struct (ChatChannelKind.Guild, ValueSome guild)) -> ValueSome guild
+                    | ValueSome _ | ValueNone -> ValueNone
+                | ModerationAction.Sanction _ | ModerationAction.Lift _ | ModerationAction.Kick _ | ModerationAction.ListSanctions
+                | ModerationAction.ListMarks _ | ModerationAction.ClearMarks _ -> ValueNone
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
-            elif state.Role <> PlayerRole.Moderator then
+            elif guildChannel.IsNone && state.Role <> PlayerRole.Moderator then
                 refuse RequestRejectionCode.NotPermitted "Only a moderator may do this."
             elif state.Pending.Count >= options.MaxPendingChat then
                 refuse RequestRejectionCode.Overloaded "Too many pending requests."
@@ -824,13 +866,49 @@ module PlayerSession =
                     admitted (state.GroundMarks.TrySend(context, GroundMarkCommand.ClearOf(request.ConnectionId, requestId, target, kinds)))
                 | ModerationAction.DeleteMessage(channel, message) ->
                     let removal = { ConnectionId = request.ConnectionId; RequestId = requestId; MessageId = message; ReplyTo = address.Map PlayerSessionMessage.ChatEvent }
-                    match ChatChannelKind.tryOfChannelId channel with
-                    | Some ChatChannelKind.Global -> admitted (state.Chat.TrySend(context, ChatRoomCommand.Remove removal))
-                    | Some ChatChannelKind.System -> admitted (state.System.TrySend(context, ChatRoomCommand.Remove removal))
-                    | None -> refuse RequestRejectionCode.ChannelNotFound "Channel does not exist."
+                    match ChatChannels.classify channel with
+                    | ValueSome(struct (ChatChannelKind.Global, _)) -> admitted (state.Chat.TrySend(context, ChatRoomCommand.Remove removal))
+                    | ValueSome(struct (ChatChannelKind.System, _)) -> admitted (state.System.TrySend(context, ChatRoomCommand.Remove removal))
+                    | ValueSome(struct (ChatChannelKind.Guild, ValueSome guild)) ->
+                        admitted (state.Guilds.TrySend(context, GuildCommand.Remove(guild, removal)))
+                    | ValueSome(struct (ChatChannelKind.Guild, ValueNone)) | ValueNone ->
+                        refuse RequestRejectionCode.ChannelNotFound "Channel does not exist."
         | Closing, _ -> ()
         | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
             refuse RequestRejectionCode.SessionNotReady "Session is not ready."
+
+    /// A member's guild request: the guild owner decides it, the session settles it.
+    let private guildRequest (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (action: GuildAction) =
+        let refuse code message =
+            sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "" }
+        match state.Phase with
+        | Active _ ->
+            if requestId = 0UL || state.Pending.Contains requestId then
+                close request state context "Request ID is invalid or already pending."
+            elif state.Pending.Count >= options.MaxPendingChat then
+                refuse RequestRejectionCode.Overloaded "Too many pending requests."
+            elif state.Guilds.TrySend(context, GuildCommand.Act { ConnectionId = request.ConnectionId; RequestId = requestId; Action = action }) then
+                state.Pending.Add requestId |> ignore
+            else
+                refuse RequestRejectionCode.Overloaded "Guild admission is full."
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ -> refuse RequestRejectionCode.SessionNotReady "Session is not ready."
+
+    let private guildEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
+        match event with
+        | GuildEvent.Snapshot guilds -> publish options request state context (ServerResponse.GuildsSnapshot guilds)
+        | GuildEvent.Changed change -> publish options request state context (ServerResponse.GuildChanged change)
+        | GuildEvent.Chat event -> chatEvent options request state context event
+        | GuildEvent.Done(requestId, guild) ->
+            match state.Phase with
+            | Active _ when state.Pending.Remove requestId -> send options request state context (ServerResponse.GuildCommandDone(requestId, guild))
+            | Closing -> ()
+            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected guild reply."
+        | GuildEvent.Refused(requestId, rejection) ->
+            match state.Phase with
+            | Active _ when state.Pending.Remove requestId -> sendRefusal options request state context DeliveryLane.Control requestId rejection
+            | Closing -> ()
+            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected guild refusal."
 
     let private moderationReplied (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: ModerationReply) =
         match state.ModerationRequests.TryGetValue reply.OperationId with
@@ -911,6 +989,11 @@ module PlayerSession =
         | PlayerSessionMessage.ChatEvent event -> chatEvent options request state context event
         | PlayerSessionMessage.PresenceEvent event -> presenceEvent options request state context event
         | PlayerSessionMessage.GroundMarkEvent event -> groundMarkEvent options request state context event
+        | PlayerSessionMessage.GuildEvent event -> guildEvent options request state context event
+        | PlayerSessionMessage.Guild(requestId, action) -> guildRequest options request state context requestId action
+        | PlayerSessionMessage.GuildsDetached connectionId ->
+            if connectionId = request.ConnectionId then state.GuildsAttached <- false
+            completeIfDetached state context
         | PlayerSessionMessage.ChatDetached connectionId ->
             if connectionId = request.ConnectionId then state.ChatAttached <- false
             completeIfDetached state context
@@ -976,7 +1059,15 @@ module PlayerSession =
         | PlayerSessionMessage.Begin | PlayerSessionMessage.Authenticated _
         | PlayerSessionMessage.IdentityReplied _ | PlayerSessionMessage.IdentityChanged _
         | PlayerSessionMessage.ChatDetached _ | PlayerSessionMessage.SystemDetached _
-        | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.Stop -> true
+        | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.GuildsDetached _
+        | PlayerSessionMessage.Stop -> true
+        // The guild owner must be able to settle a request and open the session's guilds.
+        | PlayerSessionMessage.GuildEvent (GuildEvent.Done _ | GuildEvent.Refused _ | GuildEvent.Snapshot _)
+        | PlayerSessionMessage.GuildEvent (GuildEvent.Chat (ChatRoomEvent.Accepted _ | ChatRoomEvent.Rejected _ | ChatRoomEvent.Removed(ValueSome _, _))) -> true
+        | PlayerSessionMessage.GuildEvent (GuildEvent.Changed _)
+        | PlayerSessionMessage.GuildEvent (GuildEvent.Chat (ChatRoomEvent.Published _ | ChatRoomEvent.Removed(ValueNone, _)))
+        | PlayerSessionMessage.GuildEvent (GuildEvent.Chat (ChatRoomEvent.Joined _ | ChatRoomEvent.JoinFailed _))
+        | PlayerSessionMessage.Guild _ -> false
         // Rare administrator changes use the reserve so a busy session still applies them.
         | PlayerSessionMessage.RoleChanged _ | PlayerSessionMessage.ProfileChanged _ | PlayerSessionMessage.MuteChanged _ -> true
         // The account service must be able to settle a pending change.
@@ -999,8 +1090,9 @@ module PlayerSession =
         | PlayerSessionMessage.Read _ | PlayerSessionMessage.Describe _ | PlayerSessionMessage.ChangeDisplayName _
         | PlayerSessionMessage.Moderate _ -> false
 
-    /// chat and system are the owners of the global and the system channel; marks owns the ground marks.
-    let start (settings: GameSettings) moderation authentication displayNames accountModeration chat system presence marks host (logger: ILogger) (request: SessionOpenRequest) =
+    /// chat and system are the owners of the global and the system channel; marks owns
+    /// the ground marks, guilds the guilds and their channels.
+    let start (settings: GameSettings) moderation authentication displayNames accountModeration chat system presence marks guilds host (logger: ILogger) (request: SessionOpenRequest) =
         let options = settings.Runtime.Player
         let reserve = PlayerSessionOptions.OutboxReserve
         let state = {
@@ -1009,6 +1101,7 @@ module PlayerSession =
             SystemAttached = false
             PresenceAttached = false
             GroundMarksAttached = false
+            GuildsAttached = false
             CloseSent = false
             CharacterWithheld = false
             Pseudonym = ValueNone
@@ -1031,6 +1124,7 @@ module PlayerSession =
             System = AgentOutbox(options.MaxPendingChat + reserve, system)
             Presence = AgentOutbox(options.MaxPendingUpdates + reserve, presence)
             GroundMarks = AgentOutbox(options.MaxPendingUpdates + options.MaxPendingChat + reserve, marks)
+            Guilds = AgentOutbox(options.MaxPendingChat + reserve, guilds)
             Host = AgentOutbox(options.MaxPendingOutput + reserve, host)
             Logger = logger
         }

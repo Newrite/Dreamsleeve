@@ -128,7 +128,10 @@ namespace
       auto packet = Value(DreamNetPacket::TryAllocateWith(message.ByteSizeLong(), [&](std::span<std::byte> bytes) {
         return message.SerializeToArray(bytes.data(), static_cast<int>(bytes.size()));
       }));
-      auto channel = message.has_chat_published() || message.has_chat_message_removed() ? 1 : 0;
+      // A guild channel's chat comes on the control lane, like the server sends it.
+      const auto chat =
+        message.has_chat_published() ? message.chat_published().message().channel_id() : message.chat_message_removed().channel_id();
+      auto channel = (message.has_chat_published() || message.has_chat_message_removed()) && !Domain::IsGuildChannel(chat) ? 1 : 0;
       if (message.has_request_rejected())
       {
         const auto request = std::ranges::find(requests, message.request_id(), &P::ClientPacket::request_id);
@@ -1495,6 +1498,146 @@ TEST_CASE("Moderator requests settle by request ID; a removed message leaves eve
   listMarks(8);
   fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
   CHECK(fixture.exchange->Status().role == Domain::PlayerRole::Player);
+}
+
+TEST_CASE("Guilds follow the welcome with their channels, change in the server's order and settle requests by ID")
+{
+  Fixture    fixture;
+  const auto generation = Ready(fixture);
+  CHECK_FALSE(fixture.exchange->Status().guilds);
+  constexpr auto first  = Domain::GuildChannelBase + 4;
+  constexpr auto second = Domain::GuildChannelBase + 5;
+
+  const auto fill = [](P::Guild& guild, std::uint64_t guildId, std::uint64_t messageId) {
+    guild.set_guild_id(guildId);
+    guild.set_name("Guild" + std::to_string(guildId));
+    guild.set_channel_id(Domain::GuildChannelBase + guildId);
+    auto* member = guild.add_members();
+    member->mutable_profile()->set_player_id(7);
+    member->mutable_profile()->set_username("user");
+    member->mutable_profile()->set_display_name("Player");
+    member->set_role(P::GUILD_ROLE_MASTER);
+    if (messageId == 0) return;
+    auto* message = guild.add_recent_messages();
+    message->set_message_id(messageId);
+    message->set_channel_id(Domain::GuildChannelBase + guildId);
+    *message->mutable_author() = member->profile();
+    message->set_text("guild");
+  };
+  const auto change = [&](auto write) {
+    P::ServerPacket packet;
+    packet.set_protocol_version(Wire::Version);
+    write(*packet.mutable_guild_changed());
+    fixture.Send(packet);
+  };
+  // Until repeats the predicate once more: keep everything drained so far.
+  const auto collect = [&](auto done) {
+    ClientOutput all;
+    fixture.Until([&] {
+      if (done(all)) return true;
+      ClientOutput next;
+      fixture.exchange->Drain(next);
+      std::ranges::move(next.state.updates, std::back_inserter(all.state.updates));
+      std::ranges::move(next.results, std::back_inserter(all.results));
+      all.status = std::move(next.status);
+      return done(all);
+    });
+    return all;
+  };
+  const auto chatState = [](const ClientOutput& output, Domain::ChatChannelId channel) {
+    std::optional<std::optional<ChatCacheState>> found;
+    for (const auto& update : output.state.updates)
+      for (const auto& state : std::get<ClientStateDelta>(update).chats)
+        if (state.channelId == channel) found = state.state;
+    return found;
+  };
+
+  P::ServerPacket snapshot;
+  snapshot.set_protocol_version(Wire::Version);
+  fill(*snapshot.mutable_guilds_snapshot()->add_guilds(), 4, 1);
+  auto* invite = snapshot.mutable_guilds_snapshot()->add_invites();
+  invite->set_guild_id(5);
+  invite->set_guild_name("Guild5");
+  invite->set_invited_by_player_id(9);
+  snapshot.mutable_guilds_snapshot()->mutable_limits()->set_max_guilds_per_player(3);
+  fixture.Send(snapshot);
+  const auto opened = collect([](const ClientOutput& output) { return output.status.guilds != nullptr; });
+  REQUIRE(opened.status.guilds->Guilds().size() == 1);
+  CHECK(opened.status.guilds->Invites().size() == 1);
+  CHECK(opened.status.guilds->Limits().maxGuildsPerPlayer == 3);
+  const auto firstState = chatState(opened, first);
+  REQUIRE((firstState && *firstState));
+  CHECK((*firstState)->kind == Domain::ChatChannelKind::Guild);
+  const auto history = Added(opened);
+  REQUIRE(history.size() == 1);
+  CHECK(history[0].channelId == first);
+
+  // Accepting an invitation: the invitation goes, the guild comes, then the answer.
+  const auto answerId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        GuildRequest{answerId, AnswerGuildInvite{5, true}}
+  }) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  CHECK(fixture.requests.back().guild_command().answer().guild_id() == 5);
+  change([](P::GuildChanged& changed) { changed.set_invite_removed(5); });
+  change([&](P::GuildChanged& changed) { fill(*changed.mutable_added(), 5, 0); });
+  P::ServerPacket done;
+  done.set_protocol_version(Wire::Version);
+  done.set_request_id(answerId);
+  done.mutable_guild_command_done()->set_guild_id(5);
+  fixture.Send(done);
+  const auto joined = collect([](const ClientOutput& output) { return !output.results.empty(); });
+  REQUIRE(ResultsOf<GuildDone>(joined).size() == 1);
+  CHECK(ResultsOf<GuildDone>(joined)[0].value.guildId == 5);
+  CHECK(joined.status.guilds->Guilds().size() == 2);
+  CHECK(joined.status.guilds->Invites().empty());
+  CHECK(joined.status.guilds != opened.status.guilds);
+  CHECK(chatState(joined, second));
+
+  // Guild chat goes out on the chat lane and its acceptance comes on the control lane.
+  const auto chatId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        SendChat{chatId, second, "в гильдию"}
+  }) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 3; });
+  CHECK(fixture.requests.back().send_chat().channel_id() == second);
+  auto accepted = Publication(chatId, 1);
+  accepted.mutable_chat_published()->mutable_message()->set_channel_id(second);
+  fixture.Send(accepted);
+  const auto published = collect([](const ClientOutput& output) { return !output.results.empty(); });
+  REQUIRE(ResultsOf<MessagePublished>(published).size() == 1);
+
+  // Leaving takes the channel along.
+  change([](P::GuildChanged& changed) {
+    changed.mutable_removed()->set_guild_id(4);
+    changed.mutable_removed()->set_reason(P::GUILD_REMOVAL_REASON_LEFT);
+  });
+  const auto left = collect([&](const ClientOutput& output) { return output.status.guilds && output.status.guilds->Guilds().size() == 1; });
+  const auto gone = chatState(left, first);
+  REQUIRE(gone);
+  CHECK_FALSE(*gone);
+  const auto refusedId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        SendChat{refusedId, first, "поздно"}
+  }) == CommandPostResult::Queued);
+  const auto refused = collect([](const ClientOutput& output) { return !output.results.empty(); });
+  REQUIRE(ResultsOf<CommandFailureCode>(refused).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(refused)[0].value == CommandFailureCode::InvalidRequest);
+
+  // A change to a guild the player is not in breaks the protocol.
+  change([](P::GuildChanged& changed) {
+    changed.mutable_member_removed()->set_guild_id(4);
+    changed.mutable_member_removed()->set_player_id(9);
+    changed.mutable_member_removed()->set_reason(P::GUILD_REMOVAL_REASON_LEFT);
+  });
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Faulted; });
+  CHECK_FALSE(fixture.exchange->Status().guilds);
 }
 
 TEST_CASE("A display name change settles once, one at a time, and a refusal keeps the session")

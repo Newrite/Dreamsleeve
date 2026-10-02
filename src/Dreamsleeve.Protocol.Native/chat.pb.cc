@@ -402,23 +402,23 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "allowed_sources\030\001 \003(\01623.Dreamsleeve.Prot"
     "ocol.Chat.ClientAnnouncementSource\022\027\n\017ma"
     "x_text_length\030\002 \001(\r\022\034\n\024max_signature_len"
-    "gth\030\003 \001(\r*p\n\017ChatChannelKind\022!\n\035CHAT_CHA"
-    "NNEL_KIND_UNSPECIFIED\020\000\022\034\n\030CHAT_CHANNEL_"
-    "KIND_GLOBAL\020\001\022\034\n\030CHAT_CHANNEL_KIND_SYSTE"
-    "M\020\005*\246\001\n\022AnnouncementSource\022#\n\037ANNOUNCEME"
-    "NT_SOURCE_UNSPECIFIED\020\000\022\036\n\032ANNOUNCEMENT_"
-    "SOURCE_SERVER\020\001\022&\n\"ANNOUNCEMENT_SOURCE_T"
-    "RUSTED_CLIENT\020\002\022#\n\037ANNOUNCEMENT_SOURCE_T"
-    "HIRD_PARTY\020\003*\263\001\n\020AnnouncementKind\022!\n\035ANN"
-    "OUNCEMENT_KIND_UNSPECIFIED\020\000\022\"\n\036ANNOUNCE"
-    "MENT_KIND_ANNOUNCEMENT\020\001\022\033\n\027ANNOUNCEMENT"
-    "_KIND_EVENT\020\002\022\033\n\027ANNOUNCEMENT_KIND_ADMIN"
-    "\020\003\022\036\n\032ANNOUNCEMENT_KIND_PERIODIC\020\004*\241\001\n\030C"
-    "lientAnnouncementSource\022*\n&CLIENT_ANNOUN"
-    "CEMENT_SOURCE_UNSPECIFIED\020\000\022-\n)CLIENT_AN"
-    "NOUNCEMENT_SOURCE_TRUSTED_CLIENT\020\001\022*\n&CL"
-    "IENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY\020\002b\006"
-    "proto3"
+    "gth\030\003 \001(\r*\215\001\n\017ChatChannelKind\022!\n\035CHAT_CH"
+    "ANNEL_KIND_UNSPECIFIED\020\000\022\034\n\030CHAT_CHANNEL"
+    "_KIND_GLOBAL\020\001\022\033\n\027CHAT_CHANNEL_KIND_GUIL"
+    "D\020\003\022\034\n\030CHAT_CHANNEL_KIND_SYSTEM\020\005*\246\001\n\022An"
+    "nouncementSource\022#\n\037ANNOUNCEMENT_SOURCE_"
+    "UNSPECIFIED\020\000\022\036\n\032ANNOUNCEMENT_SOURCE_SER"
+    "VER\020\001\022&\n\"ANNOUNCEMENT_SOURCE_TRUSTED_CLI"
+    "ENT\020\002\022#\n\037ANNOUNCEMENT_SOURCE_THIRD_PARTY"
+    "\020\003*\263\001\n\020AnnouncementKind\022!\n\035ANNOUNCEMENT_"
+    "KIND_UNSPECIFIED\020\000\022\"\n\036ANNOUNCEMENT_KIND_"
+    "ANNOUNCEMENT\020\001\022\033\n\027ANNOUNCEMENT_KIND_EVEN"
+    "T\020\002\022\033\n\027ANNOUNCEMENT_KIND_ADMIN\020\003\022\036\n\032ANNO"
+    "UNCEMENT_KIND_PERIODIC\020\004*\241\001\n\030ClientAnnou"
+    "ncementSource\022*\n&CLIENT_ANNOUNCEMENT_SOU"
+    "RCE_UNSPECIFIED\020\000\022-\n)CLIENT_ANNOUNCEMENT"
+    "_SOURCE_TRUSTED_CLIENT\020\001\022*\n&CLIENT_ANNOU"
+    "NCEMENT_SOURCE_THIRD_PARTY\020\002b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_chat_2eproto_deps[1] = {
@@ -428,7 +428,7 @@ static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    1846,
+    1876,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
@@ -449,7 +449,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL ChatChannelKind_descr
   return file_level_enum_descriptors_chat_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t ChatChannelKind_internal_data_[] = {
-    131072u, 32u, 8u, };
+    131072u, 32u, 10u, };
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL AnnouncementSource_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_chat_2eproto);
   return file_level_enum_descriptors_chat_2eproto[1];

@@ -93,6 +93,10 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<Domain::SanctionKind> Kind(int);
   Result<Domain::Sanction>     ReadSanction(const P::SanctionEntry&);
 
+  void                   WriteGuild(P::GuildCommand&, const GuildAction&);
+  Result<GuildsSnapshot> ReadGuilds(const Configuration&, const P::GuildsSnapshot&);
+  Result<GuildChanged>   ReadGuildChanged(const Configuration&, const P::GuildChanged&);
+
   void                  WriteSession(P::OpenSession&, const OpenSession&);
   Result<SessionOpened> Welcome(const Configuration&, std::uint64_t, const P::SessionOpened&);
   Domain::MuteState     Mute(const P::MuteState&);

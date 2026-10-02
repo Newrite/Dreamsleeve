@@ -115,9 +115,9 @@ ActivityKey = 64
 MaxSessions = 512
 # Runtime mailbox, messages, >= 1; every incoming packet passes it.
 MailboxCapacity = 32768
-# Extra mailbox room for control messages, at least 4 * MaxSessions + 4: one cleanup
-# acknowledgement per source (chat, system, presence, ground marks) per session.
-ControlReserve = 2052
+# Extra mailbox room for control messages, at least 5 * MaxSessions + 5: one cleanup
+# acknowledgement per source (chat, system, presence, ground marks, guilds) per session.
+ControlReserve = 2565
 # A new connection must send its first request, and a session must finish signing in,
 # within this many milliseconds, >= 1.
 OpenTimeoutMs = 10000
@@ -446,3 +446,35 @@ Burst = 3
 RefillMs = 20000
 # Repeated text window, milliseconds, >= 0; 0 = off.
 DuplicateWindowMs = 300000
+
+# Guilds (docs/GuildsRu.md): a master, officers and members, their own chat and
+# discipline. Persistent in SQLite. Every limit is soft: lowering one removes
+# nobody, it only refuses what would grow the excess (an invitation is checked
+# when it is accepted). Guild chat follows [Runtime.Chat.Rate].
+[Guilds]
+# Guilds on the server, 1..1000000.
+MaxGuilds = 10000
+# Guilds a player is in, the ones they master included, 1..100.
+MaxGuildsPerPlayer = 3
+# Members of one guild, 2..10000.
+MaxMembers = 64
+# Pending invitations of one guild, 1..10000.
+MaxInvites = 32
+# Bounds of a guild name in characters (Unicode scalar values), 1..64. A name has
+# letters and digits only, passes the word list and is unique regardless of case.
+NameMinLength = 3
+NameMaxLength = 24
+# Days an invitation waits for an answer, 1..365.
+InviteDays = 7
+# Chat messages each guild keeps in memory, >= 1 and at most Server.MaxRecentMessages.
+HistoryCapacity = 200
+# Owner mailbox, messages, >= 1.
+MailboxCapacity = 2048
+# Extra mailbox room for control messages, >= 1.
+ControlReserve = 64
+# Control messages the owner may have in flight to the runtime, >= 1.
+MaxControlDeliveries = 128
+# Queued storage writes before the owner treats the database as broken and stops, >= 1.
+MaxPendingWrites = 1024
+# How often expired invitations and guild mutes are collected, milliseconds, >= 1000.
+InviteCheckIntervalMs = 60000

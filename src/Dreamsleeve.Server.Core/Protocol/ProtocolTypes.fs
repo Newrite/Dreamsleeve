@@ -49,6 +49,73 @@ type GroundMarkView = {
     Clear: bool
 }
 
+/// What a member asks of their guilds; the guild owner decides who may.
+[<RequireQualifiedAccess>]
+type GuildAction =
+    /// Checked by the guild owner against [Guilds] and the word list.
+    | Create of name: string
+    /// An online player.
+    | Invite of GuildId * PlayerId
+    | Answer of GuildId * accept: bool
+    | Leave of GuildId
+    | Exclude of GuildId * PlayerId
+    /// Member or Officer; only the master assigns them.
+    | SetRole of GuildId * PlayerId * GuildRole
+    | Transfer of GuildId * PlayerId
+    | Mute of GuildId * PlayerId * SanctionTerm * SanctionReason
+    | Unmute of GuildId * PlayerId
+    | Disband of GuildId
+
+/// A member as guildmates see them: the real profile after the word list,
+/// never a pseudonym, and whether they are online.
+type GuildMemberView = {
+    Membership: GuildMember
+    Profile: PlayerData
+    Online: bool
+}
+
+type GuildView = {
+    Guild: GuildId
+    Name: GuildName
+    ChannelId: ChatChannelId
+    CreatedAt: DateTimeOffset
+    Members: GuildMemberView list
+    /// Retained chat history, oldest first; empty in a member change.
+    Messages: ChatMessage list
+}
+
+/// An invitation as the invited player sees it: the inviter is named only by
+/// ID, so a pseudonym the inviter hides behind stays one.
+type GuildInviteView = {
+    Invite: GuildInvite
+    GuildName: GuildName
+}
+
+/// Every guild of a player and their invitations, with the server's limits.
+type GuildState = {
+    Guilds: GuildView list
+    Invites: GuildInviteView list
+    Limits: GuildLimits
+}
+
+[<RequireQualifiedAccess>]
+type GuildRemoval =
+    | Left
+    | Excluded
+    | Disbanded
+
+[<RequireQualifiedAccess>]
+type GuildChange =
+    /// The player created or joined it.
+    | Added of GuildView
+    | Removed of GuildId * GuildRemoval
+    /// A member joined, or their role, guild mute, online state or name changed.
+    | MemberChanged of GuildId * GuildMemberView
+    | MemberRemoved of GuildId * PlayerId * GuildRemoval
+    | Invited of GuildInviteView
+    /// Accepted, declined, expired or the guild disbanded.
+    | InviteRemoved of GuildId
+
 [<RequireQualifiedAccess>]
 type ClientCommand =
     | OpenSession of sessionTicket: string * HiddenIdentity
@@ -71,6 +138,7 @@ type ClientCommand =
     | ListPlayerMarks of PlayerId
     | ClearPlayerMarks of PlayerId * GroundMarkKind list
     | DeleteChatMessage of ChatChannelId * ChatMessageId
+    | Guild of GuildAction
 
 type ClientRequest = {
     RequestId: uint64
@@ -193,6 +261,11 @@ type ServerResponse =
     | PlayerMarksCleared of requestId: uint64 * PlayerId * removed: int
     /// Every member drops the message; the request ID only in the requester's copy.
     | ChatMessageRemoved of requestId: uint64 voption * ChatChannelId * ChatMessageId
+    /// After SessionOpened: the player's guilds and invitations, replacing what the client knew.
+    | GuildsSnapshot of GuildState
+    | GuildChanged of GuildChange
+    /// Settles a guild command; the effect arrives as GuildChanged.
+    | GuildCommandDone of requestId: uint64 * GuildId
 
 /// How a response travels: its lane, the request it settles (none for a
 /// notification) and whether it may leave while the session is still opening.

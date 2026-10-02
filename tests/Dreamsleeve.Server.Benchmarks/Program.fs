@@ -138,6 +138,8 @@ let private start count (probe: Probe) = task {
     // Nothing is placed on the ground; writes would only be discarded.
     let writer = Agent.Start(AgentOptions.create "benchmark-mark-writer", fun _ (_: GroundMarkWrite) -> task { () })
     let marks = { Loaded = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value }
+    let guildWriter = Agent.Start(AgentOptions.create "benchmark-guild-writer", fun _ (_: GuildWrite) -> task { () })
+    let guilds = { Loaded = []; Profiles = []; NextId = 1UL; Writer = guildWriter.Ref.TryReliable().Value; WriterStopped = guildWriter.Completion }
     let incoming = ConcurrentQueue<ServerTransportEvent>()
     let mutable ready = fun () -> false
     let deliver event =
@@ -168,8 +170,8 @@ let private start count (probe: Probe) = task {
             Chat = { ServerRuntimeOptions.defaults.Chat with MailboxCapacity = 256; HistoryCapacity = 64; Rate = unlimited }
     }
     let announcements = { AnnouncementOptions.defaults with HistoryCapacity = 64 }
-    let game = GameSettings.create settings options IdentityOptions.defaults announcements GroundMarkOptions.defaults |> ok
-    let runtime = ServerRuntime.start game Moderation.empty PseudonymDictionary.builtIn marks authenticator transport
+    let game = GameSettings.create settings options IdentityOptions.defaults announcements GroundMarkOptions.defaults GuildOptions.defaults |> ok
+    let runtime = ServerRuntime.start game Moderation.empty PseudonymDictionary.builtIn marks guilds authenticator transport
                       Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance
     for index in 0 .. count - 1 do
         let welcome = probe.Expect(ids[index], 1UL)

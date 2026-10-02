@@ -10,6 +10,7 @@
     <Compile Include="DomainTests.fs" />
     <Compile Include="IdentityTests.fs" />
     <Compile Include="GroundMarkDomainTests.fs" />
+    <Compile Include="GuildDomainTests.fs" />
     <Compile Include="ModerationTests.fs" />
     <Compile Include="PlayerDetailsTests.fs" />
     <Compile Include="AgentTests.fs" />
@@ -40,6 +41,7 @@
     <Compile Include="ConfigurationTests.fs" />
     <Compile Include="AnnouncementTests.fs" />
     <Compile Include="GroundMarkTests.fs" />
+    <Compile Include="GuildTests.fs" />
     <Compile Include="AuthenticationHttpTests.fs" />
     <Compile Include="AdminHttpTests.fs" />
     <Compile Include="Program.fs" />

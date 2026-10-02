@@ -44,6 +44,14 @@ export namespace Protocol::Chat
     Muted                       = 16,
     NotPermitted                = 17,
     TargetNotFound              = 18,
+    GuildNameTaken              = 19,
+    GuildFull                   = 20,
+    GuildPlayerLimit            = 21,
+    GuildServerLimit            = 22,
+    GuildInvitesFull            = 23,
+    GuildAlreadyMember          = 24,
+    GuildAlreadyInvited         = 25,
+    GuildMasterStays            = 26,
   };
 
 }
@@ -100,6 +108,7 @@ export namespace Protocol::Chat
   {
     Unspecified = 0,
     Global      = 1,
+    Guild       = 3,
     System      = 5,
   };
 
@@ -201,6 +210,32 @@ export namespace Protocol::Chat
     Unspecified = 0,
     Mute        = 1,
     Ban         = 2,
+  };
+
+}
+
+export namespace Protocol::Chat
+{
+
+  enum class GuildRole : std::int32_t
+  {
+    Unspecified = 0,
+    Member      = 1,
+    Officer     = 2,
+    Master      = 3,
+  };
+
+}
+
+export namespace Protocol::Chat
+{
+
+  enum class GuildRemovalReason : std::int32_t
+  {
+    Unspecified = 0,
+    Left        = 1,
+    Excluded    = 2,
+    Disbanded   = 3,
   };
 
 }

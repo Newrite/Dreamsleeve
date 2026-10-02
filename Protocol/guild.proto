@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package Dreamsleeve.Protocol.Chat;
+
+import "common.proto";
+import "chat.proto";
+import "session.proto";
+
+// Guilds (version 19; docs/GuildsRu.md, docs/DomainSpecRu.MD §4.7). A guild has
+// one chat channel (ChatChannelKind GUILD): members write in it with SendChat
+// and receive ChatPublished like in any channel; the master and officers remove
+// messages with DeleteChatMessage. Members see each other's real names, even a
+// member who hides them elsewhere; an invited player outside the guild sees
+// only the inviter's ID. All guild messages go on the Control lane, and so do
+// ChatPublished, the acceptance of SendChat and ChatMessageRemoved in a guild
+// channel: no guild message overtakes the guild or trails its removal. A guild
+// channel's ID is 4294967296 + guild_id.
+
+enum GuildRole {
+  GUILD_ROLE_UNSPECIFIED = 0;
+  GUILD_ROLE_MEMBER = 1;
+  GUILD_ROLE_OFFICER = 2;
+  GUILD_ROLE_MASTER = 3;
+}
+
+message GuildMember {
+  PlayerProfile profile = 1; // Real names after the server word list; never a pseudonym.
+  GuildRole role = 2;
+  bool online = 3;
+  MuteState mute = 4; // Present while muted in this guild: reading only.
+  int64 joined_at_unix_ms = 5;
+}
+
+message Guild {
+  uint64 guild_id = 1;
+  string name = 2;
+  uint64 channel_id = 3; // The guild's chat channel.
+  int64 created_at_unix_ms = 4;
+  repeated GuildMember members = 5;
+  repeated ChatMessage recent_messages = 6; // Retained history, oldest first.
+}
+
+message GuildInvite {
+  uint64 guild_id = 1;
+  string guild_name = 2;
+  uint64 invited_by_player_id = 3; // Resolved like any player ID: a pseudonym stays one.
+  int64 expires_at_unix_ms = 4;
+}
+
+// The server's limits; a lowered limit removes nobody.
+message GuildLimits {
+  uint32 max_guilds_per_player = 1; // Guilds a player is in, own ones included.
+  uint32 max_members = 2;
+  uint32 name_min_length = 3; // Unicode scalar values.
+  uint32 name_max_length = 4;
+}
+
+// After SessionOpened: every guild of the player and their invitations; it
+// replaces what the client knew. GuildChanged follows.
+message GuildsSnapshot {
+  repeated Guild guilds = 1;
+  repeated GuildInvite invites = 2;
+  GuildLimits limits = 3;
+}
+
+enum GuildRemovalReason {
+  GUILD_REMOVAL_REASON_UNSPECIFIED = 0;
+  GUILD_REMOVAL_REASON_LEFT = 1;
+  GUILD_REMOVAL_REASON_EXCLUDED = 2;
+  GUILD_REMOVAL_REASON_DISBANDED = 3;
+}
+
+message GuildRemoved {
+  uint64 guild_id = 1;
+  GuildRemovalReason reason = 2;
+}
+
+// A member joined, or their role, guild mute, online state or name changed.
+message GuildMemberUpdate {
+  uint64 guild_id = 1;
+  GuildMember member = 2;
+}
+
+message GuildMemberRemoved {
+  uint64 guild_id = 1;
+  uint64 player_id = 2;
+  GuildRemovalReason reason = 3;
+}
+
+message GuildChanged {
+  oneof change {
+    Guild added = 1; // The player created or joined it.
+    GuildRemoved removed = 2; // The player left, was excluded, or it was disbanded.
+    GuildMemberUpdate member = 3;
+    GuildMemberRemoved member_removed = 4;
+    GuildInvite invited = 5;
+    uint64 invite_removed = 6; // Guild ID: accepted, declined, expired or disbanded.
+  }
+}
+
+message CreateGuild { string name = 1; } // Letters and digits only; unique regardless of case.
+message InviteToGuild { uint64 guild_id = 1; uint64 player_id = 2; } // An online player.
+message AnswerGuildInvite { uint64 guild_id = 1; bool accept = 2; }
+message LeaveGuild { uint64 guild_id = 1; } // Not the master.
+message ExcludeGuildMember { uint64 guild_id = 1; uint64 player_id = 2; }
+message SetGuildRole { uint64 guild_id = 1; uint64 player_id = 2; GuildRole role = 3; } // MEMBER or OFFICER.
+message TransferGuild { uint64 guild_id = 1; uint64 player_id = 2; } // The master becomes an officer.
+message MuteGuildMember {
+  uint64 guild_id = 1;
+  uint64 player_id = 2;
+  optional uint32 minutes = 3; // Absent: until lifted.
+  string reason = 4;
+}
+message UnmuteGuildMember { uint64 guild_id = 1; uint64 player_id = 2; }
+message DisbandGuild { uint64 guild_id = 1; }
+
+message GuildCommand {
+  oneof action {
+    CreateGuild create = 1;
+    InviteToGuild invite = 2;
+    AnswerGuildInvite answer = 3;
+    LeaveGuild leave = 4;
+    ExcludeGuildMember exclude = 5;
+    SetGuildRole set_role = 6;
+    TransferGuild transfer = 7;
+    MuteGuildMember mute = 8;
+    UnmuteGuildMember unmute = 9;
+    DisbandGuild disband = 10;
+  }
+}
+
+// Settles a GuildCommand; its effect arrives as GuildChanged.
+message GuildCommandDone {
+  uint64 guild_id = 1;
+}

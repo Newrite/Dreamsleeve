@@ -7,8 +7,10 @@ import "session.proto";
 import "player.proto";
 import "ground.proto";
 import "moderation.proto";
+import "guild.proto";
 
-// Control/chat envelope. Version 18 lets a moderator's ban cover the player's devices;
+// Control/chat envelope. Version 19 adds guilds;
+// version 18 lets a moderator's ban cover the player's devices;
 // version 17 ends sessions from a banned IP range;
 // version 16 batches presence per replication tick,
 // numbers actor value kinds and sends whole-point resources and metadata patches;
@@ -42,6 +44,7 @@ message ClientPacket {
     ListPlayerMarks list_player_marks = 24; // Control lane.
     ClearPlayerMarks clear_player_marks = 25; // Control lane.
     DeleteChatMessage delete_chat_message = 26; // Chat lane.
+    GuildCommand guild_command = 27; // Control lane.
   }
 }
 
@@ -56,7 +59,7 @@ message ServerPacket {
     "player_visibility_changed", "player_metadata_changed";
   oneof payload {
     SessionOpened session_opened = 10;
-    ChatPublished chat_published = 11;
+    ChatPublished chat_published = 11; // Chat lane; Control lane in a guild channel.
     RequestRejected request_rejected = 12;
     PlayerUpdateAccepted player_update_accepted = 16;
     PresenceChanged presence_changed = 37; // Control lane, no request_id.
@@ -75,7 +78,10 @@ message ServerPacket {
     SanctionList sanction_list = 33; // Control lane, request_id required.
     PlayerMarks player_marks = 34; // Control lane, request_id required.
     PlayerMarksCleared player_marks_cleared = 35; // Control lane, request_id required.
-    ChatMessageRemoved chat_message_removed = 36; // Chat lane; request_id only for the requester.
+    ChatMessageRemoved chat_message_removed = 36; // Like ChatPublished; request_id only for the requester.
+    GuildsSnapshot guilds_snapshot = 38; // Control lane, no request_id; after SessionOpened.
+    GuildChanged guild_changed = 39; // Control lane, no request_id.
+    GuildCommandDone guild_command_done = 40; // Control lane, request_id required.
   }
 }
 
@@ -103,7 +109,15 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED = 15; // The server does not let players change their display name.
   REQUEST_REJECTION_CODE_MUTED = 16; // The sender is muted (see MuteState).
   REQUEST_REJECTION_CODE_NOT_PERMITTED = 17; // Not a moderator, or the target is not a player it outranks.
-  REQUEST_REJECTION_CODE_TARGET_NOT_FOUND = 18; // No such player, sanction in force or message.
+  REQUEST_REJECTION_CODE_TARGET_NOT_FOUND = 18; // No such player, sanction in force, message, guild or invitation.
+  REQUEST_REJECTION_CODE_GUILD_NAME_TAKEN = 19; // Another guild has the name, in any case.
+  REQUEST_REJECTION_CODE_GUILD_FULL = 20; // The guild has the maximum number of members.
+  REQUEST_REJECTION_CODE_GUILD_PLAYER_LIMIT = 21; // The player is in the maximum number of guilds.
+  REQUEST_REJECTION_CODE_GUILD_SERVER_LIMIT = 22; // The server has the maximum number of guilds.
+  REQUEST_REJECTION_CODE_GUILD_INVITES_FULL = 23; // The guild has the maximum number of pending invitations.
+  REQUEST_REJECTION_CODE_GUILD_ALREADY_MEMBER = 24; // The player is in the guild already.
+  REQUEST_REJECTION_CODE_GUILD_ALREADY_INVITED = 25; // The player has an invitation to the guild already.
+  REQUEST_REJECTION_CODE_GUILD_MASTER_STAYS = 26; // The master hands the role over or disbands the guild before leaving.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

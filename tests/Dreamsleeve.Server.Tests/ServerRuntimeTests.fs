@@ -73,6 +73,9 @@ let private authentication (agent: Agent<SessionAuthenticationRequest>) : Sessio
 let private persistence (writer: Agent<GroundMarkWrite>) : GroundMarkPersistence =
     { Loaded = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value }
 let private discard (_: AgentContext<GroundMarkWrite>) (_: GroundMarkWrite) = task { () }
+let private guildStorage (writer: Agent<GuildWrite>) : GuildPersistence =
+    { Loaded = []; Profiles = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
+let private discardGuilds (_: AgentContext<GuildWrite>) (_: GuildWrite) = task { () }
 let private chat requestId text = packet requestId (fun packet -> packet.SendChat <- SendChat(ChannelId = 1UL, Text = text))
 
 let private beginCharacter requestId name =
@@ -155,8 +158,9 @@ let private withRuntimeNamed options identity pseudonyms createAuthentication ru
     }
     use authenticator = createAuthentication ()
     use writer = Agent.Start(AgentOptions.create "writer", discard)
+    use guildWriter = Agent.Start(AgentOptions.create "guild-writer", discardGuilds)
     let game = Settings.game ServerConfig.defaults options identity AnnouncementOptions.defaults GroundMarkOptions.defaults
-    use runtime = ServerRuntime.start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (authentication authenticator) transport NullLogger.Instance
+    use runtime = ServerRuntime.start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport NullLogger.Instance
     let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
@@ -339,10 +343,15 @@ let tests = testList "ServerRuntime" [
             let alice = connect fixture "alice"
             do! post fixture.Runtime (tick ())
             let! _ = welcome fixture alice
-            // Protocol v9: the (empty) own mark list follows the welcome on the control lane.
-            let! _, own = nextWhere fixture (fun target packet -> target = alice)
+            // Protocol v9: the (empty) own mark list follows the welcome on the control lane;
+            // v19: so does the (empty) guild snapshot, in either order.
+            let! _, first = nextWhere fixture (fun target _ -> target = alice)
+            let! _, second = nextWhere fixture (fun target _ -> target = alice)
+            let own, guilds = if first.PayloadCase = ServerPacket.PayloadOneofCase.OwnGroundMarks then first, second else second, first
             equal ServerPacket.PayloadOneofCase.OwnGroundMarks own.PayloadCase
             equal 0 own.OwnGroundMarks.Marks.Count
+            equal ServerPacket.PayloadOneofCase.GuildsSnapshot guilds.PayloadCase
+            equal 0 guilds.GuildsSnapshot.Guilds.Count
             let pid = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
             let point = Dreamsleeve.Server.Domain.Position.create 2.f 0.f 0.f |> ok
             let change: Dreamsleeve.Server.Domain.MovementChange = {

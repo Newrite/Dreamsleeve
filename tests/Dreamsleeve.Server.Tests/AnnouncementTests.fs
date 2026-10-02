@@ -19,7 +19,7 @@ let private error = function
 let private config = ServerConfig.defaults
 let private codec = ProtocolCodec.create config
 let private pid raw = PlayerId.create raw |> ok
-let private channel = ChatChannelKind.channelId ChatChannelKind.System
+let private channel = ChatChannels.systemId
 let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
 
 type private WireKind = Dreamsleeve.Protocol.Chat.AnnouncementKind
@@ -39,7 +39,7 @@ let private request (result: Result<ClientRequest, ProtocolCodecError>) =
     | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _
     | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
     | ClientCommand.SetIdentityVisibility _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
-    | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.DeleteChatMessage _ -> failtest "Expected announcement"
+    | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.DeleteChatMessage _ | ClientCommand.Guild _ -> failtest "Expected announcement"
 
 let private withFile (text: string) action =
     let path = Path.Combine(Path.GetTempPath(), sprintf "dreamsleeve-announcements-%O.toml" (Guid.NewGuid()))
@@ -74,23 +74,23 @@ let tests = testList "Announcements" [
         Expect.equal (AnnouncementSignature.create 3 "abcd") (Error(DomainError.InvalidText("AnnouncementSignature", TextError.TooLong 3))) "length in scalars"
 
     testCase "channel kinds own their IDs and decide what a channel carries" <| fun _ ->
-        let globalId, systemId = ChatChannelKind.channelId ChatChannelKind.Global, ChatChannelKind.channelId ChatChannelKind.System
+        let globalId, systemId = ChatChannels.globalId, ChatChannels.systemId
         Expect.notEqual globalId systemId "one ID per server-wide kind"
-        Expect.equal (ChatChannelKind.tryOfChannelId systemId) (Some ChatChannelKind.System) "ID maps back to its kind"
-        Expect.equal (ChatChannelKind.tryOfChannelId (ChatChannelId.create 99UL |> ok)) None "unknown channel"
-        let globalChat = Chat.create ChatChannelKind.Global 4 |> ok
+        Expect.equal (ChatChannels.kindOf systemId) (ValueSome ChatChannelKind.System) "ID maps back to its kind"
+        Expect.equal (ChatChannels.kindOf (ChatChannelId.create 99UL |> ok)) ValueNone "unknown channel"
+        let globalChat = Chat.create ChatChannels.globalId ChatChannelKind.Global 4 |> ok
         Chat.join profile.PlayerId globalChat |> ignore
         let announcement =
             ChatMessage.create (ChatMessageId.create 1UL |> ok) globalId (PublicIdentity.Profile profile) ValueNone (text "event") DateTimeOffset.UnixEpoch
             |> ChatMessage.withAnnouncement (Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event ValueNone)
         Expect.equal (Chat.append announcement globalChat) (Error DomainError.ChannelMismatch) "no announcements in a global channel"
-        let systemChat = Chat.create ChatChannelKind.System 4 |> ok
+        let systemChat = Chat.create ChatChannels.systemId ChatChannelKind.System 4 |> ok
         Chat.join profile.PlayerId systemChat |> ignore
         let chat = ChatMessage.create (ChatMessageId.create 1UL |> ok) systemId (PublicIdentity.Profile profile) ValueNone (text "chat") DateTimeOffset.UnixEpoch
         Expect.equal (Chat.append chat systemChat) (Error DomainError.ChannelMismatch) "no chat in the system channel"
 
     testCase "server announcements have no author and need no membership; client ones do" <| fun _ ->
-        let chat = Chat.create ChatChannelKind.System 4 |> ok
+        let chat = Chat.create ChatChannels.systemId ChatChannelKind.System 4 |> ok
         let server = ChatMessage.serverAnnouncement (ChatMessageId.create 1UL |> ok) channel AnnouncementKind.Periodic (text "notice") DateTimeOffset.UnixEpoch
         Expect.equal server.Author ValueNone "the system is not a player"
         Chat.append server chat |> ok

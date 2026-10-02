@@ -40,6 +40,7 @@ message ChatPublished { ChatMessage message = 1; }
 enum ChatChannelKind {
   CHAT_CHANNEL_KIND_UNSPECIFIED = 0;
   CHAT_CHANNEL_KIND_GLOBAL = 1; // Players write with SendChat.
+  CHAT_CHANNEL_KIND_GUILD = 3; // One guild's members write with SendChat; IDs above 2^32, see guild.proto.
   CHAT_CHANNEL_KIND_SYSTEM = 5; // Announcements; the server and PostAnnouncement publish.
 }
 

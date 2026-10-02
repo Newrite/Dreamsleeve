@@ -14,6 +14,7 @@
         <Compile Include="Protocol/ChatCodec.fs" />
         <Compile Include="Protocol/GroundMarkCodec.fs" />
         <Compile Include="Protocol/ModerationCodec.fs" />
+        <Compile Include="Protocol/GuildCodec.fs" />
         <Compile Include="Protocol/SessionCodec.fs" />
         <Compile Include="Protocol/ProtocolCodec.fs" />
         <Compile Include="Authentication.fs" />
@@ -25,6 +26,7 @@
         <Compile Include="SpatialIndex.fs" />
         <Compile Include="PresenceAgent.fs" />
         <Compile Include="GroundMarksAgent.fs" />
+        <Compile Include="GuildsAgent.fs" />
         <Compile Include="PlayerSession.fs" />
         <Compile Include="SessionTable.fs" />
         <Compile Include="ServerRuntime.fs" />

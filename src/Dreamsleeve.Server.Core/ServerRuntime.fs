@@ -10,7 +10,7 @@ open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
 [<RequireQualifiedAccess>]
-type SessionSource = Chat | System | Presence | GroundMarks | Authentication
+type SessionSource = Chat | System | Presence | GroundMarks | Guilds | GuildStorage | Authentication
 
 type ServerRuntimeSnapshot = {
     Connections: int
@@ -56,6 +56,8 @@ type ServerRuntimeMessage =
     | SetPlayerRole of PlayerId * PlayerRole
     /// The stored profile after an administrator renamed the player.
     | RenamePlayer of PlayerData
+    /// The panel's request to the guild owner; unanswered while the game is restarting.
+    | Guilds of GuildAdminCommand * ReplyChannel<GuildAdminResult>
     | Stop
 
 /// Routes managed transport events without waiting for domain agents.
@@ -69,14 +71,18 @@ module ServerRuntime =
         Presence: Agent<PresenceCommand>
         /// Owner of the marks on the ground.
         GroundMarks: Agent<GroundMarkCommand>
+        /// Owner of the guilds and their channels.
+        Guilds: Agent<GuildCommand>
         ChatCleanup: AgentOutbox<ChatRoomCommand>
         SystemCleanup: AgentOutbox<ChatRoomCommand>
         PresenceCleanup: AgentOutbox<PresenceCommand>
         GroundMarksCleanup: AgentOutbox<GroundMarkCommand>
+        GuildsCleanup: AgentOutbox<GuildCommand>
         mutable ChatStopped: bool
         mutable SystemStopped: bool
         mutable PresenceStopped: bool
         mutable GroundMarksStopped: bool
+        mutable GuildsStopped: bool
     }
 
     type private State = {
@@ -85,6 +91,7 @@ module ServerRuntime =
         Settings: GameSettings
         Moderation: ModerationRules
         Persistence: GroundMarkPersistence
+        Guilds: GuildPersistence
         Schedule: AnnouncementSchedule
         Transport: ServerTransport
         Logger: ILogger
@@ -120,7 +127,8 @@ module ServerRuntime =
             let system = sources.SystemCleanup.TrySend(context, ChatRoomCommand.Detach(detach SessionSource.System), ServerRuntimeMessage.CleanupFailed)
             let presence = sources.PresenceCleanup.TrySend(context, PresenceCommand.Detach(detach SessionSource.Presence), ServerRuntimeMessage.CleanupFailed)
             let marks = sources.GroundMarksCleanup.TrySend(context, GroundMarkCommand.Detach(detach SessionSource.GroundMarks), ServerRuntimeMessage.CleanupFailed)
-            if not chat || not system || not presence || not marks then fail state context "Session cleanup capacity exhausted."
+            let guilds = sources.GuildsCleanup.TrySend(context, GuildCommand.Detach(detach SessionSource.Guilds), ServerRuntimeMessage.CleanupFailed)
+            if not chat || not system || not presence || not marks || not guilds then fail state context "Session cleanup capacity exhausted."
         | None, _ | _, None -> fail state context "Session cleanup has no sources."
 
     // The public (moderated) username of a reserved player, for the log.
@@ -150,6 +158,7 @@ module ServerRuntime =
                 entry.SystemDetached <- true
                 entry.PresenceDetached <- true
                 entry.GroundMarksDetached <- true
+                entry.GuildsDetached <- true
                 if SessionTable.clean entry then SessionTable.remove entry state.Table
             | Some child ->
                 match child.TryPost PlayerSessionMessage.Stop with
@@ -296,7 +305,8 @@ module ServerRuntime =
             let child =
                 PlayerSession.start state.Settings state.Moderation authenticator.Requests authenticator.DisplayNames authenticator.Moderation
                     (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
-                    (sources.GroundMarks.Ref.TryReliable().Value) (self.Map ServerRuntimeMessage.Host) state.Logger request
+                    (sources.GroundMarks.Ref.TryReliable().Value) (sources.Guilds.Ref.TryReliable().Value)
+                    (self.Map ServerRuntimeMessage.Host) state.Logger request
             entry.Child <- Some child
             entry.Phase <- RuntimeSessionPhase.Opening
             // Authentication has its own time from the request: a guest may have
@@ -355,6 +365,7 @@ module ServerRuntime =
             CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.ClearMarks(target, kinds)))
         | ClientCommand.DeleteChatMessage(channel, message) ->
             CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.DeleteMessage(channel, message)))
+        | ClientCommand.Guild action -> CommandRoute.Session(PlayerSessionMessage.Guild(requestId, action))
 
     let private receiveSample state (entry: SessionTable.Entry) bytes =
         if entry.Phase = RuntimeSessionPhase.Ready then
@@ -454,20 +465,29 @@ module ServerRuntime =
             | Ok chat, Ok system ->
                 context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
                 context.Own(system, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.System, outcome))
-                match GroundMarksAgent.start game.GroundMarks game.GroundMarkRules state.Persistence.Loaded state.Persistence.NextId state.Persistence.Writer output state.Logger with
-                | Error error -> fail state context $"Ground marks startup failed: {error}"
-                | Ok marks ->
+                let marks = GroundMarksAgent.start game.GroundMarks game.GroundMarkRules state.Persistence.Loaded state.Persistence.NextId state.Persistence.Writer output state.Logger
+                let guilds = GuildsAgent.start game.Guilds game.GuildLimits state.Moderation options.Chat.Rate state.Guilds output state.Logger
+                match marks, guilds with
+                | Error error, _ -> fail state context $"Ground marks startup failed: {error}"
+                | Ok marks, Error error ->
+                    marks.Abort()
+                    fail state context $"Guilds startup failed: {error}"
+                | Ok marks, Ok guilds ->
                     let presence = PresenceAgent.start options.Presence output
                     context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
                     context.Own(marks, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GroundMarks, outcome))
+                    context.Own(guilds, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Guilds, outcome))
+                    // A failed guild write stops the writer: the supervisor restarts the game from storage.
+                    context.Watch(state.Guilds.WriterStopped, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GuildStorage, outcome))
                     context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
                     state.Sources <- Some {
-                        Chat = chat; System = system; Presence = presence; GroundMarks = marks
+                        Chat = chat; System = system; Presence = presence; GroundMarks = marks; Guilds = guilds
                         ChatCleanup = AgentOutbox(options.MaxSessions, chat.Ref.TryReliable().Value)
                         SystemCleanup = AgentOutbox(options.MaxSessions, system.Ref.TryReliable().Value)
                         PresenceCleanup = AgentOutbox(options.MaxSessions, presence.Ref.TryReliable().Value)
                         GroundMarksCleanup = AgentOutbox(options.MaxSessions, marks.Ref.TryReliable().Value)
-                        ChatStopped = false; SystemStopped = false; PresenceStopped = false; GroundMarksStopped = false
+                        GuildsCleanup = AgentOutbox(options.MaxSessions, guilds.Ref.TryReliable().Value)
+                        ChatStopped = false; SystemStopped = false; PresenceStopped = false; GroundMarksStopped = false; GuildsStopped = false
                     }
                     state.Transport.SetReadyHandler(fun () ->
                         context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentPostResult.Posted)
@@ -499,7 +519,8 @@ module ServerRuntime =
             | SessionSource.System -> entry.SystemDetached <- true
             | SessionSource.Presence -> entry.PresenceDetached <- true
             | SessionSource.GroundMarks -> entry.GroundMarksDetached <- true
-            | SessionSource.Authentication -> ()
+            | SessionSource.Guilds -> entry.GuildsDetached <- true
+            | SessionSource.GuildStorage | SessionSource.Authentication -> ()
 
             if SessionTable.clean entry then
                 SessionTable.remove entry state.Table
@@ -603,7 +624,8 @@ module ServerRuntime =
         visitRoutes state (tickRoute options time state context)
 
         let sourcesStopped =
-            state.Sources |> Option.forall (fun sources -> sources.ChatStopped && sources.SystemStopped && sources.PresenceStopped && sources.GroundMarksStopped)
+            state.Sources |> Option.forall (fun sources ->
+                sources.ChatStopped && sources.SystemStopped && sources.PresenceStopped && sources.GroundMarksStopped && sources.GuildsStopped)
         if state.Stopping && time >= state.StopDeadline && (state.Table.Connections.Count > 0 || not sourcesStopped) then
             fail state context "Server shutdown timed out."
 
@@ -618,8 +640,10 @@ module ServerRuntime =
                     sources.System.Complete() |> ignore
                     sources.Presence.Complete() |> ignore
                     sources.GroundMarks.Complete() |> ignore
+                    sources.Guilds.Complete() |> ignore
 
-                if sources.ChatStopped && sources.SystemStopped && sources.PresenceStopped && sources.GroundMarksStopped && state.Table.Connections.Count = 0 then
+                if sources.ChatStopped && sources.SystemStopped && sources.PresenceStopped && sources.GroundMarksStopped && sources.GuildsStopped
+                   && state.Table.Connections.Count = 0 then
                     context.Complete() |> ignore
 
     let private sourceStopped state context source (outcome: Result<unit, exn>) =
@@ -635,7 +659,8 @@ module ServerRuntime =
                 | Some sources, SessionSource.System -> sources.SystemStopped <- true
                 | Some sources, SessionSource.Presence -> sources.PresenceStopped <- true
                 | Some sources, SessionSource.GroundMarks -> sources.GroundMarksStopped <- true
-                | Some _, SessionSource.Authentication | None, _ -> ()
+                | Some sources, SessionSource.Guilds -> sources.GuildsStopped <- true
+                | Some _, (SessionSource.GuildStorage | SessionSource.Authentication) | None, _ -> ()
 
     let private handle (options: ServerRuntimeOptions) authenticator state (context: AgentContext<ServerRuntimeMessage>) message = task {
         match message with
@@ -675,6 +700,22 @@ module ServerRuntime =
                                   PlayerId.value profile.PlayerId, state.Table.Players.ContainsKey profile.PlayerId)
             state.Table.Profiles[profile.PlayerId] <- profile
             online state profile.PlayerId |> Option.iter (fun entry -> panelChanges state entry profile.PlayerId)
+            // Guildmates of an offline player see the new name too.
+            match state.Sources with
+            | Some sources ->
+                match sources.Guilds.TryPost(GuildCommand.Rename(Moderation.publicProfile state.Moderation profile)) with
+                | AgentPostResult.Posted -> ()
+                | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
+                    state.Logger.LogWarning("The guild owner did not take the rename of player {PlayerId}", PlayerId.value profile.PlayerId)
+            | None -> ()
+        | ServerRuntimeMessage.Guilds(command, reply) ->
+            match state.Sources with
+            | Some sources when not state.Stopping ->
+                match sources.Guilds.TryPost(GuildCommand.Admin(command, reply)) with
+                | AgentPostResult.Posted -> ()
+                | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
+                    state.Logger.LogWarning("The guild owner did not take a panel request")
+            | Some _ | None -> ()
         | ServerRuntimeMessage.ListSessions reply ->
             reply.Reply [
                 for entry in state.Table.Connections.Values do
@@ -704,7 +745,8 @@ module ServerRuntime =
     let private isControl = function
         | ServerRuntimeMessage.Host(SessionHostCommand.Send _) | ServerRuntimeMessage.Read _
         | ServerRuntimeMessage.FindPlayer _ | ServerRuntimeMessage.TransportReady | ServerRuntimeMessage.Announce _
-        | ServerRuntimeMessage.ListSessions _ | ServerRuntimeMessage.SetPlayerRole _ | ServerRuntimeMessage.RenamePlayer _ -> false
+        | ServerRuntimeMessage.ListSessions _ | ServerRuntimeMessage.SetPlayerRole _ | ServerRuntimeMessage.RenamePlayer _
+        | ServerRuntimeMessage.Guilds _ -> false
         | ServerRuntimeMessage.Start | ServerRuntimeMessage.Tick _ | ServerRuntimeMessage.Host _
         | ServerRuntimeMessage.PlayerStopped _ | ServerRuntimeMessage.SourceStopped _
         | ServerRuntimeMessage.Detached _ | ServerRuntimeMessage.CleanupFailed _ | ServerRuntimeMessage.AccountChanged _
@@ -715,11 +757,11 @@ module ServerRuntime =
     /// The checked settings, moderation rules and pseudonym dictionary are
     /// fixed for the runtime lifetime.
     let start (settings: GameSettings) (moderation: ModerationRules) (pseudonyms: PseudonymDictionary) (persistence: GroundMarkPersistence)
-              (authenticator: SessionAuthenticator) transport (logger: ILogger) =
+              (guilds: GuildPersistence) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let options = settings.Runtime
         let state = {
             Table = SessionTable.create pseudonyms; RouteScratch = Array.empty
-            Settings = settings; Moderation = moderation; Persistence = persistence
+            Settings = settings; Moderation = moderation; Persistence = persistence; Guilds = guilds
             Schedule = AnnouncementSchedule.create (now ()) settings.Schedule
             Transport = transport; Logger = logger
             Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L

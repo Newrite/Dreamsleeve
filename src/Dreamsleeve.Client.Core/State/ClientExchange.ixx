@@ -3,6 +3,7 @@ export module Dreamsleeve.Client.Exchange;
 import std;
 export import Dreamsleeve.Client.Auth;
 export import Dreamsleeve.Client.StateUpdateQueue;
+export import Dreamsleeve.Client.GuildBook;
 
 export namespace Dreamsleeve::Client
 {
@@ -127,6 +128,90 @@ export namespace Dreamsleeve::Client
     Domain::ChatMessageId messageId{};
   };
 
+  // Guild requests. The server judges the roles, the name rules and the limits;
+  // the effect arrives with the guild book.
+  struct CreateGuild
+  {
+    std::string name;
+  };
+
+  // An online player, who answers within the server's invitation lifetime.
+  struct InviteToGuild
+  {
+    Domain::GuildId  guildId{};
+    Domain::PlayerId playerId{};
+  };
+
+  struct AnswerGuildInvite
+  {
+    Domain::GuildId guildId{};
+    bool            accept{};
+  };
+
+  // Not the master, who transfers the guild or disbands it first.
+  struct LeaveGuild
+  {
+    Domain::GuildId guildId{};
+  };
+
+  struct ExcludeGuildMember
+  {
+    Domain::GuildId  guildId{};
+    Domain::PlayerId playerId{};
+  };
+
+  // Member or officer; the master's role passes by TransferGuild.
+  struct SetGuildRole
+  {
+    Domain::GuildId   guildId{};
+    Domain::PlayerId  playerId{};
+    Domain::GuildRole role{Domain::GuildRole::Member};
+  };
+
+  // The master becomes an officer.
+  struct TransferGuild
+  {
+    Domain::GuildId  guildId{};
+    Domain::PlayerId playerId{};
+  };
+
+  struct MuteGuildMember
+  {
+    Domain::GuildId              guildId{};
+    Domain::PlayerId             playerId{};
+    std::optional<std::uint32_t> minutes;  // Absent: until lifted.
+    std::string                  reason;
+  };
+
+  struct UnmuteGuildMember
+  {
+    Domain::GuildId  guildId{};
+    Domain::PlayerId playerId{};
+  };
+
+  struct DisbandGuild
+  {
+    Domain::GuildId guildId{};
+  };
+
+  using GuildAction = std::variant<
+    CreateGuild,
+    InviteToGuild,
+    AnswerGuildInvite,
+    LeaveGuild,
+    ExcludeGuildMember,
+    SetGuildRole,
+    TransferGuild,
+    MuteGuildMember,
+    UnmuteGuildMember,
+    DisbandGuild>;
+
+  struct GuildRequest
+  {
+    std::uint64_t requestId{};
+    GuildAction   action;
+  };
+
   // Complete sampled values, not a patch. Only adjacent pending samples from
   // the same session can replace one another; transitions remain ordered.
   struct LocalMovement
@@ -181,6 +266,7 @@ export namespace Dreamsleeve::Client
     ListPlayerMarks,
     ClearPlayerMarks,
     DeleteChatMessage,
+    GuildRequest,
     LocalMovement,
     LocalLocation,
     LocalActorValues,
@@ -312,6 +398,13 @@ export namespace Dreamsleeve::Client
     Domain::ChatMessageId messageId{};
   };
 
+  // A guild request was done; the guild book already shows its effect. A
+  // created guild's new ID.
+  struct GuildDone
+  {
+    Domain::GuildId guildId{};
+  };
+
   // Exactly one result settles every command with a request ID: the server's
   // answer, its refusal or a local failure, with the command's generation.
   struct CommandResult
@@ -329,6 +422,7 @@ export namespace Dreamsleeve::Client
       MarksListed,
       MarksCleared,
       MessageDeleted,
+      GuildDone,
       ServerRejection,
       CommandFailureCode>;
 
@@ -377,6 +471,10 @@ export namespace Dreamsleeve::Client
     std::optional<Domain::MuteState> mute;
     // The player's role in this session; a moderator gets the moderator tools.
     Domain::PlayerRole role{Domain::PlayerRole::Player};
+    // The player's guilds and invitations in this session, published with the
+    // chat state of their channels; absent until the server sent them. Every
+    // change is a new book, so comparing pointers tells a change.
+    std::shared_ptr<const GuildBook> guilds;
     // Why the last session ended or a sign-in was refused by a ban; kept until
     // the next sign-in. The sequence tells a repeat of the same notice apart.
     std::optional<Domain::SessionEnd> sessionEnd;
@@ -740,11 +838,12 @@ public:
     // Only this owner adds results; a concurrent Drain can only free room
     // between check and insertion.
     [[nodiscard]] bool Publish(
-      ClientModel&                 model,
-      bool                         requestSnapshot = false,
-      std::optional<SessionPhase>  nextPhase       = std::nullopt,
-      std::string_view             serverName      = {},
-      std::optional<CommandResult> result          = std::nullopt)
+      ClientModel&                     model,
+      bool                             requestSnapshot = false,
+      std::optional<SessionPhase>      nextPhase       = std::nullopt,
+      std::string_view                 serverName      = {},
+      std::optional<CommandResult>     result          = std::nullopt,
+      std::shared_ptr<const GuildBook> guilds          = nullptr)
     {
       const bool                       accepted = !result || CanAcceptReplies();
       std::optional<ClientStateUpdate> update;
@@ -761,6 +860,7 @@ public:
       std::lock_guard lock{mutex};
       if (nextPhase) status.phase = *nextPhase;
       status.serverName = serverName;
+      status.guilds     = std::move(guilds);
       if (accepted && result) pendingResults.push_back(std::move(*result));
       if (update && state->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired) state->Publish(model.Snapshot());
       return accepted;

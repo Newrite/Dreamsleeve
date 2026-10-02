@@ -19,6 +19,7 @@
         <Compile Include="Sanctions.fs" />
         <Compile Include="Addresses.fs" />
         <Compile Include="Devices.fs" />
+        <Compile Include="Guilds.fs" />
         <Compile Include="Core.fs" />
     </ItemGroup>
 

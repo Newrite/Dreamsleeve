@@ -50,22 +50,22 @@ namespace Dreamsleeve.Protocol.Chat {
             "EQoJc2lnbmF0dXJlGAUgASgJIpkBChJBbm5vdW5jZW1lbnRQb2xpY3kSTAoP",
             "YWxsb3dlZF9zb3VyY2VzGAEgAygOMjMuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
             "Q2hhdC5DbGllbnRBbm5vdW5jZW1lbnRTb3VyY2USFwoPbWF4X3RleHRfbGVu",
-            "Z3RoGAIgASgNEhwKFG1heF9zaWduYXR1cmVfbGVuZ3RoGAMgASgNKnAKD0No",
-            "YXRDaGFubmVsS2luZBIhCh1DSEFUX0NIQU5ORUxfS0lORF9VTlNQRUNJRklF",
-            "RBAAEhwKGENIQVRfQ0hBTk5FTF9LSU5EX0dMT0JBTBABEhwKGENIQVRfQ0hB",
-            "Tk5FTF9LSU5EX1NZU1RFTRAFKqYBChJBbm5vdW5jZW1lbnRTb3VyY2USIwof",
-            "QU5OT1VOQ0VNRU5UX1NPVVJDRV9VTlNQRUNJRklFRBAAEh4KGkFOTk9VTkNF",
-            "TUVOVF9TT1VSQ0VfU0VSVkVSEAESJgoiQU5OT1VOQ0VNRU5UX1NPVVJDRV9U",
-            "UlVTVEVEX0NMSUVOVBACEiMKH0FOTk9VTkNFTUVOVF9TT1VSQ0VfVEhJUkRf",
-            "UEFSVFkQAyqzAQoQQW5ub3VuY2VtZW50S2luZBIhCh1BTk5PVU5DRU1FTlRf",
-            "S0lORF9VTlNQRUNJRklFRBAAEiIKHkFOTk9VTkNFTUVOVF9LSU5EX0FOTk9V",
-            "TkNFTUVOVBABEhsKF0FOTk9VTkNFTUVOVF9LSU5EX0VWRU5UEAISGwoXQU5O",
-            "T1VOQ0VNRU5UX0tJTkRfQURNSU4QAxIeChpBTk5PVU5DRU1FTlRfS0lORF9Q",
-            "RVJJT0RJQxAEKqEBChhDbGllbnRBbm5vdW5jZW1lbnRTb3VyY2USKgomQ0xJ",
-            "RU5UX0FOTk9VTkNFTUVOVF9TT1VSQ0VfVU5TUEVDSUZJRUQQABItCilDTElF",
-            "TlRfQU5OT1VOQ0VNRU5UX1NPVVJDRV9UUlVTVEVEX0NMSUVOVBABEioKJkNM",
-            "SUVOVF9BTk5PVU5DRU1FTlRfU09VUkNFX1RISVJEX1BBUlRZEAJiBnByb3Rv",
-            "Mw=="));
+            "Z3RoGAIgASgNEhwKFG1heF9zaWduYXR1cmVfbGVuZ3RoGAMgASgNKo0BCg9D",
+            "aGF0Q2hhbm5lbEtpbmQSIQodQ0hBVF9DSEFOTkVMX0tJTkRfVU5TUEVDSUZJ",
+            "RUQQABIcChhDSEFUX0NIQU5ORUxfS0lORF9HTE9CQUwQARIbChdDSEFUX0NI",
+            "QU5ORUxfS0lORF9HVUlMRBADEhwKGENIQVRfQ0hBTk5FTF9LSU5EX1NZU1RF",
+            "TRAFKqYBChJBbm5vdW5jZW1lbnRTb3VyY2USIwofQU5OT1VOQ0VNRU5UX1NP",
+            "VVJDRV9VTlNQRUNJRklFRBAAEh4KGkFOTk9VTkNFTUVOVF9TT1VSQ0VfU0VS",
+            "VkVSEAESJgoiQU5OT1VOQ0VNRU5UX1NPVVJDRV9UUlVTVEVEX0NMSUVOVBAC",
+            "EiMKH0FOTk9VTkNFTUVOVF9TT1VSQ0VfVEhJUkRfUEFSVFkQAyqzAQoQQW5u",
+            "b3VuY2VtZW50S2luZBIhCh1BTk5PVU5DRU1FTlRfS0lORF9VTlNQRUNJRklF",
+            "RBAAEiIKHkFOTk9VTkNFTUVOVF9LSU5EX0FOTk9VTkNFTUVOVBABEhsKF0FO",
+            "Tk9VTkNFTUVOVF9LSU5EX0VWRU5UEAISGwoXQU5OT1VOQ0VNRU5UX0tJTkRf",
+            "QURNSU4QAxIeChpBTk5PVU5DRU1FTlRfS0lORF9QRVJJT0RJQxAEKqEBChhD",
+            "bGllbnRBbm5vdW5jZW1lbnRTb3VyY2USKgomQ0xJRU5UX0FOTk9VTkNFTUVO",
+            "VF9TT1VSQ0VfVU5TUEVDSUZJRUQQABItCilDTElFTlRfQU5OT1VOQ0VNRU5U",
+            "X1NPVVJDRV9UUlVTVEVEX0NMSUVOVBABEioKJkNMSUVOVF9BTk5PVU5DRU1F",
+            "TlRfU09VUkNFX1RISVJEX1BBUlRZEAJiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.ChatChannelKind), typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementSource), typeof(global::Dreamsleeve.Protocol.Chat.AnnouncementKind), typeof(global::Dreamsleeve.Protocol.Chat.ClientAnnouncementSource), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -93,6 +93,10 @@ namespace Dreamsleeve.Protocol.Chat {
     /// Players write with SendChat.
     /// </summary>
     [pbr::OriginalName("CHAT_CHANNEL_KIND_GLOBAL")] Global = 1,
+    /// <summary>
+    /// One guild's members write with SendChat; IDs above 2^32, see guild.proto.
+    /// </summary>
+    [pbr::OriginalName("CHAT_CHANNEL_KIND_GUILD")] Guild = 3,
     /// <summary>
     /// Announcements; the server and PostAnnouncement publish.
     /// </summary>
