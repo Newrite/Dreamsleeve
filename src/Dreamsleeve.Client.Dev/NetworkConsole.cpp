@@ -349,6 +349,8 @@ namespace
               << " registration=" << static_cast<int>(output.status.methods.registration) << " steam=" << output.status.methods.steam
               << '\n';
     if (!output.status.error.empty()) console << "Client: " << output.status.error << '\n';
+    if (!output.status.steamBrowser.empty()) console << "Browser: " << output.status.steamBrowser << '\n';
+    if (!output.status.steamBrowserError.empty()) console << "Browser failed: " << output.status.steamBrowserError << '\n';
 
     for (const auto& update : output.state.updates)
     {

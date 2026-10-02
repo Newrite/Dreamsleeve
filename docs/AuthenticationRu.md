@@ -384,12 +384,21 @@ loopback или с `[Authentication.Listener] AllowInsecureRemote`. Регист
    уже здесь.
 2. Клиент открывает `browserUrl` браузером по умолчанию — только если это
    `https://steamcommunity.com/openid/login?…` без пробелов и кавычек (`Auth::SteamPage`): сервер не
-   может заставить клиент открыть что-то другое. Открывает отдельный процесс
-   (`rundll32.exe url.dll,FileProtocolHandler <url>`), а не `ShellExecute` в процессе игры: там COM
-   без цикла сообщений, расширения оболочки и хуки оверлеев могли подвесить сетевой поток клиента.
-   Пароль Steam вводится только на сайте Steam, игра его не видит. Хост пишет в
-   `DreamsleeveClient.log` начало и итог каждой операции входа (`Authentication started: steamLogin`,
-   `Authentication failed: …`).
+   может заставить клиент открыть что-то другое. Страницу открывает Проводник
+   (`IShellDispatch2::ShellExecute` окна рабочего стола), поэтому браузер — его дочерний процесс, а не
+   игры. Всё, что внедрено в игру, до браузера не доходит: под MO2 его `usvfs` внедряется в дочерние
+   процессы игры, и Edge (его нет в чёрном списке исполняемых файлов MO2) падал с `0xc0000005`, не
+   открыв вкладку. Где Проводник не оболочка (Wine, Proton), страницу открывает
+   `rundll32.exe url.dll,FileProtocolHandler`. Открытие идёт в отдельном потоке, так что зависшая
+   оболочка не останавливает ожидание входа и отмену. Пароль Steam вводится только на сайте Steam,
+   игра его не видит.
+
+   Браузер открывается за полноэкранной игрой: Windows не даёт ему выйти поверх. Пока клиент ждёт,
+   вкладка «Аккаунт» подсказывает переключиться (Alt+Tab) и даёт кнопку «Скопировать ссылку» (команда
+   `copySteamLink`: host кладёт ссылку в буфер обмена Windows), а если браузер не открылся
+   (`auth.browserFailed`), говорит об этом. Хост пишет в `DreamsleeveClient.log` начало и итог каждой
+   операции входа (`Authentication started: steamLogin`, `Authentication failed: …`) и через что
+   отправлена страница (`Steam page sent to the browser through Explorer`) или почему не удалось.
 3. Steam возвращает браузер на `GET /auth/steam/return?flow=…&openid.*`. Сервер проверяет, что ответ
    относится к этому потоку (`openid.return_to`, `op_endpoint`, `claimed_id` = `identity` вида
    `https://steamcommunity.com/openid/id/7656119…`), и спрашивает у Steam `check_authentication` —

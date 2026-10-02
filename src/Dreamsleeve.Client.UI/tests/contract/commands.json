@@ -252,5 +252,8 @@
   {
     "type": "signInSteam",
     "remember": true
+  },
+  {
+    "type": "copySteamLink"
   }
 ]

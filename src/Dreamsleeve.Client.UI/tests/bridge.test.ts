@@ -52,6 +52,7 @@ describe("native bridge", () => {
       savedUsername: "northern",
       registration: "manual",
       steam: true,
+      browserFailed: false,
       phase: "disconnected",
     };
     expect(parseHostEvent(JSON.stringify(event))).toEqual(event);
@@ -79,6 +80,7 @@ describe("native bridge", () => {
       { ...event, registration: "invite" },
       { ...event, registration: undefined },
       { ...event, steam: "yes" },
+      { ...event, browserFailed: undefined },
     ])
       expect(() => parseHostEvent(JSON.stringify(broken))).toThrow();
   });

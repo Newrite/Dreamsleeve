@@ -33,6 +33,8 @@ export interface AuthState {
   // it signs in through Steam.
   registration: RegistrationMode;
   steam: boolean;
+  // A Steam sign-in waits, but the browser did not open its page.
+  browserFailed: boolean;
 }
 export type ChannelKind = (typeof channelKinds)[number];
 export interface Channel {
@@ -180,6 +182,8 @@ export type Command =
   | { type: "signInSaved" }
   // The browser opens Steam; remember saves the login like a password sign-in.
   | { type: "signInSteam"; remember: boolean }
+  // The page of the waiting Steam sign-in onto the clipboard.
+  | { type: "copySteamLink" }
   // An administrator's one-time code and the new password; then a normal sign-in.
   | { type: "resetPassword"; code: string; password: string }
   | { type: "signOut" }

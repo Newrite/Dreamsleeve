@@ -258,6 +258,11 @@ export namespace Dreamsleeve::Host::Bridge
       bool remember{};
     };
 
+    // The page of the Steam sign-in in progress onto the clipboard.
+    struct CopySteamLink
+    {
+    };
+
   }
 
   using UiCommand = std::variant<
@@ -284,7 +289,8 @@ export namespace Dreamsleeve::Host::Bridge
     Commands::ClearPlayerMarks,
     Commands::DeleteChatMessage,
     Commands::ResetPassword,
-    Commands::SignInSteam>;
+    Commands::SignInSteam,
+    Commands::CopySteamLink>;
 
   // The "type" of each UiCommand alternative, in variant order.
   constexpr auto CommandNames = std::to_array<std::string_view>({
@@ -312,6 +318,7 @@ export namespace Dreamsleeve::Host::Bridge
       "deleteChatMessage",
       "resetPassword",
       "signInSteam",
+      "copySteamLink",
   });
   static_assert(CommandNames.size() == std::variant_size_v<UiCommand>);
 
@@ -501,6 +508,8 @@ export namespace Dreamsleeve::Host::Bridge
     // Who may register on the server and whether it signs in through Steam.
     std::string registration{RegistrationNames.front()};
     bool        steam{};
+    // A Steam sign-in waits, but the browser did not open its page.
+    bool        browserFailed{};
     std::string phase{PhaseNames.front()};
   };
 
@@ -1280,6 +1289,7 @@ export namespace Dreamsleeve::Host::Bridge
     event.savedUsername  = ShownUsername(status, streamerMode);
     event.registration   = NameOf(RegistrationNames, status.methods.registration, ClientAuth::RegistrationMode::Unknown, RegistrationNames.front());
     event.steam          = status.methods.steam;
+    event.browserFailed  = !status.steamBrowserError.empty();
     event.phase          = PhaseName(status);
     return event;
   }

@@ -38,6 +38,8 @@ namespace Logic
     bool                                                   wasReady{};
     bool                                                   authenticating{};
     std::uint32_t                                          authSequence{};
+    std::string                                            steamBrowser;
+    std::string                                            steamBrowserError;
     Dreamsleeve::Utils::Timing::Backoff                    reconnect{ReconnectMinimum, ReconnectMaximum};
     Clock::time_point                                      readySince{};
     std::uint64_t                                          bubbleGeneration{};
@@ -199,8 +201,14 @@ namespace Logic
       else
         logger::warn("Authentication failed: {}, {}{}{}", event.operation, event.failure, event.error.empty() ? "" : ": ", event.error);
     }
-    state.authenticating = status.authenticating;
-    state.authSequence   = status.authSequence;
+    if (status.steamBrowser != state.steamBrowser && !status.steamBrowser.empty())
+      logger::info("Steam page sent to the browser through {}", status.steamBrowser);
+    if (status.steamBrowserError != state.steamBrowserError && !status.steamBrowserError.empty())
+      logger::warn("The browser did not open the Steam page: {}", status.steamBrowserError);
+    state.authenticating    = status.authenticating;
+    state.authSequence      = status.authSequence;
+    state.steamBrowser      = status.steamBrowser;
+    state.steamBrowserError = status.steamBrowserError;
   }
 
   void Drain(Clock::time_point now)

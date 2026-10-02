@@ -182,6 +182,7 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     label(v.savedUsername) &&
     oneOf(registrationModes)(v.registration) &&
     flag(v.steam) &&
+    flag(v.browserFailed) &&
     oneOf(connectionPhases)(v.phase),
   settings: (v) => object(v.settings),
   groundMarks: (v) => marks(256)(v.marks),

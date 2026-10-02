@@ -184,6 +184,42 @@ export namespace Dreamsleeve::Utils::Toml
 
 }
 
+// The Windows clipboard.
+export namespace Dreamsleeve::Utils::Clipboard
+{
+
+  // Puts UTF-8 text on the clipboard as Unicode text; false when Windows refuses.
+  bool Copy(std::string_view text)
+  {
+    const int size  = static_cast<int>(text.size());
+    const int count = text.empty() ? 0 : MultiByteToWideChar(CP_UTF8, 0, text.data(), size, nullptr, 0);
+    if (count == 0 && !text.empty()) return false;
+    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, (static_cast<std::size_t>(count) + 1) * sizeof(wchar_t));
+    if (!memory) return false;
+    auto* target = static_cast<wchar_t*>(GlobalLock(memory));
+    if (!target)
+    {
+      GlobalFree(memory);
+      return false;
+    }
+    if (count != 0) MultiByteToWideChar(CP_UTF8, 0, text.data(), size, target, count);
+    target[count] = L'\0';
+    GlobalUnlock(memory);
+    if (!OpenClipboard(nullptr))
+    {
+      GlobalFree(memory);
+      return false;
+    }
+    EmptyClipboard();
+    // The clipboard owns the memory once it takes it.
+    const bool placed = SetClipboardData(CF_UNICODETEXT, memory) != nullptr;
+    CloseClipboard();
+    if (!placed) GlobalFree(memory);
+    return placed;
+  }
+
+}
+
 // Pacing of retries after failures.
 export namespace Dreamsleeve::Utils::Timing
 {

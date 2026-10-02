@@ -126,6 +126,15 @@ private:
     // Unknown sign-in methods are asked again this often.
     static constexpr auto MethodsRetry = std::chrono::seconds{30};
 
+    // How opening the browser ended, written by its own thread.
+    struct BrowserOpening
+    {
+      std::mutex  mutex;
+      bool        done{};
+      std::string opener;
+      std::string error;
+    };
+
     ClientApplication(ClientSettings options, DreamNetRuntime net, ClientExchange::Ptr boundary, ClientRuntime::Ptr client)
         : settings(std::move(options)),
           enet(std::move(net)),
@@ -258,16 +267,50 @@ private:
     {
       auto flow = Auth::BeginSteam(settings.authUrl, request.remember, settings.allowInsecureRemoteAuth, device);
       if (!flow) return std::unexpected{flow.error()};
-      if (auto opened = Auth::OpenSteamPage(flow->page); !opened)
-        return std::unexpected{
-            Auth::Failure{Auth::FailureCode::Unavailable, opened.error()}
-        };
+      // The page stays available for "copy the link" while the client waits.
+      exchange->PublishSteamPage(flow->page);
+      struct PageShown
+      {
+        ClientExchange& exchange;
+
+        ~PageShown()
+        {
+          exchange.PublishSteamPage({});
+        }
+      } shown{*exchange};
+      // The shell may take its time or never answer, and the wait must not
+      // stall with it. The thread holds only its own copies, so it is detached.
+      auto opening = std::make_shared<BrowserOpening>();
+      try
+      {
+        std::thread{[opening, page = flow->page] {
+          auto            opened = Auth::OpenSteamPage(page);
+          std::lock_guard lock{opening->mutex};
+          if (opened)
+            opening->opener = std::move(*opened);
+          else
+            opening->error = std::move(opened.error());
+          opening->done = true;
+        }}.detach();
+      }
+      catch (const std::system_error&)
+      {
+        opening->done  = true;
+        opening->error = "Cannot start a thread for the browser";
+      }
+      bool       opened{};
       const auto deadline = std::chrono::steady_clock::now() + flow->lifetime;
       auto       next     = std::chrono::steady_clock::now() + SteamPollInterval;
       int        failures{};
       while (!exchange->AuthenticationCanceled())
       {
         Report(runtime->Poll(10));
+        if (!opened)
+        {
+          std::lock_guard lock{opening->mutex};
+          opened = opening->done;
+          if (opened) exchange->PublishSteamPage(flow->page, opening->opener, opening->error);
+        }
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline)
           return std::unexpected{

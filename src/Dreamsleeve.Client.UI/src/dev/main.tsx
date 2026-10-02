@@ -45,6 +45,7 @@ const auth: AuthState = {
       "registration",
     ) as AuthState["registration"]) ?? "open",
   steam: true,
+  browserFailed: false,
 };
 let steamTimer: ReturnType<typeof setTimeout> | undefined;
 function connection(phase: ConnectionPhase) {
@@ -437,6 +438,7 @@ function command(c: Command) {
     emitAuth({}, "disconnected");
     return true;
   }
+  if (c.type === "copySteamLink") return true;
   // The browser "returns" after three seconds unless canceled.
   if (c.type === "signInSteam") {
     emitAuth(

@@ -381,6 +381,7 @@ const authEvent = (patch: Partial<AuthEvent> = {}): AuthEvent => ({
   savedUsername: "",
   registration: "unknown",
   steam: false,
+  browserFailed: false,
   phase: "disconnected",
   ...patch,
 });
@@ -442,6 +443,7 @@ describe("account", () => {
       steam: true,
     });
     chat.cancelSteam();
+    expect(chat.copySteamLink()).toBe(false);
     expect(send).not.toHaveBeenCalled();
     chat.signInSteam(false);
     expect(send.mock.calls[0][0]).toEqual({
@@ -455,8 +457,19 @@ describe("account", () => {
     expect(authStatus(chat.store.getState().auth)).toBe(
       "Вход через Steam: завершите вход в открывшемся браузере…",
     );
+    expect(chat.copySteamLink()).toBe(true);
+    expect(send.mock.calls[1][0]).toEqual({ type: "copySteamLink" });
+    chat.receive(
+      authEvent({
+        steam: true,
+        authenticating: true,
+        operation: "steamLogin",
+        browserFailed: true,
+      }),
+    );
+    expect(chat.store.getState().auth.browserFailed).toBe(true);
     chat.cancelSteam();
-    expect(send.mock.calls[1][0]).toEqual({ type: "disconnect" });
+    expect(send.mock.calls[2][0]).toEqual({ type: "disconnect" });
     chat.receive(
       authEvent({ steam: true, operation: "steamLogin", failure: "canceled" }),
     );

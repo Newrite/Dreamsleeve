@@ -34,6 +34,7 @@ export const idleAuth: AuthState = {
   savedUsername: "",
   registration: "unknown",
   steam: false,
+  browserFailed: false,
 };
 // One human-readable line: the operation in progress, or the failure with the
 // raw host text when present. Empty when there is nothing to report.

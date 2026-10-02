@@ -364,6 +364,11 @@ export namespace Dreamsleeve::Client
     std::uint32_t     authSequence{};  // Bumped per completion so an identical repeat is still observable.
     // What the server offers: who may register, whether Steam sign-in is on.
     Auth::Methods methods;
+    // The page of a Steam sign-in in progress, for "copy the link", and who
+    // was asked to open it in the browser or why that failed; empty outside one.
+    std::string steamPage;
+    std::string steamBrowser;
+    std::string steamBrowserError;
     // The server pseudonym the others see for this session and where; absent
     // while the names are shown or outside a session.
     std::optional<std::string> pseudonym;
@@ -569,6 +574,14 @@ public:
       std::lock_guard lock{mutex};
       status.savedLogin    = available;
       status.savedUsername = std::move(username);
+    }
+
+    void PublishSteamPage(std::string page, std::string browser = {}, std::string browserError = {})
+    {
+      std::lock_guard lock{mutex};
+      status.steamPage         = std::move(page);
+      status.steamBrowser      = std::move(browser);
+      status.steamBrowserError = std::move(browserError);
     }
 
     void PublishMethods(Auth::Methods methods)

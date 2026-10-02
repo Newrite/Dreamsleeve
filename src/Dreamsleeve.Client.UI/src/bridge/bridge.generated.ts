@@ -54,6 +54,7 @@ export const commandTypes = [
   "deleteChatMessage",
   "resetPassword",
   "signInSteam",
+  "copySteamLink",
 ] as const;
 
 // Enum strings of the events.

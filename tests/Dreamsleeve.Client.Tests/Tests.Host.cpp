@@ -215,6 +215,14 @@ TEST_CASE("Session reports every authentication completion, even an identical re
   auto auth = Parse(frame.events[0]);
   CHECK(auth["registration"].get<std::string>() == "manual");
   CHECK(auth["steam"].get<bool>());
+  CHECK_FALSE(auth["browserFailed"].get<bool>());
+
+  // A browser that did not open is news too: the page offers the link.
+  exchange->PublishSteamPage("https://steamcommunity.com/openid/login?x=1", {}, "Opening the browser failed (Windows 2)");
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  REQUIRE(frame.events.size() == 1);
+  CHECK(Parse(frame.events[0])["browserFailed"].get<bool>());
 }
 
 TEST_CASE("Session tells the page of a mute and its lift, and of each end of a session once")
@@ -295,6 +303,7 @@ TEST_CASE("Bridge parses each command into its own checked type")
   CHECK(reset.password == "p");
   CHECK(CommandOf<Bridge::Commands::SignInSteam>(R"({"type":"signInSteam","remember":true})").remember);
   CHECK_FALSE(CommandOf<Bridge::Commands::SignInSteam>(R"({"type":"signInSteam","remember":false})").remember);
+  CommandOf<Bridge::Commands::CopySteamLink>(R"({"type":"copySteamLink"})");
   CHECK(CommandOf<Bridge::Commands::Ignore>(R"({"type":"ignore","playerId":"18446744073709551615"})").playerId.value == 18446744073709551615ull);
 }
 

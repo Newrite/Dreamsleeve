@@ -34,6 +34,8 @@ namespace
     int                        closes{};
     std::vector<std::string>   keys;
     std::optional<Domain::MarkSpot> spot;
+    std::vector<std::string>        copied;
+    bool                            copyRefused{};
 
     CommandOutput Run(std::string_view json)
     {
@@ -53,7 +55,12 @@ namespace
            },
            .close         = [this] { ++closes; },
            .activationKey = [this](std::string_view key) { keys.emplace_back(key); },
-           .noteSpot      = [this] { return spot; }}
+           .noteSpot      = [this] { return spot; },
+           .copyText      = [this](std::string_view text) {
+             if (copyRefused) return false;
+             copied.emplace_back(text);
+             return true;
+           }}
       };
       return Handle(context, std::move(*command));
     }
@@ -243,6 +250,20 @@ TEST_CASE("Account commands go to the Core and decide the manual disconnect")
   const auto* browser = std::get_if<SteamLogin>(&*steam);
   REQUIRE(browser);
   CHECK_FALSE(browser->remember);
+  // The link of the waiting sign-in goes to the clipboard; without one it is refused.
+  fixture.exchange->PublishSteamPage("https://steamcommunity.com/openid/login?openid.mode=checkid_setup");
+  CHECK(fixture.Run(R"({"type":"copySteamLink"})").events.empty());
+  REQUIRE(fixture.copied.size() == 1);
+  CHECK(fixture.copied[0] == "https://steamcommunity.com/openid/login?openid.mode=checkid_setup");
+  fixture.copyRefused = true;
+  auto refusedCopy    = fixture.Run(R"({"type":"copySteamLink"})");
+  REQUIRE(refusedCopy.events.size() == 1);
+  CHECK(Parse(refusedCopy.events[0])["error"].get<std::string>() == "Cannot copy the link");
+  fixture.exchange->PublishSteamPage({});
+  auto nothing = fixture.Run(R"({"type":"copySteamLink"})");
+  REQUIRE(nothing.events.size() == 1);
+  CHECK(Parse(nothing.events[0])["error"].get<std::string>() == "No Steam sign-in is waiting");
+  CHECK(fixture.copied.size() == 1);
   fixture.exchange->CompleteAuthentication();
 
   fixture.Run(R"({"type":"disconnect"})");

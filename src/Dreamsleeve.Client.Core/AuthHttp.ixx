@@ -2,6 +2,10 @@ module;
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <ole2.h>
+#include <shlobj.h>
+#include <exdisp.h>
+#include <shldisp.h>
 #include <winhttp.h>
 #include <glaze/glaze.hpp>
 
@@ -660,26 +664,103 @@ namespace Dreamsleeve::Client::Auth
     return std::optional<Grant>{std::move(*grant)};
   }
 
-  // The default browser opens the Steam page; nothing else is opened. A
-  // separate process asks the shell, so nothing in the game process (COM
-  // without a message loop, shell extensions, overlay hooks) holds up sign-in.
-  export Result<void> OpenSteamPage(std::string_view page)
+  namespace
+  {
+
+    template <class T>
+    struct ComRef
+    {
+      T* value{};
+
+      ComRef() = default;
+      ComRef(const ComRef&)            = delete;
+      ComRef& operator=(const ComRef&) = delete;
+
+      ~ComRef()
+      {
+        if (value) value->Release();
+      }
+
+      T* operator->() const noexcept
+      {
+        return value;
+      }
+    };
+
+    // Explorer opens the page (IShellDispatch2 of the desktop window), so the
+    // browser starts as its child, not the game's. What is injected into the
+    // game does not reach it: a mod manager's virtual file system (MO2 usvfs
+    // makes Edge crash) or an overlay.
+    HRESULT DesktopOpen(const std::wstring& url)
+    {
+      const HRESULT initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+      const HRESULT result      = [&]() -> HRESULT {
+        ComRef<IShellWindows> windows;
+        HRESULT               hr = CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&windows.value));
+        if (FAILED(hr)) return hr;
+        VARIANT           location{};
+        VARIANT           root{};
+        long              window{};
+        ComRef<IDispatch> desktop;
+        hr = windows->FindWindowSW(&location, &root, SWC_DESKTOP, &window, SWFO_NEEDDISPATCH, &desktop.value);
+        if (hr != S_OK || !desktop.value) return FAILED(hr) ? hr : E_FAIL;
+        ComRef<IServiceProvider> provider;
+        if (FAILED(hr = desktop->QueryInterface(IID_PPV_ARGS(&provider.value)))) return hr;
+        ComRef<IShellBrowser> browser;
+        if (FAILED(hr = provider->QueryService(SID_STopLevelBrowser, IID_PPV_ARGS(&browser.value)))) return hr;
+        ComRef<IShellView> view;
+        if (FAILED(hr = browser->QueryActiveShellView(&view.value))) return hr;
+        ComRef<IDispatch> background;
+        if (FAILED(hr = view->GetItemObject(SVGIO_BACKGROUND, IID_PPV_ARGS(&background.value)))) return hr;
+        ComRef<IShellFolderViewDual> folder;
+        if (FAILED(hr = background->QueryInterface(IID_PPV_ARGS(&folder.value)))) return hr;
+        ComRef<IDispatch> application;
+        if (FAILED(hr = folder->get_Application(&application.value))) return hr;
+        ComRef<IShellDispatch2> shell;
+        if (FAILED(hr = application->QueryInterface(IID_PPV_ARGS(&shell.value)))) return hr;
+        BSTR file = SysAllocString(url.c_str());
+        if (!file) return E_OUTOFMEMORY;
+        VARIANT none{};
+        hr = shell->ShellExecute(file, none, none, none, none);
+        SysFreeString(file);
+        return hr;
+      }();
+      if (SUCCEEDED(initialized)) CoUninitialize();
+      return result;
+    }
+
+    // Where Explorer is not the shell (Wine, Proton), rundll32 asks the shell.
+    Result<void> HelperOpen(const std::wstring& url)
+    {
+      wchar_t    system[MAX_PATH];
+      const UINT length = GetSystemDirectoryW(system, MAX_PATH);
+      if (length == 0 || length >= MAX_PATH) return SystemError("System directory lookup");
+      const std::wstring  program = std::wstring{system, length} + L"\\rundll32.exe";
+      std::wstring        command = L"\"" + program + L"\" url.dll,FileProtocolHandler " + url;
+      STARTUPINFOW        startup{.cb = sizeof(STARTUPINFOW)};
+      PROCESS_INFORMATION process{};
+      if (!CreateProcessW(program.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process))
+        return SystemError("Opening the browser");
+      CloseHandle(process.hThread);
+      CloseHandle(process.hProcess);
+      return {};
+    }
+
+  }
+
+  // The default browser opens the Steam page; nothing else is opened. It may
+  // take a while or stall in the shell: callers run it on a thread of its own.
+  // The result says who was asked, for the log.
+  export Result<std::string> OpenSteamPage(std::string_view page)
   {
     if (!SteamPage(page)) return std::unexpected{"Not a Steam sign-in page"};
     auto url = Wide(page);
     if (!url) return std::unexpected{url.error()};
-    wchar_t    system[MAX_PATH];
-    const UINT length = GetSystemDirectoryW(system, MAX_PATH);
-    if (length == 0 || length >= MAX_PATH) return SystemError("System directory lookup");
-    const std::wstring  program = std::wstring{system, length} + L"\\rundll32.exe";
-    std::wstring        command = L"\"" + program + L"\" url.dll,FileProtocolHandler " + *url;
-    STARTUPINFOW        startup{.cb = sizeof(STARTUPINFOW)};
-    PROCESS_INFORMATION process{};
-    if (!CreateProcessW(program.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process))
-      return SystemError("Opening the browser");
-    CloseHandle(process.hThread);
-    CloseHandle(process.hProcess);
-    return {};
+    const HRESULT desktop = DesktopOpen(*url);
+    if (SUCCEEDED(desktop)) return "Explorer";
+    const auto refused = std::format("Explorer refused, HRESULT 0x{:08X}", static_cast<std::uint32_t>(desktop));
+    if (auto helper = HelperOpen(*url); !helper) return std::unexpected{refused + "; " + helper.error()};
+    return "rundll32 (" + refused + ")";
   }
 
   export std::expected<void, Failure> Logout(std::string_view url, std::string_view token, bool allowInsecureRemote = false)

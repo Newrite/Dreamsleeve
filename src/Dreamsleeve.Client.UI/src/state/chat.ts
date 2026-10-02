@@ -507,6 +507,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
             savedUsername: event.savedUsername,
             registration: event.registration,
             steam: event.steam,
+            browserFailed: event.browserFailed,
           },
           connected: event.phase === "connected",
           connectionPhase: event.phase,
@@ -831,6 +832,13 @@ export function makeChat(send: Send, now = () => Date.now()) {
     signInSteam(remember: boolean) {
       if (!store.getState().auth.steam) return;
       authenticate({ type: "signInSteam", remember }, "steamLogin");
+    },
+    // The browser may not open or stay behind the game: the player pastes the link.
+    copySteamLink() {
+      if (!canCancelSteam(store.getState().auth)) return false;
+      if (send({ type: "copySteamLink" })) return true;
+      store.setState({ notice: "Команда не принята приложением" });
+      return false;
     },
     // Only a Steam sign-in waits long enough to be canceled.
     cancelSteam() {

@@ -21,6 +21,8 @@ export namespace Dreamsleeve::Host
     std::function<void(std::string_view)> activationKey;
     // The character's spot in the world; empty outside it.
     std::function<std::optional<Domain::MarkSpot>()> noteSpot;
+    // Puts text on the system clipboard; false when it cannot.
+    std::function<bool(std::string_view)> copyText;
   };
 
   struct CommandContext
@@ -154,6 +156,16 @@ export namespace Dreamsleeve::Host
       {
         context.manualDisconnect = false;
         Admitted(context.exchange.PostAuthentication(Client::SteamLogin{command.remember}));
+      }
+
+      // The browser may not open or hide behind the game: the player pastes the link.
+      void operator()(Commands::CopySteamLink&)
+      {
+        const auto page = context.exchange.Status().steamPage;
+        if (page.empty())
+          Admitted(std::unexpected{"No Steam sign-in is waiting"});
+        else if (!context.ports.copyText(page))
+          Admitted(std::unexpected{"Cannot copy the link"});
       }
 
       void operator()(Commands::SignInSaved&)

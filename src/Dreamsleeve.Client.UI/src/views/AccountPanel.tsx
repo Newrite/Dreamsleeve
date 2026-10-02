@@ -29,6 +29,7 @@ export function AccountPanel({
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const self = s.players.find((p) => p.id === s.selfId);
   // Streamer mode keeps even the own names off the screen, like the saved login.
   const current = s.settings.streamerMode ? "" : (self?.displayName ?? "");
@@ -60,6 +61,7 @@ export function AccountPanel({
     displayName,
   });
   const status = authStatus(s.auth);
+  const steamWaiting = canCancelSteam(s.auth);
   const registration = canRegister(s.auth);
   const note = registrationNote(s.auth);
   function signIn(register: boolean) {
@@ -230,24 +232,51 @@ export function AccountPanel({
       {s.auth.steam && (
         <div className={styles.form} data-part="steam">
           <div className={styles.actions}>
-            {canCancelSteam(s.auth) ? (
-              <button type="button" onClick={chat.cancelSteam}>
-                Отменить вход через Steam
-              </button>
+            {steamWaiting ? (
+              <>
+                <button type="button" onClick={chat.cancelSteam}>
+                  Отменить вход через Steam
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLinkCopied(chat.copySteamLink())}
+                >
+                  Скопировать ссылку
+                </button>
+              </>
             ) : (
               <button
                 type="button"
                 disabled={!can.steam}
-                onClick={() => chat.signInSteam(remember)}
+                onClick={() => {
+                  setLinkCopied(false);
+                  chat.signInSteam(remember);
+                }}
               >
                 Войти через Steam
               </button>
             )}
           </div>
+          {steamWaiting && s.auth.browserFailed && (
+            <p className={styles.error} role="alert" data-part="steam-browser">
+              Браузер не открылся. Скопируйте ссылку и откройте её в браузере
+              сами.
+            </p>
+          )}
+          {steamWaiting && linkCopied && !s.auth.error && (
+            <p className={styles.status} role="status">
+              Ссылка скопирована: вставьте её в адресную строку браузера.
+            </p>
+          )}
+          {steamWaiting && s.auth.error && (
+            <p className={styles.error} role="alert">
+              {s.auth.error}
+            </p>
+          )}
           <p className={styles.muted}>
-            Откроется браузер со страницей Steam; пароль Steam вводится только
-            там. После входа вернитесь в игру. «Запомнить меня» сохраняет вход и
-            для Steam.
+            {steamWaiting
+              ? "Страница входа Steam открыта в браузере. Если его не видно, он за игрой: переключитесь на него (Alt+Tab), войдите и вернитесь — игра войдёт сама."
+              : "Откроется браузер со страницей Steam; пароль Steam вводится только там. После входа вернитесь в игру. «Запомнить меня» сохраняет вход и для Steam."}
           </p>
         </div>
       )}

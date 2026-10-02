@@ -11,6 +11,7 @@ import Dreamsleeve.Host.Commands;
 import Dreamsleeve.Events;
 import Dreamsleeve.Game.Input;
 import Dreamsleeve.Game.World;
+import Dreamsleeve.Client.Utils;
 
 // PrismaUI host of the production web UI. PrismaUI 1.5.1 wraps every callback
 // (DOM ready, JS listener, console) in SKSE::GetTaskInterface()->AddTask, so
@@ -236,7 +237,12 @@ namespace PrismaUI
         .ui               = runtime.ui,
         .bubbles          = runtime.bubbles,
         .manualDisconnect = runtime.manualDisconnect,
-        .ports = {.saveUi = Runtime::SaveUi, .close = Deactivate, .activationKey = Events::SetActivationKey, .noteSpot = World::Spot}
+        .ports = {
+                  .saveUi        = Runtime::SaveUi,
+                  .close         = Deactivate,
+                  .activationKey = Events::SetActivationKey,
+                  .noteSpot      = World::Spot,
+                  .copyText      = Dreamsleeve::Utils::Clipboard::Copy}
     };
     const auto output = Dreamsleeve::Host::Handle(context, std::move(*command));
     for (const auto& note : output.notes)
