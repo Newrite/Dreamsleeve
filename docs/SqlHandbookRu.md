@@ -1254,9 +1254,9 @@ Fling нужен для агрегатов, а не для любого select/u
 Это значит, что в БД размер guild — не “инвариант схемы”, а предметная проверка на новых операциях.
 
 То же касается:
-- max guilds per player
+- max guilds on the server
+- max guilds per player (owned ones included; no separate ownership limit)
 - max parties size
-- max created guilds per player
 
 ### 16.3 Recovery / rebind key
 
