@@ -382,9 +382,14 @@ loopback или с `[Authentication.Listener] AllowInsecureRemote`. Регист
    в памяти `AuthService` `[Authentication.Service] SteamFlowSeconds` (600) секунд, одновременно —
    не больше `MaxTickets`; адрес и устройство запроса запоминаются вместе с ним. Бан IP проверяется
    уже здесь.
-2. Клиент открывает `browserUrl` браузером по умолчанию (`ShellExecuteW`) — только если это
-   `https://steamcommunity.com/openid/login?…` (`Auth::SteamPage`): сервер не может заставить
-   клиент открыть что-то другое. Пароль Steam вводится только на сайте Steam, игра его не видит.
+2. Клиент открывает `browserUrl` браузером по умолчанию — только если это
+   `https://steamcommunity.com/openid/login?…` без пробелов и кавычек (`Auth::SteamPage`): сервер не
+   может заставить клиент открыть что-то другое. Открывает отдельный процесс
+   (`rundll32.exe url.dll,FileProtocolHandler <url>`), а не `ShellExecute` в процессе игры: там COM
+   без цикла сообщений, расширения оболочки и хуки оверлеев могли подвесить сетевой поток клиента.
+   Пароль Steam вводится только на сайте Steam, игра его не видит. Хост пишет в
+   `DreamsleeveClient.log` начало и итог каждой операции входа (`Authentication started: steamLogin`,
+   `Authentication failed: …`).
 3. Steam возвращает браузер на `GET /auth/steam/return?flow=…&openid.*`. Сервер проверяет, что ответ
    относится к этому потоку (`openid.return_to`, `op_endpoint`, `claimed_id` = `identity` вида
    `https://steamcommunity.com/openid/id/7656119…`), и спрашивает у Steam `check_authentication` —

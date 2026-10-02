@@ -2,8 +2,6 @@ module;
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
-#include <objbase.h>
-#include <shellapi.h>
 #include <winhttp.h>
 #include <glaze/glaze.hpp>
 
@@ -355,12 +353,13 @@ namespace Dreamsleeve::Client::Auth
   }
 
   // The only page a Steam sign-in opens: Steam's OpenID login, so a server
-  // cannot have the client open anything else.
+  // cannot have the client open anything else. It becomes one command-line
+  // argument: no spaces or quotes.
   export bool SteamPage(std::string_view url)
   {
     constexpr std::string_view Login = "https://steamcommunity.com/openid/login?";
     return url.size() > Login.size() && url.size() <= 4096 && url.starts_with(Login) &&
-           std::ranges::all_of(url, [](unsigned char c) { return c > ' ' && c < 0x7f && c != '#'; });
+           std::ranges::all_of(url, [](unsigned char c) { return c > ' ' && c < 0x7f && c != '#' && c != '"'; });
   }
 
   export Result<void> ValidatePassword(std::string_view password)
@@ -661,17 +660,25 @@ namespace Dreamsleeve::Client::Auth
     return std::optional<Grant>{std::move(*grant)};
   }
 
-  // The default browser opens the Steam page; nothing else is opened.
+  // The default browser opens the Steam page; nothing else is opened. A
+  // separate process asks the shell, so nothing in the game process (COM
+  // without a message loop, shell extensions, overlay hooks) holds up sign-in.
   export Result<void> OpenSteamPage(std::string_view page)
   {
     if (!SteamPage(page)) return std::unexpected{"Not a Steam sign-in page"};
-    auto wide = Wide(page);
-    if (!wide) return std::unexpected{wide.error()};
-    // The shell may use COM on this thread.
-    const HRESULT com    = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-    const auto    opened = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", wide->c_str(), nullptr, nullptr, SW_SHOWNORMAL));
-    if (SUCCEEDED(com)) CoUninitialize();
-    if (opened <= 32) return std::unexpected{"Cannot open the browser (Windows " + std::to_string(opened) + ")"};
+    auto url = Wide(page);
+    if (!url) return std::unexpected{url.error()};
+    wchar_t    system[MAX_PATH];
+    const UINT length = GetSystemDirectoryW(system, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) return SystemError("System directory lookup");
+    const std::wstring  program = std::wstring{system, length} + L"\\rundll32.exe";
+    std::wstring        command = L"\"" + program + L"\" url.dll,FileProtocolHandler " + *url;
+    STARTUPINFOW        startup{.cb = sizeof(STARTUPINFOW)};
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(program.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process))
+      return SystemError("Opening the browser");
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
     return {};
   }
 

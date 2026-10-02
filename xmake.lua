@@ -120,7 +120,7 @@ target("Dreamsleeve.Client.Core")
     add_cpp_files("src/Dreamsleeve.Client.Core")
 
     add_deps("Dreamsleeve.Protocol.Native")
-    add_syslinks("winhttp", "advapi32", "bcrypt", "shell32", "ole32", {public = true})
+    add_syslinks("winhttp", "advapi32", "bcrypt", {public = true})
     -- The client's version, sent as its HTTP User-Agent.
     on_load(function (target)
         target:add("defines", "DREAMSLEEVE_VERSION=\"" .. (target:version() or "0.0.0") .. "\"")

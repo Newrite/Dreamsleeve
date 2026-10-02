@@ -50,6 +50,7 @@ TEST_CASE("A Steam sign-in opens only Steam's OpenID login page")
   CHECK_FALSE(Auth::SteamPage("https://steamcommunity.com.example.test/openid/login?openid.mode=checkid_setup"));
   CHECK_FALSE(Auth::SteamPage("https://steamcommunity.com/openid/login?a=b c"));
   CHECK_FALSE(Auth::SteamPage("https://steamcommunity.com/openid/login?a=b#fragment"));
+  CHECK_FALSE(Auth::SteamPage("https://steamcommunity.com/openid/login?a=\"b\" c"));
   CHECK_FALSE(Auth::SteamPage("file:///C:/Windows/System32/calc.exe"));
   CHECK_FALSE(Auth::SteamPage("https://steamcommunity.com/openid/login?" + std::string(4096, 'a')));
   CHECK_FALSE(Auth::OpenSteamPage("calc.exe"));

@@ -36,6 +36,8 @@ namespace Logic
     Dream::ClientOutput                                    output;
     bool                                                   resumeTried{};
     bool                                                   wasReady{};
+    bool                                                   authenticating{};
+    std::uint32_t                                          authSequence{};
     Dreamsleeve::Utils::Timing::Backoff                    reconnect{ReconnectMinimum, ReconnectMaximum};
     Clock::time_point                                      readySince{};
     std::uint64_t                                          bubbleGeneration{};
@@ -181,12 +183,33 @@ namespace Logic
     if (runtime.app->ConnectSaved()) logger::info("Reconnecting with saved login");
   }
 
+  // Each sign-in operation in the log: when it starts and how it ends. The
+  // status carries no password or token; streamer mode does not matter here.
+  void LogAuthentication()
+  {
+    auto&       state  = Get();
+    const auto& status = state.output.status;
+    if (status.authenticating && !state.authenticating)
+      logger::info("Authentication started: {}", Dreamsleeve::Host::Bridge::AuthState(status).operation);
+    if (status.authSequence != state.authSequence)
+    {
+      const auto event = Dreamsleeve::Host::Bridge::AuthState(status);
+      if (event.failure == "none")
+        logger::info("Authentication finished: {}", event.operation);
+      else
+        logger::warn("Authentication failed: {}, {}{}{}", event.operation, event.failure, event.error.empty() ? "" : ": ", event.error);
+    }
+    state.authenticating = status.authenticating;
+    state.authSequence   = status.authSequence;
+  }
+
   void Drain(Clock::time_point now)
   {
     auto& runtime = Runtime::Get();
     auto& state   = Get();
     runtime.app->Exchange().Drain(state.output);
     runtime.movement->Apply(state.output.state);
+    LogAuthentication();
 
     Dreamsleeve::Host::Session::Frame frame;
     runtime.session.Process(
