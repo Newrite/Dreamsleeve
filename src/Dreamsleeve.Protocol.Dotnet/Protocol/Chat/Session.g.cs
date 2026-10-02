@@ -55,14 +55,16 @@ namespace Dreamsleeve.Protocol.Chat {
             "ZW4YAiABKA4yKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkhpZGRlbklk",
             "ZW50aXR5QgwKCl9wc2V1ZG9ueW0iKQoRQ2hhbmdlRGlzcGxheU5hbWUSFAoM",
             "ZGlzcGxheV9uYW1lGAEgASgJIioKEkRpc3BsYXlOYW1lQ2hhbmdlZBIUCgxk",
-            "aXNwbGF5X25hbWUYASABKAkqcwoOSGlkZGVuSWRlbnRpdHkSGAoUSElEREVO",
-            "X0lERU5USVRZX05PTkUQABIeChpISURERU5fSURFTlRJVFlfRVZFUllXSEVS",
-            "RRABEicKI0hJRERFTl9JREVOVElUWV9FWENFUFRfR1JPVU5EX01BUktTEAIq",
-            "wgEKEFNlc3Npb25FbmRSZWFzb24SIgoeU0VTU0lPTl9FTkRfUkVBU09OX1VO",
-            "U1BFQ0lGSUVEEAASJQohU0VTU0lPTl9FTkRfUkVBU09OX0FDQ0VTU19SRVZP",
-            "S0VEEAESHQoZU0VTU0lPTl9FTkRfUkVBU09OX0JBTk5FRBACEh0KGVNFU1NJ",
-            "T05fRU5EX1JFQVNPTl9LSUNLRUQQAxIlCiFTRVNTSU9OX0VORF9SRUFTT05f",
-            "QUREUkVTU19CQU5ORUQQBGIGcHJvdG8z"));
+            "aXNwbGF5X25hbWUYASABKAkiIgoMU2V0TmFtZUNvbG9yEhIKCm5hbWVfY29s",
+            "b3IYASABKA0iJgoQTmFtZUNvbG9yQ2hhbmdlZBISCgpuYW1lX2NvbG9yGAEg",
+            "ASgNKnMKDkhpZGRlbklkZW50aXR5EhgKFEhJRERFTl9JREVOVElUWV9OT05F",
+            "EAASHgoaSElEREVOX0lERU5USVRZX0VWRVJZV0hFUkUQARInCiNISURERU5f",
+            "SURFTlRJVFlfRVhDRVBUX0dST1VORF9NQVJLUxACKsIBChBTZXNzaW9uRW5k",
+            "UmVhc29uEiIKHlNFU1NJT05fRU5EX1JFQVNPTl9VTlNQRUNJRklFRBAAEiUK",
+            "IVNFU1NJT05fRU5EX1JFQVNPTl9BQ0NFU1NfUkVWT0tFRBABEh0KGVNFU1NJ",
+            "T05fRU5EX1JFQVNPTl9CQU5ORUQQAhIdChlTRVNTSU9OX0VORF9SRUFTT05f",
+            "S0lDS0VEEAMSJQohU0VTU0lPTl9FTkRfUkVBU09OX0FERFJFU1NfQkFOTkVE",
+            "EARiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.ModerationReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.HiddenIdentity), typeof(global::Dreamsleeve.Protocol.Chat.SessionEndReason), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -75,7 +77,9 @@ namespace Dreamsleeve.Protocol.Chat {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SetIdentityVisibility), global::Dreamsleeve.Protocol.Chat.SetIdentityVisibility.Parser, new[]{ "Hidden" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged), global::Dreamsleeve.Protocol.Chat.IdentityVisibilityChanged.Parser, new[]{ "Pseudonym", "Hidden" }, new[]{ "Pseudonym" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ChangeDisplayName), global::Dreamsleeve.Protocol.Chat.ChangeDisplayName.Parser, new[]{ "DisplayName" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.DisplayNameChanged), global::Dreamsleeve.Protocol.Chat.DisplayNameChanged.Parser, new[]{ "DisplayName" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.DisplayNameChanged), global::Dreamsleeve.Protocol.Chat.DisplayNameChanged.Parser, new[]{ "DisplayName" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SetNameColor), global::Dreamsleeve.Protocol.Chat.SetNameColor.Parser, new[]{ "NameColor" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.NameColorChanged), global::Dreamsleeve.Protocol.Chat.NameColorChanged.Parser, new[]{ "NameColor" }, null, null, null, null)
           }));
     }
     #endregion
@@ -2707,6 +2711,413 @@ namespace Dreamsleeve.Protocol.Chat {
             break;
           case 10: {
             DisplayName = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Choose the color of the sender's own name in chat, 0xRRGGBB. Control lane;
+  /// settled by NameColorChanged or RequestRejected (INVALID_REQUEST above
+  /// 0xFFFFFF, NAME_COLOR_UNREADABLE, RATE_LIMITED, OVERLOADED). Muted players
+  /// may change it too.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class SetNameColor : pb::IMessage<SetNameColor>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<SetNameColor> _parser = new pb::MessageParser<SetNameColor>(() => new SetNameColor());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<SetNameColor> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[10]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetNameColor() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetNameColor(SetNameColor other) : this() {
+      nameColor_ = other.nameColor_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetNameColor Clone() {
+      return new SetNameColor(this);
+    }
+
+    /// <summary>Field number for the "name_color" field.</summary>
+    public const int NameColorFieldNumber = 1;
+    private uint nameColor_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint NameColor {
+      get { return nameColor_; }
+      set {
+        nameColor_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as SetNameColor);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(SetNameColor other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (NameColor != other.NameColor) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (NameColor != 0) hash ^= NameColor.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (NameColor != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(NameColor);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (NameColor != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(NameColor);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (NameColor != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(NameColor);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(SetNameColor other) {
+      if (other == null) {
+        return;
+      }
+      if (other.NameColor != 0) {
+        NameColor = other.NameColor;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            NameColor = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            NameColor = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Settles SetNameColor with the color as stored. The other players receive
+  /// the new profile as PlayerUpdated; messages already sent keep the color they
+  /// were sent with.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class NameColorChanged : pb::IMessage<NameColorChanged>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<NameColorChanged> _parser = new pb::MessageParser<NameColorChanged>(() => new NameColorChanged());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<NameColorChanged> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor.MessageTypes[11]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public NameColorChanged() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public NameColorChanged(NameColorChanged other) : this() {
+      nameColor_ = other.nameColor_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public NameColorChanged Clone() {
+      return new NameColorChanged(this);
+    }
+
+    /// <summary>Field number for the "name_color" field.</summary>
+    public const int NameColorFieldNumber = 1;
+    private uint nameColor_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint NameColor {
+      get { return nameColor_; }
+      set {
+        nameColor_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as NameColorChanged);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(NameColorChanged other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (NameColor != other.NameColor) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (NameColor != 0) hash ^= NameColor.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (NameColor != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(NameColor);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (NameColor != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(NameColor);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (NameColor != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(NameColor);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(NameColorChanged other) {
+      if (other == null) {
+        return;
+      }
+      if (other.NameColor != 0) {
+        NameColor = other.NameColor;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            NameColor = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            NameColor = input.ReadUInt32();
             break;
           }
         }

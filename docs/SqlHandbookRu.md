@@ -27,6 +27,8 @@ Username, DisplayName может совпадать. Регистрация со
 | `player_devices`, `device_bans` | Устройства игроков (хэш клиента) и устройства, на которые распространён бан |
 
 Гильдии — `guilds`, `guild_members` и `guild_invites` (схема 13, [GuildsRu.md](GuildsRu.md)).
+Цвет имени в чате — `profiles.name_color`, `0xRRGGBB` (схема 14,
+[ModerationAndNamesRu.md](ModerationAndNamesRu.md#цвет-имени-в-чате)).
 Друзей, блоклиста, партий, сессий и ключей идентичности в БД нет. Время —
 Unix-миллисекунды UTC. SQL живёт в `SqliteAccountStore`, `SqliteGroundMarkStore`,
 `SqliteAdminStore`, `SqliteSanctionStore` и `SqliteGuildStore`; вызывают их workers владеющих

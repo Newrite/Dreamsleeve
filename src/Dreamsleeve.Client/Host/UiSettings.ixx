@@ -19,6 +19,8 @@ export namespace Dreamsleeve::Host
   // generated from both (src/Dreamsleeve.Client.UI/src/bridge/settings.generated.ts).
   struct UiSettings
   {
+    // Fireflies (with their names and bubbles) only of players who share a guild with you.
+    bool   fireflyGuildmatesOnly{false};
     bool   showFireflyNames{true};
     bool   fireflyNameOcclusion{true};
     double fireflyNameFontSize{18};
@@ -79,6 +81,8 @@ export namespace Dreamsleeve::Host
     // Ground marks: notes and death places near the player (see docs/GroundMarksRu.md).
     bool        showGroundNotes{true};
     bool        showDeathMarks{true};
+    // Notes and death marks only of players who share a guild with you; your own always.
+    bool        markGuildmatesOnly{false};
     double      maxVisibleNotes{16};
     double      maxVisibleDeaths{16};
     double      groundDrawDistance{4096};  // Game units; the server delivers within its own radius.
@@ -173,9 +177,10 @@ export namespace Dreamsleeve::Host
   constexpr auto ColorKeys =
     std::to_array<std::string_view>({"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor"});
 
-  // How names, texts and dates are projected. These apply to every surface at
-  // once, without saving, and a change projects the session again.
-  constexpr auto InstantKeys = std::to_array<std::string_view>({"nameMode", "streamerMode", "textFilter", "markDateStyle"});
+  // How names, texts, dates and whose marks are projected. These apply to every
+  // surface at once, without saving, and a change projects the session again.
+  constexpr auto InstantKeys =
+    std::to_array<std::string_view>({"nameMode", "streamerMode", "textFilter", "markDateStyle", "markGuildmatesOnly"});
 
   // The hide-my-name choices in the order of Domain::HiddenIdentity.
   constexpr auto HidingNames = std::to_array<std::string_view>({"off", "everywhere", "exceptGroundMarks"});
@@ -188,6 +193,12 @@ export namespace Dreamsleeve::Host
     const auto    parsed = std::from_chars(text.data() + 1, text.data() + text.size(), value, 16);
     if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) return std::nullopt;
     return value;
+  }
+
+  // 0xRRGGBB to "#RRGGBB", the form ParseColor reads.
+  std::string ColorText(std::uint32_t value)
+  {
+    return std::format("#{:06X}", value & 0xFFFFFF);
   }
 
   // Host-owned records, never round-tripped through the web UI. IDs are

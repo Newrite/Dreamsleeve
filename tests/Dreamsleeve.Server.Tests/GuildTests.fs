@@ -17,7 +17,7 @@ let private ok = function Ok value -> value | Error error -> failtestf "Expected
 let private pid raw = PlayerId.create raw |> ok
 let private gid raw = GuildId.create raw |> ok
 let private profile number =
-    PlayerData.create (pid number) (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok)
+    PlayerData.create (pid number) (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok) NameColor.unknown
 let private text value = ChatMessageText.create 2000 value |> ok
 let private reason = SanctionReason.create "Флуд" |> ok
 let private token = CancellationToken.None

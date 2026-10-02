@@ -676,6 +676,7 @@ def smoke(args, log, directory: Path):
         shown_as = wait_player(bob, hidden_id, lambda state: state["data"].get("pseudonymous"), args.timeout, bob_start)
         check(shown_as["data"]["username"] == "" and shown_as["data"]["displayName"] == "Тень",
               "The observer received something other than the pseudonym")
+        check("nameColor" not in shown_as["data"], "The pseudonym carried the player's name color")
         stage("a session opened hidden shows the pseudonym with an empty username online; its owner sees the real profile")
 
         hidden_start, bob_start = hidden.mark(), bob.mark()
@@ -731,6 +732,21 @@ def smoke(args, log, directory: Path):
         hidden.wait_for(lambda lines: any("rejected (10): The display name can be changed again in" in line for line in lines),
                         args.timeout, hidden_start, read=True)
         stage("a listed word and a second change within the interval are refused")
+
+        # The name color: a palette color from registration, a dark one refused,
+        # a chosen one stored and spread through presence, the next one too soon.
+        palette = {0xE57373, 0xF06292, 0xBA68C8, 0x9575CD, 0x7986CB, 0x64B5F6, 0x4FC3F7, 0x4DD0E1,
+                   0x4DB6AC, 0x81C784, 0xAED581, 0xDCE775, 0xFFF176, 0xFFD54F, 0xFFB74D, 0xFF8A65}
+        registered = next(state for state in player_states(bob.output(), hidden_id) if not state["data"].get("pseudonymous"))
+        check(registered["data"].get("nameColor") in palette, f"A new account has no palette color: {registered['data']}")
+        mark_refused(hidden, "color #101010", 27)
+        hidden_start, bob_start = hidden.mark(), bob.mark()
+        hidden.send("color #FFFFFF")
+        hidden.wait_for(lambda lines: any(re.fullmatch(r"request \d+ name color #FFFFFF", line) for line in lines),
+                        args.timeout, hidden_start, read=True)
+        wait_player(bob, hidden_id, lambda state: state["data"].get("nameColor") == 0xFFFFFF, args.timeout, bob_start)
+        mark_refused(hidden, "color #4FC3F7", 10)
+        stage("a new account has a palette color; a dark one is refused, a chosen one reaches others, the next waits")
         for child in (hidden, late):
             child.send("quit")
             child.process.wait(timeout=args.timeout)

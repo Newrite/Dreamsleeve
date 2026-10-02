@@ -739,7 +739,7 @@ test("firefly name preferences save and restore", async ({ page }) => {
     page.getByRole("slider", { name: "Высота имени над светлячком" }),
   ).toHaveValue("70");
   await page
-    .getByRole("group", { name: "Имена над светлячками" })
+    .getByRole("group", { name: "Светлячки и имена над ними" })
     .scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/firefly-settings.png" });
 });
@@ -1399,6 +1399,69 @@ test("the own display name changes in the account panel once the server answers"
   await field.fill("Ещё Одно");
   await change.click();
   await expect(status).toHaveText("Имя можно сменить снова через 1 мин");
+});
+
+test("names are drawn in their color; the own color changes in the settings once the server answers", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await expect(
+    page
+      .locator('[data-part="messages"] button', { hasText: "Седобородый:" })
+      .first(),
+  ).toHaveCSS("color", "rgb(255, 213, 79)");
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  const picker = page.locator('[data-part="name-color"]');
+  const status = page.getByRole("status", { name: "Смена цвета" });
+  const apply = page.getByRole("button", { name: "Применить цвет" });
+  // The current color is chosen; nothing to apply yet.
+  await expect(picker.getByRole("button", { name: "#64B5F6" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(apply).toBeDisabled();
+  await picker.getByRole("button", { name: "#FF8A65" }).click();
+  await expect(picker.locator("b")).toHaveCSS("color", "rgb(255, 138, 101)");
+  await apply.click();
+  await expect(status).toHaveText("Ожидание сервера…");
+  await expect(status).toHaveText("Цвет сохранён");
+  await expect(apply).toBeDisabled();
+  // The workshop stands in for the server: a dark color is refused.
+  await picker.getByLabel("Свой цвет").fill("#101010");
+  await apply.click();
+  await expect(status).toHaveText(
+    "Цвет слишком тёмный: имя будет плохо видно в чате",
+  );
+  await picker.getByRole("slider", { name: "Оттенок" }).fill("200");
+  await apply.click();
+  await expect(status).toHaveText("Цвет можно сменить снова через 10 с");
+  await picker.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/name-color.png" });
+});
+
+test("fireflies and marks of guildmates only save and restore", async ({
+  page,
+}) => {
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+    await page
+      .getByRole("button", { name: "Открыть меню Dreamsleeve" })
+      .click();
+    await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  };
+  await openSettings();
+  const fireflies = page.getByLabel("Только игроки из ваших гильдий");
+  const marks = page.getByLabel("Только от игроков из ваших гильдий");
+  await expect(fireflies).not.toBeChecked();
+  await expect(marks).not.toBeChecked();
+  await fireflies.check();
+  await marks.check();
+  await page.getByRole("button", { name: "Сохранить настройки" }).click();
+  await page.reload();
+  await openSettings();
+  await expect(fireflies).toBeChecked();
+  await expect(marks).toBeChecked();
 });
 
 test("guilds have their tabs and send target, a panel by role, invitations and a guild mute", async ({

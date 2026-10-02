@@ -341,7 +341,7 @@ username и PlayerId остаются. Протокол v11: `ChangeDisplayName`
 - Интервал считает `AuthService` по таблице `display_name_changes` (SQLite, миграция 6) в одной
   транзакции с заменой имени, поэтому переподключение и перезапуск его не сбрасывают. Смены
   администратором в интервал не входят и не ограничиваются.
-- Путь: `PlayerSession` → `AuthService` (`DisplayNameChangeRequest`, workers `account-storage`) →
+- Путь: `PlayerSession` → `AuthService` (`ProfileChangeRequest` с `ProfileChange.DisplayName`, workers `account-storage`) →
   ответ сессии → тот же путь, что у переименования из панели: `Moderation.publicProfile`,
   `SessionHostCommand.UpdateProfile` (книга имён), `PresenceCommand.Update` и
   `GroundMarkCommand.Rename`. Остальные получают обновлённого игрока в `PresenceChanged` (`identityEqual`); новые
@@ -354,6 +354,34 @@ username и PlayerId остаются. Протокол v11: `ChangeDisplayName`
   удаляются при записи новой, как квоты меток на земле.
 - Лог: `Player {PlayerId} {Username} changed display name: {Previous} -> {DisplayName}` и отказ по
   интервалу; смена администратором пишется в лог и в `admin_audit`.
+
+## Цвет имени в чате
+
+Имя игрока в чате окрашено его собственным цветом — во всех каналах: общем и гильдейских (строка
+гильдии остаётся зелёной, своим цветом рисуется только имя). Надписи над светлячками, онлайн и
+метки цвет не меняет. Протокол v20: `PlayerProfile.name_color` (`0xRRGGBB`), `SetNameColor` →
+`NameColorChanged` ([Protocol/README.ru.md](../Protocol/README.ru.md#цвет-имени)).
+
+- Новый аккаунт получает случайный цвет из палитры 16 светлых цветов (`NameColor.palette`);
+  миграция 14 (`1791590400000_name_colors.sql`) так же раскрасила все существующие аккаунты.
+  Цвет хранится в `profiles.name_color`.
+- Игрок выбирает другой в «Настройки → Цвет вашего имени в чате»: готовые цвета, ползунок оттенка
+  или свой `#RRGGBB`, предпросмотр строки чата и кнопка «Применить цвет» (`color #RRGGBB` в
+  Client.Dev).
+- Проверки — в `PlayerSession`: цвет должен читаться на тёмном фоне чата — относительная яркость
+  WCAG не ниже 0,15 (контраст 4:1 с чёрным; `NameColor.readable`), иначе
+  `NAME_COLOR_UNREADABLE = 27` («Цвет слишком тёмный…»); не чаще одного раза в
+  `[Identity] NameColorIntervalMs` (10000 мс; 0 — без лимита) за сессию, иначе `RATE_LIMITED`
+  («The name color can be changed again in N s.»). Мут смене цвета не мешает. Запрос текущего
+  цвета подтверждается сразу.
+- Путь тот же, что у смены имени: одна смена профиля за раз (имя или цвет), `AuthService`
+  (`ProfileChange.NameColor`, `SqliteAccountStore.setNameColor`), затем
+  `SessionHostCommand.UpdateProfile`, `PresenceCommand.Update` — остальные получают игрока с
+  новым цветом в `PresenceChanged`. Новые сообщения несут новый цвет, отправленные раньше
+  сохраняют снимок автора, как и имя. Невыкупленные билеты получают новый цвет сразу.
+- Скрытое имя: псевдоним уходит без цвета, клиенты рисуют его цветом канала — иначе цвет выдавал
+  бы игрока. В режиме стримера цвет остаётся: он не раскрывает настоящее имя.
+- Лог: `Player {PlayerId} {Username} changed name color to #RRGGBB` и отказ по интервалу.
 
 ## Муты, баны и кик
 
@@ -442,6 +470,11 @@ runtime `AccountChange` (`Banned`, `MuteChanged`), runtime хранит муты
 ([GuildsRu.md](GuildsRu.md)). Мут в гильдии закрывает только её чат.
 
 ## Протокол
+
+Protocol **v20** — цвет имени в чате: `PlayerProfile.name_color = 5` (optional, нет у псевдонима),
+`ClientPacket.set_name_color = 28` (`SetNameColor{name_color}`, Control, RequestId),
+`ServerPacket.name_color_changed = 41` (`NameColorChanged{name_color}`), код
+`NAME_COLOR_UNREADABLE = 27`.
 
 Protocol **v15** — инструменты модератора, подробно в
 [Protocol/README.ru.md](../Protocol/README.ru.md#модерация): роль в приветствии и `RoleChanged`,

@@ -10,326 +10,134 @@
 
 import Dreamsleeve.Protocol;
 
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::Unspecified));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::ClientShutdown) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::ClientShutdown));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::ServerShutdown) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::ServerShutdown));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::Kicked) == static_cast<long long>(Dreamsleeve::Protocol::Network::Kicked));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::AuthFailed) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::AuthFailed));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::TimeoutPolicy) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::TimeoutPolicy));
-static_assert(
-  static_cast<long long>(Protocol::Network::DisconnectReason::ProtocolError) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Network::ProtocolError));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Network::Unspecified));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::ClientShutdown) == static_cast<long long>(Dreamsleeve::Protocol::Network::ClientShutdown));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::ServerShutdown) == static_cast<long long>(Dreamsleeve::Protocol::Network::ServerShutdown));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::Kicked) == static_cast<long long>(Dreamsleeve::Protocol::Network::Kicked));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::AuthFailed) == static_cast<long long>(Dreamsleeve::Protocol::Network::AuthFailed));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::TimeoutPolicy) == static_cast<long long>(Dreamsleeve::Protocol::Network::TimeoutPolicy));
+static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::ProtocolError) == static_cast<long long>(Dreamsleeve::Protocol::Network::ProtocolError));
 static_assert(Dreamsleeve::Protocol::Network::DisconnectReason_ARRAYSIZE == 7);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::InvalidRequest) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_INVALID_REQUEST));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionNotReady) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_NOT_READY));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionAlreadyOpen) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_ALREADY_OPEN));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::UsernameTaken) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_USERNAME_TAKEN));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::ChannelNotFound) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotChannelMember) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::Overloaded) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_OVERLOADED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::AuthenticationFailed) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::TextNotAllowed) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_TEXT_NOT_ALLOWED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::RateLimited) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_RATE_LIMITED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::AnnouncementNotAllowed) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GroundMarkAreaFull) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GroundMarkNotFound) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::HiddenIdentityNotAllowed) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::DisplayNameChangeNotAllowed) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::Muted) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_MUTED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotPermitted) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NOT_PERMITTED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::TargetNotFound) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_TARGET_NOT_FOUND));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildNameTaken) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_NAME_TAKEN));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildFull) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_FULL));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildPlayerLimit) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_PLAYER_LIMIT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildServerLimit) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_SERVER_LIMIT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildInvitesFull) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_INVITES_FULL));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildAlreadyMember) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_ALREADY_MEMBER));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildAlreadyInvited) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_ALREADY_INVITED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildMasterStays) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_MASTER_STAYS));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 27);
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::InvalidRequest) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_INVALID_REQUEST));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionNotReady) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_NOT_READY));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionAlreadyOpen) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_ALREADY_OPEN));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::UsernameTaken) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_USERNAME_TAKEN));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::ChannelNotFound) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_CHANNEL_NOT_FOUND));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotChannelMember) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NOT_CHANNEL_MEMBER));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Overloaded) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_OVERLOADED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::AuthenticationFailed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_AUTHENTICATION_FAILED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::TextNotAllowed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_TEXT_NOT_ALLOWED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::RateLimited) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_RATE_LIMITED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::AnnouncementNotAllowed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GroundMarkAreaFull) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GROUND_MARK_AREA_FULL));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GroundMarkNotFound) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GROUND_MARK_NOT_FOUND));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::HiddenIdentityNotAllowed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::DisplayNameChangeNotAllowed) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Muted) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_MUTED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::NotPermitted) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NOT_PERMITTED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::TargetNotFound) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_TARGET_NOT_FOUND));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildNameTaken) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_NAME_TAKEN));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildFull) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_FULL));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildPlayerLimit) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_PLAYER_LIMIT));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildServerLimit) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_SERVER_LIMIT));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildInvitesFull) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_INVITES_FULL));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildAlreadyMember) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_ALREADY_MEMBER));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildAlreadyInvited) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_ALREADY_INVITED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildMasterStays) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_MASTER_STAYS));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::NameColorUnreadable) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NAME_COLOR_UNREADABLE));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 28);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_UNKNOWN));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Exploring) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_EXPLORING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Combat) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_COMBAT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Talking) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_TALKING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Bartering) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_BARTERING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Training) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_TRAINING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Reading) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_READING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Lockpicking) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_LOCKPICKING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Crafting) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_CRAFTING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::UsingObject) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_USING_OBJECT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Riding) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_RIDING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Sneaking) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_SNEAKING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Swimming) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_SWIMMING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Flying) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_FLYING));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Dead) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_DEAD));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Ragdoll) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_RAGDOLL));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Menu) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_MENU));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::NewGame) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_NEW_GAME));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ActivityKind::Loading) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_LOADING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_UNKNOWN));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Exploring) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_EXPLORING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Combat) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_COMBAT));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Talking) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_TALKING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Bartering) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_BARTERING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Training) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_TRAINING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Reading) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_READING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Lockpicking) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_LOCKPICKING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Crafting) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_CRAFTING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::UsingObject) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_USING_OBJECT));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Riding) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_RIDING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Sneaking) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_SNEAKING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Swimming) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_SWIMMING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Flying) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_FLYING));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Dead) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_DEAD));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Ragdoll) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_RAGDOLL));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Menu) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_MENU));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::NewGame) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_NEW_GAME));
+static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Loading) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_LOADING));
 static_assert(Dreamsleeve::Protocol::Chat::ActivityKind_ARRAYSIZE == 19);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::LockDifficulty::Unknown) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_UNKNOWN));
-static_assert(
-  static_cast<long long>(Protocol::Chat::LockDifficulty::Unlocked) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_UNLOCKED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::LockDifficulty::VeryEasy) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_VERY_EASY));
-static_assert(
-  static_cast<long long>(Protocol::Chat::LockDifficulty::Easy) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_EASY));
-static_assert(
-  static_cast<long long>(Protocol::Chat::LockDifficulty::Average) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_AVERAGE));
-static_assert(
-  static_cast<long long>(Protocol::Chat::LockDifficulty::Hard) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_HARD));
-static_assert(
-  static_cast<long long>(Protocol::Chat::LockDifficulty::VeryHard) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_VERY_HARD));
-static_assert(
-  static_cast<long long>(Protocol::Chat::LockDifficulty::RequiresKey) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_REQUIRES_KEY));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Unknown) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_UNKNOWN));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Unlocked) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_UNLOCKED));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::VeryEasy) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_VERY_EASY));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Easy) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_EASY));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Average) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_AVERAGE));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::Hard) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_HARD));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::VeryHard) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_VERY_HARD));
+static_assert(static_cast<long long>(Protocol::Chat::LockDifficulty::RequiresKey) == static_cast<long long>(Dreamsleeve::Protocol::Chat::LOCK_DIFFICULTY_REQUIRES_KEY));
 static_assert(Dreamsleeve::Protocol::Chat::LockDifficulty_ARRAYSIZE == 8);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::ChatChannelKind::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ChatChannelKind::Global) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_GLOBAL));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ChatChannelKind::Guild) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_GUILD));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ChatChannelKind::System) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_SYSTEM));
+static_assert(static_cast<long long>(Protocol::Chat::ChatChannelKind::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::ChatChannelKind::Global) == static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_GLOBAL));
+static_assert(static_cast<long long>(Protocol::Chat::ChatChannelKind::Guild) == static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_GUILD));
+static_assert(static_cast<long long>(Protocol::Chat::ChatChannelKind::System) == static_cast<long long>(Dreamsleeve::Protocol::Chat::CHAT_CHANNEL_KIND_SYSTEM));
 static_assert(Dreamsleeve::Protocol::Chat::ChatChannelKind_ARRAYSIZE == 6);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementSource::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementSource::Server) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_SERVER));
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementSource::TrustedClient) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementSource::ThirdParty) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_THIRD_PARTY));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementSource::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementSource::Server) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_SERVER));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementSource::TrustedClient) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementSource::ThirdParty) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_SOURCE_THIRD_PARTY));
 static_assert(Dreamsleeve::Protocol::Chat::AnnouncementSource_ARRAYSIZE == 4);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementKind::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementKind::Announcement) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_ANNOUNCEMENT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementKind::Event) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_EVENT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementKind::Admin) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_ADMIN));
-static_assert(
-  static_cast<long long>(Protocol::Chat::AnnouncementKind::Periodic) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_PERIODIC));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementKind::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementKind::Announcement) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_ANNOUNCEMENT));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementKind::Event) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_EVENT));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementKind::Admin) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_ADMIN));
+static_assert(static_cast<long long>(Protocol::Chat::AnnouncementKind::Periodic) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ANNOUNCEMENT_KIND_PERIODIC));
 static_assert(Dreamsleeve::Protocol::Chat::AnnouncementKind_ARRAYSIZE == 5);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::TrustedClient) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::ThirdParty) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY));
+static_assert(static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::TrustedClient) == static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_TRUSTED_CLIENT));
+static_assert(static_cast<long long>(Protocol::Chat::ClientAnnouncementSource::ThirdParty) == static_cast<long long>(Dreamsleeve::Protocol::Chat::CLIENT_ANNOUNCEMENT_SOURCE_THIRD_PARTY));
 static_assert(Dreamsleeve::Protocol::Chat::ClientAnnouncementSource_ARRAYSIZE == 3);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::GroundMarkKind::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::GROUND_MARK_KIND_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::GroundMarkKind::Note) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::GROUND_MARK_KIND_NOTE));
-static_assert(
-  static_cast<long long>(Protocol::Chat::GroundMarkKind::Death) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::GROUND_MARK_KIND_DEATH));
+static_assert(static_cast<long long>(Protocol::Chat::GroundMarkKind::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GROUND_MARK_KIND_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::GroundMarkKind::Note) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GROUND_MARK_KIND_NOTE));
+static_assert(static_cast<long long>(Protocol::Chat::GroundMarkKind::Death) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GROUND_MARK_KIND_DEATH));
 static_assert(Dreamsleeve::Protocol::Chat::GroundMarkKind_ARRAYSIZE == 3);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::HiddenIdentity::None) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_NONE));
-static_assert(
-  static_cast<long long>(Protocol::Chat::HiddenIdentity::Everywhere) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_EVERYWHERE));
-static_assert(
-  static_cast<long long>(Protocol::Chat::HiddenIdentity::ExceptGroundMarks) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS));
+static_assert(static_cast<long long>(Protocol::Chat::HiddenIdentity::None) == static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_NONE));
+static_assert(static_cast<long long>(Protocol::Chat::HiddenIdentity::Everywhere) == static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_EVERYWHERE));
+static_assert(static_cast<long long>(Protocol::Chat::HiddenIdentity::ExceptGroundMarks) == static_cast<long long>(Dreamsleeve::Protocol::Chat::HIDDEN_IDENTITY_EXCEPT_GROUND_MARKS));
 static_assert(Dreamsleeve::Protocol::Chat::HiddenIdentity_ARRAYSIZE == 3);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::SessionEndReason::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::SessionEndReason::AccessRevoked) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_ACCESS_REVOKED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::SessionEndReason::Banned) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_BANNED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::SessionEndReason::Kicked) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_KICKED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::SessionEndReason::AddressBanned) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_ADDRESS_BANNED));
+static_assert(static_cast<long long>(Protocol::Chat::SessionEndReason::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::SessionEndReason::AccessRevoked) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_ACCESS_REVOKED));
+static_assert(static_cast<long long>(Protocol::Chat::SessionEndReason::Banned) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_BANNED));
+static_assert(static_cast<long long>(Protocol::Chat::SessionEndReason::Kicked) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_KICKED));
+static_assert(static_cast<long long>(Protocol::Chat::SessionEndReason::AddressBanned) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SESSION_END_REASON_ADDRESS_BANNED));
 static_assert(Dreamsleeve::Protocol::Chat::SessionEndReason_ARRAYSIZE == 5);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::PlayerRole::Player) == static_cast<long long>(Dreamsleeve::Protocol::Chat::PLAYER_ROLE_PLAYER));
-static_assert(
-  static_cast<long long>(Protocol::Chat::PlayerRole::Moderator) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::PLAYER_ROLE_MODERATOR));
+static_assert(static_cast<long long>(Protocol::Chat::PlayerRole::Player) == static_cast<long long>(Dreamsleeve::Protocol::Chat::PLAYER_ROLE_PLAYER));
+static_assert(static_cast<long long>(Protocol::Chat::PlayerRole::Moderator) == static_cast<long long>(Dreamsleeve::Protocol::Chat::PLAYER_ROLE_MODERATOR));
 static_assert(Dreamsleeve::Protocol::Chat::PlayerRole_ARRAYSIZE == 2);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::SanctionKind::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::SanctionKind::Mute) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_MUTE));
-static_assert(
-  static_cast<long long>(Protocol::Chat::SanctionKind::Ban) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_BAN));
+static_assert(static_cast<long long>(Protocol::Chat::SanctionKind::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::SanctionKind::Mute) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_MUTE));
+static_assert(static_cast<long long>(Protocol::Chat::SanctionKind::Ban) == static_cast<long long>(Dreamsleeve::Protocol::Chat::SANCTION_KIND_BAN));
 static_assert(Dreamsleeve::Protocol::Chat::SanctionKind_ARRAYSIZE == 3);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::GuildRole::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::GuildRole::Member) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_MEMBER));
-static_assert(
-  static_cast<long long>(Protocol::Chat::GuildRole::Officer) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_OFFICER));
-static_assert(
-  static_cast<long long>(Protocol::Chat::GuildRole::Master) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_MASTER));
+static_assert(static_cast<long long>(Protocol::Chat::GuildRole::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildRole::Member) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_MEMBER));
+static_assert(static_cast<long long>(Protocol::Chat::GuildRole::Officer) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_OFFICER));
+static_assert(static_cast<long long>(Protocol::Chat::GuildRole::Master) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_ROLE_MASTER));
 static_assert(Dreamsleeve::Protocol::Chat::GuildRole_ARRAYSIZE == 4);
 
-static_assert(
-  static_cast<long long>(Protocol::Chat::GuildRemovalReason::Unspecified) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_UNSPECIFIED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::GuildRemovalReason::Left) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_LEFT));
-static_assert(
-  static_cast<long long>(Protocol::Chat::GuildRemovalReason::Excluded) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_EXCLUDED));
-static_assert(
-  static_cast<long long>(Protocol::Chat::GuildRemovalReason::Disbanded) ==
-  static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_DISBANDED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildRemovalReason::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildRemovalReason::Left) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_LEFT));
+static_assert(static_cast<long long>(Protocol::Chat::GuildRemovalReason::Excluded) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_EXCLUDED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildRemovalReason::Disbanded) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_DISBANDED));
 static_assert(Dreamsleeve::Protocol::Chat::GuildRemovalReason_ARRAYSIZE == 4);

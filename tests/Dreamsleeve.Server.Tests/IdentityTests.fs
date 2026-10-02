@@ -12,7 +12,7 @@ let private ok = function
 let private pseudonym text = Pseudonym.create text |> ok
 
 let private profile id username display =
-    PlayerData.create (PlayerId.create id |> ok) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok)
+    PlayerData.create (PlayerId.create id |> ok) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok) NameColor.unknown
 
 let private dictionary names =
     PseudonymDictionary.create (names |> List.map pseudonym) |> ValueOption.get

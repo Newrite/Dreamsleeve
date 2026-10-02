@@ -284,12 +284,18 @@ Runtime после завершения сессии шлёт `Detach` и мет
 `ClientCommand.ChangeDisplayName` (кодек уже применил `DisplayName.create`) → runtime пересылает
 `PlayerSessionMessage.ChangeDisplayName` Ready-сессии. Сессия отказывает сама
 (`MUTED`, `DISPLAY_NAME_CHANGE_NOT_ALLOWED`, `OVERLOADED` при ожидающей смене, `TEXT_NOT_ALLOWED`), текущее
-имя подтверждает сразу, иначе отправляет `DisplayNameChangeRequest` по
-`SessionAuthenticator.DisplayNames` (outbox на одно место). `AuthService` хранит имя и считает
-интервал (`TooSoon` → `RATE_LIMITED` с минутами), ответ `DisplayNameReplied` — служебное сообщение
+имя подтверждает сразу, иначе отправляет `ProfileChangeRequest` (`ProfileChange.DisplayName`) по
+`SessionAuthenticator.Profiles` (outbox на одно место). `AuthService` хранит имя и считает
+интервал (`TooSoon` → `RATE_LIMITED` с минутами), ответ `ProfileReplied` — служебное сообщение
 сессии. После успеха — `profileChanged own=true`: `UpdateProfile(own = true)` снимает
 административную подмену профиля в `SessionTable.Profiles`, presence и `GroundMarkCommand.Rename`
 несут новое имя, клиент получает `DisplayNameChanged`.
+
+Цвет имени (`ClientCommand.SetNameColor`, кодек проверил 24 бита) идёт тем же путём с
+`ProfileChange.NameColor`: сессия сама отказывает в слишком тёмном цвете
+(`NAME_COLOR_UNREADABLE`, `NameColor.readable`) и в смене чаще `[Identity] NameColorIntervalMs`
+(`RATE_LIMITED`, интервал — в сессии), одна смена профиля за раз — имя или цвет; клиент получает
+`NameColorChanged`.
 
 ### Логи
 

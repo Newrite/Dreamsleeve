@@ -11,6 +11,7 @@
   {
     "type": "saveSettings",
     "settings": {
+      "fireflyGuildmatesOnly": false,
       "showFireflyNames": true,
       "fireflyNameOcclusion": true,
       "fireflyNameFontSize": 18,
@@ -59,6 +60,7 @@
       "fireflyHeightOffset": 110,
       "showGroundNotes": true,
       "showDeathMarks": true,
+      "markGuildmatesOnly": false,
       "maxVisibleNotes": 16,
       "maxVisibleDeaths": 16,
       "groundDrawDistance": 4096,
@@ -101,6 +103,7 @@
   {
     "type": "displaySettings",
     "settings": {
+      "fireflyGuildmatesOnly": false,
       "showFireflyNames": true,
       "fireflyNameOcclusion": true,
       "fireflyNameFontSize": 18,
@@ -149,6 +152,7 @@
       "fireflyHeightOffset": 110,
       "showGroundNotes": true,
       "showDeathMarks": true,
+      "markGuildmatesOnly": false,
       "maxVisibleNotes": 16,
       "maxVisibleDeaths": 16,
       "groundDrawDistance": 4096,
@@ -201,6 +205,10 @@
   {
     "type": "changeDisplayName",
     "displayName": "Новое имя"
+  },
+  {
+    "type": "setNameColor",
+    "color": "#E57373"
   },
   {
     "type": "sanctionPlayer",

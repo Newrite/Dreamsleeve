@@ -85,6 +85,12 @@ namespace Dreamsleeve::Client::Wire
         packet.mutable_change_display_name()->set_display_name(value.displayName);
       }
 
+      void operator()(const SetNameColor& value) const
+      {
+        packet.set_request_id(value.requestId);
+        packet.mutable_set_name_color()->set_name_color(value.nameColor);
+      }
+
       void operator()(const SanctionPlayer& value) const
       {
         packet.set_request_id(value.requestId);
@@ -350,6 +356,10 @@ namespace Dreamsleeve::Client::Wire
         if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
         if (packet.display_name_changed().display_name().empty()) return Invalid("display_name");
         return DisplayNameChanged{packet.request_id(), packet.display_name_changed().display_name()};
+      case P::ServerPacket::kNameColorChanged:
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        if (packet.name_color_changed().name_color() > MaxNameColor) return Invalid("name_color");
+        return NameColorChanged{packet.request_id(), packet.name_color_changed().name_color()};
       case P::ServerPacket::kRoleChanged: {
         if (packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
         auto role = Role(packet.role_changed().role());

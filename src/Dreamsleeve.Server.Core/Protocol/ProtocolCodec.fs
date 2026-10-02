@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 19u
+    let Version = 20u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -40,6 +40,10 @@ module ProtocolCodec =
                 SessionCodec.decodeHiding "hidden" packet.SetIdentityVisibility.Hidden |> Result.map ClientCommand.SetIdentityVisibility
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.ChangeDisplayName ->
                 SessionCodec.decodeDisplayName config packet.ChangeDisplayName
+            | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.SetNameColor ->
+                NameColor.create packet.SetNameColor.NameColor
+                |> Result.map ClientCommand.SetNameColor
+                |> Result.mapError ProtocolCodecFailure.InvalidDomain
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.JoinAsGuest -> Ok ClientCommand.JoinAsGuest
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.SanctionPlayer -> ModerationCodec.decodeSanction packet.SanctionPlayer
             | Dreamsleeve.Protocol.Chat.ClientPacket.PayloadOneofCase.LiftSanction -> ModerationCodec.decodeLift packet.LiftSanction
@@ -82,8 +86,8 @@ module ProtocolCodec =
         match request.Command with
         | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _ | ClientCommand.DeleteChatMessage _ -> DeliveryLane.Chat
         | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.UpdatePlayer _ | ClientCommand.SetIdentityVisibility _
-        | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
-        | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
+        | ClientCommand.ChangeDisplayName _ | ClientCommand.SetNameColor _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _
+        | ClientCommand.RemoveGroundMark _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
         | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.Guild _ -> DeliveryLane.Control
 
     /// What the client hears for a request this codec refused: the wire field
@@ -112,6 +116,7 @@ module ProtocolCodec =
         | ProtocolCodecFailure.InvalidPayload "kinds" -> invalid "kinds" "Choose notes, death marks or both."
         | ProtocolCodecFailure.InvalidPayload "role" -> invalid "role" "A guild role is member or officer."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidId "GuildId") -> invalid "guild_id" "Invalid guild."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidColor _) -> invalid "name_color" "A color is 0xRRGGBB."
         | _ -> invalid "" "Invalid request."
 
     /// The refusal of a request, sent back on the lane the request came by.
@@ -134,6 +139,7 @@ module ProtocolCodec =
         | ServerResponse.SessionOpened(requestId, _) | ServerResponse.PlayerUpdateAccepted requestId
         | ServerResponse.GroundMarkPlaced(requestId, _, _) | ServerResponse.GroundMarkRemoved(requestId, _)
         | ServerResponse.IdentityVisibilityChanged(requestId, _, _) | ServerResponse.DisplayNameChanged(requestId, _)
+        | ServerResponse.NameColorChanged(requestId, _)
         | ServerResponse.SanctionIssued(requestId, _) | ServerResponse.SanctionLifted(requestId, _, _) | ServerResponse.PlayerKicked(requestId, _)
         | ServerResponse.SanctionList(requestId, _) | ServerResponse.PlayerMarks(requestId, _, _) | ServerResponse.PlayerMarksCleared(requestId, _, _)
         | ServerResponse.GuildCommandDone(requestId, _) ->
@@ -271,6 +277,9 @@ module ProtocolCodec =
                 envelope ()
             | ServerResponse.DisplayNameChanged(_, name) ->
                 packet.DisplayNameChanged <- Dreamsleeve.Protocol.Chat.DisplayNameChanged(DisplayName = DisplayName.value name)
+                envelope ()
+            | ServerResponse.NameColorChanged(_, color) ->
+                packet.NameColorChanged <- Dreamsleeve.Protocol.Chat.NameColorChanged(NameColor = NameColor.value color)
                 envelope ()
             | ServerResponse.MuteChanged mute ->
                 let changed = Dreamsleeve.Protocol.Chat.MuteChanged()

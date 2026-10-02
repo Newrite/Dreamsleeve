@@ -66,8 +66,9 @@ module SqliteGroundMarkStore =
             match GroundMarkId.create (uint64 mark.id), PlayerId.create (uint64 mark.author_id), body, characterName,
                   PluginName.create Int32.MaxValue mark.plugin_name, LocalFormId.create (uint32 mark.local_form_id),
                   Position.create (float32 mark.x) (float32 mark.y) (float32 mark.z), Radian.create (float32 mark.heading),
-                  Username.create Int32.MaxValue account.username, DisplayName.create Int32.MaxValue profile.display_name with
-            | Ok markId, Ok author, Ok body, Ok characterName, Ok plugin, Ok localId, Ok position, Ok heading, Ok username, Ok displayName
+                  Username.create Int32.MaxValue account.username, DisplayName.create Int32.MaxValue profile.display_name,
+                  SqliteStatements.nameColor profile.name_color with
+            | Ok markId, Ok author, Ok body, Ok characterName, Ok plugin, Ok localId, Ok position, Ok heading, Ok username, Ok displayName, Ok color
                 when PluginName.value plugin = mark.plugin_name && DisplayName.value displayName = profile.display_name ->
                 let placement = GroundMarkPlacement.create (FormKey.create plugin localId) position heading
                 let createdAt =
@@ -81,7 +82,7 @@ module SqliteGroundMarkStore =
                             |> GroundMark.withCharacterName characterName
                             |> GroundMark.withPseudonym pseudonym
                             |> GroundMark.withGameDate gameDate
-                         Author = PlayerData.create author username displayName }
+                         Author = PlayerData.create author username displayName color }
             | _ -> invalidData "A stored ground mark or its author profile is invalid."
 
     /// All marks, ascending by ID, with the storage high-water mark. Expiry is

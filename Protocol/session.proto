@@ -109,3 +109,18 @@ message ChangeDisplayName {
 message DisplayNameChanged {
   string display_name = 1;
 }
+
+// Choose the color of the sender's own name in chat, 0xRRGGBB. Control lane;
+// settled by NameColorChanged or RequestRejected (INVALID_REQUEST above
+// 0xFFFFFF, NAME_COLOR_UNREADABLE, RATE_LIMITED, OVERLOADED). Muted players
+// may change it too.
+message SetNameColor {
+  uint32 name_color = 1;
+}
+
+// Settles SetNameColor with the color as stored. The other players receive
+// the new profile as PlayerUpdated; messages already sent keep the color they
+// were sent with.
+message NameColorChanged {
+  uint32 name_color = 1;
+}

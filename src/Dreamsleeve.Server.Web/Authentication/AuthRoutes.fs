@@ -156,7 +156,7 @@ module AuthRoutes =
                                 expiresInSeconds = grant.ExpiresInSeconds; rememberToken = grant.RememberToken |}
         | Ok AccountAccessResult.Completed -> Results.NoContent()
         // Trusted results never come from a public route.
-        | Ok (AccountAccessResult.PasswordResetCreated _) | Ok (AccountAccessResult.Renamed _)
+        | Ok (AccountAccessResult.PasswordResetCreated _) | Ok (AccountAccessResult.ProfileChanged _)
         | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
         | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
         | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)

@@ -238,6 +238,15 @@ export namespace Dreamsleeve::Host
         Emit(session.NameEvent());
       }
 
+      // Admitted as "#RRGGBB"; the server judges readability.
+      void operator()(Commands::SetNameColor& command)
+      {
+        auto& session = context.session;
+        if (auto posted = session.SetNameColor(context.exchange, ParseColor(command.color).value_or(0)); !posted)
+          session.SetColorError(posted.error());
+        Emit(session.ColorEvent());
+      }
+
       // Moderator tools: the server answers with moderationResult; a request
       // that did not leave is answered here.
       template <class Command>

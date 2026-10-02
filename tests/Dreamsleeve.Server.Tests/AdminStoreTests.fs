@@ -43,7 +43,8 @@ let tests = testList "SQLite admin" [
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = player database "alice" "Alice"
-        database.Execute ((downSql "1791504000000_guilds.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%guilds%';"
+        database.Execute ((downSql "1791590400000_name_colors.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%name_colors%';"
+                          + (downSql "1791504000000_guilds.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%guilds%';"
                           + (downSql "1791417600000_devices.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%devices%';"
                           + (downSql "1791331200000_addresses.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%';"
                           + (downSql "1791244800000_registration.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%';"
@@ -55,10 +56,15 @@ let tests = testList "SQLite admin" [
                           + "DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; PRAGMA user_version = 4")
         equal 0L (tableCount database)
         SqliteAccountStore.initialize database.Config |> ok
-        equal 13L (database.Scalar "PRAGMA user_version")
+        equal 14L (database.Scalar "PRAGMA user_version")
         equal 5L (tableCount database)
         equal (Some alice.PlayerId) (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.map _.Profile.PlayerId)
-        // The DOWN sections return to schemas 12, 11, 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        // An existing player gets a name color of the palette new accounts get theirs from.
+        let color = database.Scalar "SELECT name_color FROM profiles" |> uint32
+        check (NameColor.palette |> Array.exists (fun entry -> NameColor.value entry = color)) $"palette color: {color:X6}"
+        // The DOWN sections return to schemas 13, 12, 11, 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        database.Execute (downSql "1791590400000_name_colors.sql")
+        equal 13L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791504000000_guilds.sql")
         equal 12L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791417600000_devices.sql")

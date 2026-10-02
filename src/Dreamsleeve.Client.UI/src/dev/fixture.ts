@@ -70,6 +70,7 @@ export const players: Player[] = [
   {
     id: "18446744073709551601",
     name: "Северный",
+    color: "#64B5F6",
     inCharacter: true,
     displayName: "Северный",
     username: "northern",
@@ -104,6 +105,7 @@ export const players: Player[] = [
   {
     id: "2",
     name: "Мира",
+    color: "#F06292",
     inCharacter: true,
     displayName: "Мира",
     username: "mira",
@@ -136,6 +138,7 @@ export const players: Player[] = [
   {
     id: "3",
     name: "Седобородый",
+    color: "#FFD54F",
     inCharacter: true,
     displayName: "Седобородый",
     username: "greybeard",

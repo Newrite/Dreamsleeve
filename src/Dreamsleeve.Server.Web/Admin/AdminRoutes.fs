@@ -482,7 +482,7 @@ module AdminRoutes =
                 | Ok None -> return! errorPage 404 "Игрок не найден." (Some admin) context
                 | Ok (Some before) ->
                     match! account routes context (AccountAccessCommand.RenamePlayer(playerId, name, admin.Id)) with
-                    | Ok (AccountAccessResult.Renamed profile) ->
+                    | Ok (AccountAccessResult.ProfileChanged profile) ->
                         if not (routes.Ports.ApplyProfile profile) then
                             routes.Logger.Warning("Runtime did not take the new name of player {PlayerId}", PlayerId.value playerId)
                         let details = $"{DisplayName.value before.Profile.DisplayName} -> {DisplayName.value profile.DisplayName}"

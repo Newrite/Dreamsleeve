@@ -361,6 +361,11 @@ AllowDisplayNameChange = true
 # A player's own change may come no sooner than this after the previous one, minutes,
 # 0..525600 (a year), across reconnects and restarts; sooner gets RATE_LIMITED. 0 = no limit.
 DisplayNameChangeIntervalMinutes = 1
+# The color of a player's name in chat: a new account gets a random one, the player
+# chooses another in the game (a color too dark to read gets NAME_COLOR_UNREADABLE).
+# A session may change it no sooner than this after its previous change, milliseconds,
+# >= 0; sooner gets RATE_LIMITED. 0 disables the limit.
+NameColorIntervalMs = 10000
 
 # System channel: server announcements and announcements requested by clients.
 # A channel of its own, read-only for chat. Read at startup, like the rest of

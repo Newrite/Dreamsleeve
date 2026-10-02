@@ -7,7 +7,7 @@
 | [common.proto](common.proto) | PlayerProfile (публичная личность, в том числе псевдонимная) и FormKey |
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
-| [session.proto](session.proto) | OpenSession, JoinAsGuest и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged; мут и конец сессии: MuteState, MuteChanged, SessionEndReason, SessionEnded |
+| [session.proto](session.proto) | OpenSession, JoinAsGuest и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged; цвет имени: SetNameColor и NameColorChanged; мут и конец сессии: MuteState, MuteChanged, SessionEndReason, SessionEnded |
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [moderation.proto](moderation.proto) | Роль и инструменты модератора: PlayerRole, SanctionKind, RoleChanged, SanctionEntry, запросы наказаний, списков и удаления контента с их ответами |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
@@ -91,6 +91,8 @@ ENet-сессии по прежнему билету или history epoch (HTTP 
 | Сервер → клиент | IdentityVisibilityChanged | Подтверждение с RequestId: применённый вариант и псевдоним, который теперь видят другие, или его отсутствие |
 | Клиент → сервер | ChangeDisplayName | Новое собственное отображаемое имя; Control-канал |
 | Сервер → клиент | DisplayNameChanged | Подтверждение с RequestId: имя, как сервер его сохранил (Trim + NFC) |
+| Клиент → сервер | SetNameColor | Новый цвет своего имени в чате, `0xRRGGBB`; Control-канал |
+| Сервер → клиент | NameColorChanged | Подтверждение с RequestId: цвет, как сервер его сохранил |
 | Сервер → клиент | MuteChanged / SessionEnded / RoleChanged | Свой мут, причина конца сессии, своя роль; без RequestId (см. «Модерация») |
 | Клиент → сервер | SanctionPlayer … DeleteChatMessage | Запросы модератора; ответы и коды — в разделе «Модерация» |
 
@@ -262,6 +264,24 @@ Control-канале ENet.
   игрока со скрытым именем другие по-прежнему видят псевдоним, обновление им не приходит.
 - Клиентский кодек отвергает пустое имя в запросе и в ответе и ответ без RequestId.
 
+## Цвет имени
+
+С версии 20 у профиля есть цвет имени в чате: `PlayerProfile.name_color = 5` (optional uint32,
+`0xRRGGBB`). Сервер шлёт его в каждом показанном профиле — онлайн, автор сообщения, участник
+гильдии, автор метки; у псевдонима (`pseudonymous`) его нет, и клиент отвергает псевдоним с цветом
+и цвет больше `0xFFFFFF`. Новый аккаунт получает случайный цвет палитры сервера. Реализация —
+[ModerationAndNamesRu.md](../docs/ModerationAndNamesRu.md#цвет-имени-в-чате).
+
+- `ClientPacket.set_name_color = 28` (`SetNameColor{name_color}`, Control, RequestId): больше
+  `0xFFFFFF` — `INVALID_REQUEST` с полем `name_color` из кодека; затем сессия: слишком тёмный
+  (яркость WCAG ниже 0,15) — `NAME_COLOR_UNREADABLE = 27`, одна смена профиля за раз
+  (`OVERLOADED`, общая со сменой имени), не чаще `[Identity] NameColorIntervalMs` (`RATE_LIMITED`,
+  message «The name color can be changed again in N s.»). Мут не мешает. Запрос текущего цвета
+  подтверждается сразу.
+- Ответ — `ServerPacket.name_color_changed = 41` (`NameColorChanged{name_color}`). Новый профиль
+  приходит всем обычным `PresenceChanged.updated`; уже отправленные сообщения сохраняют цвет,
+  с которым были отправлены.
+
 ## Модерация
 
 С версии 14 сервер сообщает игроку его мут и конец сессии; с версии 15 модератор действует
@@ -274,6 +294,8 @@ Control-канале ENet.
 - v17: причина `ADDRESS_BANNED = 4` — администратор забанил диапазон IP соединения; `text` — причина,
   `until_unix_ms` — конец бана.
 - v18: `SanctionPlayer.devices = 5` — бан распространяется на устройства игрока; для мута игнорируется.
+- v20: цвет имени (см. «Цвет имени»): `PlayerProfile.name_color = 5`, `set_name_color = 28`,
+  `name_color_changed = 41`, код `NAME_COLOR_UNREADABLE = 27`.
 - v19: гильдии (`guild.proto`, [GuildsRu](../docs/GuildsRu.md)). `ClientPacket.guild_command = 27`
   (`GuildCommand` с одним из действий: create, invite, answer, leave, exclude, set_role, transfer,
   mute, unmute, disband; Control, RequestId), ответ `ServerPacket.guild_command_done = 40`

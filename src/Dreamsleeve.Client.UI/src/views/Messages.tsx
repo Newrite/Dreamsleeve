@@ -39,6 +39,7 @@ const MessageRow = memo(function MessageRow({
   source,
   authorId,
   name,
+  color,
   pseudonymous,
   channelName,
   channelKind,
@@ -60,6 +61,7 @@ const MessageRow = memo(function MessageRow({
   source: Message["source"];
   authorId: string;
   name: string;
+  color: string | undefined; // the author's own; absent: the channel's
   pseudonymous: boolean;
   channelName: string;
   channelKind: string | undefined;
@@ -106,6 +108,7 @@ const MessageRow = memo(function MessageRow({
       {source === "player" && (
         <button
           className={styles.author}
+          style={color ? { color } : undefined}
           disabled={!active}
           aria-haspopup="menu"
           title={pseudonymous ? "Имя скрыто игроком" : undefined}
@@ -209,6 +212,7 @@ export function Messages({ chat, state: s }: { chat: Chat; state: ChatState }) {
               source={m.source}
               authorId={m.source === "player" ? m.author.id : ""}
               name={m.source === "player" ? author : ""}
+              color={m.source === "player" ? m.author.color : undefined}
               pseudonymous={m.source === "player" && !!m.author.pseudonymous}
               channelName={channel?.name ?? "Канал"}
               channelKind={channel?.kind}

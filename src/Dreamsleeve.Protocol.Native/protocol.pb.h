@@ -131,6 +131,7 @@ enum RequestRejectionCode : int {
   REQUEST_REJECTION_CODE_GUILD_ALREADY_MEMBER = 24,
   REQUEST_REJECTION_CODE_GUILD_ALREADY_INVITED = 25,
   REQUEST_REJECTION_CODE_GUILD_MASTER_STAYS = 26,
+  REQUEST_REJECTION_CODE_NAME_COLOR_UNREADABLE = 27,
   RequestRejectionCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   RequestRejectionCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -141,11 +142,11 @@ extern const uint32_t RequestRejectionCode_internal_data_[];
 inline constexpr RequestRejectionCode RequestRejectionCode_MIN =
     static_cast<RequestRejectionCode>(0);
 inline constexpr RequestRejectionCode RequestRejectionCode_MAX =
-    static_cast<RequestRejectionCode>(26);
+    static_cast<RequestRejectionCode>(27);
 inline bool RequestRejectionCode_IsValid(int value) {
-  return 0 <= value && value <= 26;
+  return 0 <= value && value <= 27;
 }
-inline constexpr int RequestRejectionCode_ARRAYSIZE = 26 + 1;
+inline constexpr int RequestRejectionCode_ARRAYSIZE = 27 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_descriptor();
 template <typename T>
 const ::std::string& RequestRejectionCode_Name(T value) {
@@ -156,7 +157,7 @@ const ::std::string& RequestRejectionCode_Name(T value) {
 }
 template <>
 inline const ::std::string& RequestRejectionCode_Name(RequestRejectionCode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 26>(
+  return ::google::protobuf::internal::NameOfDenseEnum<RequestRejectionCode_descriptor, 0, 27>(
       static_cast<int>(value));
 }
 inline bool RequestRejectionCode_Parse(
@@ -1022,6 +1023,7 @@ class ServerPacket final : public ::google::protobuf::Message
     kGuildsSnapshot = 38,
     kGuildChanged = 39,
     kGuildCommandDone = 40,
+    kNameColorChanged = 41,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 1;
@@ -1137,6 +1139,7 @@ class ServerPacket final : public ::google::protobuf::Message
     kGuildsSnapshotFieldNumber = 38,
     kGuildChangedFieldNumber = 39,
     kGuildCommandDoneFieldNumber = 40,
+    kNameColorChangedFieldNumber = 41,
   };
   // optional uint64 request_id = 2;
   bool has_request_id() const;
@@ -1615,6 +1618,25 @@ class ServerPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NONNULL _internal_mutable_guild_command_done();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.NameColorChanged name_color_changed = 41;
+  bool has_name_color_changed() const;
+  private:
+  bool _internal_has_name_color_changed() const;
+
+  public:
+  void clear_name_color_changed() ;
+  const ::Dreamsleeve::Protocol::Chat::NameColorChanged& name_color_changed() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NULLABLE release_name_color_changed();
+  ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NONNULL mutable_name_color_changed();
+  void set_allocated_name_color_changed(::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_name_color_changed(::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NULLABLE unsafe_arena_release_name_color_changed();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::NameColorChanged& _internal_name_color_changed() const;
+  ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NONNULL _internal_mutable_name_color_changed();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ServerPacket)
@@ -1644,11 +1666,12 @@ class ServerPacket final : public ::google::protobuf::Message
   void set_has_guilds_snapshot();
   void set_has_guild_changed();
   void set_has_guild_command_done();
+  void set_has_name_color_changed();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 26,
-                                   24, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 27,
+                                   25, 0,
                                    7>
       _table_;
 
@@ -1698,6 +1721,7 @@ class ServerPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE guilds_snapshot_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE guild_changed_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE guild_command_done_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE name_color_changed_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1783,6 +1807,7 @@ class ClientPacket final : public ::google::protobuf::Message
     kClearPlayerMarks = 25,
     kDeleteChatMessage = 26,
     kGuildCommand = 27,
+    kSetNameColor = 28,
     PAYLOAD_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -1892,6 +1917,7 @@ class ClientPacket final : public ::google::protobuf::Message
     kClearPlayerMarksFieldNumber = 25,
     kDeleteChatMessageFieldNumber = 26,
     kGuildCommandFieldNumber = 27,
+    kSetNameColorFieldNumber = 28,
   };
   // uint64 request_id = 2;
   void clear_request_id() ;
@@ -2255,6 +2281,25 @@ class ClientPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NONNULL _internal_mutable_guild_command();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.SetNameColor set_name_color = 28;
+  bool has_set_name_color() const;
+  private:
+  bool _internal_has_set_name_color() const;
+
+  public:
+  void clear_set_name_color() ;
+  const ::Dreamsleeve::Protocol::Chat::SetNameColor& set_name_color() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NULLABLE release_set_name_color();
+  ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NONNULL mutable_set_name_color();
+  void set_allocated_set_name_color(::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_set_name_color(::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NULLABLE unsafe_arena_release_set_name_color();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::SetNameColor& _internal_set_name_color() const;
+  ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NONNULL _internal_mutable_set_name_color();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ClientPacket)
@@ -2278,11 +2323,12 @@ class ClientPacket final : public ::google::protobuf::Message
   void set_has_clear_player_marks();
   void set_has_delete_chat_message();
   void set_has_guild_command();
+  void set_has_set_name_color();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 20,
-                                   18, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 21,
+                                   19, 0,
                                    2>
       _table_;
 
@@ -2326,6 +2372,7 @@ class ClientPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE clear_player_marks_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE delete_chat_message_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE guild_command_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE set_name_color_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3677,6 +3724,77 @@ inline ::Dreamsleeve::Protocol::Chat::GuildCommand* PROTOBUF_NONNULL ClientPacke
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::GuildCommand* _msg = _internal_mutable_guild_command();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.guild_command)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.SetNameColor set_name_color = 28;
+inline bool ClientPacket::has_set_name_color() const {
+  return payload_case() == kSetNameColor;
+}
+inline bool ClientPacket::_internal_has_set_name_color() const {
+  return payload_case() == kSetNameColor;
+}
+inline void ClientPacket::set_has_set_name_color() {
+  _impl_._oneof_case_[0] = kSetNameColor;
+}
+inline ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NULLABLE ClientPacket::release_set_name_color() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ClientPacket.set_name_color)
+  if (payload_case() == kSetNameColor) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetNameColor*>(_impl_.payload_.set_name_color_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.set_name_color_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::SetNameColor& ClientPacket::_internal_set_name_color() const {
+  return payload_case() == kSetNameColor ? static_cast<const ::Dreamsleeve::Protocol::Chat::SetNameColor&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetNameColor*>(_impl_.payload_.set_name_color_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SetNameColor&>(::Dreamsleeve::Protocol::Chat::_SetNameColor_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::SetNameColor& ClientPacket::set_name_color() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ClientPacket.set_name_color)
+  return _internal_set_name_color();
+}
+inline ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NULLABLE ClientPacket::unsafe_arena_release_set_name_color() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ClientPacket.set_name_color)
+  if (payload_case() == kSetNameColor) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetNameColor*>(_impl_.payload_.set_name_color_);
+    _impl_.payload_.set_name_color_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ClientPacket::unsafe_arena_set_allocated_set_name_color(
+    ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_set_name_color();
+    _impl_.payload_.set_name_color_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.set_name_color)
+}
+inline ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NONNULL ClientPacket::_internal_mutable_set_name_color() {
+  if (payload_case() != kSetNameColor) {
+    clear_payload();
+    set_has_set_name_color();
+    _impl_.payload_.set_name_color_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SetNameColor>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetNameColor*>(_impl_.payload_.set_name_color_);
+}
+inline ::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NONNULL ClientPacket::mutable_set_name_color()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::SetNameColor* _msg = _internal_mutable_set_name_color();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ClientPacket.set_name_color)
   return _msg;
 }
 
@@ -5470,6 +5588,77 @@ inline ::Dreamsleeve::Protocol::Chat::GuildCommandDone* PROTOBUF_NONNULL ServerP
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::GuildCommandDone* _msg = _internal_mutable_guild_command_done();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.guild_command_done)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.NameColorChanged name_color_changed = 41;
+inline bool ServerPacket::has_name_color_changed() const {
+  return payload_case() == kNameColorChanged;
+}
+inline bool ServerPacket::_internal_has_name_color_changed() const {
+  return payload_case() == kNameColorChanged;
+}
+inline void ServerPacket::set_has_name_color_changed() {
+  _impl_._oneof_case_[0] = kNameColorChanged;
+}
+inline ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NULLABLE ServerPacket::release_name_color_changed() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.ServerPacket.name_color_changed)
+  if (payload_case() == kNameColorChanged) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::NameColorChanged*>(_impl_.payload_.name_color_changed_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.name_color_changed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::NameColorChanged& ServerPacket::_internal_name_color_changed() const {
+  return payload_case() == kNameColorChanged ? static_cast<const ::Dreamsleeve::Protocol::Chat::NameColorChanged&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::NameColorChanged*>(_impl_.payload_.name_color_changed_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::NameColorChanged&>(::Dreamsleeve::Protocol::Chat::_NameColorChanged_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::NameColorChanged& ServerPacket::name_color_changed() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ServerPacket.name_color_changed)
+  return _internal_name_color_changed();
+}
+inline ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NULLABLE ServerPacket::unsafe_arena_release_name_color_changed() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.ServerPacket.name_color_changed)
+  if (payload_case() == kNameColorChanged) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::NameColorChanged*>(_impl_.payload_.name_color_changed_);
+    _impl_.payload_.name_color_changed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerPacket::unsafe_arena_set_allocated_name_color_changed(
+    ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_name_color_changed();
+    _impl_.payload_.name_color_changed_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.name_color_changed)
+}
+inline ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NONNULL ServerPacket::_internal_mutable_name_color_changed() {
+  if (payload_case() != kNameColorChanged) {
+    clear_payload();
+    set_has_name_color_changed();
+    _impl_.payload_.name_color_changed_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::NameColorChanged>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::NameColorChanged*>(_impl_.payload_.name_color_changed_);
+}
+inline ::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NONNULL ServerPacket::mutable_name_color_changed()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::NameColorChanged* _msg = _internal_mutable_name_color_changed();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.ServerPacket.name_color_changed)
   return _msg;
 }
 

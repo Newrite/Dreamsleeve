@@ -112,6 +112,7 @@ Native host создаёт view, регистрирует JS listener `dreamslee
 | `nearbyMarks` | Метки, которые сервер показывает рядом с персонажем, с именем автора (`author`) от host; в снимке — `nearbyMarks`; метки игнорируемых не приходят |
 | `markResult` | Итог `placeGroundNote` (markId, evictedId) или `removeGroundMark` (removed) по requestId, либо error; это не дельта видимых меток |
 | `displayName` | Смена своего отображаемого имени: pending (ждём сервер), changed (сохранённое имя, один раз), error (текст отказа); свой профиль приходит в `players` |
+| `nameColor` | Смена цвета своего имени: pending, changed (`#RRGGBB`, один раз), error; свой цвет — `color` своей записи в `players` |
 | `mute` | Свой мут: muted, причина модератора, until (Unix ms; нет — бессрочно); поле ввода закрыто до конца срока |
 | `sessionEnded` | Как сервер закрыл сессию или отказал во входе: reason (`revoked`/`banned`/`kicked`), text — причина, until — конец бана |
 | `role` | moderator: роль игрока в сессии; только модератор видит пункты модератора и вкладку «Модерация» |
@@ -137,13 +138,14 @@ Native host создаёт view, регистрирует JS listener `dreamslee
 | `forgetLogin` | Забыть сохранённый вход только локально; работает без сети |
 | `disconnect` | Закрыть сессию, сохранённый вход оставить |
 | `ignore` / `unignore` | playerId; host хранит список в `ui.toml` по адресу сервера и повторно проецирует снимок |
-| `displaySettings` | Полный набор settings; host берёт из него `instantKeys` (nameMode, streamerMode, textFilter, markDateStyle), применяет и сохраняет сразу, затем шлёт refresh-снимок |
+| `displaySettings` | Полный набор settings; host берёт из него `instantKeys` (nameMode, streamerMode, textFilter, markDateStyle, markGuildmatesOnly), применяет и сохраняет сразу, затем шлёт refresh-снимок |
 | `placeGroundNote` | requestId, text: оставить черновик меткой там, где стоит персонаж; положение подставляет host |
 | `removeGroundMark` | requestId, markId: удалить свою метку (модератору — любую) |
 | `sanctionPlayer` / `liftSanction` / `kickPlayer` | Модератор: requestId, playerId, kind (`mute`/`ban`), minutes (нет — бессрочно), reason; сервер проверяет роль и цель |
 | `listSanctions` / `listPlayerMarks` / `clearPlayerMarks` | Модератор: requestId; действующие наказания, метки игрока, удаление его надписей (notes) и/или мест смерти (deaths) |
 | `deleteChatMessage` | Модератор: requestId, channelId, messageId — удалить сообщение для всех |
 | `changeDisplayName` | displayName: в Ready-сессии — запрос серверу; username не меняется; одна смена за раз |
+| `setNameColor` | color (`#RRGGBB`): цвет своего имени в чате, запрос серверу; одна смена профиля за раз вместе с именем |
 | `setIdentityVisibility` | hiding (`off`/`everywhere`/`exceptGroundMarks`): в Ready-сессии — запрос серверу (выбор сохраняется после подтверждения), без сессии — выбор для следующего входа; пока сессия открывается — отказ «Дождитесь подключения к серверу» |
 
 UI requestId относится к lifetime данного view. Host сопоставляет его с RequestId,
@@ -307,7 +309,7 @@ Steam» (`disconnect`) и «Скопировать ссылку» (`copySteamLin
 хранилища учётных данных Windows», «Операция отменена», «Некорректный запрос», «Имя содержит
 недопустимые слова», «Аккаунт заблокирован») и добавляет сырой error host, если он есть.
 При соединении вкладка также меняет отображаемое имя (команда `changeDisplayName`, статус из
-события `displayName`) и показывает, как сервер закрыл сессию или отказал во входе (`sessionEnded`).
+события `displayName`; цвет имени — во вкладке «Настройки», команда `setNameColor`) и показывает, как сервер закрыл сессию или отказал во входе (`sessionEnded`).
 
 Пароль уходит в команде `signIn` один раз, не попадает в состояние zustand, лог и
 localStorage ни в одной сборке; поле очищается сразу после отправки. Сохранённый

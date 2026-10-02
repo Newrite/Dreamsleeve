@@ -554,6 +554,9 @@ type IdentityOptions = {
     /// A player's own change may come no sooner than this after the previous
     /// one, across sessions and restarts (display_name_changes); 0 disables the limit.
     DisplayNameChangeIntervalMinutes: int
+    /// A name color change sooner than this after the previous one in the
+    /// session is refused (RATE_LIMITED); 0 disables the limit.
+    NameColorIntervalMs: int
 }
 
 [<RequireQualifiedAccess>]
@@ -564,11 +567,12 @@ module IdentityOptions =
 
     let defaults = {
         AllowHiddenIdentity = true; ToggleIntervalMs = 30000; PseudonymsPath = "pseudonyms.toml"
-        AllowDisplayNameChange = true; DisplayNameChangeIntervalMinutes = 1
+        AllowDisplayNameChange = true; DisplayNameChangeIntervalMinutes = 1; NameColorIntervalMs = 10000
     }
 
     let validate options = [
         if options.ToggleIntervalMs < 0 then "Identity.ToggleIntervalMs must be non-negative."
+        if options.NameColorIntervalMs < 0 then "Identity.NameColorIntervalMs must be non-negative."
         if options.DisplayNameChangeIntervalMinutes < 0 || options.DisplayNameChangeIntervalMinutes > MaxDisplayNameChangeIntervalMinutes then
             $"Identity.DisplayNameChangeIntervalMinutes must be 0..{MaxDisplayNameChangeIntervalMinutes}."
     ]

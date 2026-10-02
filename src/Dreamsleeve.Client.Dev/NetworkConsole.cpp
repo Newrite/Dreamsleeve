@@ -321,7 +321,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -565,6 +565,8 @@ namespace
                                                 : std::string{"shown"});
           else if constexpr (std::is_same_v<Outcome, NameChanged>)
             console << "display name " << value.displayName;
+          else if constexpr (std::is_same_v<Outcome, ColorChanged>)
+            console << std::format("name color #{:06X}", value.nameColor);
           else if constexpr (std::is_same_v<Outcome, Sanctioned>)
             PrintSanction(console << "sanctioned ", value.sanction);
           else if constexpr (std::is_same_v<Outcome, Lifted>)
@@ -827,6 +829,20 @@ int RunNetworkConsole(int argc, char* argv[])
             generation,
             ChangeDisplayName{*requestId, line.substr(5)}
       }) == CommandPostResult::Queued)
+        std::cout << "request " << *requestId << " queued\n";
+      else
+        std::cout << "Command queue is full or closed\n";
+    }
+    else if (line.starts_with("color #") && line.size() == 13)
+    {
+      // The own name color in chat, #RRGGBB.
+      std::uint32_t color{};
+      const auto*   begin = line.data() + 7;
+      if (std::from_chars(begin, line.data() + line.size(), color, 16).ptr != line.data() + line.size())
+        std::cout << "Usage: color #RRGGBB\n";
+      else if (const auto requestId = exchange.NextRequestId(); !requestId)
+        std::cout << "Request IDs exhausted\n";
+      else if (exchange.Post({generation, SetNameColor{*requestId, color}}) == CommandPostResult::Queued)
         std::cout << "request " << *requestId << " queued\n";
       else
         std::cout << "Command queue is full or closed\n";

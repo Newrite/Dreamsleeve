@@ -57,12 +57,18 @@ public:
       const bool ready = output.status.Ready();
       serverName       = output.status.serverName;
       // Published with the chat state of their channels: read before the updates name them.
-      guilds = output.status.guilds;
+      const bool guildsChanged = guilds != output.status.guilds;
+      guilds                   = output.status.guilds;
+      if (guildsChanged) CollectGuildmates();
       // The core drops the request with the session; the server may or may not have stored it.
       if (!ready && std::erase_if(pending, [](const auto& entry) {
                       return std::holds_alternative<PendingName>(entry.second.request);
                     }) != 0)
         nameError = "Соединение прервано до ответа сервера";
+      if (!ready && std::erase_if(pending, [](const auto& entry) {
+                      return std::holds_alternative<PendingColor>(entry.second.request);
+                    }) != 0)
+        colorError = "Соединение прервано до ответа сервера";
       for (const auto& update : output.state.updates)
         std::visit([&](const auto& value) { Apply(value, settings, ready, frame); }, update);
 
@@ -75,7 +81,9 @@ public:
       pseudonym = output.status.pseudonym;
       if (ownMarksChanged && !frame.snapshot) Emit(frame, Bridge::GroundMarksEvent{.marks = OwnMarkList(settings)});
       ownMarksChanged = false;
-      if (frame.visibleMarksChanged && !frame.snapshot && Ready()) Emit(frame, Bridge::NearbyMarksEvent{.marks = NearbyMarkList(settings)});
+      // Guild-only marks follow the guilds as well.
+      if ((frame.visibleMarksChanged || (guildsChanged && settings.markGuildmatesOnly)) && !frame.snapshot && Ready())
+        Emit(frame, Bridge::NearbyMarksEvent{.marks = NearbyMarkList(settings)});
 
       PublishStatus(output.status, settings, frame);
       if (auto identity = Identity(frame.hideIdentity.value_or(hiding)); identity != lastIdentity)
@@ -89,6 +97,12 @@ public:
         lastName = std::move(name);
         nameChanged.reset();
       }
+      if (auto color = ColorEvent(); color != lastColor)
+      {
+        Emit(frame, color);
+        lastColor = std::move(color);
+        colorChanged.reset();
+      }
       RequestSnapshotIfNeeded(exchange, frame);
     }
 
@@ -98,11 +112,17 @@ public:
       return Bridge::DisplayNameEvent{.pending = Waiting<PendingName>() != nullptr, .changed = nameChanged, .error = nameError};
     }
 
-    // A ready session asks the server; one change at a time. The own profile
-    // changes through the players list once the server applies it.
+    // The state of an own name color change as the UI shows it.
+    Bridge::NameColorEvent ColorEvent() const
+    {
+      return Bridge::NameColorEvent{.pending = Waiting<PendingColor>() != nullptr, .changed = colorChanged, .error = colorError};
+    }
+
+    // A ready session asks the server; one profile change at a time, a name or
+    // a color. The own profile changes through the players list once the server applies it.
     std::expected<void, std::string> ChangeDisplayName(ClientExchange& exchange, std::string displayName)
     {
-      if (Waiting<PendingName>()) return std::unexpected{"Ожидание ответа сервера"};
+      if (Waiting<PendingName>() || Waiting<PendingColor>()) return std::unexpected{"Ожидание ответа сервера"};
       auto sent = Submit(exchange, PendingName{}, [&](std::uint64_t id) {
         return Dreamsleeve::Client::ChangeDisplayName{id, std::move(displayName)};
       });
@@ -116,6 +136,21 @@ public:
     void SetNameError(std::string error)
     {
       nameError = error.empty() ? std::nullopt : std::optional{Bridge::ClipError(error)};
+    }
+
+    std::expected<void, std::string> SetNameColor(ClientExchange& exchange, std::uint32_t color)
+    {
+      if (Waiting<PendingName>() || Waiting<PendingColor>()) return std::unexpected{"Ожидание ответа сервера"};
+      auto sent = Submit(exchange, PendingColor{}, [&](std::uint64_t id) { return Dreamsleeve::Client::SetNameColor{id, color}; });
+      if (!sent) return std::unexpected{std::string{Refusal(sent.error())}};
+      colorError.reset();
+      colorChanged.reset();
+      return {};
+    }
+
+    void SetColorError(std::string error)
+    {
+      colorError = error.empty() ? std::nullopt : std::optional{Bridge::ClipError(error)};
     }
 
     // "Hide my name from other players" as the UI shows it: the preference, or
@@ -234,7 +269,8 @@ public:
       lastStatus.reset();
       lastIdentity.reset();
       // The UI starts with nothing pending; only a difference is sent.
-      lastName = {};
+      lastName  = {};
+      lastColor = {};
     }
 
     // Names or the ignore list changed: the same session is projected again.
@@ -332,6 +368,13 @@ public:
       return selfId;
     }
 
+    // Whether a "guildmates only" choice hides this player's fireflies or
+    // marks: on, not self, and in none of the own guilds.
+    bool GuildmatesOnlyHides(Domain::PlayerId id, bool guildmatesOnly) const
+    {
+      return guildmatesOnly && selfId != id && !guildmates.contains(id);
+    }
+
     const Players& OnlinePlayers() const noexcept
     {
       return players;
@@ -389,6 +432,9 @@ private:
     struct PendingName
     {};
 
+    struct PendingColor
+    {};
+
     struct PendingModeration
     {
       std::string uiRequestId;
@@ -400,7 +446,7 @@ private:
     };
 
     using PendingRequest =
-      std::variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName, PendingModeration, PendingGuild>;
+      std::variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName, PendingColor, PendingModeration, PendingGuild>;
 
     struct Pending
     {
@@ -563,6 +609,19 @@ private:
         nameError = Bridge::ClipError(Reason(outcome));
     }
 
+    void Resolve(Frame&, PendingColor&, const CommandResult::Outcome& outcome, const UiSettings&)
+    {
+      if (const auto* changed = std::get_if<ColorChanged>(&outcome))
+      {
+        colorError.reset();
+        colorChanged = ColorText(changed->nameColor);
+      }
+      else if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
+        colorError = Bridge::ClipError(Bridge::NameColorRejectionText(rejection->code, rejection->message));
+      else
+        colorError = Bridge::ClipError(Reason(outcome));
+    }
+
     // Every answer names its player; lists name them as far as the host knows.
     void Resolve(Frame& frame, PendingModeration& moderation, const CommandResult::Outcome& outcome, const UiSettings& settings)
     {
@@ -654,6 +713,16 @@ private:
       guildsShown = true;
     }
 
+    // Everyone in the own guilds, from the book the server sent last.
+    void CollectGuildmates()
+    {
+      guildmates.clear();
+      if (!guilds) return;
+      for (const auto& guild : guilds->Guilds())
+        for (const auto& member : guild.members)
+          guildmates.insert(member.profile.playerId);
+    }
+
     // The session's channels in ID order, a guild's named after the guild.
     std::vector<Bridge::UiChannel> ChannelList() const
     {
@@ -700,7 +769,7 @@ private:
       list.reserve(visibleMarks.size());
       for (const auto& [id, mark] : visibleMarks)
       {
-        if (names.Hides(mark.author.playerId, selfId)) continue;
+        if (names.Hides(mark.author.playerId, selfId) || GuildmatesOnlyHides(mark.author.playerId, settings.markGuildmatesOnly)) continue;
         const bool own   = mark.author.playerId == selfId;
         auto       entry = Bridge::ToUiGroundMark(mark, settings, own);
         entry.author     = names.NameFor(mark.author.playerId, mark.author, mark.characterName, settings);
@@ -1012,10 +1081,14 @@ private:
     std::optional<std::string>                                         nameError;
     std::optional<std::string>                                         nameChanged;
     Bridge::DisplayNameEvent                                           lastName;
+    std::optional<std::string>                                         colorError;
+    std::optional<std::string>                                         colorChanged;
+    Bridge::NameColorEvent                                             lastColor;
     std::optional<ClientStatus>                                        lastStatus;
     // The guild book of the session, the one the UI shows, whether this view
     // has had it, and the book revision whose removals the UI has heard of.
     std::shared_ptr<const GuildBook> guilds;
+    std::unordered_set<Domain::PlayerId> guildmates;
     std::shared_ptr<const GuildBook> shownGuilds;
     bool                             guildsShown{};
     std::uint64_t                    removalsSeen{};

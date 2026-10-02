@@ -66,10 +66,10 @@ module SqliteAccountStore =
         if row.player_id <= 0L || row.account_id <= 0L then
             invalidData "The stored account/profile identifier is outside the positive Int64 range."
         else
-            match PlayerId.create (uint64 row.player_id), DisplayName.create Int32.MaxValue row.display_name with
-            | Ok playerId, Ok displayName when DisplayName.value displayName = row.display_name ->
-                Ok(PlayerData.create playerId username displayName)
-            | _ -> invalidData "The stored profile contains an invalid identifier or display name."
+            match PlayerId.create (uint64 row.player_id), DisplayName.create Int32.MaxValue row.display_name, nameColor row.name_color with
+            | Ok playerId, Ok displayName, Ok color when DisplayName.value displayName = row.display_name ->
+                Ok(PlayerData.create playerId username displayName color)
+            | _ -> invalidData "The stored profile contains an invalid identifier, display name or name color."
 
     let private toRole (value: int64) =
         match PlayerRole.ofInt (int value) with
@@ -109,7 +109,8 @@ module SqliteAccountStore =
         with :? SqliteException as error when error.SqliteExtendedErrorCode = 2067 ->
             Error AccountStoreError.UsernameTaken
 
-    // The account and its profile, inside the caller's transaction.
+    // The account and its profile, inside the caller's transaction. The name
+    // color is a random one of the palette; the player chooses another later.
     let private insertPlayer (context: QueryContext) (username: Username) (displayName: DisplayName) =
         match insertAccount context username with
         | Error error -> Error error
@@ -118,6 +119,7 @@ module SqliteAccountStore =
                 player_id = 0L
                 account_id = accountId
                 display_name = DisplayName.value displayName
+                name_color = int64 (NameColor.value (NameColor.random Random.Shared))
             }
             let query = insert {
                 for profile in main.profiles do
@@ -163,7 +165,7 @@ module SqliteAccountStore =
 
     /// Every identity query selects these columns; the role row is optional.
     [<Literal>]
-    let private IdentityColumns = "a.id, a.username, p.player_id, p.display_name, COALESCE(r.role, 0)"
+    let private IdentityColumns = "a.id, a.username, p.player_id, p.display_name, COALESCE(r.role, 0), p.name_color"
 
     [<Literal>]
     let private RoleJoin = "LEFT JOIN player_roles r ON r.player_id=p.player_id"
@@ -172,9 +174,9 @@ module SqliteAccountStore =
         if not (reader.Read()) then Ok None
         else
             match Username.create Int32.MaxValue (reader.GetString 1), PlayerId.create (uint64 (reader.GetInt64 2)),
-                  DisplayName.create Int32.MaxValue (reader.GetString 3), toRole (reader.GetInt64 4) with
-            | Ok username, Ok playerId, Ok displayName, Ok role when reader.GetInt64 0 > 0L ->
-                Ok (Some { AccountId = reader.GetInt64 0; Profile = PlayerData.create playerId username displayName; Role = role })
+                  DisplayName.create Int32.MaxValue (reader.GetString 3), toRole (reader.GetInt64 4), nameColor (reader.GetInt64 5) with
+            | Ok username, Ok playerId, Ok displayName, Ok role, Ok color when reader.GetInt64 0 > 0L ->
+                Ok (Some { AccountId = reader.GetInt64 0; Profile = PlayerData.create playerId username displayName color; Role = role })
             | _ -> invalidData "Invalid stored account identity."
 
     let findAccount config (username: Username) token =
@@ -308,6 +310,22 @@ module SqliteAccountStore =
                         | Ok None -> Ok RenameOutcome.NotFound
                         | Error error -> Error error
                 | _ -> Ok RenameOutcome.NotFound)
+
+    /// Replaces the name color of an existing profile; the caller checked that
+    /// the player may choose it. None: no such profile.
+    let setNameColor config (playerId: PlayerId) (color: NameColor) token =
+        withContext config token (fun context ->
+            let id = PlayerId.value playerId
+            if id > uint64 Int64.MaxValue then Ok None
+            else
+                SqliteStatements.transaction context (fun () ->
+                    execute context "UPDATE profiles SET name_color=@color WHERE player_id=@id"
+                        [ "@color", box (int64 (NameColor.value color)); "@id", box (int64 id) ] |> ignore
+                    use statement = command context
+                                        $"SELECT {IdentityColumns} FROM profiles p JOIN accounts a ON a.id=p.account_id {RoleJoin} WHERE p.player_id=@id"
+                                        [ "@id", box (int64 id) ]
+                    use reader = statement.ExecuteReader()
+                    readIdentity reader))
 
     /// An account that signs in only through a provider, with no password: its
     /// identity row maps (provider, subject) to it. The caller verified the subject.

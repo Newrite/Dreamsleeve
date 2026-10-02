@@ -59,7 +59,7 @@ type private FakeAdmin() =
         | AdminCommand.RecentAudit _ -> Ok (AdminReply.Audit [])
         // The hidden player has a card; the rest of it is not served here.
         | AdminCommand.FindPlayer playerId when PlayerId.value playerId = 7UL ->
-            let stored = PlayerData.create playerId (Username.create 32 "alice.real" |> ok) (DisplayName.create 64 "Алиса Настоящая" |> ok)
+            let stored = PlayerData.create playerId (Username.create 32 "alice.real" |> ok) (DisplayName.create 64 "Алиса Настоящая" |> ok) NameColor.unknown
             Ok (AdminReply.Player(Some { Profile = stored; Role = PlayerRole.Player }))
         | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.ResetPassword _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.RevokeApiToken _ | AdminCommand.SetRole _ | AdminCommand.SearchPlayers _
@@ -73,7 +73,7 @@ let private hiddenRow = {
 }
 
 let private hiddenView =
-    let stored = PlayerData.create (PlayerId.create 7UL |> ok) (Username.create 32 "alice.real" |> ok) (DisplayName.create 64 "Алиса Настоящая" |> ok)
+    let stored = PlayerData.create (PlayerId.create 7UL |> ok) (Username.create 32 "alice.real" |> ok) (DisplayName.create 64 "Алиса Настоящая" |> ok) NameColor.unknown
     let player = Player.create stored |> Player.beginCharacter (CharacterName.create 64 "<b>Героиня</b>" |> ok)
     AdminPlayerView.create stored player false (ValueSome (Pseudonym.create "Страж" |> ok)) HiddenIdentity.Everywhere PlayerRole.Player
         AdminSessionPhase.Active DateTimeOffset.UtcNow
@@ -272,7 +272,7 @@ let tests = testSequenced (testList "Admin HTTP" [
     case "the registration page changes the mode and creates a player with a one-time code, both audited" (fun () ->
         withPanel id (fun panel -> task {
             let mode = ref RegistrationMode.Open
-            let created = PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "newcomer" |> ok) (DisplayName.create 64 "Новичок" |> ok)
+            let created = PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "newcomer" |> ok) (DisplayName.create 64 "Новичок" |> ok) NameColor.unknown
             panel.AccountReply.Value <- (function
                 | AccountAccessCommand.ReadRegistration -> Ok (AccountAccessResult.Registration mode.Value)
                 | AccountAccessCommand.SetRegistration(next, _) ->
@@ -314,7 +314,7 @@ let tests = testSequenced (testList "Admin HTTP" [
             let range = AddressRange.parse "203.0.113.0/24" |> ok
             let reason = SanctionReason.create "Рейд" |> ok
             let ban : AddressBan = { Id = 5L; Range = range; Reason = reason; IssuedBy = ValueSome root.Id; IssuedAt = DateTimeOffset.UtcNow; Expires = ValueNone }
-            let bob = PlayerData.create (PlayerId.create 8UL |> ok) (Username.create 32 "bob" |> ok) (DisplayName.create 64 "Боб" |> ok)
+            let bob = PlayerData.create (PlayerId.create 8UL |> ok) (Username.create 32 "bob" |> ok) (DisplayName.create 64 "Боб" |> ok) NameColor.unknown
             let seen : SignInAddress = { Address = IPAddress.Parse "203.0.113.9"; FirstSeen = DateTimeOffset.UtcNow; LastSeen = DateTimeOffset.UtcNow; SignIns = 3L }
             panel.AccountReply.Value <- (function
                 | AccountAccessCommand.ListAddressBans -> Ok (AccountAccessResult.AddressBans bans.Value)
@@ -373,7 +373,7 @@ let tests = testSequenced (testList "Admin HTTP" [
             let guild = GuildId.create 5UL |> ok
             let name = GuildName.create 1 64 "Вороны" |> ok
             let at = DateTimeOffset.UtcNow
-            let profile raw username display = PlayerData.create (pid raw) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok)
+            let profile raw username display = PlayerData.create (pid raw) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok) NameColor.unknown
             let bob = profile 8UL "bob" "<i>Боб</i>"
             let carol = profile 9UL "carol" "Кэрол"
             let membership (player: PlayerData) role : GuildMember = { Player = player.PlayerId; Role = role; JoinedAt = at; Mute = ValueNone }

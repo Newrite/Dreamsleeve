@@ -42,7 +42,7 @@ type private Fixture = {
     /// Where the guild owner answers this session, once it joined.
     GuildEvents: ReliableAgentRef<GuildEvent> option ref
     Host: Channel<SessionHostCommand>
-    Names: Channel<DisplayNameChangeRequest>
+    Names: Channel<ProfileChangeRequest>
     Moderation: Channel<ModerationRequest>
 }
 
@@ -58,7 +58,7 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     let markCommands = Channel.CreateUnbounded<GroundMarkCommand>()
     let guildCommands = Channel.CreateUnbounded<GuildCommand>()
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
-    let nameRequests = Channel.CreateUnbounded<DisplayNameChangeRequest>()
+    let nameRequests = Channel.CreateUnbounded<ProfileChangeRequest>()
     let moderationRequests = Channel.CreateUnbounded<ModerationRequest>()
     use authentication = Agent.Start(AgentOptions.create "authentication", collect queries)
     use names = Agent.Start(AgentOptions.create "names", collect nameRequests)
@@ -123,7 +123,7 @@ let private resolve fixture = task {
     let! query = receive fixture.Authentication
     equal fixture.Request.SessionTicket query.Ticket
     let profile = PlayerData.create (PlayerId.create 42UL |> ok)
-                      (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok)
+                      (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok) NameColor.unknown
     do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone } }
     let! command = receive fixture.Host
     match command with
@@ -368,7 +368,7 @@ let private identityTests = [
                 equal (ValueSome name) value.CharacterName
             | other -> failwithf "Expected own update: %A" other
             // Another player's pseudonym passes unchanged.
-            let other = PlayerSnapshot.withPseudonym strazh (playerSnapshot (PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "other" |> ok) (DisplayName.create 64 "Other" |> ok)))
+            let other = PlayerSnapshot.withPseudonym strazh (playerSnapshot (PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "other" |> ok) (DisplayName.create 64 "Other" |> ok) NameColor.unknown))
             let arrival = { PresenceChange.empty with Joined = [ other ] }
             do! deliver presence.Events (PresenceEvent.Changed(arrival, ActorValueKinds.none))
             let! joined = receive fixture.Host
@@ -570,7 +570,7 @@ let tests = testList "PlayerSession" ([
         withRules options (fun fixture -> task {
             let! query = receive fixture.Authentication
             let stored = PlayerData.create (PlayerId.create 42UL |> ok)
-                             (Username.create 32 "bad.word" |> ok) (DisplayName.create 64 "Sir Badword" |> ok)
+                             (Username.create 32 "bad.word" |> ok) (DisplayName.create 64 "Sir Badword" |> ok) NameColor.unknown
             do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = stored; Role = PlayerRole.Player; Mute = ValueNone } }
             let! reserve = receive fixture.Host
             let reply =
@@ -660,7 +660,7 @@ let tests = testList "PlayerSession" ([
             let key = ActorValueKey.create 128 "skyrim:health" |> ok
             let name = ActorValueName.create 64 "Health" |> ok
             let health current = ActorValueInfo.create name (ActorValueState.resource current 100)
-            let neighbour = PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "other" |> ok) (DisplayName.create 64 "Other" |> ok)
+            let neighbour = PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "other" |> ok) (DisplayName.create 64 "Other" |> ok) NameColor.unknown
             let healthy = { playerSnapshot neighbour with ActorValues = Map.ofList [ key, health -5 ] }
             let opening: ActorValueKinds = { Ids = Map.ofList [ struct (key, name), 3UL ]; Defined = [ { Id = 3UL; Key = key; DisplayName = name } ] }
             do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
@@ -941,7 +941,7 @@ let tests = testList "PlayerSession" ([
             SessionTicket = String('b', 43); Hiding = HiddenIdentity.Shown
         }
         use marks = Agent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
-        use names = Agent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<DisplayNameChangeRequest>()))
+        use names = Agent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<ProfileChangeRequest>()))
         use moderation = Agent.Start(AgentOptions.create "account-moderation", collect (Channel.CreateUnbounded<ModerationRequest>()))
         use guilds = Agent.Start(AgentOptions.create "guilds", collect (Channel.CreateUnbounded<GuildCommand>()))
         let game = Settings.game ServerConfig.defaults { ServerRuntimeOptions.defaults with Player = options } IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults
@@ -1082,8 +1082,7 @@ let tests = testList "PlayerSession" ([
             do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(4UL, name "Новое Имя"))
             let! request = receive fixture.Names
             equal profile.PlayerId request.PlayerId
-            equal "Новое Имя" (DisplayName.value request.DisplayName)
-            equal (TimeSpan.FromMinutes 60.) request.MinInterval
+            equal (ProfileChange.DisplayName(name "Новое Имя", TimeSpan.FromMinutes 60.)) request.Change
             // One change at a time.
             do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(5UL, name "Другое"))
             let! _ = refusal 5UL RequestRejectionCode.Overloaded
@@ -1105,11 +1104,67 @@ let tests = testList "PlayerSession" ([
             // Too soon: the account service refuses and nothing changes.
             do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(6UL, name "Третье"))
             let! second = receive fixture.Names
-            do! deliver second.ReplyTo { OperationId = second.OperationId; Result = Error (DisplayNameChangeError.TooSoon(TimeSpan.FromMinutes 29.5)) }
+            do! deliver second.ReplyTo { OperationId = second.OperationId; Result = Error (ProfileChangeError.TooSoon(TimeSpan.FromMinutes 29.5)) }
             let! message = refusal 6UL RequestRejectionCode.RateLimited
             check (message.Contains "30 min") $"The refusal names the wait: {message}"
             let! unchanged = read fixture.Player
             equal (PublicIdentity.Profile stored) (ok unchanged).Identity
+        }))
+
+    case "a name color must be readable, goes to the account service, spreads through presence and waits the interval" (fun () ->
+        let identity = { IdentityOptions.defaults with NameColorIntervalMs = 60000 }
+        withIdentityPlayer Moderation.empty AnnouncementOptions.defaults identity HiddenIdentity.Shown options
+            (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
+            let! profile, _, _ = ready fixture
+            let color raw = NameColor.create raw |> ok
+            let refusal requestId expected = task {
+                let! answer = receive fixture.Host
+                match answer with
+                | SessionHostCommand.Send(_, ServerResponse.RequestRejected(id, rejection)) ->
+                    equal requestId id
+                    equal expected rejection.Code
+                    equal "name_color" rejection.Field
+                    return rejection.Message
+                | other -> return failwithf "Expected a refusal: %A" other
+            }
+            // Too dark to read: refused before the account service hears of it.
+            do! post fixture.Player (PlayerSessionMessage.SetNameColor(2UL, color 0x101010u))
+            let! _ = refusal 2UL RequestRejectionCode.NameColorUnreadable
+            // The current color settles at once and is not a change.
+            do! post fixture.Player (PlayerSessionMessage.SetNameColor(3UL, profile.NameColor))
+            let! same = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.NameColorChanged(3UL, profile.NameColor))) same
+            equal 0 fixture.Names.Reader.Count
+
+            do! post fixture.Player (PlayerSessionMessage.SetNameColor(4UL, color 0xE57373u))
+            let! request = receive fixture.Names
+            equal profile.PlayerId request.PlayerId
+            equal (ProfileChange.NameColor(color 0xE57373u)) request.Change
+            // One profile change at a time, whatever it changes.
+            do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(5UL, DisplayName.create 64 "Другое" |> ok))
+            let! answer = receive fixture.Host
+            match answer with
+            | SessionHostCommand.Send(_, ServerResponse.RequestRejected(5UL, rejection)) -> equal RequestRejectionCode.Overloaded rejection.Code
+            | other -> failwithf "Expected a refusal: %A" other
+            let stored = PlayerData.withNameColor (color 0xE57373u) profile
+            do! deliver request.ReplyTo { OperationId = request.OperationId; Result = Ok stored }
+            let! host = receive fixture.Host
+            equal (SessionHostCommand.UpdateProfile(fixture.Request.ConnectionId, stored, true)) host
+            let! update = receive fixture.Presence
+            match update with
+            | PresenceCommand.Update(_, snapshot) -> equal (PublicIdentity.Profile stored) snapshot.Identity
+            | other -> failwithf "Expected presence update: %A" other
+            let! _ = receive fixture.Marks
+            let! settled = receive fixture.Host
+            equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.NameColorChanged(4UL, color 0xE57373u))) settled
+            let! current = read fixture.Player
+            equal (PublicIdentity.Profile stored) (ok current).Identity
+
+            // The next change waits the interval; the account service never hears of it.
+            do! post fixture.Player (PlayerSessionMessage.SetNameColor(6UL, color 0x4FC3F7u))
+            let! message = refusal 6UL RequestRejectionCode.RateLimited
+            check (message.Contains " s.") $"The refusal names the wait: {message}"
+            equal 0 fixture.Names.Reader.Count
         }))
 
     case "a server that refuses display name changes answers before the account service" (fun () ->
@@ -1173,7 +1228,7 @@ let tests = testList "PlayerSession" ([
             let! issued = receive fixture.Host
             equal (sent (ServerResponse.SanctionIssued(4UL, mute))) issued
             // A chat removal goes to the channel owner; the requester's copy settles it.
-            let author = PlayerData.create bob (Username.create 32 "bob" |> ok) (DisplayName.create 64 "Bob" |> ok)
+            let author = PlayerData.create bob (Username.create 32 "bob" |> ok) (DisplayName.create 64 "Bob" |> ok) NameColor.unknown
             let message = publication author 9UL
             do! post fixture.Player (PlayerSessionMessage.Moderate(5UL, ModerationAction.DeleteMessage(globalId, message.MessageId)))
             let! command = receive fixture.Chat

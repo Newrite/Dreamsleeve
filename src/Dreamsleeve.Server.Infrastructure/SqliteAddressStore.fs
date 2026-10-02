@@ -95,13 +95,13 @@ module SqliteAddressStore =
             let first, last = AddressRange.bounds range
             use statement =
                 command context
-                    "SELECT s.player_id, a.username, p.display_name, s.address, s.first_seen, s.last_seen, s.sign_ins FROM sign_in_addresses s JOIN profiles p ON p.player_id=s.player_id JOIN accounts a ON a.id=p.account_id WHERE s.address BETWEEN @first AND @last ORDER BY s.last_seen DESC LIMIT @limit"
+                    "SELECT s.player_id, a.username, p.display_name, s.address, s.first_seen, s.last_seen, s.sign_ins, p.name_color FROM sign_in_addresses s JOIN profiles p ON p.player_id=s.player_id JOIN accounts a ON a.id=p.account_id WHERE s.address BETWEEN @first AND @last ORDER BY s.last_seen DESC LIMIT @limit"
                     [ "@first", box first; "@last", box last; "@limit", box MaxListed ]
             use reader = statement.ExecuteReader()
             readAll reader (fun reader ->
                 match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
-                      DisplayName.create Int32.MaxValue (reader.GetString 2), readAddress reader 3 with
-                | Ok id, Ok username, Ok name, Ok address -> Ok { Player = PlayerData.create id username name; Address = address }
+                      DisplayName.create Int32.MaxValue (reader.GetString 2), readAddress reader 3, nameColor (reader.GetInt64 7) with
+                | Ok id, Ok username, Ok name, Ok address, Ok color -> Ok { Player = PlayerData.create id username name color; Address = address }
                 | _ -> invalidData ()))
 
     /// The bans in force at now, newest first.

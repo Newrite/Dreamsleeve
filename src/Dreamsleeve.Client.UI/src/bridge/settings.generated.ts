@@ -2,6 +2,7 @@
 // "The web UI settings module is generated from UiSettings"; do not edit.
 // Regenerate: set DREAMSLEEVE_WRITE_GENERATED=1 and run Dreamsleeve.Client.Tests.
 export interface Settings {
+  fireflyGuildmatesOnly: boolean;
   showFireflyNames: boolean;
   fireflyNameOcclusion: boolean;
   fireflyNameFontSize: number;
@@ -50,6 +51,7 @@ export interface Settings {
   fireflyHeightOffset: number;
   showGroundNotes: boolean;
   showDeathMarks: boolean;
+  markGuildmatesOnly: boolean;
   maxVisibleNotes: number;
   maxVisibleDeaths: number;
   groundDrawDistance: number;
@@ -74,6 +76,7 @@ export interface Settings {
 }
 
 export const defaults: Settings = {
+  fireflyGuildmatesOnly: false,
   showFireflyNames: true,
   fireflyNameOcclusion: true,
   fireflyNameFontSize: 18,
@@ -122,6 +125,7 @@ export const defaults: Settings = {
   fireflyHeightOffset: 110,
   showGroundNotes: true,
   showDeathMarks: true,
+  markGuildmatesOnly: false,
   maxVisibleNotes: 16,
   maxVisibleDeaths: 16,
   groundDrawDistance: 4096,
@@ -185,4 +189,5 @@ export const instantKeys = [
   "streamerMode",
   "textFilter",
   "markDateStyle",
+  "markGuildmatesOnly",
 ] as const;

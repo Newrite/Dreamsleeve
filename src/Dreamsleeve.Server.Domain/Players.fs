@@ -7,19 +7,25 @@ type PlayerData =
         playerId: PlayerId
         username: Username
         displayName: DisplayName
+        nameColor: NameColor
     }
     member this.PlayerId = this.playerId
     member this.Username = this.username
     member this.DisplayName = this.displayName
+    /// How the name is drawn in chat; the player chooses it, a new account gets a random one.
+    member this.NameColor = this.nameColor
 
 [<RequireQualifiedAccess>]
 module PlayerData =
     /// Combine values already accepted by their primitive factories.
-    let create playerId username displayName : PlayerData =
-        { playerId = playerId; username = username; displayName = displayName }
+    let create playerId username displayName nameColor : PlayerData =
+        { playerId = playerId; username = username; displayName = displayName; nameColor = nameColor }
 
     let withDisplayName displayName (profile: PlayerData) =
         { profile with displayName = displayName }
+
+    let withNameColor nameColor (profile: PlayerData) =
+        { profile with nameColor = nameColor }
 
     /// The registry must reserve the new username before applying this update.
     let withUsername username (profile: PlayerData) =
@@ -31,7 +37,7 @@ module PlayerData =
 [<RequireQualifiedAccess>]
 type PublicIdentity =
     | Profile of PlayerData
-    /// No username, display name or character name leaves with it.
+    /// No username, display name, character name or name color leaves with it.
     | Pseudonymous of PlayerId * Pseudonym
 
     member this.PlayerId =

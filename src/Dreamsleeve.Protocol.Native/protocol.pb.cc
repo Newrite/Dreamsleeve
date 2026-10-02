@@ -197,9 +197,10 @@ const ::uint32_t
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_._oneof_case_[0]),
-        25, // hasbit index offset
+        26, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.protocol_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.request_id_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ClientPacket, _impl_.payload_),
@@ -239,10 +240,11 @@ const ::uint32_t
         ~0u,
         ~0u,
         ~0u,
+        ~0u,
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._oneof_case_[0]),
-        31, // hasbit index offset
+        32, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.protocol_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
@@ -270,8 +272,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         1,
         0,
+        ~0u,
         ~0u,
         ~0u,
         ~0u,
@@ -325,11 +329,11 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::ClientPacket)},
-        {45, sizeof(::Dreamsleeve::Protocol::Chat::ServerPacket)},
-        {102, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
-        {103, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
-        {112, sizeof(::Dreamsleeve::Protocol::Chat::ClientMovementPacket)},
-        {119, sizeof(::Dreamsleeve::Protocol::Chat::ServerMovementPacket)},
+        {47, sizeof(::Dreamsleeve::Protocol::Chat::ServerPacket)},
+        {106, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
+        {107, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
+        {116, sizeof(::Dreamsleeve::Protocol::Chat::ClientMovementPacket)},
+        {123, sizeof(::Dreamsleeve::Protocol::Chat::ServerMovementPacket)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_ClientPacket_default_instance_._instance,
@@ -344,7 +348,7 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "\n\016protocol.proto\022\031Dreamsleeve.Protocol.C"
     "hat\032\nchat.proto\032\rsession.proto\032\014player.p"
     "roto\032\014ground.proto\032\020moderation.proto\032\013gu"
-    "ild.proto\"\261\n\n\014ClientPacket\022\030\n\020protocol_v"
+    "ild.proto\"\364\n\n\014ClientPacket\022\030\n\020protocol_v"
     "ersion\030\001 \001(\r\022\022\n\nrequest_id\030\002 \001(\004\022>\n\014open"
     "_session\030\n \001(\0132&.Dreamsleeve.Protocol.Ch"
     "at.OpenSessionH\000\0228\n\tsend_chat\030\013 \001(\0132#.Dr"
@@ -377,98 +381,103 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "at_message\030\032 \001(\0132,.Dreamsleeve.Protocol."
     "Chat.DeleteChatMessageH\000\022@\n\rguild_comman"
     "d\030\033 \001(\0132\'.Dreamsleeve.Protocol.Chat.Guil"
-    "dCommandH\000B\t\n\007payload\"\312\017\n\014ServerPacket\022\030"
-    "\n\020protocol_version\030\001 \001(\r\022\027\n\nrequest_id\030\002"
-    " \001(\004H\001\210\001\001\022B\n\016session_opened\030\n \001(\0132(.Drea"
-    "msleeve.Protocol.Chat.SessionOpenedH\000\022B\n"
-    "\016chat_published\030\013 \001(\0132(.Dreamsleeve.Prot"
-    "ocol.Chat.ChatPublishedH\000\022F\n\020request_rej"
-    "ected\030\014 \001(\0132*.Dreamsleeve.Protocol.Chat."
-    "RequestRejectedH\000\022Q\n\026player_update_accep"
-    "ted\030\020 \001(\0132/.Dreamsleeve.Protocol.Chat.Pl"
-    "ayerUpdateAcceptedH\000\022F\n\020presence_changed"
-    "\030% \001(\0132*.Dreamsleeve.Protocol.Chat.Prese"
-    "nceChangedH\000\022M\n\024ground_marks_changed\030\025 \001"
-    "(\0132-.Dreamsleeve.Protocol.Chat.GroundMar"
-    "ksChangedH\000\022I\n\022ground_mark_placed\030\026 \001(\0132"
-    "+.Dreamsleeve.Protocol.Chat.GroundMarkPl"
-    "acedH\000\022K\n\023ground_mark_removed\030\027 \001(\0132,.Dr"
-    "eamsleeve.Protocol.Chat.GroundMarkRemove"
-    "dH\000\022E\n\020own_ground_marks\030\030 \001(\0132).Dreamsle"
-    "eve.Protocol.Chat.OwnGroundMarksH\000\022[\n\033id"
-    "entity_visibility_changed\030\031 \001(\01324.Dreams"
-    "leeve.Protocol.Chat.IdentityVisibilityCh"
-    "angedH\000\022M\n\024display_name_changed\030\032 \001(\0132-."
-    "Dreamsleeve.Protocol.Chat.DisplayNameCha"
-    "ngedH\000\022>\n\014mute_changed\030\033 \001(\0132&.Dreamslee"
-    "ve.Protocol.Chat.MuteChangedH\000\022@\n\rsessio"
-    "n_ended\030\034 \001(\0132\'.Dreamsleeve.Protocol.Cha"
-    "t.SessionEndedH\000\022>\n\014role_changed\030\035 \001(\0132&"
-    ".Dreamsleeve.Protocol.Chat.RoleChangedH\000"
-    "\022D\n\017sanction_issued\030\036 \001(\0132).Dreamsleeve."
-    "Protocol.Chat.SanctionIssuedH\000\022D\n\017sancti"
-    "on_lifted\030\037 \001(\0132).Dreamsleeve.Protocol.C"
-    "hat.SanctionLiftedH\000\022@\n\rplayer_kicked\030  "
-    "\001(\0132\'.Dreamsleeve.Protocol.Chat.PlayerKi"
-    "ckedH\000\022@\n\rsanction_list\030! \001(\0132\'.Dreamsle"
-    "eve.Protocol.Chat.SanctionListH\000\022>\n\014play"
-    "er_marks\030\" \001(\0132&.Dreamsleeve.Protocol.Ch"
-    "at.PlayerMarksH\000\022M\n\024player_marks_cleared"
-    "\030# \001(\0132-.Dreamsleeve.Protocol.Chat.Playe"
-    "rMarksClearedH\000\022M\n\024chat_message_removed\030"
-    "$ \001(\0132-.Dreamsleeve.Protocol.Chat.ChatMe"
-    "ssageRemovedH\000\022D\n\017guilds_snapshot\030& \001(\0132"
-    ").Dreamsleeve.Protocol.Chat.GuildsSnapsh"
-    "otH\000\022@\n\rguild_changed\030\' \001(\0132\'.Dreamsleev"
-    "e.Protocol.Chat.GuildChangedH\000\022I\n\022guild_"
-    "command_done\030( \001(\0132+.Dreamsleeve.Protoco"
-    "l.Chat.GuildCommandDoneH\000B\t\n\007payloadB\r\n\013"
-    "_request_idJ\004\010\r\020\016J\004\010\016\020\017J\004\010\017\020\020J\004\010\021\020\022J\004\010\022\020"
-    "\023J\004\010\023\020\024J\004\010\024\020\025R\014player_movedR\rplayers_mov"
-    "edR\rplayer_joinedR\013player_leftR\016player_u"
-    "pdatedR\031player_visibility_changedR\027playe"
-    "r_metadata_changed\"\026\n\024PlayerUpdateAccept"
-    "ed\"p\n\017RequestRejected\022=\n\004code\030\001 \001(\0162/.Dr"
-    "eamsleeve.Protocol.Chat.RequestRejection"
-    "Code\022\017\n\007message\030\002 \001(\t\022\r\n\005field\030\003 \001(\t\"k\n\024"
-    "ClientMovementPacket\022\030\n\020protocol_version"
-    "\030\001 \001(\r\0229\n\006sample\030\002 \001(\0132).Dreamsleeve.Pro"
-    "tocol.Chat.MovementSample\"l\n\024ServerMovem"
-    "entPacket\022\030\n\020protocol_version\030\001 \001(\r\022:\n\tm"
-    "ovements\030\002 \001(\0132\'.Dreamsleeve.Protocol.Ch"
-    "at.PlayersMoved*\371\t\n\024RequestRejectionCode"
-    "\022&\n\"REQUEST_REJECTION_CODE_UNSPECIFIED\020\000"
-    "\022*\n&REQUEST_REJECTION_CODE_INVALID_REQUE"
-    "ST\020\001\022,\n(REQUEST_REJECTION_CODE_SESSION_N"
-    "OT_READY\020\002\022/\n+REQUEST_REJECTION_CODE_SES"
-    "SION_ALREADY_OPEN\020\003\022)\n%REQUEST_REJECTION"
-    "_CODE_USERNAME_TAKEN\020\004\022,\n(REQUEST_REJECT"
-    "ION_CODE_CHANNEL_NOT_FOUND\020\005\022-\n)REQUEST_"
-    "REJECTION_CODE_NOT_CHANNEL_MEMBER\020\006\022%\n!R"
-    "EQUEST_REJECTION_CODE_OVERLOADED\020\007\0220\n,RE"
-    "QUEST_REJECTION_CODE_AUTHENTICATION_FAIL"
-    "ED\020\010\022+\n\'REQUEST_REJECTION_CODE_TEXT_NOT_"
-    "ALLOWED\020\t\022\'\n#REQUEST_REJECTION_CODE_RATE"
-    "_LIMITED\020\n\0223\n/REQUEST_REJECTION_CODE_ANN"
-    "OUNCEMENT_NOT_ALLOWED\020\013\0220\n,REQUEST_REJEC"
-    "TION_CODE_GROUND_MARK_AREA_FULL\020\014\0220\n,REQ"
-    "UEST_REJECTION_CODE_GROUND_MARK_NOT_FOUN"
-    "D\020\r\0226\n2REQUEST_REJECTION_CODE_HIDDEN_IDE"
-    "NTITY_NOT_ALLOWED\020\016\022:\n6REQUEST_REJECTION"
-    "_CODE_DISPLAY_NAME_CHANGE_NOT_ALLOWED\020\017\022"
-    " \n\034REQUEST_REJECTION_CODE_MUTED\020\020\022(\n$REQ"
-    "UEST_REJECTION_CODE_NOT_PERMITTED\020\021\022+\n\'R"
-    "EQUEST_REJECTION_CODE_TARGET_NOT_FOUND\020\022"
-    "\022+\n\'REQUEST_REJECTION_CODE_GUILD_NAME_TA"
-    "KEN\020\023\022%\n!REQUEST_REJECTION_CODE_GUILD_FU"
-    "LL\020\024\022-\n)REQUEST_REJECTION_CODE_GUILD_PLA"
-    "YER_LIMIT\020\025\022-\n)REQUEST_REJECTION_CODE_GU"
-    "ILD_SERVER_LIMIT\020\026\022-\n)REQUEST_REJECTION_"
-    "CODE_GUILD_INVITES_FULL\020\027\022/\n+REQUEST_REJ"
-    "ECTION_CODE_GUILD_ALREADY_MEMBER\020\030\0220\n,RE"
-    "QUEST_REJECTION_CODE_GUILD_ALREADY_INVIT"
-    "ED\020\031\022-\n)REQUEST_REJECTION_CODE_GUILD_MAS"
-    "TER_STAYS\020\032b\006proto3"
+    "dCommandH\000\022A\n\016set_name_color\030\034 \001(\0132\'.Dre"
+    "amsleeve.Protocol.Chat.SetNameColorH\000B\t\n"
+    "\007payload\"\225\020\n\014ServerPacket\022\030\n\020protocol_ve"
+    "rsion\030\001 \001(\r\022\027\n\nrequest_id\030\002 \001(\004H\001\210\001\001\022B\n\016"
+    "session_opened\030\n \001(\0132(.Dreamsleeve.Proto"
+    "col.Chat.SessionOpenedH\000\022B\n\016chat_publish"
+    "ed\030\013 \001(\0132(.Dreamsleeve.Protocol.Chat.Cha"
+    "tPublishedH\000\022F\n\020request_rejected\030\014 \001(\0132*"
+    ".Dreamsleeve.Protocol.Chat.RequestReject"
+    "edH\000\022Q\n\026player_update_accepted\030\020 \001(\0132/.D"
+    "reamsleeve.Protocol.Chat.PlayerUpdateAcc"
+    "eptedH\000\022F\n\020presence_changed\030% \001(\0132*.Drea"
+    "msleeve.Protocol.Chat.PresenceChangedH\000\022"
+    "M\n\024ground_marks_changed\030\025 \001(\0132-.Dreamsle"
+    "eve.Protocol.Chat.GroundMarksChangedH\000\022I"
+    "\n\022ground_mark_placed\030\026 \001(\0132+.Dreamsleeve"
+    ".Protocol.Chat.GroundMarkPlacedH\000\022K\n\023gro"
+    "und_mark_removed\030\027 \001(\0132,.Dreamsleeve.Pro"
+    "tocol.Chat.GroundMarkRemovedH\000\022E\n\020own_gr"
+    "ound_marks\030\030 \001(\0132).Dreamsleeve.Protocol."
+    "Chat.OwnGroundMarksH\000\022[\n\033identity_visibi"
+    "lity_changed\030\031 \001(\01324.Dreamsleeve.Protoco"
+    "l.Chat.IdentityVisibilityChangedH\000\022M\n\024di"
+    "splay_name_changed\030\032 \001(\0132-.Dreamsleeve.P"
+    "rotocol.Chat.DisplayNameChangedH\000\022>\n\014mut"
+    "e_changed\030\033 \001(\0132&.Dreamsleeve.Protocol.C"
+    "hat.MuteChangedH\000\022@\n\rsession_ended\030\034 \001(\013"
+    "2\'.Dreamsleeve.Protocol.Chat.SessionEnde"
+    "dH\000\022>\n\014role_changed\030\035 \001(\0132&.Dreamsleeve."
+    "Protocol.Chat.RoleChangedH\000\022D\n\017sanction_"
+    "issued\030\036 \001(\0132).Dreamsleeve.Protocol.Chat"
+    ".SanctionIssuedH\000\022D\n\017sanction_lifted\030\037 \001"
+    "(\0132).Dreamsleeve.Protocol.Chat.SanctionL"
+    "iftedH\000\022@\n\rplayer_kicked\030  \001(\0132\'.Dreamsl"
+    "eeve.Protocol.Chat.PlayerKickedH\000\022@\n\rsan"
+    "ction_list\030! \001(\0132\'.Dreamsleeve.Protocol."
+    "Chat.SanctionListH\000\022>\n\014player_marks\030\" \001("
+    "\0132&.Dreamsleeve.Protocol.Chat.PlayerMark"
+    "sH\000\022M\n\024player_marks_cleared\030# \001(\0132-.Drea"
+    "msleeve.Protocol.Chat.PlayerMarksCleared"
+    "H\000\022M\n\024chat_message_removed\030$ \001(\0132-.Dream"
+    "sleeve.Protocol.Chat.ChatMessageRemovedH"
+    "\000\022D\n\017guilds_snapshot\030& \001(\0132).Dreamsleeve"
+    ".Protocol.Chat.GuildsSnapshotH\000\022@\n\rguild"
+    "_changed\030\' \001(\0132\'.Dreamsleeve.Protocol.Ch"
+    "at.GuildChangedH\000\022I\n\022guild_command_done\030"
+    "( \001(\0132+.Dreamsleeve.Protocol.Chat.GuildC"
+    "ommandDoneH\000\022I\n\022name_color_changed\030) \001(\013"
+    "2+.Dreamsleeve.Protocol.Chat.NameColorCh"
+    "angedH\000B\t\n\007payloadB\r\n\013_request_idJ\004\010\r\020\016J"
+    "\004\010\016\020\017J\004\010\017\020\020J\004\010\021\020\022J\004\010\022\020\023J\004\010\023\020\024J\004\010\024\020\025R\014pla"
+    "yer_movedR\rplayers_movedR\rplayer_joinedR"
+    "\013player_leftR\016player_updatedR\031player_vis"
+    "ibility_changedR\027player_metadata_changed"
+    "\"\026\n\024PlayerUpdateAccepted\"p\n\017RequestRejec"
+    "ted\022=\n\004code\030\001 \001(\0162/.Dreamsleeve.Protocol"
+    ".Chat.RequestRejectionCode\022\017\n\007message\030\002 "
+    "\001(\t\022\r\n\005field\030\003 \001(\t\"k\n\024ClientMovementPack"
+    "et\022\030\n\020protocol_version\030\001 \001(\r\0229\n\006sample\030\002"
+    " \001(\0132).Dreamsleeve.Protocol.Chat.Movemen"
+    "tSample\"l\n\024ServerMovementPacket\022\030\n\020proto"
+    "col_version\030\001 \001(\r\022:\n\tmovements\030\002 \001(\0132\'.D"
+    "reamsleeve.Protocol.Chat.PlayersMoved*\253\n"
+    "\n\024RequestRejectionCode\022&\n\"REQUEST_REJECT"
+    "ION_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_REJECT"
+    "ION_CODE_INVALID_REQUEST\020\001\022,\n(REQUEST_RE"
+    "JECTION_CODE_SESSION_NOT_READY\020\002\022/\n+REQU"
+    "EST_REJECTION_CODE_SESSION_ALREADY_OPEN\020"
+    "\003\022)\n%REQUEST_REJECTION_CODE_USERNAME_TAK"
+    "EN\020\004\022,\n(REQUEST_REJECTION_CODE_CHANNEL_N"
+    "OT_FOUND\020\005\022-\n)REQUEST_REJECTION_CODE_NOT"
+    "_CHANNEL_MEMBER\020\006\022%\n!REQUEST_REJECTION_C"
+    "ODE_OVERLOADED\020\007\0220\n,REQUEST_REJECTION_CO"
+    "DE_AUTHENTICATION_FAILED\020\010\022+\n\'REQUEST_RE"
+    "JECTION_CODE_TEXT_NOT_ALLOWED\020\t\022\'\n#REQUE"
+    "ST_REJECTION_CODE_RATE_LIMITED\020\n\0223\n/REQU"
+    "EST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLO"
+    "WED\020\013\0220\n,REQUEST_REJECTION_CODE_GROUND_M"
+    "ARK_AREA_FULL\020\014\0220\n,REQUEST_REJECTION_COD"
+    "E_GROUND_MARK_NOT_FOUND\020\r\0226\n2REQUEST_REJ"
+    "ECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED\020"
+    "\016\022:\n6REQUEST_REJECTION_CODE_DISPLAY_NAME"
+    "_CHANGE_NOT_ALLOWED\020\017\022 \n\034REQUEST_REJECTI"
+    "ON_CODE_MUTED\020\020\022(\n$REQUEST_REJECTION_COD"
+    "E_NOT_PERMITTED\020\021\022+\n\'REQUEST_REJECTION_C"
+    "ODE_TARGET_NOT_FOUND\020\022\022+\n\'REQUEST_REJECT"
+    "ION_CODE_GUILD_NAME_TAKEN\020\023\022%\n!REQUEST_R"
+    "EJECTION_CODE_GUILD_FULL\020\024\022-\n)REQUEST_RE"
+    "JECTION_CODE_GUILD_PLAYER_LIMIT\020\025\022-\n)REQ"
+    "UEST_REJECTION_CODE_GUILD_SERVER_LIMIT\020\026"
+    "\022-\n)REQUEST_REJECTION_CODE_GUILD_INVITES"
+    "_FULL\020\027\022/\n+REQUEST_REJECTION_CODE_GUILD_"
+    "ALREADY_MEMBER\020\030\0220\n,REQUEST_REJECTION_CO"
+    "DE_GUILD_ALREADY_INVITED\020\031\022-\n)REQUEST_RE"
+    "JECTION_CODE_GUILD_MASTER_STAYS\020\032\0220\n,REQ"
+    "UEST_REJECTION_CODE_NAME_COLOR_UNREADABL"
+    "E\020\033b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_protocol_2eproto_deps[6] = {
@@ -483,7 +492,7 @@ static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    5099,
+    5291,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -504,7 +513,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_
   return file_level_enum_descriptors_protocol_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t RequestRejectionCode_internal_data_[] = {
-    1769472u, 0u, };
+    1835008u, 0u, };
 // ===================================================================
 
 class ClientPacket::_Internal {
@@ -949,6 +958,30 @@ void ClientPacket::clear_guild_command() {
     clear_has_payload();
   }
 }
+void ClientPacket::set_allocated_set_name_color(::Dreamsleeve::Protocol::Chat::SetNameColor* PROTOBUF_NULLABLE set_name_color) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_payload();
+  if (set_name_color) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(set_name_color)->GetArena();
+    if (message_arena != submessage_arena) {
+      set_name_color = ::google::protobuf::internal::GetOwnedMessage(message_arena, set_name_color, submessage_arena);
+    }
+    set_has_set_name_color();
+    _impl_.payload_.set_name_color_ = set_name_color;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ClientPacket.set_name_color)
+}
+void ClientPacket::clear_set_name_color() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (payload_case() == kSetNameColor) {
+    if (GetArena() == nullptr) {
+      delete _impl_.payload_.set_name_color_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.set_name_color_);
+    }
+    clear_has_payload();
+  }
+}
 ClientPacket::ClientPacket(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ClientPacket_class_data_.base()) {
@@ -1043,6 +1076,9 @@ ClientPacket::ClientPacket(
         break;
       case kGuildCommand:
         _impl_.payload_.guild_command_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.guild_command_);
+        break;
+      case kSetNameColor:
+        _impl_.payload_.set_name_color_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.set_name_color_);
         break;
   }
 
@@ -1229,6 +1265,14 @@ void ClientPacket::clear_payload() {
       }
       break;
     }
+    case kSetNameColor: {
+      if (GetArena() == nullptr) {
+        delete _impl_.payload_.set_name_color_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.set_name_color_);
+      }
+      break;
+    }
     case PAYLOAD_NOT_SET: {
       break;
     }
@@ -1280,17 +1324,17 @@ ClientPacket::GetClassData() const {
   return ClientPacket_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 20, 18, 0, 2>
+const ::_pbi::TcParseTable<1, 21, 19, 0, 2>
 ClientPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ClientPacket, _impl_._has_bits_),
     0, // no _extensions_
-    27, 8,  // max_field_number, fast_idx_mask
+    28, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4160750076,  // skipmap
+    4026532348,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    20,  // num_field_entries
-    18,  // num_aux_entries
+    21,  // num_field_entries
+    19,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ClientPacket_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1350,6 +1394,8 @@ ClientPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ClientPacket, _impl_.payload_.delete_chat_message_), _Internal::kOneofCaseOffset + 0, 16, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.GuildCommand guild_command = 27;
     {PROTOBUF_FIELD_OFFSET(ClientPacket, _impl_.payload_.guild_command_), _Internal::kOneofCaseOffset + 0, 17, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.SetNameColor set_name_color = 28;
+    {PROTOBUF_FIELD_OFFSET(ClientPacket, _impl_.payload_.set_name_color_), _Internal::kOneofCaseOffset + 0, 18, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::OpenSession>()},
@@ -1370,6 +1416,7 @@ ClientPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::ClearPlayerMarks>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::DeleteChatMessage>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GuildCommand>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SetNameColor>()},
   }},
   {{
   }},
@@ -1538,6 +1585,12 @@ PROTOBUF_NOINLINE void ClientPacket::Clear() {
           stream);
       break;
     }
+    case kSetNameColor: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          28, *this_._impl_.payload_.set_name_color_, this_._impl_.payload_.set_name_color_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -1689,6 +1742,12 @@ PROTOBUF_NOINLINE void ClientPacket::Clear() {
     case kGuildCommand: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.guild_command_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Chat.SetNameColor set_name_color = 28;
+    case kSetNameColor: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.set_name_color_);
       break;
     }
     case PAYLOAD_NOT_SET: {
@@ -1880,6 +1939,14 @@ void ClientPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.payload_.guild_command_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.guild_command_);
         } else {
           _this->_impl_.payload_.guild_command_->MergeFrom(*from._impl_.payload_.guild_command_);
+        }
+        break;
+      }
+      case kSetNameColor: {
+        if (oneof_needs_init) {
+          _this->_impl_.payload_.set_name_color_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.set_name_color_);
+        } else {
+          _this->_impl_.payload_.set_name_color_->MergeFrom(*from._impl_.payload_.set_name_color_);
         }
         break;
       }
@@ -2482,6 +2549,30 @@ void ServerPacket::clear_guild_command_done() {
     clear_has_payload();
   }
 }
+void ServerPacket::set_allocated_name_color_changed(::Dreamsleeve::Protocol::Chat::NameColorChanged* PROTOBUF_NULLABLE name_color_changed) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_payload();
+  if (name_color_changed) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(name_color_changed)->GetArena();
+    if (message_arena != submessage_arena) {
+      name_color_changed = ::google::protobuf::internal::GetOwnedMessage(message_arena, name_color_changed, submessage_arena);
+    }
+    set_has_name_color_changed();
+    _impl_.payload_.name_color_changed_ = name_color_changed;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.name_color_changed)
+}
+void ServerPacket::clear_name_color_changed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (payload_case() == kNameColorChanged) {
+    if (GetArena() == nullptr) {
+      delete _impl_.payload_.name_color_changed_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.name_color_changed_);
+    }
+    clear_has_payload();
+  }
+}
 ServerPacket::ServerPacket(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ServerPacket_class_data_.base()) {
@@ -2594,6 +2685,9 @@ ServerPacket::ServerPacket(
         break;
       case kGuildCommandDone:
         _impl_.payload_.guild_command_done_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.guild_command_done_);
+        break;
+      case kNameColorChanged:
+        _impl_.payload_.name_color_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.name_color_changed_);
         break;
   }
 
@@ -2828,6 +2922,14 @@ void ServerPacket::clear_payload() {
       }
       break;
     }
+    case kNameColorChanged: {
+      if (GetArena() == nullptr) {
+        delete _impl_.payload_.name_color_changed_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.name_color_changed_);
+      }
+      break;
+    }
     case PAYLOAD_NOT_SET: {
       break;
     }
@@ -2879,17 +2981,17 @@ ServerPacket::GetClassData() const {
   return ServerPacket_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 26, 24, 0, 7>
+const ::_pbi::TcParseTable<1, 27, 25, 0, 7>
 ServerPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_._has_bits_),
     0, // no _extensions_
-    40, 8,  // max_field_number, fast_idx_mask
+    41, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
     1012220,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    26,  // num_field_entries
-    24,  // num_aux_entries
+    27,  // num_field_entries
+    25,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ServerPacket_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -2908,7 +3010,7 @@ ServerPacket::_table_ = {
       PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.protocol_version_)}},
   }}, {{
     33, 0, 1,
-    65280, 18,
+    65024, 18,
     65535, 65535
   }}, {{
     // uint32 protocol_version = 1;
@@ -2963,6 +3065,8 @@ ServerPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.guild_changed_), _Internal::kOneofCaseOffset + 0, 22, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.GuildCommandDone guild_command_done = 40;
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.guild_command_done_), _Internal::kOneofCaseOffset + 0, 23, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.NameColorChanged name_color_changed = 41;
+    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.name_color_changed_), _Internal::kOneofCaseOffset + 0, 24, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SessionOpened>()},
@@ -2989,6 +3093,7 @@ ServerPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GuildsSnapshot>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GuildChanged>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GuildCommandDone>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::NameColorChanged>()},
   }},
   {{
   }},
@@ -3191,6 +3296,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
           stream);
       break;
     }
+    case kNameColorChanged: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          41, *this_._impl_.payload_.name_color_changed_, this_._impl_.payload_.name_color_changed_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -3376,6 +3487,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
     case kGuildCommandDone: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.guild_command_done_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Chat.NameColorChanged name_color_changed = 41;
+    case kNameColorChanged: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.name_color_changed_);
       break;
     }
     case PAYLOAD_NOT_SET: {
@@ -3613,6 +3730,14 @@ void ServerPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.payload_.guild_command_done_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.guild_command_done_);
         } else {
           _this->_impl_.payload_.guild_command_done_->MergeFrom(*from._impl_.payload_.guild_command_done_);
+        }
+        break;
+      }
+      case kNameColorChanged: {
+        if (oneof_needs_init) {
+          _this->_impl_.payload_.name_color_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.name_color_changed_);
+        } else {
+          _this->_impl_.payload_.name_color_changed_->MergeFrom(*from._impl_.payload_.name_color_changed_);
         }
         break;
       }

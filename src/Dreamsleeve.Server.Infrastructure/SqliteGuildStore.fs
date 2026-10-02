@@ -78,11 +78,11 @@ module SqliteGuildStore =
                 rows "SELECT guild_id, player_id, role, joined_at, mute_reason, muted_by, muted_at, muted_until FROM guild_members" memberOf
             let invites = rows "SELECT guild_id, player_id, invited_by, created_at, expires_at FROM guild_invites" inviteOf
             let profiles =
-                rows "SELECT p.player_id, a.username, p.display_name FROM profiles p JOIN accounts a ON a.id=p.account_id WHERE p.player_id IN (SELECT player_id FROM guild_members UNION SELECT player_id FROM guild_invites)"
+                rows "SELECT p.player_id, a.username, p.display_name, p.name_color FROM profiles p JOIN accounts a ON a.id=p.account_id WHERE p.player_id IN (SELECT player_id FROM guild_members UNION SELECT player_id FROM guild_invites)"
                     (fun reader ->
                         match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
-                              DisplayName.create Int32.MaxValue (reader.GetString 2) with
-                        | Ok id, Ok username, Ok name -> Ok(PlayerData.create id username name)
+                              DisplayName.create Int32.MaxValue (reader.GetString 2), nameColor (reader.GetInt64 3) with
+                        | Ok id, Ok username, Ok name, Ok color -> Ok(PlayerData.create id username name color)
                         | _ -> invalidData "A stored profile is invalid.")
             match guilds, members, invites, profiles with
             | Ok guilds, Ok members, Ok invites, Ok profiles ->

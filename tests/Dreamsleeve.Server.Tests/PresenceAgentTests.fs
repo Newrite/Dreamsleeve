@@ -18,7 +18,7 @@ let private ok = function Ok value -> value | Error error -> failwithf "%A" erro
 let private config = { MailboxCapacity = 4; ControlReserve = 2; MaxControlDeliveries = 4; ReplicationIntervalMs = 60000; VisibilityDistance = 8192.0f }
 let private profile number =
     PlayerData.create (PlayerId.create number |> ok)
-        (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok)
+        (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok) NameColor.unknown
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test output closed."
 }

@@ -57,7 +57,7 @@ let tests = testList "SQLite accounts" [
     testCase "provider identity and saved session do not require a password credential" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
-        database.Execute "INSERT INTO accounts(id,username) VALUES(17,'external'); INSERT INTO profiles VALUES(23,17,'External'); INSERT INTO account_identities VALUES('steam','verified-subject',17)"
+        database.Execute "INSERT INTO accounts(id,username) VALUES(17,'external'); INSERT INTO profiles VALUES(23,17,'External',15037299); INSERT INTO account_identities VALUES('steam','verified-subject',17)"
         let identity = SqliteAccountStore.findIdentity database.Config "steam" "verified-subject" token |> ok |> Option.get
         Expect.equal identity.AccountId 17L "Provider resolves an account, not a display name."
         Expect.isNone (SqliteAccountStore.find database.Config (username "external") token |> ok) "No implicit password login."
@@ -89,8 +89,21 @@ let tests = testList "SQLite accounts" [
         Expect.equal restored.Profile profile "Persisted profile is unchanged."
         Expect.equal restored.PasswordHash "stored-password-hash" "The opaque password hash survives restart."
         Expect.isGreaterThan restored.AccountId 0L "Account IDs are positive."
-        Expect.equal (database.Scalar "PRAGMA user_version") 13L "The applied schema is recorded."
-        Expect.equal (database.Scalar "SELECT count(*) FROM __migrondi_migrations") 13L "Repeated startup does not reapply migration.")
+        Expect.equal (database.Scalar "PRAGMA user_version") 14L "The applied schema is recorded."
+        Expect.equal (database.Scalar "SELECT count(*) FROM __migrondi_migrations") 14L "Repeated startup does not reapply migration.")
+
+    testCase "a new account gets a palette name color; a chosen one is stored and comes back" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let profile = SqliteAccountStore.create database.Config (username "Painter") (display "Painter") "hash" token |> ok
+        Expect.contains NameColor.palette profile.NameColor "a random palette color"
+        let chosen = NameColor.create 0x123456u |> ok
+        let stored = SqliteAccountStore.setNameColor database.Config profile.PlayerId chosen token |> ok |> Option.get
+        Expect.equal stored.Profile (PlayerData.withNameColor chosen profile) "only the color changed"
+        let restored = SqliteAccountStore.find database.Config (username "painter") token |> ok |> Option.get
+        Expect.equal restored.Profile.NameColor chosen "the color survives a new connection"
+        let missing = PlayerId.create 404UL |> Result.defaultWith (failwithf "%A")
+        Expect.isNone (SqliteAccountStore.setNameColor database.Config missing chosen token |> ok) "no such profile")
 
     testCase "duplicate canonical username does not create an orphan profile or change its hash" (fun () ->
         use database = new Database()
@@ -150,10 +163,10 @@ let tests = testList "SQLite accounts" [
 
     testCase "a newer schema is rejected before changing the database" (fun () ->
         use database = new Database()
-        database.Execute "PRAGMA user_version = 14"
+        database.Execute "PRAGMA user_version = 15"
 
         Expect.isError (SqliteAccountStore.initialize database.Config) "Older binaries must not open a newer schema."
-        Expect.equal (database.Scalar "PRAGMA user_version") 14L "The version is preserved."
+        Expect.equal (database.Scalar "PRAGMA user_version") 15L "The version is preserved."
         Expect.equal (database.Scalar "SELECT count(*) FROM sqlite_master WHERE type = 'table'") 0L "No migrations were applied.")
 
     testCase "another application database and damaged schema are rejected" (fun () ->

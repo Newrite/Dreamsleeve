@@ -82,35 +82,40 @@ type SessionAuthenticationRequest = {
     ReplyTo: ReliableAgentRef<SessionAuthenticationReply>
 }
 
+/// What a player changes in their own profile from the game.
 [<RequireQualifiedAccess>]
-type DisplayNameChangeError =
-    /// The previous own change was too recent; the name stays.
+type ProfileChange =
+    /// The session has validated the name and checked the word list; the account
+    /// service limits how often it may change (TimeSpan.Zero: no limit).
+    | DisplayName of DisplayName * minInterval: TimeSpan
+    /// The session has checked that the player may choose it, and how often.
+    | NameColor of NameColor
+
+[<RequireQualifiedAccess>]
+type ProfileChangeError =
+    /// The previous own display name change was too recent; the name stays.
     | TooSoon of retryAfter: TimeSpan
     | Busy
     | Unavailable
 
-type DisplayNameChangeReply = {
+type ProfileChangeReply = {
     OperationId: Guid
-    /// The stored profile with the new name.
-    Result: Result<PlayerData, DisplayNameChangeError>
+    /// The stored profile with the change.
+    Result: Result<PlayerData, ProfileChangeError>
 }
 
-/// A player's own display name change. The session has already validated the
-/// name and checked the word list; the account service stores it and limits
-/// how often it may happen.
-type DisplayNameChangeRequest = {
+/// A player's own profile change; the account service stores it.
+type ProfileChangeRequest = {
     OperationId: Guid
     PlayerId: PlayerId
-    DisplayName: DisplayName
-    /// TimeSpan.Zero: no limit.
-    MinInterval: TimeSpan
-    ReplyTo: ReliableAgentRef<DisplayNameChangeReply>
+    Change: ProfileChange
+    ReplyTo: ReliableAgentRef<ProfileChangeReply>
 }
 
 /// The runtime observes this dependency but does not own the account service.
 type SessionAuthenticator = {
     Requests: ReliableAgentRef<SessionAuthenticationRequest>
-    DisplayNames: ReliableAgentRef<DisplayNameChangeRequest>
+    Profiles: ReliableAgentRef<ProfileChangeRequest>
     Moderation: ReliableAgentRef<ModerationRequest>
     Completion: Task
 }

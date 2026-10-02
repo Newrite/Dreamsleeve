@@ -204,7 +204,8 @@ module internal PlayerCodec =
             Dreamsleeve.Protocol.Chat.PlayerProfile(
                 PlayerId = PlayerId.value data.PlayerId,
                 Username = Username.value data.Username,
-                DisplayName = DisplayName.value data.DisplayName)
+                DisplayName = DisplayName.value data.DisplayName,
+                NameColor = NameColor.value data.NameColor)
         | PublicIdentity.Pseudonymous(playerId, pseudonym) ->
             Dreamsleeve.Protocol.Chat.PlayerProfile(
                 PlayerId = PlayerId.value playerId, DisplayName = Pseudonym.value pseudonym, Pseudonymous = true)

@@ -115,10 +115,18 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<Domain::PlayerData> Profile(const P::PlayerProfile& player)
   {
     if (player.player_id() == Domain::InvalidId) return Invalid("player_id");
-    if (player.pseudonymous() && (!player.username().empty() || player.display_name().empty())) return Invalid("pseudonymous");
+    if (player.pseudonymous() && (!player.username().empty() || player.display_name().empty() || player.has_name_color()))
+      return Invalid("pseudonymous");
+    if (player.has_name_color() && player.name_color() > MaxNameColor) return Invalid("name_color");
 
     // Strings have already been validated/canonicalized by the server.
-    return Domain::PlayerData{player.player_id(), player.username(), player.display_name(), player.pseudonymous()};
+    return Domain::PlayerData{
+        player.player_id(),
+        player.username(),
+        player.display_name(),
+        player.pseudonymous(),
+        player.has_name_color() ? std::optional{player.name_color()} : std::nullopt
+    };
   }
 
   Result<Domain::PlayerLocation> ReadLocation(const P::PlayerLocation& source)

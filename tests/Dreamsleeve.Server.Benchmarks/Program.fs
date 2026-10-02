@@ -21,7 +21,7 @@ let private text = ChatMessageText.create 2000 "same benchmark payload" |> ok
 let private profile index =
     PlayerData.create (PlayerId.create (uint64 index + 1UL) |> ok)
         (Username.create 32 (sprintf "bench%d" index) |> ok)
-        (DisplayName.create 64 (sprintf "Bench %d" index) |> ok)
+        (DisplayName.create 64 (sprintf "Bench %d" index) |> ok) NameColor.unknown
 // The same text again and again, as fast as admitted: anti-spam would refuse it,
 // and the measurement is routing, not admission.
 let private unlimited = { Burst = Int32.MaxValue; RefillMs = 1; DuplicateWindowMs = 0 }
@@ -127,12 +127,12 @@ let private start count (probe: Probe) = task {
     let authentication = Agent.Start(AgentOptions.create "benchmark-authentication",
                              AgentReplyDispatcher.createHandler 128 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) authenticate)
     // The workload never renames or moderates; these owners answer like an unavailable service.
-    let names = Agent.Start(AgentOptions.create "benchmark-names", fun _ (request: DisplayNameChangeRequest) -> task {
-        request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error DisplayNameChangeError.Unavailable } |> ignore })
+    let names = Agent.Start(AgentOptions.create "benchmark-names", fun _ (request: ProfileChangeRequest) -> task {
+        request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ProfileChangeError.Unavailable } |> ignore })
     let moderation = Agent.Start(AgentOptions.create "benchmark-moderation", fun _ (request: ModerationRequest) -> task {
         request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ModerationError.Unavailable } |> ignore })
     let authenticator = {
-        Requests = authentication.Ref.TryReliable().Value; DisplayNames = names.Ref.TryReliable().Value
+        Requests = authentication.Ref.TryReliable().Value; Profiles = names.Ref.TryReliable().Value
         Moderation = moderation.Ref.TryReliable().Value; Completion = authentication.Completion
     }
     // Nothing is placed on the ground; writes would only be discarded.

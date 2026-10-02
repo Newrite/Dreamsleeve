@@ -88,6 +88,10 @@ class MuteState;
 struct MuteStateDefaultTypeInternal;
 extern MuteStateDefaultTypeInternal _MuteState_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull MuteState_class_data_;
+class NameColorChanged;
+struct NameColorChangedDefaultTypeInternal;
+extern NameColorChangedDefaultTypeInternal _NameColorChanged_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull NameColorChanged_class_data_;
 class OpenSession;
 struct OpenSessionDefaultTypeInternal;
 extern OpenSessionDefaultTypeInternal _OpenSession_default_instance_;
@@ -104,6 +108,10 @@ class SetIdentityVisibility;
 struct SetIdentityVisibilityDefaultTypeInternal;
 extern SetIdentityVisibilityDefaultTypeInternal _SetIdentityVisibility_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull SetIdentityVisibility_class_data_;
+class SetNameColor;
+struct SetNameColorDefaultTypeInternal;
+extern SetNameColorDefaultTypeInternal _SetNameColor_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SetNameColor_class_data_;
 }  // namespace Chat
 }  // namespace Protocol
 }  // namespace Dreamsleeve
@@ -201,6 +209,196 @@ inline bool SessionEndReason_Parse(
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class SetNameColor final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.SetNameColor) */ {
+ public:
+  inline SetNameColor() : SetNameColor(nullptr) {}
+  ~SetNameColor() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetNameColor* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetNameColor));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR SetNameColor(::google::protobuf::internal::ConstantInitialized);
+
+  inline SetNameColor(const SetNameColor& from) : SetNameColor(nullptr, from) {}
+  inline SetNameColor(SetNameColor&& from) noexcept
+      : SetNameColor(nullptr, ::std::move(from)) {}
+  inline SetNameColor& operator=(const SetNameColor& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetNameColor& operator=(SetNameColor&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const SetNameColor& default_instance() {
+    return *reinterpret_cast<const SetNameColor*>(
+        &_SetNameColor_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(SetNameColor& a, SetNameColor& b) { a.Swap(&b); }
+  inline void Swap(SetNameColor* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetNameColor* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SetNameColor* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetNameColor>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetNameColor& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetNameColor& from) { SetNameColor::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetNameColor* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.SetNameColor"; }
+
+  explicit SetNameColor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetNameColor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetNameColor& from);
+  SetNameColor(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetNameColor&& from) noexcept
+      : SetNameColor(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameColorFieldNumber = 1,
+  };
+  // uint32 name_color = 1;
+  void clear_name_color() ;
+  ::uint32_t name_color() const;
+  void set_name_color(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_name_color() const;
+  void _internal_set_name_color(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SetNameColor)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetNameColor& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t name_color_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_session_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SetNameColor_class_data_;
 // -------------------------------------------------------------------
 
 class SetIdentityVisibility final : public ::google::protobuf::Message
@@ -818,6 +1016,196 @@ class OpenSession final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull OpenSession_class_data_;
+// -------------------------------------------------------------------
+
+class NameColorChanged final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.NameColorChanged) */ {
+ public:
+  inline NameColorChanged() : NameColorChanged(nullptr) {}
+  ~NameColorChanged() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(NameColorChanged* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(NameColorChanged));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR NameColorChanged(::google::protobuf::internal::ConstantInitialized);
+
+  inline NameColorChanged(const NameColorChanged& from) : NameColorChanged(nullptr, from) {}
+  inline NameColorChanged(NameColorChanged&& from) noexcept
+      : NameColorChanged(nullptr, ::std::move(from)) {}
+  inline NameColorChanged& operator=(const NameColorChanged& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline NameColorChanged& operator=(NameColorChanged&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const NameColorChanged& default_instance() {
+    return *reinterpret_cast<const NameColorChanged*>(
+        &_NameColorChanged_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(NameColorChanged& a, NameColorChanged& b) { a.Swap(&b); }
+  inline void Swap(NameColorChanged* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(NameColorChanged* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  NameColorChanged* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<NameColorChanged>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const NameColorChanged& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const NameColorChanged& from) { NameColorChanged::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(NameColorChanged* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.NameColorChanged"; }
+
+  explicit NameColorChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  NameColorChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const NameColorChanged& from);
+  NameColorChanged(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, NameColorChanged&& from) noexcept
+      : NameColorChanged(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameColorFieldNumber = 1,
+  };
+  // uint32 name_color = 1;
+  void clear_name_color() ;
+  ::uint32_t name_color() const;
+  void set_name_color(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_name_color() const;
+  void _internal_set_name_color(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.NameColorChanged)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const NameColorChanged& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t name_color_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_session_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull NameColorChanged_class_data_;
 // -------------------------------------------------------------------
 
 class MuteState final : public ::google::protobuf::Message
@@ -3546,6 +3934,64 @@ inline void DisplayNameChanged::set_allocated_display_name(::std::string* PROTOB
     _impl_.display_name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.DisplayNameChanged.display_name)
+}
+
+// -------------------------------------------------------------------
+
+// SetNameColor
+
+// uint32 name_color = 1;
+inline void SetNameColor::clear_name_color() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_color_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::uint32_t SetNameColor::name_color() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SetNameColor.name_color)
+  return _internal_name_color();
+}
+inline void SetNameColor::set_name_color(::uint32_t value) {
+  _internal_set_name_color(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SetNameColor.name_color)
+}
+inline ::uint32_t SetNameColor::_internal_name_color() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_color_;
+}
+inline void SetNameColor::_internal_set_name_color(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_color_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// NameColorChanged
+
+// uint32 name_color = 1;
+inline void NameColorChanged::clear_name_color() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_color_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::uint32_t NameColorChanged::name_color() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.NameColorChanged.name_color)
+  return _internal_name_color();
+}
+inline void NameColorChanged::set_name_color(::uint32_t value) {
+  _internal_set_name_color(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.NameColorChanged.name_color)
+}
+inline ::uint32_t NameColorChanged::_internal_name_color() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_color_;
+}
+inline void NameColorChanged::_internal_set_name_color(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_color_ = value;
 }
 
 #ifdef __GNUC__

@@ -1640,6 +1640,61 @@ TEST_CASE("Guilds follow the welcome with their channels, change in the server's
   CHECK_FALSE(fixture.exchange->Status().guilds);
 }
 
+TEST_CASE("A name color change shares the display name's slot and settles with the stored color")
+{
+  Fixture fixture;
+  auto    welcome = Welcome(fixture.Open());
+  fixture.Send(welcome);
+  fixture.Until([&] { return fixture.client->Phase() == SessionPhase::Ready; });
+  const auto opened     = fixture.Drain();
+  const auto generation = std::get<ClientSnapshot>(opened.state.updates.front()).generation;
+
+  // Until repeats the predicate once more: keep what was drained.
+  const auto results = [&] {
+    ClientOutput found;
+    const auto   any = [&] { return !ResultsOf<ColorChanged>(found).empty() || !ResultsOf<CommandFailureCode>(found).empty(); };
+    fixture.Until([&] {
+      if (any()) return true;
+      fixture.exchange->Drain(found);
+      return any();
+    });
+    return found;
+  };
+
+  const auto colorId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        SetNameColor{colorId, 0xE57373}
+  }) == CommandPostResult::Queued);
+  fixture.Until([&] { return fixture.requests.size() == 2; });
+  CHECK(fixture.requests.back().request_id() == colorId);
+  CHECK(fixture.requests.back().set_name_color().name_color() == 0xE57373);
+
+  // The server takes one profile change at a time: a name waits too.
+  const auto nameId = Value(fixture.exchange->NextRequestId());
+  REQUIRE(
+    fixture.exchange->Post({
+        generation,
+        ChangeDisplayName{nameId, "Другое"}
+  }) == CommandPostResult::Queued);
+  const auto busy = results();
+  REQUIRE(ResultsOf<CommandFailureCode>(busy).size() == 1);
+  CHECK(ResultsOf<CommandFailureCode>(busy)[0].requestId == nameId);
+  CHECK(ResultsOf<CommandFailureCode>(busy)[0].value == CommandFailureCode::Busy);
+
+  P::ServerPacket changed;
+  changed.set_protocol_version(Wire::Version);
+  changed.set_request_id(colorId);
+  changed.mutable_name_color_changed()->set_name_color(0xE57373);
+  fixture.Send(changed);
+  const auto settled = results();
+  REQUIRE(ResultsOf<ColorChanged>(settled).size() == 1);
+  CHECK(ResultsOf<ColorChanged>(settled)[0].requestId == colorId);
+  CHECK(ResultsOf<ColorChanged>(settled)[0].value.nameColor == 0xE57373);
+  CHECK(fixture.client->Phase() == SessionPhase::Ready);
+}
+
 TEST_CASE("A display name change settles once, one at a time, and a refusal keeps the session")
 {
   Fixture fixture;

@@ -140,8 +140,14 @@ reuses an ID, so a guild's chat channel never names another guild), `guild_membe
 the role (0 member, 1 officer, 2 master) and an optional guild mute, and `guild_invites`
 with their expiry. Members and invitations go with their guild and with the player's
 profile (`ON DELETE CASCADE`). `SqliteGuildStore` owns the SQL; one sequential writer of
-the guild owner applies the changes. This is the schema version the server supports
-(`SqliteDatabase.SchemaVersion`).
+the guild owner applies the changes.
+
+Schema 14 (`1791590400000_name_colors.sql`) adds `profiles.name_color`: the color of the
+player's name in chat, 0xRRGGBB (docs/ModerationAndNamesRu.md). Every existing profile gets
+a random one of the 16 colors new accounts get theirs from (`NameColor.palette`); the
+account store picks one for each new profile. Readability is checked when a player chooses
+a color, not when a profile loads. DOWN drops the column. This is the schema version the
+server supports (`SqliteDatabase.SchemaVersion`).
 
 ## Verification
 

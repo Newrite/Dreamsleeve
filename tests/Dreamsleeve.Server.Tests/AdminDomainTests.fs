@@ -7,7 +7,7 @@ open AgentTests
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private profile id username display =
-    PlayerData.create (PlayerId.create id |> ok) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok)
+    PlayerData.create (PlayerId.create id |> ok) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok) NameColor.unknown
 let private now = DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero)
 
 let tests = testList "Admin domain" [

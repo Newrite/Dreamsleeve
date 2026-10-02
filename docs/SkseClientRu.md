@@ -207,6 +207,13 @@ Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIde
 `error` (`GuildRejectionText`). Удаление сообщения гильдии — прежний `deleteChatMessage`; над
 светлячками сообщения гильдии не всплывают.
 
+Цвет имени ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#цвет-имени-в-чате)). `ToUiAuthor` кладёт в
+`UiPlayer.color` цвет профиля (`#RRGGBB`, `ColorText`) — и в режиме стримера, у псевдонима его нет;
+страница рисует им имя автора в строках чата. Команда `setNameColor{color}` (`#RRGGBB` проверяет
+`Admit`) идёт в `Session::SetNameColor` → Core `SetNameColor`; одна смена профиля за раз вместе
+со сменой имени. Итог — событие `nameColor` (`pending`, `changed`, `error` из
+`Bridge::NameColorRejectionText`).
+
 Смена отображаемого имени ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#смена-отображаемого-имени)).
 Команда UI `changeDisplayName{displayName}` в Ready-сессии идёт в `Session::ChangeDisplayName` →
 Core `ChangeDisplayName{requestId, displayName}` (одна за раз). Итог — `NameChanged`
@@ -297,7 +304,8 @@ CELL/WRLD), ближайший видимый map marker персистентн�
 ## Светлячки
 
 `Fireflies.ixx`: для каждого игрока из проекции онлайна, кроме себя, в том же WRLD/CELL и в радиусе
-`client.visibilityDistance`, `MovementView::Sample(id, now)` даёт позу; создаётся одна placed reference
+`client.visibilityDistance` (при `fireflyGuildmatesOnly` в `ui.toml` — только для участников ваших
+гильдий, `Session::GuildmatesOnlyHides`; имена и облачки уходят вместе со светлячком), `MovementView::Sample(id, now)` даёт позу; создаётся одна placed reference
 `FXGlowFillRoundXBrt` (Skyrim.esm 0x02EB0F) через общий модуль `Game/PlacedReferences.ixx`
 (`TESDataHandler::CreateReferenceAtLocation`, `SetTemporary`, масштаб) и каждый кадр перемещается
 `SetPosition` + `Update3DPosition(true)` (выше позы на `fireflyHeightOffset` из `[ui.chat]`,
@@ -466,7 +474,8 @@ HUD меняется только внутри `HUDMenu::AdvanceMovie`, а не 
 граница UI, она не добавляет блокировок в ClientApplication. Проекция может
 отставать от основного кадра на один UI-проход.
 
-Настройки имён — `[ui.chat]` в `ui.toml`: `showFireflyNames`, `fireflyNameOcclusion`,
+Настройки имён — `[ui.chat]` в `ui.toml`: `fireflyGuildmatesOnly` (светлячки только игроков из
+ваших гильдий), `showFireflyNames`, `fireflyNameOcclusion`,
 `fireflyNameFontSize` (единицы HUD, 8..48), `fireflyNameOffset` (выше центра светлячка,
 игровые единицы 0..512). Дистанция ограничивается существующей `visibilityDistance`. Имена скрываются при
 паузе и выключенном HUD. Настройка скрытия Prisma-чата не выключает имена.
@@ -676,6 +685,7 @@ host берёт положение и дату из `World::Spot()` (порт `n
 | Ключ | По умолчанию | Диапазон |
 |---|---|---|
 | `showGroundNotes`, `showDeathMarks` | true | |
+| `markGuildmatesOnly` | false | только метки игроков из ваших гильдий и свои; применяется сразу (`InstantKeys`) |
 | `maxVisibleNotes`, `maxVisibleDeaths` | 16 | 1..64 |
 | `groundDrawDistance` | 4096 | 0..16384 |
 | `groundNoteOffset`, `deathMarkOffset` | 5 | −64..256 |

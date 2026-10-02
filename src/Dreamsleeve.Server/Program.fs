@@ -101,7 +101,7 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
                             match result with
                             | Ok (AccountAccessResult.PasswordResetCreated code) -> printfn "One-time reset code (deliver privately): %s" code
                             | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
-                            | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.Renamed _)
+                            | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.ProfileChanged _)
                             | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
                             | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
                             | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)

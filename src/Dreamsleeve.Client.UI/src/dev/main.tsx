@@ -111,6 +111,20 @@ try {
 const pseudonymOf = () => `Страж ${3 + identity.switches}`;
 // The last own display name change, for the stand-in interval.
 let renamedAt = 0;
+let recoloredAt = 0;
+// The server's readability rule (NameColor.readable): WCAG luminance of at least 0.15.
+function readable(color: string) {
+  const value = Number.parseInt(color.slice(1), 16);
+  const linear = (channel: number) => {
+    const share = channel / 255;
+    return share <= 0.04045 ? share / 12.92 : ((share + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance =
+    0.2126 * linear((value >> 16) & 255) +
+    0.7152 * linear((value >> 8) & 255) +
+    0.0722 * linear(value & 255);
+  return luminance >= 0.15;
+}
 if (identity.mode !== "off") identity.pseudonym = pseudonymOf();
 function identityEvent(error?: string, pending = false, mode = identity.mode) {
   chat.receive({
@@ -323,6 +337,33 @@ function command(c: Command) {
       players[0] = { ...players[0], displayName: name };
       snapshot(chat.store.getState().settings, true);
       chat.receive({ type: "displayName", pending: false, changed: name });
+    }, 400);
+    return true;
+  }
+  // Stand-in for the server: readability and a ten-second change interval.
+  if (c.type === "setNameColor") {
+    setTimeout(() => chat.receive({ type: "nameColor", pending: true }), 0);
+    setTimeout(() => {
+      if (!readable(c.color)) {
+        chat.receive({
+          type: "nameColor",
+          pending: false,
+          error: "Цвет слишком тёмный: имя будет плохо видно в чате",
+        });
+        return;
+      }
+      if (recoloredAt && Date.now() - recoloredAt < 10000) {
+        chat.receive({
+          type: "nameColor",
+          pending: false,
+          error: "Цвет можно сменить снова через 10 с",
+        });
+        return;
+      }
+      recoloredAt = Date.now();
+      players[0] = { ...players[0], color: c.color };
+      snapshot(chat.store.getState().settings, true);
+      chat.receive({ type: "nameColor", pending: false, changed: c.color });
     }, 400);
     return true;
   }

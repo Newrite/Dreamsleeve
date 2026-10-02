@@ -174,6 +174,11 @@ oneof 14–16 и 21–24 и коды `GROUND_MARK_AREA_FULL = 12`, `GROUND_MARK_
 
 Метки не попадают в `ChatCache`, `freshMessages` и облачка.
 
+Показ — дело host и игрового потока: `showGroundNotes`/`showDeathMarks` выбирают виды, а
+`markGuildmatesOnly` оставляет только метки игроков из ваших гильдий и ваши собственные
+(`Session::GuildmatesOnlyHides` по книге гильдий; в мире — `GroundMarks::Tick`, в списке
+«Метки рядом» — `Session::NearbyMarkList`, который пересылается и при смене гильдий).
+
 ## Проверки
 
 Managed: `GroundMarkDomainTests` (текст, правила, TTL, видимость, положение, квота с

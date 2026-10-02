@@ -22,7 +22,7 @@ open BackgroundTests
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private password = "Boundary-Password-2026!"
 let private profile = PlayerData.create (PlayerId.create 42UL |> ok)
-                          (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok)
+                          (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok) NameColor.unknown
 let private ticket = String('a', 43)
 let private signedIn = Ok (AccountAccessResult.SignedIn { Profile = profile; SessionTicket = ticket; ExpiresInSeconds = 60; RememberToken = "" })
 
@@ -38,7 +38,7 @@ let private withHostUsing (steam: SteamPorts option) customize execute run = tas
             execute command reply
         | AuthMessage.Start | AuthMessage.Finished _ | AuthMessage.ConsumeTicket _
         | AuthMessage.WorkersStopped _ | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ | AuthMessage.Stop
-        | AuthMessage.ChangeDisplayName _ | AuthMessage.Moderate _ -> failwith "Unexpected test authentication control."
+        | AuthMessage.ChangeProfile _ | AuthMessage.Moderate _ -> failwith "Unexpected test authentication control."
     }
     use auth = Agent.Start(AgentOptions.create "http-test-auth", handle)
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()
@@ -87,7 +87,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _ -> response.Reply (Ok AccountAccessResult.Completed)
             | AccountAccessCommand.Register _ | AccountAccessCommand.Login _
             | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
-            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
+            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.ChangeOwnNameColor _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
@@ -122,7 +122,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.Login _ -> response.Reply signedIn
             | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ | AccountAccessCommand.Logout _
             | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
-            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
+            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.ChangeOwnNameColor _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
@@ -146,7 +146,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
                 equal password actualPassword
             | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _ | AccountAccessCommand.Resume _ | AccountAccessCommand.Logout _
             | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _
-            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
+            | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.ChangeOwnNameColor _
             | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
             | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
             | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _

@@ -68,6 +68,14 @@ export namespace Dreamsleeve::Client
     std::string   displayName;
   };
 
+  // A new color of this player's name in chat, 0xRRGGBB. The server refuses a
+  // color too dark to read and limits how often; others see it through presence.
+  struct SetNameColor
+  {
+    std::uint64_t requestId{};
+    std::uint32_t nameColor{};
+  };
+
   // Moderator requests. The server checks the role and whom a moderator may
   // act on; a hidden player is named by the public PlayerId.
 
@@ -259,6 +267,7 @@ export namespace Dreamsleeve::Client
     RemoveGroundMark,
     SetIdentityVisibility,
     ChangeDisplayName,
+    SetNameColor,
     SanctionPlayer,
     LiftSanction,
     KickPlayer,
@@ -357,6 +366,12 @@ export namespace Dreamsleeve::Client
     std::string displayName;
   };
 
+  // The name color as the server stored it.
+  struct ColorChanged
+  {
+    std::uint32_t nameColor{};
+  };
+
   // Moderator answers. Players are named by PlayerId; the UI resolves names.
   struct Sanctioned
   {
@@ -415,6 +430,7 @@ export namespace Dreamsleeve::Client
       MarkRemoved,
       IdentityChanged,
       NameChanged,
+      ColorChanged,
       Sanctioned,
       Lifted,
       Kicked,

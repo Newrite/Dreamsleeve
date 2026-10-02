@@ -31,7 +31,7 @@ module MemoryProfileStore =
             match PlayerId.create state.NextId with
             | Error _ -> Error ProfileStoreError.IdExhausted
             | Ok playerId ->
-                let profile = PlayerData.create playerId username displayName
+                let profile = PlayerData.create playerId username displayName NameColor.unknown
                 state.Profiles.Add(username, profile)
                 state.NextId <- if state.NextId = System.UInt64.MaxValue then 0UL else state.NextId + 1UL
 

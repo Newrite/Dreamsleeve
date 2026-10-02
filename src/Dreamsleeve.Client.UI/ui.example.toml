@@ -17,6 +17,8 @@ hideUi = false
 hideIdentity = "off"
 
 [ui.chat]
+# Fireflies, with their names and bubbles, only of players in your guilds.
+fireflyGuildmatesOnly = false
 # Names above other players' fireflies.
 showFireflyNames = true
 # Hide those names behind walls and terrain.
@@ -118,6 +120,8 @@ fireflyHeightOffset = 110
 showGroundNotes = true
 # Show places where characters died.
 showDeathMarks = true
+# Notes and death marks only of players in your guilds; your own always show.
+markGuildmatesOnly = false
 # Nearest notes drawn, 1..64.
 maxVisibleNotes = 16
 # Nearest death marks drawn, 1..64.

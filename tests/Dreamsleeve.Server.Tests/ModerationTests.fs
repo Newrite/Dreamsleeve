@@ -81,13 +81,13 @@ let tests = testList "Moderation" [
     test "public profiles hide failing stored names without changing identity" {
         let id = PlayerId.create 9UL |> Result.defaultWith (failwithf "%A")
         let stored = PlayerData.create id (Username.create 32 "ass" |> Result.defaultWith (failwithf "%A"))
-                         (DisplayName.create 64 "Sir Badword" |> Result.defaultWith (failwithf "%A"))
+                         (DisplayName.create 64 "Sir Badword" |> Result.defaultWith (failwithf "%A")) NameColor.unknown
         let shown = Moderation.publicProfile rules stored
         Expect.equal shown.PlayerId id "same account"
         Expect.equal (Username.value shown.Username) "hidden.9" "username placeholder"
         Expect.equal (DisplayName.value shown.DisplayName) "Player 9" "display placeholder"
         let clean = PlayerData.create id (Username.create 32 "lydia" |> Result.defaultWith (failwithf "%A"))
-                        (DisplayName.create 64 "Lydia" |> Result.defaultWith (failwithf "%A"))
+                        (DisplayName.create 64 "Lydia" |> Result.defaultWith (failwithf "%A")) NameColor.unknown
         Expect.equal (Moderation.publicProfile rules clean) clean "allowed profile is unchanged"
     }
 ]

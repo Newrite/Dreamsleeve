@@ -90,6 +90,8 @@ type AccountAccessCommand =
     | RenamePlayer of PlayerId * DisplayName * changedBy: AdminId
     /// The player's own change from the game session, limited by minInterval.
     | ChangeOwnDisplayName of PlayerId * DisplayName * minInterval: TimeSpan
+    /// The player's own name color from the game session, which checked it.
+    | ChangeOwnNameColor of PlayerId * NameColor
     /// An administrator's or a moderator's order, validated by the caller.
     | Sanction of SanctionOrder
     /// Lifts the sanction of a kind in force on a player.
@@ -134,7 +136,8 @@ type AccountAccessResult =
     | SignedIn of SessionGrant
     | Completed
     | PasswordResetCreated of code: string
-    | Renamed of PlayerData
+    /// The stored profile after a rename or a new name color.
+    | ProfileChanged of PlayerData
     | Sanctioned of Sanction
     | SanctionLifted of Sanction
     | Kicked
@@ -159,6 +162,7 @@ type AccountWorkResult =
     | LoggedOut of tokenHash: string
     | Revoked of PlayerData * resetCode: string
     | Renamed of previous: DisplayName * PlayerData * changedBy: AdminId voption
+    | Recolored of PlayerData
     | Sanctioned of Sanction
     | SanctionLifted of Sanction
     | Kicked of PlayerId * SanctionReason
@@ -196,8 +200,8 @@ type AuthMessage =
     | SetChangeTarget of ReliableAgentRef<AccountChange>
     /// A change did not reach the target of that generation.
     | ChangeFailed of target: int * AgentSendFailure
-    /// From a game session; settled by a DisplayNameChangeReply.
-    | ChangeDisplayName of DisplayNameChangeRequest
+    /// From a game session; settled by a ProfileChangeReply.
+    | ChangeProfile of ProfileChangeRequest
     /// A moderator's request from a game session; settled by a ModerationReply.
     | Moderate of ModerationRequest
     | Stop
@@ -212,7 +216,7 @@ module AuthService =
     [<RequireQualifiedAccess>]
     type private Requester =
         | Caller of ReplyChannel<Result<AccountAccessResult, AccountAccessError>>
-        | Session of DisplayNameChangeRequest
+        | Session of ProfileChangeRequest
         | Moderator of ModerationRequest
 
     type private Pending = { Command: AccountAccessCommand; Requester: Requester }
@@ -455,6 +459,11 @@ module AuthService =
                     rename options database logger token clock playerId displayName (ValueSome admin) TimeSpan.Zero
                 | AccountAccessCommand.ChangeOwnDisplayName(playerId, displayName, interval) ->
                     rename options database logger token clock playerId displayName ValueNone interval
+                | AccountAccessCommand.ChangeOwnNameColor(playerId, color) ->
+                    match SqliteAccountStore.setNameColor database playerId color token with
+                    | Ok (Some stored) -> Ok (AccountWorkResult.Recolored stored.Profile)
+                    | Ok None -> Error AccountAccessError.InvalidCredentials
+                    | Error error -> Error (storageError logger error)
                 | AccountAccessCommand.Sanction order ->
                     SqliteSanctionStore.issue database order (clock.GetUtcNow()) token |> sanctioned logger AccountWorkResult.Sanctioned
                 | AccountAccessCommand.LiftSanction(target, kind, issuer) ->
@@ -598,7 +607,7 @@ module AuthService =
         // The player is online: no second session of theirs can open with a stale
         // ticket, and outstanding tickets are updated when the change settles.
         | AccountAccessCommand.Register _ | AccountAccessCommand.Login _ | AccountAccessCommand.RememberLogin _
-        | AccountAccessCommand.Resume _ | AccountAccessCommand.ChangeOwnDisplayName _
+        | AccountAccessCommand.Resume _ | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.ChangeOwnNameColor _
         // A kick issues no ticket; a list and an audit line change no account.
         | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
         | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration
@@ -612,15 +621,15 @@ module AuthService =
         | Requester.Session request ->
             let answer =
                 match result with
-                | Ok (AccountAccessResult.Renamed profile) -> Ok profile
-                | Error (AccountAccessError.TooSoon wait) -> Error (DisplayNameChangeError.TooSoon wait)
-                | Error AccountAccessError.Busy -> Error DisplayNameChangeError.Busy
-                | Ok _ | Error _ -> Error DisplayNameChangeError.Unavailable
+                | Ok (AccountAccessResult.ProfileChanged profile) -> Ok profile
+                | Error (AccountAccessError.TooSoon wait) -> Error (ProfileChangeError.TooSoon wait)
+                | Error AccountAccessError.Busy -> Error ProfileChangeError.Busy
+                | Ok _ | Error _ -> Error ProfileChangeError.Unavailable
             // A control message of the session: it has room even when the session is busy.
             match request.ReplyTo.TryPost { OperationId = request.OperationId; Result = answer } with
             | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
             | AgentTryDeliveryResult.Full ->
-                logger.LogWarning("Display name reply for player {PlayerId} was not delivered: the session is full", PlayerId.value request.PlayerId)
+                logger.LogWarning("Profile change reply for player {PlayerId} was not delivered: the session is full", PlayerId.value request.PlayerId)
         | Requester.Moderator request ->
             let answer =
                 match result with
@@ -652,6 +661,7 @@ module AuthService =
         | AccountAccessCommand.BeginSteam(origin, _) | AccountAccessCommand.SignInSteam(_, _, origin, _) -> origin
         | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _ | AccountAccessCommand.CreatePasswordReset _
         | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _ | AccountAccessCommand.ChangeOwnDisplayName _
+        | AccountAccessCommand.ChangeOwnNameColor _
         | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _ | AccountAccessCommand.Kick _
         | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _ | AccountAccessCommand.CreateAccount _
         | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _ | AccountAccessCommand.BanAddresses _
@@ -759,7 +769,8 @@ module AuthService =
         | AccountAccessCommand.Resume _ -> "saved login"
         | AccountAccessCommand.Register _ | AccountAccessCommand.Logout _ | AccountAccessCommand.ResetPassword _
         | AccountAccessCommand.CreatePasswordReset _ | AccountAccessCommand.RevokeAccount _ | AccountAccessCommand.RenamePlayer _
-        | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
+        | AccountAccessCommand.ChangeOwnDisplayName _ | AccountAccessCommand.ChangeOwnNameColor _
+        | AccountAccessCommand.Sanction _ | AccountAccessCommand.LiftSanction _
         | AccountAccessCommand.Kick _ | AccountAccessCommand.ListSanctions | AccountAccessCommand.RecordModeration _
         | AccountAccessCommand.CreateAccount _ | AccountAccessCommand.ReadRegistration | AccountAccessCommand.SetRegistration _
         | AccountAccessCommand.BanAddresses _ | AccountAccessCommand.LiftAddressBan _ | AccountAccessCommand.ListAddressBans
@@ -867,7 +878,12 @@ module AuthService =
                             logger.LogInformation("Player {PlayerId} {Username} changed display name: {Previous} -> {DisplayName}",
                                                   PlayerId.value profile.PlayerId, Username.value profile.Username,
                                                   DisplayName.value previous, DisplayName.value profile.DisplayName)
-                    Ok (AccountAccessResult.Renamed profile)
+                    Ok (AccountAccessResult.ProfileChanged profile)
+                | Ok (AccountWorkResult.Recolored profile) ->
+                    for key in ticketsOf state profile.PlayerId do state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Profile = profile } }
+                    logger.LogInformation("Player {PlayerId} {Username} changed name color to #{Color:X6}", PlayerId.value profile.PlayerId,
+                                          Username.value profile.Username, NameColor.value profile.NameColor)
+                    Ok (AccountAccessResult.ProfileChanged profile)
                 | Ok (AccountWorkResult.LoggedOut key) ->
                     // Logout is exclusive: no pending resume can issue a late ticket.
                     let keys = state.Tickets |> Seq.filter (fun entry -> entry.Value.RememberKey = key) |> Seq.map _.Key |> Seq.toArray
@@ -955,8 +971,11 @@ module AuthService =
             context.Abort()
         | AuthMessage.Start -> context.Own(state.Workers, AuthMessage.WorkersStopped)
         | AuthMessage.Access(command, reply) -> access options clock logger state context command (Requester.Caller reply)
-        | AuthMessage.ChangeDisplayName request ->
-            let command = AccountAccessCommand.ChangeOwnDisplayName(request.PlayerId, request.DisplayName, request.MinInterval)
+        | AuthMessage.ChangeProfile request ->
+            let command =
+                match request.Change with
+                | ProfileChange.DisplayName(name, interval) -> AccountAccessCommand.ChangeOwnDisplayName(request.PlayerId, name, interval)
+                | ProfileChange.NameColor color -> AccountAccessCommand.ChangeOwnNameColor(request.PlayerId, color)
             access options clock logger state context command (Requester.Session request)
         | AuthMessage.Moderate request ->
             let command =
@@ -989,7 +1008,7 @@ module AuthService =
     let private isControl = function
         | AuthMessage.Start | AuthMessage.Finished _ | AuthMessage.WorkersStopped _ | AuthMessage.Stop
         | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ -> true
-        | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeDisplayName _ | AuthMessage.Moderate _ -> false
+        | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeProfile _ | AuthMessage.Moderate _ -> false
 
     /// The options come checked with the configuration.
     let start options database (logger: ILogger) (clock: TimeProvider) =
@@ -1021,7 +1040,7 @@ module AuthService =
 
     let authenticator (agent: Agent<AuthMessage>) = {
         Requests = agent.Ref.TryReliable().Value.Map AuthMessage.ConsumeTicket
-        DisplayNames = agent.Ref.TryReliable().Value.Map AuthMessage.ChangeDisplayName
+        Profiles = agent.Ref.TryReliable().Value.Map AuthMessage.ChangeProfile
         Moderation = agent.Ref.TryReliable().Value.Map AuthMessage.Moderate
         Completion = agent.Completion
     }

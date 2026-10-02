@@ -294,7 +294,7 @@ let tests = testList "Authentication service" [
         let renamedTo = DisplayName.create 64 "Новое Имя" |> ok
         let! renamed = access service (AccountAccessCommand.RenamePlayer(profile.PlayerId, renamedTo, admin))
         let expected = PlayerData.withDisplayName renamedTo profile
-        equal (Ok (AccountAccessResult.Renamed expected)) renamed
+        equal (Ok (AccountAccessResult.ProfileChanged expected)) renamed
         let! consumed = consume service outstanding.SessionTicket
         equal (Ok ({ Profile = expected; Role = PlayerRole.Moderator; Mute = ValueNone } : AuthenticatedPlayer)) consumed
         let! missing = access service (AccountAccessCommand.RenamePlayer(PlayerId.create 404UL |> ok, renamedTo, admin))
@@ -306,16 +306,17 @@ let tests = testList "Authentication service" [
         SqliteAccountStore.initialize database.Config |> ok
         use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
         let! profile = register service
-        let replies = System.Threading.Channels.Channel.CreateUnbounded<DisplayNameChangeReply>()
-        use receiver = Agent.Start(AgentOptions.create "name-replies", fun _ (reply: DisplayNameChangeReply) -> task {
+        let replies = System.Threading.Channels.Channel.CreateUnbounded<ProfileChangeReply>()
+        use receiver = Agent.Start(AgentOptions.create "name-replies", fun _ (reply: ProfileChangeReply) -> task {
             replies.Writer.TryWrite reply |> ignore
         })
         let change value = task {
             let request = {
-                OperationId = Guid.NewGuid(); PlayerId = profile.PlayerId; DisplayName = DisplayName.create 64 value |> ok
-                MinInterval = TimeSpan.FromHours 1.; ReplyTo = receiver.Ref.TryReliable().Value
+                OperationId = Guid.NewGuid(); PlayerId = profile.PlayerId
+                Change = ProfileChange.DisplayName(DisplayName.create 64 value |> ok, TimeSpan.FromHours 1.)
+                ReplyTo = receiver.Ref.TryReliable().Value
             }
-            let! admitted = (AuthService.authenticator service).DisplayNames.PostAsync request
+            let! admitted = (AuthService.authenticator service).Profiles.PostAsync request
             equal AgentDeliveryResult.Posted admitted
             let! reply = replies.Reader.ReadAsync().AsTask() |> awaitResult
             equal request.OperationId reply.OperationId
@@ -325,7 +326,7 @@ let tests = testList "Authentication service" [
         equal (Ok (PlayerData.withDisplayName (DisplayName.create 64 "Своё Имя" |> ok) profile)) first
         let! second = change "Ещё Одно"
         match second with
-        | Error (DisplayNameChangeError.TooSoon wait) -> check (wait > TimeSpan.FromMinutes 59.) $"About an hour to wait: {wait}"
+        | Error (ProfileChangeError.TooSoon wait) -> check (wait > TimeSpan.FromMinutes 59.) $"About an hour to wait: {wait}"
         | other -> failtestf "%A" other
         let! login = login service
         equal "Своё Имя" (DisplayName.value login.Profile.DisplayName)

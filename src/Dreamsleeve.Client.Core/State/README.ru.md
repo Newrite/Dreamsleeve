@@ -193,7 +193,7 @@ Post возвращает Queued, Replaced, Full или Closed. Queued не оз
 преобразует их в доменные типы, кодирование/отправка выполняются сетевым владельцем.
 
 Команды: SendChat, PostAnnouncement, PlaceGroundNote, ReportDeath, RemoveGroundMark, SetIdentityVisibility,
-ChangeDisplayName, SanctionPlayer, LiftSanction, KickPlayer, ListSanctions, ListPlayerMarks,
+ChangeDisplayName, SetNameColor, SanctionPlayer, LiftSanction, KickPlayer, ListSanctions, ListPlayerMarks,
 ClearPlayerMarks, DeleteChatMessage, LocalMovement, LocalLocation, LocalActorValues, CharacterStarted,
 CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot.
 
@@ -291,6 +291,10 @@ MovementView хранит их историю со сбросами на гра�
 некорректный UTF-8 (`InvalidRequest`), пустое имя и словарь судит сервер. Итог — `NameChanged{displayName}`,
 `ServerRejection` или `CommandFailureCode`. Модель подтверждение не меняет: своя запись с
 новым именем приходит `PlayerUpserted`.
+
+`SetNameColor{requestId, nameColor}` (`0xRRGGBB`) делит набор ожидания со сменой имени: сервер
+принимает одну смену профиля за раз. Итог — `ColorChanged{nameColor}`; читаемость и частоту судит
+сервер. Цвет профиля — `Domain::PlayerData::nameColor`, у псевдонима его нет.
 
 ## Метки на земле
 

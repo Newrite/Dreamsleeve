@@ -165,7 +165,7 @@ private:
       Update,
       Mark,
       Identity,
-      Name,
+      Profile, // A display name or a name color: the server takes one at a time.
       Moderation,
       Deletion,
       Guild
@@ -640,8 +640,15 @@ private:
     // The own profile changes through the presence update that follows; this only settles the request.
     Result<void> Receive(Wire::DisplayNameChanged& changed)
     {
-      if (!TakePending(changed.requestId, PendingKind::Name)) return Unexpected("request_id");
+      if (!TakePending(changed.requestId, PendingKind::Profile)) return Unexpected("request_id");
       return Settle(changed.requestId, NameChanged{std::move(changed.displayName)});
+    }
+
+    // Like a display name: others see the color through presence.
+    Result<void> Receive(Wire::NameColorChanged& changed)
+    {
+      if (!TakePending(changed.requestId, PendingKind::Profile)) return Unexpected("request_id");
+      return Settle(changed.requestId, ColorChanged{changed.nameColor});
     }
 
     Result<void> Receive(GroundMarksChanged& value)
@@ -866,9 +873,18 @@ private:
     Result<void> Process(std::uint64_t generation, ChangeDisplayName& command)
     {
       if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
-      if (PendingCount(PendingKind::Name) != 0) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+      if (PendingCount(PendingKind::Profile) != 0) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
 
-      return SendRequest(generation, command, {PendingKind::Name});
+      return SendRequest(generation, command, {PendingKind::Profile});
+    }
+
+    // Shares the display name's slot; the server judges readability and how often.
+    Result<void> Process(std::uint64_t generation, SetNameColor& command)
+    {
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
+      if (PendingCount(PendingKind::Profile) != 0) return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      return SendRequest(generation, command, {PendingKind::Profile});
     }
 
     // Moderator requests share one pending budget on the control lane; the

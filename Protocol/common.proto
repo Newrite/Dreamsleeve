@@ -4,12 +4,15 @@ package Dreamsleeve.Protocol.Chat;
 
 // The public identity of a player. Where the player hides their names
 // (pseudonymous), username is empty, display_name is the server pseudonym and
-// no character name travels with it; player_id is the same either way.
+// no character name or name color travels with it; player_id is the same either way.
 message PlayerProfile {
   uint64 player_id = 1;
   string username = 2;
   string display_name = 3;
   bool pseudonymous = 4;
+  // 0xRRGGBB the player chose for their name in chat. Absent when pseudonymous:
+  // clients draw such names in their own default color.
+  optional uint32 name_color = 5;
 }
 
 message FormKey {

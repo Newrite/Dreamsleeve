@@ -1619,6 +1619,132 @@ TEST_CASE("The hide-my-name preference round-trips through ui.toml and defaults 
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"setIdentityVisibility","hiding":"sometimes"})"));
 }
 
+TEST_CASE("A name color change waits for the server; authors carry their color, a pseudonym none")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(model.Generation(), OnlinePlayersReplaced{{MakePlayer(1, "Alice")}}));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  Session        session;
+  Session::Frame frame;
+  UiSettings     settings;
+  const auto     colorOf = [](const Session::Frame& value) {
+    std::optional<glz::generic> found;
+    for (const auto& event : value.events)
+      if (Type(event) == "nameColor") found = Parse(event);
+    return found;
+  };
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
+  Settle(session, *exchange, model, frame, settings);
+  REQUIRE(session.Ready());
+
+  REQUIRE(session.SetNameColor(*exchange, 0xE57373));
+  // One profile change at a time, a name or a color.
+  CHECK_FALSE(session.ChangeDisplayName(*exchange, "Другое"));
+  CHECK_FALSE(session.SetNameColor(*exchange, 0x4FC3F7));
+  std::vector<QueuedClientCommand> commands;
+  exchange->TakeCommands(commands);
+  REQUIRE(commands.size() == 1);
+  const auto request = std::get<SetNameColor>(commands[0].command);
+  CHECK(request.nameColor == 0xE57373);
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
+  auto pending = colorOf(frame);
+  REQUIRE(pending);
+  CHECK((*pending)["pending"].get<bool>());
+
+  REQUIRE(exchange->PublishResult({model.Generation(), request.requestId, ColorChanged{0xE57373}}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
+  auto settled = colorOf(frame);
+  REQUIRE(settled);
+  CHECK_FALSE((*settled)["pending"].get<bool>());
+  CHECK((*settled)["changed"].get<std::string>() == "#E57373");
+
+  REQUIRE(session.SetNameColor(*exchange, 0x101010));
+  exchange->TakeCommands(commands);
+  const auto dark = std::get<SetNameColor>(commands[0].command).requestId;
+  REQUIRE(exchange->PublishResult({model.Generation(), dark, ServerRejection{RequestRejectionCode::NameColorUnreadable, "", "name_color"}}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
+  auto refused = colorOf(frame);
+  REQUIRE(refused);
+  CHECK((*refused)["error"].get<std::string>() == "Цвет слишком тёмный: имя будет плохо видно в чате");
+  CHECK(
+    Bridge::NameColorRejectionText(RequestRejectionCode::RateLimited, "The name color can be changed again in 7 s.") ==
+    "Цвет можно сменить снова через 7 с");
+
+  // The page sends "#RRGGBB" only.
+  CHECK(CommandOf<Bridge::Commands::SetNameColor>(R"({"type":"setNameColor","color":"#e57373"})").color == "#e57373");
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"setNameColor","color":"red"})"));
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"setNameColor","color":"#E5737"})"));
+
+  Names names;
+  CHECK(Bridge::ToUiAuthor({7, "seven", "Seven", false, 0xE57373}, std::nullopt, false, names, settings).color == "#E57373");
+  CHECK_FALSE(Bridge::ToUiAuthor({7, "", "Страж", true}, std::nullopt, false, names, settings).color);
+  UiSettings streamer;
+  streamer.streamerMode = true;
+  CHECK(Bridge::ToUiAuthor({7, "seven", "Seven", false, 0xE57373}, std::nullopt, false, names, streamer).color == "#E57373");
+}
+
+TEST_CASE("Guildmates only: others' marks leave the nearby list and come back with a shared guild")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    GroundMarksChanged{
+        1,
+        {MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"),
+         MakeMark(11, 2, Domain::GroundMarkKind::Death, "Bear"),
+         MakeMark(12, 7, Domain::GroundMarkKind::Death, "Wolf")},
+        {},
+        true}));
+  UiSettings settings;
+  settings.markGuildmatesOnly = true;
+  Session        session;
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
+  Settle(session, *exchange, model, frame, settings);
+  REQUIRE(frame.snapshot);
+  // No guilds yet: only the own mark.
+  auto snapshot = Parse(frame.events[0]);
+  REQUIRE(snapshot["nearbyMarks"].size() == 1);
+  CHECK(snapshot["nearbyMarks"][0]["id"].get<std::string>() == "10");
+  CHECK_FALSE(session.GuildmatesOnlyHides(1, true));
+  CHECK(session.GuildmatesOnlyHides(2, true));
+  CHECK_FALSE(session.GuildmatesOnlyHides(2, false));
+
+  constexpr Domain::ChatChannelId channel = Domain::GuildChannelBase + 4;
+  auto                            book    = GuildBook::TryCreate(
+    {
+        {4,
+         "Вороны", channel,
+         1000, {Domain::GuildMember{{1, "user1", "Alice"}, Domain::GuildRole::Master, true},
+                Domain::GuildMember{{2, "user2", "Bob"}, Domain::GuildRole::Member, false}}}
+  },
+    {},
+    {3, 64, 3, 24});
+  REQUIRE(book);
+  REQUIRE(model.RegisterChannel(channel, 16, Domain::ChatChannelKind::Guild));
+  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", std::nullopt, std::make_shared<const GuildBook>(*book)));
+  ClientOutput output;
+  exchange->Drain(output);
+  frame = {};
+  session.Process(*exchange, output, settings, Domain::HiddenIdentity::None, frame);
+  CHECK_FALSE(session.GuildmatesOnlyHides(2, true));
+  CHECK(session.GuildmatesOnlyHides(7, true));
+  const auto nearby = std::ranges::find_if(frame.events, [](const auto& event) { return Type(event) == "nearbyMarks"; });
+  REQUIRE(nearby != frame.events.end());
+  auto marks = Parse(*nearby)["marks"];
+  REQUIRE(marks.size() == 2);
+  CHECK(marks[0]["id"].get<std::string>() == "10");
+  CHECK(marks[1]["id"].get<std::string>() == "11");
+}
+
 TEST_CASE("A display name change waits for the server and reports the stored name or the refusal")
 {
   auto        exchange = MakeExchange();

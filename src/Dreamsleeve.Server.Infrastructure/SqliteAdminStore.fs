@@ -212,9 +212,9 @@ module SqliteAdminStore =
 
     let private readPlayer (reader: DbDataReader) =
         match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
-              DisplayName.create Int32.MaxValue (reader.GetString 2), PlayerRole.ofInt (int (reader.GetInt64 3)) with
-        | Ok playerId, Ok username, Ok displayName, ValueSome role when reader.GetInt64 0 > 0L ->
-            Ok { Profile = PlayerData.create playerId username displayName; Role = role }
+              DisplayName.create Int32.MaxValue (reader.GetString 2), PlayerRole.ofInt (int (reader.GetInt64 3)), nameColor (reader.GetInt64 4) with
+        | Ok playerId, Ok username, Ok displayName, ValueSome role, Ok color when reader.GetInt64 0 > 0L ->
+            Ok { Profile = PlayerData.create playerId username displayName color; Role = role }
         | _ -> invalidData "A stored player is invalid."
 
     let private readPlayers (reader: DbDataReader) =
@@ -230,7 +230,7 @@ module SqliteAdminStore =
 
     [<Literal>]
     let private PlayerColumns =
-        "p.player_id, a.username, p.display_name, COALESCE(r.role, 0) FROM profiles p JOIN accounts a ON a.id=p.account_id LEFT JOIN player_roles r ON r.player_id=p.player_id"
+        "p.player_id, a.username, p.display_name, COALESCE(r.role, 0), p.name_color FROM profiles p JOIN accounts a ON a.id=p.account_id LEFT JOIN player_roles r ON r.player_id=p.player_id"
 
     let findPlayer config (playerId: PlayerId) token =
         SqliteAccountStore.withContext config token (fun context ->

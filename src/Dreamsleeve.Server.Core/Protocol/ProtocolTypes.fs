@@ -130,6 +130,8 @@ type ClientCommand =
     | SetIdentityVisibility of HiddenIdentity
     /// The sender's own new display name, already accepted by DisplayName.create.
     | ChangeDisplayName of DisplayName
+    /// The sender's own name color; the session decides whether it is readable.
+    | SetNameColor of NameColor
     // A moderator's; the session and the account service decide who may.
     | SanctionPlayer of PlayerId * SanctionKind * SanctionTerm * SanctionReason * devices: bool
     | LiftSanction of PlayerId * SanctionKind
@@ -249,6 +251,8 @@ type ServerResponse =
     | IdentityVisibilityChanged of requestId: uint64 * Pseudonym voption * HiddenIdentity
     /// Settles ChangeDisplayName with the stored name.
     | DisplayNameChanged of requestId: uint64 * DisplayName
+    /// Settles SetNameColor with the stored color.
+    | NameColorChanged of requestId: uint64 * NameColor
     /// The player's own mute now, if any.
     | MuteChanged of Sanction voption
     | SessionEnded of SessionEnd

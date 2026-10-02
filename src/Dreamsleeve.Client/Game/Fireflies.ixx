@@ -95,7 +95,7 @@ namespace Fireflies
     runtime.bubbles.Prune(now, ui, [&](Domain::PlayerId id) { return runtime.session.OnlinePlayers().contains(id); });
     for (const auto& [id, remote] : runtime.session.OnlinePlayers())
     {
-      if (runtime.session.SelfId() == id) continue;
+      if (runtime.session.SelfId() == id || runtime.session.GuildmatesOnlyHides(id, ui.fireflyGuildmatesOnly)) continue;
       const auto pose = runtime.movement->Sample(id, now);
       if (!pose || !Domain::Spatial::Reach(space, origin, pose->location.locationId, pose->position, settings.visibilityDistance)) continue;
 

@@ -8,6 +8,7 @@ import {
   realNames,
 } from "../src/state/names";
 import { identityStatus } from "../src/state/identity";
+import { hueColor, hueOf, nameColorPalette } from "../src/state/nameColor";
 import { parseHostEvent } from "../src/bridge/parse";
 import type { Command, HostEvent, Player } from "../src/bridge/types";
 
@@ -398,5 +399,85 @@ describe("hidden identity", () => {
       expect(() =>
         parseHostEvent(JSON.stringify({ type: "displayName", pending })),
       ).toThrow();
+  });
+});
+
+describe("name color", () => {
+  it("asks the server for a color, one at a time, and shows its answer", () => {
+    const { chat, send } = ready();
+    chat.receive({ type: "connection", connected: true, phase: "connected" });
+    send.mockClear();
+    chat.setNameColor("#e57373");
+    expect(send).toHaveBeenLastCalledWith({
+      type: "setNameColor",
+      color: "#E57373",
+    });
+    expect(chat.store.getState().nameColor).toEqual({ pending: true });
+    chat.setNameColor("#4FC3F7");
+    expect(send).toHaveBeenCalledTimes(1);
+    chat.receive(
+      parseHostEvent(
+        JSON.stringify({
+          type: "nameColor",
+          pending: false,
+          changed: "#E57373",
+        }),
+      ),
+    );
+    expect(chat.store.getState().nameColor).toEqual({
+      pending: false,
+      changed: "#E57373",
+    });
+    for (const changed of ["red", "#E5737", 7])
+      expect(() =>
+        parseHostEvent(
+          JSON.stringify({ type: "nameColor", pending: false, changed }),
+        ),
+      ).toThrow();
+  });
+
+  it("an author carries a #RRGGBB color; a pseudonymous one never does", () => {
+    const parsePlayers = (player: object) =>
+      parseHostEvent(JSON.stringify({ type: "players", players: [player] }));
+    const colored = { ...lydia, color: "#FFD54F" };
+    expect(parsePlayers(colored)).toEqual({
+      type: "players",
+      players: [colored],
+    });
+    expect(() => parsePlayers({ ...lydia, color: "gold" })).toThrow();
+    const hidden = {
+      ...lydia,
+      username: "",
+      character: undefined,
+      pseudonymous: true,
+    };
+    expect(() => parsePlayers({ ...hidden, color: "#FFD54F" })).toThrow();
+    expect(parsePlayers(hidden)).toBeTruthy();
+  });
+
+  it("every offered color and every hue of the slider reads by the server's rule", () => {
+    const luminance = (color: string) => {
+      const value = Number.parseInt(color.slice(1), 16);
+      const linear = (channel: number) => {
+        const share = channel / 255;
+        return share <= 0.04045
+          ? share / 12.92
+          : ((share + 0.055) / 1.055) ** 2.4;
+      };
+      return (
+        0.2126 * linear((value >> 16) & 255) +
+        0.7152 * linear((value >> 8) & 255) +
+        0.0722 * linear(value & 255)
+      );
+    };
+    for (const color of nameColorPalette)
+      expect(luminance(color)).toBeGreaterThanOrEqual(0.15);
+    for (let hue = 0; hue < 360; hue++) {
+      const color = hueColor(hue);
+      expect(color).toMatch(/^#[0-9A-F]{6}$/);
+      expect(luminance(color)).toBeGreaterThanOrEqual(0.15);
+      expect(Math.abs(hueOf(color) - hue) % 359).toBeLessThanOrEqual(2);
+    }
+    expect(hueOf("#808080")).toBe(0);
   });
 });

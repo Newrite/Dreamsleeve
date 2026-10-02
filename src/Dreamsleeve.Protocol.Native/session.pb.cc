@@ -28,6 +28,31 @@ namespace Dreamsleeve {
 namespace Protocol {
 namespace Chat {
 
+inline constexpr SetNameColor::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_color_{0u} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR SetNameColor::SetNameColor(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(SetNameColor_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct SetNameColorDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SetNameColorDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SetNameColorDefaultTypeInternal() {}
+  union {
+    SetNameColor _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SetNameColorDefaultTypeInternal _SetNameColor_default_instance_;
+
 inline constexpr SetIdentityVisibility::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
@@ -109,6 +134,31 @@ struct OpenSessionDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 OpenSessionDefaultTypeInternal _OpenSession_default_instance_;
+
+inline constexpr NameColorChanged::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_color_{0u} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR NameColorChanged::NameColorChanged(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(NameColorChanged_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct NameColorChangedDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR NameColorChangedDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~NameColorChangedDefaultTypeInternal() {}
+  union {
+    NameColorChanged _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 NameColorChangedDefaultTypeInternal _NameColorChanged_default_instance_;
 
 inline constexpr MuteState::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -384,6 +434,16 @@ const ::uint32_t
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::DisplayNameChanged, _impl_.display_name_),
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SetNameColor, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::SetNameColor, _impl_.name_color_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::NameColorChanged, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::NameColorChanged, _impl_.name_color_),
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -398,6 +458,8 @@ static const ::_pbi::MigrationSchema
         {57, sizeof(::Dreamsleeve::Protocol::Chat::IdentityVisibilityChanged)},
         {64, sizeof(::Dreamsleeve::Protocol::Chat::ChangeDisplayName)},
         {69, sizeof(::Dreamsleeve::Protocol::Chat::DisplayNameChanged)},
+        {74, sizeof(::Dreamsleeve::Protocol::Chat::SetNameColor)},
+        {79, sizeof(::Dreamsleeve::Protocol::Chat::NameColorChanged)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_OpenSession_default_instance_._instance,
@@ -410,6 +472,8 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_IdentityVisibilityChanged_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_ChangeDisplayName_default_instance_._instance,
     &::Dreamsleeve::Protocol::Chat::_DisplayNameChanged_default_instance_._instance,
+    &::Dreamsleeve::Protocol::Chat::_SetNameColor_default_instance_._instance,
+    &::Dreamsleeve::Protocol::Chat::_NameColorChanged_default_instance_._instance,
 };
 const char descriptor_table_protodef_session_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -448,15 +512,17 @@ const char descriptor_table_protodef_session_2eproto[] ABSL_ATTRIBUTE_SECTION_VA
     "ve.Protocol.Chat.HiddenIdentityB\014\n\n_pseu"
     "donym\")\n\021ChangeDisplayName\022\024\n\014display_na"
     "me\030\001 \001(\t\"*\n\022DisplayNameChanged\022\024\n\014displa"
-    "y_name\030\001 \001(\t*s\n\016HiddenIdentity\022\030\n\024HIDDEN"
-    "_IDENTITY_NONE\020\000\022\036\n\032HIDDEN_IDENTITY_EVER"
-    "YWHERE\020\001\022\'\n#HIDDEN_IDENTITY_EXCEPT_GROUN"
-    "D_MARKS\020\002*\302\001\n\020SessionEndReason\022\"\n\036SESSIO"
-    "N_END_REASON_UNSPECIFIED\020\000\022%\n!SESSION_EN"
-    "D_REASON_ACCESS_REVOKED\020\001\022\035\n\031SESSION_END"
-    "_REASON_BANNED\020\002\022\035\n\031SESSION_END_REASON_K"
-    "ICKED\020\003\022%\n!SESSION_END_REASON_ADDRESS_BA"
-    "NNED\020\004b\006proto3"
+    "y_name\030\001 \001(\t\"\"\n\014SetNameColor\022\022\n\nname_col"
+    "or\030\001 \001(\r\"&\n\020NameColorChanged\022\022\n\nname_col"
+    "or\030\001 \001(\r*s\n\016HiddenIdentity\022\030\n\024HIDDEN_IDE"
+    "NTITY_NONE\020\000\022\036\n\032HIDDEN_IDENTITY_EVERYWHE"
+    "RE\020\001\022\'\n#HIDDEN_IDENTITY_EXCEPT_GROUND_MA"
+    "RKS\020\002*\302\001\n\020SessionEndReason\022\"\n\036SESSION_EN"
+    "D_REASON_UNSPECIFIED\020\000\022%\n!SESSION_END_RE"
+    "ASON_ACCESS_REVOKED\020\001\022\035\n\031SESSION_END_REA"
+    "SON_BANNED\020\002\022\035\n\031SESSION_END_REASON_KICKE"
+    "D\020\003\022%\n!SESSION_END_REASON_ADDRESS_BANNED"
+    "\020\004b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_session_2eproto_deps[3] = {
@@ -468,13 +534,13 @@ static ::absl::once_flag descriptor_table_session_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_session_2eproto = {
     false,
     false,
-    1734,
+    1810,
     descriptor_table_protodef_session_2eproto,
     "session.proto",
     &descriptor_table_session_2eproto_once,
     descriptor_table_session_2eproto_deps,
     3,
-    10,
+    12,
     schemas,
     file_default_instances,
     TableStruct_session_2eproto::offsets,
@@ -3591,6 +3657,502 @@ void DisplayNameChanged::InternalSwap(DisplayNameChanged* PROTOBUF_RESTRICT PROT
 }
 
 ::google::protobuf::Metadata DisplayNameChanged::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class SetNameColor::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<SetNameColor>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SetNameColor, _impl_._has_bits_);
+};
+
+SetNameColor::SetNameColor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetNameColor_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Chat.SetNameColor)
+}
+SetNameColor::SetNameColor(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetNameColor& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetNameColor_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SetNameColor::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SetNameColor::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.name_color_ = {};
+}
+SetNameColor::~SetNameColor() {
+  // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.SetNameColor)
+  SharedDtor(*this);
+}
+inline void SetNameColor::SharedDtor(MessageLite& self) {
+  SetNameColor& this_ = static_cast<SetNameColor&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL SetNameColor::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SetNameColor(arena);
+}
+constexpr auto SetNameColor::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SetNameColor),
+                                            alignof(SetNameColor));
+}
+constexpr auto SetNameColor::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_SetNameColor_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &SetNameColor::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SetNameColor>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SetNameColor::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SetNameColor>(), &SetNameColor::ByteSizeLong,
+              &SetNameColor::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SetNameColor, _impl_._cached_size_),
+          false,
+      },
+      &SetNameColor::kDescriptorMethods,
+      &descriptor_table_session_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SetNameColor_class_data_ =
+        SetNameColor::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetNameColor::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetNameColor_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SetNameColor_class_data_.tc_table);
+  return SetNameColor_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 1, 0, 0, 2>
+SetNameColor::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(SetNameColor, _impl_._has_bits_),
+    0, // no _extensions_
+    1, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967294,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    1,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    SetNameColor_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SetNameColor>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // uint32 name_color = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetNameColor, _impl_.name_color_), 0>(),
+     {8, 0, 0,
+      PROTOBUF_FIELD_OFFSET(SetNameColor, _impl_.name_color_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint32 name_color = 1;
+    {PROTOBUF_FIELD_OFFSET(SetNameColor, _impl_.name_color_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+  }},
+  // no aux_entries
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void SetNameColor::Clear() {
+// @@protoc_insertion_point(message_clear_start:Dreamsleeve.Protocol.Chat.SetNameColor)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.name_color_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SetNameColor::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SetNameColor& this_ = static_cast<const SetNameColor&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SetNameColor::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SetNameColor& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:Dreamsleeve.Protocol.Chat.SetNameColor)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 name_color = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_name_color() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_name_color(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:Dreamsleeve.Protocol.Chat.SetNameColor)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SetNameColor::ByteSizeLong(const MessageLite& base) {
+  const SetNameColor& this_ = static_cast<const SetNameColor&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SetNameColor::ByteSizeLong() const {
+  const SetNameColor& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:Dreamsleeve.Protocol.Chat.SetNameColor)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint32 name_color = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_name_color() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_name_color());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SetNameColor::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<SetNameColor*>(&to_msg);
+  auto& from = static_cast<const SetNameColor&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:Dreamsleeve.Protocol.Chat.SetNameColor)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_name_color() != 0) {
+      _this->_impl_.name_color_ = from._impl_.name_color_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SetNameColor::CopyFrom(const SetNameColor& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:Dreamsleeve.Protocol.Chat.SetNameColor)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SetNameColor::InternalSwap(SetNameColor* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.name_color_, other->_impl_.name_color_);
+}
+
+::google::protobuf::Metadata SetNameColor::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class NameColorChanged::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<NameColorChanged>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(NameColorChanged, _impl_._has_bits_);
+};
+
+NameColorChanged::NameColorChanged(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, NameColorChanged_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Chat.NameColorChanged)
+}
+NameColorChanged::NameColorChanged(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const NameColorChanged& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, NameColorChanged_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE NameColorChanged::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void NameColorChanged::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.name_color_ = {};
+}
+NameColorChanged::~NameColorChanged() {
+  // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.NameColorChanged)
+  SharedDtor(*this);
+}
+inline void NameColorChanged::SharedDtor(MessageLite& self) {
+  NameColorChanged& this_ = static_cast<NameColorChanged&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL NameColorChanged::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) NameColorChanged(arena);
+}
+constexpr auto NameColorChanged::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(NameColorChanged),
+                                            alignof(NameColorChanged));
+}
+constexpr auto NameColorChanged::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_NameColorChanged_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &NameColorChanged::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<NameColorChanged>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &NameColorChanged::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<NameColorChanged>(), &NameColorChanged::ByteSizeLong,
+              &NameColorChanged::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(NameColorChanged, _impl_._cached_size_),
+          false,
+      },
+      &NameColorChanged::kDescriptorMethods,
+      &descriptor_table_session_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull NameColorChanged_class_data_ =
+        NameColorChanged::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+NameColorChanged::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&NameColorChanged_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(NameColorChanged_class_data_.tc_table);
+  return NameColorChanged_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 1, 0, 0, 2>
+NameColorChanged::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(NameColorChanged, _impl_._has_bits_),
+    0, // no _extensions_
+    1, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967294,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    1,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    NameColorChanged_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::NameColorChanged>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // uint32 name_color = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NameColorChanged, _impl_.name_color_), 0>(),
+     {8, 0, 0,
+      PROTOBUF_FIELD_OFFSET(NameColorChanged, _impl_.name_color_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint32 name_color = 1;
+    {PROTOBUF_FIELD_OFFSET(NameColorChanged, _impl_.name_color_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+  }},
+  // no aux_entries
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void NameColorChanged::Clear() {
+// @@protoc_insertion_point(message_clear_start:Dreamsleeve.Protocol.Chat.NameColorChanged)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.name_color_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL NameColorChanged::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const NameColorChanged& this_ = static_cast<const NameColorChanged&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL NameColorChanged::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const NameColorChanged& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:Dreamsleeve.Protocol.Chat.NameColorChanged)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 name_color = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_name_color() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_name_color(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:Dreamsleeve.Protocol.Chat.NameColorChanged)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t NameColorChanged::ByteSizeLong(const MessageLite& base) {
+  const NameColorChanged& this_ = static_cast<const NameColorChanged&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t NameColorChanged::ByteSizeLong() const {
+  const NameColorChanged& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:Dreamsleeve.Protocol.Chat.NameColorChanged)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint32 name_color = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_name_color() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_name_color());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void NameColorChanged::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<NameColorChanged*>(&to_msg);
+  auto& from = static_cast<const NameColorChanged&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:Dreamsleeve.Protocol.Chat.NameColorChanged)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_name_color() != 0) {
+      _this->_impl_.name_color_ = from._impl_.name_color_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void NameColorChanged::CopyFrom(const NameColorChanged& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:Dreamsleeve.Protocol.Chat.NameColorChanged)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void NameColorChanged::InternalSwap(NameColorChanged* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.name_color_, other->_impl_.name_color_);
+}
+
+::google::protobuf::Metadata NameColorChanged::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

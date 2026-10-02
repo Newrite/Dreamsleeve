@@ -303,7 +303,7 @@ module ServerRuntime =
         | Some sources, Some self ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket; Hiding = hiding }
             let child =
-                PlayerSession.start state.Settings state.Moderation authenticator.Requests authenticator.DisplayNames authenticator.Moderation
+                PlayerSession.start state.Settings state.Moderation authenticator.Requests authenticator.Profiles authenticator.Moderation
                     (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
                     (sources.GroundMarks.Ref.TryReliable().Value) (sources.Guilds.Ref.TryReliable().Value)
                     (self.Map ServerRuntimeMessage.Host) state.Logger request
@@ -355,6 +355,7 @@ module ServerRuntime =
         | ClientCommand.RemoveGroundMark id -> CommandRoute.Session(PlayerSessionMessage.RemoveGroundMark(requestId, id))
         | ClientCommand.SetIdentityVisibility hiding -> CommandRoute.Session(PlayerSessionMessage.SetIdentityVisibility(requestId, hiding))
         | ClientCommand.ChangeDisplayName name -> CommandRoute.Session(PlayerSessionMessage.ChangeDisplayName(requestId, name))
+        | ClientCommand.SetNameColor color -> CommandRoute.Session(PlayerSessionMessage.SetNameColor(requestId, color))
         | ClientCommand.SanctionPlayer(target, kind, term, reason, devices) ->
             CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Sanction(target, kind, term, reason, devices)))
         | ClientCommand.LiftSanction(target, kind) -> CommandRoute.Session(PlayerSessionMessage.Moderate(requestId, ModerationAction.Lift(target, kind)))

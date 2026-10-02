@@ -488,6 +488,7 @@ sudo ufw enable
 | `[Announcements.Rate]` | Объявления, которые клиенты и моды публикуют в системный канал |
 | `[GroundMarks.NoteRate]`, `DeathMinIntervalMs` | Надписи на земле и метки смерти |
 | `[Identity] DisplayNameChangeIntervalMinutes` | Смена отображаемого имени из игры (`AllowDisplayNameChange = false` запрещает её) |
+| `[Identity] NameColorIntervalMs` | Смена цвета имени в чате: не чаще раза в 10 с за сессию |
 
 **Баны IP.** Против обхода бана новыми аккаунтами — бан диапазона адресов на странице панели «Баны IP»:
 закрывает вход, регистрацию и подключение игры из диапазона и сразу завершает открытые оттуда

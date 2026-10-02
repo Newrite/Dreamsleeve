@@ -14,6 +14,7 @@ import { IgnoredPanel } from "./IgnoredPanel";
 import { ModeratorPanel } from "./ModeratorPanel";
 import { GuildsPanel, ProfileGuilds } from "./GuildsPanel";
 import { playerActions } from "../state/moderator";
+import { playerName } from "../state/names";
 import { useDialog } from "../features/useDialog";
 import styles from "../styles/Workspace.module.css";
 const tabs: { id: Exclude<Panel, null>; label: string }[] = [
@@ -31,6 +32,7 @@ const moderatorTab = { id: "moderation", label: "Модерация" } as const;
 export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
   const dialog = useDialog();
   const player = s.players.find((p) => p.id === s.selectedPlayer);
+  const self = s.players.find((p) => p.id === s.selfId);
   const selectedName =
     player?.name ??
     s.ignored.find((p) => p.id === s.selectedPlayer)?.name ??
@@ -91,6 +93,10 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
                 settings={s.settings}
                 identity={s.identity}
                 phase={s.connectionPhase}
+                nameColor={s.nameColor}
+                selfColor={self?.color}
+                selfName={self ? playerName(self, s.settings) : ""}
+                connected={s.connected}
               />
             </>
           )}

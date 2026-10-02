@@ -226,6 +226,7 @@ class PlayerProfile final : public ::google::protobuf::Message
     kDisplayNameFieldNumber = 3,
     kPlayerIdFieldNumber = 1,
     kPseudonymousFieldNumber = 4,
+    kNameColorFieldNumber = 5,
   };
   // string username = 2;
   void clear_username() ;
@@ -277,11 +278,22 @@ class PlayerProfile final : public ::google::protobuf::Message
   void _internal_set_pseudonymous(bool value);
 
   public:
+  // optional uint32 name_color = 5;
+  bool has_name_color() const;
+  void clear_name_color() ;
+  ::uint32_t name_color() const;
+  void set_name_color(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_name_color() const;
+  void _internal_set_name_color(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.PlayerProfile)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
                                    0, 68,
                                    2>
       _table_;
@@ -307,6 +319,7 @@ class PlayerProfile final : public ::google::protobuf::Message
     ::google::protobuf::internal::ArenaStringPtr display_name_;
     ::uint64_t player_id_;
     bool pseudonymous_;
+    ::uint32_t name_color_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -716,6 +729,35 @@ inline bool PlayerProfile::_internal_pseudonymous() const {
 inline void PlayerProfile::_internal_set_pseudonymous(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pseudonymous_ = value;
+}
+
+// optional uint32 name_color = 5;
+inline bool PlayerProfile::has_name_color() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  return value;
+}
+inline void PlayerProfile::clear_name_color() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_color_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline ::uint32_t PlayerProfile::name_color() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerProfile.name_color)
+  return _internal_name_color();
+}
+inline void PlayerProfile::set_name_color(::uint32_t value) {
+  _internal_set_name_color(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.PlayerProfile.name_color)
+}
+inline ::uint32_t PlayerProfile::_internal_name_color() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_color_;
+}
+inline void PlayerProfile::_internal_set_name_color(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_color_ = value;
 }
 
 // -------------------------------------------------------------------

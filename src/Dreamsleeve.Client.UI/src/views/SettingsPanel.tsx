@@ -1,6 +1,12 @@
 import type { Chat } from "../state/chat";
-import type { ConnectionPhase, IdentityState, Settings } from "../bridge/types";
+import type {
+  ConnectionPhase,
+  IdentityState,
+  NameColorState,
+  Settings,
+} from "../bridge/types";
 import { isColor } from "../state/settings";
+import { nameColorPalette, hueColor, hueOf } from "../state/nameColor";
 import { defaults, limits } from "../bridge/settings.generated";
 import { identityStatus } from "../state/identity";
 import { Select } from "./Select";
@@ -47,6 +53,88 @@ function ColorField({
     </label>
   );
 }
+// The own name color in chat: a server setting, applied with its own button.
+// The server refuses a color too dark to read; the preview shows the chat line.
+function NameColorPicker({
+  chat,
+  current,
+  state,
+  connected,
+  hidden,
+  name,
+}: {
+  chat: Chat;
+  current: string | undefined;
+  state: NameColorState;
+  connected: boolean;
+  hidden: boolean;
+  name: string;
+}) {
+  const [draft, setDraft] = useState(current ?? nameColorPalette[0]);
+  useEffect(() => {
+    if (current) setDraft(current);
+  }, [current]);
+  const changed = draft.toUpperCase() !== (current ?? "").toUpperCase();
+  const status = state.pending
+    ? "Ожидание сервера…"
+    : state.error
+      ? state.error
+      : state.changed
+        ? "Цвет сохранён"
+        : connected
+          ? ""
+          : "Войдите, чтобы выбрать цвет";
+  return (
+    <fieldset className={styles.group} data-part="name-color">
+      <legend>Цвет вашего имени в чате</legend>
+      <p className={styles.preview} aria-label="Как увидят другие">
+        <span className={styles.previewChannel}>[Общий]</span>{" "}
+        <b style={{ color: draft }}>{name || "Ваше имя"}:</b> Привет, Скайрим!
+      </p>
+      <div className={styles.palette} role="group" aria-label="Готовые цвета">
+        {nameColorPalette.map((color) => (
+          <button
+            key={color}
+            type="button"
+            className={styles.paletteColor}
+            style={{ background: color }}
+            aria-label={color}
+            aria-pressed={color === draft.toUpperCase()}
+            onClick={() => setDraft(color)}
+          />
+        ))}
+      </div>
+      <label className={styles.range}>
+        <span>Оттенок</span>
+        <input
+          type="range"
+          aria-label="Оттенок"
+          min={0}
+          max={359}
+          step={1}
+          value={hueOf(draft)}
+          onChange={(e) => setDraft(hueColor(Number(e.target.value)))}
+        />
+      </label>
+      <ColorField label="Свой цвет" value={draft} onChange={setDraft} />
+      <button
+        type="button"
+        className={`${styles.primary} ${styles.apply}`}
+        disabled={!connected || state.pending || !changed}
+        onClick={() => chat.setNameColor(draft)}
+      >
+        Применить цвет
+      </button>
+      <p className={styles.muted} role="status" aria-label="Смена цвета">
+        {status}
+      </p>
+      <p className={styles.muted}>
+        Цвет видят все игроки во всех чатах. Слишком тёмный сервер не примет.
+        {hidden && " Пока имя скрыто, другие видят его цветом по умолчанию."}
+      </p>
+    </fieldset>
+  );
+}
 // Counts of nearby marks: a fixed ladder plus the saved value if it is not on it.
 function countOptions(current: number) {
   const ladder = [4, 8, 16, 32, 64];
@@ -70,11 +158,19 @@ export function SettingsPanel({
   settings: s,
   identity,
   phase,
+  nameColor,
+  selfColor,
+  selfName,
+  connected,
 }: {
   chat: Chat;
   settings: Settings;
   identity: IdentityState;
   phase: ConnectionPhase;
+  nameColor: NameColorState;
+  selfColor: string | undefined;
+  selfName: string;
+  connected: boolean;
 }) {
   return (
     <div className={styles.settings}>
@@ -169,6 +265,14 @@ export function SettingsPanel({
       >
         Сбросить расположение
       </button>
+      <NameColorPicker
+        chat={chat}
+        current={selfColor}
+        state={nameColor}
+        connected={connected}
+        hidden={identity.mode !== "off"}
+        name={selfName}
+      />
       <fieldset className={styles.group}>
         <legend>Отображение имён</legend>
         <label className={styles.choice}>
@@ -310,9 +414,10 @@ export function SettingsPanel({
         </p>
       </fieldset>
       <fieldset className={styles.group}>
-        <legend>Имена над светлячками</legend>
+        <legend>Светлячки и имена над ними</legend>
         {(
           [
+            ["fireflyGuildmatesOnly", "Только игроки из ваших гильдий"],
             ["showFireflyNames", "Показывать имена"],
             ["fireflyNameOcclusion", "Скрывать имена за препятствиями"],
           ] as const
@@ -424,6 +529,7 @@ export function SettingsPanel({
           [
             ["showGroundNotes", "Показывать надписи"],
             ["showDeathMarks", "Показывать места смерти"],
+            ["markGuildmatesOnly", "Только от игроков из ваших гильдий"],
             ["groundBorder", "Рамка надписи"],
             ["deathBorder", "Рамка места смерти"],
             ["deathDateHeader", "Дата над местом смерти"],

@@ -211,13 +211,15 @@ module main =
     type profiles =
         { player_id: int64
           account_id: int64
-          display_name: string }
+          display_name: string
+          name_color: int64 }
 
         interface IWriteColumns with
             member this.WriteColumns =
                 [ { WriteColumn.Name = "player_id"; Value = box this.player_id; ProviderDbType = None }
                   { WriteColumn.Name = "account_id"; Value = box this.account_id; ProviderDbType = None }
-                  { WriteColumn.Name = "display_name"; Value = box this.display_name; ProviderDbType = None } ]
+                  { WriteColumn.Name = "display_name"; Value = box this.display_name; ProviderDbType = None }
+                  { WriteColumn.Name = "name_color"; Value = box this.name_color; ProviderDbType = None } ]
 
     let profiles = table<profiles>
 

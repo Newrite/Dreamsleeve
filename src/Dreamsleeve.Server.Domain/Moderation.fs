@@ -282,4 +282,4 @@ module Moderation =
             if allows rules (DisplayName.value profile.DisplayName) then profile.DisplayName
             else fallbackDisplayName profile.PlayerId
         if username = profile.Username && displayName = profile.DisplayName then profile
-        else PlayerData.create profile.PlayerId username displayName
+        else PlayerData.create profile.PlayerId username displayName profile.NameColor

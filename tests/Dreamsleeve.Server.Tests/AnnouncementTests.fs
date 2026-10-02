@@ -20,7 +20,7 @@ let private config = ServerConfig.defaults
 let private codec = ProtocolCodec.create config
 let private pid raw = PlayerId.create raw |> ok
 let private channel = ChatChannels.systemId
-let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
+let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok) NameColor.unknown
 
 type private WireKind = Dreamsleeve.Protocol.Chat.AnnouncementKind
 type private WireClientSource = Dreamsleeve.Protocol.Chat.ClientAnnouncementSource
@@ -37,7 +37,7 @@ let private request (result: Result<ClientRequest, ProtocolCodecError>) =
     match (ok result).Command with
     | ClientCommand.PostAnnouncement value -> value
     | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _
-    | ClientCommand.ChangeDisplayName _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
+    | ClientCommand.ChangeDisplayName _ | ClientCommand.SetNameColor _ | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
     | ClientCommand.SetIdentityVisibility _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
     | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.DeleteChatMessage _ | ClientCommand.Guild _ -> failtest "Expected announcement"
 

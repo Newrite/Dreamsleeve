@@ -52,6 +52,38 @@
   color: var(--accent);
   padding: 10px;
 }
+.primary:disabled {
+  color: var(--muted);
+}
+.apply {
+  align-self: center;
+}
+/* The own name color: a chat line as others see it and the color choices. */
+.preview {
+  margin: 0;
+  padding: 8px 10px;
+  background: rgb(0 0 0 / 0.82);
+  border: 1px solid var(--border);
+  color: var(--global);
+}
+.previewChannel {
+  color: var(--muted);
+}
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.paletteColor {
+  width: 1.6em;
+  height: 1.6em;
+  padding: 0;
+  border: 1px solid var(--border);
+}
+.paletteColor[aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .muted {
   color: var(--muted);

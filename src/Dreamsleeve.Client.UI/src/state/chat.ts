@@ -8,6 +8,7 @@ import type {
   GroundMark,
   HideIdentity,
   DisplayNameState,
+  NameColorState,
   HostEvent,
   IdentityState,
   Message,
@@ -136,6 +137,8 @@ export interface ChatState extends ModeratorState, GuildsState {
   identity: IdentityState;
   // A change of the own display name, as the host reports it.
   displayName: DisplayNameState;
+  // A change of the own name color, as the host reports it.
+  nameColor: NameColorState;
   // The player's own mute, as the host reports it.
   mute: MuteState;
   // Why the last session ended or sign-in was refused by a ban; cleared by the next session.
@@ -229,6 +232,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     authorMenu: null,
     identity: { mode: "off", pending: false },
     displayName: { pending: false },
+    nameColor: { pending: false },
     mute: { muted: false, reason: "" },
     sessionEnd: null,
     groundMarksSupported: false,
@@ -493,6 +497,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
       case "displayName": {
         const { type: _, ...displayName } = event;
         store.setState({ displayName });
+        break;
+      }
+      case "nameColor": {
+        const { type: _, ...nameColor } = event;
+        store.setState({ nameColor });
         break;
       }
       case "mute": {
@@ -989,6 +998,21 @@ export function makeChat(send: Send, now = () => Date.now()) {
       if (!send({ type: "changeDisplayName", displayName }))
         store.setState({
           displayName: {
+            pending: false,
+            error: "Команда не принята приложением",
+          },
+        });
+      touch();
+    },
+    // The server stores the color ("#RRGGBB") and judges whether it reads;
+    // the own profile follows through the players list.
+    setNameColor(color: string) {
+      const s = store.getState();
+      if (!s.connected || s.nameColor.pending) return;
+      store.setState({ nameColor: { pending: true } });
+      if (!send({ type: "setNameColor", color: color.toUpperCase() }))
+        store.setState({
+          nameColor: {
             pending: false,
             error: "Команда не принята приложением",
           },

@@ -39,7 +39,7 @@ let private createAuthentication () =
             Dreamsleeve.Server.Domain.PlayerData.create
                 (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
                 (Dreamsleeve.Server.Domain.Username.create 32 name |> ok)
-                (Dreamsleeve.Server.Domain.DisplayName.create 64 name |> ok))
+                (Dreamsleeve.Server.Domain.DisplayName.create 64 name |> ok) Dreamsleeve.Server.Domain.NameColor.unknown)
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
@@ -48,11 +48,15 @@ let private createAuthentication () =
     Agent.Start(AgentOptions.create "fixture-authentication",
         AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
 
-// Display name changes are stored by the account service; here they succeed at once.
+// Profile changes are stored by the account service; here they succeed at once.
 let private names =
-    lazy (Agent.Start(AgentOptions.create "fixture-names", fun _ (request: DisplayNameChangeRequest) -> task {
-        let profile = Dreamsleeve.Server.Domain.PlayerData.create request.PlayerId
-                          (Dreamsleeve.Server.Domain.Username.create 32 $"p{Dreamsleeve.Server.Domain.PlayerId.value request.PlayerId}" |> ok) request.DisplayName
+    lazy (Agent.Start(AgentOptions.create "fixture-names", fun _ (request: ProfileChangeRequest) -> task {
+        let username = $"p{Dreamsleeve.Server.Domain.PlayerId.value request.PlayerId}"
+        let create = Dreamsleeve.Server.Domain.PlayerData.create request.PlayerId (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
+        let profile =
+            match request.Change with
+            | ProfileChange.DisplayName(name, _) -> create name Dreamsleeve.Server.Domain.NameColor.unknown
+            | ProfileChange.NameColor color -> create (Dreamsleeve.Server.Domain.DisplayName.create 64 username |> ok) color
         request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok profile } |> ignore
     }))
 
@@ -64,7 +68,7 @@ let private moderation =
 
 let private authentication (agent: Agent<SessionAuthenticationRequest>) : SessionAuthenticator = {
     Requests = agent.Ref.TryReliable().Value
-    DisplayNames = names.Value.Ref.TryReliable().Value
+    Profiles = names.Value.Ref.TryReliable().Value
     Moderation = moderation.Value.Ref.TryReliable().Value
     Completion = agent.Completion
 }
@@ -535,7 +539,7 @@ let tests = testList "ServerRuntime" [
                 Dreamsleeve.Server.Domain.PlayerData.create
                     (Dreamsleeve.Server.Domain.PlayerId.create 42UL |> ok)
                     (Dreamsleeve.Server.Domain.Username.create 32 "race" |> ok)
-                    (Dreamsleeve.Server.Domain.DisplayName.create 64 "Race" |> ok)
+                    (Dreamsleeve.Server.Domain.DisplayName.create 64 "Race" |> ok) Dreamsleeve.Server.Domain.NameColor.unknown
             let respond (request: SessionAuthenticationRequest) =
                 request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone } }
             equal AgentTryDeliveryResult.Closed (respond oldRequest)
@@ -702,7 +706,7 @@ let private namedAuthentication (accounts: (string * string * string) list) () =
             Dreamsleeve.Server.Domain.PlayerData.create
                 (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
                 (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
-                (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok))
+                (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok) Dreamsleeve.Server.Domain.NameColor.unknown)
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
@@ -853,7 +857,7 @@ let private roleAuthentication (accounts: (string * string * string * Dreamsleev
                  Dreamsleeve.Server.Domain.PlayerData.create
                      (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
                      (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
-                     (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok)
+                     (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok) Dreamsleeve.Server.Domain.NameColor.unknown
                Role = role; Mute = ValueNone } : AuthenticatedPlayer))
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
@@ -945,7 +949,7 @@ let adminTests = testList "ServerRuntime admin panel" [
             let! aliceOpened = welcome fixture alice
             let renamed id username display =
                 Dreamsleeve.Server.Domain.PlayerData.create (playerId id) (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
-                    (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok)
+                    (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok) Dreamsleeve.Server.Domain.NameColor.unknown
             // A shown player: the others get the player again with the new name.
             do! post fixture.Runtime (ServerRuntimeMessage.RenamePlayer(renamed bobOpened.SelfPlayerId "bob" "Боб Новый"))
             let! _, updated = nextWhere fixture (fun target value ->

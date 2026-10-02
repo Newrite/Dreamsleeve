@@ -237,8 +237,9 @@ namespace GroundMarks
     {
       const bool death = mark.kind == Domain::GroundMarkKind::Death;
       if (death ? !ui.showDeathMarks : !ui.showGroundNotes) continue;
-      // Marks of ignored players are not drawn at all.
-      if (book.Hides(mark.author.playerId, self)) continue;
+      // Marks of ignored players are not drawn at all, nor others' under "guildmates only".
+      if (book.Hides(mark.author.playerId, self) || runtime.session.GuildmatesOnlyHides(mark.author.playerId, ui.markGuildmatesOnly))
+        continue;
       const auto distance =
         Domain::Spatial::Reach(space, origin, mark.placement.locationId, mark.placement.position, ui.groundDrawDistance);
       if (!distance) continue;

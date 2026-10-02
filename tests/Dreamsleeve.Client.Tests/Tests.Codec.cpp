@@ -939,6 +939,52 @@ TEST_CASE("Pseudonymous profiles carry no username and the identity switch round
   CHECK(std::get<W::SessionOpened>(*opened).hiding == Domain::HiddenIdentity::Everywhere);
 }
 
+TEST_CASE("A name color travels in SetNameColor, its answer and profiles, never with a pseudonym")
+{
+  const auto codec   = MakeCodec();
+  const auto encoded = codec.Encode(W::ClientRequest{
+      SetNameColor{8, 0xE57373}
+  });
+  REQUIRE(encoded);
+  P::ClientPacket sent;
+  REQUIRE(sent.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+  CHECK(sent.request_id() == 8);
+  CHECK(sent.set_name_color().name_color() == 0xE57373);
+
+  P::ServerPacket changed;
+  changed.set_protocol_version(W::Version);
+  changed.set_request_id(8);
+  changed.mutable_name_color_changed()->set_name_color(0x4FC3F7);
+  const auto settled = codec.Decode(Bytes(changed));
+  REQUIRE(settled);
+  CHECK(std::get<W::NameColorChanged>(*settled).requestId == 8);
+  CHECK(std::get<W::NameColorChanged>(*settled).nameColor == 0x4FC3F7);
+  CHECK_FALSE(codec.Decode(Bytes(changed), W::Channel::Chat));
+  changed.mutable_name_color_changed()->set_name_color(0x1000000);
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  changed.mutable_name_color_changed()->set_name_color(0x4FC3F7);
+  changed.clear_request_id();
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+
+  // A message carries its author's color; a pseudonym carries none.
+  auto packet = Published();
+  packet.mutable_chat_published()->mutable_message()->mutable_author()->set_name_color(0xFFD54F);
+  const auto colored = codec.Decode(Bytes(packet), W::Channel::Chat);
+  REQUIRE(colored);
+  CHECK(std::get<ChatMessagesReceived>(*colored).messages[0].author->nameColor == std::optional<std::uint32_t>{0xFFD54F});
+  packet.mutable_chat_published()->mutable_message()->mutable_author()->set_name_color(0x1000000);
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Chat));
+  auto* author = packet.mutable_chat_published()->mutable_message()->mutable_author();
+  author->clear_name_color();
+  const auto plain = codec.Decode(Bytes(packet), W::Channel::Chat);
+  REQUIRE(plain);
+  CHECK_FALSE(std::get<ChatMessagesReceived>(*plain).messages[0].author->nameColor);
+  author->clear_username();
+  author->set_pseudonymous(true);
+  author->set_name_color(0xFFD54F);
+  CHECK_FALSE(codec.Decode(Bytes(packet), W::Channel::Chat));
+}
+
 TEST_CASE("A display name change and its answer round-trip with the correlation")
 {
   const auto codec   = MakeCodec();
@@ -1221,6 +1267,7 @@ TEST_CASE("The codec refuses only what would close the connection: a zero reques
       ReportDeath{1, "Wolf\n", place, date},
       RemoveGroundMark{1, Domain::InvalidId},
       ChangeDisplayName{1, " \t "},
+      SetNameColor{1, 0x1000000},
   };
   for (const auto& request : judgedByServer)
     CHECK(codec.Encode(request));

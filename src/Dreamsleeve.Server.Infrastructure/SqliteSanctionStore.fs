@@ -202,10 +202,11 @@ module SqliteSanctionStore =
         SqliteAccountStore.withContext config token (fun context ->
             use statement =
                 command context
-                    $"SELECT {Columns}, a.username, p.display_name FROM sanctions s JOIN profiles p ON p.player_id=s.player_id JOIN accounts a ON a.id=p.account_id WHERE {InForce} ORDER BY s.issued_at DESC LIMIT @limit"
+                    $"SELECT {Columns}, a.username, p.display_name, p.name_color FROM sanctions s JOIN profiles p ON p.player_id=s.player_id JOIN accounts a ON a.id=p.account_id WHERE {InForce} ORDER BY s.issued_at DESC LIMIT @limit"
                     [ "@now", box (milliseconds now); "@limit", box MaxListed ]
             use reader = statement.ExecuteReader()
             readAll reader (fun reader ->
-                match read reader, Username.create Int32.MaxValue (reader.GetString 8), DisplayName.create Int32.MaxValue (reader.GetString 9) with
-                | Ok sanction, Ok username, Ok name -> Ok { Sanction = sanction; Target = PlayerData.create sanction.Target username name }
+                match read reader, Username.create Int32.MaxValue (reader.GetString 8), DisplayName.create Int32.MaxValue (reader.GetString 9),
+                      nameColor (reader.GetInt64 10) with
+                | Ok sanction, Ok username, Ok name, Ok color -> Ok { Sanction = sanction; Target = PlayerData.create sanction.Target username name color }
                 | _ -> invalidData ()))

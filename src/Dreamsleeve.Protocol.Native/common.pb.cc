@@ -38,7 +38,8 @@ inline constexpr PlayerProfile::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
-        pseudonymous_{false} {}
+        pseudonymous_{false},
+        name_color_{0u} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR PlayerProfile::PlayerProfile(::_pbi::ConstantInitialized)
@@ -99,15 +100,17 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerProfile, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerProfile, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerProfile, _impl_.username_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerProfile, _impl_.display_name_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerProfile, _impl_.pseudonymous_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::PlayerProfile, _impl_.name_color_),
         2,
         0,
         1,
         3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::FormKey, _impl_._has_bits_),
         5, // hasbit index offset
@@ -120,7 +123,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::PlayerProfile)},
-        {11, sizeof(::Dreamsleeve::Protocol::Chat::FormKey)},
+        {13, sizeof(::Dreamsleeve::Protocol::Chat::FormKey)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_PlayerProfile_default_instance_._instance,
@@ -129,17 +132,18 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
 const char descriptor_table_protodef_common_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\014common.proto\022\031Dreamsleeve.Protocol.Cha"
-    "t\"`\n\rPlayerProfile\022\021\n\tplayer_id\030\001 \001(\004\022\020\n"
-    "\010username\030\002 \001(\t\022\024\n\014display_name\030\003 \001(\t\022\024\n"
-    "\014pseudonymous\030\004 \001(\010\"5\n\007FormKey\022\023\n\013plugin"
-    "_name\030\001 \001(\t\022\025\n\rlocal_form_id\030\002 \001(\rb\006prot"
-    "o3"
+    "t\"\210\001\n\rPlayerProfile\022\021\n\tplayer_id\030\001 \001(\004\022\020"
+    "\n\010username\030\002 \001(\t\022\024\n\014display_name\030\003 \001(\t\022\024"
+    "\n\014pseudonymous\030\004 \001(\010\022\027\n\nname_color\030\005 \001(\r"
+    "H\000\210\001\001B\r\n\013_name_color\"5\n\007FormKey\022\023\n\013plugi"
+    "n_name\030\001 \001(\t\022\025\n\rlocal_form_id\030\002 \001(\rb\006pro"
+    "to3"
 };
 static ::absl::once_flag descriptor_table_common_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_common_2eproto = {
     false,
     false,
-    202,
+    243,
     descriptor_table_protodef_common_2eproto,
     "common.proto",
     &descriptor_table_common_2eproto_once,
@@ -200,9 +204,9 @@ PlayerProfile::PlayerProfile(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, pseudonymous_) -
+           offsetof(Impl_, name_color_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::pseudonymous_));
+               sizeof(Impl_::name_color_));
 
   // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Chat.PlayerProfile)
 }
@@ -218,9 +222,9 @@ inline void PlayerProfile::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, pseudonymous_) -
+           offsetof(Impl_, name_color_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::pseudonymous_));
+               sizeof(Impl_::name_color_));
 }
 PlayerProfile::~PlayerProfile() {
   // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Chat.PlayerProfile)
@@ -281,16 +285,16 @@ PlayerProfile::GetClassData() const {
   return PlayerProfile_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 4, 0, 68, 2>
+const ::_pbi::TcParseTable<3, 5, 0, 68, 2>
 PlayerProfile::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_._has_bits_),
     0, // no _extensions_
-    4, 24,  // max_field_number, fast_idx_mask
+    5, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967280,  // skipmap
+    4294967264,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    4,  // num_field_entries
+    5,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     PlayerProfile_class_data_.base(),
@@ -300,10 +304,7 @@ PlayerProfile::_table_ = {
     ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::PlayerProfile>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // bool pseudonymous = 4;
-    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerProfile, _impl_.pseudonymous_), 3>(),
-     {32, 3, 0,
-      PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.pseudonymous_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // uint64 player_id = 1;
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfile, _impl_.player_id_), 2>(),
      {8, 2, 0,
@@ -316,6 +317,16 @@ PlayerProfile::_table_ = {
     {::_pbi::TcParser::FastUS1,
      {26, 1, 0,
       PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.display_name_)}},
+    // bool pseudonymous = 4;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerProfile, _impl_.pseudonymous_), 3>(),
+     {32, 3, 0,
+      PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.pseudonymous_)}},
+    // optional uint32 name_color = 5;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfile, _impl_.name_color_), 4>(),
+     {40, 4, 0,
+      PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.name_color_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
@@ -327,6 +338,8 @@ PlayerProfile::_table_ = {
     {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.display_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // bool pseudonymous = 4;
     {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.pseudonymous_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    // optional uint32 name_color = 5;
+    {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.name_color_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
   }},
   // no aux_entries
   {{
@@ -352,10 +365,10 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
       _impl_.display_name_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.pseudonymous_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.pseudonymous_));
+        reinterpret_cast<char*>(&_impl_.name_color_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.name_color_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -418,6 +431,13 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
+  // optional uint32 name_color = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+        5, this_._internal_name_color(), target);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -443,7 +463,7 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string username = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_username().empty()) {
@@ -471,6 +491,11 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
         total_size += 2;
       }
     }
+    // optional uint32 name_color = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+          this_._internal_name_color());
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -490,7 +515,7 @@ void PlayerProfile::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_username().empty()) {
         _this->_internal_set_username(from._internal_username());
@@ -519,6 +544,9 @@ void PlayerProfile::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.pseudonymous_ = from._impl_.pseudonymous_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _this->_impl_.name_color_ = from._impl_.name_color_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -542,8 +570,8 @@ void PlayerProfile::InternalSwap(PlayerProfile* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.username_, &other->_impl_.username_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.display_name_, &other->_impl_.display_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.pseudonymous_)
-      + sizeof(PlayerProfile::_impl_.pseudonymous_)
+      PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.name_color_)
+      + sizeof(PlayerProfile::_impl_.name_color_)
       - PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));

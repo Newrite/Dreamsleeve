@@ -27,6 +27,9 @@ namespace Dreamsleeve::Client::Wire::Detail
     return value >= MinUnixMs && value <= MaxUnixMs;
   }
 
+  // A name color is 0xRRGGBB.
+  inline constexpr std::uint32_t MaxNameColor = 0xFFFFFF;
+
   using Domain::Checks::Finite;
   using Domain::Checks::ValidGameDate;
   using Domain::Checks::ValidKey;

@@ -52,6 +52,8 @@ module DomainUMX =
     type deathMarkText
     [<Measure>]
     type guildId
+    [<Measure>]
+    type nameColor
 
 type PluginName = string<pluginName>
 type LocalFormId = uint32<localFormId>
@@ -81,6 +83,8 @@ type GroundNoteText = string<groundNoteText>
 type DeathMarkText = string<deathMarkText>
 /// Storage-issued and never reused, so a guild's chat channel never names another guild.
 type GuildId = uint64<guildId>
+/// 0xRRGGBB: how the player's name is drawn in chat.
+type NameColor = uint32<nameColor>
 
 [<RequireQualifiedAccess>]
 type TextError =
@@ -107,6 +111,8 @@ type DomainError =
     | DuplicateGroundMark of GroundMarkId
     /// A GameDate component outside its calendar range.
     | InvalidGameDate of field: string
+    /// Not a 24-bit RGB value.
+    | InvalidColor of field: string
 
 module internal PrimitiveValidation =
     let invalidControl multiline (rune: Rune) =
@@ -330,6 +336,47 @@ module DisplayName =
     /// Trims and normalizes to NFC while preserving case; duplicates are allowed.
     let create maxLength raw : Result<DisplayName, DomainError> =
         PrimitiveValidation.name "DisplayName" maxLength raw |> Result.map UMX.tag
+
+[<RequireQualifiedAccess>]
+module NameColor =
+    let value (color: NameColor) : uint32 = uint32 color
+
+    let private tag raw : NameColor = LanguagePrimitives.UInt32WithMeasure<nameColor> raw
+
+    /// Any 24-bit RGB value. Readability is a rule for choosing a color
+    /// (readable), not for stored ones: a stricter rule later never makes a
+    /// stored profile fail to load.
+    let create (raw: uint32) : Result<NameColor, DomainError> =
+        if raw > 0xFFFFFFu then Error(DomainError.InvalidColor "NameColor") else Ok(tag raw)
+
+    // WCAG: an sRGB channel in linear light.
+    let private linear (channel: uint32) =
+        let share = float channel / 255.0
+        if share <= 0.04045 then share / 12.92 else Math.Pow((share + 0.055) / 1.055, 2.4)
+
+    /// WCAG relative luminance, 0 (black) to 1 (white).
+    let luminance (color: NameColor) =
+        let rgb = value color
+        0.2126 * linear ((rgb >>> 16) &&& 0xFFu) + 0.7152 * linear ((rgb >>> 8) &&& 0xFFu) + 0.0722 * linear (rgb &&& 0xFFu)
+
+    /// A contrast of 4:1 against black, so the name reads on the dark chat background.
+    [<Literal>]
+    let MinLuminance = 0.15
+
+    /// Whether a player may choose the color.
+    let readable color = luminance color >= MinLuminance
+
+    /// New accounts get one of these at random. Migration 14
+    /// (1791590400000_name_colors.sql) gave the existing accounts the same palette.
+    let palette : NameColor array =
+        [| 0xE57373u; 0xF06292u; 0xBA68C8u; 0x9575CDu; 0x7986CBu; 0x64B5F6u; 0x4FC3F7u; 0x4DD0E1u
+           0x4DB6ACu; 0x81C784u; 0xAED581u; 0xDCE775u; 0xFFF176u; 0xFFD54Fu; 0xFFB74Du; 0xFF8A65u |]
+        |> Array.map tag
+
+    let random (source: Random) = palette[source.Next palette.Length]
+
+    /// The color of a profile the owner has not loaded; it is never drawn.
+    let unknown = tag 0xC8C8C8u
 
 [<RequireQualifiedAccess>]
 module CharacterName =

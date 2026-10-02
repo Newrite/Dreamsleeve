@@ -175,13 +175,16 @@ export namespace Domain
   };
 
   // A pseudonymous profile is what others see of a player who hides their
-  // names: username empty, displayName the server pseudonym, no character name.
+  // names: username empty, displayName the server pseudonym, no character name
+  // and no name color.
   struct PlayerData final
   {
     PlayerId    playerId{};
     Username    username{};
     DisplayName displayName{};
     bool        pseudonymous{};
+    // 0xRRGGBB the player chose for their name in chat; absent for a pseudonym.
+    std::optional<std::uint32_t> nameColor;
 
     bool operator==(const PlayerData&) const = default;
   };

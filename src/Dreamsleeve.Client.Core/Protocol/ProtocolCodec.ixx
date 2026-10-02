@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 19;
+  inline constexpr std::uint32_t Version = 20;
 
   enum class ErrorCode
   {
@@ -84,6 +84,7 @@ export namespace Dreamsleeve::Client::Wire
     RemoveGroundMark,
     SetIdentityVisibility,
     ChangeDisplayName,
+    SetNameColor,
     SanctionPlayer,
     LiftSanction,
     KickPlayer,
@@ -246,6 +247,13 @@ private:
     std::string   displayName;
   };
 
+  // Settles SetNameColor with the stored color.
+  struct NameColorChanged
+  {
+    std::uint64_t requestId;
+    std::uint32_t nameColor;
+  };
+
   // Moderator answers, each settling its request.
   struct SanctionIssued
   {
@@ -383,6 +391,7 @@ private:
     OwnGroundMarksReplaced,
     IdentityVisibilityChanged,
     DisplayNameChanged,
+    NameColorChanged,
     MuteChanged,
     SessionEnded,
     RoleChanged,

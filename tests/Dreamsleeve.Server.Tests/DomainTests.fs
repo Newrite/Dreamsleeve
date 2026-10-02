@@ -18,7 +18,7 @@ let private characterName value = CharacterName.create 128 value |> ok
 let private actorKey value = ActorValueKey.create 128 value |> ok
 
 let private profile id name =
-    PlayerData.create (playerId id) (Username.create 32 (sprintf "user%d" id) |> ok) (displayName name)
+    PlayerData.create (playerId id) (Username.create 32 (sprintf "user%d" id) |> ok) (displayName name) NameColor.unknown
 
 let private formKey plugin id =
     FormKey.create (PluginName.create 255 plugin |> ok) (LocalFormId.create id |> ok)
@@ -68,6 +68,24 @@ let private textTests =
             DisplayName.create 1 "\U0001F600" |> ok |> DisplayName.value
             |> fun value -> value.Should().Be("\U0001F600") |> ignore
             Expect.isError (DisplayName.create 1 "\U0001F600a") "Two scalars exceed a one-scalar limit"
+
+        testCase "a name color is any 24-bit RGB value; a player may choose only a readable one" <| fun _ ->
+            Expect.equal (NameColor.create 0xFFFFFFu |> ok |> NameColor.value) 0xFFFFFFu "white"
+            Expect.isError (NameColor.create 0x1000000u) "beyond 24 bits"
+            let readable raw = NameColor.create raw |> ok |> NameColor.readable
+            Expect.isTrue (readable 0xFFFFFFu) "white reads on the dark chat"
+            Expect.isTrue (readable 0xFF0000u) "pure red reads"
+            Expect.isFalse (readable 0x0000FFu) "pure blue is too dark"
+            Expect.isFalse (readable 0x000000u) "black is too dark"
+            Expect.isFalse (readable 0x666666u) "dark grey is too dark"
+            Expect.isTrue (readable 0x707070u) "a lighter grey reads"
+            Expect.equal NameColor.palette.Length 16 "the palette of the migration"
+            for color in NameColor.palette do
+                Expect.isTrue (NameColor.readable color) $"palette color {NameColor.value color:X6} reads"
+            Expect.equal (Array.distinct NameColor.palette).Length NameColor.palette.Length "palette colors differ"
+            let source = Random 7
+            for _ in 1 .. 100 do
+                Expect.contains NameColor.palette (NameColor.random source) "a random color comes from the palette"
 
         testCase "character name preserves the game text exactly" <| fun _ ->
             let original = "  Ne\u0301revar  "

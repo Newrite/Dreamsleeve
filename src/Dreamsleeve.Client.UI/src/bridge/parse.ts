@@ -1,4 +1,5 @@
 import type { HostEvent } from "./types";
+import { isColor } from "../state/settings";
 import {
   announcementKinds,
   announcementOrigins,
@@ -60,6 +61,7 @@ function player(v: unknown): boolean {
     object(v) &&
     id(v.id) &&
     text(v.name) &&
+    optional(isColor)(v.color) &&
     optional(text)(v.alias) &&
     flag(v.inCharacter) &&
     text(v.displayName) &&
@@ -81,8 +83,9 @@ function player(v: unknown): boolean {
     optional(time)(v.gameStartedAt) &&
     optional((x) => list(x, actorValue, 64))(v.actorValues) &&
     optional(flag)(v.pseudonymous) &&
-    // The server sends no username or character of a pseudonymous player.
-    (!v.pseudonymous || (v.username === "" && v.character === undefined))
+    // The server sends no username, character or color of a pseudonymous player.
+    (!v.pseudonymous ||
+      (v.username === "" && v.character === undefined && v.color === undefined))
   );
 }
 function groundMark(v: unknown): boolean {
@@ -247,6 +250,8 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     optional(error)(v.error),
   displayName: (v) =>
     flag(v.pending) && optional(label)(v.changed) && optional(error)(v.error),
+  nameColor: (v) =>
+    flag(v.pending) && optional(isColor)(v.changed) && optional(error)(v.error),
   mute: (v) => flag(v.muted) && label(v.reason) && optional(time)(v.until),
   sessionEnded: (v) =>
     oneOf(sessionEndReasons)(v.reason) &&

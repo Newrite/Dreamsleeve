@@ -55,10 +55,12 @@ export interface ActorValue {
 // mode `alias` carries the local pseudonym and the real username, displayName
 // and character never arrive (displayName repeats the alias, username is empty).
 // `pseudonymous`: the player hides their names from everyone; the server sent
-// only its pseudonym (displayName), no username and no character.
+// only its pseudonym (displayName), no username, no character and no color.
+// `color` ("#RRGGBB") is how the player's name is drawn in chat.
 export interface Player {
   id: Id;
   name: string;
+  color?: string;
   alias?: string;
   inCharacter: boolean;
   displayName: string;
@@ -117,6 +119,13 @@ export interface IdentityState {
 // A change of the own display name as the host reports it: pending waits
 // for the server, changed is the name it has just stored, error the last refusal.
 export interface DisplayNameState {
+  pending: boolean;
+  changed?: string;
+  error?: string;
+}
+// A change of the own name color, like DisplayNameState: changed is the
+// "#RRGGBB" the server has just stored.
+export interface NameColorState {
   pending: boolean;
   changed?: string;
   error?: string;
@@ -263,6 +272,7 @@ export type Command =
   | { type: "setIdentityVisibility"; hiding: HideIdentity }
   // In a session only; the server applies its word list and change interval.
   | { type: "changeDisplayName"; displayName: string }
+  | { type: "setNameColor"; color: string }
   // Moderator tools; the server checks the role and whom a moderator may act
   // on. No minutes: until lifted. Each is answered with moderationResult.
   | {
@@ -331,6 +341,7 @@ export type HostEvent =
     }
   | ({ type: "identity" } & IdentityState)
   | ({ type: "displayName" } & DisplayNameState)
+  | ({ type: "nameColor" } & NameColorState)
   | ({ type: "mute" } & MuteState)
   | ({ type: "sessionEnded" } & SessionEndState)
   // The player's role; a moderator gets the moderator tools.

@@ -96,7 +96,7 @@ namespace
   Domain::Player SamplePlayer()
   {
     Domain::Player player;
-    player.data          = {7, "seven", "Seven"};
+    player.data          = {7, "seven", "Seven", false, 0xE57373};
     player.characterName = "Nerevar";
     player.details.level = 12;
     player.details.race  = Domain::NamedForm{
@@ -144,7 +144,7 @@ namespace
     const UiSettings settings;
     const auto       player = Bridge::ToUiPlayer(SamplePlayer(), names, settings);
 
-    Domain::ChatMessage chat{11, 1, Domain::PlayerData{7, "seven", "Seven"}, "Привет, Вайтран", Domain::FromUnixMilliseconds(1700000000000)};
+    Domain::ChatMessage chat{11, 1, Domain::PlayerData{7, "seven", "Seven", false, 0xE57373}, "Привет, Вайтран", Domain::FromUnixMilliseconds(1700000000000)};
     chat.characterName = "Nerevar";
     Domain::ChatMessage notice{12, 2, std::nullopt, "Сервер перезапустится", Domain::FromUnixMilliseconds(1700000001000)};
     notice.announcement = Domain::Announcement{Domain::AnnouncementSource::Server, Domain::AnnouncementKind::Admin, {}};
@@ -185,6 +185,7 @@ namespace
         Bridge::NearbyMarksEvent{.marks = {nearby}},
         Bridge::IdentityEvent{.mode = "everywhere", .pseudonym = "Страж 2"},
         Bridge::DisplayNameEvent{.changed = "Seven"},
+        Bridge::NameColorEvent{.changed = "#E57373"},
         Bridge::MuteEvent{.muted = true, .reason = "Флуд", .until = 1700000900000},
         Bridge::Ended({Domain::SessionEndReason::Banned, "Читы", 1700086400000}),
         Bridge::RoleEvent{.moderator = true},

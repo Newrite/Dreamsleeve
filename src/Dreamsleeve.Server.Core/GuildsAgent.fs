@@ -79,7 +79,7 @@ module GuildsAgent =
     let private profileOf state player =
         match state.Profiles.TryGetValue player with
         | true, profile -> profile
-        | false, _ -> PlayerData.create player (Moderation.fallbackUsername player) (Moderation.fallbackDisplayName player)
+        | false, _ -> PlayerData.create player (Moderation.fallbackUsername player) (Moderation.fallbackDisplayName player) NameColor.unknown
 
     let private memberView state now (membership: GuildMember) =
         { Membership = { membership with Mute = GuildMember.mute now membership }

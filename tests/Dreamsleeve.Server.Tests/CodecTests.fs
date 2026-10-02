@@ -26,7 +26,7 @@ let private configured settings = ProtocolCodec.create settings
 
 let private pid raw = PlayerId.create raw |> ok
 let private channel = ChatChannelId.create 1UL |> ok
-let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok)
+let private profile = PlayerData.create (pid 7UL) (Username.create 32 "player" |> ok) (DisplayName.create 64 "Игрок" |> ok) NameColor.unknown
 let private snapshot = Player.create profile |> Player.snapshot
 let private healthKey = ActorValueKey.create 128 "skyrim:health" |> ok
 let private healthName = ActorValueName.create 64 "Health" |> ok
@@ -101,7 +101,7 @@ let private playerUpdate result =
     | ClientCommand.UpdatePlayer value -> value
     | ClientCommand.OpenSession _ | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.PostAnnouncement _
     | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
-    | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
+    | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ | ClientCommand.SetNameColor _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _ | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions
     | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _ | ClientCommand.DeleteChatMessage _ | ClientCommand.Guild _ -> failtest "Expected player update"
 
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
@@ -214,7 +214,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isEmpty clearOnly.Metadata[0].ActorValues "absent values set nothing"
 
     testCase "a presence change defines new kinds and carries every part in its own field" <| fun _ ->
-        let other = PlayerData.create (pid 8UL) profile.Username (DisplayName.create 64 "Other" |> ok) |> Player.create |> Player.snapshot
+        let other = PlayerData.create (pid 8UL) profile.Username (DisplayName.create 64 "Other" |> ok) NameColor.unknown |> Player.create |> Player.snapshot
         let entering = { other with ActorValues = Map.ofList [ healthKey, health 75 100 ] }
         let renamed = { snapshot with ActorValues = Map.ofList [ healthKey, health 30 100 ] }
         let activity = PlayerActivity.create 256 64 ActivityKind.Sneaking ValueNone LockDifficulty.Unknown ValueNone |> ok
@@ -289,7 +289,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             Expect.equal hidden HiddenIdentity.Shown "names are shown unless the client asks otherwise"
         | ClientCommand.JoinAsGuest | ClientCommand.SendChat _ | ClientCommand.UpdatePlayer _ | ClientCommand.PostAnnouncement _
         | ClientCommand.PlaceGroundNote _ | ClientCommand.ReportDeath _ | ClientCommand.RemoveGroundMark _
-        | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _
+        | ClientCommand.SetIdentityVisibility _ | ClientCommand.ChangeDisplayName _ | ClientCommand.SetNameColor _ | ClientCommand.SanctionPlayer _ | ClientCommand.LiftSanction _
         | ClientCommand.KickPlayer _ | ClientCommand.ListSanctions | ClientCommand.ListPlayerMarks _ | ClientCommand.ClearPlayerMarks _
         | ClientCommand.DeleteChatMessage _ | ClientCommand.Guild _ -> failtest "Wrong command"
 
@@ -462,7 +462,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (Packets.single (configured small) response |> error).Failure ProtocolCodecFailure.PacketTooLarge "output above configured limit"
 
     testCase "bootstrap counts and empty initial history are configurable" <| fun _ ->
-        let second = PlayerData.create (pid 8UL) profile.Username profile.DisplayName |> Player.create |> Player.snapshot
+        let second = PlayerData.create (pid 8UL) profile.Username profile.DisplayName NameColor.unknown |> Player.create |> Player.snapshot
         let response = ServerResponse.SessionOpened(1UL, { welcome with Players = [snapshot; second] })
         Expect.isOk (Packets.single (configured { config with MaxInitialPlayers = 2 }) response) "two unique players"
         Expect.isError (Packets.single (configured { config with MaxInitialPlayers = 1 }) response) "configured count"
@@ -888,4 +888,33 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal packet.DisplayNameChanged.DisplayName "Новое Имя" "stored name"
         Expect.equal (ProtocolCodec.delivery (ServerResponse.DisplayNameChanged(78UL, name))).Lane DeliveryLane.Control "control lane"
         Expect.isError (Packets.single codec (ServerResponse.DisplayNameChanged(0UL, name))) "zero correlation is invalid"
+
+    testCase "a name color travels in SetNameColor, its settlement and every shown profile, never with a pseudonym" <| fun _ ->
+        let set raw =
+            Dreamsleeve.Protocol.Chat.ClientPacket(
+                ProtocolVersion = ProtocolCodec.Version, RequestId = 79UL,
+                SetNameColor = Dreamsleeve.Protocol.Chat.SetNameColor(NameColor = raw)) |> decode
+        match (set 0xE57373u |> ok).Command with
+        | ClientCommand.SetNameColor color -> Expect.equal (NameColor.value color) 0xE57373u "color as sent"
+        | other -> failtestf "%A" other
+        // Readability is the session's rule; the codec only checks the range.
+        match (set 0x000001u |> ok).Command with
+        | ClientCommand.SetNameColor color -> Expect.equal (NameColor.value color) 1u "a dark color still decodes"
+        | other -> failtestf "%A" other
+        Expect.equal (ProtocolCodec.requestLane (set 0xE57373u |> ok)) DeliveryLane.Control "control lane"
+        let refused = set 0x1000000u |> error
+        Expect.equal refused.RequestId (Some 79UL) "the refusal keeps the correlation"
+        Expect.equal (ProtocolCodec.rejection refused.Failure).Field "name_color" "the wrong field is named"
+        let color = NameColor.create 0x4FC3F7u |> ok
+        let packet = Packets.single codec (ServerResponse.NameColorChanged(80UL, color)) |> ok |> parse
+        Expect.equal packet.RequestId 80UL "correlated"
+        Expect.equal packet.NameColorChanged.NameColor 0x4FC3F7u "stored color"
+        Expect.equal (ProtocolCodec.delivery (ServerResponse.NameColorChanged(80UL, color))).Lane DeliveryLane.Control "control lane"
+        let colored = PlayerData.withNameColor color profile |> Player.create |> Player.snapshot
+        let shown = (Packets.single codec (joined colored) |> ok |> parse).PresenceChanged.Joined[0].Profile
+        Expect.isTrue shown.HasNameColor "a shown profile carries its color"
+        Expect.equal shown.NameColor 0x4FC3F7u "the player's color"
+        let pseudonym = Pseudonym.create "Страж" |> ok
+        let hidden = (Packets.single codec (joined (PlayerSnapshot.withPseudonym pseudonym colored)) |> ok |> parse).PresenceChanged.Joined[0].Profile
+        Expect.isFalse hidden.HasNameColor "a pseudonym leaves without the color"
 ]

@@ -203,6 +203,12 @@ export namespace Dreamsleeve::Host::Bridge
       std::string displayName;
     };
 
+    // The own name color in chat, "#RRGGBB".
+    struct SetNameColor
+    {
+      std::string color;
+    };
+
     // Moderator tools; the server checks the role and the target. kind is
     // SanctionKindNames; no minutes: until lifted.
     struct SanctionPlayer
@@ -308,6 +314,7 @@ export namespace Dreamsleeve::Host::Bridge
     Commands::RemoveGroundMark,
     Commands::SetIdentityVisibility,
     Commands::ChangeDisplayName,
+    Commands::SetNameColor,
     Commands::SanctionPlayer,
     Commands::LiftSanction,
     Commands::KickPlayer,
@@ -337,6 +344,7 @@ export namespace Dreamsleeve::Host::Bridge
       "removeGroundMark",
       "setIdentityVisibility",
       "changeDisplayName",
+      "setNameColor",
       "sanctionPlayer",
       "liftSanction",
       "kickPlayer",
@@ -370,11 +378,13 @@ export namespace Dreamsleeve::Host::Bridge
   // real username/displayName/character never cross the bridge: displayName
   // and alias carry the local pseudonym, the others stay empty. A player who
   // hides their names (pseudonymous) arrives from the server with the server
-  // pseudonym only; the UI marks such a player.
+  // pseudonym only; the UI marks such a player. color ("#RRGGBB") is how the
+  // player's name is drawn in chat; absent for a pseudonym.
   struct UiPlayer
   {
     std::string                              id;
     std::string                              name;
+    std::optional<std::string>               color;
     std::optional<std::string>               alias;
     std::string                              displayName;
     std::string                              username;
@@ -598,6 +608,17 @@ export namespace Dreamsleeve::Host::Bridge
     bool operator==(const DisplayNameEvent&) const = default;
   };
 
+  // A change of the own name color, like DisplayNameEvent: changed is the
+  // "#RRGGBB" the server has just stored (sent once).
+  struct NameColorEvent
+  {
+    bool                       pending{};
+    std::optional<std::string> changed;
+    std::optional<std::string> error;
+
+    bool operator==(const NameColorEvent&) const = default;
+  };
+
   // The player's own mute: the moderator's reason and when it ends (absent:
   // until lifted). muted is false when there is none.
   struct MuteEvent
@@ -759,6 +780,7 @@ export namespace Dreamsleeve::Host::Bridge
     NearbyMarksEvent,
     IdentityEvent,
     DisplayNameEvent,
+    NameColorEvent,
     MuteEvent,
     SessionEndedEvent,
     RoleEvent,
@@ -789,6 +811,7 @@ export namespace Dreamsleeve::Host::Bridge
       "nearbyMarks",
       "identity",
       "displayName",
+      "nameColor",
       "mute",
       "sessionEnded",
       "role",
@@ -884,6 +907,12 @@ export namespace Dreamsleeve::Host::Bridge
     std::expected<void, std::string> Admit(Commands::ChangeDisplayName& command)
     {
       if (command.displayName.size() > MaxDisplayName) return std::unexpected{"changeDisplayName displayName is too long"};
+      return {};
+    }
+
+    std::expected<void, std::string> Admit(Commands::SetNameColor& command)
+    {
+      if (!ParseColor(command.color)) return std::unexpected{"setNameColor color must be #RRGGBB"};
       return {};
     }
 
@@ -1179,6 +1208,7 @@ export namespace Dreamsleeve::Host::Bridge
     player.name         = names.NameFor(data.playerId, data, character, settings);
     player.inCharacter  = inCharacter;
     player.pseudonymous = data.pseudonymous;
+    if (data.nameColor) player.color = ColorText(*data.nameColor);
     if (settings.streamerMode || data.pseudonymous)
     {
       if (settings.streamerMode) player.alias = player.name;
@@ -1581,6 +1611,33 @@ export namespace Dreamsleeve::Host::Bridge
         break;
     }
     return message.empty() ? std::string{"Сервер отклонил имя"} : std::string{message};
+  }
+
+  // Refusals of a name color change, in the UI language.
+  std::string NameColorRejectionText(Dreamsleeve::Client::RequestRejectionCode code, std::string_view message)
+  {
+    using Code = Dreamsleeve::Client::RequestRejectionCode;
+    switch (code)
+    {
+      case Code::NameColorUnreadable:
+        return "Цвет слишком тёмный: имя будет плохо видно в чате";
+      case Code::RateLimited: {
+        // "The name color can be changed again in N s."
+        constexpr std::string_view prefix = "The name color can be changed again in ";
+        std::uint64_t              seconds{};
+        if (message.starts_with(prefix) &&
+            std::from_chars(message.data() + prefix.size(), message.data() + message.size(), seconds).ec == std::errc{} && seconds > 0)
+          return std::format("Цвет можно сменить снова через {} с", seconds);
+        return "Цвет меняли только что. Попробуйте чуть позже";
+      }
+      case Code::InvalidRequest:
+        return "Цвет задаётся как #RRGGBB";
+      case Code::Overloaded:
+        return "Сервер занят. Попробуйте позже";
+      default:
+        break;
+    }
+    return message.empty() ? std::string{"Сервер отклонил цвет"} : std::string{message};
   }
 
   // Refusals of a guild request, in the UI language.
