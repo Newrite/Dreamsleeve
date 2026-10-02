@@ -129,6 +129,7 @@ export namespace Dreamsleeve::Host
       return fallback("Cannot read alias dictionary; using built-in names");
 
     AliasFile file;
+    source = Dreamsleeve::Utils::Toml::OneLineArrays(source);
     if (auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(file, source))
       return fallback("Invalid alias dictionary: " + glz::format_error(error, source));
 

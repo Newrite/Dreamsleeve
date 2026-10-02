@@ -5,6 +5,23 @@ import Dreamsleeve.Client.Utils;
 
 TEST_SUITE_BEGIN("Client.Utils");
 
+TEST_CASE("TOML arrays are joined onto one line for glaze; strings, tables and positions stay")
+{
+  using Dreamsleeve::Utils::Toml::OneLineArrays;
+
+  CHECK(
+    OneLineArrays("names = [\n  \"a\", # first\r\n  \"b\",\n]\nversion = 1\n") == "names = [   \"a\",            \"b\"  ]\nversion = 1\n");
+  CHECK(OneLineArrays("x = [1, 2 , ]") == "x = [1, 2   ]");
+  // Brackets, hashes and newlines inside strings are text; table headers are left alone.
+  CHECK(
+    OneLineArrays("[ui]\nkey = \"[#\"\nlist = ['x]', \"y\\\"]\"\n]\n# end\n") == "[ui]\nkey = \"[#\"\nlist = ['x]', \"y\\\"]\" ]\n# end\n");
+  CHECK(OneLineArrays("[[names.aliases]]\nname = \"Бард\"\n") == "[[names.aliases]]\nname = \"Бард\"\n");
+  CHECK(OneLineArrays("a = [[1,\n2],\n[3]]\n") == "a = [[1, 2], [3]]\n");
+  // An unclosed array or string stays broken for glaze to report.
+  CHECK(OneLineArrays("names = [\n").size() == 10);
+  CHECK(OneLineArrays("key = \"open\n[\n") == "key = \"open\n[ ");
+}
+
 TEST_CASE("UTF-8 is validated once and then measured and cut on code point boundaries")
 {
   using namespace Dreamsleeve::Utils::Text;

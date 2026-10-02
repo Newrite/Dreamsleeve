@@ -6,6 +6,7 @@ import Dreamsleeve.Host.Bubbles;
 import Dreamsleeve.Client.Model;
 
 #include "Bridge.h"
+#include "Repository.h"
 
 namespace
 {
@@ -704,10 +705,23 @@ TEST_CASE("Alias dictionary falls back to built-in names for missing, broken or 
   auto broken = LoadAliasDictionary(file.path);
   CHECK_FALSE(broken.names.empty());
   CHECK_FALSE(broken.warning.empty());
+  // TOML allows an array over several lines with comments; glaze needs help with it.
+  write("version = 1\nnames = [\n  \"Страж\", # guard\n  \"Бард\",\n]\n");
+  auto multiline = LoadAliasDictionary(file.path);
+  CHECK(multiline.warning.empty());
+  CHECK(multiline.names == std::vector<std::string>{"Страж", "Бард"});
   write("names = []\n");
   CHECK(LoadAliasDictionary(file.path).names == missing.names);
   write("");
   CHECK(LoadAliasDictionary(file.path).names == missing.names);
+}
+
+TEST_CASE("The shipped alias dictionary is read, not replaced by the built-in names")
+{
+  const auto shipped = LoadAliasDictionary(RepositoryRoot() / "src" / "Dreamsleeve.Client" / "aliases.toml");
+  CHECK(shipped.warning.empty());
+  CHECK(shipped.names.size() > 10);
+  CHECK(std::ranges::contains(shipped.names, std::string{"Странник"}));
 }
 
 TEST_CASE("Ignore list is per server, refuses self and system, and survives a restart")

@@ -5,6 +5,7 @@ export module Dreamsleeve.Client.Settings;
 
 import std;
 import Dreamsleeve.Client.Auth;
+import Dreamsleeve.Client.Utils;
 import Dreamsleeve.Client.Exchange;
 import DreamNet.Client;
 export import Dreamsleeve.Client.Config;
@@ -234,6 +235,7 @@ namespace Dreamsleeve::Client
     std::string source(static_cast<std::size_t>(length), '\0');
     input.seekg(0);
     if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read client configuration"};
+    source = Dreamsleeve::Utils::Toml::OneLineArrays(source);
 
     const char*                   cursor = source.data();
     SettingsDetail::DocumentCheck document;

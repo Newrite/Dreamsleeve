@@ -134,6 +134,56 @@ export namespace Dreamsleeve::Utils::Text
 
 }
 
+// TOML files the player edits, before glaze reads them.
+export namespace Dreamsleeve::Utils::Toml
+{
+
+  // glaze 7 reads an array only on one line and without a comma after the
+  // last element, while TOML allows newlines, comments and that comma. Inside
+  // brackets this turns newlines into spaces and blanks comments and the last
+  // comma; strings stay as they are. The length is kept, so glaze reports
+  // errors at the original line and column. Multi-line strings inside an
+  // array are not supported.
+  std::string OneLineArrays(std::string_view source)
+  {
+    std::string result{source};
+    std::size_t depth{};
+    char        quote{};
+    for (std::size_t at = 0; at < result.size(); ++at)
+    {
+      const char c = result[at];
+      if (quote)
+      {
+        if (quote == '"' && c == '\\')
+          ++at;
+        else if (c == quote || c == '\n')
+          quote = 0;
+      }
+      else if (c == '"' || c == '\'')
+        quote = c;
+      else if (c == '#')
+      {
+        for (; at < result.size() && result[at] != '\n' && result[at] != '\r'; ++at)
+          if (depth != 0) result[at] = ' ';
+        --at;
+      }
+      else if (c == '[')
+        ++depth;
+      else if (c == ']' && depth != 0)
+      {
+        // Newlines and comments before it are blanks by now.
+        const auto last = result.find_last_not_of(" \t", at - 1);
+        if (last != std::string::npos && result[last] == ',') result[last] = ' ';
+        --depth;
+      }
+      else if (depth != 0 && (c == '\n' || c == '\r'))
+        result[at] = ' ';
+    }
+    return result;
+  }
+
+}
+
 // Pacing of retries after failures.
 export namespace Dreamsleeve::Utils::Timing
 {

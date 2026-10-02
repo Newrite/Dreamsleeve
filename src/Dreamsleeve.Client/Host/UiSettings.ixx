@@ -6,6 +6,7 @@ module;
 export module Dreamsleeve.Host.UiSettings;
 
 import std;
+import Dreamsleeve.Client.Utils;
 
 // Settings written by the web UI and the SKSE menu. They live in their own TOML
 // next to the Core client configuration: the Core file is user-authored and only
@@ -339,6 +340,7 @@ export namespace Dreamsleeve::Host
     if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read UI settings"};
 
     UiFile file;
+    source = Dreamsleeve::Utils::Toml::OneLineArrays(source);
     if (auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(file, source); !source.empty() && error)
       return std::unexpected{"Invalid UI TOML: " + glz::format_error(error, source)};
     if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};
