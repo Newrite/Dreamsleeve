@@ -197,6 +197,16 @@ Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIde
 этого сообщения (`Bubbles::EraseMessage`, `Frame::deletedMessages`). Удаление одной метки —
 прежний `removeGroundMark`.
 
+Гильдии ([GuildsRu.md](GuildsRu.md)). Книгу гильдий `ClientStatus::guilds` (новый указатель на
+каждое изменение) host показывает странице событием `guilds` — гильдии с участниками (имена через
+`Names`, как везде), приглашения, лимиты и `removed` с причинами выхода; только после того, как её
+прислал сервер, после каждого снимка заново и без повтора уже сказанных выходов. Канал гильдии
+назван её именем; когда гильдия пришла или ушла, host шлёт `channels` со всем списком до истории
+нового канала. Команда страницы `guild` (`requestId`, `action` из `GuildActionNames` и нужные ему
+поля) идёт в `Session::Guild` → `GuildRequest` Core; ответ — `guildResult` с `guildId` или
+`error` (`GuildRejectionText`). Удаление сообщения гильдии — прежний `deleteChatMessage`; над
+светлячками сообщения гильдии не всплывают.
+
 Смена отображаемого имени ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#смена-отображаемого-имени)).
 Команда UI `changeDisplayName{displayName}` в Ready-сессии идёт в `Session::ChangeDisplayName` →
 Core `ChangeDisplayName{requestId, displayName}` (одна за раз). Итог — `NameChanged`

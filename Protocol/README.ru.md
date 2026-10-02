@@ -140,9 +140,10 @@ Added/Removed из модели. Полная история не копируе
 
 Модель — [DomainSpecRu.MD §4.8, §5](../docs/DomainSpecRu.MD).
 
-- `ChatChannelKind`: `GLOBAL` (1) — игроки пишут `SendChat`; `SYSTEM` (5) — объявления,
-  канал только для чтения. Номера 2–4 оставлены партии, гильдии и личным сообщениям
-  ([ProtobufHandbook](../docs/ProtobufHandbookRu.MD)). Вкладка «Все» клиента — агрегат,
+- `ChatChannelKind`: `GLOBAL` (1) — игроки пишут `SendChat`; `GUILD` (3) — канал одной гильдии,
+  ID `4294967296 + guild_id`, приходит с гильдией в `GuildsSnapshot`/`GuildChanged`;
+  `SYSTEM` (5) — объявления, канал только для чтения. Номера 2 и 4 оставлены партии и личным
+  сообщениям ([ProtobufHandbook](../docs/ProtobufHandbookRu.MD)). Вкладка «Все» клиента — агрегат,
   а не канал. `SessionOpened.channels` (`ChatChannel{channel_id, kind, recent_messages}`)
   перечисляет каналы сессии: в версии 7 это один `GLOBAL` и один `SYSTEM`; ID общих
   каналов сервер выводит из вида (`ChatChannelKind.channelId`: 1 и 2).
@@ -273,6 +274,14 @@ Control-канале ENet.
 - v17: причина `ADDRESS_BANNED = 4` — администратор забанил диапазон IP соединения; `text` — причина,
   `until_unix_ms` — конец бана.
 - v18: `SanctionPlayer.devices = 5` — бан распространяется на устройства игрока; для мута игнорируется.
+- v19: гильдии (`guild.proto`, [GuildsRu](../docs/GuildsRu.md)). `ClientPacket.guild_command = 27`
+  (`GuildCommand` с одним из действий: create, invite, answer, leave, exclude, set_role, transfer,
+  mute, unmute, disband; Control, RequestId), ответ `ServerPacket.guild_command_done = 40`
+  (`GuildCommandDone{guild_id}`) или `RequestRejected`; уведомления без RequestId
+  `guilds_snapshot = 38` (после `SessionOpened`: гильдии с историей, приглашения, лимиты) и
+  `guild_changed = 39`. `CHAT_CHANNEL_KIND_GUILD = 3`. `ChatPublished`, принятие `SendChat` и
+  `ChatMessageRemoved` в канале гильдии идут по Control, а не по Chat. Коды отказа
+  `GUILD_NAME_TAKEN = 19` … `GUILD_MASTER_STAYS = 26`.
 - v15: `SessionOpened.role = 12` (`PlayerRole`: `PLAYER = 0`, `MODERATOR = 1`) и уведомление
   `ServerPacket.role_changed = 29` (Control, без RequestId), когда панель меняет роль в живой сессии.
 - Запросы модератора (Control, RequestId): `sanction_player = 20`

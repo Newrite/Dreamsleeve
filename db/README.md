@@ -126,8 +126,22 @@ references `profiles(player_id)` with `ON DELETE SET NULL`; a CHECK forbids both
 moderator's line keeps its text once the profile is gone. `SqliteAdminStore.audit` is
 the one writer of audit lines: panel actions, sanction actions of both issuers (in the
 sanction's transaction) and content a moderator removed. DOWN drops the moderator lines
-(schema 8 has no such actor) and returns to version 8. This is the schema version the
-server supports (`SqliteDatabase.SchemaVersion`).
+(schema 8 has no such actor) and returns to version 8.
+
+Schema 10 (`1791244800000_registration.sql`) adds `server_settings`: settings the panel
+and the console change at run time, one row per key (the registration mode). Schema 11
+(`1791331200000_addresses.sql`) adds `sign_in_addresses` and `address_bans` (IP ranges);
+schema 12 (`1791417600000_devices.sql`) adds `player_devices` and `device_bans`
+(docs/AuthenticationRu.md).
+
+Schema 13 (`1791504000000_guilds.sql`) adds guilds (docs/GuildsRu.md): `guilds` with a
+unique lower-case `name_key` (names are unique regardless of case; AUTOINCREMENT never
+reuses an ID, so a guild's chat channel never names another guild), `guild_members` with
+the role (0 member, 1 officer, 2 master) and an optional guild mute, and `guild_invites`
+with their expiry. Members and invitations go with their guild and with the player's
+profile (`ON DELETE CASCADE`). `SqliteGuildStore` owns the SQL; one sequential writer of
+the guild owner applies the changes. This is the schema version the server supports
+(`SqliteDatabase.SchemaVersion`).
 
 ## Verification
 

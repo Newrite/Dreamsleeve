@@ -43,6 +43,7 @@ python Scripts/run_tests.py --suite managed
 | Смена отображаемого имени | Кодек (Trim/NFC, лимит, корреляция), сессия (словарь, текущее имя, одна смена, запрет, интервал), runtime (новое имя у других, у скрытого — побайтно нет), `AuthService`/SQLite (интервал, история); native: кодек, `ClientRuntime`, host; UI: vitest, Playwright; `smoke_chat.py` |
 | Словарь, антиспам, объявления | Нормализация, уровни `[block]`/`[flag]`, корпус ложных срабатываний, лимиты частоты; объявления сервера и клиентов (подпись, каналы, политика, расписание) |
 | Наказания и инструменты модератора | Домен (сроки, причина, ранг), SQLite (замена, истечение, аудит под выдавшим, миграция 9), `AuthService` (мут, бан, кик, список), удаление сообщений и меток, сессия и кодеки; native: `ClientRuntime`; UI: vitest и Playwright; `smoke_moderation.py`. Подробно — [ModerationAndNamesRu](../docs/ModerationAndNamesRu.md#проверки) |
+| Гильдии | Домен (имя, роли и ранги, лимиты и их снижение, приглашения и срок, мут, удаление сообщений, передача и назначение главы), владелец (рассылка, чат, отказы, истечение, панель), SQLite-хранилище и писатель (миграция 13), кодек и линии доставки, сессия, конфигурация, админка (страницы, аудит, REST); native: книга, модель, кодек, `ClientRuntime`, host и bridge; UI: vitest и Playwright; `smoke_guilds.py`. Подробно — [GuildsRu](../docs/GuildsRu.md#проверка) |
 | PlayerSession | Оба порядка bootstrap, ограниченный буфер, персональная квота RequestId, отказ/подтверждение, независимые показания и очистка подписок |
 | ServerRuntime | Реальный обмен агентов через управляемый транспорт: вход, профильный резерв, адресованные пакеты, disconnect/Completion, старые ответы, дедлайны и Stop |
 | EnetTransport | Настоящий yENet loopback: correlation ID/peer lifetime, reliable channel, размеры и исходящие бюджеты, отключение и очистка; `PumpHealth`: отказ отправки одному адресату проходит со сводкой в логе, неизвестная ошибка или минута сплошных сбоев ломают транспорт |
@@ -90,6 +91,7 @@ dotnet build src/Dreamsleeve.Server -c Release
 xmake build Dreamsleeve.Client.Dev
 python Scripts/smoke_chat.py
 python Scripts/smoke_moderation.py
+python Scripts/smoke_guilds.py
 python Scripts/smoke_saved_auth.py
 ```
 
@@ -105,6 +107,9 @@ python Scripts/smoke_saved_auth.py
   Параметры: `--help`.
 - `smoke_moderation.py` — инструменты модератора: отказ без роли, роль из БД, удаление
   сообщения, мут и снятие, список, метки игрока, кик, бан при входе, строки аудита.
+- `smoke_guilds.py` — гильдии с тремя Client.Dev: создание и правила имени, приглашение и
+  вступление, настоящее имя в чате гильдии при скрытом в общем, гильдейский мут, офицер удаляет
+  сообщение и исключает, глава не выходит и передаёт роль, строки в SQLite, роспуск и свободное имя.
 - `smoke_saved_auth.py` — сохранённый вход через native Core, Credential Manager, HTTP,
   SQLite и ENet: перезапуск, отзыв живой сессии администратором, сброс пароля.
 

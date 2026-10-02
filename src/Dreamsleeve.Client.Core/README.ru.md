@@ -259,7 +259,10 @@ clear-location очищает только положение; actor values и d
 Позиция измеряется игровыми world units, вращение XYZ — радианами.
 Также: `resume`, `signout`, `forget`, `reset-password <code>` (вход), `announce …`, `location <json>`,
 `note <text>` / `death <label>` / `unmark <id>` / `marks` (метки), `hide <on|except-marks|off>`,
-`name <имя>` (отображаемое имя), `mod …` (инструменты модератора); полный список печатает консоль.
+`name <имя>` (отображаемое имя), `mod …` (инструменты модератора), `guild …` (гильдии: create,
+invite, accept, decline, leave, exclude, role, transfer, mute, unmute, disband, say, delete; книга
+гильдий печатается строками `guilds`/`guild`/`member`/`invite` при каждом изменении); полный
+список печатает консоль.
 
 ```text
 begin Nerevar
@@ -294,8 +297,8 @@ UDP-порту, проверяет оба направления чата, ед�
 смену пространства, отсутствие утечки координат через полное PlayerInfo и возврат
 неподвижной цели после перемещения только наблюдателя.
 Кроме того, smoke проверяет объявления, метки на земле, скрытое имя и смену отображаемого имени;
-`Scripts/smoke_moderation.py` — инструменты модератора, `Scripts/smoke_saved_auth.py` — сохранённый
-вход, отзыв и сброс пароля.
+`Scripts/smoke_moderation.py` — инструменты модератора, `Scripts/smoke_guilds.py` — гильдии,
+`Scripts/smoke_saved_auth.py` — сохранённый вход, отзыв и сброс пароля.
 Аккаунты регистрируются через Client.Dev, SQLite/config создаются во временной папке.
 После рестарта сервера проверяются тот же PlayerId и новый успешный login;
 история чата пока сохраняется только в памяти работающего сервера.

@@ -200,9 +200,15 @@ CharacterRenamed, PlayerDetailsChanged, GameExited, RequestSnapshot.
 PostAnnouncement (системный канал, текст, вид, заявленный источник, подпись) идёт по
 пути SendChat: Chat-канал ENet, общий лимит ожидающих чат-запросов, `MessagePublished`
 при публикации, `ServerRejection` при отказе. Канал команды должен быть известен и
-подходящего вида: SendChat — `Global`, PostAnnouncement — `System`, иначе локальный
+подходящего вида: SendChat — `Global` или `Guild`, PostAnnouncement — `System`, иначе локальный
 `InvalidRequest`. Разрешён ли источник и укладываются ли текст и подпись в лимиты, Core
 сверяет с `AnnouncementPolicy` из приветствия; отказ — локальный `InvalidRequest`.
+
+Каналы гильдий приходят и уходят посреди сессии: `UnregisterChannel(id)` убирает кэш и
+непереданные изменения его содержимого, а дельта называет канал отсутствующим
+(`ChatStateChange::state` пуст). Книга гильдий (`GuildBook`) живёт в `ClientStatus::guilds`:
+каждое изменение — новая книга, опубликованная в том же `Publish`, что и чат её каналов
+([GuildsRu.md](../../../docs/GuildsRu.md)).
 
 Канал знает свой вид (`RegisterChannel(id, capacity, kind)`, `ChatCacheState::kind`,
 `ChatCacheSnapshot::kind`). `ChatCache::Merge` отвергает объявление в не системном

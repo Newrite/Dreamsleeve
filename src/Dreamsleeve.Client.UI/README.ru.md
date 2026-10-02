@@ -56,8 +56,9 @@ dev-данных, localStorage и стенда. `npm run build:demo` отдел�
   «Модерация» (`views/ModeratorPanel.tsx`) — наказания в силе со снятием и метки выбранного игрока.
 
 На стенде Enter или кнопка открывает чат; новая публикация не захватывает фокус.
-Группа/гильдия/личные сообщения на стенде — демонстрационные каналы, не новые
-возможности сервера. Кнопка «Отклонить следующую отправку» проверяет ошибку в строке
+Гильдии на стенде имитирует `src/dev/guilds.ts`: игрок — глава «Соратников» и участник
+«Воронов», у него есть приглашение; кнопки стенда присылают сообщение гильдии, приглашение,
+мут в гильдии и исключение. Кнопка «Отклонить следующую отправку» проверяет ошибку в строке
 и ручной повтор. Настройки стенда сохраняются локально в браузере. В игре сохранение
 передаётся native host, который пишет `ui.toml` и отвечает `settingsResult`.
 UI не сообщает об успешном сохранении до ответа host. Стенд с `?moderator` в адресе
@@ -116,11 +117,15 @@ Native host создаёт view, регистрирует JS listener `dreamslee
 | `role` | moderator: роль игрока в сессии; только модератор видит пункты модератора и вкладку «Модерация» |
 | `messagesRemoved` | channelId, messageIds: сообщения, удалённые модератором, уходят из истории у всех |
 | `moderationResult` | Ответ на запрос модератора по requestId: error при отказе, иначе поля своего вида — sanction, sanctions (игрок по playerId, name — если host его встречал), playerId, marks, removed |
+| `guilds` | Гильдии игрока целиком: guilds (id, name, channelId, createdAt, members — id, name, role `member`/`officer`/`master`, online, joinedAt, mute), invites (guildId, guildName, invitedBy, inviter), limits (perPlayer, members, nameMin, nameMax) и removed — гильдии, из которых игрок вышел с прошлого события, с причиной `left`/`excluded`/`disbanded`. Приходит только после того, как сервер прислал гильдии; первое событие сессии — точка отсчёта без уведомлений |
+| `guildResult` | Ответ на команду `guild` по requestId: guildId (у create — новой гильдии) или error |
+| `channels` | Полный список каналов, когда гильдия пришла или ушла: строки, черновик и непрочитанное ушедшего канала пропадают, выбор отправки и вкладка возвращаются к доступным |
 | `identity` | «Скрывать моё имя от других игроков»: mode (`off`/`everywhere`/`exceptGroundMarks`; во время ожидания — запрошенный), pending (ждём сервер), pseudonym (что видят другие, только в Ready-сессии), error (последний отказ); приходит при каждом изменении, после (пере)создания view и в ответ на `setIdentityVisibility` |
 
 | UI → host | Смысл |
 |---|---|
 | `sendChat` | channelId, text, requestId корреляции UI |
+| `guild` | requestId и action: `create` (name), `invite`/`exclude`/`transfer`/`unmute` (guildId, playerId), `answer` (guildId, accept), `leave`/`disband` (guildId), `setRole` (guildId, playerId, role `member`/`officer`), `mute` (guildId, playerId, minutes — нет: до снятия, reason); ответ — `guildResult` |
 | `close` | Освободить native focus; игру не ставить на паузу |
 | `saveSettings` | Полный набор UI settings и монотонная revision |
 | `signIn` | username, password, remember; непустой displayName — сначала регистрация, затем вход |

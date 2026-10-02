@@ -199,7 +199,8 @@ cookie. Заголовки принимаются только от `127.0.0.1`/
 
 Остальное по желанию: антиспам `[Runtime.Chat.Rate]`, словарь `[Moderation]`, скрытое имя и смена
 имени `[Identity]`, объявления `[Announcements]` и расписание `[[Announcements.Scheduled]]`, метки
-`[GroundMarks]`, логи `[Logging]` — всё с пояснениями в `server.example.toml`. Словарь
+`[GroundMarks]`, гильдии `[Guilds]` (лимиты гильдий, участников и длины названия, срок приглашения;
+[GuildsRu.md](GuildsRu.md)), логи `[Logging]` — всё с пояснениями в `server.example.toml`. Словарь
 (`moderation.toml`) описан в `moderation.example.toml` и в разделе «Модерация», псевдонимы
 (`pseudonyms.toml`) — в `pseudonyms.example.toml`.
 

@@ -26,10 +26,11 @@ Username, DisplayName может совпадать. Регистрация со
 | `sign_in_addresses`, `address_bans` | Адреса входа игроков за `SignInHistoryDays` и баны диапазонов IP |
 | `player_devices`, `device_bans` | Устройства игроков (хэш клиента) и устройства, на которые распространён бан |
 
-Друзей, блоклиста, партий, гильдий, сессий и ключей идентичности в БД нет. Время —
+Гильдии — `guilds`, `guild_members` и `guild_invites` (схема 13, [GuildsRu.md](GuildsRu.md)).
+Друзей, блоклиста, партий, сессий и ключей идентичности в БД нет. Время —
 Unix-миллисекунды UTC. SQL живёт в `SqliteAccountStore`, `SqliteGroundMarkStore`,
-`SqliteAdminStore` и `SqliteSanctionStore`; вызывают их workers владеющих агентов, а не
-HTTP-обработчики.
+`SqliteAdminStore`, `SqliteSanctionStore` и `SqliteGuildStore`; вызывают их workers владеющих
+агентов, а не HTTP-обработчики.
 
 SqlHydra 5 использует собственный emitter, без SqlKata. Старые query-примеры ниже
 не являются компилируемым API-контрактом текущего проекта. Migrondi V1 использует
