@@ -1,5 +1,5 @@
 -- One version for the client and the server: Directory.Build.props and the UI package.json repeat it.
-set_version("1.0.0")
+set_version("1.1.0")
 
 add_rules("mode.debug", "mode.releasedbg")
 set_defaultplat("windows")
