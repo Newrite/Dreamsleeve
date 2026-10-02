@@ -57,6 +57,10 @@ type private FakeAdmin() =
             this.Audit.Enqueue((admin, entry))
             Ok AdminReply.Completed
         | AdminCommand.RecentAudit _ -> Ok (AdminReply.Audit [])
+        // The hidden player has a card; the rest of it is not served here.
+        | AdminCommand.FindPlayer playerId when PlayerId.value playerId = 7UL ->
+            let stored = PlayerData.create playerId (Username.create 32 "alice.real" |> ok) (DisplayName.create 64 "Алиса Настоящая" |> ok)
+            Ok (AdminReply.Player(Some { Profile = stored; Role = PlayerRole.Player }))
         | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.ResetPassword _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.RevokeApiToken _ | AdminCommand.SetRole _ | AdminCommand.SearchPlayers _
         | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ | AdminCommand.PlayerSanctions _ -> Error AdminServiceError.Unavailable
@@ -82,6 +86,9 @@ type private Panel = {
     /// Trusted account commands the panel sent, answered by AccountReply.
     Accounts: ConcurrentQueue<AccountAccessCommand>
     AccountReply: (AccountAccessCommand -> Result<AccountAccessResult, AccountAccessError>) ref
+    /// Requests to the guild owner, answered by GuildReply.
+    Guilds: ConcurrentQueue<GuildAdminCommand>
+    GuildReply: (GuildAdminCommand -> GuildAdminResult) ref
 }
 
 let private withPanel customize run = task {
@@ -89,12 +96,17 @@ let private withPanel customize run = task {
     let announcements = ConcurrentQueue<ServerAnnouncement>()
     let accounts = ConcurrentQueue<AccountAccessCommand>()
     let accountReply = ref (fun (_: AccountAccessCommand) -> Error AccountAccessError.Unavailable)
+    let guildCommands = ConcurrentQueue<GuildAdminCommand>()
+    let guildReply = ref (fun (_: GuildAdminCommand) -> GuildAdminResult.Refused GuildError.NotFound)
     let ports = {
         Admin = fun command _ _ -> Task.FromResult(AgentAskResult.Replied(admin.Handle command))
         Account = fun command _ _ ->
             accounts.Enqueue command
             Task.FromResult(AgentAskResult.Replied(accountReply.Value command))
         Snapshot = fun _ _ -> Task.FromResult(AgentAskResult.Replied { Connections = 1; Guests = 0; Ready = 1; Reservations = 1; Closing = 0; Stopping = false })
+        Guilds = fun command _ _ ->
+            guildCommands.Enqueue command
+            Task.FromResult(AgentAskResult.Replied(guildReply.Value command))
         Sessions = fun _ _ -> Task.FromResult(AgentAskResult.Replied [ hiddenRow ])
         Describe = fun _ row -> Task.FromResult(if row.ConnectionId = hiddenRow.ConnectionId then Some hiddenView else None)
         Announce = fun announcement -> announcements.Enqueue announcement; true
@@ -112,7 +124,8 @@ let private withPanel customize run = task {
             let cookies = CookieContainer()
             use handler = new HttpClientHandler(CookieContainer = cookies, UseCookies = true, AllowAutoRedirect = false)
             use http = new HttpClient(handler, BaseAddress = Uri(Seq.head app.Urls), Timeout = guard)
-            do! run { Http = http; Cookies = cookies; Admin = admin; Announcements = announcements; Accounts = accounts; AccountReply = accountReply }
+            do! run { Http = http; Cookies = cookies; Admin = admin; Announcements = announcements; Accounts = accounts; AccountReply = accountReply
+                      Guilds = guildCommands; GuildReply = guildReply }
             return Ok ()
         with failure -> return Error failure
     }
@@ -352,6 +365,76 @@ let tests = testSequenced (testList "Admin HTTP" [
             status 303 withDevices
             let orders = panel.Accounts.ToArray() |> Array.choose (function AccountAccessCommand.Sanction order -> Some order.Devices | _ -> None)
             equal [| false; true |] orders
+        }))
+
+    case "guild pages go through the guild owner: a new master or a dissolution is audited, and the player card lists the guilds" (fun () ->
+        withPanel id (fun panel -> task {
+            let pid raw = PlayerId.create raw |> ok
+            let guild = GuildId.create 5UL |> ok
+            let name = GuildName.create 1 64 "Вороны" |> ok
+            let at = DateTimeOffset.UtcNow
+            let profile raw username display = PlayerData.create (pid raw) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok)
+            let bob = profile 8UL "bob" "<i>Боб</i>"
+            let carol = profile 9UL "carol" "Кэрол"
+            let membership (player: PlayerData) role : GuildMember = { Player = player.PlayerId; Role = role; JoinedAt = at; Mute = ValueNone }
+            // The master's account is gone: the guild waits for the panel.
+            let summary master : GuildSummary = { Guild = guild; Name = name; CreatedAt = at; Members = 2; Master = master }
+            let card bobRole master : GuildCard =
+                { Summary = summary master
+                  Members = [ { Membership = membership bob bobRole; Profile = bob; Online = true }
+                              { Membership = membership carol GuildRole.Officer; Profile = carol; Online = false } ]
+                  Invites = [] }
+            panel.GuildReply.Value <- (function
+                | GuildAdminCommand.Search _ -> GuildAdminResult.Page { Guilds = [ summary ValueNone ]; Total = 1; Page = 1 }
+                | GuildAdminCommand.Card id when id = guild -> GuildAdminResult.Card(ValueSome(card GuildRole.Member ValueNone))
+                | GuildAdminCommand.Card _ -> GuildAdminResult.Card ValueNone
+                | GuildAdminCommand.PlayerGuilds _ -> GuildAdminResult.PlayerGuilds [ summary ValueNone, GuildRole.Officer ]
+                | GuildAdminCommand.Appoint(_, player) when player = pid 10UL -> GuildAdminResult.Refused GuildError.TargetNotFound
+                | GuildAdminCommand.Appoint _ -> GuildAdminResult.Appointed(card GuildRole.Master (ValueSome bob))
+                | GuildAdminCommand.Dissolve _ ->
+                    GuildAdminResult.Dissolved { Guild = guild; Name = name; Members = [ membership bob GuildRole.Master; membership carol GuildRole.Officer ]; Invites = [] })
+            do! signIn panel
+            use! list = panel.Http.GetAsync "/guilds?q=вор"
+            status 200 list
+            let! listing = list.Content.ReadAsStringAsync()
+            check (listing.Contains "Вороны" && listing.Contains "/guilds/5" && listing.Contains "нет — назначьте") "The list shows the guild without a master."
+            check (panel.Guilds.ToArray() |> Array.contains (GuildAdminCommand.Search("вор", 1))) "The search reaches the guild owner."
+            use! page = panel.Http.GetAsync "/guilds/5"
+            status 200 page
+            let! html = page.Content.ReadAsStringAsync()
+            check (html.Contains "&lt;i&gt;Боб&lt;/i&gt;" && not (html.Contains "<i>Боб")) "Member names are encoded."
+            check (html.Contains "/guilds/5/appoint" && html.Contains "/guilds/5/dissolve") "The card offers both actions."
+            use! missing = panel.Http.GetAsync "/guilds/6"
+            status 404 missing
+            use! unconfirmed = submit panel "/guilds/5/appoint" [ "player", "8" ] []
+            status 400 unconfirmed
+            use! stranger = submit panel "/guilds/5/appoint" [ "player", "10"; "confirm", "yes" ] []
+            status 409 stranger
+            use! appointed = submit panel "/guilds/5/appoint" [ "player", "8"; "confirm", "yes" ] []
+            status 303 appointed
+            equal "/guilds/5?done=appointed" appointed.Headers.Location.OriginalString
+            use! dissolved = submit panel "/guilds/5/dissolve" [ "confirm", "yes" ] []
+            status 303 dissolved
+            equal "/guilds?done=dissolved" dissolved.Headers.Location.OriginalString
+            let audit = panel.Admin.Audit.ToArray() |> Array.map (fun (_, entry) -> entry.Action, AuditTarget.key entry.Target, entry.Details)
+            equal [| AdminAction.AppointedGuildMaster, "guild:5", "Вороны: player:8 <i>Боб</i>"; AdminAction.DissolvedGuild, "guild:5", "Вороны, участников: 2" |] audit
+
+            use request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/guilds/5")
+            request.Headers.Authorization <- Headers.AuthenticationHeaderValue("Bearer", apiToken)
+            use! api = panel.Http.SendAsync request
+            status 200 api
+            let! json = api.Content.ReadAsStringAsync()
+            let root = JsonDocument.Parse(json).RootElement
+            equal "Вороны" (root.GetProperty("guild").GetProperty("name").GetString())
+            equal JsonValueKind.Null (root.GetProperty("guild").GetProperty("masterId").ValueKind)
+            let members = root.GetProperty("members")
+            equal "officer" (members[1].GetProperty("role").GetString())
+            check (not (members[0].GetProperty("muted").GetBoolean())) "Nobody is muted."
+
+            use! player = panel.Http.GetAsync "/players/7"
+            status 200 player
+            let! card = player.Content.ReadAsStringAsync()
+            check (card.Contains "/guilds/5" && card.Contains "офицер") "The player card lists the guild with the role."
         }))
 
     case "sign-in attempts are limited per address and forwarded addresses are ignored unless trusted" (fun () ->

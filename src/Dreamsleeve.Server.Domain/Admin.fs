@@ -142,6 +142,9 @@ type AdminAction =
     | RemovedGroundMark
     | ClearedGroundMarks
     | DeletedChatMessage
+    // Guilds the panel steps into: a new master when the old one is banned or gone.
+    | AppointedGuildMaster
+    | DissolvedGuild
 
 [<RequireQualifiedAccess>]
 module AdminAction =
@@ -152,6 +155,7 @@ module AdminAction =
         AdminAction.SanctionedPlayer; AdminAction.LiftedSanction; AdminAction.KickedPlayer
         AdminAction.SetRegistrationMode; AdminAction.CreatedPlayer; AdminAction.BannedAddresses; AdminAction.LiftedAddressBan
         AdminAction.RemovedGroundMark; AdminAction.ClearedGroundMarks; AdminAction.DeletedChatMessage
+        AdminAction.AppointedGuildMaster; AdminAction.DissolvedGuild
     ]
 
     let key action =
@@ -175,11 +179,13 @@ module AdminAction =
         | AdminAction.RemovedGroundMark -> "remove_ground_mark"
         | AdminAction.ClearedGroundMarks -> "clear_ground_marks"
         | AdminAction.DeletedChatMessage -> "delete_chat_message"
+        | AdminAction.AppointedGuildMaster -> "appoint_guild_master"
+        | AdminAction.DissolvedGuild -> "dissolve_guild"
 
     let ofKey (text: string) = all |> List.tryFind (fun action -> key action = text)
 
 /// What an action was applied to, written as "player:42", "admin:3",
-/// "token:<hash prefix>", "range:203.0.113.0/24" or "server".
+/// "token:<hash prefix>", "range:203.0.113.0/24", "guild:5" or "server".
 [<RequireQualifiedAccess>]
 type AuditTarget =
     | Player of PlayerId
@@ -187,6 +193,7 @@ type AuditTarget =
     | ApiToken of hashPrefix: string
     /// An IP range, by its canonical CIDR (AddressRange.key).
     | Range of cidr: string
+    | Guild of GuildId
     | Server
 
 [<RequireQualifiedAccess>]
@@ -197,6 +204,7 @@ module AuditTarget =
         | AuditTarget.Admin id -> $"admin:{AdminId.value id}"
         | AuditTarget.ApiToken prefix -> $"token:{prefix}"
         | AuditTarget.Range cidr -> $"range:{cidr}"
+        | AuditTarget.Guild id -> $"guild:{GuildId.value id}"
         | AuditTarget.Server -> "server"
 
 /// Details never contain passwords, codes or tokens; the caller passes only

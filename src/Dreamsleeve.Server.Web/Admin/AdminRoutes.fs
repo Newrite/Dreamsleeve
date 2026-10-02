@@ -111,6 +111,17 @@ module AdminRoutes =
         | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AccountAccessError.Unavailable
     }
 
+    /// The guild owner answers through the runtime; while it restarts the panel reports it unavailable.
+    let private guilds routes (context: HttpContext) command = task {
+        match! routes.Ports.Guilds command (timeout routes) context.RequestAborted with
+        | AgentAskResult.Replied result -> return Ok result
+        | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.Faulted failure ->
+            routes.Logger.Error(failure, "Guild request from the panel failed")
+            return Error AdminServiceError.Unavailable
+        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AdminServiceError.Unavailable
+    }
+
     let private snapshot routes (context: HttpContext) = task {
         match! routes.Ports.Snapshot (timeout routes) context.RequestAborted with
         | AgentAskResult.Replied value -> return Some (AdminModels.status value)
@@ -392,8 +403,10 @@ module AdminRoutes =
         let addresses = match addresses with Ok (AccountAccessResult.Addresses entries) -> entries |> List.map AdminModels.signInAddress | Ok _ | Error _ -> []
         let! devices = account routes context (AccountAccessCommand.DeviceHistory record.Profile.PlayerId)
         let devices = match devices with Ok (AccountAccessResult.Devices entries) -> entries |> List.map AdminModels.signInDevice | Ok _ | Error _ -> []
+        let! memberships = guilds routes context (GuildAdminCommand.PlayerGuilds record.Profile.PlayerId)
+        let memberships = match memberships with Ok (GuildAdminResult.PlayerGuilds entries) -> entries |> List.map AdminModels.playerGuild | Ok _ | Error _ -> []
         return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names; Sanctions = sanctions
-                 Addresses = addresses; Devices = devices }
+                 Addresses = addresses; Devices = devices; Guilds = memberships }
     }
 
     let private notices =
@@ -409,6 +422,8 @@ module AdminRoutes =
             "address-lifted", "Бан диапазона снят."
             "announced", "Объявление отправлено."
             "token-revoked", "Токен отозван."
+            "appointed", "Глава гильдии назначен."
+            "dissolved", "Гильдия распущена."
         ]
 
     let private notice (context: HttpContext) =
@@ -567,6 +582,97 @@ module AdminRoutes =
         | Ok entries -> return! html 200 (AdminViews.sanctions admin entries) context
         | Error error -> return! serviceFailure (Some admin) error context
     }
+
+    // --- Guilds ------------------------------------------------------------
+
+    let private guildPage routes context = task {
+        let query = searchQuery context
+        match! guilds routes context (GuildAdminCommand.Search(query, pageNumber context)) with
+        | Ok (GuildAdminResult.Page page) -> return Ok (AdminModels.guildPage query page)
+        | Ok _ -> return Error AdminServiceError.Unavailable
+        | Error error -> return Error error
+    }
+
+    let private guildsPage routes admin : HttpHandler = fun context -> task {
+        match! guildPage routes context with
+        | Ok model -> return! html 200 (AdminViews.guilds admin model (notice context)) context
+        | Error error -> return! serviceFailure (Some admin) error context
+    }
+
+    let private routeGuild (context: HttpContext) =
+        match UInt64.TryParse(string context.Request.RouteValues["id"]) with
+        | true, raw -> GuildId.create raw |> Result.toOption
+        | false, _ -> None
+
+    let private guildCard routes context guild = task {
+        match! guilds routes context (GuildAdminCommand.Card guild) with
+        | Ok (GuildAdminResult.Card card) -> return Ok (card |> ValueOption.map AdminModels.guildCard)
+        | Ok _ -> return Error AdminServiceError.Unavailable
+        | Error error -> return Error error
+    }
+
+    let private showGuild routes admin status (failure: string option) guild : HttpHandler = fun context -> task {
+        match! guildCard routes context guild with
+        | Ok (ValueSome card) -> return! html status (AdminViews.guild admin card (if failure.IsNone then notice context else None) failure) context
+        | Ok ValueNone -> return! errorPage 404 "Гильдия не найдена." (Some admin) context
+        | Error error -> return! serviceFailure (Some admin) error context
+    }
+
+    let private guildPageOf routes admin : HttpHandler = fun context ->
+        match routeGuild context with
+        | Some guild -> showGuild routes admin 200 None guild context
+        | None -> errorPage 404 "Гильдия не найдена." (Some admin) context
+
+    let private guildAction routes (handler: AdminAccount -> GuildId -> IFormCollection -> HttpHandler) : HttpHandler =
+        mutation routes (fun admin form context ->
+            match routeGuild context with
+            | None -> errorPage 404 "Гильдия не найдена." (Some admin) context
+            | Some guild when not (confirmed form) -> showGuild routes admin 400 (Some "Отметьте подтверждение действия.") guild context
+            | Some guild -> handler admin guild form context)
+
+    let private guildRefusal routes admin guild error : HttpHandler =
+        match error with
+        | GuildError.NotFound -> errorPage 404 "Гильдия не найдена." (Some admin)
+        | GuildError.TargetNotFound -> showGuild routes admin 409 (Some "Этот игрок не состоит в гильдии.") guild
+        | GuildError.NameTaken | GuildError.ServerFull | GuildError.PlayerLimit | GuildError.GuildFull | GuildError.InvitesFull
+        | GuildError.AlreadyMember | GuildError.AlreadyInvited | GuildError.NotPermitted | GuildError.MasterStays ->
+            showGuild routes admin 409 (Some "Владелец гильдий отказал в действии.") guild
+
+    /// The guild owner hands the role over and tells the members; the panel audits it.
+    let private appoint routes =
+        guildAction routes (fun admin guild form context -> task {
+            let target =
+                match UInt64.TryParse(value form "player") with
+                | true, raw -> PlayerId.create raw |> Result.toOption
+                | false, _ -> None
+            match target with
+            | None -> return! showGuild routes admin 400 (Some "Выберите участника гильдии.") guild context
+            | Some player ->
+                match! guilds routes context (GuildAdminCommand.Appoint(guild, player)) with
+                | Ok (GuildAdminResult.Appointed card) ->
+                    let master = card.Members |> List.tryFind (fun entry -> entry.Profile.PlayerId = player)
+                    let name = master |> Option.map (fun entry -> DisplayName.value entry.Profile.DisplayName) |> Option.defaultValue ""
+                    let details = $"{GuildName.value card.Summary.Name}: player:{PlayerId.value player} {name}"
+                    let! audited = record routes context admin AdminAction.AppointedGuildMaster (AuditTarget.Guild guild) details
+                    if audited then return! redirect $"/guilds/{GuildId.value guild}?done=appointed" context
+                    else return! errorPage 503 "Глава назначен, но строка аудита не записана; см. лог сервера." (Some admin) context
+                | Ok (GuildAdminResult.Refused error) -> return! guildRefusal routes admin guild error context
+                | Ok _ -> return! serviceFailure (Some admin) AdminServiceError.Unavailable context
+                | Error error -> return! serviceFailure (Some admin) error context
+        })
+
+    let private dissolve routes =
+        guildAction routes (fun admin guild _ context -> task {
+            match! guilds routes context (GuildAdminCommand.Dissolve guild) with
+            | Ok (GuildAdminResult.Dissolved gone) ->
+                let details = $"{GuildName.value gone.Name}, участников: {gone.Members.Length}"
+                let! audited = record routes context admin AdminAction.DissolvedGuild (AuditTarget.Guild guild) details
+                if audited then return! redirect "/guilds?done=dissolved" context
+                else return! errorPage 503 "Гильдия распущена, но строка аудита не записана; см. лог сервера." (Some admin) context
+            | Ok (GuildAdminResult.Refused error) -> return! guildRefusal routes admin guild error context
+            | Ok _ -> return! serviceFailure (Some admin) AdminServiceError.Unavailable context
+            | Error error -> return! serviceFailure (Some admin) error context
+        })
 
     // --- Registration ------------------------------------------------------
 
@@ -862,6 +968,22 @@ module AdminRoutes =
             | Error error -> return! apiFailure error context
     }
 
+    let private apiGuilds routes (_: AdminAccount) : HttpHandler = fun context -> task {
+        match! guildPage routes context with
+        | Ok model -> return! apiJson model context
+        | Error error -> return! apiFailure error context
+    }
+
+    let private apiGuild routes (_: AdminAccount) : HttpHandler = fun context -> task {
+        match routeGuild context with
+        | None -> return! apiFailure AdminServiceError.NotFound context
+        | Some guild ->
+            match! guildCard routes context guild with
+            | Ok (ValueSome card) -> return! apiJson card context
+            | Ok ValueNone -> return! apiFailure AdminServiceError.NotFound context
+            | Error error -> return! apiFailure error context
+    }
+
     let private apiSanctions routes (_: AdminAccount) : HttpHandler = fun context -> task {
         match! activeSanctions routes context with
         | Ok entries -> return! apiJson entries context
@@ -897,6 +1019,10 @@ module AdminRoutes =
         post "/players/{id}/sanction" (sanction routes)
         post "/players/{id}/lift" (lift routes)
         post "/players/{id}/kick" (kick routes)
+        get "/guilds" (withAdmin routes (guildsPage routes))
+        get "/guilds/{id}" (withAdmin routes (guildPageOf routes))
+        post "/guilds/{id}/appoint" (appoint routes)
+        post "/guilds/{id}/dissolve" (dissolve routes)
         get "/sanctions" (withAdmin routes (sanctionsPage routes))
         get "/registration" (withAdmin routes (fun admin -> showRegistration routes admin 200 None None))
         post "/registration/mode" (setRegistration routes)
@@ -916,6 +1042,8 @@ module AdminRoutes =
         get "/api/v1/online" (withApi routes (apiOnline routes))
         get "/api/v1/players" (withApi routes (apiPlayers routes))
         get "/api/v1/players/{id}" (withApi routes (apiPlayer routes))
+        get "/api/v1/guilds" (withApi routes (apiGuilds routes))
+        get "/api/v1/guilds/{id}" (withApi routes (apiGuild routes))
         get "/api/v1/sanctions" (withApi routes (apiSanctions routes))
         get "/api/v1/address-bans" (withApi routes (apiAddressBans routes))
     ]

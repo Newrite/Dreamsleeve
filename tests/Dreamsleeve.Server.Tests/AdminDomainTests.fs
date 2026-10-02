@@ -24,7 +24,7 @@ let tests = testList "Admin domain" [
 
     testCase "audit actions have distinct stored keys that read back" <| fun _ ->
         let keys = AdminAction.all |> List.map AdminAction.key
-        equal 19 (List.length keys)
+        equal 21 (List.length keys)
         equal (List.length keys) (keys |> List.distinct |> List.length)
         for action in AdminAction.all do equal (Some action) (AdminAction.ofKey (AdminAction.key action))
         equal "player:42" (AuditTarget.key (AuditTarget.Player(PlayerId.create 42UL |> ok)))

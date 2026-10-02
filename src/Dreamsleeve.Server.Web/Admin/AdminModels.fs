@@ -100,6 +100,64 @@ type SignInDeviceModel = {
     SignIns: int64
 }
 
+/// A guild in a list. The master is null when the guild has none (the account
+/// is gone): the panel appoints one from the members.
+type GuildModel = {
+    GuildId: uint64
+    Name: string
+    CreatedAt: DateTimeOffset
+    Members: int
+    MasterId: Nullable<uint64>
+    Master: string
+}
+
+type GuildPageModel = {
+    Query: string
+    Page: int
+    PageSize: int
+    Total: int
+    Guilds: GuildModel list
+}
+
+/// A member with the real names; role is member, officer or master. The mute
+/// fields are null unless the guild's master or an officer muted the member
+/// (mutedBy "player:42"; muteExpires null: until lifted).
+type GuildMemberModel = {
+    PlayerId: uint64
+    Username: string
+    DisplayName: string
+    Role: string
+    Online: bool
+    JoinedAt: DateTimeOffset
+    Muted: bool
+    MuteReason: string
+    MuteExpires: Nullable<DateTimeOffset>
+    MutedBy: string
+}
+
+/// An invitation waiting for the player's answer; the names are null once
+/// the account is gone.
+type GuildInviteModel = {
+    PlayerId: uint64
+    Username: string
+    DisplayName: string
+    InvitedBy: string
+    CreatedAt: DateTimeOffset
+    Expires: DateTimeOffset
+}
+
+type GuildCardModel = {
+    Guild: GuildModel
+    Members: GuildMemberModel list
+    Invites: GuildInviteModel list
+}
+
+/// A guild of one player, for the player card.
+type PlayerGuildModel = {
+    Guild: GuildModel
+    Role: string
+}
+
 type PlayerCardModel = {
     Player: PlayerModel
     Sessions: OnlineModel list
@@ -107,6 +165,7 @@ type PlayerCardModel = {
     Sanctions: SanctionModel list
     Addresses: SignInAddressModel list
     Devices: SignInDeviceModel list
+    Guilds: PlayerGuildModel list
 }
 
 /// An IP range ban in force; issuedBy is "admin:3", null once that account is gone.
@@ -278,6 +337,34 @@ module AdminModels =
         { PlayerId = PlayerId.value entry.Player.PlayerId; Username = Username.value entry.Player.Username
           DisplayName = DisplayName.value entry.Player.DisplayName; Address = ClientAddress.text entry.Address.Address
           LastSeen = entry.Address.LastSeen }
+
+    let guild (summary: GuildSummary) : GuildModel =
+        { GuildId = GuildId.value summary.Guild; Name = GuildName.value summary.Name; CreatedAt = summary.CreatedAt; Members = summary.Members
+          MasterId = summary.Master |> ValueOption.map (fun master -> PlayerId.value master.PlayerId) |> ValueOption.toNullable
+          Master = summary.Master |> ValueOption.map (fun master -> DisplayName.value master.DisplayName) |> ValueOption.defaultValue null }
+
+    let guildPage query (page: GuildPage) : GuildPageModel =
+        { Query = query; Page = page.Page; PageSize = GuildPage.Size; Total = page.Total; Guilds = page.Guilds |> List.map guild }
+
+    let private guildMember (view: GuildMemberView) : GuildMemberModel =
+        { PlayerId = PlayerId.value view.Profile.PlayerId; Username = Username.value view.Profile.Username
+          DisplayName = DisplayName.value view.Profile.DisplayName; Role = GuildRole.key view.Membership.Role; Online = view.Online
+          JoinedAt = view.Membership.JoinedAt
+          Muted = view.Membership.Mute.IsSome
+          MuteReason = view.Membership.Mute |> ValueOption.map (fun mute -> SanctionReason.value mute.Reason) |> ValueOption.defaultValue null
+          MuteExpires = view.Membership.Mute |> ValueOption.bind _.Expires |> ValueOption.toNullable
+          MutedBy = view.Membership.Mute |> ValueOption.map (fun mute -> AuditTarget.key (AuditTarget.Player mute.IssuedBy)) |> ValueOption.defaultValue null }
+
+    let private guildInvite (invite: GuildInvite, profile: PlayerData voption) : GuildInviteModel =
+        { PlayerId = PlayerId.value invite.Player
+          Username = profile |> ValueOption.map (fun profile -> Username.value profile.Username) |> ValueOption.defaultValue null
+          DisplayName = profile |> ValueOption.map (fun profile -> DisplayName.value profile.DisplayName) |> ValueOption.defaultValue null
+          InvitedBy = AuditTarget.key (AuditTarget.Player invite.InvitedBy); CreatedAt = invite.CreatedAt; Expires = invite.Expires }
+
+    let guildCard (card: GuildCard) : GuildCardModel =
+        { Guild = guild card.Summary; Members = card.Members |> List.map guildMember; Invites = card.Invites |> List.map guildInvite }
+
+    let playerGuild (summary: GuildSummary, role: GuildRole) : PlayerGuildModel = { Guild = guild summary; Role = GuildRole.key role }
 
     let token (info: ApiTokenInfo) : TokenModel =
         { Id = info.TokenHash; Prefix = info.TokenHash.Substring(0, min 8 info.TokenHash.Length); Label = ApiTokenLabel.value info.Label

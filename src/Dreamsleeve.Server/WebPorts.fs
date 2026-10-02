@@ -81,6 +81,7 @@ module WebPorts =
         { Admin = fun command timeout token -> service.TryAskAsync((fun reply -> AdminMessage.Access(command, reply)), timeout, token)
           Account = fun command timeout token -> authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token)
           Snapshot = ask ServerRuntimeMessage.Read
+          Guilds = fun command -> ask (fun reply -> ServerRuntimeMessage.Guilds(command, reply))
           Sessions = ask ServerRuntimeMessage.ListSessions
           Describe = fun timeout row ->
             match row.Session with

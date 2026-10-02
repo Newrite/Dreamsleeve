@@ -23,6 +23,8 @@ type AdminPorts = {
     /// Trusted account commands: CreatePasswordReset, RevokeAccount, RenamePlayer.
     Account: AccountAccessCommand -> TimeSpan -> CancellationToken -> Task<AgentAskResult<Result<AccountAccessResult, AccountAccessError>>>
     Snapshot: TimeSpan -> CancellationToken -> Task<AgentAskResult<ServerRuntimeSnapshot>>
+    /// The guild owner: lists, cards, a new master, dissolution.
+    Guilds: GuildAdminCommand -> TimeSpan -> CancellationToken -> Task<AgentAskResult<GuildAdminResult>>
     Sessions: TimeSpan -> CancellationToken -> Task<AgentAskResult<RuntimeSessionRow list>>
     /// Asks one session for its view; None when it did not answer within the timeout.
     Describe: TimeSpan -> RuntimeSessionRow -> Task<AdminPlayerView option>

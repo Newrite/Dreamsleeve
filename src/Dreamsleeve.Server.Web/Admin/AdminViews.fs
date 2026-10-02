@@ -31,6 +31,7 @@ module AdminViews =
     type Navigation =
         | Overview
         | Players
+        | Guilds
         | Registration
         | Sanctions
         | AddressBans
@@ -51,6 +52,7 @@ module AdminViews =
                     Elem.strong [] [ text "Dreamsleeve" ]
                     link "/" "Обзор" Overview
                     link "/players" "Игроки" Players
+                    link "/guilds" "Гильдии" Guilds
                     link "/registration" "Регистрация" Registration
                     link "/sanctions" "Наказания" Sanctions
                     link "/address-bans" "Баны IP" AddressBans
@@ -262,6 +264,133 @@ module AdminViews =
             ]
         ]
 
+    let private guildRole key =
+        match GuildRole.ofKey key with
+        | Some GuildRole.Master -> "глава"
+        | Some GuildRole.Officer -> "офицер"
+        | Some GuildRole.Member -> "участник"
+        | None -> key
+
+    let private guildLink (guild: GuildModel) = Elem.a [ attr "href" $"/guilds/{guild.GuildId}" ] [ text guild.Name ]
+
+    let private master (guild: GuildModel) =
+        if guild.MasterId.HasValue then Elem.a [ attr "href" $"/players/{guild.MasterId.Value}" ] [ text guild.Master ]
+        else Elem.span [ css "error" ] [ text "нет — назначьте" ]
+
+    let guilds admin (model: GuildPageModel) (notice: string option) =
+        let pages = max 1 ((model.Total + model.PageSize - 1) / model.PageSize)
+        let link label number =
+            Elem.a [ attr "href" ("/guilds?" + query [ "q", model.Query; "page", string number ]) ] [ text label ]
+        page "Гильдии" Guilds (Some admin) notice [
+            Elem.form [ attr "method" "get"; attr "action" "/guilds"; css "inline" ] [
+                Elem.input [ attr "type" "search"; attr "name" "q"; attr "value" model.Query; attr "placeholder" "часть названия или ID гильдии" ]
+                submit "Найти"
+            ]
+            Elem.p [ css "muted" ] [ text $"Найдено: {model.Total}. Страница {model.Page} из {pages}." ]
+            Elem.table [] [
+                Elem.thead [] [ Elem.tr [] [ for heading in [ "ID"; "Название"; "Глава"; "Участников"; "Создана" ] do Elem.th [] [ text heading ] ] ]
+                Elem.tbody [] [
+                    for guild in model.Guilds do
+                        Elem.tr [] [
+                            Elem.td [] [ text (string guild.GuildId) ]
+                            Elem.td [] [ guildLink guild ]
+                            Elem.td [] [ master guild ]
+                            Elem.td [] [ text (string guild.Members) ]
+                            Elem.td [] [ text (time guild.CreatedAt) ]
+                        ]
+                ]
+            ]
+            Elem.p [ css "pager" ] [
+                if model.Page > 1 then link "← назад" (model.Page - 1)
+                if model.Page < pages then link "вперёд →" (model.Page + 1)
+            ]
+        ]
+
+    let guild admin (card: GuildCardModel) (notice: string option) (failure: string option) =
+        let id = card.Guild.GuildId
+        let action path = attr "action" $"/guilds/{id}/{path}"
+        page $"Гильдия {card.Guild.Name}" Guilds (Some admin) notice [
+            error failure
+            Elem.dl [] [
+                Elem.dt [] [ text "ID" ]
+                Elem.dd [] [ text (string id) ]
+                Elem.dt [] [ text "Глава" ]
+                Elem.dd [] [ master card.Guild ]
+                Elem.dt [] [ text "Участников" ]
+                Elem.dd [] [ text (string card.Guild.Members) ]
+                Elem.dt [] [ text "Создана" ]
+                Elem.dd [] [ text (time card.Guild.CreatedAt) ]
+            ]
+            Elem.section [] [
+                Elem.h2 [] [ text "Участники" ]
+                Elem.p [ css "muted" ] [ text "Настоящие имена: в гильдии псевдонимы не действуют." ]
+                Elem.table [] [
+                    Elem.thead [] [
+                        Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Display name"; "Роль"; "Онлайн"; "В гильдии с"; "Мут в гильдии" ] do Elem.th [] [ text heading ] ]
+                    ]
+                    Elem.tbody [] [
+                        for entry in card.Members do
+                            Elem.tr [] [
+                                Elem.td [] [ Elem.a [ attr "href" $"/players/{entry.PlayerId}" ] [ text (string entry.PlayerId) ] ]
+                                Elem.td [] [ text entry.Username ]
+                                Elem.td [] [ text entry.DisplayName ]
+                                Elem.td [] [ text (guildRole entry.Role) ]
+                                Elem.td [] [ text (if entry.Online then "да" else "") ]
+                                Elem.td [] [ text (time entry.JoinedAt) ]
+                                Elem.td [] [
+                                    if entry.Muted then
+                                        let ends = if entry.MuteExpires.HasValue then time entry.MuteExpires.Value else "бессрочно"
+                                        text $"до {ends}: {entry.MuteReason} ({entry.MutedBy})"
+                                    else text ""
+                                ]
+                            ]
+                    ]
+                ]
+            ]
+            Elem.section [] [
+                Elem.h2 [] [ text "Приглашения" ]
+                if card.Invites.IsEmpty then Elem.p [ css "muted" ] [ text "Ожидающих приглашений нет." ]
+                else
+                    Elem.table [] [
+                        Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Пригласил"; "Отправлено"; "Истекает" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.tbody [] [
+                            for invite in card.Invites do
+                                Elem.tr [] [
+                                    Elem.td [] [ Elem.a [ attr "href" $"/players/{invite.PlayerId}" ] [ text (string invite.PlayerId) ] ]
+                                    Elem.td [] [ text (if isNull invite.Username then "—" else invite.Username) ]
+                                    Elem.td [] [ text invite.InvitedBy ]
+                                    Elem.td [] [ text (time invite.CreatedAt) ]
+                                    Elem.td [] [ text (time invite.Expires) ]
+                                ]
+                        ]
+                    ]
+            ]
+            Elem.section [ css "actions" ] [
+                Elem.h2 [] [ text "Действия" ]
+                let candidates = card.Members |> List.filter (fun entry -> entry.Role <> GuildRole.key GuildRole.Master)
+                if not candidates.IsEmpty then
+                    Elem.form [ attr "method" "post"; action "appoint"; css "stack" ] [
+                        Elem.p [ css "hint" ] [
+                            text "Когда глава забанен или удалён: игроки сами называют, кого поставить. Прежний глава, если он в гильдии, становится офицером."
+                        ]
+                        Elem.label [] [
+                            Elem.span [] [ text "Новый глава" ]
+                            Elem.select [ attr "name" "player" ] [
+                                for entry in candidates do
+                                    Elem.option [ attr "value" (string entry.PlayerId) ] [ text $"{entry.DisplayName} ({entry.Username}, {guildRole entry.Role})" ]
+                            ]
+                        ]
+                        confirm "Подтверждаю смену главы"
+                        submit "Назначить главой"
+                    ]
+                Elem.form [ attr "method" "post"; action "dissolve"; css "stack" ] [
+                    Elem.p [ css "hint" ] [ text "Например, за название против правил. Участники и приглашения удаляются, история чата гильдии пропадает, название освобождается." ]
+                    confirm "Подтверждаю роспуск гильдии"
+                    submit "Распустить"
+                ]
+            ]
+        ]
+
     let private rangeLink (range: string) label =
         Elem.a [ attr "href" ("/address-bans?" + query [ "range", range ]) ] [ text label ]
 
@@ -285,6 +414,23 @@ module AdminViews =
                     Elem.dd [] [ text value ]
             ]
             if not card.Sessions.IsEmpty then online card.Sessions true
+            Elem.section [] [
+                Elem.h2 [] [ text "Гильдии" ]
+                if card.Guilds.IsEmpty then Elem.p [ css "muted" ] [ text "Не состоит в гильдиях." ]
+                else
+                    Elem.table [] [
+                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Гильдия"; "Роль"; "Глава"; "Участников" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.tbody [] [
+                            for entry in card.Guilds do
+                                Elem.tr [] [
+                                    Elem.td [] [ guildLink entry.Guild ]
+                                    Elem.td [] [ text (guildRole entry.Role) ]
+                                    Elem.td [] [ master entry.Guild ]
+                                    Elem.td [] [ text (string entry.Guild.Members) ]
+                                ]
+                        ]
+                    ]
+            ]
             Elem.section [] [
                 Elem.h2 [] [ text "Наказания" ]
                 if card.Sanctions.IsEmpty then Elem.p [ css "muted" ] [ text "Действующих наказаний нет." ]
