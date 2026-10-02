@@ -1,0 +1,130 @@
+/* The guilds tab of the workspace: invitations, the player's guilds as tabs,
+   the open guild's members with the actions of the player's role. */
+.guilds {
+  display: grid;
+  gap: 18px;
+  max-width: 860px;
+}
+.section {
+  display: grid;
+  gap: 10px;
+}
+.section h3 {
+  margin: 0;
+}
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tabs button {
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.tabs button[aria-pressed="true"] {
+  color: var(--guild);
+  border-color: var(--guild);
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.facts b {
+  color: var(--ink);
+  font-weight: normal;
+}
+.members {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.members li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.members li > button:first-child {
+  padding: 2px 0;
+  color: var(--ink);
+}
+.members li[data-online="false"] > button:first-child {
+  color: var(--muted);
+}
+.role {
+  color: var(--guild);
+  font-size: 0.85em;
+}
+.members li[data-role="member"] .role {
+  color: var(--muted);
+}
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.mute {
+  color: var(--error);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.rowActions button,
+.actions button,
+.invite button {
+  border: 1px solid var(--border);
+}
+.rowActions button:disabled,
+.actions button:disabled,
+.invite button:disabled {
+  opacity: 0.45;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.danger {
+  color: var(--error) !important;
+}
+.invite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.warning {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  color: var(--system);
+  font-size: 0.9em;
+}
+.create {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.create input {
+  width: 260px;
+}
+.error {
+  margin: 0;
+  color: var(--error);
+  font-size: 0.85em;
+}

@@ -255,5 +255,14 @@
   },
   {
     "type": "copySteamLink"
+  },
+  {
+    "type": "guild",
+    "requestId": "g1",
+    "action": "mute",
+    "guildId": "4",
+    "playerId": "7",
+    "minutes": 30,
+    "reason": "Флуд"
   }
 ]

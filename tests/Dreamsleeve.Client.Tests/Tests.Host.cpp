@@ -398,6 +398,133 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   CHECK_FALSE(session.OnlinePlayers().contains(2));
 }
 
+TEST_CASE("Session shows the guilds once the server sent them, names guild channels after them and settles guild requests")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    OnlinePlayersReplaced{
+        {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}
+  }));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  Session        session;
+  Session::Frame frame;
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  Settle(session, *exchange, model, frame);
+  REQUIRE(frame.snapshot);
+  // Until the server sends them the page hears nothing of guilds, not "none".
+  CHECK_FALSE(std::ranges::any_of(frame.events, [](const auto& e) { return Type(e) == "guilds"; }));
+
+  constexpr Domain::ChatChannelId channel = Domain::GuildChannelBase + 4;
+  const auto                      member  = [](Domain::PlayerId id, std::string name, Domain::GuildRole role) {
+    return Domain::GuildMember{
+        {id, "user" + std::to_string(id), std::move(name)},
+        role,
+        true
+    };
+  };
+  auto book = GuildBook::TryCreate(
+    {
+        {4, "Вороны", channel, 1000, {member(1, "Alice", Domain::GuildRole::Master), member(2, "Bob", Domain::GuildRole::Officer)}}
+  },
+    {{5, "Соратники", 2, 2000}},
+    {3, 64, 3, 24});
+  REQUIRE(book);
+  REQUIRE(model.RegisterChannel(channel, 16, Domain::ChatChannelKind::Guild));
+  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{channel, {MakeMessage(1, channel, "в гильдии")}}));
+  const auto publish =
+    [&](std::shared_ptr<const GuildBook> guilds, std::optional<CommandResult> result = std::nullopt, bool snapshot = false) {
+      REQUIRE(exchange->Publish(model, snapshot, SessionPhase::Ready, "Tamriel", std::move(result), std::move(guilds)));
+      ClientOutput output;
+      exchange->Drain(output);
+      frame = {};
+      session.Process(*exchange, output, UiSettings{}, Domain::HiddenIdentity::None, frame);
+    };
+  const auto shared = std::make_shared<const GuildBook>(*book);
+  publish(shared);
+  REQUIRE(frame.events.size() == 3);
+  CHECK(Type(frame.events[0]) == "channels");
+  auto channels = Parse(frame.events[0])["channels"];
+  REQUIRE(channels.get_array().size() == 2);
+  CHECK(channels[1]["kind"].get<std::string>() == "guild");
+  CHECK(channels[1]["name"].get<std::string>() == "Вороны");
+  CHECK(Type(frame.events[1]) == "messages");
+  CHECK(Type(frame.events[2]) == "guilds");
+  auto guilds = Parse(frame.events[2]);
+  CHECK(guilds["guilds"][0]["channelId"].get<std::string>() == std::to_string(channel));
+  CHECK(guilds["guilds"][0]["members"][1]["role"].get<std::string>() == "officer");
+  CHECK(guilds["invites"][0]["guildName"].get<std::string>() == "Соратники");
+  CHECK(guilds["invites"][0].contains("inviter"));
+  CHECK(guilds["limits"]["members"].get<double>() == 64);
+  CHECK(guilds["removed"].get_array().empty());
+  // The same book again is no news.
+  publish(shared);
+  CHECK(frame.events.empty());
+
+  // A guild request settles with the server's answer in the UI language.
+  REQUIRE(session.Guild(*exchange, "g1", LeaveGuild{4}));
+  std::vector<QueuedClientCommand> commands;
+  exchange->TakeCommands(commands);
+  REQUIRE(commands.size() == 1);
+  const auto request = std::get<GuildRequest>(commands[0].command);
+  CHECK(std::holds_alternative<LeaveGuild>(request.action));
+  publish(
+    shared,
+    CommandResult{
+        model.Generation(),
+        request.requestId,
+        ServerRejection{RequestRejectionCode::GuildMasterStays, "Hand the master's role over or disband the guild first.", ""}
+  });
+  REQUIRE(frame.events.size() == 1);
+  auto refused = Parse(frame.events[0]);
+  CHECK(refused["requestId"].get<std::string>() == "g1");
+  CHECK(refused["error"].get<std::string>() == "Глава не может выйти: сначала передайте роль или распустите гильдию");
+  REQUIRE(session.Guild(*exchange, "g2", DisbandGuild{4}));
+  exchange->TakeCommands(commands);
+  publish(shared, CommandResult{model.Generation(), std::get<GuildRequest>(commands[0].command).requestId, GuildDone{4}});
+  REQUIRE(frame.events.size() == 1);
+  CHECK(Parse(frame.events[0])["guildId"].get<std::string>() == "4");
+
+  // Excluded: the channel goes, and the page hears why exactly once.
+  auto next = *shared;
+  REQUIRE(next.Remove(4, Domain::GuildRemovalReason::Excluded));
+  REQUIRE(model.UnregisterChannel(channel));
+  const auto removed = std::make_shared<const GuildBook>(std::move(next));
+  publish(removed);
+  REQUIRE(frame.events.size() == 2);
+  CHECK(Type(frame.events[0]) == "channels");
+  CHECK(Parse(frame.events[0])["channels"].get_array().size() == 1);
+  auto left = Parse(frame.events[1]);
+  CHECK(left["guilds"].get_array().empty());
+  CHECK(left["removed"][0]["reason"].get<std::string>() == "excluded");
+  CHECK(left["removed"][0]["name"].get<std::string>() == "Вороны");
+  session.Refresh();
+  publish(removed);
+  exchange->TakeCommands(commands);
+  REQUIRE(std::ranges::any_of(commands, [](const auto& c) { return std::holds_alternative<RequestSnapshot>(c.command); }));
+  publish(removed, std::nullopt, true);
+  REQUIRE(frame.snapshot);
+  const auto again = std::ranges::find_if(frame.events, [](const auto& e) { return Type(e) == "guilds"; });
+  REQUIRE(again != frame.events.end());
+  CHECK(Parse(*again)["removed"].get_array().empty());
+
+  // The command carries what its action needs; anything else stays on the page.
+  auto role = CommandOf<Bridge::Commands::Guild>(
+    R"({"type":"guild","requestId":"g3","action":"setRole","guildId":"4","playerId":"2","role":"officer"})");
+  const auto promote = Bridge::GuildActionOf(role);
+  REQUIRE(std::holds_alternative<SetGuildRole>(promote));
+  CHECK(std::get<SetGuildRole>(promote).playerId == 2);
+  CHECK(std::get<SetGuildRole>(promote).role == Domain::GuildRole::Officer);
+  auto mute =
+    CommandOf<Bridge::Commands::Guild>(R"({"type":"guild","requestId":"g4","action":"mute","guildId":"4","playerId":"2","reason":"Флуд"})");
+  CHECK_FALSE(std::get<MuteGuildMember>(Bridge::GuildActionOf(mute)).minutes);
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"guild","requestId":"g5","action":"rename","guildId":"4"})"));
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"guild","requestId":"g6","action":"setRole","guildId":"4","playerId":"2","role":"master"})"));
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"guild","action":"leave","guildId":"4"})"));
+}
+
 TEST_CASE("Session view reset requests a fresh snapshot and drops stale correlations")
 {
   auto        exchange = MakeExchange();

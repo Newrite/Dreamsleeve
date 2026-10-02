@@ -9,6 +9,9 @@ import type {
   connectionPhases,
   eventTypes,
   groundMarkKinds,
+  guildActions,
+  guildRemovalReasons,
+  guildRoles,
   hidingModes,
   registrationModes,
   sanctionKinds,
@@ -163,6 +166,70 @@ export interface Sanction {
   issuedAt: number;
   until?: number;
 }
+export type GuildRole = (typeof guildRoles)[number];
+export type GuildRemovalReason = (typeof guildRemovalReasons)[number];
+// A mute inside one guild: reading only; until is Unix ms, absent until lifted.
+export interface GuildMute {
+  reason: string;
+  until?: number;
+}
+// A member as guildmates see them: `name` is the host's label of the real
+// profile (the local alias in streamer mode); never a server pseudonym.
+export interface GuildMember {
+  id: Id;
+  name: string;
+  role: GuildRole;
+  online: boolean;
+  joinedAt: number;
+  mute?: GuildMute;
+}
+export interface Guild {
+  id: Id;
+  name: string;
+  channelId: Id;
+  createdAt: number;
+  members: GuildMember[];
+}
+// An invitation waiting for the player's answer; inviter is the host's name
+// for the inviting player when it has met them.
+export interface GuildInvite {
+  guildId: Id;
+  guildName: string;
+  invitedBy: Id;
+  inviter?: string;
+  expires: number;
+}
+// The server's limits; a lowered limit removes nobody.
+export interface GuildLimits {
+  perPlayer: number;
+  members: number;
+  nameMin: number;
+  nameMax: number;
+}
+// What a guild command asks; the server judges roles, the name and limits.
+export type GuildAction =
+  | { action: "create"; name: string }
+  | { action: "invite"; guildId: Id; playerId: Id }
+  | { action: "answer"; guildId: Id; accept: boolean }
+  | { action: "leave"; guildId: Id }
+  | { action: "exclude"; guildId: Id; playerId: Id }
+  | {
+      action: "setRole";
+      guildId: Id;
+      playerId: Id;
+      role: Exclude<GuildRole, "master">;
+    }
+  | { action: "transfer"; guildId: Id; playerId: Id }
+  // No minutes: until lifted.
+  | {
+      action: "mute";
+      guildId: Id;
+      playerId: Id;
+      minutes?: number;
+      reason: string;
+    }
+  | { action: "unmute"; guildId: Id; playerId: Id }
+  | { action: "disband"; guildId: Id };
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
   | { type: "close" }
@@ -229,7 +296,9 @@ export type Command =
       requestId: string;
       channelId: Id;
       messageId: Id;
-    };
+    }
+  // Answered with guildResult.
+  | ({ type: "guild"; requestId: string } & GuildAction);
 export type AuthEvent = { type: "auth"; phase: ConnectionPhase } & AuthState;
 export type HostEvent =
   | {
@@ -280,6 +349,19 @@ export type HostEvent =
       marks?: GroundMark[];
       removed?: number;
     }
+  // The player's guilds and invitations, complete, once the server sent them;
+  // removed names the guilds the player left since the previous one.
+  | {
+      type: "guilds";
+      guilds: Guild[];
+      invites: GuildInvite[];
+      limits: GuildLimits;
+      removed: { guildId: Id; name: string; reason: GuildRemovalReason }[];
+    }
+  // The answer to a guild command: the guild (a new one's ID for create) or the refusal.
+  | { type: "guildResult"; requestId: string; guildId?: Id; error?: string }
+  // The channels of the session changed: a guild came or went.
+  | { type: "channels"; channels: Channel[] }
   // Personal ignore list of this server, already named for current settings.
   | { type: "ignored"; players: { id: Id; name: string }[] }
   | { type: "messages"; messages: Message[] }
@@ -315,4 +397,7 @@ export type EventTypesMatch = Assert<
 >;
 export type CommandTypesMatch = Assert<
   Same<Command["type"], (typeof commandTypes)[number]>
+>;
+export type GuildActionsMatch = Assert<
+  Same<GuildAction["action"], (typeof guildActions)[number]>
 >;

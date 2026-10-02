@@ -1,7 +1,8 @@
 import { controlKey } from "../features/keyboard";
 import { connectionLabels } from "../state/connection";
 import { muted, muteText } from "../state/moderation";
-import { useRef, type CSSProperties, type FormEvent } from "react";
+import { guildMuted, guildMuteText, guildOfChannel } from "../state/guilds";
+import { Fragment, useRef, type CSSProperties, type FormEvent } from "react";
 import type { Chat } from "../state/chat";
 import { frame } from "../state/settings";
 import { useChat } from "../features/useChat";
@@ -10,17 +11,40 @@ import { Messages } from "../views/Messages";
 import { Panels } from "../views/Panels";
 import { AuthorMenu } from "../views/AuthorMenu";
 import { ModerationDialog } from "../views/ModerationDialog";
+import { GuildMuteDialog } from "../views/GuildMuteDialog";
 import { Select } from "../views/Select";
 import styles from "../styles/Chat.module.css";
+import { GUILDS } from "../state/chat";
+import type { Channel } from "../bridge/types";
+// Tabs and the send list: the global chat, the guilds, announcements last.
+const kindOrder: Record<Channel["kind"], number> = {
+  global: 0,
+  guild: 1,
+  system: 2,
+};
+const channelLabel = (c: Channel) =>
+  c.kind === "guild" ? `Гильдия «${c.name}»` : c.name;
 export function SkyrimLayout({ chat }: { chat: Chat }) {
   const { state: s, input } = useChat(chat);
   const silenced = muted(s.mute, Date.now());
+  // A guild mute closes only that guild's channel; reading stays.
+  const targetGuild = guildOfChannel(s.guilds, s.target);
+  const guildSilenced =
+    !!targetGuild && guildMuted(targetGuild, s.selfId, Date.now());
   const frameRef = useRef<HTMLElement>(null);
   const { viewport, start } = useFrame(chat, frameRef);
   const settings = s.settings;
   const bounds = frame(settings, viewport.width, viewport.height);
   const faded = s.faded && settings.fade && !s.active && s.connected;
-  const writable = s.channels.filter((c) => c.writable);
+  const ordered = [...s.channels].sort(
+    (a, b) => kindOrder[a.kind] - kindOrder[b.kind],
+  );
+  const writable = ordered.filter((c) => c.writable);
+  const guildChannels = ordered.filter((c) => c.kind === "guild");
+  const guildUnread = guildChannels.reduce(
+    (n, c) => n + (s.unread[c.id] ?? 0),
+    0,
+  );
   const style = {
     ...bounds,
     "--chat-font-size": `${settings.fontSize * settings.scale}px`,
@@ -98,16 +122,29 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
             >
               Все
             </button>
-            {s.channels.map((c) => (
-              <button
-                key={c.id}
-                data-selected={s.filter === c.id}
-                data-channel={c.kind}
-                onClick={() => chat.select(c.id)}
-              >
-                {c.name}
-                {s.unread[c.id] > 0 && <sup>{s.unread[c.id]}</sup>}
-              </button>
+            {ordered.map((c) => (
+              <Fragment key={c.id}>
+                {guildChannels.length > 1 && c.id === guildChannels[0].id && (
+                  <button
+                    data-selected={s.filter === GUILDS}
+                    data-channel="guild"
+                    title="Все гильдии вместе"
+                    onClick={() => chat.select(GUILDS)}
+                  >
+                    Гильдии
+                    {guildUnread > 0 && <sup>{guildUnread}</sup>}
+                  </button>
+                )}
+                <button
+                  data-selected={s.filter === c.id}
+                  data-channel={c.kind}
+                  title={c.kind === "guild" ? channelLabel(c) : undefined}
+                  onClick={() => chat.select(c.id)}
+                >
+                  {c.name}
+                  {s.unread[c.id] > 0 && <sup>{s.unread[c.id]}</sup>}
+                </button>
+              </Fragment>
             ))}
           </nav>
         )}
@@ -128,7 +165,10 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
                   value={s.target}
                   options={
                     writable.length
-                      ? writable.map((c) => ({ value: c.id, label: c.name }))
+                      ? writable.map((c) => ({
+                          value: c.id,
+                          label: channelLabel(c),
+                        }))
                       : [{ value: "", label: "Нет каналов" }]
                   }
                   onChange={(target) => chat.store.setState({ target })}
@@ -142,12 +182,15 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
                     ? "Нет соединения"
                     : silenced
                       ? muteText(s.mute)
-                      : "Ваше сообщение…"
+                      : guildSilenced && targetGuild
+                        ? guildMuteText(targetGuild, s.selfId)
+                        : "Ваше сообщение…"
                 }
                 value={s.drafts[s.target] ?? ""}
                 maxLength={2000}
                 disabled={
                   silenced ||
+                  guildSilenced ||
                   Object.values(s.pending).some((p) => p.status === "sending")
                 }
                 onChange={(e) => chat.setDraft(e.target.value)}
@@ -170,6 +213,7 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
                   !s.connected ||
                   !s.target ||
                   silenced ||
+                  guildSilenced ||
                   Object.values(s.pending).some((p) => p.status === "sending")
                 }
               >
@@ -226,6 +270,13 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
       </section>
       {s.active && s.authorMenu && <AuthorMenu chat={chat} state={s} />}
       {s.active && s.panel && <Panels chat={chat} state={s} />}
+      {s.active && s.guildMute && (
+        <GuildMuteDialog
+          key={`${s.guildMute.guildId}:${s.guildMute.playerId}`}
+          chat={chat}
+          state={s}
+        />
+      )}
       {s.active && s.moderation && (
         <ModerationDialog
           key={`${s.moderation.action}:${s.moderation.playerId}`}

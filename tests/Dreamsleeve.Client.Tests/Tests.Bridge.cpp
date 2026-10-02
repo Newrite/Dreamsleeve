@@ -58,6 +58,8 @@ namespace
            List("announcementKinds", Bridge::KindNames) + List("groundMarkKinds", Bridge::MarkKindNames) +
            List("channelKinds", Bridge::ChannelKindNames) + List("hidingModes", HidingNames) + List("sessionEndReasons", Bridge::EndNames) +
            List("sanctionKinds", Bridge::SanctionKindNames) + List("registrationModes", Bridge::RegistrationNames) +
+           List("guildRoles", Bridge::GuildRoleNames) + List("guildRemovalReasons", Bridge::GuildRemovalNames) +
+           List("guildActions", Bridge::GuildActionNames) +
            std::format(
              "\n// Bounds of text the host sends: chat and mark text, snapshot lines per\n"
              "// channel, error strings (UTF-8 bytes, never more UTF-16 units).\n"
@@ -188,6 +190,24 @@ namespace
         Bridge::RoleEvent{.moderator = true},
         Bridge::MessagesRemovedEvent{.channelId = "1", .messageIds = {"11"}},
         Bridge::ModerationResultEvent{.requestId = "m1", .sanctions = SampleSanctions()},
+        Bridge::GuildsEvent{
+                              .guilds  = {{"4",
+                         "Вороны",
+                         "4294967300",
+                         1700000000000,
+                         {Bridge::ToUiGuildMember({{7, "seven", "Seven"}, Domain::GuildRole::Master, true, std::nullopt, 1700000000000}, names, settings),
+                          Bridge::ToUiGuildMember(
+                            {{9, "nine", "Nine"}, Domain::GuildRole::Member, false, Domain::MuteState{"Флуд", 1700000900000}, 1700000500000},
+                            names,
+                            settings)}}},
+                              .invites = {{"5", "Соратники", "8", "Eight", 1700604800000}},
+                              .limits  = {3, 64, 3, 24},
+                              .removed = {{"6", "Изгнанники", "excluded"}}},
+        Bridge::GuildResultEvent{.requestId = "g1", .guildId = "4"},
+        Bridge::ChannelsEvent{
+                              .channels = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global),
+                         Bridge::ToUiChannel(Domain::GuildChannelBase + 4, Domain::ChatChannelKind::Guild, "Вороны"),
+                         Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)}},
         Bridge::ShowEvent{},
         Bridge::HideEvent{},
         Bridge::ActivateEvent{},
@@ -210,6 +230,8 @@ TEST_CASE("Bridge name tables follow the enumerators they name")
   CHECK(Strings(Bridge::ChannelKindNames) == EnumeratorNames<Domain::ChatChannelKind>());
   CHECK(Strings(Bridge::SanctionKindNames) == EnumeratorNames<Domain::SanctionKind>());
   CHECK(Strings(Bridge::RegistrationNames) == EnumeratorNames<Auth::RegistrationMode>());
+  CHECK(Strings(Bridge::GuildRoleNames) == EnumeratorNames<Domain::GuildRole>());
+  CHECK(Strings(Bridge::GuildRemovalNames) == EnumeratorNames<Domain::GuildRemovalReason>());
   // "off" is the ui.toml word for None; the others follow the enumerators.
   auto hiding    = EnumeratorNames<Domain::HiddenIdentity>();
   hiding.front() = "off";

@@ -15,6 +15,20 @@ export namespace Dreamsleeve::Client
   {
 public:
 
+    // A guild the player is no longer in, and why, at the revision it left.
+    struct Removal
+    {
+      std::uint64_t              revision{};
+      Domain::GuildId            guildId{};
+      std::string                name;
+      Domain::GuildRemovalReason reason{Domain::GuildRemovalReason::Left};
+
+      bool operator==(const Removal&) const = default;
+    };
+
+    // Removals kept: a consumer that reads every few frames misses none.
+    static constexpr std::size_t RecentRemovals = 16;
+
     GuildBook() = default;
 
     // A complete replacement (GuildsSnapshot).
@@ -35,6 +49,7 @@ public:
           };
         book.invites.push_back(std::move(invite));
       }
+      book.revision = 0;
       return book;
     }
 
@@ -51,6 +66,19 @@ public:
     const Domain::GuildLimits& Limits() const noexcept
     {
       return limits;
+    }
+
+    // Grows with every change; a replacement starts again from zero.
+    std::uint64_t Revision() const noexcept
+    {
+      return revision;
+    }
+
+    // The latest removals, oldest first: those above the revision a consumer
+    // saw last are news to it.
+    std::span<const Removal> Removals() const noexcept
+    {
+      return removals;
     }
 
     const Domain::Guild* Find(Domain::GuildId guildId) const noexcept
@@ -84,13 +112,18 @@ public:
               Domain::Error{Domain::ErrorCode::DuplicatePlayer, "members"}
           };
       guilds.push_back(std::move(guild));
+      ++revision;
       return {};
     }
 
     // The player left, was excluded, or the guild was disbanded.
-    Domain::OperationResult Remove(Domain::GuildId guildId)
+    Domain::OperationResult Remove(Domain::GuildId guildId, Domain::GuildRemovalReason reason)
     {
-      if (std::erase_if(guilds, [&](const Domain::Guild& guild) { return guild.guildId == guildId; }) == 0) return UnknownGuild();
+      const auto found = std::ranges::find(guilds, guildId, &Domain::Guild::guildId);
+      if (found == guilds.end()) return UnknownGuild();
+      if (removals.size() == RecentRemovals) removals.erase(removals.begin());
+      removals.push_back({++revision, guildId, std::move(found->name), reason});
+      guilds.erase(found);
       return {};
     }
 
@@ -104,6 +137,7 @@ public:
         guild->members.push_back(std::move(member));
       else
         *found = std::move(member);
+      ++revision;
       return {};
     }
 
@@ -115,6 +149,7 @@ public:
         return std::unexpected{
             Domain::Error{Domain::ErrorCode::UnknownPlayer, "player_id"}
         };
+      ++revision;
       return {};
     }
 
@@ -126,12 +161,14 @@ public:
         invites.push_back(std::move(invite));
       else
         *found = std::move(invite);
+      ++revision;
     }
 
     // Accepted, declined, expired or disbanded.
     Domain::OperationResult RemoveInvite(Domain::GuildId guildId)
     {
       if (std::erase_if(invites, [&](const Domain::GuildInvite& invite) { return invite.guildId == guildId; }) == 0) return UnknownGuild();
+      ++revision;
       return {};
     }
 
@@ -159,6 +196,8 @@ private:
     std::vector<Domain::Guild>       guilds;
     std::vector<Domain::GuildInvite> invites;
     Domain::GuildLimits              limits;
+    std::uint64_t                    revision{};
+    std::vector<Removal>             removals;
   };
 
 }

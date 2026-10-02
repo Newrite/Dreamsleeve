@@ -7,6 +7,8 @@ import {
   channelKinds,
   connectionPhases,
   groundMarkKinds,
+  guildRemovalReasons,
+  guildRoles,
   hidingModes,
   maxError,
   maxSnapshotRows,
@@ -139,6 +141,50 @@ function sanction(v: unknown): boolean {
 }
 const count = (v: unknown) =>
   typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+function guildMember(v: unknown): boolean {
+  return (
+    object(v) &&
+    id(v.id) &&
+    label(v.name) &&
+    oneOf(guildRoles)(v.role) &&
+    flag(v.online) &&
+    time(v.joinedAt) &&
+    optional((m) => object(m) && label(m.reason) && optional(time)(m.until))(
+      v.mute,
+    )
+  );
+}
+function guild(v: unknown): boolean {
+  return (
+    object(v) &&
+    id(v.id) &&
+    label(v.name) &&
+    id(v.channelId) &&
+    time(v.createdAt) &&
+    list(v.members, guildMember, 4096)
+  );
+}
+function guildInvite(v: unknown): boolean {
+  return (
+    object(v) &&
+    id(v.guildId) &&
+    label(v.guildName) &&
+    id(v.invitedBy) &&
+    optional(label)(v.inviter) &&
+    time(v.expires)
+  );
+}
+const guildLimits = (v: unknown) =>
+  object(v) &&
+  count(v.perPlayer) &&
+  count(v.members) &&
+  count(v.nameMin) &&
+  count(v.nameMax);
+const guildRemoval = (v: unknown) =>
+  object(v) &&
+  id(v.guildId) &&
+  label(v.name) &&
+  oneOf(guildRemovalReasons)(v.reason);
 const bare = () => true;
 // One check per host event: a new event type does not compile until it has one.
 const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
@@ -217,6 +263,17 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     optional(id)(v.playerId) &&
     optional(marks(4096))(v.marks) &&
     optional(count)(v.removed),
+  guilds: (v) =>
+    list(v.guilds, guild, 128) &&
+    list(v.invites, guildInvite, 1024) &&
+    guildLimits(v.limits) &&
+    list(v.removed, guildRemoval, 128),
+  guildResult: (v) =>
+    id(v.requestId) &&
+    optional(id)(v.guildId) &&
+    optional(error)(v.error) &&
+    (v.error === undefined) !== (v.guildId === undefined),
+  channels: (v) => list(v.channels, channel, 128),
   show: bare,
   hide: bare,
   activate: bare,

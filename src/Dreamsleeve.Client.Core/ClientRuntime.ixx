@@ -447,7 +447,7 @@ private:
       const auto* guild = book.Find(removed.guildId);
       if (!guild) return Unexpected("guild_id");
       if (auto closed = model.UnregisterChannel(guild->channelId); !closed) return std::unexpected{closed.error()};
-      return Checked(book.Remove(removed.guildId));
+      return Checked(book.Remove(removed.guildId, removed.reason));
     }
 
     Result<void> Change(GuildBook& book, Wire::GuildMemberUpdated& updated)

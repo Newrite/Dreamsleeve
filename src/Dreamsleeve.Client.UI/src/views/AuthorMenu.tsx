@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { Chat, ChatState } from "../state/chat";
 import { HIDDEN_BY_PLAYER } from "../state/names";
 import { playerActions } from "../state/moderator";
+import { guildOfChannel, mayRemove } from "../state/guilds";
 import styles from "../styles/Chat.module.css";
 const WIDTH = 220;
 // The header and the profile and ignore items; each further item adds a row.
@@ -23,12 +24,22 @@ export function AuthorMenu({
   }, [target.playerId]);
   const own = target.playerId === s.selfId;
   const ignored = s.ignored.some((p) => p.id === target.playerId);
-  const message = s.moderator ? target.message : undefined;
+  // A guild's messages answer to the guild's roles, not to moderators.
+  const guild = target.message
+    ? guildOfChannel(s.guilds, target.message.channelId)
+    : undefined;
+  const message = s.moderator && !guild ? target.message : undefined;
+  const guildMessage =
+    guild && mayRemove(guild, s.selfId, target.playerId)
+      ? target.message
+      : undefined;
   const moderate =
     s.moderator && !own
       ? playerActions(chat.moderator, target.playerId, target.name)
       : [];
-  const height = HEIGHT + ROW * (moderate.length + (message ? 1 : 0));
+  const height =
+    HEIGHT +
+    ROW * (moderate.length + (message ? 1 : 0) + (guildMessage ? 1 : 0));
   const left = Math.max(0, Math.min(target.x, window.innerWidth - WIDTH));
   const top = Math.max(0, Math.min(target.y, window.innerHeight - height));
   function act(run: () => void) {
@@ -92,6 +103,21 @@ export function AuthorMenu({
             }
           >
             Удалить сообщение
+          </button>
+        )}
+        {guildMessage && (
+          <button
+            role="menuitem"
+            onClick={() =>
+              act(() =>
+                chat.guilds.deleteMessage(
+                  guildMessage.channelId,
+                  guildMessage.id,
+                ),
+              )
+            }
+          >
+            Удалить сообщение из гильдии
           </button>
         )}
         {moderate.map((item) => (

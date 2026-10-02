@@ -20,6 +20,14 @@ import type {
 import { canCancelSteam, idleAuth } from "./auth";
 import { muted, muteText, sessionEndText } from "./moderation";
 import { idleModerator, makeModerator, type ModeratorState } from "./moderator";
+import {
+  guildMuted,
+  guildMuteText,
+  guildOfChannel,
+  idleGuilds,
+  makeGuilds,
+  type GuildsState,
+} from "./guilds";
 import { defaults, instantKeys } from "../bridge/settings.generated";
 // Lines kept per channel: a busy channel never pushes another one out.
 export const HISTORY_LIMIT = 500;
@@ -46,6 +54,7 @@ const confirmedKey = (p: PendingMessage) =>
 export type Panel =
   | "online"
   | "profile"
+  | "guilds"
   | "stats"
   | "settings"
   | "account"
@@ -84,7 +93,7 @@ function makeRoom(pending: Record<string, PendingMessage>) {
 // unknown row leaves the passive HUD after the same time, while an active chat
 // keeps it until the player retries or dismisses.
 export const PENDING_TIMEOUT = 15000;
-export interface ChatState extends ModeratorState {
+export interface ChatState extends ModeratorState, GuildsState {
   channels: Channel[];
   messages: Message[];
   receivedAt: Record<string, number>;
@@ -156,8 +165,11 @@ export function allowed(message: Message, s: Settings) {
         : true)
   );
 }
+// The view of every guild channel together, beside "all" and single channels.
+export const GUILDS = "guilds";
 // Whether the view `filter` includes lines of a channel: the system channel
-// joins "Все" or every tab as chosen. Unread counting follows the same rule.
+// joins "Все" or every tab as chosen, guild channels join "Гильдии" too.
+// Unread counting follows the same rule.
 export function shows(
   channelId: string,
   filter: string,
@@ -165,12 +177,19 @@ export function shows(
   channels: Channel[],
 ) {
   if (channelId === filter) return true;
-  if (channels.some((c) => c.id === channelId && c.kind === "system"))
+  const kind = channels.find((c) => c.id === channelId)?.kind;
+  if (kind === "system")
     return (
       s.announcementChannels === "current" ||
       (filter === "all" && s.announcementChannels === "all")
     );
-  return filter === "all";
+  return filter === "all" || (filter === GUILDS && kind === "guild");
+}
+// Keeps the entries of the channels that still exist.
+function channelsOnly<T>(record: Record<string, T>, ids: Set<string>) {
+  return Object.fromEntries(
+    Object.entries(record).filter(([id]) => ids.has(id)),
+  );
 }
 export const visible = (
   message: Message,
@@ -216,8 +235,10 @@ export function makeChat(send: Send, now = () => Date.now()) {
     groundMarks: [],
     nearbyMarks: [],
     ...idleModerator,
+    ...idleGuilds,
   }));
   const moderator = makeModerator(store, send);
+  const guilds = makeGuilds(store, send);
   let sequence = 0;
   let refusals = 0;
   // Removal requests in flight: request id -> mark id, for the result notice.
@@ -245,6 +266,14 @@ export function makeChat(send: Send, now = () => Date.now()) {
     store.setState({ notice: muteText(mute) });
     return true;
   }
+  // A guild mute holds only in the guild's own channel.
+  function guildSilenced() {
+    const s = store.getState();
+    const guild = guildOfChannel(s.guilds, s.target);
+    if (!guild || !guildMuted(guild, s.selfId, now())) return false;
+    store.setState({ notice: guildMuteText(guild, s.selfId) });
+    return true;
+  }
   function receive(event: HostEvent) {
     const state = store.getState();
     switch (event.type) {
@@ -269,6 +298,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
           break;
         }
         const shown = new Set(event.messages.map(keyOf));
+        // A new session: its guilds come after the snapshot.
+        guilds.reset();
         store.setState({
           channels,
           messages: chronological(event.messages),
@@ -362,9 +393,45 @@ export function makeChat(send: Send, now = () => Date.now()) {
         break;
       }
       case "role":
-      case "moderationResult":
         moderator.receive(event);
         break;
+      case "moderationResult":
+        moderator.receive(event);
+        guilds.receive(event);
+        break;
+      case "guilds":
+      case "guildResult":
+        guilds.receive(event);
+        break;
+      case "channels": {
+        // A guild came or went: its lines, unread count and draft go with it.
+        const ids = new Set(event.channels.map((c) => c.id));
+        const messages = state.messages.filter((m) => ids.has(m.channelId));
+        const retained = new Set(messages.map(keyOf));
+        const writable = event.channels.filter((c) => c.writable);
+        const guildView =
+          state.filter === GUILDS &&
+          event.channels.some((c) => c.kind === "guild");
+        store.setState({
+          channels: event.channels,
+          messages,
+          receivedAt: Object.fromEntries(
+            Object.entries(state.receivedAt).filter(([key]) =>
+              retained.has(key),
+            ),
+          ),
+          unread: channelsOnly(state.unread, ids),
+          drafts: channelsOnly(state.drafts, ids),
+          target: writable.some((c) => c.id === state.target)
+            ? state.target
+            : (writable[0]?.id ?? ""),
+          filter:
+            state.filter === "all" || ids.has(state.filter) || guildView
+              ? state.filter
+              : "all",
+        });
+        break;
+      }
       case "players":
         store.setState({ players: event.players });
         break;
@@ -636,7 +703,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
       !s.channels.some((c) => c.id === s.target && c.writable)
     )
       return;
-    if (silenced()) return;
+    if (silenced() || guildSilenced()) return;
     const room = makeRoom(s.pending);
     if (Object.keys(room).length >= PENDING_LIMIT) {
       store.setState({
@@ -646,7 +713,10 @@ export function makeChat(send: Send, now = () => Date.now()) {
     }
     const requestId = String(++sequence);
     store.setState({
-      filter: s.filter === "all" ? "all" : s.target,
+      // A view that shows the target stays; another one turns to the target.
+      filter: shows(s.target, s.filter, s.settings, s.channels)
+        ? s.filter
+        : s.target,
       scrolled: false,
       pending: {
         ...room,
@@ -710,9 +780,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
       });
   }
   function select(filter: string) {
+    const channels = store.getState().channels;
     if (
       filter !== "all" &&
-      !store.getState().channels.some((c) => c.id === filter)
+      !(filter === GUILDS && channels.some((c) => c.kind === "guild")) &&
+      !channels.some((c) => c.id === filter)
     )
       return;
     store.setState({ filter, scrolled: false });
@@ -783,6 +855,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     },
     placeNote,
     moderator,
+    guilds,
     // The author's own marks, or any for a moderator; the result is a notice.
     removeMark(markId: string) {
       const s = store.getState();

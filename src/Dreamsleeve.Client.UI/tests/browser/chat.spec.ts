@@ -1400,3 +1400,64 @@ test("the own display name changes in the account panel once the server answers"
   await change.click();
   await expect(status).toHaveText("Имя можно сменить снова через 1 мин");
 });
+
+test("guilds have their tabs and send target, a panel by role, invitations and a guild mute", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  const tabs = page.getByRole("navigation", { name: "Каналы" });
+  await expect(tabs.getByRole("button", { name: "Гильдии" })).toBeVisible();
+  await expect(tabs.getByRole("button", { name: "Соратники" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Канал отправки" }).click();
+  await expect(
+    page.getByRole("listbox", { name: "Канал отправки" }),
+  ).toContainText("Гильдия «Вороны»");
+  await page.getByRole("option", { name: "Гильдия «Соратники»" }).click();
+  const input = page.getByRole("textbox", { name: "Сообщение" });
+  await input.fill("Сбор у Йоррваскра");
+  await input.press("Enter");
+  await expect(
+    page.locator('[data-part="message"][data-channel="guild"]').filter({
+      hasText: "Сбор у Йоррваскра",
+    }),
+  ).toContainText("[Соратники]");
+
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const invites = page.getByRole("region", { name: "Приглашения" });
+  await expect(invites).toContainText("СеребрянаяРука");
+  await expect(invites).toContainText("видят ваше настоящее имя");
+  const members = page.getByRole("list", {
+    name: "Участники гильдии Соратники",
+  });
+  const mira = members.getByRole("listitem").filter({ hasText: "Мира" });
+  await expect(mira).toContainText("офицер");
+  await mira.getByRole("button", { name: "Мут…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Мут в гильдии: Мира" });
+  await dialog.getByLabel("Причина").fill("Флуд");
+  await dialog.getByRole("button", { name: "Замутить" }).click();
+  await expect(dialog).toHaveCount(0);
+  // The first term is fifteen minutes.
+  await expect(mira).toContainText(/мут до .+: Флуд/);
+
+  await invites.getByRole("button", { name: "Вступить" }).click();
+  await expect(
+    page.getByRole("group", { name: "Выбор гильдии" }),
+  ).toContainText("СеребрянаяРука");
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toHaveText("Вы вступили в гильдию «СеребрянаяРука»");
+  await expect(invites).toHaveCount(0);
+  // A member of another guild may leave; the master is told how to.
+  await page
+    .getByRole("group", { name: "Выбор гильдии" })
+    .getByRole("button", { name: "Соратники" })
+    .click();
+  await expect(page.getByRole("region", { name: "Мои гильдии" })).toContainText(
+    "Чтобы выйти, передайте роль главы",
+  );
+});

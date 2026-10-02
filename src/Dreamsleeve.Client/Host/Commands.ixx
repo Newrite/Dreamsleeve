@@ -291,6 +291,13 @@ export namespace Dreamsleeve::Host
       {
         Moderate(command.requestId, Client::DeleteChatMessage{.channelId = command.channelId.value, .messageId = command.messageId.value});
       }
+
+      // The server answers with guildResult; a request that did not leave is answered here.
+      void operator()(Commands::Guild& command)
+      {
+        if (auto posted = context.session.Guild(context.exchange, command.requestId, Bridge::GuildActionOf(command)); !posted)
+          Emit(Bridge::GuildResultEvent{.requestId = command.requestId, .error = posted.error()});
+      }
     };
 
   }

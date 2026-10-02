@@ -25,6 +25,7 @@ import {
   nearbyMarks,
   players,
 } from "./fixture";
+import { makeGuildStand } from "./guilds";
 import "../styles/base.css";
 import "../themes/skyrim.css";
 import "./workshop.css";
@@ -188,7 +189,7 @@ function snapshot(settings = chat.store.getState().settings, refresh = false) {
   chat.receive({
     type: "snapshot",
     serverName: "Голоса Тамриэля",
-    channels,
+    channels: [...channels, ...guildStand.channels()],
     messages: projectMessages(history, settings),
     players: players.map((p) => project(p, settings)),
     selfId: players[0].id,
@@ -197,6 +198,8 @@ function snapshot(settings = chat.store.getState().settings, refresh = false) {
     groundMarks: marks,
     nearbyMarks: nearby,
   });
+  // The server sends the guilds after the session opens.
+  guildStand.publish();
 }
 function command(c: Command) {
   if (c.type === "close") return true;
@@ -491,6 +494,7 @@ function command(c: Command) {
     );
     return true;
   }
+  if (c.type === "guild") return guildStand.command(c);
   if (c.type !== "sendChat") return moderate(c);
   const rejected = rejectNext;
   rejectNext = false;
@@ -645,6 +649,12 @@ function moderate(c: ModeratorCommand) {
 }
 const chat = makeChat(command);
 installVisibility(chat);
+const guildStand = makeGuildStand(
+  (event) => chat.receive(event),
+  players,
+  (p) => project(p, chat.store.getState().settings).name,
+);
+guildStand.setServerChannels(channels);
 // The host normalizes real settings; the preview trusts its own saved copy.
 let settings = defaults;
 try {
@@ -714,6 +724,24 @@ function publish(system?: "server" | "thirdParty") {
     messages: projectMessages([message], chat.store.getState().settings),
   });
 }
+// Another member writes in the player's first guild.
+function publishGuild() {
+  const speaker = guildStand.speaker();
+  if (!speaker) return;
+  const message: Message = {
+    id: String(nextId++),
+    channelId: speaker.channelId,
+    source: "player",
+    author: speaker.player,
+    text: "Сбор гильдии у Йоррваскра через час.",
+    time: Date.now(),
+  };
+  history.push(message);
+  chat.receive({
+    type: "messages",
+    messages: projectMessages([message], chat.store.getState().settings),
+  });
+}
 function Workshop() {
   const connected = useStore(chat.store, (s) => s.connected);
   const savedLogin = useStore(chat.store, (s) => s.auth.savedLogin);
@@ -758,6 +786,14 @@ function Workshop() {
         <button onClick={() => publish()}>Новое сообщение</button>
         <button onClick={() => publish("server")}>Системное объявление</button>
         <button onClick={() => publish("thirdParty")}>Объявление мода</button>
+        <button onClick={publishGuild}>Сообщение гильдии</button>
+        <button onClick={() => guildStand.invite()}>
+          Приглашение в гильдию
+        </button>
+        <button onClick={() => guildStand.mute()}>Мут в гильдии</button>
+        <button onClick={() => guildStand.exclude()}>
+          Исключение из гильдии
+        </button>
         <button
           onClick={() =>
             chat.receive({

@@ -97,6 +97,15 @@ const commands: { [K in Command["type"]]: Extract<Command, { type: K }> } = {
   },
   signInSteam: { type: "signInSteam", remember: true },
   copySteamLink: { type: "copySteamLink" },
+  guild: {
+    type: "guild",
+    requestId: "g1",
+    action: "mute",
+    guildId: "4",
+    playerId: "7",
+    minutes: 30,
+    reason: "Флуд",
+  },
 };
 
 describe("bridge contract with the host", () => {

@@ -69,6 +69,14 @@ export namespace Dreamsleeve::Host::Bridge
   constexpr auto EndNames = std::to_array<std::string_view>({"revoked", "banned", "kicked", "addressBanned"});
   // Domain::SanctionKind from Mute.
   constexpr auto SanctionKindNames = std::to_array<std::string_view>({"mute", "ban"});
+  // Domain::GuildRole from Member.
+  constexpr auto GuildRoleNames = std::to_array<std::string_view>({"member", "officer", "master"});
+  // Domain::GuildRemovalReason from Left.
+  constexpr auto GuildRemovalNames = std::to_array<std::string_view>({"left", "excluded", "disbanded"});
+  // The "action" of the guild command, in Client::GuildAction order.
+  constexpr auto GuildActionNames =
+    std::to_array<std::string_view>({"create", "invite", "answer", "leave", "exclude", "setRole", "transfer", "mute", "unmute", "disband"});
+  static_assert(GuildActionNames.size() == std::variant_size_v<Dreamsleeve::Client::GuildAction>);
 
   // names[value - first]; a value outside the table (Unspecified, a newer
   // server value) takes fallback.
@@ -101,6 +109,8 @@ export namespace Dreamsleeve::Host::Bridge
   constexpr std::size_t MaxErrorBytes = 512;
   // Bytes of a moderator's reason; the server applies its own, smaller limit.
   constexpr std::size_t MaxReasonBytes = 1024;
+  // Bytes of a requested guild name; the server applies its own, smaller limit.
+  constexpr std::size_t MaxGuildNameBytes = 1024;
 
   // ---- UI -> host ----------------------------------------------------------
 
@@ -264,6 +274,22 @@ export namespace Dreamsleeve::Host::Bridge
     {
     };
 
+    // A guild request: action is GuildActionNames and decides which values
+    // count (role: member or officer; no minutes: until lifted). The server
+    // judges the roles, the name and the limits.
+    struct Guild
+    {
+      std::string                  requestId;
+      std::string                  action;
+      UiId                         guildId;
+      UiId                         playerId;
+      std::string                  name;
+      bool                         accept{};
+      std::string                  role;
+      std::optional<std::uint32_t> minutes;
+      std::string                  reason;
+    };
+
   }
 
   using UiCommand = std::variant<
@@ -291,7 +317,8 @@ export namespace Dreamsleeve::Host::Bridge
     Commands::DeleteChatMessage,
     Commands::ResetPassword,
     Commands::SignInSteam,
-    Commands::CopySteamLink>;
+    Commands::CopySteamLink,
+    Commands::Guild>;
 
   // The "type" of each UiCommand alternative, in variant order.
   constexpr auto CommandNames = std::to_array<std::string_view>({
@@ -320,6 +347,7 @@ export namespace Dreamsleeve::Host::Bridge
       "resetPassword",
       "signInSteam",
       "copySteamLink",
+      "guild",
   });
   static_assert(CommandNames.size() == std::variant_size_v<UiCommand>);
 
@@ -620,6 +648,88 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<std::uint32_t>             removed;    // clearPlayerMarks
   };
 
+  // A mute inside one guild: reading only; until is absent until lifted.
+  struct UiGuildMute
+  {
+    std::string                 reason;
+    std::optional<std::int64_t> until;
+  };
+
+  // A member as guildmates see them: name is the host's label of the real
+  // profile for the current settings (the local alias in streamer mode).
+  // role: GuildRoleNames.
+  struct UiGuildMember
+  {
+    std::string                id;
+    std::string                name;
+    std::string                role;
+    bool                       online{};
+    std::int64_t               joinedAt{};
+    std::optional<UiGuildMute> mute;
+  };
+
+  struct UiGuild
+  {
+    std::string                id;
+    std::string                name;
+    std::string                channelId;
+    std::int64_t               createdAt{};
+    std::vector<UiGuildMember> members;
+  };
+
+  // An invitation waiting for the player's answer; inviter is the host's
+  // name for the inviting player when it has met them.
+  struct UiGuildInvite
+  {
+    std::string                guildId;
+    std::string                guildName;
+    std::string                invitedBy;
+    std::optional<std::string> inviter;
+    std::int64_t               expires{};
+  };
+
+  // The server's limits; a lowered limit removes nobody.
+  struct UiGuildLimits
+  {
+    std::uint32_t perPlayer{};
+    std::uint32_t members{};
+    std::uint32_t nameMin{};
+    std::uint32_t nameMax{};
+  };
+
+  // A guild the player left since the last guilds event; reason: GuildRemovalNames.
+  struct UiGuildRemoval
+  {
+    std::string guildId;
+    std::string name;
+    std::string reason;
+  };
+
+  // The player's guilds and invitations, complete; removed names the guilds
+  // the player left since the previous event, for notices.
+  struct GuildsEvent
+  {
+    std::vector<UiGuild>        guilds;
+    std::vector<UiGuildInvite>  invites;
+    UiGuildLimits               limits;
+    std::vector<UiGuildRemoval> removed;
+  };
+
+  // The answer to a guild command: the guild it acted on (a new one's ID for
+  // create), or the refusal.
+  struct GuildResultEvent
+  {
+    std::string                requestId;
+    std::optional<std::string> guildId;
+    std::optional<std::string> error;
+  };
+
+  // The channels of the session changed (a guild came or went): the complete list.
+  struct ChannelsEvent
+  {
+    std::vector<UiChannel> channels;
+  };
+
   // View visibility and chat focus, decided by the host.
   struct ShowEvent
   {};
@@ -654,6 +764,9 @@ export namespace Dreamsleeve::Host::Bridge
     RoleEvent,
     MessagesRemovedEvent,
     ModerationResultEvent,
+    GuildsEvent,
+    GuildResultEvent,
+    ChannelsEvent,
     ShowEvent,
     HideEvent,
     ActivateEvent,
@@ -681,6 +794,9 @@ export namespace Dreamsleeve::Host::Bridge
       "role",
       "messagesRemoved",
       "moderationResult",
+      "guilds",
+      "guildResult",
+      "channels",
       "show",
       "hide",
       "activate",
@@ -817,6 +933,16 @@ export namespace Dreamsleeve::Host::Bridge
     std::expected<void, std::string> Admit(Commands::DeleteChatMessage& command)
     {
       return Correlated(command, "deleteChatMessage");
+    }
+
+    std::expected<void, std::string> Admit(Commands::Guild& command)
+    {
+      if (!std::ranges::contains(GuildActionNames, command.action)) return std::unexpected{"guild requires a known action"};
+      if (command.action == "setRole" && command.role != GuildRoleNames[0] && command.role != GuildRoleNames[1])
+        return std::unexpected{"guild setRole requires role member or officer"};
+      if (command.name.size() > MaxGuildNameBytes) return std::unexpected{"guild name is too long"};
+      if (command.reason.size() > MaxReasonBytes) return std::unexpected{"guild reason is too long"};
+      return Correlated(command, "guild");
     }
 
     // Commands without values have nothing to admit.
@@ -1065,12 +1191,58 @@ export namespace Dreamsleeve::Host::Bridge
     return player;
   }
 
-  // The UI description of a channel entity; the UI's "all" view is its own aggregate.
-  UiChannel ToUiChannel(Domain::ChatChannelId id, Domain::ChatChannelKind kind)
+  // The UI description of a channel entity; the UI's "all" view is its own
+  // aggregate. A guild's channel is named after the guild.
+  UiChannel ToUiChannel(Domain::ChatChannelId id, Domain::ChatChannelKind kind, std::string_view guild = {})
   {
     if (kind == Domain::ChatChannelKind::System) return {Id(id), std::string{ChannelKindNames[2]}, "Объявления", false};
-    if (kind == Domain::ChatChannelKind::Guild) return {Id(id), std::string{ChannelKindNames[1]}, "Гильдия", true};
+    if (kind == Domain::ChatChannelKind::Guild)
+      return {Id(id), std::string{ChannelKindNames[1]}, guild.empty() ? std::string{"Гильдия"} : std::string{guild}, true};
     return {Id(id), std::string{ChannelKindNames[0]}, "Общий", true};
+  }
+
+  std::string_view GuildRoleName(Domain::GuildRole role)
+  {
+    return NameOf(GuildRoleNames, role, Domain::GuildRole::Member, GuildRoleNames.front());
+  }
+
+  std::string_view GuildRemovalName(Domain::GuildRemovalReason reason)
+  {
+    return NameOf(GuildRemovalNames, reason, Domain::GuildRemovalReason::Left, GuildRemovalNames.front());
+  }
+
+  // Named like every other surface: the real profile, or the alias in streamer mode.
+  UiGuildMember ToUiGuildMember(const Domain::GuildMember& member, Names& names, const UiSettings& settings)
+  {
+    UiGuildMember result{
+        .id       = Id(member.profile.playerId),
+        .name     = names.NameFor(member.profile.playerId, member.profile, std::nullopt, settings),
+        .role     = std::string{GuildRoleName(member.role)},
+        .online   = member.online,
+        .joinedAt = member.joinedAtUnixMs,
+    };
+    if (member.mute) result.mute = UiGuildMute{member.mute->reason, member.mute->untilUnixMs};
+    return result;
+  }
+
+  // The values of the command its action uses; the rest are ignored.
+  Dreamsleeve::Client::GuildAction GuildActionOf(Commands::Guild& command)
+  {
+    namespace Client   = Dreamsleeve::Client;
+    const auto  guild  = command.guildId.value;
+    const auto  player = command.playerId.value;
+    const auto& action = command.action;
+    if (action == "invite") return Client::InviteToGuild{guild, player};
+    if (action == "answer") return Client::AnswerGuildInvite{guild, command.accept};
+    if (action == "leave") return Client::LeaveGuild{guild};
+    if (action == "exclude") return Client::ExcludeGuildMember{guild, player};
+    if (action == "setRole")
+      return Client::SetGuildRole{guild, player, command.role == GuildRoleNames[1] ? Domain::GuildRole::Officer : Domain::GuildRole::Member};
+    if (action == "transfer") return Client::TransferGuild{guild, player};
+    if (action == "mute") return Client::MuteGuildMember{guild, player, command.minutes, std::move(command.reason)};
+    if (action == "unmute") return Client::UnmuteGuildMember{guild, player};
+    if (action == "disband") return Client::DisbandGuild{guild};
+    return Client::CreateGuild{std::move(command.name)};
   }
 
   // An unknown source is shown with the least trust.
@@ -1348,6 +1520,7 @@ export namespace Dreamsleeve::Host::Bridge
       case Code::TextNotAllowed:
         return "Сообщение содержит запрещённые слова";
       case Code::Muted:
+        if (message.starts_with("Muted in this guild")) return "Мут в этой гильдии: можно только читать";
         return "Вы в муте: писать сейчас нельзя";
       case Code::RateLimited:
         return "Слишком часто или повтор того же сообщения. Подождите немного";
@@ -1359,6 +1532,9 @@ export namespace Dreamsleeve::Host::Bridge
         return "Метка не найдена или уже удалена";
       case Code::HiddenIdentityNotAllowed:
         return "Сервер не разрешает скрывать имя";
+      case Code::NotChannelMember:
+        if (message.starts_with("Player is not a member of this guild")) return "Вы не состоите в этой гильдии";
+        break;
       case Code::InvalidRequest:
         if (message.starts_with("Message exceeds")) return "Сообщение слишком длинное";
         if (message.starts_with("Note exceeds")) return "Текст метки слишком длинный";
@@ -1407,6 +1583,58 @@ export namespace Dreamsleeve::Host::Bridge
     return message.empty() ? std::string{"Сервер отклонил имя"} : std::string{message};
   }
 
+  // Refusals of a guild request, in the UI language.
+  std::string GuildRejectionText(Dreamsleeve::Client::RequestRejectionCode code, std::string_view message)
+  {
+    using Code = Dreamsleeve::Client::RequestRejectionCode;
+    // "A guild name has at least N characters." and "... at most N ...".
+    const auto count = [&](std::string_view prefix) -> std::optional<std::uint64_t> {
+      if (!message.starts_with(prefix)) return std::nullopt;
+      std::uint64_t value{};
+      const auto*   begin = message.data() + prefix.size();
+      if (std::from_chars(begin, message.data() + message.size(), value).ec != std::errc{}) return std::nullopt;
+      return value;
+    };
+    switch (code)
+    {
+      case Code::GuildNameTaken:
+        return "Гильдия с таким названием уже есть";
+      case Code::GuildFull:
+        return "В гильдии нет свободных мест";
+      case Code::GuildPlayerLimit:
+        return "Достигнут предел гильдий на игрока";
+      case Code::GuildServerLimit:
+        return "На сервере уже предельное число гильдий";
+      case Code::GuildInvitesFull:
+        return "У гильдии слишком много ожидающих приглашений";
+      case Code::GuildAlreadyMember:
+        return "Игрок уже состоит в гильдии";
+      case Code::GuildAlreadyInvited:
+        return "Игрок уже приглашён";
+      case Code::GuildMasterStays:
+        return "Глава не может выйти: сначала передайте роль или распустите гильдию";
+      case Code::NotPermitted:
+        return "Ваша роль в гильдии этого не позволяет";
+      case Code::TextNotAllowed:
+        return "Название содержит запрещённые слова";
+      case Code::TargetNotFound:
+        if (message.starts_with("The player is not online")) return "Игрок не в сети";
+        if (message.starts_with("No such guild")) return "Гильдия не найдена";
+        return "Игрок не в гильдии или приглашения уже нет";
+      case Code::InvalidRequest:
+        if (const auto minimum = count("A guild name has at least ")) return std::format("Название не короче {} символов", *minimum);
+        if (const auto maximum = count("A guild name has at most ")) return std::format("Название не длиннее {} символов", *maximum);
+        if (message.starts_with("A guild name has letters")) return "В названии только буквы и цифры";
+        if (message.starts_with("A guild role")) return "Роль: участник или офицер";
+        break;
+      case Code::Overloaded:
+        return "Сервер занят. Попробуйте позже";
+      default:
+        break;
+    }
+    return message.empty() ? std::string{"Сервер отклонил запрос"} : std::string{message};
+  }
+
   // Refusals of a moderator request, in the UI language.
   std::string ModerationRejectionText(Dreamsleeve::Client::RequestRejectionCode code, std::string_view message, std::string_view field)
   {
@@ -1414,6 +1642,7 @@ export namespace Dreamsleeve::Host::Bridge
     switch (code)
     {
       case Code::NotPermitted:
+        if (message.starts_with("The guild role")) return "Ваша роль в гильдии не позволяет удалить это сообщение";
         if (message.starts_with("Only a moderator")) return "Это может только модератор";
         return "Модератор не может наказать себя или другого модератора";
       case Code::TargetNotFound:

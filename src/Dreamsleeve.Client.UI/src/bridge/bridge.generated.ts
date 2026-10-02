@@ -24,6 +24,9 @@ export const eventTypes = [
   "role",
   "messagesRemoved",
   "moderationResult",
+  "guilds",
+  "guildResult",
+  "channels",
   "show",
   "hide",
   "activate",
@@ -55,6 +58,7 @@ export const commandTypes = [
   "resetPassword",
   "signInSteam",
   "copySteamLink",
+  "guild",
 ] as const;
 
 // Enum strings of the events.
@@ -134,6 +138,28 @@ export const registrationModes = [
   "open",
   "steam",
   "manual",
+] as const;
+export const guildRoles = [
+  "member",
+  "officer",
+  "master",
+] as const;
+export const guildRemovalReasons = [
+  "left",
+  "excluded",
+  "disbanded",
+] as const;
+export const guildActions = [
+  "create",
+  "invite",
+  "answer",
+  "leave",
+  "exclude",
+  "setRole",
+  "transfer",
+  "mute",
+  "unmute",
+  "disband",
 ] as const;
 
 // Bounds of text the host sends: chat and mark text, snapshot lines per

@@ -12,12 +12,14 @@ import { AccountPanel } from "./AccountPanel";
 import { MarksPanel } from "./MarksPanel";
 import { IgnoredPanel } from "./IgnoredPanel";
 import { ModeratorPanel } from "./ModeratorPanel";
+import { GuildsPanel, ProfileGuilds } from "./GuildsPanel";
 import { playerActions } from "../state/moderator";
 import { useDialog } from "../features/useDialog";
 import styles from "../styles/Workspace.module.css";
 const tabs: { id: Exclude<Panel, null>; label: string }[] = [
   { id: "online", label: "Онлайн" },
   { id: "profile", label: "Профиль" },
+  { id: "guilds", label: "Гильдии" },
   { id: "marks", label: "Метки" },
   { id: "ignored", label: "Игнор" },
   { id: "stats", label: "Статистика" },
@@ -66,6 +68,9 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
               onClick={() => chat.open(t.id)}
             >
               {t.label}
+              {t.id === "guilds" && s.invites.length > 0 && (
+                <sup> {s.invites.length}</sup>
+              )}
             </button>
           ))}
         </nav>
@@ -73,6 +78,7 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
           className={`${styles.body} ${s.panel === "online" ? styles.onlineBody : ""}`}
         >
           {s.panel === "online" && <OnlinePanel chat={chat} state={s} />}
+          {s.panel === "guilds" && <GuildsPanel chat={chat} state={s} />}
           {s.panel === "settings" && (
             <>
               <h3>Настройки чата</h3>
@@ -112,6 +118,16 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
                   вас. Сам светлячок и онлайн остаются.
                 </small>
               </div>
+            )}
+          {s.panel === "profile" &&
+            s.selectedPlayer &&
+            s.selectedPlayer !== s.selfId && (
+              <ProfileGuilds
+                chat={chat}
+                state={s}
+                playerId={s.selectedPlayer}
+                name={selectedName}
+              />
             )}
           {s.panel === "profile" &&
             s.moderator &&

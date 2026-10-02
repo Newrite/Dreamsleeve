@@ -56,6 +56,8 @@ public:
     {
       const bool ready = output.status.Ready();
       serverName       = output.status.serverName;
+      // Published with the chat state of their channels: read before the updates name them.
+      guilds = output.status.guilds;
       // The core drops the request with the session; the server may or may not have stored it.
       if (!ready && std::erase_if(pending, [](const auto& entry) {
                       return std::holds_alternative<PendingName>(entry.second.request);
@@ -65,6 +67,8 @@ public:
         std::visit([&](const auto& value) { Apply(value, settings, ready, frame); }, update);
 
       if (frame.playersChanged && !frame.snapshot) Emit(frame, Bridge::PlayersEvent{.players = PlayerList(settings)});
+      // Before the results: a settled request finds the guilds it changed.
+      PublishGuilds(settings, ready, frame);
 
       for (const auto& result : output.results)
         Resolve(frame, result, settings);
@@ -202,6 +206,15 @@ public:
       }));
     }
 
+    // A guild request of the web UI, answered with guildResult; the server
+    // judges the roles, the name and the limits.
+    std::expected<void, std::string> Guild(ClientExchange& exchange, std::string uiRequestId, GuildAction action)
+    {
+      return Posted(Submit(exchange, PendingGuild{std::move(uiRequestId)}, [&](std::uint64_t id) {
+        return GuildRequest{id, std::move(action)};
+      }));
+    }
+
     // The next Process must deliver a full snapshot; old correlations are dropped
     // so a reply cannot reach a view that no longer exists.
     void ResetView()
@@ -209,12 +222,14 @@ public:
       needsSnapshot     = true;
       snapshotRequested = false;
       refreshing        = false;
-      // Chat sends, mark and moderator requests lose their view. Death reports
-      // have no UI correlation and settle silently either way.
+      guildsShown       = false;
+      // Chat sends, mark, moderator and guild requests lose their view. Death
+      // reports have no UI correlation and settle silently either way.
       std::erase_if(pending, [](const auto& entry) {
         const auto* mark = std::get_if<PendingMark>(&entry.second.request);
         return std::holds_alternative<PendingChat>(entry.second.request) ||
-               std::holds_alternative<PendingModeration>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
+               std::holds_alternative<PendingModeration>(entry.second.request) ||
+               std::holds_alternative<PendingGuild>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
       });
       lastStatus.reset();
       lastIdentity.reset();
@@ -229,6 +244,7 @@ public:
       needsSnapshot     = true;
       snapshotRequested = false;
       refreshing        = true;
+      guildsShown       = false;
       lastStatus.reset();
     }
 
@@ -378,7 +394,13 @@ private:
       std::string uiRequestId;
     };
 
-    using PendingRequest = std::variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName, PendingModeration>;
+    struct PendingGuild
+    {
+      std::string uiRequestId;
+    };
+
+    using PendingRequest =
+      std::variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName, PendingModeration, PendingGuild>;
 
     struct Pending
     {
@@ -584,6 +606,73 @@ private:
       Emit(frame, std::move(event));
     }
 
+    void Resolve(Frame& frame, PendingGuild& guild, const CommandResult::Outcome& outcome, const UiSettings&)
+    {
+      Bridge::GuildResultEvent event{.requestId = std::move(guild.uiRequestId)};
+      if (const auto* done = std::get_if<GuildDone>(&outcome))
+        event.guildId = Bridge::Id(done->guildId);
+      else if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
+        event.error = Bridge::ClipError(Bridge::GuildRejectionText(rejection->code, rejection->message));
+      else
+        event.error = Bridge::ClipError(Reason(outcome));
+      Emit(frame, std::move(event));
+    }
+
+    // The guild book as the UI shows it: after a change or a new view, and
+    // only once the server sent it, so a session never starts with "no
+    // guilds". The guilds left since the last event ride along for notices.
+    void PublishGuilds(const UiSettings& settings, bool ready, Frame& frame)
+    {
+      if (!guilds)
+      {
+        removalsSeen = 0;
+        return;
+      }
+      if (!ready || needsSnapshot || (guildsShown && guilds == shownGuilds)) return;
+      Bridge::GuildsEvent event;
+      for (const auto& guild : guilds->Guilds())
+      {
+        Bridge::UiGuild entry{Bridge::Id(guild.guildId), guild.name, Bridge::Id(guild.channelId), guild.createdAtUnixMs, {}};
+        for (const auto& member : guild.members)
+          entry.members.push_back(Bridge::ToUiGuildMember(member, names, settings));
+        event.guilds.push_back(std::move(entry));
+      }
+      for (const auto& invite : guilds->Invites())
+        event.invites.push_back({Bridge::Id(invite.guildId),
+                                 invite.guildName,
+                                 Bridge::Id(invite.invitedBy),
+                                 KnownName(invite.invitedBy, settings),
+                                 invite.expiresAtUnixMs});
+      const auto& limits = guilds->Limits();
+      event.limits       = {limits.maxGuildsPerPlayer, limits.maxMembers, limits.nameMinLength, limits.nameMaxLength};
+      for (const auto& removal : guilds->Removals())
+        if (removal.revision > removalsSeen)
+          event.removed.push_back({Bridge::Id(removal.guildId), removal.name, std::string{Bridge::GuildRemovalName(removal.reason)}});
+      removalsSeen = guilds->Revision();
+      Emit(frame, std::move(event));
+      shownGuilds = guilds;
+      guildsShown = true;
+    }
+
+    // The session's channels in ID order, a guild's named after the guild.
+    std::vector<Bridge::UiChannel> ChannelList() const
+    {
+      std::vector<Domain::ChatChannelId> ids;
+      ids.reserve(channels.size());
+      for (const auto& [id, kind] : channels)
+        ids.push_back(id);
+      std::ranges::sort(ids);
+      std::vector<Bridge::UiChannel> list;
+      list.reserve(ids.size());
+      for (const auto id : ids)
+      {
+        const auto  kind  = channels.at(id);
+        const auto* guild = kind == Domain::ChatChannelKind::Guild && guilds ? guilds->FindByChannel(id) : nullptr;
+        list.push_back(Bridge::ToUiChannel(id, kind, guild ? std::string_view{guild->name} : std::string_view{}));
+      }
+      return list;
+    }
+
     // The name of a player the host has met: online now or the author of
     // retained chat; absent for anyone else, such as an offline player never seen.
     std::optional<std::string> KnownName(Domain::PlayerId id, const UiSettings& settings)
@@ -713,8 +802,9 @@ private:
       }
 
       Bridge::SnapshotEvent event;
-      for (const auto& chat : snapshot.chats)
-        event.channels.push_back(Bridge::ToUiChannel(chat.channelId, chat.kind));
+      event.channels = ChannelList();
+      // The UI starts this view over: the guilds follow the snapshot again.
+      guildsShown = false;
       // ChatCache keeps ascending MessageId order; the UI bounds its own history.
       for (const auto& chat : snapshot.chats)
       {
@@ -772,6 +862,8 @@ private:
         else
           channels.erase(change.channelId);
       }
+      // A guild came or went: the UI gets the list before the channel's history.
+      if (!delta.chats.empty() && !needsSnapshot) Emit(frame, Bridge::ChannelsEvent{.channels = ChannelList()});
       // Ordered transitions of the visible set. A clear (space change) keeps
       // the own marks: they still exist, only out of sight.
       for (const auto& change : delta.groundMarks)
@@ -921,6 +1013,12 @@ private:
     std::optional<std::string>                                         nameChanged;
     Bridge::DisplayNameEvent                                           lastName;
     std::optional<ClientStatus>                                        lastStatus;
+    // The guild book of the session, the one the UI shows, whether this view
+    // has had it, and the book revision whose removals the UI has heard of.
+    std::shared_ptr<const GuildBook> guilds;
+    std::shared_ptr<const GuildBook> shownGuilds;
+    bool                             guildsShown{};
+    std::uint64_t                    removalsSeen{};
     bool                                                               needsSnapshot{true};
     bool                                                               snapshotRequested{};
     bool                                                               refreshing{};

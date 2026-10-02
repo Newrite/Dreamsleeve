@@ -97,7 +97,12 @@ const MessageRow = memo(function MessageRow({
           })}{" "}
         </time>
       )}
-      <span className={styles.channel}>[{channelName}] </span>
+      <span
+        className={styles.channel}
+        title={channelKind === "guild" ? `Гильдия «${channelName}»` : undefined}
+      >
+        [{channelName}]{" "}
+      </span>
       {source === "player" && (
         <button
           className={styles.author}

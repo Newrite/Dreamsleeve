@@ -80,10 +80,22 @@ TEST_CASE("A guild book holds each guild, member and invitation once and refuses
   REQUIRE(book->Invites().size() == 1);
   CHECK(book->Invites()[0].invitedBy == 10);
 
-  REQUIRE(book->Remove(4));
-  CHECK_FALSE(book->Remove(4));
+  // A removal is remembered with its reason and the revision it happened at.
+  const auto before = book->Revision();
+  REQUIRE(book->Remove(4, Domain::GuildRemovalReason::Excluded));
+  CHECK_FALSE(book->Remove(4, Domain::GuildRemovalReason::Left));
   CHECK_FALSE(book->Find(4));
   CHECK(book->Find(5));
+  REQUIRE(book->Removals().size() == 1);
+  CHECK(book->Removals()[0] == GuildBook::Removal{before + 1, 4, "Guild4", Domain::GuildRemovalReason::Excluded});
+  for (Domain::GuildId guildId = 10; guildId < 10 + GuildBook::RecentRemovals; ++guildId)
+  {
+    REQUIRE(book->Add(MakeGuild(guildId)));
+    REQUIRE(book->Remove(guildId, Domain::GuildRemovalReason::Disbanded));
+  }
+  REQUIRE(book->Removals().size() == GuildBook::RecentRemovals);
+  CHECK(book->Removals().front().guildId == 10);
+  CHECK(book->Removals().back().revision == book->Revision());
 }
 
 TEST_CASE("A removed channel takes its undelivered content along and the next delta reports it absent")

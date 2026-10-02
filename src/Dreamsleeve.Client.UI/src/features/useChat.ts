@@ -36,6 +36,7 @@ export function useChat(chat: Chat) {
         event.preventDefault();
         const s = chat.store.getState();
         if (s.moderation) chat.moderator.closeDialog();
+        else if (s.guildMute) chat.guilds.closeMute();
         else if (s.authorMenu) chat.closeAuthorMenu();
         else if (s.panel) chat.open(null);
         else chat.close();
