@@ -42,11 +42,13 @@ module SteamOpenId =
 
     /// The SteamID of the answer the browser brought back for this flow, once
     /// Steam confirms that it issued it. "canceled" when the player turned back.
-    let verify (http: HttpClient) (publicUrl: string) (flow: string) (fields: (string * string) list) (token: CancellationToken) = task {
+    /// The flow returns to whichever of the public origins it began through.
+    let verify (http: HttpClient) (publicUrls: string list) (flow: string) (fields: (string * string) list) (token: CancellationToken) = task {
+        let expected returned = publicUrls |> List.exists (fun publicUrl -> returned = returnUrl publicUrl flow)
         let field name = fields |> List.tryFind (fun (key, _) -> key = name) |> Option.map snd
         match field "openid.mode", field "openid.op_endpoint", field "openid.return_to", field "openid.claimed_id", field "openid.identity" with
         | Some "cancel", _, _, _, _ -> return Error "canceled"
-        | Some "id_res", Some Endpoint, Some returned, Some id, Some identity when returned = returnUrl publicUrl flow && id = identity ->
+        | Some "id_res", Some Endpoint, Some returned, Some id, Some identity when expected returned && id = identity ->
             let found = claimed.Match id
             if not found.Success then return Error "The claimed ID is not a Steam account."
             else

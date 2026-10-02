@@ -19,11 +19,19 @@ module WebPorts =
     [<Literal>]
     let DescribeTimeoutMs = 1000
 
-    let private listener passwordVariable (settings: HttpListenerSettings) : ListenerSettings =
+    let private listener passwordVariable proxies (settings: HttpListenerSettings) : ListenerSettings =
         { ListenUrl = settings.ListenUrl; CertificatePath = settings.CertificatePath
-          CertificatePasswordVariable = passwordVariable; TrustForwardedHeaders = settings.TrustForwardedHeaders }
+          CertificatePasswordVariable = passwordVariable; TrustForwardedHeaders = settings.TrustForwardedHeaders
+          TrustedProxies = proxies }
 
-    let authListener (settings: ApplicationConfig) = listener "DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD" settings.Authentication.Listener
+    /// Players reach it through the server's proxies too; the admin panel never.
+    let authListener (settings: ApplicationConfig) =
+        listener "DREAMSLEEVE_AUTH_CERTIFICATE_PASSWORD" (Configuration.trustedProxies settings) settings.Authentication.Listener
+
+    // The server's own origin first, then its proxies'.
+    let private steamUrls (settings: ApplicationConfig) =
+        let steam = settings.Authentication.Steam
+        if steam.Enabled then (steam.PublicUrl :: steam.ProxyUrls) |> List.map (fun url -> url.TrimEnd('/')) else []
 
     /// The optional Steam Web API key: an environment variable, never a setting.
     [<Literal>]
@@ -31,13 +39,13 @@ module WebPorts =
 
     let authRoutes (settings: ApplicationConfig) : AuthRouteSettings =
         let authentication = settings.Authentication
-        { SteamPublicUrl = if authentication.Steam.Enabled then ValueSome (authentication.Steam.PublicUrl.TrimEnd('/')) else ValueNone
+        { SteamPublicUrls = steamUrls settings
           RequestsPerMinute = authentication.Listener.RequestsPerMinute
           RequestTimeoutSeconds = authentication.Listener.RequestTimeoutSeconds
           MaxConnections = 2 * authentication.Service.MailboxCapacity + authentication.Service.MaxConcurrentOperations
           Input = settings.Server.ChatInput }
 
-    let adminListener (settings: ApplicationConfig) = listener "DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD" settings.Admin.Listener
+    let adminListener (settings: ApplicationConfig) = listener "DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD" [] settings.Admin.Listener
 
     let adminRoutes (settings: ApplicationConfig) moderation : AdminRouteSettings =
         let admin = settings.Admin
@@ -52,9 +60,9 @@ module WebPorts =
     let private steamHttp = lazy (new HttpClient(Timeout = TimeSpan.FromSeconds 15.))
 
     let steam (settings: ApplicationConfig) : SteamPorts =
-        let publicUrl = settings.Authentication.Steam.PublicUrl.TrimEnd('/')
+        let publicUrls = steamUrls settings
         let key = Environment.GetEnvironmentVariable SteamKeyVariable
-        { Verify = fun flow fields token -> SteamOpenId.verify steamHttp.Value publicUrl flow fields token
+        { Verify = fun flow fields token -> SteamOpenId.verify steamHttp.Value publicUrls flow fields token
           Profile = fun steamId token ->
             if String.IsNullOrWhiteSpace key then Task.FromResult { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
             else SteamOpenId.profile steamHttp.Value key steamId token }

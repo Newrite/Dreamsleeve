@@ -291,7 +291,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
     case "Steam sign-in starts a flow with Steam's URL, is polled by the client and is off unless enabled" (fun () -> task {
         let flow, secret = String('f', 43), String('s', 43)
         let steamOn (config: ApplicationConfig) =
-            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779/" } } }
+            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779/"; ProxyUrls = [] } } }
         let execute command (response: ReplyChannel<_>) =
             match command with
             | AccountAccessCommand.BeginSteam(origin, true) when origin.Address.IsSome -> response.Reply(Ok (AccountAccessResult.SteamStarted(flow, secret, 600)))
@@ -343,7 +343,7 @@ let tests = testSequenced (testList "Authentication HTTP" [
     case "the browser's return is verified with Steam, named from a clean persona and answered with a page" (fun () -> task {
         let flow = String('f', 43)
         let steamOn (config: ApplicationConfig) =
-            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779" } } }
+            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779"; ProxyUrls = [] } } }
         let steamId = 76561198000000042UL
         let persona = ref "Довакин"
         let steam = {
@@ -392,6 +392,62 @@ let tests = testSequenced (testList "Authentication HTTP" [
             let! actual = code second
             equal "rate_limited" actual
             equal 1 received.Count
+        }))
+
+    case "a proxy of the server speaks for its players; anyone else's forwarded address is ignored" (fun () ->
+        let resolve trustLoopback proxies (peer: string) (forwarded: string list) =
+            let ranges = proxies |> List.map (fun (range: string) -> AddressRange.parse range |> ok)
+            let found = Dreamsleeve.Server.Web.Forwarding.resolve trustLoopback ranges (Net.IPAddress.Parse peer) forwarded
+            found.Client |> ValueOption.map string, found.Proxy |> ValueOption.map string
+        let proxies = [ "203.0.113.200" ]
+        // A stranger's header is the stranger's own words.
+        equal (ValueSome "198.51.100.9", ValueNone) (resolve false proxies "198.51.100.9" [ "192.0.2.1" ])
+        // Through the proxy: the client it names; entries left of it are spoofable.
+        equal (ValueSome "192.0.2.1", ValueSome "203.0.113.200") (resolve false proxies "203.0.113.200" [ "10.0.0.1, 192.0.2.1" ])
+        equal (ValueSome "192.0.2.1", ValueSome "203.0.113.200") (resolve false proxies "::ffff:203.0.113.200" [ "192.0.2.1" ])
+        // A proxy that names nobody: the client is unknown.
+        equal (ValueNone, ValueSome "203.0.113.200") (resolve false proxies "203.0.113.200" [])
+        equal (ValueNone, ValueSome "203.0.113.200") (resolve false proxies "203.0.113.200" [ "garbage" ])
+        // A local proxy in front of the server, then the server's proxy.
+        equal (ValueSome "192.0.2.1", ValueSome "203.0.113.200") (resolve true proxies "127.0.0.1" [ "192.0.2.1, 203.0.113.200" ])
+        equal (ValueSome "203.0.113.200", ValueNone) (resolve true [] "127.0.0.1" [ "192.0.2.1, 203.0.113.200" ])
+        equal (ValueSome "127.0.0.1", ValueNone) (resolve false proxies "127.0.0.1" [ "192.0.2.1" ])
+
+        let throughProxy config =
+            { config with Proxies = { Trusted = [ "127.0.0.1" ] }
+                          Authentication = { config.Authentication with
+                                                 Steam = { Enabled = true; PublicUrl = "https://auth.example.org"
+                                                           ProxyUrls = [ "https://proxy.example.org" ] } } }
+        let execute command (response: ReplyChannel<_>) =
+            match command with
+            | AccountAccessCommand.BeginSteam _ -> response.Reply (Ok (AccountAccessResult.SteamStarted(String('f', 43), String('s', 43), 300)))
+            | _ -> response.Reply signedIn
+        withHost throughProxy execute (fun http received -> task {
+            use forwarded = new HttpRequestMessage(HttpMethod.Post, "auth/login", Content = JsonContent.Create credentials)
+            forwarded.Headers.Add("X-Forwarded-For", "192.0.2.1")
+            use! answer = http.SendAsync forwarded
+            status 200 answer
+            use! anonymous = post http "auth/login" credentials
+            status 200 anonymous
+            let origins =
+                received.ToArray() |> Array.map (function
+                    | AccountAccessCommand.Login(_, _, origin) -> origin.Address |> ValueOption.map string, origin.Proxy |> ValueOption.map string
+                    | other -> failtestf "%A" other)
+            equal [| ValueSome "192.0.2.1", ValueSome "127.0.0.1"; ValueNone, ValueSome "127.0.0.1" |] origins
+            // A Steam sign-in begun through the proxy returns there, any other to the server.
+            let steamUrl (host: string) = task {
+                use request = new HttpRequestMessage(HttpMethod.Post, "auth/steam/begin", Content = JsonContent.Create {| |})
+                request.Headers.Host <- host
+                use! response = http.SendAsync request
+                status 200 response
+                let! body = response.Content.ReadFromJsonAsync<JsonElement>()
+                return Uri.UnescapeDataString(body.GetProperty("browserUrl").GetString())
+            }
+            let! viaProxy = steamUrl "proxy.example.org"
+            check (viaProxy.Contains "openid.return_to=https://proxy.example.org/auth/steam/return") viaProxy
+            check (viaProxy.Contains "openid.realm=https://proxy.example.org&") viaProxy
+            let! direct = steamUrl "localhost"
+            check (direct.Contains "openid.return_to=https://auth.example.org/auth/steam/return") direct
         }))
 
     case "request deadline includes a client that never finishes its HTTP body" (fun () ->

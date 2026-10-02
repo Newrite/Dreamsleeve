@@ -318,7 +318,7 @@ module PlayerSession =
                 let profile = Moderation.publicProfile state.Moderation stored.Profile
                 state.Phase <- Reserving(Player.create profile)
                 emit options request state context
-                    (SessionHostCommand.Reserve(request.ConnectionId, profile, request.Hiding,
+                    (SessionHostCommand.Reserve(request.ConnectionId, profile, request.Hiding, stored.SignedInFrom,
                         address.Map PlayerSessionMessage.IdentityReplied)) |> ignore
 
             | Error SessionAuthenticationError.InvalidTicket, _ ->

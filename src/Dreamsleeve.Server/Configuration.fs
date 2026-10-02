@@ -35,6 +35,18 @@ type SteamSettings = {
     /// The origin of the authentication host as players' browsers reach it,
     /// "https://auth.example.org"; Steam sends the browser back there.
     PublicUrl: string
+    /// The origins of the proxies ([Proxies]) as browsers reach them: a sign-in
+    /// begun through one returns there (matched by the Host of the request).
+    ProxyUrls: string list
+}
+
+/// Proxies players connect through when they cannot reach this server directly
+/// (docs/DeploymentRu.md, «Прокси»). Their forwarded client addresses count on
+/// the authentication host; a game connection from one takes the address the
+/// player signed in from; their own addresses are never range-banned.
+type ProxySettings = {
+    /// Addresses or CIDR ranges, like range bans: "203.0.113.7", "2001:db8::/48".
+    Trusted: string list
 }
 
 /// Who may register is not a setting: the panel and the console change the
@@ -84,6 +96,7 @@ type ApplicationConfig = {
     Announcements: AnnouncementOptions
     GroundMarks: GroundMarkOptions
     Guilds: GuildOptions
+    Proxies: ProxySettings
 }
 
 [<RequireQualifiedAccess>]
@@ -101,7 +114,7 @@ module Configuration =
         Recovery = { InitialDelayMs = 1000; MaxDelayMs = 30000; MaxRestarts = 5; WindowSeconds = 600 }
         Database = SqliteAccountStoreConfig.defaults
         Authentication = {
-            Steam = { Enabled = false; PublicUrl = "" }
+            Steam = { Enabled = false; PublicUrl = ""; ProxyUrls = [] }
             Listener = {
                 ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
                 TrustForwardedHeaders = false; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
@@ -123,6 +136,7 @@ module Configuration =
         Announcements = AnnouncementOptions.defaults
         GroundMarks = GroundMarkOptions.defaults
         Guilds = GuildOptions.defaults
+        Proxies = { Trusted = [] }
     }
 
     // Each [[table array]] entry starts from these defaults, like a section does.
@@ -145,6 +159,10 @@ module Configuration =
         if isList target then
             let element = target.GetGenericArguments()[0]
             match input, listItemDefaults.TryGetValue element with
+            // A list of strings is an inline array of strings.
+            | (:? TomlArray as values), _ when element = typeof<string> ->
+                if values |> Seq.forall (fun value -> value :? string) then Ok (makeList target (List.ofSeq values))
+                else invalid ()
             | (:? TomlTableArray as tables), (true, template) ->
                 let items = tables |> Seq.mapi (fun index table -> overlay $"{path.TrimEnd('.')}[{index}]." template table) |> Seq.toList
                 match items |> List.tryPick (function Error error -> Some error | Ok _ -> None) with
@@ -190,7 +208,12 @@ module Configuration =
 
     let rec private toTableValue (value: obj) : obj =
         let valueType = value.GetType()
-        if isList valueType then
+        if isList valueType && valueType.GetGenericArguments()[0] = typeof<string> then
+            let values = TomlArray()
+            for item in value :?> System.Collections.IEnumerable do
+                values.Add item
+            box values
+        elif isList valueType then
             let tables = TomlTableArray()
             for item in value :?> System.Collections.IEnumerable do
                 tables.Add(toTableValue item :?> TomlTable)
@@ -297,6 +320,10 @@ module Configuration =
         | true, uri -> Some uri.Port
         | false, _ -> None
 
+    /// The [Proxies] the file trusts; validate has refused any that does not parse.
+    let trustedProxies (config: ApplicationConfig) =
+        config.Proxies.Trusted |> List.choose (AddressRange.parse >> Result.toOption)
+
     /// The one check of the whole file: every section's own rules and the rules
     /// between sections. The owners that receive the settings trust them.
     let private validate (config: ApplicationConfig) =
@@ -313,6 +340,14 @@ module Configuration =
                     "Authentication.Steam.PublicUrl must be an origin (scheme, host and port) that players' browsers reach; "
                     + "plain HTTP only on literal loopback or with Authentication.Listener.AllowInsecureRemote."
                 | Ok _ -> ()
+                for url in authentication.Steam.ProxyUrls do
+                    match listenUrl "Authentication.Steam.ProxyUrls" url true authentication.Listener.AllowInsecureRemote with
+                    | Error _ -> $"Authentication.Steam.ProxyUrls: \"{url}\" is not an origin (scheme, host and port) that browsers reach."
+                    | Ok _ -> ()
+            for proxy in config.Proxies.Trusted do
+                match AddressRange.parse proxy with
+                | Error _ -> $"Proxies.Trusted: \"{proxy}\" is not an address or a CIDR range."
+                | Ok _ -> ()
             if admin.Enabled then
                 yield! listener "Admin.Listener" admin.Listener
                 yield! AdminService.validate admin.Service
@@ -327,7 +362,7 @@ module Configuration =
                 "Moderation.RulesPath must be set when moderation is enabled."
         ]
         match errors, GameSettings.create config.Server config.Runtime config.Identity config.Announcements config.GroundMarks config.Guilds with
-        | [], Ok game -> Ok (config, game)
+        | [], Ok game -> Ok (config, GameSettings.withTrustedProxies (trustedProxies config) game)
         | errors, Ok _ -> Error (String.concat " " errors)
         | errors, Error game -> Error (String.concat " " (errors @ game))
 

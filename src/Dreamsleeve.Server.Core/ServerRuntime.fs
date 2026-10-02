@@ -28,6 +28,8 @@ type RuntimeSessionRow = {
     ConnectionId: Guid
     /// For the panel only.
     Address: IPAddress
+    /// The proxy of the server the player connects through.
+    Proxy: IPAddress option
     PlayerId: PlayerId option
     Phase: RuntimeSessionPhase
     ConnectedAt: DateTimeOffset
@@ -109,6 +111,30 @@ module ServerRuntime =
 
     // A pseudonym is chosen at random, never from a name.
     let private pick count = Random.Shared.Next count
+
+    let private isProxy state (address: IPAddress) =
+        state.Settings.TrustedProxies |> List.exists (fun range -> AddressRange.contains range address)
+
+    /// A session through a proxy of the server is the player who signed in
+    /// through it: it takes that address, and the bans in force on it. true when
+    /// such a ban refuses the session (the connection closes).
+    let private throughProxy state (entry: SessionTable.Entry) (signedInFrom: IPAddress voption) =
+        match signedInFrom with
+        | ValueSome player when entry.Proxy.IsNone && isProxy state entry.Address ->
+            entry.Proxy <- Some entry.Address
+            entry.Address <- player
+            match AddressBan.find DateTimeOffset.UtcNow player state.AddressBans with
+            | ValueSome ban ->
+                state.Logger.LogInformation("Closing {ConnectionId} from {Address} through proxy {Proxy}: the range {Range} is banned",
+                                            entry.ConnectionId, ClientAddress.text player, ClientAddress.text entry.Proxy.Value,
+                                            AddressRange.key ban.Range)
+                state.Transport.Close entry.ConnectionId
+                true
+            | ValueNone ->
+                state.Logger.LogDebug("Session {ConnectionId} comes through proxy {Proxy} from {Address}",
+                                      entry.ConnectionId, ClientAddress.text entry.Proxy.Value, ClientAddress.text player)
+                false
+        | ValueSome _ | ValueNone -> false
 
     let private fail state (context: AgentContext<ServerRuntimeMessage>) (reason: string) =
         state.Logger.LogError("Server runtime failed: {Reason}", reason)
@@ -221,10 +247,11 @@ module ServerRuntime =
 
     let private host (options: ServerRuntimeOptions) state context command =
         match command with
-        | SessionHostCommand.Reserve(connectionId, profile, hiding, reply) ->
+        | SessionHostCommand.Reserve(connectionId, profile, hiding, signedInFrom, reply) ->
             let answer =
                 match SessionTable.find connectionId state.Table with
-                | Some entry when not state.Stopping -> SessionTable.reserve profile hiding pick entry state.Table
+                | Some entry when not state.Stopping && not (throughProxy state entry signedInFrom) ->
+                    SessionTable.reserve profile hiding pick entry state.Table
                 | Some _ | None -> IdentityAdmission.Closed
 
             match answer with
@@ -425,7 +452,8 @@ module ServerRuntime =
     let private transportEvent (options: ServerRuntimeOptions) authenticator state context event =
         match event with
         | ServerTransportEvent.Connected(connectionId, address) ->
-            let banned = AddressBan.find DateTimeOffset.UtcNow address state.AddressBans
+            // A proxy of the server is never banned; its players are, once they sign in.
+            let banned = if isProxy state address then ValueNone else AddressBan.find DateTimeOffset.UtcNow address state.AddressBans
             if state.Stopping then
                 state.Logger.LogDebug("Refusing connection {ConnectionId}: the server is stopping", connectionId)
                 state.Transport.Close connectionId
@@ -576,12 +604,14 @@ module ServerRuntime =
             close options state context entry
 
     /// The bans in force from now on. Every connection they cover ends; a
-    /// session first hears why, like an account ban.
+    /// session first hears why, like an account ban. A guest of a proxy of the
+    /// server stays: the proxy itself is never banned.
     let private banAddresses (options: ServerRuntimeOptions) state context (bans: AddressBan list) =
         state.AddressBans <- bans
         let time = DateTimeOffset.UtcNow
         visitRoutes state (fun entry ->
-            match AddressBan.find time entry.Address bans with
+            let proxyGuest = entry.Proxy.IsNone && isProxy state entry.Address
+            match (if proxyGuest then ValueNone else AddressBan.find time entry.Address bans) with
             | ValueSome ban when entry.Phase <> RuntimeSessionPhase.Closing ->
                 state.Logger.LogInformation("Closing {ConnectionId} from {Address}: the range {Range} is banned",
                                             entry.ConnectionId, ClientAddress.text entry.Address, AddressRange.key ban.Range)
@@ -720,7 +750,7 @@ module ServerRuntime =
         | ServerRuntimeMessage.ListSessions reply ->
             reply.Reply [
                 for entry in state.Table.Connections.Values do
-                    { ConnectionId = entry.ConnectionId; Address = entry.Address; PlayerId = entry.PlayerId; Phase = entry.Phase
+                    { ConnectionId = entry.ConnectionId; Address = entry.Address; Proxy = entry.Proxy; PlayerId = entry.PlayerId; Phase = entry.Phase
                       ConnectedAt = entry.ConnectedAt; Session = entry.Child |> Option.map _.Ref }
             ]
         | ServerRuntimeMessage.Stop -> stop options state context

@@ -303,6 +303,17 @@ let tests = testList "Server configuration" [
             Expect.isError (Configuration.parse [|"--config"; path|]) "plain HTTP outside loopback is refused")
         withFile "[Authentication.Steam]\nEnabled = true\nPublicUrl = \"https://auth.example.org\"\n" (fun path ->
             Expect.isOk (Configuration.parse [|"--config"; path|]) "an HTTPS origin is accepted")
+        // The server's proxies: addresses or ranges; their Steam origins follow the PublicUrl rules.
+        withFile "[Proxies]\nTrusted = [\"203.0.113.7\", \"2001:db8::/48\"]\n" (fun path ->
+            match Configuration.parse [|"--config"; path|] with
+            | Ok (LaunchCommand.Run(config, game)) ->
+                Expect.equal (Configuration.trustedProxies config |> List.map Dreamsleeve.Server.Domain.AddressRange.key) [ "203.0.113.7/32"; "2001:db8::/48" ] "both parse"
+                Expect.equal game.TrustedProxies (Configuration.trustedProxies config) "the runtime gets them"
+            | other -> failtestf "%A" other)
+        withFile "[Proxies]\nTrusted = [\"proxy.example.org\"]\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "a name is not an address")
+        withFile "[Authentication.Steam]\nEnabled = true\nPublicUrl = \"https://auth.example.org\"\nProxyUrls = [\"http://proxy.example.org\"]\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "a proxy's plain HTTP origin is refused")
         // Who may register is the run-time registration mode, not a setting.
         withFile "[Authentication]\nAllowRegistration = false\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "AllowRegistration is an unknown setting")

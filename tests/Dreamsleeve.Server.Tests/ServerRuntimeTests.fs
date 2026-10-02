@@ -43,7 +43,13 @@ let private createAuthentication () =
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
-        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone } | None -> Error SessionAuthenticationError.InvalidTicket)
+        Result =
+            match Map.tryFind request.Ticket identities with
+            | Some profile ->
+                // Each player signed in from an address of its own.
+                let address = Net.IPAddress.Parse $"198.51.100.{Dreamsleeve.Server.Domain.PlayerId.value profile.PlayerId}"
+                Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueSome address }
+            | None -> Error SessionAuthenticationError.InvalidTicket
     }
     Agent.Start(AgentOptions.create "fixture-authentication",
         AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
@@ -124,7 +130,7 @@ let private post (agent: Agent<_>) command = task {
     equal AgentPostResult.Posted posted
 }
 
-let private withRuntimeNamed options identity pseudonyms createAuthentication run = task {
+let private withRuntimeConfigured options identity pseudonyms proxies createAuthentication run = task {
     let mutable ready = fun () -> false
     let input = ConcurrentQueue<ServerTransportEvent>()
     let output = Channel.CreateUnbounded<Guid * ServerPacket>()
@@ -163,7 +169,9 @@ let private withRuntimeNamed options identity pseudonyms createAuthentication ru
     use authenticator = createAuthentication ()
     use writer = Agent.Start(AgentOptions.create "writer", discard)
     use guildWriter = Agent.Start(AgentOptions.create "guild-writer", discardGuilds)
-    let game = Settings.game ServerConfig.defaults options identity AnnouncementOptions.defaults GroundMarkOptions.defaults
+    let game =
+        Settings.game ServerConfig.defaults options identity AnnouncementOptions.defaults GroundMarkOptions.defaults
+        |> GameSettings.withTrustedProxies proxies
     use runtime = ServerRuntime.start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport NullLogger.Instance
     let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
@@ -174,6 +182,9 @@ let private withRuntimeNamed options identity pseudonyms createAuthentication ru
     finally
         runtime.Abort()
 }
+
+let private withRuntimeNamed options identity pseudonyms createAuthentication run =
+    withRuntimeConfigured options identity pseudonyms [] createAuthentication run
 
 let private withRuntimeUsing options createAuthentication run =
     withRuntimeNamed options IdentityOptions.defaults Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn createAuthentication run
@@ -278,6 +289,60 @@ let tests = testList "ServerRuntime" [
             let! state = stats fixture
             equal 1 state.Ready
             equal 1 state.Connections
+        })
+    }
+
+    testTask "a session through a proxy of the server takes its player's sign-in address; the proxy itself is never banned" {
+        let proxy = Net.IPAddress.Parse "203.0.113.200"
+        let proxies = [ Dreamsleeve.Server.Domain.AddressRange.parse "203.0.113.200" |> ok ]
+        let ban (range: string) : Dreamsleeve.Server.Domain.AddressBan = {
+            Id = 1L; Range = Dreamsleeve.Server.Domain.AddressRange.parse range |> ok
+            Reason = Dreamsleeve.Server.Domain.SanctionReason.create "Рейд" |> ok; IssuedBy = ValueNone
+            IssuedAt = DateTimeOffset.UtcNow; Expires = ValueNone
+        }
+        let connections fixture count = task {
+            let deadline = Environment.TickCount64 + 5000L
+            let mutable current = 0
+            while current <> count do
+                let! value = stats fixture
+                current <- value.Connections
+                check (Environment.TickCount64 < deadline) $"Expected {count} connections, found {current}."
+                if current <> count then do! Task.Yield()
+        }
+        do! withRuntimeConfigured ServerRuntimeOptions.defaults IdentityOptions.defaults Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn
+                proxies createAuthentication (fun fixture -> task {
+            let alice = Guid.NewGuid()
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(alice, proxy))
+            fixture.Input.Enqueue(incoming(alice, opening "alice"))
+            let! _ = welcome fixture alice
+            let guest = Guid.NewGuid()
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(guest, proxy))
+            fixture.Input.Enqueue(incoming(guest, joinAsGuest 2UL))
+            fixture.Notify() |> ignore
+            do! connections fixture 2
+            let! rows = fixture.Runtime.AskAsync(fun reply -> ServerRuntimeMessage.ListSessions reply) |> awaitResult
+            let row id = rows |> List.find (fun row -> row.ConnectionId = id)
+            equal ("198.51.100.1", Some proxy) (Dreamsleeve.Server.Domain.ClientAddress.text (row alice).Address, (row alice).Proxy)
+            equal (proxy, None) ((row guest).Address, (row guest).Proxy)
+            // A ban of the proxy's own range spares it, its guest and new connections.
+            do! post fixture.Runtime (ServerRuntimeMessage.AccountChanged(AccountChange.AddressBans [ ban "203.0.113.0/24" ]))
+            let late = Guid.NewGuid()
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(late, proxy))
+            fixture.Notify() |> ignore
+            do! connections fixture 3
+            // A ban of the player's range ends the session that came through the proxy.
+            do! post fixture.Runtime (ServerRuntimeMessage.AccountChanged(AccountChange.AddressBans [ ban "198.51.100.0/24" ]))
+            let! _, ended = nextWhere fixture (fun id packet -> id = alice && packet.PayloadCase = ServerPacket.PayloadOneofCase.SessionEnded)
+            equal SessionEndReason.AddressBanned ended.SessionEnded.Reason
+            let! closed = receive fixture.Closed
+            equal alice closed
+            // The next session of that player through the proxy is refused at once.
+            let again = Guid.NewGuid()
+            fixture.Input.Enqueue(ServerTransportEvent.Connected(again, proxy))
+            fixture.Input.Enqueue(incoming(again, opening "alice"))
+            fixture.Notify() |> ignore
+            let! refused = receive fixture.Closed
+            equal again refused
         })
     }
 
@@ -541,7 +606,7 @@ let tests = testList "ServerRuntime" [
                     (Dreamsleeve.Server.Domain.Username.create 32 "race" |> ok)
                     (Dreamsleeve.Server.Domain.DisplayName.create 64 "Race" |> ok) Dreamsleeve.Server.Domain.NameColor.unknown
             let respond (request: SessionAuthenticationRequest) =
-                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone } }
+                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } }
             equal AgentTryDeliveryResult.Closed (respond oldRequest)
             equal AgentTryDeliveryResult.Posted (respond newRequest)
             let! snapshot = welcome fixture replacement
@@ -710,7 +775,7 @@ let private namedAuthentication (accounts: (string * string * string) list) () =
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
-        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone } | None -> Error SessionAuthenticationError.InvalidTicket)
+        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } | None -> Error SessionAuthenticationError.InvalidTicket)
     }
     Agent.Start(AgentOptions.create "named-authentication",
         AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
@@ -858,7 +923,7 @@ let private roleAuthentication (accounts: (string * string * string * Dreamsleev
                      (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
                      (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
                      (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok) Dreamsleeve.Server.Domain.NameColor.unknown
-               Role = role; Mute = ValueNone } : AuthenticatedPlayer))
+               Role = role; Mute = ValueNone; SignedInFrom = ValueNone } : AuthenticatedPlayer))
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId

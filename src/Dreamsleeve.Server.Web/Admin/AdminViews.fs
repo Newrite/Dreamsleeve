@@ -195,7 +195,12 @@ module AdminViews =
                     for row in rows do
                         Elem.tr [] [
                             Elem.td [] [ playerLink row.PlayerId ]
-                            Elem.td [] [ Elem.code [] [ text row.Address ] ]
+                            Elem.td [] [
+                                Elem.code [] [ text row.Address ]
+                                if not (isNull row.Proxy) then
+                                    Elem.br []
+                                    Elem.small [] [ text "через прокси "; Elem.code [] [ text row.Proxy ] ]
+                            ]
                             if row.Described then
                                 Elem.td [] [ text row.Username ]
                                 Elem.td [] [ text row.DisplayName ]

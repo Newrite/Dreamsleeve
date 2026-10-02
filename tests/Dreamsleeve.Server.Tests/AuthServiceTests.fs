@@ -17,7 +17,7 @@ let private username value = Username.create 32 value |> ok
 let private display = DisplayName.create 64 "Persistent Player" |> ok
 let private password = "password-with-spaces  "
 // A consumed ticket carries the stored role; nobody was given one here.
-let private player profile : AuthenticatedPlayer = { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone }
+let private player profile : AuthenticatedPlayer = { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone }
 let private settings = { AuthService.defaults with MailboxCapacity = 8; MaxConcurrentOperations = 2; MaxTickets = 2; TicketLifetimeSeconds = 10 }
 
 // Expiry uses monotonic time. Advance never sleeps or changes machine time.
@@ -296,7 +296,7 @@ let tests = testList "Authentication service" [
         let expected = PlayerData.withDisplayName renamedTo profile
         equal (Ok (AccountAccessResult.ProfileChanged expected)) renamed
         let! consumed = consume service outstanding.SessionTicket
-        equal (Ok ({ Profile = expected; Role = PlayerRole.Moderator; Mute = ValueNone } : AuthenticatedPlayer)) consumed
+        equal (Ok ({ Profile = expected; Role = PlayerRole.Moderator; Mute = ValueNone; SignedInFrom = ValueNone } : AuthenticatedPlayer)) consumed
         let! missing = access service (AccountAccessCommand.RenamePlayer(PlayerId.create 404UL |> ok, renamedTo, admin))
         equal (Error AccountAccessError.InvalidCredentials) missing
         do! stop service
@@ -399,7 +399,11 @@ let tests = testList "Authentication service" [
         let from (text: string) = SignInOrigin.ofAddress (Net.IPAddress.Parse text)
         let signIn origin = access service (AccountAccessCommand.Login(username "player", password, origin))
         let! first = signIn (from "198.51.100.7")
-        match first with Ok (AccountAccessResult.SignedIn _) -> () | other -> failtestf "%A" other
+        let grant = match first with Ok (AccountAccessResult.SignedIn grant) -> grant | other -> failtestf "%A" other
+        // The ticket remembers where the player signed in from: a game connection
+        // through a proxy of the server takes that address.
+        let! consumed = consume service grant.SessionTicket
+        equal (Ok (ValueSome (Net.IPAddress.Parse "198.51.100.7"))) (consumed |> Result.map _.SignedInFrom)
         let! history = access service (AccountAccessCommand.AddressHistory profile.PlayerId)
         match history with
         | Ok (AccountAccessResult.Addresses [ entry ]) -> equal ("198.51.100.7", 1L) (ClientAddress.text entry.Address, entry.SignIns)

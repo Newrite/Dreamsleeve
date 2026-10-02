@@ -17,8 +17,11 @@ type RuntimeSessionPhase = Waiting | Guest | Opening | Ready | Closing
 module internal SessionTable =
     type Entry = {
         ConnectionId: Guid
-        /// Shown only in the panel; IP range bans apply to it.
-        Address: IPAddress
+        /// Shown only in the panel; IP range bans apply to it. A session through a
+        /// proxy of the server takes the address its player signed in from.
+        mutable Address: IPAddress
+        /// The proxy of the server the connection comes through.
+        mutable Proxy: IPAddress option
         ConnectedAt: DateTimeOffset
         mutable Phase: RuntimeSessionPhase
         mutable Deadline: int64
@@ -56,7 +59,8 @@ module internal SessionTable =
 
     let add connectionId address connectedAt deadline state =
         let entry = {
-            ConnectionId = connectionId; Address = address; ConnectedAt = connectedAt; Phase = RuntimeSessionPhase.Waiting; Deadline = deadline
+            ConnectionId = connectionId; Address = address; Proxy = None; ConnectedAt = connectedAt; Phase = RuntimeSessionPhase.Waiting
+            Deadline = deadline
             PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
             ChatDetached = false; SystemDetached = false; PresenceDetached = false; GroundMarksDetached = false
             GuildsDetached = false

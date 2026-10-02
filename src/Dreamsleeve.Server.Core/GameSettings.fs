@@ -19,6 +19,7 @@ type GameSettings =
         schedule: (ServerAnnouncement * ScheduledAnnouncement) list
         groundMarkRules: GroundMarkRules
         guildLimits: GuildLimits
+        trustedProxies: AddressRange list
     }
 
     member this.Server = this.server
@@ -32,9 +33,15 @@ type GameSettings =
     member this.GroundMarkRules = this.groundMarkRules
     member this.Guilds = this.guilds
     member this.GuildLimits = this.guildLimits
+    /// [Proxies]: a game connection from one of them is the player who signed in
+    /// through it, and these addresses themselves are never range-banned.
+    member this.TrustedProxies = this.trustedProxies
 
 [<RequireQualifiedAccess>]
 module GameSettings =
+    /// The checked [Proxies] of the same file.
+    let withTrustedProxies proxies (settings: GameSettings) = { settings with trustedProxies = proxies }
+
     /// Sources that acknowledge the cleanup of every session: chat, system
     /// channel, presence, ground marks and guilds.
     [<Literal>]
@@ -98,7 +105,8 @@ module GameSettings =
         match errors, schedule, rules, limits with
         | [], Ok schedule, Ok rules, Ok limits ->
             Ok { server = server; runtime = runtime; identity = identity; announcements = announcements; groundMarks = groundMarks
-                 guilds = guilds; codec = ProtocolCodec.create server; schedule = schedule; groundMarkRules = rules; guildLimits = limits }
+                 guilds = guilds; codec = ProtocolCodec.create server; schedule = schedule; groundMarkRules = rules; guildLimits = limits
+                 trustedProxies = [] }
         | errors, schedule, rules, limits ->
             let scheduleErrors = match schedule with Error errors -> errors | Ok _ -> []
             let rulesErrors = match rules with Error errors -> errors | Ok _ -> []

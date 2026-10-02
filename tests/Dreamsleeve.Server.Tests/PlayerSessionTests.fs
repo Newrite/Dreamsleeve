@@ -124,10 +124,10 @@ let private resolve fixture = task {
     equal fixture.Request.SessionTicket query.Ticket
     let profile = PlayerData.create (PlayerId.create 42UL |> ok)
                       (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok) NameColor.unknown
-    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone } }
+    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } }
     let! command = receive fixture.Host
     match command with
-    | SessionHostCommand.Reserve(connectionId, reserved, hidden, reply) ->
+    | SessionHostCommand.Reserve(connectionId, reserved, hidden, _, reply) ->
         equal fixture.Request.ConnectionId connectionId
         equal profile reserved
         equal fixture.Request.Hiding hidden
@@ -571,11 +571,11 @@ let tests = testList "PlayerSession" ([
             let! query = receive fixture.Authentication
             let stored = PlayerData.create (PlayerId.create 42UL |> ok)
                              (Username.create 32 "bad.word" |> ok) (DisplayName.create 64 "Sir Badword" |> ok) NameColor.unknown
-            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = stored; Role = PlayerRole.Player; Mute = ValueNone } }
+            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = stored; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } }
             let! reserve = receive fixture.Host
             let reply =
                 match reserve with
-                | SessionHostCommand.Reserve(_, reserved, _, reply) -> equal stored.PlayerId reserved.PlayerId; reply
+                | SessionHostCommand.Reserve(_, reserved, _, _, reply) -> equal stored.PlayerId reserved.PlayerId; reply
                 | other -> failwithf "Expected Reserve: %A" other
             do! deliver reply (IdentityAdmission.Reserved ValueNone)
             let! chatCommand = receive fixture.Chat

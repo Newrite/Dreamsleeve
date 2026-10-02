@@ -16,6 +16,10 @@ type AuthenticatedPlayer = {
     Role: PlayerRole
     /// The mute in force when the ticket was issued; later changes come as AccountChange.
     Mute: Sanction voption
+    /// The address of the sign-in that issued the ticket, as the authentication
+    /// host saw it (behind a trusted proxy, the forwarded client). A game
+    /// connection from a proxy of the server is that player.
+    SignedInFrom: System.Net.IPAddress voption
 }
 
 /// What the account service changed that live sessions must follow. The

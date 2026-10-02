@@ -68,7 +68,8 @@ type private FakeAdmin() =
 
 // One hidden player online; its real names only the panel may show.
 let private hiddenRow = {
-    ConnectionId = Guid.NewGuid(); Address = IPAddress.Parse "203.0.113.7"; PlayerId = Some (PlayerId.create 7UL |> ok); Phase = RuntimeSessionPhase.Ready
+    ConnectionId = Guid.NewGuid(); Address = IPAddress.Parse "203.0.113.7"; Proxy = None; PlayerId = Some (PlayerId.create 7UL |> ok)
+    Phase = RuntimeSessionPhase.Ready
     ConnectedAt = DateTimeOffset.UtcNow; Session = None
 }
 

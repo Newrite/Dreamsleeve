@@ -58,7 +58,7 @@ type IdentityAdmission =
 type SessionHostCommand =
     /// Reserves the PlayerId and the names the moderated profile is shown under,
     /// with a new pseudonym when the names are hidden.
-    | Reserve of Guid * PlayerData * HiddenIdentity * ReliableAgentRef<IdentityAdmission>
+    | Reserve of Guid * PlayerData * HiddenIdentity * signedInFrom: System.Net.IPAddress voption * ReliableAgentRef<IdentityAdmission>
     /// Shows the reserved profile again or hides it; the pseudonym is new only
     /// when the names were shown everywhere before.
     | ChangeIdentity of Guid * HiddenIdentity * ReliableAgentRef<Pseudonym voption>

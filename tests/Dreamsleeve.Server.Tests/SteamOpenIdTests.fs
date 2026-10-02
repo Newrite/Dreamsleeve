@@ -43,14 +43,14 @@ let tests = testList "Steam OpenID" [
     case "an answer is accepted only when Steam confirms it, for this flow and a Steam account" (fun () -> task {
         let confirming = new FakeSteam(fun _ -> "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n")
         use http = new HttpClient(confirming)
-        let! accepted = SteamOpenId.verify http publicUrl flow (answerFields 76561198000000042UL) CancellationToken.None
+        let! accepted = SteamOpenId.verify http [ publicUrl ] flow (answerFields 76561198000000042UL) CancellationToken.None
         equal (Ok 76561198000000042UL) accepted
         let url, body = confirming.Requests.ToArray() |> Array.exactlyOne
         equal SteamOpenId.Endpoint url
         check (body.Contains "openid.mode=check_authentication" && body.Contains "openid.sig=c2lnbmF0dXJl") "Steam checks its own fields."
         let refusing = new FakeSteam(fun _ -> "ns:http://specs.openid.net/auth/2.0\nis_valid:false\n")
         use refused = new HttpClient(refusing)
-        let! denied = SteamOpenId.verify refused publicUrl flow (answerFields 76561198000000042UL) CancellationToken.None
+        let! denied = SteamOpenId.verify refused [ publicUrl ] flow (answerFields 76561198000000042UL) CancellationToken.None
         check (Result.isError denied) "Steam refused it."
         let neverAsked = new FakeSteam(fun _ -> failwith "Steam must not be asked")
         use idle = new HttpClient(neverAsked)
@@ -60,10 +60,19 @@ let tests = testList "Steam OpenID" [
                         answerFields 76561198000000042UL |> swap "openid.claimed_id" "https://evil.example/openid/id/76561198000000042"
                         answerFields 76561198000000042UL |> swap "openid.identity" "https://steamcommunity.com/openid/id/76561198000000043"
                         answerFields 12345UL ] do
-            let! result = SteamOpenId.verify idle publicUrl flow fields CancellationToken.None
+            let! result = SteamOpenId.verify idle [ publicUrl ] flow fields CancellationToken.None
             check (Result.isError result) $"Refused: %A{fields}"
-        let! canceled = SteamOpenId.verify idle publicUrl flow [ "openid.mode", "cancel" ] CancellationToken.None
+        let! canceled = SteamOpenId.verify idle [ publicUrl ] flow [ "openid.mode", "cancel" ] CancellationToken.None
         equal (Error "canceled") canceled
+        // A flow begun through a proxy returns to the proxy's origin.
+        let proxied = new FakeSteam(fun _ -> "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n")
+        use viaProxy = new HttpClient(proxied)
+        let proxyUrl = "https://proxy.example.org"
+        let throughProxy = answerFields 76561198000000042UL |> swap "openid.return_to" (SteamOpenId.returnUrl proxyUrl flow)
+        let! returned = SteamOpenId.verify viaProxy [ publicUrl; proxyUrl ] flow throughProxy CancellationToken.None
+        equal (Ok 76561198000000042UL) returned
+        let! unknown = SteamOpenId.verify idle [ publicUrl ] flow throughProxy CancellationToken.None
+        check (Result.isError unknown) "An origin the server does not list is refused."
         equal 0 neverAsked.Requests.Count
     })
 

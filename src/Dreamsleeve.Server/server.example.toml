@@ -221,6 +221,9 @@ Enabled = false
 # The origin of the authentication host as players' browsers reach it, "https://auth.example.org"
 # (the authUrl of clients); plain HTTP only on literal loopback or with AllowInsecureRemote.
 PublicUrl = ""
+# The origins of the [Proxies] as browsers reach them, ["https://proxy.example.org"]: a sign-in
+# begun through a proxy (the Host of the request) returns there. Same rules as PublicUrl.
+ProxyUrls = []
 
 # The public HTTP host of /auth/*. Clients set its origin as authUrl.
 # The same keys describe the admin panel listener ([Admin.Listener]).
@@ -483,3 +486,13 @@ MaxControlDeliveries = 128
 MaxPendingWrites = 1024
 # How often expired invitations and guild mutes are collected, milliseconds, >= 1000.
 InviteCheckIntervalMs = 60000
+
+# Proxies players connect through when they cannot reach this server directly
+# (docs/DeploymentRu.md, «Прокси»): they forward UDP to the game port and HTTPS to
+# the authentication host with X-Forwarded-For. From these addresses the server
+# takes the forwarded client of a sign-in, and a game connection takes the address
+# its player signed in from; the proxies themselves are never range-banned. The
+# admin panel never trusts them. Addresses or CIDR ranges, like range bans:
+# ["203.0.113.7", "2001:db8::/48"]. Read at startup.
+[Proxies]
+Trusted = []

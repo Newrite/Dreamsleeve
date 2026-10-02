@@ -23,7 +23,10 @@ type StatusModel = {
 type OnlineModel = {
     ConnectionId: string
     /// The connection's IP address (ClientAddress.text); the panel alone shows it.
+    /// Through a proxy of the server, the address the player signed in from.
     Address: string
+    /// The proxy of the server the player connects through; null: directly.
+    Proxy: string
     PlayerId: Nullable<uint64>
     Phase: string
     ConnectedAt: DateTimeOffset
@@ -284,15 +287,20 @@ module AdminModels =
                 $"{PluginName.value id.PluginName}|{LocalFormId.value id.LocalFormId:X6}"
             else name
 
+    let private proxy (row: RuntimeSessionRow) =
+        match row.Proxy with
+        | Some address -> ClientAddress.text address
+        | None -> null
+
     let online (row: RuntimeSessionRow) (view: AdminPlayerView option) : OnlineModel =
         let playerId = row.PlayerId |> Option.map PlayerId.value |> Option.toNullable
         match view with
         | None ->
-            { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address; PlayerId = playerId; Phase = phase row.Phase
+            { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address; Proxy = proxy row; PlayerId = playerId; Phase = phase row.Phase
               ConnectedAt = row.ConnectedAt; Described = false; Username = null; DisplayName = null; CharacterName = null; CharacterWithheld = false
               Hidden = null; Pseudonym = null; Role = null; Location = null; Level = Nullable() }
         | Some view ->
-            { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address
+            { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address; Proxy = proxy row
               PlayerId = Nullable(PlayerId.value view.PlayerId); Phase = phase row.Phase
               ConnectedAt = row.ConnectedAt; Described = true
               Username = Username.value view.Username; DisplayName = DisplayName.value view.DisplayName

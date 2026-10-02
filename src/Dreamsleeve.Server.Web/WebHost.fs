@@ -8,11 +8,12 @@ open System.Threading.RateLimiting
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.Http
-open Microsoft.AspNetCore.HttpOverrides
 open Microsoft.AspNetCore.RateLimiting
 open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Primitives
 open Serilog
+open Dreamsleeve.Server.Domain
 
 /// Where one HTTP host listens. The configuration layer has already checked the
 /// URL (scheme, host and port only) and whether plain HTTP is allowed there.
@@ -21,9 +22,51 @@ type ListenerSettings = {
     CertificatePath: string
     /// Environment variable with the certificate password; never a setting.
     CertificatePasswordVariable: string
-    /// Accept X-Forwarded-For/Proto, and only from a loopback proxy.
+    /// Accept X-Forwarded-For/Proto from a loopback proxy.
     TrustForwardedHeaders: bool
+    /// And from these proxies of the server ([Proxies]); the admin panel has none.
+    TrustedProxies: AddressRange list
 }
+
+/// Who sent a request: the client as the trusted hops report it, and the
+/// server's proxy it came through. Client is absent when a proxy sent the
+/// request without saying for whom.
+type ForwardedClient = {
+    Client: IPAddress voption
+    Proxy: IPAddress voption
+}
+
+/// X-Forwarded-For, read from the right while the hop is trusted: a loopback
+/// proxy (TrustForwardedHeaders) or a proxy of the server. Entries left of
+/// the first untrusted hop are the client's own words and never count.
+[<RequireQualifiedAccess>]
+module Forwarding =
+    let private plain (address: IPAddress) = if address.IsIPv4MappedToIPv6 then address.MapToIPv4() else address
+
+    let private hop (text: string) =
+        match IPAddress.TryParse(text.Trim().Trim('[', ']')) with
+        | true, address -> ValueSome (plain address)
+        | false, _ -> ValueNone
+
+    let resolve trustLoopback (proxies: AddressRange list) (peer: IPAddress) (forwardedFor: string seq) =
+        let isProxy address = proxies |> List.exists (fun range -> AddressRange.contains range address)
+        let trusted address = (trustLoopback && IPAddress.IsLoopback address) || isProxy address
+        let hops =
+            forwardedFor
+            |> Seq.collect (fun value -> if isNull value then Array.empty else value.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            |> Seq.map hop
+            |> Seq.rev
+            |> List.ofSeq
+        let rec walk current proxy hops =
+            let proxy = if isProxy current then ValueSome current else proxy
+            match hops with
+            | ValueSome next :: rest when trusted current -> walk next proxy rest
+            | (ValueSome _ | ValueNone) :: _ | [] ->
+                // A proxy that names no client leaves the client unknown.
+                let client = if isProxy current then ValueNone else ValueSome current
+                { Client = client; Proxy = proxy }
+        walk (plain peer) ValueNone hops
+
 
 type HostLimits = {
     MaxBodyBytes: int
@@ -52,7 +95,35 @@ module WebHost =
 
     let noStore (context: HttpContext) = context.Response.Headers.CacheControl <- "no-store"
 
-    /// After the forwarded-headers middleware, when it is enabled, this is the
+    [<Literal>]
+    let private ForwardedKey = "dreamsleeve.forwarded"
+
+    /// The client and the proxy of the request; without forwarding, the socket peer.
+    let forwarded (context: HttpContext) =
+        match context.Items.TryGetValue ForwardedKey with
+        | true, (:? ForwardedClient as value) -> value
+        | true, _ | false, _ ->
+            let remote = context.Connection.RemoteIpAddress
+            { Client = (if isNull remote then ValueNone else ValueSome remote); Proxy = ValueNone }
+
+    // Trusted hops speak for the client: the connection takes its address
+    // (rate limits, sign-in history and bans follow the player) and the scheme
+    // its proxy reported.
+    let private forward trustLoopback proxies (next: RequestDelegate) (context: HttpContext) : Task =
+        let peer = context.Connection.RemoteIpAddress
+        if not (isNull peer) then
+            let headers = context.Request.Headers
+            let found = Forwarding.resolve trustLoopback proxies peer (headers["X-Forwarded-For"] :> string seq)
+            let trustedPeer = (trustLoopback && IPAddress.IsLoopback peer) || found.Proxy.IsSome
+            if trustedPeer then
+                match (headers["X-Forwarded-Proto"].ToString().Split(',') |> Array.last).Trim().ToLowerInvariant() with
+                | "http" | "https" as scheme -> context.Request.Scheme <- scheme
+                | _ -> ()
+            found.Client |> ValueOption.iter (fun client -> context.Connection.RemoteIpAddress <- client)
+            context.Items[ForwardedKey] <- found
+        next.Invoke context
+
+    /// After the forwarding middleware, when it is enabled, this is the
     /// address the trusted proxy reported; otherwise the socket peer.
     let clientKey (context: HttpContext) =
         let remote = context.Connection.RemoteIpAddress
@@ -135,14 +206,10 @@ module WebHost =
         builder.WebHost.ConfigureKestrel(Action<KestrelServerOptions>(configureServer listener limits)) |> ignore
         builder.Services.AddRateLimiter(Action<RateLimiterOptions>(configureRate rule rejected)) |> ignore
         let app = builder.Build()
-        if listener.TrustForwardedHeaders then
-            // Only a proxy on this machine may speak for the client.
-            let forwarded = ForwardedHeadersOptions(ForwardedHeaders = (ForwardedHeaders.XForwardedFor ||| ForwardedHeaders.XForwardedProto), ForwardLimit = Nullable 1)
-            forwarded.KnownIPNetworks.Clear()
-            forwarded.KnownProxies.Clear()
-            forwarded.KnownProxies.Add IPAddress.Loopback
-            forwarded.KnownProxies.Add IPAddress.IPv6Loopback
-            app.UseForwardedHeaders forwarded |> ignore
+        if listener.TrustForwardedHeaders || not listener.TrustedProxies.IsEmpty then
+            // Only a proxy on this machine or a proxy of the server may speak for the client.
+            app.Use(Func<RequestDelegate, RequestDelegate>(fun next ->
+                RequestDelegate(forward listener.TrustForwardedHeaders listener.TrustedProxies next))) |> ignore
         app.Use(Func<RequestDelegate, RequestDelegate>(fun next -> RequestDelegate(secure next))) |> ignore
         app.UseRateLimiter() |> ignore
         // Falco maps its endpoints with UseEndpoints, which needs routing before it.

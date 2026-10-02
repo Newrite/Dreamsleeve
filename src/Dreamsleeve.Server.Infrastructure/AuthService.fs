@@ -40,11 +40,13 @@ type SignInOrigin = {
     Address: IPAddress voption
     /// The device the client reported, if it could tell.
     Device: DeviceId voption
+    /// The proxy of the server ([Proxies]) the request came through.
+    Proxy: IPAddress voption
 }
 
 [<RequireQualifiedAccess>]
 module SignInOrigin =
-    let none = { Address = ValueNone; Device = ValueNone }
+    let none = { Address = ValueNone; Device = ValueNone; Proxy = ValueNone }
 
     let ofAddress (address: IPAddress) = { none with Address = if isNull address then ValueNone else ValueSome address }
 
@@ -301,7 +303,8 @@ module AuthService =
         | Ok sanctions ->
             match Sanction.find SanctionKind.Ban now sanctions with
             | ValueSome ban -> Error (AccountAccessError.Banned ban)
-            | ValueNone -> Ok { Profile = account.Profile; Role = account.Role; Mute = Sanction.find SanctionKind.Mute now sanctions }
+            | ValueNone ->
+                Ok { Profile = account.Profile; Role = account.Role; Mute = Sanction.find SanctionKind.Mute now sanctions; SignedInFrom = ValueNone }
 
     let private verify options database dummyHash logger token username password =
         match SqliteAccountStore.find database username token with
@@ -373,10 +376,14 @@ module AuthService =
             noteAddress options database logger clock token origin playerId
             noteDevice options database logger clock token origin playerId
         match result with
-        | Ok (AccountWorkResult.Verified(player, _)) -> note player.Profile.PlayerId
-        | Ok (AccountWorkResult.Registered profile) -> note profile.PlayerId
-        | Ok _ | Error _ -> ()
-        result
+        | Ok (AccountWorkResult.Verified(player, secret)) ->
+            note player.Profile.PlayerId
+            // The ticket remembers where the player signed in from.
+            Ok (AccountWorkResult.Verified({ player with SignedInFrom = origin.Address }, secret))
+        | Ok (AccountWorkResult.Registered profile) ->
+            note profile.PlayerId
+            result
+        | Ok _ | Error _ -> result
 
     // A device that an account ban in force covers refuses every account.
     let private deviceRefusal database (clock: TimeProvider) logger token (origin: SignInOrigin) =
@@ -862,8 +869,13 @@ module AuthService =
                 | Ok (AccountWorkResult.Verified _) when state.Stopping || (abandoned pending.Requester && not (isSteam pending.Command)) ->
                     Error AccountAccessError.Unavailable
                 | Ok (AccountWorkResult.Verified(player, rememberToken)) ->
-                    logger.LogInformation("Player {PlayerId} {Username} signed in ({Method})", PlayerId.value player.Profile.PlayerId,
-                                          Username.value player.Profile.Username, signInMethod pending.Command)
+                    match (originOf pending.Command).Proxy with
+                    | ValueSome proxy ->
+                        logger.LogInformation("Player {PlayerId} {Username} signed in ({Method}) through proxy {Proxy}", PlayerId.value player.Profile.PlayerId,
+                                              Username.value player.Profile.Username, signInMethod pending.Command, ClientAddress.text proxy)
+                    | ValueNone ->
+                        logger.LogInformation("Player {PlayerId} {Username} signed in ({Method})", PlayerId.value player.Profile.PlayerId,
+                                              Username.value player.Profile.Username, signInMethod pending.Command)
                     issue options clock state player rememberToken
                 | Ok (AccountWorkResult.Renamed(previous, profile, changedBy)) ->
                     // Outstanding tickets would open a session with the old name.

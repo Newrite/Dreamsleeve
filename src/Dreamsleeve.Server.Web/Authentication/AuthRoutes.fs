@@ -33,8 +33,9 @@ type AuthPorts = {
 }
 
 type AuthRouteSettings = {
-    /// The public origin Steam sends browsers back to; absent: Steam sign-in is off.
-    SteamPublicUrl: string voption
+    /// The public origins Steam sends browsers back to, the server's own first,
+    /// then its proxies'; empty: Steam sign-in is off.
+    SteamPublicUrls: string list
     RequestsPerMinute: int
     RequestTimeoutSeconds: int
     /// Service admission bounds the useful number of open connections.
@@ -135,17 +136,26 @@ module AuthRoutes =
             | Error WebHost.BodyError.TooLarge | Error WebHost.BodyError.UnsupportedType -> return Error (tooLarge ())
             | Ok bytes ->
                 use body = JsonDocument.Parse(bytes, JsonDocumentOptions(MaxDepth = 8))
-                // After the forwarded-headers middleware: a trusted proxy's client address.
-                let origin = SignInOrigin.ofAddress context.Connection.RemoteIpAddress
+                // After the forwarding middleware: a trusted proxy's client and the proxy.
+                let forwarded = WebHost.forwarded context
+                let origin = { SignInOrigin.none with Address = forwarded.Client; Proxy = forwarded.Proxy }
                 return command settings moderation origin operation body.RootElement
     }
 
-    let private response settings = function
+    /// The public origin of the host the client asked through: a proxy's when the
+    /// request came through it, else the server's own.
+    let private steamUrlFor settings (context: HttpContext) =
+        let host = context.Request.Host.Value
+        settings.SteamPublicUrls
+        |> List.tryFind (fun url -> String.Equals(Uri(url).Authority, host, StringComparison.OrdinalIgnoreCase))
+        |> Option.orElse (List.tryHead settings.SteamPublicUrls)
+
+    let private response settings (context: HttpContext) = function
         | Ok (AccountAccessResult.SteamStarted(flow, secret, seconds)) ->
-            match settings.SteamPublicUrl with
-            | ValueSome publicUrl ->
+            match steamUrlFor settings context with
+            | Some publicUrl ->
                 WebHost.json 200 {| flow = flow; secret = secret; browserUrl = SteamOpenId.loginUrl publicUrl flow; expiresInSeconds = seconds |}
-            | ValueNone -> unavailable ()
+            | None -> unavailable ()
         | Ok AccountAccessResult.SteamPending -> WebHost.json 202 {| status = "pending" |}
         | Ok (AccountAccessResult.Registered profile) ->
             WebHost.json 201 {| playerId = PlayerId.value profile.PlayerId; username = Username.value profile.Username
@@ -190,13 +200,13 @@ module AuthRoutes =
         deadline.CancelAfter timeout
         let! result = task {
             try
-                let steamOff = (operation = Operation.SteamBegin || operation = Operation.SteamPoll) && settings.SteamPublicUrl.IsNone
+                let steamOff = (operation = Operation.SteamBegin || operation = Operation.SteamPoll) && settings.SteamPublicUrls.IsEmpty
                 match! (if steamOff then Task.FromResult(Error (WebHost.error 404 "steam_disabled" "Steam sign-in is not enabled on this server."))
                         else read settings moderation operation context deadline.Token) with
                 | Error failure -> return failure
                 | Ok command ->
                     match! ports.Access command timeout deadline.Token with
-                    | AgentAskResult.Replied value -> return response settings value
+                    | AgentAskResult.Replied value -> return response settings context value
                     | AgentAskResult.Full | AgentAskResult.Dropped -> return busy ()
                     | AgentAskResult.Closed | AgentAskResult.TimedOut -> return unavailable ()
                     | AgentAskResult.Canceled ->
@@ -250,7 +260,7 @@ module AuthRoutes =
         deadline.CancelAfter timeout
         let! status, message = task {
             let flow = context.Request.Query["flow"].ToString()
-            if settings.SteamPublicUrl.IsNone then return 404, "Вход через Steam на этом сервере выключен."
+            if settings.SteamPublicUrls.IsEmpty then return 404, "Вход через Steam на этом сервере выключен."
             elif not (AuthService.validToken flow) then return 400, "Ссылка входа повреждена. Начните вход из игры заново."
             else
                 try
@@ -284,7 +294,7 @@ module AuthRoutes =
         let answer =
             match result with
             | AgentAskResult.Replied (Ok (AccountAccessResult.Registration mode)) ->
-                WebHost.json 200 {| registration = RegistrationMode.key mode; steam = settings.SteamPublicUrl.IsSome |}
+                WebHost.json 200 {| registration = RegistrationMode.key mode; steam = not settings.SteamPublicUrls.IsEmpty |}
             | AgentAskResult.Faulted failure ->
                 logger.Error(failure, "Authentication methods request failed")
                 unavailable ()
