@@ -117,7 +117,8 @@ def main() -> int:
             tar_tree(server, archives[-1], f"{name}/", executable)
 
     sums = [f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}" for archive in archives]
-    (output / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+    # LF on every system: sha256sum -c reads a CR as part of the file name.
+    (output / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8", newline="\n")
     for archive in archives:
         print(f"{archive.name}: {archive.stat().st_size / 2**20:.1f} MiB")
     print(f"Release {release} in {output}")
