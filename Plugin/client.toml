@@ -4,7 +4,8 @@
 # The plugin never rewrites this file (without one it writes the vanilla example); ranges are checked
 # at start (Configuration::InvalidSetting); with an invalid file the plugin does not start
 # and DreamsleeveClient.log names the reason. Chat, name and mark looks live in ui.toml.
-# Usually only serverHost, serverPort and authUrl change: the server owner publishes them.
+# Usually only serverHost, serverPort and authUrl change: the server owner publishes them,
+# and the [[routes]] at the end when the server has proxies.
 # "World units" are Skyrim game units: about 1.43 cm, an exterior cell is 4096.
 
 # File format version; must be 1.
@@ -113,3 +114,17 @@ maxGapMs = 1000
 historyCapacity = 32
 # A jump longer than this snaps (teleport), world units, > 0.
 teleportDistance = 2048
+
+# Other routes to the same server, tried in this order when the main one (the keys at the
+# top, shown as "Основной") does not answer: a proxy of the server for players whose
+# provider or country blocks it. The client remembers the route that answered and starts
+# with it next time; the Account tab of the game lets the player pick one by hand. The
+# saved login, the device and the ignore list stay the same on every route. Up to 7
+# routes, each a table like this one (remove the leading "# "):
+# [[routes]]
+# # Shown in the game; unique, not "Основной", at most 64 bytes.
+# name = "Прокси"
+# # Like serverHost, serverPort and authUrl above, of the proxy.
+# serverHost = "proxy.example.org"
+# serverPort = 8778
+# authUrl = "https://proxy.example.org"

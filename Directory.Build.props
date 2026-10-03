@@ -1,7 +1,7 @@
 <Project>
   <!-- One version for the client and the server: xmake.lua and the UI package.json repeat it. -->
   <PropertyGroup>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
   </PropertyGroup>
   <!-- One FSharp.Core for every F# project, whatever SDK builds it. Left implicit, it
        follows the SDK band: the 10.0.1xx SDK that Linux distributions ship picks 10.0.x,
