@@ -227,8 +227,9 @@ nginx, TLS, все параметры) — [DeploymentRu.md](DeploymentRu.md). �
 - SSH-туннель без изменения конфигурации: `ssh -L 8780:127.0.0.1:8780 user@server`, затем
   `http://127.0.0.1:8780` у себя.
 - Обратный прокси с HTTPS на той же машине. Панель остаётся на loopback, в `[Admin.Listener]` —
-  `TrustForwardedHeaders = true` (прокси из `[Proxies]` админке не доверяются никогда). Заголовки `X-Forwarded-For`/`X-Forwarded-Proto` принимаются
-  только от `127.0.0.1`/`::1` и только один переход (`ForwardLimit = 1`). Прокси обязан передать
+  `TrustForwardedHeaders = true`. Заголовки `X-Forwarded-For`/`X-Forwarded-Proto` принимаются
+  только от `127.0.0.1`/`::1`: адрес клиента — первый справа в `X-Forwarded-For`, который не
+  loopback. Прокси сервера из `[Proxies]` админке не доверяются никогда. Прокси обязан передать
   исходный `Host`: проверка `Origin` сравнивает его со `схемой://Host` запроса.
 
 ```nginx

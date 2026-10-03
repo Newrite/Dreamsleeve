@@ -241,7 +241,9 @@ AllowInsecureRemote = false
 # Empty = none (an https:// ListenUrl then needs Kestrel's default certificate).
 CertificatePath = ""
 # true only behind a reverse proxy on this machine: X-Forwarded-For/Proto are then read
-# from 127.0.0.1/::1, one hop; otherwise they are ignored and the socket address counts.
+# from 127.0.0.1/::1 (and from the [Proxies] below): X-Forwarded-For from the right while
+# the hop is trusted, the client is the first untrusted address. false and no [Proxies]:
+# they are ignored and the socket address counts.
 TrustForwardedHeaders = false
 # Requests per client address and minute, 1..100000; more get HTTP 429.
 RequestsPerMinute = 120
