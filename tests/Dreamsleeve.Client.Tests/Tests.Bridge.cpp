@@ -186,6 +186,7 @@ namespace
         Bridge::IdentityEvent{.mode = "everywhere", .pseudonym = "Страж 2"},
         Bridge::DisplayNameEvent{.changed = "Seven"},
         Bridge::NameColorEvent{.changed = "#E57373"},
+        Bridge::RoutesEvent{.routes = {"Основной", "Прокси"}, .active = "Прокси", .chosen = "", .reached = true},
         Bridge::MuteEvent{.muted = true, .reason = "Флуд", .until = 1700000900000},
         Bridge::Ended({Domain::SessionEndReason::Banned, "Читы", 1700086400000}),
         Bridge::RoleEvent{.moderator = true},

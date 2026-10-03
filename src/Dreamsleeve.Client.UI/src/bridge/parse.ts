@@ -252,6 +252,12 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     flag(v.pending) && optional(label)(v.changed) && optional(error)(v.error),
   nameColor: (v) =>
     flag(v.pending) && optional(isColor)(v.changed) && optional(error)(v.error),
+  routes: (v) =>
+    list(v.routes, label, 8) &&
+    (v.routes as unknown[]).length > 1 &&
+    (v.routes as unknown[]).includes(v.active) &&
+    (v.chosen === "" || (v.routes as unknown[]).includes(v.chosen)) &&
+    flag(v.reached),
   mute: (v) => flag(v.muted) && label(v.reason) && optional(time)(v.until),
   sessionEnded: (v) =>
     oneOf(sessionEndReasons)(v.reason) &&

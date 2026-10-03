@@ -15,6 +15,7 @@
 {"type":"identity","mode":"everywhere","pending":false,"pseudonym":"Страж 2"},
 {"type":"displayName","pending":false,"changed":"Seven"},
 {"type":"nameColor","pending":false,"changed":"#E57373"},
+{"type":"routes","routes":["Основной","Прокси"],"active":"Прокси","chosen":"","reached":true},
 {"type":"mute","muted":true,"reason":"Флуд","until":1700000900000},
 {"type":"sessionEnded","reason":"banned","text":"Читы","until":1700086400000},
 {"type":"role","moderator":true},

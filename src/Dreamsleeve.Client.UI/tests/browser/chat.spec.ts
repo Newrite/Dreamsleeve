@@ -1401,6 +1401,27 @@ test("the own display name changes in the account panel once the server answers"
   await expect(status).toHaveText("Имя можно сменить снова через 1 мин");
 });
 
+test("the account tab picks the route to the server and shows the one in use", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Аккаунт", exact: true }).click();
+  const status = page.getByRole("status", { name: "Маршрут" });
+  await expect(status).toHaveText(
+    "Сейчас через: Основной. Если маршрут не отвечает, игра сама пробует следующий.",
+  );
+  const route = page.getByRole("combobox", { name: "Маршрут к серверу" });
+  await expect(route).toHaveAttribute("data-value", "");
+  await route.click();
+  await page.getByRole("option", { name: "Прокси" }).click();
+  // The workshop answers after a moment, like a route that connects.
+  await expect(status).toHaveText("Сейчас через: Прокси.");
+  await route.click();
+  await page.getByRole("option", { name: "Автоматически" }).click();
+  await expect(route).toHaveAttribute("data-value", "");
+});
+
 test("names are drawn in their color; the own color changes in the settings once the server answers", async ({
   page,
 }) => {

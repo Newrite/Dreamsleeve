@@ -16,6 +16,7 @@ export const failureLabels: Record<Exclude<AuthFailure, "none">, string> = {
   addressBanned: "IP-адрес заблокирован",
   deviceBanned: "Устройство заблокировано",
   steamExpired: "Вход через Steam не завершён вовремя",
+  unreachable: "Сервер не отвечает",
 };
 export const operationLabels: Record<Exclude<AuthOperation, "none">, string> = {
   passwordLogin: "Вход по паролю…",

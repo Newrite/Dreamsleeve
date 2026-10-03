@@ -88,6 +88,57 @@ namespace
 
 TEST_SUITE_BEGIN("Host.Commands");
 
+TEST_CASE("A route is chosen by name, saved and reported with the one the traffic goes by")
+{
+  Fixture fixture;
+  fixture.session.ConfigureRoutes({"Основной", "Прокси"}, "");
+  const auto routesOf = [&] {
+    ClientOutput output;
+    fixture.exchange->Drain(output);
+    Session::Frame frame;
+    fixture.session.Process(*fixture.exchange, output, fixture.ui.ui.chat, Domain::HiddenIdentity::None, frame);
+    std::optional<glz::generic> found;
+    for (const auto& event : frame.events)
+      if (Type(event) == "routes") found = Parse(event);
+    return found;
+  };
+  auto first = routesOf();
+  REQUIRE(first);
+  CHECK((*first)["active"].get<std::string>() == "Основной");
+  CHECK((*first)["chosen"].get<std::string>() == "");
+  CHECK_FALSE((*first)["reached"].get<bool>());
+
+  fixture.Run(R"({"type":"chooseRoute","route":"Прокси"})");
+  CHECK(fixture.exchange->RouteChoice() == std::optional<std::size_t>{1});
+  CHECK(fixture.ui.ui.route == "Прокси");
+  CHECK(fixture.saves == 1);
+  fixture.exchange->PublishRoute(1, true);
+  auto chosen = routesOf();
+  REQUIRE(chosen);
+  CHECK((*chosen)["active"].get<std::string>() == "Прокси");
+  CHECK((*chosen)["chosen"].get<std::string>() == "Прокси");
+  CHECK((*chosen)["reached"].get<bool>());
+  // Nothing changed: no news.
+  CHECK_FALSE(routesOf());
+
+  // An unknown name changes nothing; empty is automatic again.
+  const auto unknown = fixture.Run(R"({"type":"chooseRoute","route":"Нет такого"})");
+  CHECK(unknown.notes.size() == 1);
+  CHECK(fixture.exchange->RouteChoice() == std::optional<std::size_t>{1});
+  fixture.Run(R"({"type":"chooseRoute","route":""})");
+  CHECK_FALSE(fixture.exchange->RouteChoice());
+  CHECK(fixture.ui.ui.route.empty());
+
+  // With one route the page hears nothing of routes.
+  Fixture single;
+  single.session.ConfigureRoutes({"Основной"}, "");
+  ClientOutput   output;
+  Session::Frame frame;
+  single.exchange->Drain(output);
+  single.session.Process(*single.exchange, output, single.ui.ui.chat, Domain::HiddenIdentity::None, frame);
+  CHECK(std::ranges::none_of(frame.events, [](const auto& event) { return Type(event) == "routes"; }));
+}
+
 TEST_CASE("Close only asks the plugin to leave chat focus")
 {
   Fixture    fixture;

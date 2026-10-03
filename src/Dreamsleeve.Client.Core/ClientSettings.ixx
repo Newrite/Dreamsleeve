@@ -15,6 +15,25 @@ export namespace Dreamsleeve::Client
 
   constexpr int ClientSettingsVersion = 1;
 
+  // A way to the server: its game port and its authentication origin. The main
+  // route is the top of client.toml; [[routes]] add others, such as a proxy of
+  // the server for players who cannot reach it directly.
+  struct ConnectionRoute
+  {
+    std::string name;
+    std::string serverHost;
+    Port        serverPort{DefaultServerPort};
+    std::string authUrl;
+
+    bool operator==(const ConnectionRoute&) const = default;
+  };
+
+  // The main route's name; the others name themselves.
+  constexpr std::string_view MainRouteName = "Основной";
+  // Routes with the main one, and the bytes of a route's name.
+  constexpr std::size_t MaxRoutes         = 8;
+  constexpr std::size_t MaxRouteNameBytes = 64;
+
   struct ClientSettings
   {
     Configuration client{};
@@ -22,7 +41,28 @@ export namespace Dreamsleeve::Client
     std::size_t   commandCapacity{8};
     std::size_t   stateCapacity{8};
     bool          allowInsecureRemoteAuth{false};
+    // The other routes, tried in this order after the main one.
+    std::vector<ConnectionRoute> routes;
   };
+
+  // The main route first, then the others. The saved login, the device and
+  // the names book stay keyed by the main route whichever one carries the traffic.
+  std::vector<ConnectionRoute> RoutesOf(const ClientSettings& settings)
+  {
+    std::vector<ConnectionRoute> routes{
+        {std::string{MainRouteName}, settings.client.serverHost, settings.client.serverPort, settings.authUrl}
+    };
+    routes.insert(routes.end(), settings.routes.begin(), settings.routes.end());
+    return routes;
+  }
+
+  // The position of the named route in RoutesOf, if there is one.
+  std::optional<std::size_t> RouteIndex(std::span<const ConnectionRoute> routes, std::string_view name)
+  {
+    const auto found = std::ranges::find(routes, name, &ConnectionRoute::name);
+    if (found == routes.end()) return std::nullopt;
+    return static_cast<std::size_t>(found - routes.begin());
+  }
 
 }
 
@@ -96,6 +136,9 @@ namespace Dreamsleeve::Client
       std::set<std::vector<std::string>> keys;
       std::set<std::vector<std::string>> tables;
 
+      // [[name]] tables: the elements so far of each array.
+      std::map<std::vector<std::string>, std::size_t> arrays;
+
       bool Members(const char*& it, const char* end, std::vector<std::string> scope = {}, bool inlined = false)
       {
         while (true)
@@ -116,13 +159,24 @@ namespace Dreamsleeve::Client
           const bool table = *it == '[';
           if (table && inlined) return false;
           if (table) ++it;
+          // [[name]]: one more element of an array of tables.
+          const bool element = table && it != end && *it == '[';
+          if (element) ++it;
 
           std::vector<std::string> path;
           if (!glz::parse_toml_key(path, context, it, end)) return false;
 
-          if (table)
+          if (element)
           {
-            if (it == end || *it++ != ']' || !tables.insert(path).second || keys.contains(path)) return false;
+            if (it == end || *it++ != ']' || it == end || *it++ != ']' || tables.contains(path) || keys.contains(path)) return false;
+            // Each element is its own table: its keys never meet the previous one's.
+            const auto index = arrays[path]++;
+            scope            = std::move(path);
+            scope.push_back("[" + std::to_string(index) + "]");
+          }
+          else if (table)
+          {
+            if (it == end || *it++ != ']' || !tables.insert(path).second || keys.contains(path) || arrays.contains(path)) return false;
             scope = std::move(path);
           }
           else
@@ -180,7 +234,27 @@ namespace Dreamsleeve::Client
       std::size_t       commandCapacity{ClientSettings{}.commandCapacity};
       std::size_t       stateCapacity{ClientSettings{}.stateCapacity};
       bool              allowInsecureRemoteAuth{ClientSettings{}.allowInsecureRemoteAuth};
+      std::vector<ConnectionRoute> routes;
     };
+
+    // The first route setting that fails, named as in the file.
+    std::optional<std::string> InvalidRoute(const ClientSettings& settings)
+    {
+      if (settings.routes.size() >= MaxRoutes) return "routes";
+      std::set<std::string_view> names{MainRouteName};
+      for (std::size_t index = 0; index < settings.routes.size(); ++index)
+      {
+        const auto& route = settings.routes[index];
+        const auto  field = [&](std::string_view key) { return std::format("routes[{}].{}", index + 1, key); };
+        const bool  control =
+          std::ranges::any_of(route.name, [](char value) { return static_cast<unsigned char>(value) < 0x20 || value == 0x7F; });
+        if (route.name.empty() || route.name.size() > MaxRouteNameBytes || control || !names.insert(route.name).second) return field("name");
+        if (!DreamNetAddress::IsHostSyntax(route.serverHost)) return field("serverHost");
+        if (route.serverPort == 0) return field("serverPort");
+        if (!Auth::ValidateUrl(route.authUrl, settings.allowInsecureRemoteAuth)) return field("authUrl");
+      }
+      return std::nullopt;
+    }
 
   }
 
@@ -192,6 +266,7 @@ namespace Dreamsleeve::Client
     if (auto field = client.InvalidSetting()) return std::unexpected{"Invalid client setting: " + std::string{*field}};
     if (auto field = ClientExchange::InvalidCapacity(settings.commandCapacity, settings.stateCapacity))
       return std::unexpected{"Invalid client setting: " + std::string{*field}};
+    if (auto field = SettingsDetail::InvalidRoute(settings)) return std::unexpected{"Invalid client setting: " + *field};
     // The host is resolved per connection; the transport check covers the ENet host and the timeouts.
     if (
       auto transport = DreamNetClient::ValidateConfig(
@@ -257,7 +332,8 @@ namespace Dreamsleeve::Client
         std::move(file.authUrl),
         file.commandCapacity,
         file.stateCapacity,
-        file.allowInsecureRemoteAuth
+        file.allowInsecureRemoteAuth,
+        std::move(file.routes)
     };
   }
 

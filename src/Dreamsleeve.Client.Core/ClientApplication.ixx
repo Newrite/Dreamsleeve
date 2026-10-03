@@ -11,6 +11,14 @@ export import Dreamsleeve.Client.Runtime;
 export namespace Dreamsleeve::Client
 {
 
+  // How the application picks its route (RoutesOf): the one the player chose,
+  // or automatically, starting with first (the one that worked last time).
+  struct RoutePreference
+  {
+    std::optional<std::size_t> chosen;
+    std::size_t                first{};
+  };
+
   // All public calls, including destruction, belong to the application main
   // thread. The worker owns Runtime; Exchange is the only shared-state boundary.
   class ClientApplication final
@@ -20,7 +28,7 @@ public:
     using Result = std::expected<std::unique_ptr<ClientApplication>, std::string>;
     using Ptr    = std::unique_ptr<ClientApplication>;
 
-    static Result TryCreate(ClientSettings settings)
+    static Result TryCreate(ClientSettings settings, RoutePreference preference = {})
     {
       if (auto valid = ValidateClientSettings(settings); !valid) return std::unexpected{valid.error()};
       auto net = DreamNetRuntime::TryInitialize();
@@ -32,6 +40,12 @@ public:
       auto app = std::unique_ptr<ClientApplication>{
           new ClientApplication{std::move(settings), std::move(*net), std::move(*exchange), std::move(runtime)}
       };
+      // Before the threads: the first connection already goes by the route.
+      const auto known = [&](std::optional<std::size_t> index) { return index && *index < app->routes.size() ? index : std::nullopt; };
+      const auto chosen = known(preference.chosen);
+      app->exchange->SetRouteChoice(chosen);
+      app->automatic = !chosen;
+      app->SelectRoute(chosen.value_or(known(preference.first).value_or(0)), true);
       try
       {
         app->methodsReader = std::jthread([self = app.get()](std::stop_token stop) { self->ReadMethods(stop); });
@@ -60,6 +74,12 @@ public:
     const ClientSettings& Settings() const noexcept
     {
       return settings;
+    }
+
+    // RoutesOf the settings; Status().route is an index of them.
+    std::span<const ConnectionRoute> Routes() const noexcept
+    {
+      return routes;
     }
 
     ClientStatus Status() const
@@ -137,6 +157,7 @@ private:
 
     ClientApplication(ClientSettings options, DreamNetRuntime net, ClientExchange::Ptr boundary, ClientRuntime::Ptr client)
         : settings(std::move(options)),
+          routes(RoutesOf(settings)),
           enet(std::move(net)),
           exchange(std::move(boundary)),
           runtime(std::move(client))
@@ -175,6 +196,62 @@ private:
       if (!result) exchange->PublishError(Describe(result.error()));
     }
 
+    // The route the traffic goes by. The saved login and the device stay with
+    // settings.authUrl, the main route's, whichever route answers.
+    const ConnectionRoute& Route() const
+    {
+      return routes[active.load()];
+    }
+
+    void SelectRoute(std::size_t index, bool now)
+    {
+      active       = index;
+      routeReached = false;
+      runtime->UseEndpoint(routes[index].serverHost, routes[index].serverPort, now);
+      exchange->PublishRoute(index, false);
+      RefreshMethods();
+    }
+
+    // The player's choice applies while no session runs.
+    void FollowRouteChoice()
+    {
+      const auto choice = exchange->RouteChoice();
+      automatic         = !choice;
+      if (choice && *choice < routes.size() && *choice != active.load() && SessionIdle(runtime->Phase())) SelectRoute(*choice, true);
+    }
+
+    // The active route did not get through: chosen automatically, the next one
+    // takes over, at once until every route failed in a row, then after the
+    // guest's growing wait. false when there is no other route to take.
+    bool NextRoute()
+    {
+      if (!automatic || routes.size() < 2) return false;
+      ++failedRoutes;
+      SelectRoute((active.load() + 1) % routes.size(), failedRoutes < routes.size());
+      return true;
+    }
+
+    void NoteReached()
+    {
+      failedRoutes = 0;
+      if (routeReached) return;
+      routeReached = true;
+      exchange->PublishRoute(active.load(), true);
+    }
+
+    // A request by the active route; while it goes unanswered and the route is
+    // chosen automatically, by each other route in turn. Any answer keeps the route.
+    template <class Request>
+    auto OnRoutes(Request request)
+    {
+      auto       result      = request(Route());
+      const auto unanswered  = [&] { return !result && result.error().code == Auth::FailureCode::Unreachable; };
+      for (std::size_t tried = 1; unanswered() && tried < routes.size() && !exchange->AuthenticationCanceled() && NextRoute(); ++tried)
+        result = request(Route());
+      if (!unanswered()) NoteReached();
+      return result;
+    }
+
     // Closes the session and serves the transport until the close completes.
     // The client stays a guest unless it leaves: the application stops.
     void CloseSession(bool leave = false)
@@ -203,7 +280,9 @@ private:
         exchange->PublishSavedLogin(false);
         return {};
       }
-      auto result = Auth::Logout(settings.authUrl, (**saved).token, settings.allowInsecureRemoteAuth);
+      auto result = OnRoutes([&](const ConnectionRoute& route) {
+        return Auth::Logout(route.authUrl, (**saved).token, settings.allowInsecureRemoteAuth);
+      });
       // Keep the credential on transient failure so the UI can retry revocation.
       // ForgetSavedLogin is the explicit offline alternative.
       if (!result) return result;
@@ -232,13 +311,19 @@ private:
     {
       if (request.registerName)
       {
+        // Not repeated by another route: an answer lost on the way may have
+        // registered the account already. The player's next try goes by the next one.
         auto registered =
-          Auth::RegisterAccount(settings.authUrl, request.credentials, *request.registerName, settings.allowInsecureRemoteAuth, device);
+          Auth::RegisterAccount(Route().authUrl, request.credentials, *request.registerName, settings.allowInsecureRemoteAuth, device);
         if (exchange->AuthenticationCanceled()) return {};
+        if (!registered && registered.error().code == Auth::FailureCode::Unreachable) NextRoute();
         if (!registered) return registered;
+        NoteReached();
       }
       return ConnectGrant(
-        Auth::LoginGrant(settings.authUrl, request.credentials, request.remember, settings.allowInsecureRemoteAuth, device),
+        OnRoutes([&](const ConnectionRoute& route) {
+          return Auth::LoginGrant(route.authUrl, request.credentials, request.remember, settings.allowInsecureRemoteAuth, device);
+        }),
         request.remember);
     }
 
@@ -253,7 +338,9 @@ private:
             Auth::Failure{Auth::FailureCode::InvalidCredentials, "Sign in to this server first"}
         };
       }
-      auto grant = Auth::Resume(settings.authUrl, (**saved).token, settings.allowInsecureRemoteAuth, device);
+      auto grant = OnRoutes([&](const ConnectionRoute& route) {
+        return Auth::Resume(route.authUrl, (**saved).token, settings.allowInsecureRemoteAuth, device);
+      });
       if (!grant && grant.error().code == Auth::FailureCode::InvalidCredentials)
       {
         if (auto forgotten = ForgetLogin(); !forgotten) return forgotten;
@@ -265,7 +352,10 @@ private:
     // served while the client waits, and a cancel or stop ends the wait.
     AuthResult Authenticate(const SteamLogin& request)
     {
-      auto flow = Auth::BeginSteam(settings.authUrl, request.remember, settings.allowInsecureRemoteAuth, device);
+      // The flow stays on the route it began by: the server sends the browser back there.
+      auto flow = OnRoutes([&](const ConnectionRoute& route) {
+        return Auth::BeginSteam(route.authUrl, request.remember, settings.allowInsecureRemoteAuth, device);
+      });
       if (!flow) return std::unexpected{flow.error()};
       // The page stays available for "copy the link" while the client waits.
       exchange->PublishSteamPage(flow->page);
@@ -318,12 +408,15 @@ private:
           };
         if (now < next) continue;
         next        = now + SteamPollInterval;
-        auto polled = Auth::PollSteam(settings.authUrl, flow->flow, flow->secret, settings.allowInsecureRemoteAuth);
+        auto polled = Auth::PollSteam(Route().authUrl, flow->flow, flow->secret, settings.allowInsecureRemoteAuth);
         if (!polled)
         {
           // A dropped request or a busy server may pass while the browser finishes.
           const auto code = polled.error().code;
-          if ((code == Auth::FailureCode::Unavailable || code == Auth::FailureCode::Busy) && ++failures < MaxSteamPollFailures) continue;
+          if (
+            (code == Auth::FailureCode::Unavailable || code == Auth::FailureCode::Unreachable || code == Auth::FailureCode::Busy) &&
+            ++failures < MaxSteamPollFailures)
+            continue;
           return std::unexpected{polled.error()};
         }
         failures = 0;
@@ -350,14 +443,16 @@ private:
 
     AuthResult Authenticate(const ResetAccountPassword& request)
     {
-      auto result = Auth::ResetPassword(settings.authUrl, request.code, request.password, settings.allowInsecureRemoteAuth);
+      auto result = OnRoutes([&](const ConnectionRoute& route) {
+        return Auth::ResetPassword(route.authUrl, request.code, request.password, settings.allowInsecureRemoteAuth);
+      });
       if (!result) return result;
       return ForgetLogin();
     }
 
     // What the server offers is asked off the network thread, so a slow server
-    // never delays a sign-in: at start, after a refused sign-in and while
-    // unknown. When the server does not answer, the last known methods stay.
+    // never delays a sign-in: at start, after a refused sign-in, on a new route
+    // and while unknown. When the server does not answer, the last known methods stay.
     void ReadMethods(std::stop_token stop)
     {
       std::unique_lock lock{methodsMutex};
@@ -365,7 +460,7 @@ private:
       {
         methodsWanted = false;
         lock.unlock();
-        auto methods = Auth::ReadMethods(settings.authUrl, settings.allowInsecureRemoteAuth);
+        auto methods = Auth::ReadMethods(routes[active.load()].authUrl, settings.allowInsecureRemoteAuth);
         if (methods) exchange->PublishMethods(*methods);
         lock.lock();
         if (methods)
@@ -401,6 +496,7 @@ private:
 
       while (!exchange->StopRequested())
       {
+        FollowRouteChoice();
         auto control = exchange->TakeControl();
         if (control.authentication)
         {
@@ -420,6 +516,10 @@ private:
         if (exchange->StopRequested()) break;
         if (control.disconnect || (control.authentication && exchange->AuthenticationCanceled())) Report(runtime->Disconnect());
         Report(runtime->Poll(10));
+        if (runtime->TakeUnreachable() > 0)
+          NextRoute();
+        else if (runtime->Reached())
+          NoteReached();
 
         if (SessionIdle(runtime->Phase())) exchange->WaitForControl();
       }
@@ -429,7 +529,15 @@ private:
       exchange->Finish();
     }
 
-    ClientSettings             settings;
+    ClientSettings               settings;
+    std::vector<ConnectionRoute> routes;
+    // Written by the worker, read by the methods reader too.
+    std::atomic<std::size_t> active{};
+    // The worker's: the route is chosen automatically, the active one answered
+    // since it was taken, routes that failed in a row.
+    bool                       automatic{true};
+    bool                       routeReached{};
+    std::size_t                failedRoutes{};
     std::optional<std::string> device;
     DreamNetRuntime            enet;
     ClientExchange::Ptr exchange;

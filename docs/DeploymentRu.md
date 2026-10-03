@@ -366,8 +366,10 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         proxy_set_header Host $host;
-        # Ровно адрес игрока: сервер берёт последний адрес списка, один переход.
-        proxy_set_header X-Forwarded-For $remote_addr;
+        # Адрес игрока дописывается в конец: сервер читает список справа, пока
+        # переход доверенный (этот nginx, прокси из [Proxies]), и берёт первый
+        # недоверенный адрес. Что игрок дописал сам, левее, не учитывается.
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 30s;
     }
@@ -545,9 +547,104 @@ authUrl = "https://auth.example.org"
 поднимите соответствующие `maxInitialPlayers`, `maxRecentMessages`, `maxActorValues` и
 `client.network.maxPacketBytes` у клиента — иначе клиент отвергнет данные сервера.
 
-Сохранённый вход хранится в Windows Credential Manager отдельно для каждого `authUrl`.
-Версия протокола проверяется при входе: клиент и сервер обновляются вместе, совместимости между
-версиями нет.
+Сохранённый вход хранится в Windows Credential Manager отдельно для каждого основного `authUrl`;
+маршруты через прокси (ниже) делят его с основным. Версия протокола проверяется при входе: клиент
+и сервер обновляются вместе, совместимости между версиями нет.
+
+### 10.1. Прокси для игроков, которым сервер недоступен
+
+Если часть игроков не может достучаться до сервера (провайдер или страна режут адрес), поставьте
+прокси на другом хосте, который им доступен. Прокси ничего не знает о Dreamsleeve: он пересылает
+UDP на игровой порт и HTTPS на хост входа с `X-Forwarded-For`. Подойдёт nginx, HAProxy или
+любой другой; ниже — nginx.
+
+```text
+Игрок ── UDP 8778 ──► proxy.example.org (198.51.100.20) ── UDP ──► 203.0.113.10:8778
+      └─ HTTPS 443 ─►  nginx, /auth/ с X-Forwarded-For ── HTTPS ─► auth.example.org
+```
+
+На хосте прокси, `/etc/nginx/nginx.conf` (UDP требует модуль `stream`, пакет `libnginx-mod-stream`):
+
+```nginx
+stream {
+    # Каждый адрес игрока — свой поток к серверу.
+    server {
+        listen 8778 udp;
+        proxy_pass 203.0.113.10:8778;
+        # ENet шлёт пакеты постоянно; поток без пакетов дольше закрывается.
+        proxy_timeout 10m;
+    }
+}
+
+http {
+    server {
+        listen 443 ssl;
+        server_name proxy.example.org;
+        ssl_certificate     /etc/letsencrypt/live/proxy.example.org/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/proxy.example.org/privkey.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        client_max_body_size 8k;
+
+        location /auth/ {
+            proxy_pass https://auth.example.org;
+            proxy_ssl_server_name on;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            # Имя прокси: вход через Steam, начатый здесь, возвращается сюда.
+            proxy_set_header Host $host;
+            # Ровно адрес игрока; то, что прислал он сам, отбрасывается.
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_read_timeout 30s;
+        }
+
+        location / { return 404; }
+    }
+}
+```
+
+На основном сервере:
+
+- nginx входа (6.2) принимает и имя прокси — `server_name auth.example.org proxy.example.org;` —
+  и дописывает адрес в `X-Forwarded-For` (`$proxy_add_x_forwarded_for`, как в 6.2);
+- `server.toml`:
+
+```toml
+[Proxies]
+Trusted = ["198.51.100.20"]        # адреса или подсети прокси
+
+[Authentication.Steam]
+ProxyUrls = ["https://proxy.example.org"]   # если включён вход через Steam
+```
+
+Что сервер делает с прокси:
+
+- **Вход.** От доверенного прокси сервер берёт адрес игрока из `X-Forwarded-For`: лимиты запросов,
+  история адресов, баны диапазонов и устройства работают по игроку. В логе входа —
+  `signed in (…) through proxy 198.51.100.20`. От чужого адреса заголовок игнорируется.
+- **Игровое соединение.** Настоящий адрес за UDP-прокси не виден, поэтому билет входа помнит адрес,
+  с которого игрок вошёл: соединение от прокси считается соединением этого игрока. В таблице
+  онлайна админки — его адрес и «через прокси 198.51.100.20», бан диапазона закрывает его сессию.
+- **Сам прокси** под баны диапазонов не попадает — ни его гости, ни новые соединения. Гость без
+  входа виден в админке с адресом прокси.
+- **Steam.** Вход, начатый через прокси (по имени хоста в запросе), возвращает браузер на адрес
+  прокси из `ProxyUrls`, иначе — на `PublicUrl`.
+
+Игрокам — маршрут в `client.toml` после основных ключей:
+
+```toml
+[[routes]]
+name = "Прокси"
+serverHost = "proxy.example.org"
+serverPort = 8778
+authUrl = "https://proxy.example.org"
+```
+
+Клиент сам переходит на следующий маршрут, если текущий не отвечает (нет ответа HTTP или
+UDP-соединения), запоминает сработавший и начинает с него в следующий раз; во вкладке «Аккаунт»
+маршрут выбирается вручную. Сохранённый вход, устройство, псевдонимы и игнор у всех маршрутов
+общие — по основному. Проверка без nginx — `python Scripts/smoke_proxy.py`: прокси-заглушка на
+Python с адреса `127.0.0.2`.
 
 ## 11. Проверка после развёртывания
 

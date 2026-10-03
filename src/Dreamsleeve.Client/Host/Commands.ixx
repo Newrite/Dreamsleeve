@@ -238,6 +238,23 @@ export namespace Dreamsleeve::Host
         Emit(session.NameEvent());
       }
 
+      // Applies at once while no session runs, else when the next one opens.
+      // An unknown name keeps the choice as it is.
+      void operator()(Commands::ChooseRoute& command)
+      {
+        auto& session = context.session;
+        auto  choice  = session.RouteChoiceOf(command.route);
+        if (!choice)
+        {
+          output.notes.push_back(std::format("Unknown route \"{}\" ignored", command.route));
+          return;
+        }
+        context.exchange.SetRouteChoice(*choice);
+        session.ChooseRoute(command.route);
+        context.ui.ui.route = std::move(command.route);
+        if (auto saved = context.ports.saveUi(); !saved) output.notes.push_back(saved.error());
+      }
+
       // Admitted as "#RRGGBB"; the server judges readability.
       void operator()(Commands::SetNameColor& command)
       {

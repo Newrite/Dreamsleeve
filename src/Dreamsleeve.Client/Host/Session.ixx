@@ -368,6 +368,28 @@ public:
       return selfId;
     }
 
+    // The route names of client.toml and the player's pick; the page hears of
+    // them only when there is more than one route.
+    void ConfigureRoutes(std::vector<std::string> names, std::string chosen)
+    {
+      routeNames  = std::move(names);
+      routeChoice = std::move(chosen);
+    }
+
+    // The position of a route by name; empty is automatic.
+    std::optional<std::optional<std::size_t>> RouteChoiceOf(std::string_view name) const
+    {
+      if (name.empty()) return std::optional<std::size_t>{};
+      const auto found = std::ranges::find(routeNames, name);
+      if (found == routeNames.end()) return std::nullopt;
+      return std::optional<std::size_t>{static_cast<std::size_t>(found - routeNames.begin())};
+    }
+
+    void ChooseRoute(std::string chosen)
+    {
+      routeChoice = std::move(chosen);
+    }
+
     // Whether a "guildmates only" choice hides this player's fireflies or
     // marks: on, not self, and in none of the own guilds.
     bool GuildmatesOnlyHides(Domain::PlayerId id, bool guildmatesOnly) const
@@ -1050,6 +1072,15 @@ private:
         Emit(frame, Bridge::Ended(*status.sessionEnd));
         frame.sessionEnded = status.sessionEnd->reason;
       }
+      if (routeNames.size() > 1 && status.route < routeNames.size())
+      {
+        Bridge::RoutesEvent routes{.routes = routeNames, .active = routeNames[status.route], .chosen = routeChoice, .reached = status.routeReached};
+        if (first || routes != lastRoutes)
+        {
+          Emit(frame, routes);
+          lastRoutes = std::move(routes);
+        }
+      }
       lastStatus = status;
     }
 
@@ -1084,6 +1115,9 @@ private:
     std::optional<std::string>                                         colorError;
     std::optional<std::string>                                         colorChanged;
     Bridge::NameColorEvent                                             lastColor;
+    std::vector<std::string>                                           routeNames;
+    std::string                                                        routeChoice;
+    Bridge::RoutesEvent                                                lastRoutes;
     std::optional<ClientStatus>                                        lastStatus;
     // The guild book of the session, the one the UI shows, whether this view
     // has had it, and the book revision whose removals the UI has heard of.

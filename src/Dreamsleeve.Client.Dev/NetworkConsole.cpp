@@ -344,6 +344,8 @@ namespace
 
   // The guild book last printed, and the newest one seen: a new book is a change.
   std::shared_ptr<const GuildBook> printedGuilds;
+  // The route names of the configuration; printed when there is more than one.
+  std::vector<std::string> routeNames;
 
   bool PostPlayerCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
@@ -472,6 +474,8 @@ namespace
     if (!output.status.serverName.empty()) console << "server=" << output.status.serverName << '\n';
     if (output.status.pseudonym) console << "pseudonym=" << *output.status.pseudonym << '\n';
     if (output.status.role == Domain::PlayerRole::Moderator) console << "role=moderator\n";
+    if (routeNames.size() > 1 && output.status.route < routeNames.size())
+      console << "route=" << routeNames[output.status.route] << (output.status.routeReached ? " reached" : "") << '\n';
     if (output.status.mute) console << "muted: " << output.status.mute->reason << '\n';
     if (output.status.sessionEnd)
       console << "ended=" << static_cast<int>(output.status.sessionEnd->reason) << ": " << output.status.sessionEnd->text << '\n';
@@ -723,6 +727,8 @@ int RunNetworkConsole(int argc, char* argv[])
   }
   // Validated by TryCreate; the view trusts it.
   auto  movement = MovementView::Create((*application)->Settings().client.movement);
+  for (const auto& route : (*application)->Routes())
+    routeNames.push_back(route.name);
   auto& exchange = (*application)->Exchange();
   // Others see a server pseudonym from the very first packet of the session.
   exchange.SetHideIdentity(hiding);

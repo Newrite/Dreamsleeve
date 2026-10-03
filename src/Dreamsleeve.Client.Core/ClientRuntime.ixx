@@ -52,6 +52,30 @@ public:
       if (transport->State() != ClientState::Disconnecting) DropGuest();
     }
 
+    // Where the next connection goes; a guest link elsewhere is dropped. now:
+    // the guest connects at once rather than after its retry wait.
+    void UseEndpoint(std::string host, Port port, bool now)
+    {
+      reached = false;
+      if (host == endpoint.host && port == endpoint.port) return;
+      endpoint = {std::move(host), port};
+      if (SessionIdle(phase) && transport) DropGuest();
+      if (now) guestRetry.Reset();
+    }
+
+    // Connection attempts that failed before the server answered, since the
+    // last call: the route does not get through.
+    std::size_t TakeUnreachable() noexcept
+    {
+      return std::exchange(unreachable, 0);
+    }
+
+    // The server answered a connection on this endpoint.
+    bool Reached() const noexcept
+    {
+      return reached;
+    }
+
     // A close is still being served: the session's or the guest link's.
     bool Closing() const noexcept
     {
@@ -76,7 +100,11 @@ public:
       if (!reuse)
       {
         auto created = NewTransport();
-        if (!created) return Fail(created.error());
+        if (!created)
+        {
+          ++unreachable;
+          return Fail(created.error());
+        }
         transport = std::move(*created);
       }
 
@@ -130,7 +158,11 @@ public:
 
       auto polled = transport->Poll(events, waitMs);
       // A transport failure invalidates the whole unprocessed batch.
-      if (!polled) return Fail(polled.error());
+      if (!polled)
+      {
+        if (phase == SessionPhase::Connecting) ++unreachable;
+        return Fail(polled.error());
+      }
 
       for (auto& event : events)
       {
@@ -249,6 +281,7 @@ private:
     Result<void> Handle(ClientConnected&)
     {
       if (phase != SessionPhase::Connecting) return Unexpected("connected");
+      reached = true;
       return SendOpening();
     }
 
@@ -275,7 +308,7 @@ private:
     // as the HTTP sign-in does; a failure is a failed attempt, retried as one.
     std::expected<DreamNetClient::Ptr, DreamNetError> NewTransport() const
     {
-      auto address = DreamNetAddress::TryResolve(config.serverHost, config.serverPort);
+      auto address = DreamNetAddress::TryResolve(endpoint.host, endpoint.port);
       if (!address) return std::unexpected{std::move(address.error())};
       return DreamNetClient::TryCreate({config.network, *address, config.connectTimeoutMs, config.disconnectTimeoutMs});
     }
@@ -297,17 +330,31 @@ private:
       {
         if (!keepGuest || !guestRetry.Due(Clock::now())) return;
         auto created = NewTransport();
-        if (!created) return;
+        if (!created)
+        {
+          ++unreachable;
+          return;
+        }
         transport = std::move(*created);
-        if (!transport->BeginConnect()) return DropGuest();
+        if (!transport->BeginConnect())
+        {
+          ++unreachable;
+          return DropGuest();
+        }
       }
 
       events.clear();
-      bool failed = !transport->Poll(events, waitMs);
+      const bool connecting = transport->State() == ClientState::Connecting;
+      bool       failed     = !transport->Poll(events, waitMs);
       // A guest is told nothing but a refusal, and a close needs no answer.
       for (const auto& event : events)
-        if (!failed && std::holds_alternative<ClientConnected>(event)) failed = !JoinAsGuest();
+        if (!failed && std::holds_alternative<ClientConnected>(event))
+        {
+          reached = true;
+          failed  = !JoinAsGuest();
+        }
       events.clear();
+      if (failed && connecting && !reached) ++unreachable;
       if (failed) DropGuest();
     }
 
@@ -1077,6 +1124,14 @@ private:
     Wire::ProtocolCodec                               codec;
     ClientExchange&                                   exchange;
     DreamNetClient::Ptr                               transport;
+    // The route's game port, the main one until the application picks another.
+    struct
+    {
+      std::string host;
+      Port        port{};
+    } endpoint{config.serverHost, config.serverPort};
+    std::size_t                                       unreachable{};  // See TakeUnreachable.
+    bool                                              reached{};      // See Reached.
     bool                                              keepGuest{};
     Utils::Timing::Backoff                            guestRetry{GuestRetryMinimum, GuestRetryMaximum};
     ClientModel                                       model;

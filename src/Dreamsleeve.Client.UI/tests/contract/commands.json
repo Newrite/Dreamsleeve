@@ -211,6 +211,10 @@
     "color": "#E57373"
   },
   {
+    "type": "chooseRoute",
+    "route": "Прокси"
+  },
+  {
     "type": "sanctionPlayer",
     "requestId": "m1",
     "playerId": "7",

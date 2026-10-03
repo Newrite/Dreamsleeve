@@ -243,6 +243,10 @@ export namespace Dreamsleeve::Host
     // HidingNames. Sent when a session opens; only the host writes it, once the
     // server confirmed a switch, so the web UI never sends it.
     std::string hideIdentity{"off"};
+    // The route of client.toml the player chose, by name; empty: automatic.
+    std::string route{};
+    // The route that answered last in automatic mode; the next start begins there.
+    std::string lastRoute{};
     UiSettings  chat{};
 
     bool operator==(const UiSection&) const = default;

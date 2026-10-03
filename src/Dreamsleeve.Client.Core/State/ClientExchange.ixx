@@ -495,6 +495,10 @@ export namespace Dreamsleeve::Client
     // the next sign-in. The sequence tells a repeat of the same notice apart.
     std::optional<Domain::SessionEnd> sessionEnd;
     std::uint32_t                     sessionEndSequence{};
+    // The route the traffic goes by (an index of the settings' routes, the main
+    // one first) and whether it has answered since the client took it.
+    std::size_t route{};
+    bool        routeReached{};
 
     // Nothing runs: no sign-in in flight and no session.
     bool Idle() const noexcept
@@ -739,6 +743,28 @@ public:
       });
     }
 
+    // Main thread: the one route to use, or none to choose automatically. The
+    // owner takes it while no session runs.
+    void SetRouteChoice(std::optional<std::size_t> route)
+    {
+      std::lock_guard lock{mutex};
+      routeChoice = route;
+    }
+
+    std::optional<std::size_t> RouteChoice() const
+    {
+      std::lock_guard lock{mutex};
+      return routeChoice;
+    }
+
+    // Owner only.
+    void PublishRoute(std::size_t route, bool reached)
+    {
+      std::lock_guard lock{mutex};
+      status.route        = route;
+      status.routeReached = reached;
+    }
+
     // Main thread. Read by the owner when it opens the next session; a running
     // session changes only through SetIdentityVisibility.
     void SetHideIdentity(Domain::HiddenIdentity hiding)
@@ -942,6 +968,7 @@ private:
     std::vector<CommandResult>           pendingResults;
     ClientStatus                         status;
     Domain::HiddenIdentity               hideIdentity{Domain::HiddenIdentity::None};
+    std::optional<std::size_t>           routeChoice;
     std::optional<AuthenticationRequest> pendingAuthentication;
     bool                                 disconnectRequested{};
     bool                                 authenticationCanceled{};

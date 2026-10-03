@@ -123,6 +123,15 @@ export interface DisplayNameState {
   changed?: string;
   error?: string;
 }
+// The routes of client.toml by name, the main one first, when there are
+// others: active carries the traffic, reached tells whether it answered,
+// chosen is the player's pick ("" automatic).
+export interface RoutesState {
+  routes: string[];
+  active: string;
+  chosen: string;
+  reached: boolean;
+}
 // A change of the own name color, like DisplayNameState: changed is the
 // "#RRGGBB" the server has just stored.
 export interface NameColorState {
@@ -273,6 +282,7 @@ export type Command =
   // In a session only; the server applies its word list and change interval.
   | { type: "changeDisplayName"; displayName: string }
   | { type: "setNameColor"; color: string }
+  | { type: "chooseRoute"; route: string }
   // Moderator tools; the server checks the role and whom a moderator may act
   // on. No minutes: until lifted. Each is answered with moderationResult.
   | {
@@ -342,6 +352,7 @@ export type HostEvent =
   | ({ type: "identity" } & IdentityState)
   | ({ type: "displayName" } & DisplayNameState)
   | ({ type: "nameColor" } & NameColorState)
+  | ({ type: "routes" } & RoutesState)
   | ({ type: "mute" } & MuteState)
   | ({ type: "sessionEnded" } & SessionEndState)
   // The player's role; a moderator gets the moderator tools.

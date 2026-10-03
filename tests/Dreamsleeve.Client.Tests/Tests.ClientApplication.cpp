@@ -212,6 +212,47 @@ visibilityDistance = -1
   CHECK_FALSE(fixture.Accepts(std::string(65537, ' ')));
 }
 
+TEST_CASE("Routes come as [[routes]] tables after the main one and are checked like it")
+{
+  SettingsFixture fixture;
+  constexpr std::string_view main = "serverHost = \"main.example.org\"\nauthUrl = \"https://main.example.org\"\n";
+  const auto                 route = [](std::string_view body) { return std::format("[[routes]]\n{}\n", body); };
+  const std::string          proxy =
+    route("name = \"Прокси\"\nserverHost = \"proxy.example.org\"\nserverPort = 9000\nauthUrl = \"https://proxy.example.org\"");
+  const std::string second = route("name = \"Второй\"\nserverHost = \"203.0.113.9\"\nauthUrl = \"https://203.0.113.9\"");
+  auto              loaded = fixture.Load(std::string{main} + proxy + second);
+  REQUIRE(loaded);
+  REQUIRE(ValidateClientSettings(*loaded));
+  const auto routes = RoutesOf(*loaded);
+  REQUIRE(routes.size() == 3);
+  CHECK(routes[0] == ConnectionRoute{std::string{MainRouteName}, "main.example.org", DefaultServerPort, "https://main.example.org"});
+  CHECK(routes[1] == ConnectionRoute{"Прокси", "proxy.example.org", 9000, "https://proxy.example.org"});
+  CHECK(routes[2].serverPort == DefaultServerPort);
+  CHECK(RouteIndex(routes, "Второй") == std::optional<std::size_t>{2});
+  CHECK_FALSE(RouteIndex(routes, "Нет такого"));
+
+  std::string tooMany{main};
+  for (int index = 0; index < 8; ++index)
+    tooMany += route(std::format("name = \"r{}\"\nserverHost = \"203.0.113.9\"\nauthUrl = \"https://203.0.113.9\"", index));
+  for (const auto& source : {
+         std::string{main} + proxy + proxy,  // names are unique
+         std::string{main} + route("name = \"Основной\"\nserverHost = \"a.example.org\"\nauthUrl = \"https://a.example.org\""),
+         std::string{main} + route("serverHost = \"a.example.org\"\nauthUrl = \"https://a.example.org\""),
+         std::string{main} + route("name = \"x\"\nserverHost = \"bad host\"\nauthUrl = \"https://a.example.org\""),
+         std::string{main} + route("name = \"x\"\nserverHost = \"a.example.org\"\nserverPort = 0\nauthUrl = \"https://a.example.org\""),
+         std::string{main} + route("name = \"x\"\nserverHost = \"a.example.org\"\nauthUrl = \"http://a.example.org\""),
+         std::string{main} + route("name = \"x\"\nserverHost = \"a.example.org\"\nauthUrl = \"https://a.example.org\"\ntypo = 1"),
+         std::string{main} + "[routes]\nname = \"x\"\n",
+         std::string{main} + "routes = []\n" + proxy,
+         std::string{main} + proxy + "[routes]\nname = \"y\"\n",
+         tooMany,
+       })
+  {
+    CAPTURE(source);
+    CHECK_FALSE(fixture.Accepts(source));
+  }
+}
+
 TEST_CASE("TOML supports comments inline tables and rejects ambiguous scalar values")
 {
   SettingsFixture fixture;
@@ -251,6 +292,44 @@ TEST_CASE("Application owns startup and final shutdown without a connection")
   ClientOutput output;
   (*app)->Exchange().Drain(output);
   CHECK(output.status.stopped);
+}
+
+TEST_CASE("Routes chosen automatically take turns while none answers; a chosen route stays")
+{
+  // Nobody serves these ports: every attempt times out.
+  ClientSettings settings;
+  settings.client.serverPort       = 1;
+  settings.client.connectTimeoutMs = 50;
+  settings.routes.push_back({"Прокси", "127.0.0.1", 2, "http://127.0.0.1:9"});
+  const auto routeOf = [](ClientApplication& app, std::size_t route) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+    while (app.Status().route != route && std::chrono::steady_clock::now() < deadline)
+      std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    return app.Status().route == route;
+  };
+
+  // The remembered route goes first, the next one takes over when it does not answer.
+  auto app = ClientApplication::TryCreate(settings, {std::nullopt, 1});
+  REQUIRE(app);
+  REQUIRE((*app)->Routes().size() == 2);
+  CHECK((*app)->Routes()[0].name == MainRouteName);
+  CHECK((*app)->Status().route == 1);
+  CHECK(routeOf(**app, 0));
+  CHECK(routeOf(**app, 1));
+  CHECK_FALSE((*app)->Status().routeReached);
+
+  // The player's choice holds, answered or not.
+  (*app)->Exchange().SetRouteChoice(0);
+  CHECK(routeOf(**app, 0));
+  std::this_thread::sleep_for(std::chrono::milliseconds{300});
+  CHECK((*app)->Status().route == 0);
+  (*app)->Stop();
+
+  auto chosen = ClientApplication::TryCreate(settings, {1, 0});
+  REQUIRE(chosen);
+  CHECK((*chosen)->Status().route == 1);
+  std::this_thread::sleep_for(std::chrono::milliseconds{300});
+  CHECK((*chosen)->Status().route == 1);
 }
 
 TEST_CASE("Authentication errors are observable and a subsequent explicit login is allowed")
@@ -362,8 +441,12 @@ TEST_CASE("The bundled client.example.toml is the first-run file and holds every
   const auto named = [&](std::string_view key) {
     CHECK_MESSAGE(text.contains(std::format("\n{} = ", key)), std::string{key});
   };
+  // Sections and the [[routes]] tables, which the example shows commented out.
   for (const auto key : glz::reflect<SettingsDetail::SettingsFile>::keys)
-    if (key != "client" && key != "interpolation") named(key);
+    if (key != "client" && key != "interpolation" && key != "routes") named(key);
+  CHECK(loaded->routes.empty());
+  for (const auto key : glz::reflect<ConnectionRoute>::keys)
+    CHECK_MESSAGE(text.contains(std::format("\n# {} = ", key)), std::string{key});
   for (const auto key : glz::reflect<Configuration>::keys)
     if (key != "network") named(key);
   for (const auto key : glz::reflect<NetConfig>::keys)

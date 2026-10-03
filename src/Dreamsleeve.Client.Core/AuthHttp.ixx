@@ -37,7 +37,8 @@ export namespace Dreamsleeve::Client::Auth
     RegistrationSteamOnly,  // New accounts come only from a Steam sign-in.
     AddressBanned,          // The server banned the IP range of this computer; see Failure::ban.
     DeviceBanned,           // An account ban covers this computer.
-    SteamExpired            // The Steam sign-in was not finished in the browser in time.
+    SteamExpired,           // The Steam sign-in was not finished in the browser in time.
+    Unreachable             // No answer at all: name, connection, TLS or timeout before a response.
   };
 
   // Who may create an account on the server (GET /auth/methods); Unknown until
@@ -204,6 +205,13 @@ namespace Dreamsleeve::Client::Auth
       std::string body;
     };
 
+    // Why a request has no response; unanswered when the server never answered.
+    struct SendFailure
+    {
+      std::string message;
+      bool        unanswered{};
+    };
+
     auto SystemError(std::string_view operation)
     {
       return std::unexpected{std::string(operation) + " failed (Windows " + std::to_string(GetLastError()) + ")"};
@@ -253,11 +261,12 @@ namespace Dreamsleeve::Client::Auth
     }
 
     // A request without a body is a GET.
-    Result<HttpResponse> Send(std::string_view url, const wchar_t* path, const std::string& body, bool allowInsecureRemote = false)
+    std::expected<HttpResponse, SendFailure> Send(std::string_view url, const wchar_t* path, const std::string& body, bool allowInsecureRemote = false)
     {
-      auto endpoint = ParseUrl(url, allowInsecureRemote);
-      if (!endpoint) return std::unexpected{endpoint.error()};
-      if (body.size() > 16384) return std::unexpected{"Authentication request is too large"};
+      const auto failed = [](Result<HttpResponse> local) { return std::unexpected{SendFailure{std::move(local.error())}}; };
+      auto       endpoint = ParseUrl(url, allowInsecureRemote);
+      if (!endpoint) return std::unexpected{SendFailure{endpoint.error()}};
+      if (body.size() > 16384) return std::unexpected{SendFailure{"Authentication request is too large"}};
 
       Handle session{WinHttpOpen(
         L"Dreamsleeve.Client/" DREAMSLEEVE_VERSION,
@@ -265,10 +274,10 @@ namespace Dreamsleeve::Client::Auth
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
         0)};
-      if (!session) return SystemError("WinHttpOpen");
-      if (!WinHttpSetTimeouts(session.get(), 5000, 5000, 5000, 5000)) return SystemError("Auth timeout configuration");
+      if (!session) return failed(SystemError("WinHttpOpen"));
+      if (!WinHttpSetTimeouts(session.get(), 5000, 5000, 5000, 5000)) return failed(SystemError("Auth timeout configuration"));
       Handle connection{WinHttpConnect(session.get(), endpoint->host.c_str(), endpoint->port, 0)};
-      if (!connection) return SystemError("WinHttpConnect");
+      if (!connection) return failed(SystemError("WinHttpConnect"));
       Handle request{WinHttpOpenRequest(
         connection.get(),
         body.empty() ? L"GET" : L"POST",
@@ -277,14 +286,14 @@ namespace Dreamsleeve::Client::Auth
         WINHTTP_NO_REFERER,
         WINHTTP_DEFAULT_ACCEPT_TYPES,
         endpoint->secure ? WINHTTP_FLAG_SECURE : 0)};
-      if (!request) return SystemError("WinHttpOpenRequest");
+      if (!request) return failed(SystemError("WinHttpOpenRequest"));
 
       DWORD redirects = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
       DWORD disabled  = WINHTTP_DISABLE_COOKIES | WINHTTP_DISABLE_AUTHENTICATION;
       if (
         !WinHttpSetOption(request.get(), WINHTTP_OPTION_REDIRECT_POLICY, &redirects, sizeof(redirects)) ||
         !WinHttpSetOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)))
-        return SystemError("Auth request policy");
+        return failed(SystemError("Auth request policy"));
       // HTTPS uses WinHTTP's normal certificate and hostname validation.
       const auto     deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
       const wchar_t* headers  = body.empty() ? L"Accept: application/json\r\n" : L"Content-Type: application/json\r\nAccept: application/json\r\n";
@@ -298,7 +307,11 @@ namespace Dreamsleeve::Client::Auth
           static_cast<DWORD>(body.size()),
           0) ||
         !WinHttpReceiveResponse(request.get(), nullptr))
-        return SystemError("Authentication request");
+      {
+        // The name, the connection, TLS or the wait for a response failed.
+        auto unanswered = SystemError("Authentication request");
+        return std::unexpected{SendFailure{std::move(unanswered.error()), true}};
+      }
 
       HttpResponse result;
       DWORD        statusSize = sizeof(result.status);
@@ -309,15 +322,15 @@ namespace Dreamsleeve::Client::Auth
             &result.status,
             &statusSize,
             WINHTTP_NO_HEADER_INDEX))
-        return SystemError("Authentication status");
+        return failed(SystemError("Authentication status"));
       for (;;)
       {
-        if (std::chrono::steady_clock::now() >= deadline) return std::unexpected{"Authentication response timed out"};
+        if (std::chrono::steady_clock::now() >= deadline) return std::unexpected{SendFailure{"Authentication response timed out"}};
         char  chunk[4096];
         DWORD read{};
-        if (!WinHttpReadData(request.get(), chunk, sizeof(chunk), &read)) return SystemError("Authentication response");
+        if (!WinHttpReadData(request.get(), chunk, sizeof(chunk), &read)) return failed(SystemError("Authentication response"));
         if (read == 0) break;
-        if (result.body.size() + read > 16384) return std::unexpected{"Authentication response is too large"};
+        if (result.body.size() + read > 16384) return std::unexpected{SendFailure{"Authentication response is too large"}};
         result.body.append(chunk, read);
       }
       return result;
@@ -448,7 +461,7 @@ namespace Dreamsleeve::Client::Auth
     SecureZeroMemory(body->data(), body->size());
     if (!response)
       return std::unexpected{
-          Failure{FailureCode::Unavailable, response.error()}
+          Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
     if (response->status == 400)
     {
@@ -521,7 +534,7 @@ namespace Dreamsleeve::Client::Auth
     SecureZeroMemory(body.data(), body.size());
     if (!response)
       return std::unexpected{
-          Failure{FailureCode::Unavailable, response.error()}
+          Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
     return DecodeGrant(*response);
   }
@@ -574,7 +587,7 @@ namespace Dreamsleeve::Client::Auth
     SecureZeroMemory(body.data(), body.size());
     if (!response)
       return std::unexpected{
-          Failure{FailureCode::Unavailable, response.error()}
+          Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
     if (response->status != 204) return std::unexpected{HttpFailure(response->status)};
     return {};
@@ -586,7 +599,7 @@ namespace Dreamsleeve::Client::Auth
     auto response = Send(url, L"/auth/methods", {}, allowInsecureRemote);
     if (!response)
       return std::unexpected{
-          Failure{FailureCode::Unavailable, response.error()}
+          Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
     if (response->status != 200) return std::unexpected{HttpFailure(response->status)};
     auto methods = DecodeMethods(response->body);
@@ -612,7 +625,7 @@ namespace Dreamsleeve::Client::Auth
     auto response = Send(url, L"/auth/steam/begin", *body, allowInsecureRemote);
     if (!response)
       return std::unexpected{
-          Failure{FailureCode::Unavailable, response.error()}
+          Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
     if (response->status == 403)
       if (auto banned = AddressBan(response->body)) return std::unexpected{std::move(*banned)};
@@ -652,7 +665,7 @@ namespace Dreamsleeve::Client::Auth
     SecureZeroMemory(body->data(), body->size());
     if (!response)
       return std::unexpected{
-          Failure{FailureCode::Unavailable, response.error()}
+          Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
     if (response->status == 202) return std::optional<Grant>{};
     if (response->status == 410)

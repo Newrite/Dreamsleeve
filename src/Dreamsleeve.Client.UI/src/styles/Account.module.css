@@ -8,6 +8,11 @@
   gap: 4px;
   margin: 0;
 }
+.route {
+  display: grid;
+  gap: 5px;
+  font-size: 0.9em;
+}
 .summary span:first-child {
   color: var(--muted);
   font-size: 13px;

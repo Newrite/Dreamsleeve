@@ -176,7 +176,7 @@ presence-обновление; остальные получают обновл�
 | Путь | Что делает |
 |---|---|
 | `/setup`, `/reset`, `/login`, `POST /logout` | Первичная настройка, смена пароля по коду, вход, выход |
-| `/` | `ServerRuntimeSnapshot` и таблица онлайна с IP-адресом соединения; htmx обновляет её раз в 5 с (`/partials/online`) |
+| `/` | `ServerRuntimeSnapshot` и таблица онлайна с IP-адресом соединения (через прокси сервера — адрес входа игрока и «через прокси …»); htmx обновляет её раз в 5 с (`/partials/online`) |
 | `/players?q=&page=` | Поиск по username, display name (подстрока, `%` и `_` буквальные) или точному PlayerId; страницы по 50 |
 | `/players/{id}` | Карточка: профиль из БД, роль, живые сессии, гильдии игрока с его ролью, действующие наказания, адреса входа и устройства за `SignInHistoryDays` (адрес — со ссылкой «Бан …»); формы роли, переименования, сброса пароля (код показывается один раз), отзыва доступа, наказания и его снятия, кика |
 | `/sanctions` | Действующие муты и баны со ссылкой на карточку |
@@ -207,7 +207,7 @@ presence-обновление; остальные получают обновл�
 | Маршрут | Ответ |
 |---|---|
 | `GET /api/v1/status` | `{connections, guests, ready, reservations, closing, stopping}`; `guests` входит в `connections` |
-| `GET /api/v1/online` | Массив строк онлайна (настоящие имена, `pseudonym`, `hidden`, `role`, `phase` — `waiting`/`guest`/`opening`/`ready`/`closing`, `connectedAt`, `described`) |
+| `GET /api/v1/online` | Массив строк онлайна (настоящие имена, `pseudonym`, `hidden`, `role`, `phase` — `waiting`/`guest`/`opening`/`ready`/`closing`, `connectedAt`, `described`, `address` и `proxy` — прокси сервера или `null`) |
 | `GET /api/v1/players?page=&q=` | `{query, page, pageSize, total, players[]}` |
 | `GET /api/v1/players/{id}` | `{player, sessions[], names[], sanctions[]}`; наказание — `{kind, reason, issuedAt, expires, issuedBy}` (`expires` — `null` для бессрочного, `issuedBy` — `admin:3` или `player:42`) |
 | `GET /api/v1/sanctions` | Действующие наказания: `[{playerId, username, displayName, sanction}]` |
@@ -227,7 +227,7 @@ nginx, TLS, все параметры) — [DeploymentRu.md](DeploymentRu.md). �
 - SSH-туннель без изменения конфигурации: `ssh -L 8780:127.0.0.1:8780 user@server`, затем
   `http://127.0.0.1:8780` у себя.
 - Обратный прокси с HTTPS на той же машине. Панель остаётся на loopback, в `[Admin.Listener]` —
-  `TrustForwardedHeaders = true`. Заголовки `X-Forwarded-For`/`X-Forwarded-Proto` принимаются
+  `TrustForwardedHeaders = true` (прокси из `[Proxies]` админке не доверяются никогда). Заголовки `X-Forwarded-For`/`X-Forwarded-Proto` принимаются
   только от `127.0.0.1`/`::1` и только один переход (`ForwardLimit = 1`). Прокси обязан передать
   исходный `Host`: проверка `Origin` сравнивает его со `схемой://Host` запроса.
 

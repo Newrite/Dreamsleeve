@@ -207,6 +207,15 @@ Ready-сессии идёт в `Session::SetIdentityVisibility` → Core `SetIde
 `error` (`GuildRejectionText`). Удаление сообщения гильдии — прежний `deleteChatMessage`; над
 светлячками сообщения гильдии не всплывают.
 
+Маршруты к серверу ([DeploymentRu.md](DeploymentRu.md), «Прокси»). `Runtime::Initialize` читает
+`ui.toml` до запуска сети: `[ui] route` — маршрут, выбранный игроком (имя из `client.toml`; пусто —
+автоматически), `[ui] lastRoute` — маршрут, ответивший последним, с него начинается следующий запуск
+(`RoutePreference`). Когда маршрутов больше одного, host шлёт странице событие `routes` (имена,
+активный, ответил ли, выбор игрока) при изменении и после (пере)создания view; команда
+`chooseRoute{route}` сохраняет выбор и передаёт его ядру (`SetRouteChoice`). Ответивший в
+автоматическом режиме маршрут `Logic` записывает в `lastRoute`. Псевдонимы и игнор остаются по
+адресу основного маршрута.
+
 Цвет имени ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#цвет-имени-в-чате)). `ToUiAuthor` кладёт в
 `UiPlayer.color` цвет профиля (`#RRGGBB`, `ColorText`) — и в режиме стримера, у псевдонима его нет;
 страница рисует им имя автора в строках чата. Команда `setNameColor{color}` (`#RRGGBB` проверяет

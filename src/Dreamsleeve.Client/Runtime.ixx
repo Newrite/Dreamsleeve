@@ -261,18 +261,29 @@ export namespace Runtime
       return false;
     }
 
+    // Before the network starts: the first connection goes by the remembered route.
+    if (auto ui = Host::LoadUiFile(state.uiPath))
+      state.ui = *ui;
+    else
+      logger::warn("UI settings ignored: {}", ui.error());
+    const auto routes = Dream::RoutesOf(*settings);
+    const auto chosen = state.ui.ui.route.empty() ? std::nullopt : Dream::RouteIndex(routes, state.ui.ui.route);
+    if (!state.ui.ui.route.empty() && !chosen)
+    {
+      logger::warn("The chosen route \"{}\" is not in {}; choosing automatically", state.ui.ui.route, state.clientPath.string());
+      state.ui.ui.route.clear();
+    }
+    const Dream::RoutePreference preference{chosen, Dream::RouteIndex(routes, state.ui.ui.lastRoute).value_or(0)};
+
     // Validates every setting; the movement view below trusts them.
-    auto app = Dream::ClientApplication::TryCreate(*settings);
+    auto app = Dream::ClientApplication::TryCreate(*settings, preference);
     if (!app)
     {
       logger::error("Cannot create client application: {}", app.error());
       return false;
     }
-
-    if (auto ui = Host::LoadUiFile(state.uiPath))
-      state.ui = *ui;
-    else
-      logger::warn("UI settings ignored: {}", ui.error());
+    state.session.ConfigureRoutes(routes | std::views::transform(&Dream::ConnectionRoute::name) | std::ranges::to<std::vector>(),
+                                  state.ui.ui.route);
 
     // Account IDs are unique per server: "host:port" as configured scopes
     // pseudonyms and ignores (DNS names fold ASCII case).
@@ -291,7 +302,7 @@ export namespace Runtime
     state.app      = std::move(*app);
     // The first session already opens with the saved "hide my name" choice.
     state.app->Exchange().SetHideIdentity(Host::Bridge::HidingOf(state.ui.ui.hideIdentity));
-    logger::info("Client application started; server {}:{}", settings->client.serverHost, settings->client.serverPort);
+    logger::info("Client application started; server {}:{}, {} route(s)", settings->client.serverHost, settings->client.serverPort, routes.size());
     return true;
   }
 

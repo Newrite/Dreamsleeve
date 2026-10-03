@@ -153,7 +153,7 @@ TEST_CASE("The bundled ui.example.toml names every setting with its default valu
   REQUIRE(file);
   CHECK(file->ui == UiSection{});
   const auto text = ReadText(path);
-  for (const auto key : {"hideUi", "hideIdentity"})
+  for (const auto key : {"hideUi", "hideIdentity", "route", "lastRoute"})
     CHECK_MESSAGE(text.contains(std::format("\n{} = ", key)), key);
   const UiSettings defaults{};
   ForEachSettingPair(defaults, defaults, [&](std::string_view key, const auto&, const auto&) {

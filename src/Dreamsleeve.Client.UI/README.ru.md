@@ -113,6 +113,7 @@ Native host создаёт view, регистрирует JS listener `dreamslee
 | `markResult` | Итог `placeGroundNote` (markId, evictedId) или `removeGroundMark` (removed) по requestId, либо error; это не дельта видимых меток |
 | `displayName` | Смена своего отображаемого имени: pending (ждём сервер), changed (сохранённое имя, один раз), error (текст отказа); свой профиль приходит в `players` |
 | `nameColor` | Смена цвета своего имени: pending, changed (`#RRGGBB`, один раз), error; свой цвет — `color` своей записи в `players` |
+| `routes` | Маршруты к серверу, когда в `client.toml` их больше одного: routes (имена, основной первым), active (по какому идёт трафик), reached (ответил ли), chosen (выбор игрока, пусто — автоматически). Вкладка «Аккаунт» показывает выбор и текущий маршрут |
 | `mute` | Свой мут: muted, причина модератора, until (Unix ms; нет — бессрочно); поле ввода закрыто до конца срока |
 | `sessionEnded` | Как сервер закрыл сессию или отказал во входе: reason (`revoked`/`banned`/`kicked`), text — причина, until — конец бана |
 | `role` | moderator: роль игрока в сессии; только модератор видит пункты модератора и вкладку «Модерация» |
@@ -146,6 +147,7 @@ Native host создаёт view, регистрирует JS listener `dreamslee
 | `deleteChatMessage` | Модератор: requestId, channelId, messageId — удалить сообщение для всех |
 | `changeDisplayName` | displayName: в Ready-сессии — запрос серверу; username не меняется; одна смена за раз |
 | `setNameColor` | color (`#RRGGBB`): цвет своего имени в чате, запрос серверу; одна смена профиля за раз вместе с именем |
+| `chooseRoute` | route: имя маршрута из `routes` или пусто (автоматически); host сохраняет выбор в `ui.toml` и применяет, пока нет сессии |
 | `setIdentityVisibility` | hiding (`off`/`everywhere`/`exceptGroundMarks`): в Ready-сессии — запрос серверу (выбор сохраняется после подтверждения), без сессии — выбор для следующего входа; пока сессия открывается — отказ «Дождитесь подключения к серверу» |
 
 UI requestId относится к lifetime данного view. Host сопоставляет его с RequestId,

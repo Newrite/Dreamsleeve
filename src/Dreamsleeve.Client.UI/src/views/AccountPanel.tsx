@@ -11,6 +11,7 @@ import {
 import { connectionLabels } from "../state/connection";
 import { identityStatus } from "../state/identity";
 import { sessionEndText } from "../state/moderation";
+import { Select } from "./Select";
 import styles from "../styles/Account.module.css";
 export function AccountPanel({
   chat,
@@ -114,6 +115,35 @@ export function AccountPanel({
           </span>
         )}
       </p>
+      {s.routes && (
+        <section className={styles.form} data-part="routes">
+          <label className={styles.route}>
+            Маршрут к серверу
+            <Select
+              label="Маршрут к серверу"
+              value={s.routes.chosen}
+              options={[
+                { value: "", label: "Автоматически" },
+                ...s.routes.routes.map((route) => ({
+                  value: route,
+                  label: route,
+                })),
+              ]}
+              onChange={chat.chooseRoute}
+            />
+          </label>
+          <p className={styles.muted} role="status" aria-label="Маршрут">
+            {s.routes.reached
+              ? `Сейчас через: ${s.routes.active}.`
+              : `Подключение через: ${s.routes.active}…`}
+            {s.routes.chosen === ""
+              ? " Если маршрут не отвечает, игра сама пробует следующий."
+              : s.routes.chosen !== s.routes.active
+                ? " Выбранный маршрут применится при следующем подключении."
+                : ""}
+          </p>
+        </section>
+      )}
       {s.connected && (
         <form
           className={styles.form}

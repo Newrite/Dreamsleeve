@@ -52,6 +52,17 @@ let steamTimer: ReturnType<typeof setTimeout> | undefined;
 function connection(phase: ConnectionPhase) {
   chat.receive({ type: "connection", connected: phase === "connected", phase });
 }
+// Stand-in for client.toml with a proxy of the server: the player picks a
+// route, automatic mode goes by the main one.
+const routes = {
+  routes: ["Основной", "Прокси"],
+  active: "Основной",
+  chosen: "",
+  reached: true,
+};
+function routesEvent() {
+  chat.receive({ type: "routes", ...routes });
+}
 function emitAuth(next: Partial<AuthState>, phase: ConnectionPhase) {
   Object.assign(auth, next);
   chat.receive({ type: "auth", ...auth, phase });
@@ -214,6 +225,7 @@ function snapshot(settings = chat.store.getState().settings, refresh = false) {
   });
   // The server sends the guilds after the session opens.
   guildStand.publish();
+  routesEvent();
 }
 function command(c: Command) {
   if (c.type === "close") return true;
@@ -337,6 +349,18 @@ function command(c: Command) {
       players[0] = { ...players[0], displayName: name };
       snapshot(chat.store.getState().settings, true);
       chat.receive({ type: "displayName", pending: false, changed: name });
+    }, 400);
+    return true;
+  }
+  // Stand-in for the core: the choice applies at once, as with no session.
+  if (c.type === "chooseRoute") {
+    routes.chosen = c.route;
+    routes.active = c.route || "Основной";
+    routes.reached = false;
+    routesEvent();
+    setTimeout(() => {
+      routes.reached = true;
+      routesEvent();
     }, 400);
     return true;
   }

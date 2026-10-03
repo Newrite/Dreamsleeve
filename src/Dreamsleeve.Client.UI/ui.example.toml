@@ -15,6 +15,10 @@ hideUi = false
 # Where others see a server pseudonym instead of your names: off | everywhere |
 # exceptGroundMarks; written by the plugin only after the server confirmed it.
 hideIdentity = "off"
+# The route of client.toml ([[routes]]) chosen in the Account tab, by name; empty: automatic.
+route = ""
+# The route that answered last in automatic mode; the next start begins with it. The plugin writes it.
+lastRoute = ""
 
 [ui.chat]
 # Fireflies, with their names and bubbles, only of players in your guilds.

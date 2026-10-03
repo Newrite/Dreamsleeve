@@ -1023,6 +1023,33 @@ TEST_CASE("A guest link joins at once, carries the session opened on it and come
   CHECK(fixture.errors.empty());
 }
 
+TEST_CASE("A guest link to an endpoint that does not answer counts as unreachable; another endpoint takes over at once")
+{
+  Fixture    fixture;
+  const auto served = fixture.config.serverPort;
+  // A port nobody serves any more: the attempt times out (connectTimeoutMs 100).
+  const auto dead = [] {
+    auto other = Server();
+    return Value(other.GetHostInfo()).address.GetPort();
+  }();
+  fixture.client->UseEndpoint("127.0.0.1", dead, true);
+  fixture.client->KeepGuest(true);
+  std::size_t unreachable{};
+  fixture.Until([&] {
+    unreachable += fixture.client->TakeUnreachable();
+    return unreachable > 0;
+  });
+  CHECK_FALSE(fixture.client->Reached());
+  CHECK(fixture.connects == 0);
+
+  fixture.client->UseEndpoint("127.0.0.1", served, true);
+  fixture.Until([&] { return fixture.requests.size() == 1; });
+  CHECK(fixture.requests[0].has_join_as_guest());
+  CHECK(fixture.client->Reached());
+  CHECK(fixture.client->TakeUnreachable() == 0);
+  CHECK(fixture.errors.empty());
+}
+
 TEST_CASE("A sign-in while the guest link connects opens on that connection instead of joining")
 {
   Fixture fixture;

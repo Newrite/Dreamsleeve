@@ -20,6 +20,7 @@ export const eventTypes = [
   "identity",
   "displayName",
   "nameColor",
+  "routes",
   "mute",
   "sessionEnded",
   "role",
@@ -50,6 +51,7 @@ export const commandTypes = [
   "setIdentityVisibility",
   "changeDisplayName",
   "setNameColor",
+  "chooseRoute",
   "sanctionPlayer",
   "liftSanction",
   "kickPlayer",
@@ -99,6 +101,7 @@ export const authFailures = [
   "addressBanned",
   "deviceBanned",
   "steamExpired",
+  "unreachable",
 ] as const;
 export const announcementOrigins = [
   "server",

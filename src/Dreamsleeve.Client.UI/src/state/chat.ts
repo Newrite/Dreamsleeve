@@ -9,6 +9,7 @@ import type {
   HideIdentity,
   DisplayNameState,
   NameColorState,
+  RoutesState,
   HostEvent,
   IdentityState,
   Message,
@@ -139,6 +140,8 @@ export interface ChatState extends ModeratorState, GuildsState {
   displayName: DisplayNameState;
   // A change of the own name color, as the host reports it.
   nameColor: NameColorState;
+  // The routes to the server, when client.toml has more than one.
+  routes: RoutesState | null;
   // The player's own mute, as the host reports it.
   mute: MuteState;
   // Why the last session ended or sign-in was refused by a ban; cleared by the next session.
@@ -233,6 +236,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     identity: { mode: "off", pending: false },
     displayName: { pending: false },
     nameColor: { pending: false },
+    routes: null,
     mute: { muted: false, reason: "" },
     sessionEnd: null,
     groundMarksSupported: false,
@@ -502,6 +506,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
       case "nameColor": {
         const { type: _, ...nameColor } = event;
         store.setState({ nameColor });
+        break;
+      }
+      case "routes": {
+        const { type: _, ...routes } = event;
+        store.setState({ routes });
         break;
       }
       case "mute": {
@@ -1002,6 +1011,16 @@ export function makeChat(send: Send, now = () => Date.now()) {
             error: "Команда не принята приложением",
           },
         });
+      touch();
+    },
+    // A route by name, "" for automatic; the host applies it while no session
+    // runs and reports it back with the routes.
+    chooseRoute(route: string) {
+      const s = store.getState();
+      if (!s.routes || (route !== "" && !s.routes.routes.includes(route)))
+        return;
+      if (send({ type: "chooseRoute", route }))
+        store.setState({ routes: { ...s.routes, chosen: route } });
       touch();
     },
     // The server stores the color ("#RRGGBB") and judges whether it reads;

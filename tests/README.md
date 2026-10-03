@@ -93,6 +93,7 @@ xmake build Dreamsleeve.Client.Dev
 python Scripts/smoke_chat.py
 python Scripts/smoke_moderation.py
 python Scripts/smoke_guilds.py
+python Scripts/smoke_proxy.py
 python Scripts/smoke_saved_auth.py
 ```
 
@@ -108,6 +109,9 @@ python Scripts/smoke_saved_auth.py
   Параметры: `--help`.
 - `smoke_moderation.py` — инструменты модератора: отказ без роли, роль из БД, удаление
   сообщения, мут и снятие, список, метки игрока, кик, бан при входе, строки аудита.
+- `smoke_proxy.py` — прокси: основной маршрут клиента не отвечает, вход и сессия идут через
+  прокси-заглушку (UDP и HTTP с `X-Forwarded-For` с адреса `127.0.0.2`), сервер берёт адрес
+  игрока и называет прокси, чат работает.
 - `smoke_guilds.py` — гильдии с тремя Client.Dev: создание и правила имени, приглашение и
   вступление, настоящее имя в чате гильдии при скрытом в общем, гильдейский мут, офицер удаляет
   сообщение и исключает, глава не выходит и передаёт роль, строки в SQLite, роспуск и свободное имя.

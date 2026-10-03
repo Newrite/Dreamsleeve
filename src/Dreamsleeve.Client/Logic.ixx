@@ -235,6 +235,17 @@ namespace Logic
       runtime.app->Exchange().SetHideIdentity(*frame.hideIdentity);
       if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
     }
+    // Chosen automatically, the route that answered is where the next start begins.
+    if (const auto& status = state.output.status; status.routeReached && runtime.ui.ui.route.empty())
+    {
+      const auto routes = runtime.app->Routes();
+      if (status.route < routes.size() && routes[status.route].name != runtime.ui.ui.lastRoute)
+      {
+        runtime.ui.ui.lastRoute = routes[status.route].name;
+        logger::info("Route \"{}\" answered", runtime.ui.ui.lastRoute);
+        if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
+      }
+    }
     // Reconnecting would be refused again until the player turns the choice off.
     if (frame.identityRefused)
     {

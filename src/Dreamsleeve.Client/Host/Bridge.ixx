@@ -57,6 +57,7 @@ export namespace Dreamsleeve::Host::Bridge
       "addressBanned",
       "deviceBanned",
       "steamExpired",
+      "unreachable",
   });
   // Auth::RegistrationMode from GET /auth/methods.
   constexpr auto RegistrationNames = std::to_array<std::string_view>({"unknown", "open", "steam", "manual"});
@@ -102,6 +103,7 @@ export namespace Dreamsleeve::Host::Bridge
   constexpr std::size_t MaxChatText = 16000;
   // Bytes of a requested display name; the server applies its own, smaller limit.
   constexpr std::size_t MaxDisplayName  = 1024;
+  constexpr std::size_t MaxRouteName    = 256;
   constexpr std::size_t MaxSnapshotRows = 500;
   constexpr std::size_t MaxCommandBytes = 1 << 20;
   // parse.ts drops an event whose error exceeds 512 UTF-16 units; a UTF-8 byte
@@ -179,6 +181,12 @@ export namespace Dreamsleeve::Host::Bridge
 
     struct Disconnect
     {};
+
+    // A route of client.toml by name; empty: choose automatically.
+    struct ChooseRoute
+    {
+      std::string route;
+    };
 
     // A note where the character stands; the host fills the placement.
     struct PlaceGroundNote
@@ -315,6 +323,7 @@ export namespace Dreamsleeve::Host::Bridge
     Commands::SetIdentityVisibility,
     Commands::ChangeDisplayName,
     Commands::SetNameColor,
+    Commands::ChooseRoute,
     Commands::SanctionPlayer,
     Commands::LiftSanction,
     Commands::KickPlayer,
@@ -345,6 +354,7 @@ export namespace Dreamsleeve::Host::Bridge
       "setIdentityVisibility",
       "changeDisplayName",
       "setNameColor",
+      "chooseRoute",
       "sanctionPlayer",
       "liftSanction",
       "kickPlayer",
@@ -608,6 +618,19 @@ export namespace Dreamsleeve::Host::Bridge
     bool operator==(const DisplayNameEvent&) const = default;
   };
 
+  // The routes of client.toml by name, the main one first, when there are
+  // others: active is the one the traffic goes by and reached whether it has
+  // answered; chosen is the player's pick, empty for automatic.
+  struct RoutesEvent
+  {
+    std::vector<std::string> routes;
+    std::string              active;
+    std::string              chosen;
+    bool                     reached{};
+
+    bool operator==(const RoutesEvent&) const = default;
+  };
+
   // A change of the own name color, like DisplayNameEvent: changed is the
   // "#RRGGBB" the server has just stored (sent once).
   struct NameColorEvent
@@ -781,6 +804,7 @@ export namespace Dreamsleeve::Host::Bridge
     IdentityEvent,
     DisplayNameEvent,
     NameColorEvent,
+    RoutesEvent,
     MuteEvent,
     SessionEndedEvent,
     RoleEvent,
@@ -812,6 +836,7 @@ export namespace Dreamsleeve::Host::Bridge
       "identity",
       "displayName",
       "nameColor",
+      "routes",
       "mute",
       "sessionEnded",
       "role",
@@ -907,6 +932,12 @@ export namespace Dreamsleeve::Host::Bridge
     std::expected<void, std::string> Admit(Commands::ChangeDisplayName& command)
     {
       if (command.displayName.size() > MaxDisplayName) return std::unexpected{"changeDisplayName displayName is too long"};
+      return {};
+    }
+
+    std::expected<void, std::string> Admit(Commands::ChooseRoute& command)
+    {
+      if (command.route.size() > MaxRouteName) return std::unexpected{"chooseRoute route is too long"};
       return {};
     }
 

@@ -56,6 +56,7 @@ const commands: { [K in Command["type"]]: Extract<Command, { type: K }> } = {
   },
   changeDisplayName: { type: "changeDisplayName", displayName: "Новое имя" },
   setNameColor: { type: "setNameColor", color: "#E57373" },
+  chooseRoute: { type: "chooseRoute", route: "Прокси" },
   sanctionPlayer: {
     type: "sanctionPlayer",
     requestId: "m1",
