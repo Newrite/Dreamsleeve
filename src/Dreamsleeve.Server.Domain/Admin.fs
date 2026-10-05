@@ -142,8 +142,10 @@ type AdminAction =
     | RemovedGroundMark
     | ClearedGroundMarks
     | DeletedChatMessage
-    // Guilds the panel steps into: a new master when the old one is banned or gone.
+    // Guilds the panel steps into: a new master when the old one is banned or
+    // gone, a new name or the end of a guild whose name breaks the rules.
     | AppointedGuildMaster
+    | RenamedGuild
     | DissolvedGuild
 
 [<RequireQualifiedAccess>]
@@ -155,7 +157,7 @@ module AdminAction =
         AdminAction.SanctionedPlayer; AdminAction.LiftedSanction; AdminAction.KickedPlayer
         AdminAction.SetRegistrationMode; AdminAction.CreatedPlayer; AdminAction.BannedAddresses; AdminAction.LiftedAddressBan
         AdminAction.RemovedGroundMark; AdminAction.ClearedGroundMarks; AdminAction.DeletedChatMessage
-        AdminAction.AppointedGuildMaster; AdminAction.DissolvedGuild
+        AdminAction.AppointedGuildMaster; AdminAction.RenamedGuild; AdminAction.DissolvedGuild
     ]
 
     let key action =
@@ -180,6 +182,7 @@ module AdminAction =
         | AdminAction.ClearedGroundMarks -> "clear_ground_marks"
         | AdminAction.DeletedChatMessage -> "delete_chat_message"
         | AdminAction.AppointedGuildMaster -> "appoint_guild_master"
+        | AdminAction.RenamedGuild -> "rename_guild"
         | AdminAction.DissolvedGuild -> "dissolve_guild"
 
     let ofKey (text: string) = all |> List.tryFind (fun action -> key action = text)

@@ -187,16 +187,35 @@ module GuildsAgent =
         persist state context (GuildWrite.PutMember(guild.Id, master))
         broadcast state context guild ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild.Id, memberView state now master)))
 
+    /// GuildChanged has no rename: online members get a fresh snapshot, which
+    /// replaces what their client knew, and invited players the invitation again.
+    let private renamed state context now (guild: Guild) =
+        persist state context (GuildWrite.Rename(guild.Id, guild.Name))
+        for membership in guild.Members do
+            send state context membership.Player (GuildEvent.Snapshot(snapshotOf state membership.Player now))
+        for invite in guild.Invites do
+            if now < invite.Expires then
+                inviteView state invite |> ValueOption.iter (fun view -> send state context invite.Player (GuildEvent.Changed(GuildChange.Invited view)))
+
+    /// The rules of a guild name: the limits, the characters and the word list.
+    let private nameOf state raw =
+        let limits = state.Book.Limits
+        match GuildName.create limits.NameMinLength limits.NameMaxLength raw with
+        | Error(DomainError.InvalidText(_, TextError.TooShort minimum)) -> Error(GuildNameRefusal.TooShort minimum)
+        | Error(DomainError.InvalidText(_, TextError.TooLong maximum)) -> Error(GuildNameRefusal.TooLong maximum)
+        | Error _ -> Error GuildNameRefusal.InvalidCharacters
+        | Ok name when not (Moderation.allows state.Moderation (GuildName.value name)) -> Error GuildNameRefusal.NotAllowed
+        | Ok name -> Ok name
+
     let private create state context (subscriber: Subscription<GuildEvent>) requestId raw =
         let actor = subscriber.Profile.PlayerId
-        let limits = state.Book.Limits
         let reply event = deliver state context subscriber event
         let invalid message = reply (GuildEvent.Refused(requestId, { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = "name" }))
-        match GuildName.create limits.NameMinLength limits.NameMaxLength raw with
-        | Error(DomainError.InvalidText(_, TextError.TooShort minimum)) -> invalid $"A guild name has at least {minimum} characters."
-        | Error(DomainError.InvalidText(_, TextError.TooLong maximum)) -> invalid $"A guild name has at most {maximum} characters."
-        | Error _ -> invalid "A guild name has letters, digits and spaces only."
-        | Ok name when not (Moderation.allows state.Moderation (GuildName.value name)) ->
+        match nameOf state raw with
+        | Error(GuildNameRefusal.TooShort minimum) -> invalid $"A guild name has at least {minimum} characters."
+        | Error(GuildNameRefusal.TooLong maximum) -> invalid $"A guild name has at most {maximum} characters."
+        | Error GuildNameRefusal.InvalidCharacters -> invalid "A guild name has letters, digits and spaces only."
+        | Error GuildNameRefusal.NotAllowed ->
             reply (GuildEvent.Refused(requestId, { Code = RequestRejectionCode.TextNotAllowed; Message = "The guild name contains words that are not allowed."; Field = "name" }))
         | Ok name ->
             match GuildId.create state.NextId with
@@ -476,6 +495,17 @@ module GuildsAgent =
                     state.Logger.LogInformation("Player {Target} appointed master of guild {GuildId} from the panel", player target, guildKey guild)
                     handedOver state context at entry previous master
                     GuildAdminResult.Appointed(card state at entry)
+            | GuildAdminCommand.Rename(guild, raw) ->
+                match nameOf state raw with
+                | Error refusal -> GuildAdminResult.NameRefused refusal
+                | Ok name ->
+                    match GuildBook.rename guild name state.Book with
+                    | Error error -> GuildAdminResult.Refused error
+                    | Ok(entry, previous) ->
+                        state.Logger.LogInformation("Guild {GuildId} renamed from {Previous} to {Name} from the panel",
+                                                    guildKey guild, GuildName.value previous, GuildName.value name)
+                        renamed state context at entry
+                        GuildAdminResult.Renamed(previous, card state at entry)
             | GuildAdminCommand.Dissolve guild ->
                 match GuildBook.dissolve guild state.Book with
                 | Error error -> GuildAdminResult.Refused error

@@ -133,6 +133,10 @@ module SqliteGuildStore =
         | GuildWrite.Delete id ->
             execute context "DELETE FROM guilds WHERE id=@guild" [ "@guild", guild id ] |> ignore
             Ok()
+        | GuildWrite.Rename(id, name) ->
+            execute context "UPDATE guilds SET name=@name, name_key=@key WHERE id=@guild"
+                [ "@guild", guild id; "@name", box (GuildName.value name); "@key", box (GuildName.key name) ] |> ignore
+            Ok()
         | GuildWrite.PutMember(id, membership) ->
             putMember context id membership
             Ok()
