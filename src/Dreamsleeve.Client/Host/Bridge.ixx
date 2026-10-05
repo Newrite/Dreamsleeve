@@ -1712,7 +1712,7 @@ export namespace Dreamsleeve::Host::Bridge
       case Code::InvalidRequest:
         if (const auto minimum = count("A guild name has at least ")) return std::format("Название не короче {} символов", *minimum);
         if (const auto maximum = count("A guild name has at most ")) return std::format("Название не длиннее {} символов", *maximum);
-        if (message.starts_with("A guild name has letters")) return "В названии только буквы и цифры";
+        if (message.starts_with("A guild name has letters")) return "В названии только буквы, цифры и пробелы";
         if (message.starts_with("A guild role")) return "Роль: участник или офицер";
         break;
       case Code::Overloaded:

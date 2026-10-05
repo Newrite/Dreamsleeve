@@ -195,7 +195,7 @@ module GuildsAgent =
         match GuildName.create limits.NameMinLength limits.NameMaxLength raw with
         | Error(DomainError.InvalidText(_, TextError.TooShort minimum)) -> invalid $"A guild name has at least {minimum} characters."
         | Error(DomainError.InvalidText(_, TextError.TooLong maximum)) -> invalid $"A guild name has at most {maximum} characters."
-        | Error _ -> invalid "A guild name has letters and digits only."
+        | Error _ -> invalid "A guild name has letters, digits and spaces only."
         | Ok name when not (Moderation.allows state.Moderation (GuildName.value name)) ->
             reply (GuildEvent.Refused(requestId, { Code = RequestRejectionCode.TextNotAllowed; Message = "The guild name contains words that are not allowed."; Field = "name" }))
         | Ok name ->
