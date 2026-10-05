@@ -188,11 +188,11 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             check carol.Guilds.IsEmpty "a stranger sees no guilds"
         }))
 
-    case "a name has letters and digits, passes the word list and is unique in any case" (fun () ->
+    case "a name has letters, digits and spaces, passes the word list and is unique in any case" (fun () ->
         withGuilds (fun fixture -> task {
             let! _ = founded fixture
             let! _ = join fixture fixture.Carol
-            do! act fixture fixture.Carol 10UL (GuildAction.Create "Два слова")
+            do! act fixture fixture.Carol 10UL (GuildAction.Create "Два-слова")
             let! invalid = expectRefused fixture.Carol 10UL RequestRejectionCode.InvalidRequest
             equal "name" invalid.Field
             do! act fixture fixture.Carol 11UL (GuildAction.Create "badword")

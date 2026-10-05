@@ -470,8 +470,8 @@ MaxGuildsPerPlayer = 3
 MaxMembers = 64
 # Pending invitations of one guild, 1..10000.
 MaxInvites = 32
-# Bounds of a guild name in characters (Unicode scalar values), 1..64. A name has
-# letters and digits only, passes the word list and is unique regardless of case.
+# Bounds of a guild name in characters (Unicode scalar values, spaces included), 1..64. A name has
+# letters, digits and single spaces only, passes the word list and is unique regardless of case.
 NameMinLength = 3
 NameMaxLength = 24
 # Days an invitation waits for an answer, 1..365.

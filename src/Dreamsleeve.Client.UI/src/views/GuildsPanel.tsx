@@ -26,15 +26,16 @@ const ordered = (members: GuildMember[]) =>
       Number(b.online) - Number(a.online) ||
       a.name.localeCompare(b.name, "ru"),
   );
-// Letters and digits in any script; the server checks the name and its
-// dictionary anyway, the page only spares a doomed request.
-const LETTERS_AND_DIGITS = /^[\p{L}\p{N}]+$/u;
+// Letters and digits in any script, spaces between words; the server checks
+// the name and its dictionary anyway, the page only spares a doomed request.
+// The server turns runs of spaces into one, so they count once.
+const LETTERS_DIGITS_AND_SPACES = /^[\p{L}\p{N} ]+$/u;
 function nameProblem(name: string, minimum: number, maximum: number) {
-  const value = name.trim();
+  const value = name.trim().replace(/ {2,}/g, " ");
   const length = [...value].length;
   if (!value) return "";
-  if (!LETTERS_AND_DIGITS.test(value))
-    return "Только буквы и цифры, без пробелов и знаков";
+  if (!LETTERS_DIGITS_AND_SPACES.test(value))
+    return "Только буквы, цифры и пробелы, без знаков";
   if (minimum && length < minimum) return `Не короче ${minimum} символов`;
   if (maximum && length > maximum) return `Не длиннее ${maximum} символов`;
   return "";
@@ -448,7 +449,7 @@ export function GuildsPanel({
         <p className={styles.muted}>
           {full
             ? `Вы уже в ${s.guilds.length} гильдиях — это предел сервера, свои гильдии тоже считаются. Чтобы создать новую или вступить в другую, выйдите из одной.`
-            : `Буквы и цифры, ${limits.nameMin}–${limits.nameMax} символов. Название не должно совпадать с чужим без учёта регистра и проходит словарь сервера; переименовать гильдию нельзя. Вы станете её главой.`}
+            : `Буквы, цифры и пробелы, ${limits.nameMin}–${limits.nameMax} символов. Название не должно совпадать с чужим без учёта регистра и проходит словарь сервера; переименовать гильдию нельзя. Вы станете её главой.`}
         </p>
       </section>
     </div>

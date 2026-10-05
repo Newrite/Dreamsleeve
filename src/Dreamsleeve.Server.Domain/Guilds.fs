@@ -19,17 +19,23 @@ type GuildName = string<guildName>
 module GuildName =
     let value (name: GuildName) : string = UMX.untag name
 
-    let private lettersAndDigits (source: string) =
-        if source.EnumerateRunes() |> Seq.forall Rune.IsLetterOrDigit then ValueNone
+    let private lettersDigitsAndSpaces (source: string) =
+        if source.EnumerateRunes() |> Seq.forall (fun rune -> Rune.IsLetterOrDigit rune || rune.Value = int ' ') then ValueNone
         else ValueSome TextError.InvalidCharacters
 
-    /// Letters and digits of any alphabet only, in NFC: no spaces, punctuation
-    /// or controls; minLength..maxLength scalar values. The word list and
-    /// uniqueness are the owner's checks; a name never changes.
+    // Runs of spaces become one, so "Два  слова" cannot sit beside "Два слова".
+    let private canonical (source: string) =
+        let trimmed = PrimitiveValidation.nfcTrim source
+        if trimmed.Contains "  " then RegularExpressions.Regex.Replace(trimmed, " {2,}", " ") else trimmed
+
+    /// Letters and digits of any alphabet and single spaces between words, in
+    /// NFC: no other whitespace, punctuation or controls; minLength..maxLength
+    /// scalar values, spaces included. The word list and uniqueness are the
+    /// owner's checks; a name never changes.
     let create minLength maxLength raw : Result<GuildName, DomainError> =
         if minLength <= 0 || minLength > maxLength then Error(DomainError.InvalidLimit("GuildName", minLength))
         else
-            PrimitiveValidation.text "GuildName" maxLength PrimitiveValidation.nfcTrim false lettersAndDigits raw
+            PrimitiveValidation.text "GuildName" maxLength canonical false lettersDigitsAndSpaces raw
             |> Result.bind (fun canonical ->
                 if PrimitiveValidation.scalarCount canonical < minLength then
                     Error(DomainError.InvalidText("GuildName", TextError.TooShort minLength))

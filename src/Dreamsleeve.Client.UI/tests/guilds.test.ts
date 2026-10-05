@@ -226,6 +226,25 @@ describe("guilds in the chat", () => {
     expect(chat.store.getState().filter).toBe(GUILDS);
   });
 
+  it("turn the send target with the tab: a channel, «Гильдии», but not «Все» or announcements", () => {
+    const { chat } = inGuilds();
+    chat.receive({ type: "activate" });
+    const target = () => chat.store.getState().target;
+    expect(target()).toBe(global.id);
+    chat.select(companions.id);
+    expect(target()).toBe(companions.id);
+    chat.select(GUILDS);
+    expect(target()).toBe(companions.id);
+    chat.select(global.id);
+    expect(target()).toBe(global.id);
+    chat.select(GUILDS);
+    expect(target()).toBe(ravens.id);
+    chat.select("all");
+    expect(target()).toBe(ravens.id);
+    chat.select(system.id);
+    expect(target()).toBe(ravens.id);
+  });
+
   it("keep a guild mute to its own channel: the global chat still goes out", () => {
     const { chat, sent, guilds } = inGuilds();
     const [ravensGuild, companionsGuild] = guilds;

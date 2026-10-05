@@ -32,10 +32,12 @@ let private role guilds player =
     (GuildBook.tryFind (gid 1UL) guilds).Value.Member (pid player) |> ValueOption.map _.Role
 
 let tests = testList "Guild domain" [
-    testCase "a guild name has letters and digits of any alphabet and is unique regardless of case" <| fun _ ->
+    testCase "a guild name has letters, digits and spaces of any alphabet and is unique regardless of case" <| fun _ ->
         Expect.equal (GuildName.value (name "Стражи2")) "Стражи2" "Cyrillic letters and digits"
         Expect.equal (GuildName.value (name "  Guardians ")) "Guardians" "trimmed"
-        for invalid in [ "Два слова"; "Стражи!"; "a-b"; "tab\tname"; "" ] do
+        Expect.equal (GuildName.value (name "Два слова")) "Два слова" "a space between words"
+        Expect.equal (GuildName.value (name "Два   слова")) "Два слова" "a run of spaces is one space"
+        for invalid in [ "Стражи!"; "a-b"; "tab\tname"; "nbsp\u00A0name"; "line\nname"; "" ] do
             Expect.isError (GuildName.create 3 24 invalid) $"refused: {invalid}"
         Expect.equal (GuildName.create 3 24 "Ab") (Error(DomainError.InvalidText("GuildName", TextError.TooShort 3))) "too short"
         Expect.equal (GuildName.create 3 5 "Abcdef") (Error(DomainError.InvalidText("GuildName", TextError.TooLong 5))) "too long"
