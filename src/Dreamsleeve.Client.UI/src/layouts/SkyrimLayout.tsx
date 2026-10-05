@@ -188,11 +188,9 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
                 }
                 value={s.drafts[s.target] ?? ""}
                 maxLength={2000}
-                disabled={
-                  silenced ||
-                  guildSilenced ||
-                  Object.values(s.pending).some((p) => p.status === "sending")
-                }
+                // Stays enabled while a message is sending: the field keeps its
+                // focus for the next one; submit waits for the reply itself.
+                disabled={silenced || guildSilenced}
                 onChange={(e) => chat.setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (controlKey(e.nativeEvent) !== "Enter") return;

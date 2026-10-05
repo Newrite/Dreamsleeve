@@ -427,6 +427,8 @@ test("server label and dim pending row survive delayed acknowledgement without w
   const pending = page.locator('[data-part="pending-message"]');
   await expect(pending).toHaveAttribute("data-status", "sending");
   await expect(pending.locator("span")).toHaveCSS("opacity", "0.5");
+  // Sending keeps the chat active; an empty Enter returns the passive HUD.
+  await page.getByLabel("Сообщение", { exact: true }).press("Enter");
   await expect(page.locator('[data-part="header"]')).toHaveCSS(
     "visibility",
     "hidden",
@@ -575,7 +577,11 @@ test("Ultralight key codes submit once and Escape closes panel then chat", async
       .locator('[data-part="message"]')
       .filter({ hasText: "Ultralight keyboard regression" }),
   ).toHaveCount(1);
-  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await expect(page.locator('[data-part="chat"]')).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+  await expect(input).toHaveValue("");
   await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
   const escape = () =>
     page.evaluate(() =>

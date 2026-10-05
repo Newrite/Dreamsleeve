@@ -276,6 +276,17 @@ it("settles either reply order by ID and never by matching text", () => {
     expect(chat.store.getState().messages).toHaveLength(2);
   }
 });
+it("keeps the chat active after a sent message; an empty Enter closes it before the reply", () => {
+  const { chat, send } = ready();
+  chat.receive({ type: "activate" });
+  chat.setDraft("первое");
+  chat.submit();
+  expect(chat.store.getState().active).toBe(true);
+  expect(send.mock.calls.map(([c]) => c.type)).toEqual(["sendChat"]);
+  chat.submit();
+  expect(chat.store.getState().active).toBe(false);
+  expect(send.mock.calls.map(([c]) => c.type)).toEqual(["sendChat", "close"]);
+});
 it("keeps unknown delivery after timeout, accepts a late reply, and never retries automatically", () => {
   let now = 0;
   const send = vi.fn(() => true);
@@ -287,7 +298,7 @@ it("keeps unknown delivery after timeout, accepts a late reply, and never retrie
   chat.expirePending();
   expect(chat.store.getState().pending["1"].status).toBe("unknown");
   chat.retry("1");
-  expect(send).toHaveBeenCalledTimes(2); // send + release focus
+  expect(send).toHaveBeenCalledTimes(1); // the send only, no retry
   chat.receive({ type: "sendResult", requestId: "1", messageId: "late" });
   chat.receive({ type: "messages", messages: [message("late")] });
   expect(chat.store.getState().pending).toEqual({});
