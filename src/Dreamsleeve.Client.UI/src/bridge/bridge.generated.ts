@@ -33,6 +33,7 @@ export const eventTypes = [
   "hide",
   "activate",
   "deactivate",
+  "phantom",
 ] as const;
 export const commandTypes = [
   "sendChat",
@@ -63,6 +64,7 @@ export const commandTypes = [
   "signInSteam",
   "copySteamLink",
   "guild",
+  "phantom",
 ] as const;
 
 // Enum strings of the events.

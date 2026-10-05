@@ -318,7 +318,44 @@ export type Command =
       messageId: Id;
     }
   // Answered with guildResult.
-  | ({ type: "guild"; requestId: string } & GuildAction);
+  | ({ type: "guild"; requestId: string } & GuildAction)
+  | {
+      type: "phantom";
+      action: "query" | "record" | "stop" | "play" | "clear" | "load";
+      rate: 20 | 40;
+      scenario: PhantomScenario;
+      poseMode: PhantomPoseMode;
+      modelMode: PhantomModelMode;
+    };
+export type PhantomPoseMode = "full" | "selected" | "quantized";
+export type PhantomModelMode = "original" | "pruned";
+export type PhantomScenario =
+  "idle" | "movement" | "combat" | "camera" | "equipment" | "mixed";
+export interface PhantomState {
+  supported: boolean;
+  recording: boolean;
+  playing: boolean;
+  ready: boolean;
+  rate: 20 | 40;
+  frames: number;
+  nodes: number;
+  bones: number;
+  seconds: number;
+  appearanceBytes: number;
+  poseBytes: number;
+  buildMs: number;
+  sampleMs: number;
+  status: string;
+  exporting: boolean;
+  exportPath: string;
+  exportError: string;
+  loading: boolean;
+  replayChannels: number;
+  replayPoseBytes: number;
+  optimizedModelBytes: number;
+  removedGeometry: number;
+  loadedArchive: string;
+}
 export type AuthEvent = { type: "auth"; phase: ConnectionPhase } & AuthState;
 export type HostEvent =
   | {
@@ -408,7 +445,8 @@ export type HostEvent =
       source: string;
       text: string;
       error: string;
-    };
+    }
+  | ({ type: "phantom" } & PhantomState);
 export type Send = (command: Command) => boolean;
 // The unions above name exactly the host's events and commands: a type added
 // on one side only fails to compile.

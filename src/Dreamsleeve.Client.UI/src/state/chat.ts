@@ -2,6 +2,10 @@ import { createStore } from "zustand/vanilla";
 import type {
   AuthOperation,
   AuthState,
+  PhantomState,
+  PhantomScenario,
+  PhantomPoseMode,
+  PhantomModelMode,
   Command,
   ConnectionPhase,
   Channel,
@@ -96,6 +100,12 @@ function makeRoom(pending: Record<string, PendingMessage>) {
 // keeps it until the player retries or dismisses.
 export const PENDING_TIMEOUT = 15000;
 export interface ChatState extends ModeratorState, GuildsState {
+  phantom: PhantomState;
+  phantomRate: 20 | 40;
+  phantomScenario: PhantomScenario;
+  phantomPoseMode: PhantomPoseMode;
+  phantomModelMode: PhantomModelMode;
+  lastPanel: Exclude<Panel, null> | null;
   channels: Channel[];
   messages: Message[];
   receivedAt: Record<string, number>;
@@ -205,6 +215,36 @@ export const visible = (
 ) => shows(message.channelId, filter, s, channels) && allowed(message, s);
 export function makeChat(send: Send, now = () => Date.now()) {
   const store = createStore<ChatState>(() => ({
+    phantomRate: 20,
+    phantomScenario: "mixed",
+    phantomPoseMode: "full",
+    phantomModelMode: "original",
+    lastPanel: null,
+    phantom: {
+      supported: false,
+      recording: false,
+      playing: false,
+      ready: false,
+      rate: 20,
+      frames: 0,
+      nodes: 0,
+      bones: 0,
+      seconds: 0,
+      appearanceBytes: 0,
+      poseBytes: 0,
+      buildMs: 0,
+      sampleMs: 0,
+      status: "Стенд доступен в Skyrim SE / AE / VR",
+      exporting: false,
+      exportPath: "",
+      exportError: "",
+      loading: false,
+      replayChannels: 0,
+      replayPoseBytes: 0,
+      optimizedModelBytes: 0,
+      removedGeometry: 0,
+      loadedArchive: "",
+    },
     channels: [],
     messages: [],
     receivedAt: {},
@@ -442,6 +482,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
       }
       case "players":
         store.setState({ players: event.players });
+        break;
+      case "phantom":
+        store.setState({ phantom: event });
         break;
       case "groundMarks":
         store.setState({ groundMarks: event.marks });
@@ -1083,10 +1126,56 @@ export function makeChat(send: Send, now = () => Date.now()) {
       if (!store.getState().visible) return;
       store.setState({
         panel,
+        ...(panel ? { lastPanel: panel } : {}),
         selectedPlayer: playerId ?? store.getState().selfId,
         authorMenu: null,
       });
       touch();
+    },
+    openMenu() {
+      const s = store.getState();
+      const last = s.lastPanel;
+      this.open(
+        last === "moderation" && !s.moderator
+          ? "online"
+          : (last ?? (s.connected ? "online" : "account")),
+      );
+    },
+    setPhantomPoseMode(mode: PhantomPoseMode) {
+      store.setState({ phantomPoseMode: mode });
+    },
+    setPhantomModelMode(mode: PhantomModelMode) {
+      store.setState({ phantomModelMode: mode });
+    },
+    setPhantomScenario(scenario: PhantomScenario) {
+      store.setState({ phantomScenario: scenario });
+    },
+    setPhantomRate(rate: 20 | 40) {
+      store.setState({ phantomRate: rate });
+    },
+    phantom(
+      action: "query" | "record" | "stop" | "play" | "clear" | "load",
+      rate: 20 | 40 = store.getState().phantomRate,
+    ) {
+      if (action === "record") store.setState({ phantomRate: rate });
+      if (
+        !send({
+          type: "phantom",
+          action,
+          rate,
+          scenario: store.getState().phantomScenario,
+          poseMode: store.getState().phantomPoseMode,
+          modelMode: store.getState().phantomModelMode,
+        })
+      )
+        store.setState({
+          phantom: {
+            ...store.getState().phantom,
+            status: "Команда не принята приложением",
+          },
+        });
+      else if (action === "record" || action === "play")
+        send({ type: "close" });
     },
   };
 }

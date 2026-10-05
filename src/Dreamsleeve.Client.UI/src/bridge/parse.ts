@@ -285,6 +285,32 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     optional(error)(v.error) &&
     (v.error === undefined) !== (v.guildId === undefined),
   channels: (v) => list(v.channels, channel, 128),
+  phantom: (v) =>
+    flag(v.supported) &&
+    flag(v.recording) &&
+    flag(v.playing) &&
+    flag(v.ready) &&
+    flag(v.exporting) &&
+    flag(v.loading) &&
+    label(v.loadedArchive) &&
+    label(v.exportPath) &&
+    label(v.exportError) &&
+    (v.rate === 20 || v.rate === 40) &&
+    label(v.status) &&
+    [
+      v.frames,
+      v.nodes,
+      v.bones,
+      v.seconds,
+      v.appearanceBytes,
+      v.poseBytes,
+      v.buildMs,
+      v.sampleMs,
+      v.replayChannels,
+      v.replayPoseBytes,
+      v.optimizedModelBytes,
+      v.removedGeometry,
+    ].every((x) => finite(x) && (x as number) >= 0),
   show: bare,
   hide: bare,
   activate: bare,

@@ -108,6 +108,14 @@ const commands: { [K in Command["type"]]: Extract<Command, { type: K }> } = {
     minutes: 30,
     reason: "Флуд",
   },
+  phantom: {
+    type: "phantom",
+    action: "record",
+    rate: 40,
+    scenario: "mixed",
+    poseMode: "full",
+    modelMode: "original",
+  },
 };
 
 describe("bridge contract with the host", () => {

@@ -560,6 +560,15 @@ function command(c: Command) {
     return true;
   }
   if (c.type === "guild") return guildStand.command(c);
+  if (c.type === "phantom") {
+    chat.receive({
+      ...chat.store.getState().phantom,
+      type: "phantom",
+      supported: false,
+      status: "Стенд доступен только в Skyrim SE 1.5.97",
+    });
+    return true;
+  }
   if (c.type !== "sendChat") return moderate(c);
   const rejected = rejectNext;
   rejectNext = false;

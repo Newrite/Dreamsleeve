@@ -9,6 +9,7 @@ import Dreamsleeve.Logic;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Game.Input;
+import Dreamsleeve.Game.Phantom;
 
 // Every patch of the game binary lives here: Address Library IDs, call-site
 // offsets, byte checks and the thunks. The modules behind the thunks (Logic,
@@ -32,6 +33,18 @@ namespace Hooks
     // VR (0x140C52BC0) has no entry in its database, so VR is only range-checked.
     auto DispatchInput = REL::RelocationID(67355, 68655);
 
+    // IDA-verified SE 1.5.97 / AE 1.6.1170 / VR 1.4.15. VariantID takes
+    // Address Library IDs for flat runtimes and an image-relative RVA for VR.
+    // ABI/layout evidence and input hashes: docs/PhantomRuntimeRu.md.
+    constexpr auto StreamCtor   = REL::VariantID(68971, 70324, 0xC9EC40);
+    constexpr auto StreamDtor   = REL::VariantID(68972, 70325, 0xC9EEA0);
+    constexpr auto StreamLoad   = REL::VariantID(68978, 70331, 0xC9F470);
+    constexpr auto StreamSave   = REL::VariantID(68979, 70332, 0xC9F4C0);
+    constexpr auto AlphaFactory = REL::VariantID(69311, 70684, 0xCADF10);
+    constexpr auto PlayerUpdate = REL::VariantID(39375, 40447, 0x6BEC10);
+    // Actual string -> no-argument loader registry; the adjacent qword is not it.
+    constexpr auto StreamLoaders = REL::VariantID(523904, 410484, 0x316AC08);
+
   }
 
   namespace Offset
@@ -47,6 +60,17 @@ namespace Hooks
 
     // IMenu::AdvanceMovie in the HUDMenu vtable, SE and AE alike.
     constexpr std::size_t HudAdvanceMovie = 0x05;
+    auto                  PlayerUpdate    = REL::Relocate<std::size_t>(0xAD, 0xAD, 0xAF);
+    // NiTLargeArray's size/free-index fields, verified engine layout. CommonLib
+    // exposes no insert operation; used only to seed NiStream's topObjects.
+    constexpr std::size_t ArrayFreeIndex = 0x14;
+    constexpr std::size_t ArraySize      = 0x18;
+    constexpr std::size_t LoaderBuckets  = 0x08;
+    constexpr std::size_t LoaderTable    = 0x10;
+    constexpr std::size_t LoaderCount    = 0x18;
+    constexpr std::size_t LoaderNext     = 0x00;
+    constexpr std::size_t LoaderName     = 0x08;
+    constexpr std::size_t LoaderFactory  = 0x10;
 
   }
 
@@ -157,6 +181,202 @@ namespace Hooks
     logger::info("Input dispatch hook installed at {:X} (runtime {})", site, version);
   }
 
+  struct PhantomUpdate
+  {
+    static void Update(RE::PlayerCharacter* player, float delta)
+    {
+      Original(player, delta);
+      Phantom::Tick(player, delta);
+    }
+
+    static inline REL::Relocation<decltype(Update)> Original;
+  };
+
+  struct StreamDeleter
+  {
+    void operator()(RE::NiStream* stream) const
+    {
+      if (!stream) return;
+      // Non-deleting destructor, followed by its matching engine allocator.
+      REL::Relocation<void(RE::NiStream*)>{Address::StreamDtor}(stream);
+      RE::free(stream);
+    }
+  };
+
+  auto CreateStream()
+  {
+    auto* memory = RE::malloc<RE::NiStream>();
+    if (!memory) throw std::bad_alloc{};
+    auto* stream = REL::Relocation<RE::NiStream*(RE::NiStream*)>{Address::StreamCtor}(memory);
+    return std::unique_ptr<RE::NiStream, StreamDeleter>{stream};
+  }
+
+  void SeedStream(RE::NiStream& stream, RE::NiNode* root)
+  {
+    auto& top   = stream.topObjects;
+    using Array = std::remove_reference_t<decltype(top)>;
+    top.~Array();
+    new (&top) Array(1);
+    new (top.begin()) RE::NiPointer<RE::NiObject>{root};
+    const std::uint32_t one = 1;
+    std::memcpy(reinterpret_cast<std::byte*>(&top) + Offset::ArrayFreeIndex, &one, sizeof(one));
+    std::memcpy(reinterpret_cast<std::byte*>(&top) + Offset::ArraySize, &one, sizeof(one));
+  }
+
+  template <class T>
+  T StreamField(const void* object, std::size_t offset)
+  {
+    T value{};
+    std::memcpy(&value, static_cast<const std::byte*>(object) + offset, sizeof(value));
+    return value;
+  }
+
+  std::expected<void, std::string> AuditPhantom(RE::NiNode* root)
+  {
+    // SaveStream clears objects after saving. Audit a separate registration
+    // pass, including skins/properties/data, using the same streamable RTTI
+    // (virtual slot 20) that the engine writes into its type catalog.
+    auto audit = CreateStream();
+    SeedStream(*audit, root);
+    audit->RegisterObjects();
+    if (!audit->objects.size() || audit->objects.size() > 65536) return std::unexpected{"NiStream preflight: invalid object count"};
+    const auto* registry = *REL::Relocation<const void**>{Address::StreamLoaders};
+    if (!registry) return std::unexpected{"NiStream preflight: loader registry unavailable"};
+    const auto  buckets = StreamField<std::uint32_t>(registry, Offset::LoaderBuckets);
+    const auto  count   = StreamField<std::uint32_t>(registry, Offset::LoaderCount);
+    const auto* table   = StreamField<const void* const*>(registry, Offset::LoaderTable);
+    if (!table || !buckets || buckets > 65536 || count > 65536)
+      return std::unexpected{"NiStream preflight: invalid loader registry layout"};
+    std::unordered_set<std::string> factories;
+    std::size_t                     visited = 0;
+    for (std::uint32_t i = 0; i < buckets; ++i)
+      for (const void* entry = table[i]; entry; entry = StreamField<const void*>(entry, Offset::LoaderNext))
+      {
+        if (++visited > count) return std::unexpected{"NiStream preflight: loader registry chain/count mismatch"};
+        const auto* name = StreamField<const char*>(entry, Offset::LoaderName);
+        if (name && StreamField<std::uintptr_t>(entry, Offset::LoaderFactory)) factories.emplace(name);
+      }
+    if (visited != count) return std::unexpected{"NiStream preflight: incomplete loader registry"};
+    std::map<std::string, std::size_t> types;
+    for (const auto& object : audit->objects)
+    {
+      const auto* type = object ? object->GetStreamableRTTI() : nullptr;
+      if (!type || !type->GetName()) return std::unexpected{"NiStream preflight: missing streamable RTTI"};
+      ++types[type->GetName()];
+    }
+    std::string missing;
+    logger::info(
+      "[Phantom] NiStream preflight: {} objects, {} types, {} loader factories",
+      audit->objects.size(),
+      types.size(),
+      factories.size());
+    for (const auto& [name, instances] : types)
+    {
+      const bool present = factories.contains(name);
+      logger::info("[Phantom] NiStream type: {} x{} — {}", name, instances, present ? "loader present" : "MISSING loader");
+      if (!present)
+      {
+        if (!missing.empty()) missing += ", ";
+        missing += std::format("{} x{}", name, instances);
+      }
+    }
+    if (!missing.empty()) return std::unexpected{"NiStream missing loaders: " + missing};
+    return {};
+  }
+
+  std::expected<std::vector<char>, std::string> SavePhantom(RE::NiNode* root)
+  {
+    if (auto audited = AuditPhantom(root); !audited) return std::unexpected{audited.error()};
+    auto stream = CreateStream();
+    SeedStream(*stream, root);
+    char*         output = nullptr;
+    std::uint32_t length = 0;
+    // All three verified runtimes use a uint32 length reference, not CommonLib's
+    // uint64 declaration. NiMemStream::releaseBuffer transfers RE::malloc storage.
+    const bool saved = REL::Relocation<bool(RE::NiStream*, char*&, std::uint32_t&)>{Address::StreamSave}(stream.get(), output, length);
+    std::unique_ptr<char, decltype(&RE::free)> buffer{output, &RE::free};
+    if (!saved || !output || !length)
+      return std::unexpected{std::format("NiStream Save: {} {}", stream->lastError, stream->lastErrorMessage)};
+    if (length > 64 * 1024 * 1024) return std::unexpected{"NiStream appearance exceeds 64 MiB"};
+    return std::vector<char>{output, output + length};
+  }
+
+  std::expected<RE::NiPointer<RE::NiNode>, std::string> LoadPhantom(std::vector<char>& bytes)
+  {
+    if (bytes.empty() || bytes.size() > 64 * 1024 * 1024) return std::unexpected{"NiStream appearance size outside local limits"};
+    auto       stream = CreateStream();
+    const bool loaded = REL::Relocation<bool(RE::NiStream*, char*, std::uint32_t)>{
+        Address::StreamLoad
+    }(stream.get(), bytes.data(), static_cast<std::uint32_t>(bytes.size()));
+    if (!loaded || stream->topObjects.size() != 1 || !stream->topObjects[0] || !stream->topObjects[0]->AsNode())
+      return std::unexpected{std::format("NiStream Load: {} {}", stream->lastError, stream->lastErrorMessage)};
+    return RE::NiPointer<RE::NiNode>{stream->topObjects[0]->AsNode()};
+  }
+
+  RE::NiAlphaProperty* PhantomAlpha()
+  {
+    return REL::Relocation<RE::NiAlphaProperty*()>{Address::AlphaFactory}();
+  }
+
+  std::map<std::string, std::uint64_t> PhantomLayout(RE::NiNode* root)
+  {
+    const auto offset = [](const void* object, const void* field) {
+      return static_cast<std::uint64_t>(static_cast<const std::byte*>(field) - static_cast<const std::byte*>(object));
+    };
+    auto stream = CreateStream();
+    // Observed through the current runtime accessors, not guessed offsets or
+    // sizeof(wrapper) interpreted as an engine allocation size.
+    auto fields = std::map<std::string, std::uint64_t>{
+        {"NiAVObject.local",      offset(root,         &root->local)        },
+        {"NiAVObject.world",      offset(root,         &root->world)        },
+        {"NiAVObject.worldBound", offset(root,         &root->worldBound)   },
+        {"NiNode.children",       offset(root,         &root->GetChildren())},
+        {"NiStream.objects",      offset(stream.get(), &stream->objects)    },
+        {"NiStream.topObjects",   offset(stream.get(), &stream->topObjects) },
+        {"NiStream.lastError",    offset(stream.get(), &stream->lastError)  }
+    };
+    if (auto* box = root->GetVROcclusionBox()) fields.emplace("NiAVObject.vrOcclusionBox", offset(root, box));
+    return fields;
+  }
+
+  void InstallPhantom()
+  {
+    const auto version = REL::Module::get().version();
+    const bool known   = (REL::Module::IsSE() && version == REL::Version{1, 5, 97, 0}) ||
+                         (REL::Module::IsAE() && version == REL::Version{1, 6, 1170, 0}) ||
+                         (REL::Module::IsVR() && version == REL::Version{1, 4, 15, 0});
+    if (!known)
+    {
+      Phantom::Configure({});
+      logger::warn("[Phantom] local record/replay disabled: unaudited runtime {}", version.string());
+      return;
+    }
+    REL::Relocation<std::uintptr_t> vtable{RE::PlayerCharacter::VTABLE[0]};
+    const auto                      target   = reinterpret_cast<const std::uintptr_t*>(vtable.address())[Offset::PlayerUpdate];
+    const auto                      expected = REL::Relocation<std::uintptr_t>{Address::PlayerUpdate}.address();
+    const auto                      text     = REL::Module::get().segment(REL::Segment::textx);
+    if (target != expected)
+    {
+      if (target >= text.address() && target < text.address() + text.size())
+      {
+        Phantom::Configure({});
+        logger::error(
+          "[Phantom] PlayerCharacter::Update slot {:X} targets {:X}, expected {:X}; disabled",
+          Offset::PlayerUpdate,
+          target,
+          expected);
+        return;
+      }
+      logger::info("[Phantom] PlayerCharacter::Update already redirected to {:X}; chaining behind it", target);
+    }
+    Phantom::Configure({SavePhantom, LoadPhantom, PhantomAlpha, PhantomLayout});
+    PhantomUpdate::Original = vtable.write_vfunc(Offset::PlayerUpdate, PhantomUpdate::Update);
+    logger::info(
+      "[Phantom] local record/replay enabled (runtime {}, Update slot {:X}); AE/VR game validation pending",
+      version.string(),
+      Offset::PlayerUpdate);
+  }
+
   // kDataLoaded, once. Two 5-byte calls go through the trampoline.
   export void InstallHooks()
   {
@@ -166,6 +386,7 @@ namespace Hooks
     InstallHudAdvance();
     InstallInputDispatch();
     InstallMainUpdate();
+    InstallPhantom();
   }
 
 }

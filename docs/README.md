@@ -45,6 +45,10 @@
 | [Интерполяция движения](MovementInterpolationRu.md) | MovementView, история и настройки |
 | [Перехват ввода](InputCaptureHookRu.md) | Проверенные адреса и хук ввода |
 | [Смерть и actor values](DeathAndActorValuesRu.md) | Исследованные события и хуки, выбранный sampling |
+| [Локальный фантом](PhantomPrototypeRu.md) | Запись, replay и сравнение вариантов; экспериментальная ветка |
+| [Измерения фантома](PhantomMeasurementsRu.md) | Размеры внешности/поз, сжатие и ошибки квантования |
+| [Реверс фантома SE/AE/VR](PhantomRuntimeRu.md) | Проверенные адреса, ABI, размеры, VR bounds и границы проверки |
+| [Будущая репликация фантомов](PhantomReplicationRu.md) | Reliable модели, unreliable позы с bounds, кеш и файловое хранилище, нагрузка |
 
 ## Спецификации и справочники
 

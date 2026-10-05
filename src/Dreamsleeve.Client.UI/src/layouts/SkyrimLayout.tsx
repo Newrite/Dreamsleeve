@@ -97,7 +97,7 @@ export function SkyrimLayout({ chat }: { chat: Chat }) {
               <button
                 aria-label="Открыть меню Dreamsleeve"
                 title="Онлайн, профиль, аккаунт и настройки"
-                onClick={() => chat.open(s.connected ? "online" : "account")}
+                onClick={() => chat.openMenu()}
               >
                 ☰
               </button>

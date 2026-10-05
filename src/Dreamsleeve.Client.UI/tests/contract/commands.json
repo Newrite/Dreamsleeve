@@ -276,5 +276,13 @@
     "playerId": "7",
     "minutes": 30,
     "reason": "Флуд"
+  },
+  {
+    "type": "phantom",
+    "action": "record",
+    "rate": 40,
+    "scenario": "mixed",
+    "poseMode": "full",
+    "modelMode": "original"
   }
 ]

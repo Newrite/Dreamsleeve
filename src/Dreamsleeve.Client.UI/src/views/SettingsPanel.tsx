@@ -10,6 +10,7 @@ import { nameColorPalette, hueColor, hueOf } from "../state/nameColor";
 import { defaults, limits } from "../bridge/settings.generated";
 import { identityStatus } from "../state/identity";
 import { Select } from "./Select";
+import { PhantomPanel } from "./PhantomPanel";
 import { useEffect, useState } from "react";
 import styles from "../styles/Settings.module.css";
 // A "#RRGGBB" text field with a swatch: an incomplete value is kept while
@@ -668,6 +669,7 @@ export function SettingsPanel({
           ещё не вышло. Применяется после сохранения.
         </p>
       </fieldset>
+      <PhantomPanel chat={chat} />
       <button className={styles.primary} onClick={chat.save}>
         Сохранить настройки
       </button>

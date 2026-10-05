@@ -6,6 +6,7 @@ module;
 export module Dreamsleeve.PrismaUI;
 
 import std;
+import Dreamsleeve.Game.Phantom;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.Host.Commands;
 import Dreamsleeve.Events;
@@ -212,6 +213,8 @@ namespace PrismaUI
   export void OnFrame(Clock::time_point now)
   {
     auto& state = Get();
+    if (state.active)
+      if (auto event = Phantom::PollStatus()) Send(*event);
     if (!state.active || !ViewUsable() || now < state.focusGrace) return;
     if (!state.api->HasFocus(state.view))
     {
@@ -237,12 +240,14 @@ namespace PrismaUI
         .ui               = runtime.ui,
         .bubbles          = runtime.bubbles,
         .manualDisconnect = runtime.manualDisconnect,
-        .ports = {
-                  .saveUi        = Runtime::SaveUi,
-                  .close         = Deactivate,
-                  .activationKey = Events::SetActivationKey,
-                  .noteSpot      = World::Spot,
-                  .copyText      = Dreamsleeve::Utils::Clipboard::Copy}
+        .ports            = {
+                             .saveUi        = Runtime::SaveUi,
+                             .close         = Deactivate,
+                             .activationKey = Events::SetActivationKey,
+                             .noteSpot      = World::Spot,
+                             .copyText      = Dreamsleeve::Utils::Clipboard::Copy,
+                             .phantom       = Phantom::Command
+        }
     };
     const auto output = Dreamsleeve::Host::Handle(context, std::move(*command));
     for (const auto& note : output.notes)
@@ -273,6 +278,7 @@ namespace PrismaUI
     logger::info("Dreamsleeve view ready");
     Send(Bridge::SettingsEvent{.settings = Runtime::Get().ui.ui.chat});
     Send(Runtime::Get().session.IgnoredList(Runtime::Get().ui.ui.chat));
+    Send(Phantom::Command({.action = "query"}));
     RecomputeMenus();
     Runtime::Get().session.ResetView();
   }

@@ -27,5 +27,6 @@
 {"type":"show"},
 {"type":"hide"},
 {"type":"activate"},
-{"type":"deactivate"}
+{"type":"deactivate"},
+{"type":"phantom","supported":true,"recording":false,"playing":false,"ready":true,"rate":20,"frames":300,"nodes":0,"bones":0,"seconds":0,"appearanceBytes":0,"poseBytes":0,"buildMs":0,"sampleMs":0,"status":"Запись готова","exporting":false,"exportPath":"","exportError":"","loading":false,"replayChannels":0,"replayPoseBytes":0,"optimizedModelBytes":0,"removedGeometry":0,"loadedArchive":""}
 ]

@@ -10,6 +10,7 @@ import Dreamsleeve.PrismaUI;
 import Dreamsleeve.Game.Telemetry;
 import Dreamsleeve.Game.Fireflies;
 import Dreamsleeve.Game.GroundMarks;
+import Dreamsleeve.Game.Phantom;
 import Dreamsleeve.Game.World;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
@@ -71,6 +72,7 @@ namespace Logic
     }
     Fireflies::ClearAll();
     GroundMarks::EndContext();
+    Phantom::Reset();
     Nameplates::Publish({});
     Nameplates::Release();
     runtime.context = next;
@@ -335,6 +337,7 @@ namespace Logic
     {
       LeavePlaying(Runtime::GameContext::MainMenu);
       Nameplates::Shutdown();  // GFx objects go before the engine tears Scaleform down.
+      Phantom::Shutdown(); // Finish file writes from immutable capture data.
       Runtime::Shutdown();
       return;
     }

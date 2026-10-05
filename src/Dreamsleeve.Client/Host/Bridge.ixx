@@ -285,7 +285,16 @@ export namespace Dreamsleeve::Host::Bridge
 
     // The page of the Steam sign-in in progress onto the clipboard.
     struct CopySteamLink
+    {};
+
+    // Local prototype controls, never sent to the server.
+    struct Phantom
     {
+      std::string   action;
+      std::uint32_t rate{20};
+      std::string scenario{"mixed"};
+      std::string poseMode{"full"};
+      std::string modelMode{"original"};
     };
 
     // A guild request: action is GuildActionNames and decides which values
@@ -334,7 +343,8 @@ export namespace Dreamsleeve::Host::Bridge
     Commands::ResetPassword,
     Commands::SignInSteam,
     Commands::CopySteamLink,
-    Commands::Guild>;
+    Commands::Guild,
+    Commands::Phantom>;
 
   // The "type" of each UiCommand alternative, in variant order.
   constexpr auto CommandNames = std::to_array<std::string_view>({
@@ -366,6 +376,7 @@ export namespace Dreamsleeve::Host::Bridge
       "signInSteam",
       "copySteamLink",
       "guild",
+      "phantom",
   });
   static_assert(CommandNames.size() == std::variant_size_v<UiCommand>);
 
@@ -787,6 +798,33 @@ export namespace Dreamsleeve::Host::Bridge
   struct DeactivateEvent
   {};
 
+  struct PhantomEvent
+  {
+    bool          supported{};
+    bool          recording{};
+    bool          playing{};
+    bool          ready{};
+    std::uint32_t rate{20};
+    std::uint32_t frames{};
+    std::uint32_t nodes{};
+    std::uint32_t bones{};
+    double        seconds{};
+    std::uint64_t appearanceBytes{};
+    std::uint64_t poseBytes{};
+    double        buildMs{};
+    double        sampleMs{};
+    std::string   status{"Этот runtime не поддерживается локальным стендом"};
+    bool          exporting{};
+    std::string   exportPath;
+    std::string   exportError;
+    bool loading{};
+    std::uint32_t replayChannels{};
+    std::uint64_t replayPoseBytes{};
+    std::uint64_t optimizedModelBytes{};
+    std::uint32_t removedGeometry{};
+    std::string loadedArchive;
+  };
+
   using HostEvent = std::variant<
     SnapshotEvent,
     MessagesEvent,
@@ -816,7 +854,8 @@ export namespace Dreamsleeve::Host::Bridge
     ShowEvent,
     HideEvent,
     ActivateEvent,
-    DeactivateEvent>;
+    DeactivateEvent,
+    PhantomEvent>;
 
   // The "type" of each HostEvent alternative, in variant order.
   constexpr auto EventNames = std::to_array<std::string_view>({
@@ -849,6 +888,7 @@ export namespace Dreamsleeve::Host::Bridge
       "hide",
       "activate",
       "deactivate",
+      "phantom",
   });
   static_assert(EventNames.size() == std::variant_size_v<HostEvent>);
 
@@ -944,6 +984,20 @@ export namespace Dreamsleeve::Host::Bridge
     std::expected<void, std::string> Admit(Commands::SetNameColor& command)
     {
       if (!ParseColor(command.color)) return std::unexpected{"setNameColor color must be #RRGGBB"};
+      return {};
+    }
+
+    std::expected<void, std::string> Admit(Commands::Phantom& command)
+    {
+      constexpr auto actions = std::to_array<std::string_view>({"query", "record", "stop", "play", "clear", "load"});
+      if (std::ranges::find(actions, command.action) == actions.end()) return std::unexpected{"Unknown phantom action"};
+      if (command.rate != 20 && command.rate != 40) return std::unexpected{"Phantom rate must be 20 or 40"};
+      constexpr auto scenarios = std::to_array<std::string_view>({"idle", "movement", "combat", "camera", "equipment", "mixed"});
+      if (std::ranges::find(scenarios, command.scenario) == scenarios.end()) return std::unexpected{"Unknown phantom scenario"};
+      constexpr auto poses = std::to_array<std::string_view>({"full", "selected", "quantized"});
+      constexpr auto models = std::to_array<std::string_view>({"original", "pruned"});
+      if (std::ranges::find(poses, command.poseMode) == poses.end() || std::ranges::find(models, command.modelMode) == models.end())
+        return std::unexpected{"Unknown phantom replay mode"};
       return {};
     }
 

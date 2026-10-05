@@ -22,7 +22,8 @@ export namespace Dreamsleeve::Host
     // The character's spot in the world; empty outside it.
     std::function<std::optional<Domain::MarkSpot>()> noteSpot;
     // Puts text on the system clipboard; false when it cannot.
-    std::function<bool(std::string_view)> copyText;
+    std::function<bool(std::string_view)>                                 copyText;
+    std::function<Bridge::PhantomEvent(const Bridge::Commands::Phantom&)> phantom;
   };
 
   struct CommandContext
@@ -323,6 +324,11 @@ export namespace Dreamsleeve::Host
       {
         if (auto posted = context.session.Guild(context.exchange, command.requestId, Bridge::GuildActionOf(command)); !posted)
           Emit(Bridge::GuildResultEvent{.requestId = command.requestId, .error = posted.error()});
+      }
+
+      void operator()(Commands::Phantom& command)
+      {
+        Emit(context.ports.phantom ? context.ports.phantom(command) : Bridge::PhantomEvent{});
       }
     };
 

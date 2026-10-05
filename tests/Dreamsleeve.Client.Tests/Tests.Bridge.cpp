@@ -214,6 +214,7 @@ namespace
         Bridge::HideEvent{},
         Bridge::ActivateEvent{},
         Bridge::DeactivateEvent{},
+        Bridge::PhantomEvent{.supported = true, .ready = true, .frames = 300, .status = "Запись готова"},
     };
   }
 
