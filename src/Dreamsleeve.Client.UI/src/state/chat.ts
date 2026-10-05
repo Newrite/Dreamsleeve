@@ -711,11 +711,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
     const s = store.getState();
     if (!s.visible) return;
     const text = s.drafts[s.target] ?? "";
-    if (sending(s)) return;
     if (!text.trim()) {
       close();
       return;
     }
+    if (sending(s)) return;
     if (
       !s.connected ||
       !s.channels.some((c) => c.id === s.target && c.writable)
@@ -764,8 +764,8 @@ export function makeChat(send: Send, now = () => Date.now()) {
       });
       return;
     }
+    // The chat stays active for the next message; Escape or an empty Enter closes it.
     store.setState({ drafts: { ...s.drafts, [s.target]: "" } });
-    close();
   }
   // One auth operation at a time. The command carries the secret; the store
   // only ever holds the typed state the host reports back.
