@@ -45,6 +45,11 @@
 | [Интерполяция движения](MovementInterpolationRu.md) | MovementView, история и настройки |
 | [Перехват ввода](InputCaptureHookRu.md) | Проверенные адреса и хук ввода |
 | [Смерть и actor values](DeathAndActorValuesRu.md) | Исследованные события и хуки, выбранный sampling |
+| [План полной репликации фантомов](PhantomImplementationPlanRu.md) | Этапы клиента/сервера, владельцы состояния, формат, лимиты и проверки |
+| [Решения по фантомам](PhantomReplicationRu.md) | Reliable модели, unreliable позы с bounds, кеш и серверная нагрузка |
+| [Измерения фантома](PhantomMeasurementsRu.md) | Реальные SE-записи, размеры и сжатие |
+| [Реверс фантома SE/AE/VR](PhantomRuntimeRu.md) | Проверенные адреса, ABI, layouts и границы проверки |
+| [Локальный эксперимент фантома](PhantomPrototypeRu.md) | Справочник стенда из ветки codex/phantom-local-se |
 
 ## Спецификации и справочники
 
