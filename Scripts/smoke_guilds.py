@@ -99,9 +99,9 @@ def smoke(args, log, directory: Path):
         channel = expect(alice, rf"^guild {guild} name={name} channel=(\d+) members=1$", start_alice).group(1)
         check(int(channel) == 4294967296 + int(guild), "The guild channel does not follow from the guild")
         expect(alice, rf"^member {guild} {alice_id} master online=1 name=Smoke Alice$", start_alice)
-        command(alice, "guild create Два слова", rf"rejected \({INVALID_REQUEST}\)")
+        command(alice, "guild create Два-слова", rf"rejected \({INVALID_REQUEST}\)")
         command(bob, f"guild create {name.upper()}", rf"rejected \({GUILD_NAME_TAKEN}\)")
-        stage("a guild is created with its master and channel; spaces and the same name in other case are refused")
+        stage("a guild is created with its master and channel; punctuation and the same name in other case are refused")
 
         start_bob = bob.mark()
         done(alice, f"guild invite {guild} {bob_id}")
@@ -160,6 +160,11 @@ def smoke(args, log, directory: Path):
                "Members of a disbanded guild are still stored")
         done(alice, f"guild create {name.upper()}")
         stage("a disbanded guild leaves its members and frees its name")
+
+        spaced = done(bob, f"guild create  Два   слова {nonce} ")
+        stored("SELECT name FROM guilds WHERE id = ?", (int(spaced),), [(f"Два слова {nonce}",)],
+               "A spaced guild name is not stored trimmed with single spaces")
+        stage("a name with spaces is created trimmed, with runs of spaces as one")
     finally:
         for child in reversed(children):
             child.stop()
