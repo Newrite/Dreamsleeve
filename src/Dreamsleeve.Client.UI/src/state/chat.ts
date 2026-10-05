@@ -797,15 +797,26 @@ export function makeChat(send: Send, now = () => Date.now()) {
         notice: "Настройки применены, но не сохранены: приложение недоступно.",
       });
   }
+  // A tab of a writable channel becomes the send target; "Гильдии" keeps a
+  // guild target or takes the first guild; "Все" and read-only tabs keep it.
   function select(filter: string) {
-    const channels = store.getState().channels;
+    const { channels, target } = store.getState();
     if (
       filter !== "all" &&
       !(filter === GUILDS && channels.some((c) => c.kind === "guild")) &&
       !channels.some((c) => c.id === filter)
     )
       return;
-    store.setState({ filter, scrolled: false });
+    const writable = channels.filter((c) => c.writable);
+    const next =
+      filter === GUILDS
+        ? writable.some((c) => c.id === target && c.kind === "guild")
+          ? target
+          : (writable.find((c) => c.kind === "guild")?.id ?? target)
+        : writable.some((c) => c.id === filter)
+          ? filter
+          : target;
+    store.setState({ filter, target: next, scrolled: false });
     touch();
   }
   function read() {
