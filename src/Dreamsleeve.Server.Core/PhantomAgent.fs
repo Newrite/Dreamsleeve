@@ -188,7 +188,11 @@ module PhantomAgent =
                 | _ -> ()
             state.Members.Remove id |> ignore
             state.Players.Remove memberState.Player |> ignore
-            for observer in state.Members.Values do observer.Views.Remove memberState.Player |> ignore
+            for observer in state.Members.Values do
+                let mutable view = Unchecked.defaultof<View>
+                if observer.Views.TryGetValue(memberState.Player, &view) then
+                    observer.ClearedAuthority <- max observer.ClearedAuthority view.Authority
+                    observer.Views.Remove memberState.Player |> ignore
             refresh state
         | _ -> ()
     let activate state id =
@@ -240,9 +244,14 @@ module PhantomAgent =
                 }
                 state.Players[value.Identity.PlayerId] <- id
             | _ -> ()
-        | PhantomObservation.View(id, player, revision, distance) ->
+        | PhantomObservation.View(id, sourceConnection, player, revision, distance) ->
             let mutable observer = Unchecked.defaultof<Member>
-            if state.Members.TryGetValue(id, &observer) && observer.Player <> player && Double.IsFinite distance && distance >= 0.0 then
+            let mutable currentSource = Guid.Empty
+            // Presence captures the source session epoch when it projects a view.
+            // A queued fact cannot bind an absent or reconnected PlayerId.
+            if state.Members.TryGetValue(id, &observer) && observer.Player <> player
+               && state.Players.TryGetValue(player, &currentSource) && currentSource = sourceConnection
+               && Double.IsFinite distance && distance >= 0.0 then
                 let mutable view = Unchecked.defaultof<View>
                 if observer.Views.TryGetValue(player, &view) then
                     if revision >= view.Authority && (revision <> view.Authority || distance <> view.Distance) then

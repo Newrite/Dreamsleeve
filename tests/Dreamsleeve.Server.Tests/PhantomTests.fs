@@ -52,8 +52,8 @@ let private transfer output =
 let private ready state (id, value: PlayerSnapshot) manifest =
     PhantomAgent.handle state 2L id (PhantomRequest.Publish(manifest, value.MovementContext, requestId()))
     PhantomAgent.tick state 3L
-let private view state (observer, _: PlayerSnapshot) (_, value: PlayerSnapshot) revision distance =
-    PhantomAgent.observe state (PhantomObservation.View(observer, value.Identity.PlayerId, revision, distance))
+let private view state (observer, _: PlayerSnapshot) (source, value: PlayerSnapshot) revision distance =
+    PhantomAgent.observe state (PhantomObservation.View(observer, source, value.Identity.PlayerId, revision, distance))
 let private pose gen sequence context =
     Dreamsleeve.Protocol.Phantom.ClientPosePacket(ProtocolVersion = ProtocolCodec.Version,
         Sample = Dreamsleeve.Protocol.Phantom.PoseSample(Generation = gen, ContextRevision = context, Sequence = sequence,
@@ -149,7 +149,7 @@ let tests = testList "Phantoms" [
 
     testCase "repeated unchanged authority views do not allocate replacements" <| fun _ ->
         let state, members, _ = setup options memoryStorage 2
-        let observation = PhantomObservation.View(fst members[1], (snd members[0]).Identity.PlayerId, 1UL, 100.0)
+        let observation = PhantomObservation.View(fst members[1], fst members[0], (snd members[0]).Identity.PlayerId, 1UL, 100.0)
         PhantomAgent.observe state observation
         let before = GC.GetAllocatedBytesForCurrentThread()
         for _ in 1 .. 16384 do PhantomAgent.observe state observation
@@ -240,6 +240,62 @@ let tests = testList "Phantoms" [
         view state members[1] members[0] 1UL 1.0
         PhantomAgent.tick state 8L
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "old Presence baseline rejected"
+
+    testCase "departure late View and reconnect outside AOI require current session epoch and fresh authority" <| fun _ ->
+        let mutable downloads = 0
+        let storage = { memoryStorage with StartDownload = fun _ -> downloads <- downloads + 1; result () }
+        let state, members, output = setup options storage 2
+        let oldId, oldSource = members[0]
+        let observerId, _ = members[1]
+        let manifest = asset 1UL [|1uy|]
+        ready state members[0] manifest
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Initial Presence authority."
+        PhantomAgent.handle state 5L observerId (PhantomRequest.Download(oldSource.Identity.PlayerId, manifest.Generation, requestId()))
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Old session download is live."
+        output.Clear()
+        PhantomAgent.detach state oldId
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Departure immediately revokes the old view."
+        Expect.equal (PhantomAgent.snapshot state).Transfers 0 "Departure cancels old transfers."
+        // Runtime can detach before already queued Presence observations drain.
+        view state members[1] members[0] 2UL 1.0
+        PhantomAgent.observe state (PhantomObservation.Departed oldId)
+        let previous = oldSource.Location.Value
+        let far = PlayerLocation.create previous.Location (Position.create 20000.0f 0.0f 0.0f |> ok) previous.Rotation
+        let newId = Guid.NewGuid()
+        let newSource = { oldSource with Location = ValueSome far }
+        PhantomAgent.observe state (PhantomObservation.Member(newId, newSource))
+        PhantomAgent.activate state newId
+        PhantomAgent.handle state 6L newId (PhantomRequest.Publish(manifest, newSource.MovementContext, requestId()))
+        PhantomAgent.tick state 7L
+        Expect.equal (PhantomAgent.snapshot state).Sources 1 "Same-player cached publication is allowed."
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "No View is inherited outside AOI."
+        // Reject the old epoch even above the watermark, and reject the cleared
+        // revision even when supplied with the current epoch.
+        view state members[1] members[0] 3UL 1.0
+        view state members[1] (newId, newSource) 1UL 1.0
+        PhantomAgent.receive state 8L newId DeliveryLane.Poses (pose 1UL 1UL newSource.MovementContext)
+        PhantomAgent.tick state 9L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Both session epoch and authority floor are required."
+        Expect.isFalse (models output |> Array.exists (fun packet -> not (isNull packet.Offer))) "No stale model offer."
+        Expect.isFalse (output |> Seq.exists (fun (_, packet) -> packet.Lane = DeliveryLane.Poses)) "No stale pose fanout."
+        PhantomAgent.handle state 9L observerId (PhantomRequest.Download(newSource.Identity.PlayerId, manifest.Generation, requestId()))
+        Expect.equal (PhantomAgent.snapshot state).Transfers 0 "Unseen reconnect cannot be downloaded."
+        Expect.equal downloads 1 "Denied reconnect starts no IO."
+        // Presence later authorizes the new session at a fresh revision.
+        PhantomAgent.observe state (PhantomObservation.Member(newId, oldSource))
+        view state members[1] (newId, oldSource) 2UL 1.0
+        PhantomAgent.tick state 10L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Fresh authority restores the legitimate view."
+        view state members[1] members[0] 4UL 1.0
+        PhantomAgent.observe state (PhantomObservation.Departed oldId)
+        PhantomAgent.tick state 11L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Late old-session facts cannot replace or remove the new view."
+        Expect.equal (models output |> Array.filter (fun packet -> not (isNull packet.Offer)) |> Array.length) 1 "Exactly one new offer."
+        PhantomAgent.handle state 12L observerId (PhantomRequest.Download(newSource.Identity.PlayerId, manifest.Generation, requestId()))
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Fresh authorized download still works."
+        Expect.equal downloads 2 "Only authorized sessions create read IO."
 
     testCase "context retains appearance but clears poses and source/observer subscriptions" <| fun _ ->
         let state, members, _ = setup options memoryStorage 2

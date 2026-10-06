@@ -80,7 +80,7 @@ module PresenceAgent =
         if state.PhantomObservation = PhantomObservationMode.Full && observer.ConnectionId <> source.ConnectionId then
             match observer.Latest.Location, source.Latest.Location with
             | ValueSome origin, ValueSome target ->
-                state.PhantomObservations.Add(PhantomObservation.View(observer.ConnectionId, source.Latest.Identity.PlayerId, revision,
+                state.PhantomObservations.Add(PhantomObservation.View(observer.ConnectionId, source.ConnectionId, source.Latest.Identity.PlayerId, revision,
                                                        double (Position.distanceSquared origin.Position target.Position)))
             | _ -> ()
 

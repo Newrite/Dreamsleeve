@@ -135,7 +135,7 @@ type PhantomObservationMode =
 [<RequireQualifiedAccess>]
 type PhantomObservation =
     | Member of Guid * PlayerSnapshot
-    | View of observer: Guid * source: PlayerId * revision: uint64 * distanceSquared: double
+    | View of observer: Guid * sourceConnection: Guid * source: PlayerId * revision: uint64 * distanceSquared: double
     | Hidden of observer: Guid * source: PlayerId * revision: uint64
     | Departed of Guid
     | Batch of PhantomObservation array
