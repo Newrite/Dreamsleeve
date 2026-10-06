@@ -103,7 +103,7 @@ export namespace Dreamsleeve::Client::Phantom
 
   struct Limits
   {
-    std::uint32_t nodes{4096}, geometry{256}, vertices{2000000}, bonesPerSkin{512};
+    std::uint32_t nodes{4096}, geometry{512}, vertices{2000000}, bonesPerSkin{512};
     std::uint32_t maskDimension{4096}, maskBytes{16 * 1024 * 1024};
     std::uint32_t assetBytes{128 * 1024 * 1024}, compressedAssetBytes{64 * 1024 * 1024};
     std::uint32_t poseBytes{512 * 1024}, compressedPoseBytes{256 * 1024};
@@ -181,6 +181,16 @@ private:
     std::vector<Deformation> deformations;
   };
 
+  constexpr std::size_t BufferedPoseCount = 8;
+
+  // Wire bytes are quantized; they are not a decoded allocation size. Include
+  // vector capacity/metadata as well as unquantized channel and bound layouts.
+  constexpr std::uint64_t SnapshotWorkingBytes(const Limits& limits = {})
+  {
+    return 2ULL * limits.poseBytes + limits.nodes * sizeof(Channel) + limits.geometry * (sizeof(Bound) + 2 * sizeof(Deformation)) +
+           sizeof(Snapshot);
+  }
+
   // Shared by the codec and scene adapter: a pose is atomic, including every
   // deforming mesh. Native engine adapters may add engine-specific checks.
   Result<void> CheckSnapshot(const Snapshot& snapshot, const ValidatedAsset& asset);
@@ -199,7 +209,7 @@ private:
     float         distance{4096}, opacity{0.6f};
     Vec3          color{0.55f, 0.8f, 1};
     std::uint32_t sampleRate{20}, delayMs{100}, extrapolationMs{100}, timeoutMs{1000};
-    std::uint64_t memoryBytes{256 * 1024 * 1024}, diskBytes{1024ULL * 1024 * 1024};
+    std::uint64_t memoryBytes{512 * 1024 * 1024}, diskBytes{1024ULL * 1024 * 1024};
     std::uint32_t uploadBytesPerSecond{512 * 1024}, downloadBytesPerSecond{512 * 1024};
     bool          operator==(const ViewSettings&) const = default;
   };

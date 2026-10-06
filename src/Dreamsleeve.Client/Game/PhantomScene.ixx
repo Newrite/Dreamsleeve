@@ -123,9 +123,11 @@ public:
       }
     };
 
-    // Allocation-free reservation for this Graphics adapter. Core's immutable
-    // Asset/Snapshot storage is already charged by Exchange and is excluded.
-    // Counts requested resource bytes, not opaque D3D driver/allocator overhead.
+    // Allocation-free reservation for this Graphics adapter, including its
+    // retained immutable Asset. Exchange may already reserve a replacement's
+    // smaller descriptor while this scene still owns the previous Asset.
+    // Conservative duplicate Asset charges are intentional; Snapshot storage
+    // remains in Core. Counts requested bytes, not opaque driver overhead.
     static P::Result<Footprint> Requirements(const P::ValidatedAsset& validated)
     {
       const auto&             asset         = validated.Value();
@@ -135,7 +137,8 @@ public:
       const std::uint64_t     lightingBytes = vr ? 0x178 : 0x160;
       constexpr std::uint64_t packedBytes = 32, maximumIndices = 65535 * 3;
       Footprint               result;
-      result.cpuBytes               = sizeof(Scene) + asset.nodes.size() * (sizeof(RE::NiPointer<RE::NiNode>) + sizeof(std::uint32_t)) +
+      result.cpuBytes               = validated.MemoryBytes() + sizeof(Scene) +
+                                      asset.nodes.size() * (sizeof(RE::NiPointer<RE::NiNode>) + sizeof(std::uint32_t)) +
                                       asset.geometry.size() * (sizeof(std::vector<A::RenderVertex>) + sizeof(P::Bound));
       result.nativeBytes            = (asset.nodes.size() + 1) * nodeBytes;
       std::uint64_t largestVertices = 0, largestMask = 1, largestBones = 0;

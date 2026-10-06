@@ -53,7 +53,7 @@ namespace
     return result;
   }
 
-  void Policy(P::Streaming& stream, std::uint32_t concurrent = 2)
+  void Policy(P::Streaming& stream, std::uint32_t concurrent = 2, std::uint32_t window = 4, std::uint32_t visible = 4)
   {
     auto packet = Server([&](auto& packet) {
       auto*     p = packet.mutable_policy();
@@ -66,9 +66,9 @@ namespace
       p->set_pose_bytes(limits.poseBytes);
       p->set_compressed_pose_bytes(limits.compressedPoseBytes);
       p->set_sample_rate(20);
-      p->set_maximum_visible(4);
+      p->set_maximum_visible(visible);
       p->set_distance(4096);
-      p->set_window_chunks(4);
+      p->set_window_chunks(window);
       p->set_concurrent_transfers(concurrent);
       p->set_model_bytes_per_second(1024 * 1024);
       p->set_pose_bytes_per_second(1024 * 1024);
@@ -295,7 +295,7 @@ TEST_CASE("Scene allocations and simultaneous replacement share the phantom memo
 {
   P::Exchange     exchange;
   P::ViewSettings settings;
-  settings.memoryBytes = 16 * 1024 * 1024;
+  settings.memoryBytes = 64 * 1024 * 1024;
   settings.maximum     = 4;
   exchange.Configure(settings);
   P::Wire::Offer offer{
@@ -461,4 +461,129 @@ TEST_CASE("A local download budget paces acknowledgements fairly across transfer
     return acknowledged.size() == 2;
   }));
   CHECK(Clock::now() - started >= std::chrono::milliseconds(400));
+}
+
+TEST_CASE("Eight full phantom windows make partial ACK progress below the inactivity timeout")
+{
+  constexpr std::uint32_t count = 8, window = 16, rate = 64 * 1024;
+  P::Exchange             exchange;
+  P::ViewSettings         settings;
+  settings.maximum                = count;
+  settings.memoryBytes            = 1024ULL * 1024 * 1024;
+  settings.downloadBytesPerSecond = rate;
+  exchange.Configure(settings);
+  P::Streaming stream(exchange, {});
+  Policy(stream, count, window, count);
+  stream.Poll();
+  auto descriptor            = Describe(Model());
+  descriptor.compressedBytes = 1024 * 1024;
+  descriptor.rawBytes        = 4 * 1024 * 1024;
+  for (std::uint64_t player = 1; player <= count; ++player)
+    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+      auto* offer = p.mutable_offer();
+      offer->set_player_id(player);
+      offer->set_view_revision(1);
+      Set(descriptor, offer->mutable_asset());
+    })));
+  std::map<std::uint64_t, std::uint64_t> requests;
+  REQUIRE(Until([&] {
+    for (const auto& p : Models(stream.Poll()))
+      if (p.has_download()) requests[p.download().player_id()] = p.download().request_id();
+    return requests.size() == count;
+  }));
+  for (const auto& [player, request] : requests)
+  {
+    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+      auto* transfer = p.mutable_transfer();
+      transfer->set_player_id(player);
+      transfer->set_transfer_id(player);
+      transfer->set_request_id(request);
+      Set(descriptor, transfer->mutable_asset());
+    })));
+    for (std::uint32_t chunk = 0; chunk < window; ++chunk)
+      REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+        auto* data = p.mutable_chunk();
+        data->set_transfer_id(player);
+        data->set_offset(chunk * P::Wire::ChunkBytes);
+        data->set_data(std::string(P::Wire::ChunkBytes, 'x'));
+      })));
+  }
+  const auto started = Clock::now();
+  std::map<std::uint64_t, std::uint32_t> acknowledged;
+  std::uint64_t initialBytes{}, totalBytes{};
+  for (int second = 0; second <= 31; ++second)
+  {
+    for (const auto& p : Models(stream.Poll(started + std::chrono::seconds(second))))
+    {
+      CHECK_FALSE(p.has_cancel());
+      CHECK_FALSE(p.has_download());
+      if (!p.has_progress()) continue;
+      const auto id = p.progress().transfer_id();
+      REQUIRE(requests.contains(id));
+      const auto offset = p.progress().next_offset();
+      CHECK(offset > acknowledged[id]);
+      CHECK(offset <= window * P::Wire::ChunkBytes);
+      CHECK(offset % P::Wire::ChunkBytes == 0);
+      totalBytes += offset - acknowledged[id];
+      acknowledged[id] = offset;
+      if (second <= 2) CHECK(offset < window * P::Wire::ChunkBytes);
+    }
+    if (!second) initialBytes = totalBytes;
+    // At most one fractional chunk of saved credit per download crosses
+    // the test's initial clock boundary; aggregate pacing stays bounded.
+    CHECK(totalBytes - initialBytes <= std::uint64_t(rate) * second + count * P::Wire::ChunkBytes);
+    if (second == 2)
+    {
+      REQUIRE(acknowledged.size() == count);
+      for (const auto& [id, offset] : acknowledged) CHECK(offset >= P::Wire::ChunkBytes);
+    }
+  }
+  REQUIRE(acknowledged.size() == count);
+  for (const auto& [id, offset] : acknowledged) CHECK(offset >= 15 * P::Wire::ChunkBytes);
+  CHECK(totalBytes >= std::uint64_t(count) * 15 * P::Wire::ChunkBytes);
+}
+
+TEST_CASE("Phantom ACK pacing permits the final prefix off a chunk boundary")
+{
+  P::Exchange     exchange;
+  P::ViewSettings settings;
+  settings.downloadBytesPerSecond = 64 * 1024;
+  exchange.Configure(settings);
+  P::Streaming stream(exchange, {});
+  Policy(stream);
+  stream.Poll();
+  auto descriptor            = Describe(Model());
+  descriptor.compressedBytes = P::Wire::ChunkBytes + 123;
+  descriptor.rawBytes        = 4 * P::Wire::ChunkBytes;
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* offer = p.mutable_offer();
+    offer->set_player_id(9);
+    offer->set_view_revision(1);
+    Set(descriptor, offer->mutable_asset());
+  })));
+  std::uint64_t request{};
+  REQUIRE(Until([&] {
+    for (const auto& p : Models(stream.Poll()))
+      if (p.has_download()) request = p.download().request_id();
+    return request != 0;
+  }));
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* transfer = p.mutable_transfer();
+    transfer->set_player_id(9);
+    transfer->set_transfer_id(9);
+    transfer->set_request_id(request);
+    Set(descriptor, transfer->mutable_asset());
+  })));
+  for (std::uint32_t offset : {0U, P::Wire::ChunkBytes})
+    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+      auto* chunk = p.mutable_chunk();
+      chunk->set_transfer_id(9);
+      chunk->set_offset(offset);
+      chunk->set_data(std::string(offset ? 123 : P::Wire::ChunkBytes, 'x'));
+    })));
+  const auto output = Models(stream.Poll(Clock::now() + std::chrono::seconds(1)));
+  CHECK(std::ranges::any_of(output, [&](const auto& p) {
+    return p.has_progress() && p.progress().transfer_id() == 9 && p.progress().next_offset() == descriptor.compressedBytes;
+  }));
+  CHECK(std::ranges::none_of(output, [](const auto& p) { return p.has_cancel(); }));
 }

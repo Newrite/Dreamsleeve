@@ -123,7 +123,7 @@ export namespace Dreamsleeve::Client::Phantom
       if (job.epoch != exchange.Epoch()) return;
       const auto remote = exchange.Find(job.offer.player);
       if (!remote || remote->view != job.offer.view || remote->descriptor != job.offer.asset) return;
-      if (auto loaded = exchange.AssetFor(job.offer.asset.hash))
+      if (auto loaded = exchange.AssetFor(job.offer.asset))
       {
         exchange.Loaded(job.epoch, job.offer, std::move(loaded), true);
         return;

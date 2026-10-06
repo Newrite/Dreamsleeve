@@ -90,9 +90,12 @@ private:
 
     static std::uint64_t Reservation(const Wire::Descriptor& descriptor)
     {
-      // Immutable neutral model and decode scratch, plus
-      // compressed transfer and eight buffered complete poses.
-      return 2ULL * descriptor.rawBytes + descriptor.compressedBytes + 8ULL * Limits{}.poseBytes;
+      // Decode/model capacity and compressed transfer. Live playback plus the
+      // display, network and worker copies can retain independent histories.
+      // Four more frames cover decode/interpolation and producers; raw/encoded
+      // scratch and two worker batches are charged independently.
+      return 3ULL * descriptor.rawBytes + descriptor.compressedBytes + (4 * BufferedPoseCount + 4) * SnapshotWorkingBytes() +
+             Limits{}.poseBytes + 4ULL * Limits{}.compressedPoseBytes;
     }
 
     std::uint64_t Reserved(std::uint64_t except = 0) const
@@ -176,7 +179,7 @@ public:
     bool Submit(Generation generation, ValidatedAsset asset)
     {
       std::lock_guard lock(mutex);
-      const auto      bytes = 4 * asset.MemoryBytes() + 8ULL * Limits{}.poseBytes;
+      const auto bytes = 4 * asset.MemoryBytes() + 6 * SnapshotWorkingBytes() + Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
       if (!available || !settings.publish || capture || bytes + graphicsReservation > settings.memoryBytes) return false;
       localReservation = bytes;
       while (Reserved() > settings.memoryBytes && !remotes.empty())
@@ -331,11 +334,11 @@ public:
       if (cached) ++metrics.cacheHits;
     }
 
-    std::shared_ptr<const ValidatedAsset> AssetFor(const Digest& hash) const
+    std::shared_ptr<const ValidatedAsset> AssetFor(const Wire::Descriptor& descriptor) const
     {
       std::lock_guard lock(mutex);
       for (const auto& [id, remote] : remotes)
-        if (remote.descriptor.hash == hash && remote.Asset()) return remote.Asset();
+        if (remote.descriptor.SameContent(descriptor) && remote.Asset()) return remote.Asset();
       return {};
     }
 

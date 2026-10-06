@@ -477,10 +477,9 @@ public:
       return {};
     }
 
-    std::vector<Outbound> Poll()
+    std::vector<Outbound> Poll(Clock::time_point now = Clock::now())
     {
       std::vector<Outbound> output;
-      const auto            now      = Clock::now();
       auto                  outgoing = exchange.TakeOutput();
       if (localRevision != outgoing.localRevision)
       {
@@ -564,24 +563,27 @@ public:
           }
         }
       }
+      const auto downloadCount = downloads.size();
       for (auto it = downloads.begin(); it != downloads.end();)
       {
-        // ACK pacing bounds honest-server downloads without buffering another
-        // copy or inventing a second transfer window. Initial traffic is at most
-        // the server's window. Equal credit shares prevent one slow transfer
-        // from starving the other download until its inactivity timeout.
+        // Release a chunk-aligned prefix as credit permits, rather than waiting
+        // for a whole window. Keep the divisor fixed if a transfer is removed.
         auto& download = it->second;
         if (policy)
         {
           const auto rate = std::min(policy->modelBytesPerSecond, outgoing.settings.downloadBytesPerSecond);
-          download.credit = std::min<double>(download.credit + elapsed * rate / downloads.size(), Wire::ChunkBytes * policy->windowChunks);
+          download.credit = std::min<double>(download.credit + elapsed * rate / downloadCount, Wire::ChunkBytes * policy->windowChunks);
         }
         const auto received       = static_cast<std::uint32_t>(download.bytes->size());
         const auto unacknowledged = received - download.acknowledged;
-        if (unacknowledged && download.credit >= unacknowledged && Request(Wire::Progress{TransferId{it->first}, received}))
+        const auto available      = std::min(unacknowledged, static_cast<std::uint32_t>(download.credit));
+        auto       nextOffset     = download.acknowledged + available;
+        if (nextOffset != download.offer.asset.compressedBytes) nextOffset -= nextOffset % Wire::ChunkBytes;
+        const auto acknowledged = nextOffset - download.acknowledged;
+        if (acknowledged && Request(Wire::Progress{TransferId{it->first}, nextOffset}))
         {
-          download.credit       -= unacknowledged;
-          download.acknowledged  = received;
+          download.credit       -= acknowledged;
+          download.acknowledged  = nextOffset;
           download.touched       = now;
         }
         if (now - it->second.touched > Timeout)

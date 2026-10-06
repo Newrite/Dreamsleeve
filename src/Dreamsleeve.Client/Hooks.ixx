@@ -37,6 +37,9 @@ namespace Hooks
     auto PlayerUpdate  = REL::VariantID(39375, 40447, 0x6BEC10);
     auto StreamLoaders = REL::VariantID(523904, 410484, 0x316AC08);
     auto SetMaterial   = REL::VariantID(98897, 105544, 0x12CA650);
+    // IDA: unrendered NiSourceTexture create, one const BSFixedString*.
+    // SE RVA C68D20, AE RVA D2F140, VR RVA CAEF60; allocation is 0x58.
+    auto SourceTexture = REL::VariantID(69335, 70717, 0xCAEF60);
 
   }
 
@@ -128,8 +131,23 @@ namespace Hooks
     return value;
   }
 
+  // NiSourceTexture is not a vanilla stream-loader factory. Keep the public
+  // no-argument Factory ABI while calling its verified one-argument helper.
+  RE::NiObject* PhantomTexture()
+  {
+    using Create = RE::NiSourceTexture*(const RE::BSFixedString*);
+    static const REL::Relocation<Create> create{Address::SourceTexture};
+    const RE::BSFixedString              empty;
+    auto*                                texture = create(&empty);
+    // The native ctor links the texture and clears resourceStream, but leaves
+    // rendererTexture uninitialized. Graphics supplies its own owned wrapper.
+    if (texture) texture->rendererTexture = nullptr;
+    return texture;
+  }
+
   Graphics::Factory PhantomFactory(Graphics::FactoryKind kind)
   {
+    if (kind == Graphics::FactoryKind::Texture) return PhantomTexture;
     constexpr std::array<std::string_view, 5>
                names{"NiNode", "BSTriShape", "NiSourceTexture", "BSLightingShaderProperty", "NiAlphaProperty"};
     const auto index = static_cast<std::size_t>(kind);

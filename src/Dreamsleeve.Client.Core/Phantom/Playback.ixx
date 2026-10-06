@@ -113,7 +113,7 @@ public:
       const auto offset = static_cast<std::int64_t>(arrivalUs) - static_cast<std::int64_t>(pose->sampledAtUs);
       offsetUs          = samples.empty() ? offset : std::min(offsetUs, offset);
       samples.push_back({std::move(pose), arrivalUs});
-      while (samples.size() > 8)
+      while (samples.size() > BufferedPoseCount)
         samples.pop_front();
       return true;
     }

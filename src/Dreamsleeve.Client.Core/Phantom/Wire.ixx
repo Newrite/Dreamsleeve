@@ -17,6 +17,13 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     Generation    generation;
     std::uint32_t format{AssetVersion}, compressedBytes{}, rawBytes{}, channels{}, geometry{};
     bool          operator==(const Descriptor&) const = default;
+
+    bool SameContent(const Descriptor& other) const
+    {
+      auto content       = *this;
+      content.generation = other.generation;
+      return content == other;
+    }
   };
 
   struct Preferences

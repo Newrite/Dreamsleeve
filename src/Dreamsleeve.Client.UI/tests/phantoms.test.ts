@@ -229,7 +229,7 @@ describe("phantom settings", () => {
     expect(html).toContain("<output>4096 игр. ед.</output>");
     expect(html).toContain("<output>20 Гц</output>");
     expect(html).toContain("<output>100 мс</output>");
-    expect(html).toContain("<output>256 МиБ</output>");
+    expect(html).toContain("<output>512 МиБ</output>");
     expect(html).toContain("<output>1024 МиБ</output>");
     expect(html).toContain("ограничивается сервером");
     expect(html).toContain("хранит готовые модели внешности");

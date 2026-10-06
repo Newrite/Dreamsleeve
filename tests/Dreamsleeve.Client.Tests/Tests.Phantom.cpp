@@ -178,7 +178,7 @@ TEST_CASE("Phantom admission reserves aggregate working memory and server sampli
 {
   P::Exchange     exchange;
   P::ViewSettings settings;
-  settings.memoryBytes = 16 * 1024 * 1024;
+  settings.memoryBytes = 128 * 1024 * 1024;
   settings.maximum     = 4;
   settings.sampleRate  = 50;
   exchange.Configure(settings);

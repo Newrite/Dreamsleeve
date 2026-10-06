@@ -175,7 +175,7 @@ export const defaults: Settings = {
   phantomDelayMs: 100,
   phantomExtrapolationMs: 100,
   phantomTimeoutMs: 1000,
-  phantomMemoryMiB: 256,
+  phantomMemoryMiB: 512,
   phantomCacheMiB: 1024,
   phantomUploadKiB: 512,
   phantomDownloadKiB: 512,

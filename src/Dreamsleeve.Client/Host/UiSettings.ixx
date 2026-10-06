@@ -120,7 +120,7 @@ export namespace Dreamsleeve::Host
     double      phantomDelayMs{100};
     double      phantomExtrapolationMs{100};
     double      phantomTimeoutMs{1000};
-    double      phantomMemoryMiB{256};
+    double      phantomMemoryMiB{512};
     double      phantomCacheMiB{1024};
     double      phantomUploadKiB{512};
     double      phantomDownloadKiB{512};

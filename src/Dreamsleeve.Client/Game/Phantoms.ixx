@@ -366,17 +366,17 @@ namespace Phantoms
       // it hidden/unposed even when Busy is returned. Neither represents a
       // visible phantom or may prevent the next frame from rebuilding it.
       ForgetCleared(visual, exchange, remote.player);
+      if (now - visual.applied > std::chrono::milliseconds(settings.timeoutMs))
+      {
+        Hide(visual, now);
+        ForgetCleared(visual, exchange, remote.player);
+        continue;
+      }
       if (settings.hideInCombat && player->IsInCombat())
       {
         Hide(visual, now);
         ForgetCleared(visual, exchange, remote.player);
         visual.active = visual.current && visual.current->scene->Ready();
-        continue;
-      }
-      if (now - visual.applied > std::chrono::milliseconds(settings.timeoutMs))
-      {
-        Hide(visual, now);
-        ForgetCleared(visual, exchange, remote.player);
         continue;
       }
       if (!visual.active || !visual.current) continue;
