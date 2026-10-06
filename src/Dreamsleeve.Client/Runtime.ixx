@@ -75,6 +75,10 @@ export namespace Runtime
     bool        authenticating{};
     bool        hideUi{};
     bool        available{};
+    std::size_t   phantoms{};
+    std::uint64_t phantomModels{}, phantomPoses{}, phantomRejected{}, phantomDropped{}, phantomCacheHits{};
+    std::uint32_t phantomSampleRate{};
+    std::string   phantomError;
   };
 
   struct State
@@ -259,6 +263,14 @@ export namespace Runtime
     {
       logger::error("Cannot load {}: {}", state.clientPath.string(), settings.error());
       return false;
+    }
+
+    if (!settings->client.phantomCacheDirectory.empty())
+    {
+      auto cache = std::filesystem::u8path(settings->client.phantomCacheDirectory);
+      if (cache.is_relative()) cache = state.clientPath.parent_path() / cache;
+      const auto utf8 = cache.u8string();
+      settings->client.phantomCacheDirectory.assign(utf8.begin(), utf8.end());
     }
 
     // Before the network starts: the first connection goes by the remembered route.

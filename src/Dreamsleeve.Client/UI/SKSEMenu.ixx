@@ -32,6 +32,14 @@ namespace SKSEMenu
     ImGui::Text("Игроков онлайн: %zu", snapshot.online);
     ImGui::Text("Светлячков рядом: %zu", snapshot.fireflies);
     ImGui::Text("Меток рядом: %zu", snapshot.groundMarks);
+    ImGui::Text("Фантомов рядом: %zu, захват: %u Гц", snapshot.phantoms, snapshot.phantomSampleRate);
+    ImGui::Text(
+      "Модели: %.2f МиБ, позы: %.2f МиБ, попаданий в кеш: %llu",
+      snapshot.phantomModels / 1048576.0,
+      snapshot.phantomPoses / 1048576.0,
+      snapshot.phantomCacheHits);
+    ImGui::Text("Отклонений: %llu, устаревших поз: %llu", snapshot.phantomRejected, snapshot.phantomDropped);
+    if (!snapshot.phantomError.empty()) ImGui::TextWrapped("Фантомы: %s", snapshot.phantomError.c_str());
     if (snapshot.savedLogin)
       ImGui::Text("Сохранённый вход: %s", snapshot.savedUsername.c_str());
     else

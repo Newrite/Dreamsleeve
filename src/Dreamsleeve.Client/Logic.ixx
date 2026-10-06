@@ -10,6 +10,8 @@ import Dreamsleeve.PrismaUI;
 import Dreamsleeve.Game.Telemetry;
 import Dreamsleeve.Game.Fireflies;
 import Dreamsleeve.Game.GroundMarks;
+import Dreamsleeve.Game.Phantoms;
+import Dreamsleeve.Game.PhantomGraphics;
 import Dreamsleeve.Game.World;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
@@ -70,6 +72,8 @@ namespace Logic
       logger::info("Character context ended");
     }
     Fireflies::ClearAll();
+    Phantoms::Clear();
+    runtime.bubbles.Clear();
     GroundMarks::EndContext();
     Nameplates::Publish({});
     Nameplates::Release();
@@ -298,7 +302,10 @@ namespace Logic
   // and a pause or hidden HUD drops them together.
   void PublishNameplates(Clock::time_point now)
   {
+    auto& runtime = Runtime::Get();
+    runtime.bubbles.Prune(now, runtime.ui.ui.chat, [&](Domain::PlayerId id) { return runtime.session.OnlinePlayers().contains(id); });
     Nameplates::Frame names;
+    Phantoms::Tick(now, names);
     Fireflies::Tick(now, names);
     GroundMarks::Tick(now, names);
     auto* menus = RE::UI::GetSingleton();
@@ -319,6 +326,15 @@ namespace Logic
     snapshot.online         = runtime.session.OnlinePlayers().size();
     snapshot.fireflies      = Fireflies::Count();
     snapshot.groundMarks    = GroundMarks::Count();
+    snapshot.phantoms          = Phantoms::Count();
+    const auto phantom         = runtime.app->Exchange().Phantoms().Stats();
+    snapshot.phantomModels     = phantom.modelBytes;
+    snapshot.phantomPoses      = phantom.poseBytes;
+    snapshot.phantomRejected   = phantom.rejected;
+    snapshot.phantomDropped    = phantom.dropped;
+    snapshot.phantomCacheHits  = phantom.cacheHits;
+    snapshot.phantomSampleRate = phantom.sampleRate;
+    snapshot.phantomError      = phantom.error;
     snapshot.savedLogin     = status.savedLogin;
     snapshot.authenticating = status.authenticating;
     snapshot.hideUi         = runtime.ui.ui.hideUi;
@@ -334,6 +350,7 @@ namespace Logic
     if (auto* main = RE::Main::GetSingleton(); main && main->GetRuntimeData().quitGame)
     {
       LeavePlaying(Runtime::GameContext::MainMenu);
+      Dreamsleeve::Game::PhantomGraphics::Shutdown();
       Nameplates::Shutdown();  // GFx objects go before the engine tears Scaleform down.
       Runtime::Shutdown();
       return;

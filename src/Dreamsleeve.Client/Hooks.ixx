@@ -9,6 +9,8 @@ import Dreamsleeve.Logic;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Game.Input;
+import Dreamsleeve.Game.Phantoms;
+import Dreamsleeve.Game.PhantomGraphics;
 
 // Every patch of the game binary lives here: Address Library IDs, call-site
 // offsets, byte checks and the thunks. The modules behind the thunks (Logic,
@@ -32,6 +34,10 @@ namespace Hooks
     // VR (0x140C52BC0) has no entry in its database, so VR is only range-checked.
     auto DispatchInput = REL::RelocationID(67355, 68655);
 
+    auto PlayerUpdate  = REL::VariantID(39375, 40447, 0x6BEC10);
+    auto StreamLoaders = REL::VariantID(523904, 410484, 0x316AC08);
+    auto SetMaterial   = REL::VariantID(98897, 105544, 0x12CA650);
+
   }
 
   namespace Offset
@@ -47,6 +53,10 @@ namespace Hooks
 
     // IMenu::AdvanceMovie in the HUDMenu vtable, SE and AE alike.
     constexpr std::size_t HudAdvanceMovie = 0x05;
+
+    auto                  PlayerUpdate  = REL::Relocate(0xAD, 0xAD, 0xAF);
+    constexpr std::size_t LoaderBuckets = 0x08, LoaderTable = 0x10, LoaderCount = 0x18;
+    constexpr std::size_t LoaderNext = 0x00, LoaderName = 0x08, LoaderFactory = 0x10;
 
   }
 
@@ -90,6 +100,105 @@ namespace Hooks
 
     static inline REL::Relocation<decltype(Dispatch)> Original;
   };
+
+  struct PlayerUpdate
+  {
+    static void Update(RE::PlayerCharacter* player, float delta)
+    {
+      Original(player, delta);
+      Phantoms::CapturePlayer(*player);
+    }
+
+    static inline REL::Relocation<decltype(Update)> Original;
+  };
+
+  namespace Graphics = Dreamsleeve::Game::PhantomGraphics;
+  std::thread::id phantomThread;
+
+  bool PhantomThread() noexcept
+  {
+    return std::this_thread::get_id() == phantomThread;
+  }
+
+  template <class T>
+  T NativeField(const void* object, std::size_t offset)
+  {
+    T value;
+    std::memcpy(&value, static_cast<const std::byte*>(object) + offset, sizeof(value));
+    return value;
+  }
+
+  Graphics::Factory PhantomFactory(Graphics::FactoryKind kind)
+  {
+    constexpr std::array<std::string_view, 5>
+               names{"NiNode", "BSTriShape", "NiSourceTexture", "BSLightingShaderProperty", "NiAlphaProperty"};
+    const auto index = static_cast<std::size_t>(kind);
+    if (index >= names.size()) return nullptr;
+    const auto* registry = *REL::Relocation<const void**>{Address::StreamLoaders};
+    if (!registry) return nullptr;
+    const auto  buckets = NativeField<std::uint32_t>(registry, Offset::LoaderBuckets),
+                count   = NativeField<std::uint32_t>(registry, Offset::LoaderCount);
+    const auto* table   = NativeField<const void* const*>(registry, Offset::LoaderTable);
+    if (!table || !buckets || buckets > 65536 || count > 65536) return nullptr;
+    Graphics::Factory factory = nullptr;
+    std::size_t       visited = 0;
+    for (std::uint32_t i = 0; i < buckets; ++i)
+      for (const void* entry = table[i]; entry; entry = NativeField<const void*>(entry, Offset::LoaderNext))
+      {
+        if (++visited > count) return nullptr;
+        const auto* name = NativeField<const char*>(entry, Offset::LoaderName);
+        if (name && names[index] == name) factory = NativeField<Graphics::Factory>(entry, Offset::LoaderFactory);
+      }
+    return visited == count ? factory : nullptr;
+  }
+
+  void PhantomMaterial(RE::BSShaderProperty* property, RE::BSShaderMaterial* material, bool unique)
+  {
+    REL::Relocation<void(RE::BSShaderProperty*, RE::BSShaderMaterial*, bool)>{Address::SetMaterial}(property, material, unique);
+  }
+
+  bool PhantomReadbackBudget(std::uint64_t bytes)
+  {
+    auto& runtime = Runtime::Get();
+    return runtime.app && runtime.app->Exchange().Phantoms().GraphicsMemory(bytes);
+  }
+
+  bool InstallPhantomGraphics()
+  {
+    const auto version = REL::Module::get().version();
+    const bool known   = (REL::Module::IsSE() && version == REL::Version{1, 5, 97, 0}) ||
+                         (REL::Module::IsAE() && version == REL::Version{1, 6, 1170, 0}) ||
+                         (REL::Module::IsVR() && version == REL::Version{1, 4, 15, 0});
+    if (!known)
+    {
+      logger::warn("Phantom graphics disabled for unaudited runtime {}", version.string());
+      return false;
+    }
+    phantomThread  = std::this_thread::get_id();
+    auto installed = Graphics::Install({PhantomThread, PhantomFactory, PhantomMaterial, PhantomReadbackBudget});
+    if (!installed)
+    {
+      logger::warn("Phantom graphics unavailable: {}", installed.error().field);
+      return false;
+    }
+    Phantoms::Install(Graphics::CaptureEngine(), Graphics::SceneEngine());
+    return true;
+  }
+
+  void InstallPhantomCapture()
+  {
+    REL::Relocation<std::uintptr_t> table{RE::PlayerCharacter::VTABLE[0]};
+    const auto                      original = reinterpret_cast<std::uintptr_t*>(table.address())[Offset::PlayerUpdate];
+    const auto                      text     = REL::Module::get().segment(REL::Segment::textx);
+    const auto                      expected = Address::PlayerUpdate.address();
+    if (original != expected && original >= text.address() && original < text.address() + text.size())
+    {
+      logger::error("PlayerCharacter::Update slot targets {:X}, expected {:X}; phantom capture disabled", original, expected);
+      return;
+    }
+    PlayerUpdate::Original = table.write_vfunc(Offset::PlayerUpdate, PlayerUpdate::Update);
+    logger::info("PlayerCharacter::Update hook installed (phantom capture, runtime {})", REL::Module::get().version().string());
+  }
 
   void InstallMainUpdate()
   {
@@ -165,6 +274,7 @@ namespace Hooks
     installed = true;
     InstallHudAdvance();
     InstallInputDispatch();
+    if (InstallPhantomGraphics()) InstallPhantomCapture();
     InstallMainUpdate();
   }
 
