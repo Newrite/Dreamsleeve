@@ -178,7 +178,7 @@ Parent сообщил об успешном DLL build session 70409 (91.5 s), п
 Это свидетельство сборки от parent, а не результат отдельной сборки
 аудитора. Новый игровой replay пока не подтверждён.
 
-Capture работает на main thread после PlayerCharacter::Update и читает
+Capture работает на main thread после полного Main::Update и читает
 живую third-person модель, включая режим первой камеры. Сеть получает
 только neutral Asset/Snapshot. Scene принимает только ValidatedAsset;
 CheckSnapshot принадлежит Core. Remote mesh создаётся новыми native
@@ -376,6 +376,6 @@ clang-format и git diff --check; новый DLL build и runtime проверя
 неизвестные несинхронизированные dynamic layouts возвращают failure. Для
 alpha material с clamp mode != repeat нужен новый neutral sampler/clamp field;
 до его появления выдаётся UnsupportedGeometry вместо незаметного пропуска.
-Runtime DataLoaded factory preflight, реальный BC7 hair/face/body fixture,
+Runtime factory preflight в первом Main::Update, реальный BC7 hair/face/body fixture,
 SMP update ordering, переход cell/world, disconnect и quit всё ещё требуют
 игрового теста новой feature на каждом runtime.

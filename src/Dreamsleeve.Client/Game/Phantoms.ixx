@@ -56,7 +56,6 @@ namespace Phantoms
     Clock::time_point                            nextCapture{}, nextFailure{};
     std::uint32_t                                cell{}, world{};
     std::uint64_t                                cursor{};
-    bool                                         wasAvailable{};
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     std::shared_ptr<const P::ValidatedAsset> diagnosticAsset;
     bool                                     publishing{};
@@ -102,7 +101,6 @@ namespace Phantoms
     state.diagnosticAsset.reset();
 #endif
     state.cell = state.world = 0;
-    state.wasAvailable       = false;
     if (state.capture.mainThread && state.capture.mainThread())
     {
       auto cleared = Graphics::ClearReadbacks();
@@ -150,12 +148,13 @@ namespace Phantoms
   }
 #endif
 
-  export void CapturePlayer(RE::PlayerCharacter& player)
+  // Tick owns capture and playback on the same main-loop thread, after the
+  // game's frame update. No actor-update callback touches this state.
+  void CapturePlayer(RE::PlayerCharacter& player)
   {
-    auto&      runtime = Runtime::Get();
-    auto&      state   = Get();
-    const auto now     = Clock::now();
-    if (!runtime.app || runtime.shutdown || runtime.context != Runtime::GameContext::Playing || !World::PlayerReady()) return;
+    auto&      runtime    = Runtime::Get();
+    auto&      state      = Get();
+    const auto now        = Clock::now();
     auto&      exchange   = runtime.app->Exchange().Phantoms();
     const auto settings   = exchange.Settings();
     const bool publishing = exchange.Available() && settings.publish;
@@ -300,7 +299,7 @@ namespace Phantoms
   {
     auto& runtime = Runtime::Get();
     auto& state   = Get();
-    if (!runtime.app) return;
+    if (!runtime.app || !state.capture.mainThread) return;
     auto&      exchange = runtime.app->Exchange().Phantoms();
     const auto settings = Dreamsleeve::Host::PhantomSettings(runtime.ui.ui.chat);
     if (!state.settings || settings != *state.settings)
@@ -326,6 +325,7 @@ namespace Phantoms
       state.cell  = cellId;
       state.world = worldId;
     }
+    CapturePlayer(*player);
     auto display = exchange.Read();
     if (!display.available)
     {
@@ -335,7 +335,6 @@ namespace Phantoms
         for (const auto& [id, visual] : state.visuals)
           exchange.SceneMemory(id, 0);
         state.visuals.clear();
-        state.wasAvailable = false;
         return;
       }
 #endif
@@ -345,11 +344,6 @@ namespace Phantoms
       state.cell  = cellId;
       state.world = worldId;
       return;
-    }
-    if (!state.wasAvailable)
-    {
-      state.source.reset();
-      state.wasAvailable = true;
     }
     if (!settings.receive)
     {

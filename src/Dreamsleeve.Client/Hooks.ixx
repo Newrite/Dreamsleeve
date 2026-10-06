@@ -34,7 +34,6 @@ namespace Hooks
     // VR (0x140C52BC0) has no entry in its database, so VR is only range-checked.
     auto DispatchInput = REL::RelocationID(67355, 68655);
 
-    auto PlayerUpdate  = REL::VariantID(39375, 40447, 0x6BEC10);
     auto StreamLoaders = REL::VariantID(523904, 410484, 0x316AC08);
     auto SetMaterial   = REL::VariantID(98897, 105544, 0x12CA650);
     // IDA: unrendered NiSourceTexture create, one const BSFixedString*.
@@ -57,7 +56,6 @@ namespace Hooks
     // IMenu::AdvanceMovie in the HUDMenu vtable, SE and AE alike.
     constexpr std::size_t HudAdvanceMovie = 0x05;
 
-    auto                  PlayerUpdate  = REL::Relocate(0xAD, 0xAD, 0xAF);
     constexpr std::size_t LoaderBuckets = 0x08, LoaderTable = 0x10, LoaderCount = 0x18;
     constexpr std::size_t LoaderNext = 0x00, LoaderName = 0x08, LoaderFactory = 0x10;
 
@@ -70,10 +68,16 @@ namespace Hooks
   constexpr std::uint8_t CallOpcode         = 0xE8;
   constexpr std::size_t  CallSize           = 5;
 
+  bool InstallPhantomGraphics();
+
   struct MainUpdate
   {
     static void Update(RE::Main* self)
     {
+      // kDataLoaded runs on the loader's thread. Bind the graphics owner to
+      // this verified main-loop entry instead, before any frame work.
+      static const bool graphicsInstalled = InstallPhantomGraphics();
+      (void)graphicsInstalled;
       UpdateOriginal(self);
       Logic::OnFrame();
     }
@@ -102,17 +106,6 @@ namespace Hooks
     }
 
     static inline REL::Relocation<decltype(Dispatch)> Original;
-  };
-
-  struct PlayerUpdate
-  {
-    static void Update(RE::PlayerCharacter* player, float delta)
-    {
-      Original(player, delta);
-      Phantoms::CapturePlayer(*player);
-    }
-
-    static inline REL::Relocation<decltype(Update)> Original;
   };
 
   namespace Graphics = Dreamsleeve::Game::PhantomGraphics;
@@ -200,22 +193,8 @@ namespace Hooks
       return false;
     }
     Phantoms::Install(Graphics::CaptureEngine(), Graphics::SceneEngine());
+    logger::info("Phantom graphics bound to Main::Update thread {}", REX::W32::GetCurrentThreadId());
     return true;
-  }
-
-  void InstallPhantomCapture()
-  {
-    REL::Relocation<std::uintptr_t> table{RE::PlayerCharacter::VTABLE[0]};
-    const auto                      original = reinterpret_cast<std::uintptr_t*>(table.address())[Offset::PlayerUpdate];
-    const auto                      text     = REL::Module::get().segment(REL::Segment::textx);
-    const auto                      expected = Address::PlayerUpdate.address();
-    if (original != expected && original >= text.address() && original < text.address() + text.size())
-    {
-      logger::error("PlayerCharacter::Update slot targets {:X}, expected {:X}; phantom capture disabled", original, expected);
-      return;
-    }
-    PlayerUpdate::Original = table.write_vfunc(Offset::PlayerUpdate, PlayerUpdate::Update);
-    logger::info("PlayerCharacter::Update hook installed (phantom capture, runtime {})", REL::Module::get().version().string());
   }
 
   void InstallMainUpdate()
@@ -292,7 +271,6 @@ namespace Hooks
     installed = true;
     InstallHudAdvance();
     InstallInputDispatch();
-    if (InstallPhantomGraphics()) InstallPhantomCapture();
     InstallMainUpdate();
   }
 

@@ -89,6 +89,25 @@ release DLL и `SHA256SUMS.txt`. Диагностическая DLL и UI уст
 по SHA256. Backup: `build/phantom-5m-install-backup-20261006-155833`;
 install evidence: `build/phantom-5m-install-verification.json`.
 
+Исправление capture thread от 06.10.2026: первая diagnostic-запись дала
+0 поз, 81 movement и 66 `capture.main-thread` failures. Привязка Graphics
+перенесена из kDataLoaded в первый Main::Update; capture и playback теперь
+идут через один Phantoms::Tick после исходного обновления игры.
+Самопроверка: readiness/cell reset выполняется до capture, offline recording
+сохраняет источник, initial pose больше не сбрасывает источник в том же Tick,
+проверки thread ownership и release на Quit сохранены. Native diagnostic
+371/371 (1 явный skip), normal и diagnostic DLL собраны; игровая проверка
+нового capture ещё не выполнена. Логи: `build/phantom-thread-*.log`.
+Диагностическая DLL/PDB установлены в MO2 с проверкой SHA256, четыре
+пользовательских файла сохранены; backup:
+`build/phantom-thread-install-backup-20261006-163424`.
+Подробности причины и повторного теста: [PhantomDiagnosticsRu.md](PhantomDiagnosticsRu.md).
+`dist/Client`, `dist/Server` и три release archives пересобраны; normal DLL
+совпадает с dist и client ZIP, diagnostic DLL — с установленной в MO2.
+Пять существующих конфигов dist сохранены по SHA256; server defaults 5 MiB/s
+и SHA256SUMS обоих серверных архивов проверены. Evidence:
+`build/phantom-thread-package-verification.json`.
+
 ## Что проверить в игре
 
 Полный сетевой renderer ещё не проходил игровую проверку. Предыдущая
