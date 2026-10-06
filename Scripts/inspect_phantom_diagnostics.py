@@ -89,7 +89,7 @@ def inspect(path: Path, extract: Path | None = None) -> dict:
             if len(h) != 8 or records > 4096:
                 raise ValueError("truncated header or too many records")
             kind, n = struct.unpack("<II", h)
-            if n > MAX_RECORD or total + 8 + n > 1024 ** 3:
+            if n > MAX_RECORD:
                 raise ValueError("archive record exceeds limits")
             data = stream.read(n)
             if len(data) != n:

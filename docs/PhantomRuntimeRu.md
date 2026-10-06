@@ -393,3 +393,13 @@ tangent24. Нельзя определять FP16 только по отсутс
 8-byte streams и dynamic override. Добавление новых offsets/хуков не требуется.
 Декодирование всех 3223 позиций локального mesh проверено вне игры; GPU capture
 этой версии и AE/VR gameplay всё ещё не проверены.
+
+Уточнение capture scheduling от 06.10.2026: неизменные пропуски geometry
+не требуют повторного Open по таймеру. Восстановление pending read сначала
+проверяет готовность ресурса; смена источника проверяется cheap stamp, включая
+SRV diffuse. Периодический deep audit распределён по одному mesh за sample,
+не чаще одного раза в пять секунд для каждого mesh. RefreshMesh обновляет
+только buffers; shared alpha удерживается активной моделью и сравнивается
+по identity перед сравнением pixels. Это убирает повторные GPU alpha reads
+и полный hash общих масок на каждом audit. In-place alpha updates с прежним
+SRV не отслеживаются автоматически и требуют explicit invalidation.

@@ -30,7 +30,7 @@ export namespace Dreamsleeve::Client::Diagnostics
 
   struct Budget
   {
-    std::uint64_t queueBytes{128ULL * 1024 * 1024}, diskBytes{1024ULL * 1024 * 1024};
+    std::uint64_t queueBytes{128ULL * 1024 * 1024}, freeReserveBytes{64ULL * 1024};
     std::uint32_t queueJobs{64}, records{4096}, models{32};
   };
 

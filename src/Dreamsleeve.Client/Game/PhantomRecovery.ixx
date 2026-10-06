@@ -6,6 +6,11 @@ export namespace Dreamsleeve::Game::PhantomRecovery
 {
   namespace P = Dreamsleeve::Client::Phantom;
 
+  inline bool SameMask(const std::shared_ptr<const P::AlphaMask>& a, const std::shared_ptr<const P::AlphaMask>& b)
+  {
+    return a == b || (a && b && a->width == b->width && a->height == b->height && a->pixels == b->pixels);
+  }
+
   // A fault belongs to one geometry slot. Its last complete payload stays in
   // snapshots while hidden; retry timing never stalls other slots or poses.
   class Mesh

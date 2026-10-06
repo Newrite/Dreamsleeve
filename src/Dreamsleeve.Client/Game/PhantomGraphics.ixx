@@ -561,16 +561,9 @@ namespace Dreamsleeve::Game::PhantomGraphics
       for (std::uint32_t i = 0; i < partitions.numPartitions; ++i)
         erase(partitions.partitions.data()[i].buffData);
     }
-    if (
-      auto* lighting = shape.lightingShaderProp_cast();
-      lighting && lighting->material && lighting->material->GetType() == RE::BSShaderMaterial::Type::kLighting)
-    {
-      auto*      diffuse = static_cast<RE::BSLightingShaderMaterialBase*>(lighting->material)->diffuseTexture.get();
-      const auto now     = GetTickCount64();
-      std::erase_if(Detail::masks, [&](const auto& read) {
-        return read.source.get() == diffuse && read.completedMs && now - read.completedMs >= 1000;
-      });
-    }
+    // Mesh-buffer audits must not invalidate shared texture appearance.
+    // Source/SRV replacement selects another mask; explicit invalidation and
+    // context teardown still clear resources when required.
     return {};
   }
 
@@ -673,21 +666,14 @@ namespace Dreamsleeve::Game::PhantomGraphics
       return A::Fail(P::Failure::LimitExceeded, "graphics.alpha-size");
     const auto               now = GetTickCount64();
     Detail::PublishReadbacks publish;
-    std::erase_if(Detail::masks, [&](const auto& read) { return now - read.touchedMs >= 10000; });
+    std::erase_if(Detail::masks, [&](const auto& read) { return read.result.use_count() == 1 && now - read.touchedMs >= 10000; });
     auto found =
       std::ranges::find_if(Detail::masks, [&](const auto& read) { return read.source.get() == &source && read.view.Get() == view; });
     if (found != Detail::masks.end()) found->touchedMs = now;
     if (found != Detail::masks.end() && !found->result->pixels.empty())
     {
-      // Keep completed appearance reads long enough for Open to make progress
-      // across many alpha cards; dirty events call InvalidateMasks explicitly.
-      if (now - found->touchedMs < 10000)
-      {
-        if (!Detail::ChargeReadbacks(Detail::ReadbackBytes())) return A::Fail(P::Failure::LimitExceeded, "graphics.client-readback-budget");
-        return found->result;
-      }
-      Detail::masks.erase(found);
-      found = Detail::masks.end();
+      if (!Detail::ChargeReadbacks(Detail::ReadbackBytes())) return A::Fail(P::Failure::LimitExceeded, "graphics.client-readback-budget");
+      return found->result;
     }
     if (found == Detail::masks.end())
     {

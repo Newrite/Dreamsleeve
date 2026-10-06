@@ -333,13 +333,8 @@ export namespace Dreamsleeve::Game::PhantomCapture
     hash.Scalar(geometry.alphaBlend);
     hash.Scalar(geometry.doubleSided);
     hash.Scalar(geometry.alphaThreshold);
-    if (geometry.mask)
-    {
-      hash.Scalar(geometry.mask->width);
-      hash.Scalar(geometry.mask->height);
-      for (auto alpha : geometry.mask->pixels)
-        hash.Scalar(alpha);
-    }
+    // Immutable alpha pixels are compared separately, by shared identity first.
+    // Hashing a multi-megabyte shared mask once per mesh audit stalls the frame.
     return hash.value;
   }
 
@@ -411,6 +406,8 @@ export namespace Dreamsleeve::Game::PhantomCapture
         h.Scalar(m.texCoordScale[0].x);
         h.Scalar(m.texCoordScale[0].y);
         h.Scalar(reinterpret_cast<std::uintptr_t>(m.diffuseTexture.get()));
+        const auto* texture = m.diffuseTexture ? m.diffuseTexture->rendererTexture : nullptr;
+        h.Scalar(reinterpret_cast<std::uintptr_t>(texture ? texture->resourceView : nullptr));
       }
     }
     if (data.alphaProperty)
@@ -510,14 +507,44 @@ public:
       {
         const auto& a = meshes_[i];
         const auto& b = other.meshes_[i];
-        if (a.node != b.node || a.signature != b.signature || !SameSkin(a.skin, b.skin)) return false;
+        if (
+          a.node != b.node || a.signature != b.signature || !SameSkin(a.skin, b.skin) ||
+          !PhantomRecovery::SameMask(a.cached.mask, b.cached.mask))
+          return false;
       }
       return true;
     }
 
-    bool RebuildDue(std::uint64_t now) const
+    bool RebuildDue(std::uint64_t now)
     {
-      return (appearanceDirty_ || !omitted_.empty()) && now >= nextRebuildUs_;
+      if (now < nextRebuildUs_) return false;
+      DeferRebuild(now);
+      // Permanent omissions do not become valid just because five seconds
+      // elapsed. Rebuild only after their source changes or a pending read is
+      // actually ready, keeping the working model throughout the wait.
+      for (auto& item : omitted_)
+      {
+        auto* geometry = item.owner->AsGeometry();
+        auto* shape    = geometry ? geometry->AsTriShape() : nullptr;
+        if (!shape || !Locate(root_.get(), shape, limits_.nodes).present) continue;
+        if (CheapStamp(*shape) != item.stamp) appearanceDirty_ = true;
+        if (item.error.reason != P::Failure::Busy) continue;
+        auto raw = engine_.mesh(*shape, limits_);
+        if (!raw)
+        {
+          item.error = raw.error();
+          continue;
+        }
+        P::Geometry material;
+        auto        ready = Material(*shape, material, engine_, limits_);
+        if (!ready)
+        {
+          item.error = ready.error();
+          continue;
+        }
+        appearanceDirty_ = true;
+      }
+      return appearanceDirty_;
     }
 
     void DeferRebuild(std::uint64_t now)
@@ -558,7 +585,7 @@ public:
         {
           if (AuxiliaryGeometry(*geometry))
           {
-            if (meshes.contains(object)) appearanceDirty_ = true;
+            if (std::ranges::any_of(meshes_, [&](const auto& mesh) { return mesh.owner.get() == object; })) appearanceDirty_ = true;
             continue;
           }
           if (!meshes.contains(object) && CaptureCandidate(*root_, *geometry, firstPerson, limits_)) bindingsDirty_ = true;
@@ -671,16 +698,15 @@ public:
         }
         binding.recovery.Append(snapshot, binding.node, i, binding.dynamic);
       }
-      // Round-robin audit, at most four meshes / 65535 vertices per sample.
+      // Round-robin audit, at most one mesh per sample; stagger initial deadlines.
       // Normal poses never copy static streams. Dirty events request Open;
       // this audit catches otherwise unannounced in-place source mutations.
-      std::uint32_t audited = 0, vertices = 0;
-      for (std::size_t visited = 0; visited < meshes_.size() && audited < 4; ++visited)
+      std::uint32_t audited = 0;
+      for (std::size_t visited = 0; visited < meshes_.size() && audited < 1; ++visited)
       {
         auto& binding = meshes_[auditCursor_++ % meshes_.size()];
         if (!present.contains(binding.owner.get()) || snapshot.channels[binding.node.value].hidden) continue;
-        if (stamp.sampledAtUs >= binding.auditedAtUs && stamp.sampledAtUs - binding.auditedAtUs < 1000000) continue;
-        if (binding.vertexCount > 65535 - vertices) break;
+        if (stamp.sampledAtUs < binding.auditedAtUs || stamp.sampledAtUs - binding.auditedAtUs < 5000000) continue;
         auto checked = Audit(binding, transforms);
         if (!checked)
         {
@@ -692,8 +718,7 @@ public:
           binding.recovery.Failed(checked.error(), stamp.sampledAtUs);
           snapshot.channels[binding.node.value].hidden = true;
         }
-        binding.auditedAtUs  = stamp.sampledAtUs;
-        vertices            += binding.vertexCount;
+        binding.auditedAtUs = stamp.sampledAtUs;
         ++audited;
         ++audits_;
       }
@@ -717,14 +742,16 @@ private:
     {
       RE::NiPointer<RE::NiAVObject> owner;
       P::Error                      error;
+      std::uint64_t                 stamp{};
     };
 
     std::vector<Omitted> omitted_;
     std::uint64_t        nextRebuildUs_{};
 
-    bool          appearanceDirty_{}, bindingsDirty_{};
-    std::size_t   auditCursor_{};
-    std::uint64_t audits_{};
+    bool                                  appearanceDirty_{}, bindingsDirty_{};
+    std::size_t                           auditCursor_{};
+    std::uint64_t                         audits_{};
+    std::chrono::steady_clock::time_point nextSlowAuditLog_{};
 
     std::unexpected<P::Error> Dirty(std::string field)
     {
@@ -804,7 +831,8 @@ private:
         if (!fresh) return fresh;
         binding.auditPending = true;
       }
-      auto skin = Skin(*binding.owner, transforms);
+      const auto auditStart = std::chrono::steady_clock::now();
+      auto       skin       = Skin(*binding.owner, transforms);
       if (!skin) return std::unexpected(skin.error());
       if (!SameSkin(*skin, binding.skin)) return Dirty("capture.audited-skin-changed");
       auto raw = engine_.mesh(*binding.owner, limits_);
@@ -813,8 +841,15 @@ private:
       if (!geometry) return std::unexpected(geometry.error());
       auto material = Material(*binding.owner, *geometry, engine_, limits_);
       if (!material) return GeometryError(material.error(), *binding.owner);
-      if (Signature(*geometry) != binding.signature) return Dirty("capture.audited-appearance-changed");
+      if (Signature(*geometry) != binding.signature || !PhantomRecovery::SameMask(geometry->mask, binding.cached.mask))
+        return Dirty("capture.audited-appearance-changed");
       binding.auditPending = false;
+      const auto auditMs   = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - auditStart).count();
+      if (auditMs >= 8 && auditStart >= nextSlowAuditLog_)
+      {
+        nextSlowAuditLog_ = auditStart + std::chrono::seconds(5);
+        logger::info("Phantom slow mesh audit: {} vertices={}, {:.2f} ms", binding.name, binding.vertexCount, auditMs);
+      }
       return {};
     }
 
@@ -868,7 +903,7 @@ private:
           if (!decoded) continue;
           auto material = Material(*shape, *decoded, engine_, limits_);
           if (!material) continue;
-          if (Signature(*decoded) != binding.signature) continue;
+          if (Signature(*decoded) != binding.signature || !PhantomRecovery::SameMask(decoded->mask, binding.cached.mask)) continue;
           // Identical dual-wield meshes are interchangeable appearance
           // slots. Keep their pose continuity by nearest last world position;
           // unlike a parent path, this cannot alter the published asset.
@@ -1245,7 +1280,7 @@ private:
         binding.cached                        = *normalized;
         binding.name                          = shape->name.c_str() ? shape->name.c_str() : "";
         binding.stamp                         = CheapStamp(*shape);
-        binding.auditedAtUs                   = stamp.sampledAtUs;
+        binding.auditedAtUs                   = stamp.sampledAtUs + source.meshes_.size() * 50000;
         binding.recovery.deformation.geometry = static_cast<std::uint32_t>(source.meshes_.size());
         for (const auto& vertex : normalized->vertices)
         {
@@ -1279,7 +1314,8 @@ private:
       }();
       if (!captured)
       {
-        source.omitted_.push_back({RE::NiPointer<RE::NiAVObject>{object}, captured.error()});
+        source.omitted_.push_back(
+          {RE::NiPointer<RE::NiAVObject>{object}, captured.error(), geometry->AsTriShape() ? CheapStamp(*geometry->AsTriShape()) : 0});
         continue;
       }
       out.asset.geometry.push_back(captured->cached);

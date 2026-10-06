@@ -226,7 +226,37 @@ TEST_CASE("Diagnostic admission stops at queue budget without blocking publicati
   CHECK(s.queuedBytes == 0);
 }
 
-TEST_CASE("Diagnostic disk inventory refuses full storage without deleting prior recordings")
+TEST_CASE("Prior recordings over one GiB do not consume a recorder quota")
+{
+  Fixture f;
+  std::filesystem::create_directories(f.root);
+  const auto priorPath = f.root / "prior.bin";
+  {
+    std::ofstream prior(priorPath, std::ios::binary);
+    prior << "preserve";
+    prior.seekp(1024ULL * 1024 * 1024);
+    prior.put('x');
+    REQUIRE(prior);
+  }
+  D::Recorder recorder;
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  recorder.Sample(f.asset, f.Pose(1), {}, .1, false);
+  recorder.Stop();
+  const auto s = Finished(recorder);
+  CHECK(s.phase == D::Phase::Complete);
+  CHECK(s.samples == 1);
+  CHECK(s.reason == "manual");
+  CHECK(std::filesystem::file_size(priorPath) == 1024ULL * 1024 * 1024 + 1);
+  std::ifstream       prior(priorPath, std::ios::binary);
+  std::array<char, 8> prefix;
+  prior.read(prefix.data(), prefix.size());
+  CHECK(std::string(prefix.data(), prefix.size()) == "preserve");
+  prior.close();
+  // Only this test's synthetic large file, never a user's recording.
+  std::filesystem::remove(priorPath);
+}
+
+TEST_CASE("Insufficient actual free space reports a distinct reason and preserves prior files")
 {
   Fixture f;
   std::filesystem::create_directories(f.root);
@@ -235,12 +265,12 @@ TEST_CASE("Diagnostic disk inventory refuses full storage without deleting prior
     prior << "preserve";
   }
   D::Budget budget;
-  budget.diskBytes = 16385;
+  budget.freeReserveBytes = std::numeric_limits<std::uint64_t>::max();
   D::Recorder recorder(budget);
   REQUIRE(recorder.Start(f.root, 0, 15, 20));
   const auto s = Finished(recorder);
   CHECK(s.phase == D::Phase::Failed);
-  CHECK(s.reason == "disk-limit");
+  CHECK(s.reason == "disk-space-low");
   CHECK(File(f.root / "prior.bin").size() == 8);
 }
 

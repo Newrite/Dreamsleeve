@@ -113,7 +113,10 @@ namespace SKSEMenu
       s.queuedBytes / 1048576.0,
       s.dropped,
       s.errors);
-    if (!s.reason.empty()) ImGui::TextWrapped("Причина завершения: %s", s.reason.c_str());
+    if (!s.reason.empty())
+      ImGui::TextWrapped(
+        "Причина завершения: %s",
+        s.reason == "disk-space-low" ? "Недостаточно свободного места на диске записи" : s.reason.c_str());
     if (s.omittedGeometry || s.hiddenGeometry)
       ImGui::TextWrapped(
         "Частичный захват: пропущено деталей %u, временно скрыто %u. %s",

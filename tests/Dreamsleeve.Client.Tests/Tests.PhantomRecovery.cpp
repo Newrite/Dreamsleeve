@@ -130,3 +130,18 @@ TEST_CASE("Hidden failed geometry cannot poison the pose with a stale bound afte
   CHECK(pose.bounds[0].radius == 0);
   REQUIRE(P::WriteSnapshot(pose, *validated));
 }
+
+TEST_CASE("Shared immutable alpha masks reuse identity but replaced masks compare content")
+{
+  auto a    = std::make_shared<P::AlphaMask>();
+  a->width  = 2;
+  a->height = 1;
+  a->pixels = {0, 255};
+  CHECK(R::SameMask(a, a));
+  auto b = std::make_shared<P::AlphaMask>(*a);
+  CHECK(R::SameMask(a, b));
+  b->pixels[0] = 128;
+  CHECK_FALSE(R::SameMask(a, b));
+  CHECK_FALSE(R::SameMask(a, {}));
+  CHECK(R::SameMask({}, {}));
+}

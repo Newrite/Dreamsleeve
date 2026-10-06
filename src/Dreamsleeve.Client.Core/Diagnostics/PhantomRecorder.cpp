@@ -106,8 +106,6 @@ namespace Dreamsleeve::Client::Diagnostics
       std::variant<SampleJob, RecordJob> value;
     };
 
-    constexpr std::uint64_t MetadataReserve = 16384;
-
     std::uint64_t Micros()
     {
       return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count();
@@ -185,28 +183,18 @@ namespace Dreamsleeve::Client::Diagnostics
                                             : now - firstAt >= std::chrono::seconds(seconds);
     }
 
-    std::uint64_t ExistingBytes()
+    bool HasSpace(std::uint64_t bytes) const
     {
-      std::filesystem::create_directories(root);
-      std::uint64_t used    = 0;
-      std::uint32_t entries = 0;
-      for (const auto& item : std::filesystem::recursive_directory_iterator(root))
-      {
-        if (++entries > 4096 || item.is_symlink()) throw std::runtime_error("storage-inventory-limit");
-        if (item.is_regular_file())
-        {
-          const auto n = item.file_size();
-          if (n > budget.diskBytes - std::min(used, budget.diskBytes)) throw std::runtime_error("disk-limit");
-          used += n;
-        }
-      }
-      if (used + MetadataReserve >= budget.diskBytes) throw std::runtime_error("disk-limit");
-      return used;
+      // This is real free space on the destination volume, never a quota on
+      // previous captures. Only the writer queries the filesystem.
+      const auto available = std::filesystem::space(root).available;
+      return available >= budget.freeReserveBytes && bytes <= available - budget.freeReserveBytes;
     }
 
     void RunSession()
     {
-      const auto existing = ExistingBytes();
+      std::filesystem::create_directories(root);
+      if (!HasSpace(20)) throw std::runtime_error("disk-space-low");
       const auto stamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
       std::filesystem::path directory;
       for (std::uint32_t i = 0; i < 32; ++i)
@@ -234,11 +222,11 @@ namespace Dreamsleeve::Client::Diagnostics
       std::vector<double>               captures, encodes;
       std::optional<std::uint64_t>      firstSampleUs;
       auto                              write = [&](Kind kind, const P::Bytes& bytes) {
-        if (records >= budget.records || written + bytes.size() + 8 > budget.diskBytes - existing - MetadataReserve)
+        if (records >= budget.records || !HasSpace(bytes.size() + 8))
         {
           std::lock_guard lock(mutex);
           ++status.dropped;
-          StopLocked(records >= budget.records ? "record-limit" : "disk-limit");
+          StopLocked(records >= budget.records ? "record-limit" : "disk-space-low");
           return false;
         }
         Writer h;
