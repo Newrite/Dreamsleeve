@@ -27,6 +27,36 @@ namespace Dreamsleeve::Client::Phantom
 
   }
 
+  Result<void> ValidateGeometry(const Geometry& mesh, std::size_t nodeCount, const Limits& limits)
+  {
+    const auto error = [](Failure reason, std::string field) -> Result<void> {
+      return std::unexpected(Error{reason, std::move(field)});
+    };
+    if (
+      mesh.vertices.empty() || mesh.vertices.size() > 65535 || mesh.indices.empty() || mesh.indices.size() % 3 != 0 ||
+      mesh.node.value >= nodeCount)
+      return error(Failure::InvalidGeometry, "geometry.counts");
+    for (const auto index : mesh.indices)
+      if (index >= mesh.vertices.size()) return error(Failure::InvalidLink, "geometry.index");
+    if (mesh.skin)
+    {
+      const auto& skin = *mesh.skin;
+      if (skin.root.value >= nodeCount || skin.bones.empty() || skin.bones.size() > limits.bonesPerSkin || !Finite(skin.worldToSkin))
+        return error(Failure::InvalidSkin, "skin.root");
+      for (const auto& bone : skin.bones)
+        if (bone.node.value >= nodeCount || !Finite(bone.bind) || !Finite(bone.bound)) return error(Failure::InvalidSkin, "skin.bone");
+    }
+    for (const auto& vertex : mesh.vertices)
+    {
+      if (
+        !Finite(vertex.position) || !Finite(vertex.normal) || !Finite(vertex.tangent) || !std::isfinite(vertex.u) ||
+        !std::isfinite(vertex.v))
+        return error(Failure::InvalidNumber, "vertex");
+      if (!vertex.ValidWeights(mesh.skin ? mesh.skin->bones.size() : 0)) return error(Failure::InvalidSkin, "vertex.weight");
+    }
+    return {};
+  }
+
   Result<ValidatedAsset> ValidatedAsset::Parse(Asset asset, const Limits& limits)
   {
     const auto error = [](Failure reason, std::string field) -> Result<ValidatedAsset> {
@@ -45,51 +75,15 @@ namespace Dreamsleeve::Client::Phantom
     for (auto& mesh : asset.geometry)
     {
       vertices += mesh.vertices.size();
-      bytes    += mesh.vertices.size() * 80ULL + mesh.indices.size() * 2ULL;
-      if (
-        vertices > limits.vertices || bytes > limits.assetBytes || mesh.vertices.empty() || mesh.vertices.size() > 65535 ||
-        mesh.indices.empty() || mesh.indices.size() % 3 != 0 || mesh.node.value >= asset.nodes.size())
-        return error(Failure::InvalidGeometry, "geometry.counts");
-      for (const auto index : mesh.indices)
-        if (index >= mesh.vertices.size()) return error(Failure::InvalidLink, "geometry.index");
-      if (mesh.skin)
-      {
-        const auto& skin  = *mesh.skin;
-        bytes            += skin.bones.size() * 60ULL;
-        if (
-          skin.root.value >= asset.nodes.size() || skin.bones.empty() || skin.bones.size() > limits.bonesPerSkin ||
-          !Finite(skin.worldToSkin))
-          return error(Failure::InvalidSkin, "skin.root");
-        for (const auto& bone : skin.bones)
-          if (bone.node.value >= asset.nodes.size() || !Finite(bone.bind) || !Finite(bone.bound))
-            return error(Failure::InvalidSkin, "skin.bone");
-      }
-      for (const auto& vertex : mesh.vertices)
-      {
-        if (
-          !Finite(vertex.position) || !Finite(vertex.normal) || !Finite(vertex.tangent) || !std::isfinite(vertex.u) ||
-          !std::isfinite(vertex.v))
-          return error(Failure::InvalidNumber, "vertex");
-        float sum = 0;
-        for (std::size_t i = 0; i < 4; ++i)
-        {
-          const auto weight = vertex.weights[i];
-          if (
-            !std::isfinite(weight) || weight < 0 || weight > 1 ||
-            (weight > 0 && (!mesh.skin || vertex.bones[i] >= mesh.skin->bones.size())))
-            return error(Failure::InvalidSkin, "vertex.weight");
-          sum += weight;
-        }
-        if (mesh.skin && std::abs(sum - 1) > 0.01f) return error(Failure::InvalidSkin, "vertex.weights");
-      }
+      bytes    += GeometryBytes(mesh);
+      if (vertices > limits.vertices || bytes > limits.assetBytes) return error(Failure::LimitExceeded, "asset.geometry-budget");
+      auto valid = ValidateGeometry(mesh, asset.nodes.size(), limits);
+      if (!valid) return std::unexpected(valid.error());
       if (mesh.mask)
       {
         auto mask = masks.Intern(mesh.mask);
         if (!mask) return std::unexpected(mask.error());
         mesh.mask = *mask;
-        // v1 wire stores a mask per mesh. Retain its expanded upper bound
-        // for worker reservations even though resident pixels are shared.
-        bytes += mesh.mask->pixels.size();
       }
       if (bytes > limits.assetBytes) return error(Failure::LimitExceeded, "asset.bytes");
     }

@@ -54,6 +54,7 @@ namespace Phantoms
     P::Sequence                                  sequence;
     std::optional<P::ViewSettings>               settings;
     Clock::time_point                            nextCapture{}, nextFailure{};
+    std::uint32_t                                omittedGeometry{}, hiddenGeometry{};
     std::uint32_t                                cell{}, world{};
     std::uint64_t                                cursor{};
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -148,6 +149,21 @@ namespace Phantoms
   }
 #endif
 
+  void ReportCaptureHealth()
+  {
+    auto&      state  = Get();
+    const auto status = state.source->ReadStatus();
+    if (state.omittedGeometry != status.omitted || state.hiddenGeometry != status.hidden)
+    {
+      logger::info("Phantom capture health: omitted={}, hidden={}, {}", status.omitted, status.hidden, status.detail);
+      state.omittedGeometry = status.omitted;
+      state.hiddenGeometry  = status.hidden;
+    }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Phantoms().Partial(status.omitted, status.hidden, status.detail);
+#endif
+  }
+
   // Tick owns capture and playback on the same main-loop thread, after the
   // game's frame update. No actor-update callback touches this state.
   void CapturePlayer(RE::PlayerCharacter& player)
@@ -157,9 +173,15 @@ namespace Phantoms
     const auto now        = Clock::now();
     auto&      exchange   = runtime.app->Exchange().Phantoms();
     const auto settings   = exchange.Settings();
-    const bool publishing = exchange.Available() && settings.publish;
+    bool       publishing = exchange.Available() && settings.publish;
+    P::Limits  captureLimits;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     const bool recording = Dreamsleeve::Client::Diagnostics::Phantoms().Active();
+    if (recording)
+    {
+      publishing    = false;
+      captureLimits = Dreamsleeve::Client::Diagnostics::CaptureLimits();
+    }
     if (state.source && state.publishing != publishing) state.source.reset();
     state.publishing = publishing;
     if (!publishing && !recording)
@@ -183,53 +205,68 @@ namespace Phantoms
     state.nextCapture       = now + std::chrono::microseconds(1000000 / std::max(settings.sampleRate, 1u));
     const auto* camera      = RE::PlayerCamera::GetSingleton();
     const bool  firstPerson = camera && camera->IsInFirstPerson();
-    if (!state.source)
+    if (!state.source || state.source->RebuildDue(Micros(now)))
     {
-      if (state.generation.value == std::numeric_limits<std::uint64_t>::max()) return;
-      ++state.generation.value;
-      state.sequence = {1};
-      auto opened    = Capture::Open(state.capture, player, firstPerson, {state.generation, state.sequence, 1, Micros(now)});
-      if (!opened)
-      {
+      if (state.source) state.source->DeferRebuild(Micros(now));
+      const auto replace = [&]() -> bool {
+        if (state.generation.value == std::numeric_limits<std::uint64_t>::max()) return false;
+        const P::Generation nextGeneration{state.generation.value + 1};
+        auto opened = Capture::Open(state.capture, player, firstPerson, {nextGeneration, {1}, 1, Micros(now)}, captureLimits);
+        if (!opened)
+        {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-        Dreamsleeve::Client::Diagnostics::Phantoms().Failed(opened.error());
+          Dreamsleeve::Client::Diagnostics::Phantoms().Failed(opened.error());
 #endif
-        Error(opened.error(), now);
-        if (opened.error().reason != P::Failure::Busy) state.nextCapture = now + std::chrono::seconds(1);
-        return;
-      }
-      auto asset = P::ValidatedAsset::Parse(std::move(opened->asset));
-      if (!asset)
-      {
+          Error(opened.error(), now);
+          return false;
+        }
+        // A transient readback must not replace a working scene with a smaller
+        // one. Existing slots keep sampling while the candidate warms up.
+        if (state.source && opened->source->PendingReadbacks()) return false;
+        if (state.source && state.source->SameAppearance(*opened->source))
+        {
+          // Fresh bindings/recovery state, identical published schema: no model
+          // upload, generation change or additional diagnostic archive.
+          state.source = std::move(opened->source);
+          return false;
+        }
+        auto asset = P::ValidatedAsset::Parse(std::move(opened->asset));
+        if (!asset)
+        {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-        Dreamsleeve::Client::Diagnostics::Phantoms().Failed(asset.error());
+          Dreamsleeve::Client::Diagnostics::Phantoms().Failed(asset.error());
 #endif
-        Error(asset.error(), now);
+          Error(asset.error(), now);
+          return false;
+        }
+        logger::info(
+          "Phantom capture: generation {}, {} channels, {} geometry, {:.2f} MiB neutral, {:.2f} ms",
+          nextGeneration.value,
+          asset->Value().nodes.size(),
+          asset->Value().geometry.size(),
+          asset->MemoryBytes() / 1048576.0,
+          std::chrono::duration<double, std::milli>(Clock::now() - now).count());
+        if (publishing && !exchange.Submit(nextGeneration, *asset)) return false;
+        state.generation = nextGeneration;
+        state.sequence   = {1};
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        state.diagnosticAsset = std::make_shared<const P::ValidatedAsset>(std::move(*asset));
+#endif
+        state.source = std::move(opened->source);
+        ReportCaptureHealth();
+        auto initial = std::make_shared<const P::Snapshot>(std::move(opened->initial));
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Record(initial, player, now, firstPerson);
+#endif
+        if (publishing) exchange.Submit(std::move(initial));
+        return true;
+      };
+      if (replace()) return;
+      if (!state.source)
+      {
         state.nextCapture = now + std::chrono::seconds(1);
         return;
       }
-      logger::info(
-        "Phantom capture: generation {}, {} channels, {} geometry, {:.2f} MiB neutral, {:.2f} ms",
-        state.generation.value,
-        asset->Value().nodes.size(),
-        asset->Value().geometry.size(),
-        asset->MemoryBytes() / 1048576.0,
-        std::chrono::duration<double, std::milli>(Clock::now() - now).count());
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      state.diagnosticAsset = std::make_shared<const P::ValidatedAsset>(*asset);
-#endif
-      if (publishing && !exchange.Submit(state.generation, std::move(*asset)))
-      {
-        state.nextCapture = now + std::chrono::seconds(1);
-        return;
-      }
-      state.source = std::move(opened->source);
-      auto initial = std::make_shared<const P::Snapshot>(std::move(opened->initial));
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      Record(initial, player, now, firstPerson);
-#endif
-      if (publishing) exchange.Submit(std::move(initial));
-      return;
     }
     if (state.sequence.value == std::numeric_limits<std::uint64_t>::max())
     {
@@ -249,6 +286,7 @@ namespace Phantoms
         state.nextCapture = now + std::chrono::seconds(1);
       return;
     }
+    ReportCaptureHealth();
     auto sampled = std::make_shared<const P::Snapshot>(std::move(*pose));
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     Record(sampled, player, now, firstPerson);

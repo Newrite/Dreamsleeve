@@ -9,6 +9,8 @@ import Dreamsleeve.Client.Phantom.Types;
 import Dreamsleeve.Client.Phantom.Masks;
 import Dreamsleeve.Game.PhantomAsset;
 import Dreamsleeve.Game.PhantomCaptureRules;
+import Dreamsleeve.Game.PhantomRecovery;
+import Dreamsleeve.Game.PhantomMesh;
 
 export namespace Dreamsleeve::Game::PhantomCapture
 {
@@ -343,21 +345,21 @@ export namespace Dreamsleeve::Game::PhantomCapture
 
   struct MeshBinding
   {
-    RE::NiPointer<RE::BSTriShape> owner;
-    P::NodeId                     node;
-    std::uint64_t                 signature{};
-    std::uint32_t                 vertexCount{}, boneCount{};
-    std::optional<P::Skin>        skin;
-    bool                          dynamic{};
-    P::Bound                      lastBound;
-    P::Deformation                lastDeformation;
-    P::Geometry                   cached;
-    P::Bound                      localBound;
-    std::uint64_t                 stamp{};
-    std::string                   name;
-    std::vector<P::Bound>         boneBounds;
-    std::uint64_t                 auditedAtUs{};
-    bool                          auditPending{};
+    RE::NiPointer<RE::BSTriShape>            owner;
+    P::NodeId                                node;
+    std::uint64_t                            signature{};
+    std::uint32_t                            vertexCount{}, boneCount{};
+    std::optional<P::Skin>                   skin;
+    bool                                     dynamic{};
+    Dreamsleeve::Game::PhantomRecovery::Mesh recovery;
+    float                                    minimumWeight{4}, maximumWeight{};
+    P::Geometry                              cached;
+    P::Bound                                 localBound;
+    std::uint64_t                            stamp{};
+    std::string                              name;
+    std::vector<P::Bound>                    boneBounds;
+    std::uint64_t                            auditedAtUs{};
+    bool                                     auditPending{};
   };
 
   // Cheap local stamps can contain addresses as integers. They never enter
@@ -449,6 +451,7 @@ public:
     {
       if (!engine_.mainThread || !engine_.mainThread()) return A::Fail(P::Failure::Busy, "capture.main-thread");
       meshes_.clear();
+      omitted_.clear();
       bindings_.clear();
       root_.reset();
       player_ = RE::ObjectRefHandle{};
@@ -469,6 +472,59 @@ public:
       return {};
     }
 
+    struct Status
+    {
+      std::uint32_t omitted{}, hidden{};
+      std::string   detail;
+    };
+
+    Status ReadStatus() const
+    {
+      Status status{static_cast<std::uint32_t>(omitted_.size())};
+      if (!omitted_.empty()) status.detail = omitted_.front().error.field;
+      for (const auto& mesh : meshes_)
+        if (mesh.recovery.Fault())
+        {
+          ++status.hidden;
+          if (status.detail.empty()) status.detail = mesh.recovery.Fault()->field;
+        }
+      return status;
+    }
+
+    bool PendingReadbacks() const
+    {
+      return std::ranges::any_of(omitted_, [](const auto& item) { return item.error.reason == P::Failure::Busy; });
+    }
+
+    bool SameAppearance(const Source& other) const
+    {
+      if (bindings_.size() != other.bindings_.size() || meshes_.size() != other.meshes_.size()) return false;
+      for (std::size_t i = 0; i < bindings_.size(); ++i)
+      {
+        const auto& a = bindings_[i];
+        const auto& b = other.bindings_[i];
+        if (a.name != b.name || a.type != b.type || a.bone.has_value() != b.bone.has_value() || (a.bone && a.bone->name != b.bone->name))
+          return false;
+      }
+      for (std::size_t i = 0; i < meshes_.size(); ++i)
+      {
+        const auto& a = meshes_[i];
+        const auto& b = other.meshes_[i];
+        if (a.node != b.node || a.signature != b.signature || !SameSkin(a.skin, b.skin)) return false;
+      }
+      return true;
+    }
+
+    bool RebuildDue(std::uint64_t now) const
+    {
+      return (appearanceDirty_ || !omitted_.empty()) && now >= nextRebuildUs_;
+    }
+
+    void DeferRebuild(std::uint64_t now)
+    {
+      nextRebuildUs_ = now + 5000000;
+    }
+
     std::uint64_t AuditCount() const noexcept
     {
       return audits_;
@@ -477,7 +533,7 @@ public:
     P::Result<P::Snapshot> Sample(RE::PlayerCharacter& player, bool firstPerson, Stamp stamp)
     {
       if (!engine_.mainThread || !engine_.mainThread()) return A::Fail(P::Failure::Busy, "capture.main-thread");
-      if (appearanceDirty_) return A::Fail(P::Failure::Stale, "capture.appearance-dirty");
+
       if (!root_ || player_.get().get() != &player) return A::Fail(P::Failure::Stale, "capture.third-person-root");
       if (player.Get3D(false) != root_.get())
       {
@@ -493,15 +549,16 @@ public:
       std::unordered_set<RE::NiAVObject*> meshes;
       for (const auto& mesh : meshes_)
         meshes.insert(mesh.owner.get());
+      for (const auto& omitted : omitted_)
+        meshes.insert(omitted.owner.get());
       for (auto* object : *live)
       {
-        if (object->AsNiTriShape() && CaptureCandidate(*root_, *object, firstPerson, limits_))
-          return A::Fail(P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape");
+
         if (auto* geometry = object->AsGeometry())
         {
           if (AuxiliaryGeometry(*geometry))
           {
-            if (meshes.contains(object)) return Dirty("capture.material-kind-changed");
+            if (meshes.contains(object)) appearanceDirty_ = true;
             continue;
           }
           if (!meshes.contains(object) && CaptureCandidate(*root_, *geometry, firstPerson, limits_)) bindingsDirty_ = true;
@@ -518,6 +575,7 @@ public:
       P::Snapshot snapshot{stamp.generation, stamp.sequence, stamp.context, stamp.sampledAtUs, A::Value(root_->world.translate)};
       snapshot.channels.reserve(bindings_.size());
       snapshot.bounds.reserve(meshes_.size());
+      std::vector<bool>                                     unavailable(bindings_.size());
       std::unordered_map<const RE::NiTransform*, P::NodeId> transforms;
       // One name table per live flattened tree, not a full scan per bone.
       std::unordered_map<RE::BSFlattenedBoneTree*, std::unordered_map<std::string_view, std::uint32_t>> boneNames;
@@ -557,14 +615,26 @@ public:
         if (transform)
         {
           auto value = A::Value(*transform);
-          if (!value) return std::unexpected(value.error());
-          channel.world = *value;
           transforms.insert_or_assign(transform, P::NodeId{i});
-          const auto attachment = Locate(root_.get(), binding.attachment.get(), limits_.nodes);
-          channel.hidden        = binding.visibility.Sample(attached, attachment.hidden, firstPerson);
+          if (!value)
+          {
+            if (binding.root) return std::unexpected(value.error());
+            unavailable[i] = true;
+            channel.hidden = true;
+          }
+          else
+          {
+            channel.world         = *value;
+            const auto attachment = Locate(root_.get(), binding.attachment.get(), limits_.nodes);
+            channel.hidden        = binding.visibility.Sample(attached, attachment.hidden, firstPerson);
+          }
         }
         else
+        {
           channel.hidden = true;
+          unavailable[i] = true;
+        }
+        if (unavailable[i]) channel.world.position = snapshot.origin;
         binding.last = channel;
         snapshot.channels.push_back(channel);
       }
@@ -578,72 +648,28 @@ public:
       for (std::uint32_t i = 0; i < meshes_.size(); ++i)
       {
         auto& binding = meshes_[i];
-        if (AllPartitionsHidden(*binding.owner, limits_)) snapshot.channels[binding.node.value].hidden = true;
-        if (!present.contains(binding.owner.get()) || snapshot.channels[binding.node.value].hidden)
+        if (AllPartitionsHidden(*binding.owner, limits_) || AuxiliaryGeometry(*binding.owner))
+          snapshot.channels[binding.node.value].hidden = true;
+        const bool missingTransform =
+          unavailable[binding.node.value] ||
+          (binding.skin && (unavailable[binding.skin->root.value] ||
+                            std::ranges::any_of(binding.skin->bones, [&](const auto& bone) { return unavailable[bone.node.value]; })));
+        if (missingTransform) binding.recovery.Failed({P::Failure::MissingSource, "capture.mesh-transform-unavailable"}, stamp.sampledAtUs);
+        const bool visible = present.contains(binding.owner.get()) && !snapshot.channels[binding.node.value].hidden;
+        if (visible && binding.recovery.Ready(stamp.sampledAtUs))
         {
-          snapshot.bounds.push_back(binding.lastBound);
-          if (binding.dynamic) snapshot.deformations.push_back(binding.lastDeformation);
-          continue;
-        }
-        if (CheapStamp(*binding.owner) != binding.stamp)
-        {
-          auto checked = Audit(binding, transforms);
-          if (!checked) return std::unexpected(checked.error());
-          binding.stamp       = CheapStamp(*binding.owner);
-          binding.auditedAtUs = stamp.sampledAtUs;
-          ++audits_;
-        }
-        // Check live skin links, but do not reconstruct bind arrays per tick.
-        if (binding.skin)
-        {
-          auto* instance = binding.owner->GetGeometryRuntimeData().skinInstance.get();
-          if (
-            !instance || !instance->skinData || !instance->rootParent || !instance->boneWorldTransforms ||
-            instance->skinData->GetBoneCount() != binding.boneCount || !transforms.contains(&instance->rootParent->world) ||
-            transforms.at(&instance->rootParent->world) != binding.skin->root)
-            return Dirty("capture.skin-root-changed");
-          for (std::uint32_t b = 0; b < binding.boneCount; ++b)
-            if (
-              !transforms.contains(instance->boneWorldTransforms[b]) ||
-              transforms.at(instance->boneWorldTransforms[b]) != binding.skin->bones[b].node)
-              return Dirty("capture.skin-link-changed");
-        }
-        if (binding.dynamic)
-        {
-          if (!engine_.deformation) return A::Fail(P::Failure::MissingSource, "engine.pose-deformation-copy");
-          auto deformation = engine_.deformation(*binding.owner, binding.vertexCount, limits_);
-          if (!deformation) return std::unexpected(deformation.error());
-          if (
-            deformation->positions.size() != binding.vertexCount ||
-            (!deformation->normals.empty() && deformation->normals.size() != binding.vertexCount))
-            return A::Fail(P::Failure::InvalidGeometry, "capture.dynamic-count");
-          if (deformation->normals.empty())
+          auto sample = SampleMesh(binding, transforms, snapshot, i, stamp);
+          if (sample)
           {
-            deformation->normals.resize(binding.vertexCount);
-            for (std::size_t triangle = 0; triangle < binding.cached.indices.size(); triangle += 3)
-            {
-              const auto a = binding.cached.indices[triangle], b = binding.cached.indices[triangle + 1],
-                         c      = binding.cached.indices[triangle + 2];
-              const auto normal = A::Cross(
-                A::Sub(deformation->positions[b], deformation->positions[a]),
-                A::Sub(deformation->positions[c], deformation->positions[a]));
-              for (auto vertex : {a, b, c})
-                deformation->normals[vertex] = A::Add(deformation->normals[vertex], normal);
-            }
-            for (auto& normal : deformation->normals)
-              normal = A::Unit(normal);
+            binding.recovery.bound = *sample;
+            binding.recovery.Recovered();
           }
-          for (std::uint32_t v = 0; v < binding.vertexCount; ++v)
-            if (!A::Finite(deformation->positions[v]) || !A::Finite(deformation->normals[v]))
-              return A::Fail(P::Failure::InvalidNumber, "capture.dynamic-values");
-          deformation->geometry   = i;
-          binding.lastDeformation = *deformation;
-          snapshot.deformations.push_back(std::move(*deformation));
+          else
+          {
+            binding.recovery.Failed(sample.error(), stamp.sampledAtUs);
+          }
         }
-        auto bound = ConservativeBound(binding, snapshot);
-        if (!bound) return std::unexpected(bound.error());
-        binding.lastBound = *bound;
-        snapshot.bounds.push_back(*bound);
+        binding.recovery.Append(snapshot, binding.node, i, binding.dynamic);
       }
       // Round-robin audit, at most four meshes / 65535 vertices per sample.
       // Normal poses never copy static streams. Dirty events request Open;
@@ -663,7 +689,8 @@ public:
             --auditCursor_;  // finish before refreshing the next mesh
             break;
           }
-          return std::unexpected(checked.error());
+          binding.recovery.Failed(checked.error(), stamp.sampledAtUs);
+          snapshot.channels[binding.node.value].hidden = true;
         }
         binding.auditedAtUs  = stamp.sampledAtUs;
         vertices            += binding.vertexCount;
@@ -685,14 +712,88 @@ private:
     RE::NiPointer<RE::NiNode> root_;
     std::vector<Binding>      bindings_;
     std::vector<MeshBinding>  meshes_;
-    bool                      appearanceDirty_{}, bindingsDirty_{};
-    std::size_t               auditCursor_{};
-    std::uint64_t             audits_{};
+
+    struct Omitted
+    {
+      RE::NiPointer<RE::NiAVObject> owner;
+      P::Error                      error;
+    };
+
+    std::vector<Omitted> omitted_;
+    std::uint64_t        nextRebuildUs_{};
+
+    bool          appearanceDirty_{}, bindingsDirty_{};
+    std::size_t   auditCursor_{};
+    std::uint64_t audits_{};
 
     std::unexpected<P::Error> Dirty(std::string field)
     {
       appearanceDirty_ = true;
       return A::Fail(P::Failure::Stale, std::move(field));
+    }
+
+    P::Result<P::Bound> SampleMesh(
+      MeshBinding&                                                 binding,
+      const std::unordered_map<const RE::NiTransform*, P::NodeId>& transforms,
+      const P::Snapshot&                                           snapshot,
+      std::uint32_t                                                i,
+      Stamp                                                        stamp)
+    {
+      if (binding.recovery.Fault() || CheapStamp(*binding.owner) != binding.stamp)
+      {
+        auto checked = Audit(binding, transforms);
+        if (!checked) return std::unexpected(checked.error());
+        binding.stamp       = CheapStamp(*binding.owner);
+        binding.auditedAtUs = stamp.sampledAtUs;
+        ++audits_;
+      }
+      // Check live skin links, but do not reconstruct bind arrays per tick.
+      if (binding.skin)
+      {
+        auto* instance = binding.owner->GetGeometryRuntimeData().skinInstance.get();
+        if (
+          !instance || !instance->skinData || !instance->rootParent || !instance->boneWorldTransforms ||
+          instance->skinData->GetBoneCount() != binding.boneCount || !transforms.contains(&instance->rootParent->world) ||
+          transforms.at(&instance->rootParent->world) != binding.skin->root)
+          return Dirty("capture.skin-root-changed");
+        for (std::uint32_t b = 0; b < binding.boneCount; ++b)
+          if (
+            !transforms.contains(instance->boneWorldTransforms[b]) ||
+            transforms.at(instance->boneWorldTransforms[b]) != binding.skin->bones[b].node)
+            return Dirty("capture.skin-link-changed");
+      }
+      if (binding.dynamic)
+      {
+        if (!engine_.deformation) return A::Fail(P::Failure::MissingSource, "engine.pose-deformation-copy");
+        auto deformation = engine_.deformation(*binding.owner, binding.vertexCount, limits_);
+        if (!deformation) return std::unexpected(deformation.error());
+        if (
+          deformation->positions.size() != binding.vertexCount ||
+          (!deformation->normals.empty() && deformation->normals.size() != binding.vertexCount))
+          return A::Fail(P::Failure::InvalidGeometry, "capture.dynamic-count");
+        if (deformation->normals.empty())
+        {
+          deformation->normals.resize(binding.vertexCount);
+          for (std::size_t triangle = 0; triangle < binding.cached.indices.size(); triangle += 3)
+          {
+            const auto a = binding.cached.indices[triangle], b = binding.cached.indices[triangle + 1],
+                       c      = binding.cached.indices[triangle + 2];
+            const auto normal = A::Cross(
+              A::Sub(deformation->positions[b], deformation->positions[a]),
+              A::Sub(deformation->positions[c], deformation->positions[a]));
+            for (auto vertex : {a, b, c})
+              deformation->normals[vertex] = A::Add(deformation->normals[vertex], normal);
+          }
+          for (auto& normal : deformation->normals)
+            normal = A::Unit(normal);
+        }
+        for (std::uint32_t v = 0; v < binding.vertexCount; ++v)
+          if (!A::Finite(deformation->positions[v]) || !A::Finite(deformation->normals[v]))
+            return A::Fail(P::Failure::InvalidNumber, "capture.dynamic-values");
+        deformation->geometry        = i;
+        binding.recovery.deformation = *deformation;
+      }
+      return ConservativeBound(binding, snapshot);
     }
 
     P::Result<void> Audit(MeshBinding& binding, const std::unordered_map<const RE::NiTransform*, P::NodeId>& transforms)
@@ -762,11 +863,11 @@ private:
             binding.name != (shape->name.c_str() ? shape->name.c_str() : ""))
             continue;
           auto raw = engine_.mesh(*shape, limits_);
-          if (!raw) return std::unexpected(raw.error());
+          if (!raw) continue;
           auto decoded = A::Decode(*raw, binding.node, binding.boneCount, limits_);
-          if (!decoded) return std::unexpected(decoded.error());
+          if (!decoded) continue;
           auto material = Material(*shape, *decoded, engine_, limits_);
-          if (!material) return GeometryError(material.error(), *shape);
+          if (!material) continue;
           if (Signature(*decoded) != binding.signature) continue;
           // Identical dual-wield meshes are interchangeable appearance
           // slots. Keep their pose continuity by nearest last world position;
@@ -782,7 +883,13 @@ private:
         // No visible replacement: keep the valid cached hidden mesh. It must
         // not require decoding an inactive buffer just to preserve its slot.
         if (!found && originalPresent && !used.contains(binding.owner.get()) && !AuxiliaryGeometry(*binding.owner)) found = binding.owner;
-        if (!found) return Dirty("capture.equipment/schema-changed");
+        if (!found)
+        {
+          appearanceDirty_ = true;
+          binding.recovery.Failed({P::Failure::Stale, "capture.equipment/schema-changed"}, 0);
+          next[binding.node.value] = binding.owner;
+          continue;
+        }
         next[binding.node.value] = found;
         used.insert(found.get());
         const bool replaced = found.get() != binding.owner.get();
@@ -795,7 +902,7 @@ private:
         if (
           auto* geometry = object->AsGeometry();
           geometry && CaptureCandidate(*root_, *geometry, firstPerson, limits_) && !used.contains(object))
-          return Dirty("capture.new-equipment/schema");
+          if (!std::ranges::any_of(omitted_, [&](const auto& item) { return item.owner.get() == object; })) appearanceDirty_ = true;
       for (std::uint32_t i = 0; i < bindings_.size(); ++i)
       {
         if (!next[i]) return Dirty("capture.missing-semantic-node");
@@ -812,7 +919,7 @@ private:
       if (binding.dynamic)
         for (std::size_t i = 0; i < binding.cached.vertices.size(); ++i)
         {
-          const auto delta = A::Sub(binding.lastDeformation.positions[i], binding.cached.vertices[i].position);
+          const auto delta = A::Sub(binding.recovery.deformation.positions[i], binding.cached.vertices[i].position);
           displacement     = std::max(displacement, std::sqrt(A::Dot(delta, delta)));
         }
       P::Bound out;
@@ -820,16 +927,21 @@ private:
         out = {A::Value(world * A::Native(binding.localBound.center)), (binding.localBound.radius + displacement) * world.scale};
       else
       {
-        const auto& skin      = *binding.skin;
-        const auto  intoWorld = world * A::Native(skin.worldToSkin) * A::Native(snapshot.channels[skin.root.value].world).Invert();
+        const auto& skin     = *binding.skin;
+        const auto  intoSkin = A::Native(skin.worldToSkin) * A::Native(snapshot.channels[skin.root.value].world).Invert();
         for (std::size_t b = 0; b < skin.bones.size(); ++b)
         {
-          const auto  transform = intoWorld * A::Native(snapshot.channels[skin.bones[b].node.value].world);
+          const auto  transform = intoSkin * A::Native(snapshot.channels[skin.bones[b].node.value].world);
           const auto& bound     = binding.boneBounds[b];
           A::Enclose(
             out,
             {A::Value(transform * A::Native(bound.center)), (bound.radius + displacement * skin.bones[b].bind.scale) * transform.scale});
         }
+      }
+      if (binding.skin)
+      {
+        out = Dreamsleeve::Game::PhantomMesh::WeightedBound(out, binding.minimumWeight, binding.maximumWeight);
+        out = {A::Value(world * A::Native(out.center)), out.radius * world.scale};
       }
       if (!A::Finite(out)) return A::Fail(P::Failure::InvalidNumber, "capture.conservative-bound");
       return out;
@@ -921,8 +1033,8 @@ private:
       asset.geometry.reserve(meshes_.size());
       for (std::uint32_t i = 0; i < meshes_.size(); ++i)
       {
-        auto& mesh                    = meshes_[i];
-        mesh.lastDeformation.geometry = i;
+        auto& mesh                         = meshes_[i];
+        mesh.recovery.deformation.geometry = i;
         asset.geometry.push_back(mesh.cached);
         // Dynamic positions/normals are completely supplied by each pose.
         // Expression/SMP motion must never become appearance content.
@@ -1000,6 +1112,7 @@ private:
     auto& source   = *out.source;
     source.player_ = player.GetHandle();
     source.root_   = RE::NiPointer<RE::NiNode>{root};
+    source.DeferRebuild(stamp.sampledAtUs);
     std::unordered_map<RE::NiAVObject*, P::NodeId>        ids;
     std::unordered_map<const RE::NiTransform*, P::NodeId> transforms;
     source.bindings_.reserve(live->size());
@@ -1074,81 +1187,108 @@ private:
           }
         }
       }
-    std::uint64_t    bytes = out.asset.nodes.size() * 48, vertices = 0;
+    std::uint64_t    bytes = out.asset.nodes.size() * 48, vertices = 0, poseBytes = 64 + out.asset.nodes.size() * 41;
     P::AlphaMaskPool masks(limits);
     for (auto* object : *live)
     {
       if (object->AsNiTriShape() && CaptureCandidate(*root, *object, firstPerson, limits))
-        return A::Fail(P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape");
+      {
+        source.omitted_.push_back({
+            RE::NiPointer<RE::NiAVObject>{object},
+            {P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape"}
+        });
+        continue;
+      }
       auto* geometry = object->AsGeometry();
       if (!geometry) continue;
       if (!CaptureCandidate(*root, *geometry, firstPerson, limits)) continue;
-      auto* shape = geometry->AsTriShape();
-      if (!shape) return GeometryError({P::Failure::UnsupportedGeometry, "source.nontriangle-geometry"}, *geometry);
-      if (out.asset.geometry.size() >= limits.geometry) return A::Fail(P::Failure::LimitExceeded, "capture.geometry");
-      auto skin = source.Skin(*shape, transforms);
-      if (!skin) return GeometryError(skin.error(), *geometry);
-      const auto bones = *skin ? static_cast<std::uint32_t>((*skin)->bones.size()) : 0U;
-      auto       raw   = engine.mesh(*shape, limits);
-      if (!raw) return GeometryError(raw.error(), *geometry);
-      auto normalized = A::Decode(*raw, ids.at(object), bones, limits);
-      if (!normalized) return GeometryError(normalized.error(), *geometry);
-      normalized->skin = std::move(*skin);
-      auto material    = Material(*shape, *normalized, engine, limits);
-      if (!material) return GeometryError(material.error(), *geometry);
-      if (normalized->mask)
-      {
-        auto shared = masks.Intern(normalized->mask);
-        if (!shared) return GeometryError(shared.error(), *geometry);
-        normalized->mask = *shared;
-      }
-      const auto signature  = Signature(*normalized);
-      vertices             += normalized->vertices.size();
-      bytes += normalized->vertices.size() * sizeof(P::Vertex) + normalized->indices.size() * 2 + 128 +
-               (normalized->skin ? normalized->skin->bones.size() * 64 : 0) + (normalized->mask ? normalized->mask->pixels.size() : 0);
-      if (vertices > limits.vertices || bytes > limits.assetBytes) return A::Fail(P::Failure::LimitExceeded, "capture.asset-budget");
-      MeshBinding binding;
-      binding.owner                    = RE::NiPointer<RE::BSTriShape>{shape};
-      binding.node                     = ids.at(object);
-      binding.signature                = signature;
-      binding.vertexCount              = raw->vertexCount;
-      binding.boneCount                = bones;
-      binding.skin                     = normalized->skin;
-      binding.dynamic                  = normalized->dynamic;
-      binding.cached                   = *normalized;
-      binding.name                     = shape->name.c_str() ? shape->name.c_str() : "";
-      binding.stamp                    = CheapStamp(*shape);
-      binding.auditedAtUs              = stamp.sampledAtUs;
-      binding.lastDeformation.geometry = static_cast<std::uint32_t>(source.meshes_.size());
-      for (const auto& vertex : normalized->vertices)
-      {
-        // Tiny positive-radius points ensure coincident/empty engine bone
-        // bounds do not disappear from the conservative union.
-        A::Enclose(binding.localBound, {vertex.position, 0.01f});
-        if (binding.dynamic)
+      auto captured = [&]() -> P::Result<MeshBinding> {
+        auto* shape = geometry->AsTriShape();
+        if (!shape) return GeometryError({P::Failure::UnsupportedGeometry, "source.nontriangle-geometry"}, *geometry);
+        if (out.asset.geometry.size() >= limits.geometry) return A::Fail(P::Failure::LimitExceeded, "capture.geometry");
+        auto skin = source.Skin(*shape, transforms);
+        if (!skin) return GeometryError(skin.error(), *geometry);
+        const auto bones = *skin ? static_cast<std::uint32_t>((*skin)->bones.size()) : 0U;
+        auto       raw   = engine.mesh(*shape, limits);
+        if (!raw) return GeometryError(raw.error(), *geometry);
+        auto normalized = A::Decode(*raw, ids.at(object), bones, limits);
+        if (!normalized) return GeometryError(normalized.error(), *geometry);
+        normalized->skin = std::move(*skin);
+        auto material    = Material(*shape, *normalized, engine, limits);
+        if (!material) return GeometryError(material.error(), *geometry);
+        auto valid = P::ValidateGeometry(*normalized, out.asset.nodes.size(), limits);
+        if (!valid) return GeometryError(valid.error(), *geometry);
+        const auto signature     = Signature(*normalized);
+        const auto nextVertices  = vertices + normalized->vertices.size();
+        const auto nextBytes     = bytes + P::GeometryBytes(*normalized);
+        const auto nextPoseBytes = poseBytes + 16 + (normalized->dynamic ? 12 + normalized->vertices.size() * 24 : 0);
+        if (nextPoseBytes > limits.poseBytes) return A::Fail(P::Failure::LimitExceeded, "capture.mesh-pose-budget");
+        if (nextVertices > limits.vertices || nextBytes > limits.assetBytes)
+          return A::Fail(P::Failure::LimitExceeded, "capture.asset-budget");
+        if (normalized->mask)
         {
-          binding.lastDeformation.positions.push_back(vertex.position);
-          binding.lastDeformation.normals.push_back(vertex.normal);
+          auto shared = masks.Intern(normalized->mask);
+          if (!shared) return GeometryError(shared.error(), *geometry);
+          normalized->mask = *shared;
         }
-      }
-      if (binding.skin)
-      {
-        binding.boneBounds.reserve(bones);
-        for (const auto& bone : binding.skin->bones)
-          binding.boneBounds.push_back(bone.bound);
+        vertices  = nextVertices;
+        bytes     = nextBytes;
+        poseBytes = nextPoseBytes;
+        MeshBinding binding;
+        binding.owner                         = RE::NiPointer<RE::BSTriShape>{shape};
+        binding.node                          = ids.at(object);
+        binding.signature                     = signature;
+        binding.vertexCount                   = raw->vertexCount;
+        binding.boneCount                     = bones;
+        binding.skin                          = normalized->skin;
+        binding.dynamic                       = normalized->dynamic;
+        binding.cached                        = *normalized;
+        binding.name                          = shape->name.c_str() ? shape->name.c_str() : "";
+        binding.stamp                         = CheapStamp(*shape);
+        binding.auditedAtUs                   = stamp.sampledAtUs;
+        binding.recovery.deformation.geometry = static_cast<std::uint32_t>(source.meshes_.size());
         for (const auto& vertex : normalized->vertices)
-          for (unsigned b = 0; b < 4; ++b)
-            if (vertex.weights[b] > 0)
-            {
-              const auto bone = vertex.bones[b];
-              const auto bind = A::Native(binding.skin->bones[bone].bind);
-              A::Enclose(binding.boneBounds[bone], {A::Value(bind * A::Native(vertex.position)), 0.01f});
-            }
+        {
+          // Tiny positive-radius points ensure coincident/empty engine bone
+          // bounds do not disappear from the conservative union.
+          A::Enclose(binding.localBound, {vertex.position, 0.01f});
+          const auto sum        = std::accumulate(vertex.weights.begin(), vertex.weights.end(), 0.f);
+          binding.minimumWeight = std::min(binding.minimumWeight, sum);
+          binding.maximumWeight = std::max(binding.maximumWeight, sum);
+          if (binding.dynamic)
+          {
+            binding.recovery.deformation.positions.push_back(vertex.position);
+            binding.recovery.deformation.normals.push_back(vertex.normal);
+          }
+        }
+        if (binding.skin)
+        {
+          binding.boneBounds.reserve(bones);
+          for (const auto& bone : binding.skin->bones)
+            binding.boneBounds.push_back(bone.bound);
+          for (const auto& vertex : normalized->vertices)
+            for (unsigned b = 0; b < 4; ++b)
+              if (vertex.weights[b] > 0)
+              {
+                const auto bone = vertex.bones[b];
+                const auto bind = A::Native(binding.skin->bones[bone].bind);
+                A::Enclose(binding.boneBounds[bone], {A::Value(bind * A::Native(vertex.position)), 0.01f});
+              }
+        }
+        return binding;
+      }();
+      if (!captured)
+      {
+        source.omitted_.push_back({RE::NiPointer<RE::NiAVObject>{object}, captured.error()});
+        continue;
       }
-      source.meshes_.push_back(std::move(binding));
-      out.asset.geometry.push_back(std::move(*normalized));
+      out.asset.geometry.push_back(captured->cached);
+      source.meshes_.push_back(std::move(*captured));
     }
-    if (out.asset.geometry.empty()) return A::Fail(P::Failure::MissingSource, "capture.no-model-geometry");
+    if (out.asset.geometry.empty())
+      return A::Fail(
+        P::Failure::MissingSource,
+        "capture.no-model-geometry" + (source.omitted_.empty() ? std::string{} : ": " + source.omitted_.front().error.field));
     auto canonical = source.Canonicalize(out.asset);
     if (!canonical) return std::unexpected(canonical.error());
     auto snapshot = source.Sample(player, firstPerson, stamp);

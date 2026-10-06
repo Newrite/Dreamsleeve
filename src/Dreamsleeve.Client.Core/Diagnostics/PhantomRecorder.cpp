@@ -161,7 +161,9 @@ namespace Dreamsleeve::Client::Diagnostics
       if (queue.size() >= budget.queueJobs || charge > budget.queueBytes - std::min(status.queuedBytes, budget.queueBytes))
       {
         ++status.dropped;
-        StopLocked("queue-limit");
+        // Backpressure drops this observation, not the whole recording. Only
+        // an individually inadmissible job can never recover by draining.
+        if (!budget.queueJobs || charge > budget.queueBytes) StopLocked("queue-limit");
         return false;
       }
       status.queuedBytes += charge;
@@ -282,8 +284,8 @@ namespace Dreamsleeve::Client::Diagnostics
           }
           if (saved)
           {
-            auto raw     = P::SnapshotBytes(*sample->pose, *sample->asset);
-            auto encoded = P::WriteSnapshot(*sample->pose, *sample->asset);
+            auto raw     = P::SnapshotBytes(*sample->pose, *sample->asset, CaptureLimits());
+            auto encoded = P::WriteSnapshot(*sample->pose, *sample->asset, CaptureLimits());
             if (!raw || !encoded) throw std::runtime_error("sample-codec");
             Writer original;
             original.Pose(*sample->pose);
@@ -368,7 +370,7 @@ namespace Dreamsleeve::Client::Diagnostics
       std::ofstream summary(directory / "summary.json");
       summary.exceptions(std::ios::badbit | std::ios::failbit);
       summary << std::format(
-        "{{\n  \"format\": 1, \"protocol\": {}, \"assetVersion\": {},\n  \"scenario\": {}, \"requestedSeconds\": {}, \"requestedHz\": {},\n" "  \"samples\": {}, \"encoded\": {}, \"sent\": {}, \"movements\": {}, \"captureErrors\": {}, \"dropped\": {},\n" "  \"seconds\": {}, \"sampleHz\": {}, \"archiveBytes\": {}, \"models\": {}, \"reason\": {}, \"lastCaptureError\": {},\n" "  \"captureMsP50\": {}, \"captureMsP95\": {}, \"encodeMsP50\": {}, \"encodeMsP95\": {}\n}}\n",
+        "{{\n  \"format\": 1, \"protocol\": {}, \"assetVersion\": {},\n  \"scenario\": {}, \"requestedSeconds\": {}, \"requestedHz\": {},\n" "  \"samples\": {}, \"encoded\": {}, \"sent\": {}, \"movements\": {}, \"captureErrors\": {}, \"dropped\": {},\n" "  \"seconds\": {}, \"sampleHz\": {}, \"archiveBytes\": {}, \"models\": {}, \"reason\": {}, \"lastCaptureError\": {},\n" "  \"omittedGeometry\": {}, \"hiddenGeometry\": {}, \"partialSamples\": {}, \"partialDetail\": {},\n  \"captureMsP50\": {}, \"captureMsP95\": {}, \"encodeMsP50\": {}, \"encodeMsP95\": {}\n}}\n",
         Wire::Version,
         P::AssetVersion,
         Quoted(Scenarios[scenario]),
@@ -386,6 +388,10 @@ namespace Dreamsleeve::Client::Diagnostics
         models.size(),
         Quoted(result.reason),
         Quoted(result.lastCaptureError),
+        result.omittedGeometry,
+        result.hiddenGeometry,
+        result.partialSamples,
+        Quoted(result.partialDetail),
         percentile(captures, .5),
         percentile(captures, .95),
         percentile(encodes, .5),
@@ -502,6 +508,7 @@ namespace Dreamsleeve::Client::Diagnostics
       return;
     }
     if (!state->Admit(charge)) return;
+    if (state->status.omittedGeometry || state->status.hiddenGeometry) ++state->status.partialSamples;
     if (state->firstAt == Clock::time_point{}) state->firstAt = now;
     state->lastAt = now;
     state->queue.push_back({
@@ -542,6 +549,16 @@ namespace Dreamsleeve::Client::Diagnostics
     w.Put<std::uint64_t>(packet.size());
     w.Data(packet);
     state->Enqueue({Kind::MovementPacket, std::move(w.bytes)});
+  }
+
+  void Recorder::Partial(std::uint32_t omitted, std::uint32_t hidden, std::string_view detail)
+  {
+    if (!Active()) return;
+    std::lock_guard lock(state->mutex);
+    if (!state->active) return;
+    state->status.omittedGeometry = omitted;
+    state->status.hiddenGeometry  = hidden;
+    state->status.partialDetail   = Dreamsleeve::Utils::Text::ClipBytes(detail, 512);
   }
 
   void Recorder::Failed(const P::Error& failure)

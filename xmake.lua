@@ -207,6 +207,8 @@ target("Dreamsleeve.Client.Tests")
     -- Pure capture policy/byte decoding; the engine adapter still needs Skyrim.
     add_files("src/Dreamsleeve.Client/Game/PhantomCaptureRules.ixx", {public = true})
     add_files("src/Dreamsleeve.Client/Game/PhantomVertexStream.ixx", {public = true})
+    add_files("src/Dreamsleeve.Client/Game/PhantomMesh.ixx", {public = true})
+    add_files("src/Dreamsleeve.Client/Game/PhantomRecovery.ixx", {public = true})
 
     add_deps("Dreamsleeve.Client.Core")
     add_packages("doctest")

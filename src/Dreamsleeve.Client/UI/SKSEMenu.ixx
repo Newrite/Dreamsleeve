@@ -102,6 +102,7 @@ namespace SKSEMenu
       if (ImGui::Button("Начать запись"))
         Runtime::Post({Runtime::NoticeKind::PhantomRecordingStart, thirtySeconds, static_cast<std::uint32_t>(scenario)});
     }
+    ImGui::TextWrapped("Во время локальной записи публикация вашего фантома приостановлена. Записывается полная поза для анализа сжатия.");
     if (s.phase == D::Phase::Recording && ImGui::Button("Остановить запись")) Runtime::Post({Runtime::NoticeKind::PhantomRecordingStop});
     constexpr const char* phases[] = {"Не записывается", "Запись (закройте меню)", "Сохранение", "Сохранено", "Ошибка записи"};
     ImGui::Text("%s: %.1f с, %llu кадров, %.1f Гц", phases[static_cast<int>(s.phase)], s.seconds, s.samples, s.sampleHz);
@@ -113,6 +114,12 @@ namespace SKSEMenu
       s.dropped,
       s.errors);
     if (!s.reason.empty()) ImGui::TextWrapped("Причина завершения: %s", s.reason.c_str());
+    if (s.omittedGeometry || s.hiddenGeometry)
+      ImGui::TextWrapped(
+        "Частичный захват: пропущено деталей %u, временно скрыто %u. %s",
+        s.omittedGeometry,
+        s.hiddenGeometry,
+        s.partialDetail.c_str());
     if (!s.lastCaptureError.empty()) ImGui::TextWrapped("Последняя ошибка захвата: %s", s.lastCaptureError.c_str());
     if (!s.directory.empty()) ImGui::TextWrapped("Папка: %s", s.directory.c_str());
   }

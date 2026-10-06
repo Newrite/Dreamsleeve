@@ -55,6 +55,15 @@ export namespace Dreamsleeve::Client::Phantom
     std::array<std::uint8_t, 4>  color{255, 255, 255, 255};
     std::array<float, 4>         weights{};
     std::array<std::uint16_t, 4> bones{};
+
+    // Authored skin weights need not sum to one. Preserve the engine's
+    // weighted blend; normalizing here changes the rendered geometry.
+    bool ValidWeights(std::size_t boneCount) const noexcept
+    {
+      for (std::size_t i = 0; i < weights.size(); ++i)
+        if (!std::isfinite(weights[i]) || weights[i] < 0 || weights[i] > 1 || (weights[i] > 0 && bones[i] >= boneCount)) return false;
+      return true;
+    }
   };
 
   struct AlphaMask
@@ -93,6 +102,14 @@ export namespace Dreamsleeve::Client::Phantom
     std::uint8_t                     alphaThreshold{};
     bool                             alphaBlend{}, doubleSided{}, dynamic{};
   };
+
+  // Expanded reservation includes per-mesh mask bytes in the v1 wire format,
+  // even when resident alpha resources share ownership.
+  inline std::uint64_t GeometryBytes(const Geometry& mesh)
+  {
+    return mesh.vertices.size() * 80ULL + mesh.indices.size() * 2ULL + (mesh.skin ? mesh.skin->bones.size() * 60ULL : 0) +
+           (mesh.mask ? mesh.mask->pixels.size() : 0);
+  }
 
   // Detached values, never engine classes, paths, pointers or shader programs.
   struct Asset
@@ -135,6 +152,10 @@ export namespace Dreamsleeve::Client::Phantom
   };
   template <class T>
   using Result = std::expected<T, Error>;
+
+  // Shared local/wire geometry checks. Aggregate budgets and the scene graph
+  // belong to ValidatedAsset; a local producer can reject one mesh first.
+  Result<void> ValidateGeometry(const Geometry& mesh, std::size_t nodeCount, const Limits& limits = {});
 
   class ValidatedAsset final
   {

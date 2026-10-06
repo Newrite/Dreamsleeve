@@ -294,4 +294,54 @@ TEST_CASE("Diagnostic record limit finishes a complete archive and releases queu
   CHECK(s.queuedBytes == 0);
   CHECK(std::filesystem::exists(std::filesystem::path(s.directory) / "capture.phdiag"));
 }
+
+TEST_CASE("Local recording preserves a complete pose above production network limits")
+{
+  Fixture  f;
+  P::Asset data = f.asset->Value();
+  data.geometry[0].vertices.resize(45000);
+  auto asset = P::ValidatedAsset::Parse(std::move(data));
+  REQUIRE(asset);
+  f.asset   = std::make_shared<const P::ValidatedAsset>(*asset);
+  auto pose = std::make_shared<P::Snapshot>(*f.Pose(1));
+  pose->deformations[0].positions.resize(45000);
+  pose->deformations[0].normals.resize(45000, P::Vec3{0, 0, 1});
+  CHECK_FALSE(P::WriteSnapshot(*pose, *f.asset));
+  auto encoded = P::WriteSnapshot(*pose, *f.asset, D::CaptureLimits());
+  REQUIRE(encoded);
+  REQUIRE(P::ReadSnapshot(*encoded, *f.asset, D::CaptureLimits()));
+  D::Recorder recorder;
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  recorder.Partial(1, 2, "test partial geometry");
+  recorder.Sample(f.asset, pose, {}, 1, false);
+  recorder.Stop();
+  auto status = Finished(recorder);
+  CHECK(status.phase == D::Phase::Complete);
+  CHECK(status.samples == 1);
+  CHECK(status.errors == 0);
+  CHECK(status.partialSamples == 1);
+  CHECK(status.omittedGeometry == 1);
+  CHECK(status.hiddenGeometry == 2);
+  auto        summaryBytes = File(std::filesystem::path(status.directory) / "summary.json");
+  std::string summary(summaryBytes.begin(), summaryBytes.end());
+  CHECK(summary.find("test partial geometry") != std::string::npos);
+}
+
+TEST_CASE("Temporary recorder backpressure drops observations without ending the session")
+{
+  Fixture   f;
+  D::Budget budget;
+  budget.queueJobs = 1;
+  D::Recorder recorder(budget);
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  for (unsigned i = 1; i <= 1000; ++i)
+    recorder.Sample(f.asset, f.Pose(i), {}, 1, false);
+  CHECK(recorder.Active());
+  recorder.Stop();
+  const auto result = Finished(recorder);
+  CHECK(result.phase == D::Phase::Complete);
+  CHECK(result.reason == "manual");
+  CHECK(result.samples > 0);
+  CHECK(result.dropped > 0);
+}
 #endif

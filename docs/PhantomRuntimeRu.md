@@ -375,7 +375,10 @@ clang-format и git diff --check; новый DLL build и runtime проверя
 несовместимые nonshared skin partitions, скиненные effect materials и
 неизвестные несинхронизированные dynamic layouts возвращают failure. Для
 alpha material с clamp mode != repeat нужен новый neutral sampler/clamp field;
-до его появления выдаётся UnsupportedGeometry вместо незаметного пропуска.
+до его появления выдаётся UnsupportedGeometry для этой детали. Capture
+изолирует её: Open помечает omission, Sample скрывает только её slot,
+диагностика показывает неполную репрезентацию. Остальная сцена продолжает
+работать; правила восстановления описаны в PhantomDiagnosticsRu.md.
 Runtime factory preflight в первом Main::Update, реальный BC7 hair/face/body fixture,
 SMP update ordering, переход cell/world, disconnect и quit всё ещё требуют
 игрового теста новой feature на каждом runtime.
