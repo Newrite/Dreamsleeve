@@ -227,3 +227,55 @@ Backup и install manifest:
 Успех записи и полнота внешности в игре ещё не подтверждены. Для следующей
 проверки достаточно одной локальной записи 15 секунд при 20 Гц без сервера:
 должны увеличиваться samples и появиться model, вместо одних movement.
+
+## FP32 позиции без VF_FULLPREC, 06.10.2026
+
+Запись `1791293387229-idle-0`: 0 моделей/поз, 1090 movement, 60 capture
+failures, 136380 байт, завершение `no-samples`. Свежий лог подтверждает
+исключение EdgeBlood05/EdgeBlood12; новый отказ — `mesh.vertex` на
+`Warhammer_Mesh`, shader flags `840182400300`/`850182400300`.
+
+Локальный `PGOutput/meshes/armor/aokili/battlenun/warhammer.nif` содержит этот
+mesh: SSE stream 100, descriptor `0x1B00000650407`, stride 28, 3223 вершины,
+UV offset 16, normal 20, tangent 24. VF_FULLPREC не выставлен, но позиции
+записаны как FP32. Неверное чтение как FP16 даёт 206 нечисловых позиций;
+чтение FP32 — ни одной, UV также валидны. Это воспроизводимый отказ декодера,
+не повод исключать оружие. NIF и его геометрия не добавлены в репозиторий/dist.
+
+Независимое подтверждение: nifly `BSTriShape::Sync` читает FP32 при stream 100
+независимо от FULLPREC. В IDA SE `BSTriShape::LoadBinary` (`C66F80`) вызывает
+BSShaderResourceManager slot 2; renderer loader `D6B8D0` копирует descriptor
+без изменения и загружает vertexCount*stride исходных байт в CPU shadow +20
+и GPU buffer. В функции оставлен комментарий с descriptor evidence.
+Новых engine addresses/hooks не добавлено.
+
+Production decoder использует чистый `Game/PhantomVertexStream`: формат
+определяется по footprint позиции до следующего атрибута, не по численной
+правдоподобности данных. 16-byte FP32 и 8-byte FP16 остаются разными layouts;
+противоречивые offsets/stride и NaN/Inf отклоняются. Dynamic positions по-прежнему
+перекрывают packed stream. Ошибки позиции/UV теперь включают descriptor,
+stride и индекс проблемной вершины, чтобы не повторять диагностику вслепую.
+
+Четыре постоянных регрессионных теста проверяют FP32 без FULLPREC, FP16,
+противоречивые layouts и отказ без попытки прочитать невалидный FP32 как FP16.
+Пятый opt-in тест читает локальный fixture через
+`DREAMSLEEVE_PHANTOM_VERTEX_FIXTURE`: header DLPVTX01, descriptor u64, stride/count
+u32, packed bytes, затем независимый FP32 position oracle. В этой проверке
+все 3223 позиции реального Warhammer_Mesh точно совпали с oracle.
+Обычный запуск явно пропускает этот тест без внешнего fixture.
+Локальные evidence: `build/inspect-warhammer-nif.py`,
+`build/phantom-warhammer-nif-evidence.json`, `build/phantom-warhammer-vertices.bin`,
+`build/phantom-warhammer-failed-capture.json`.
+
+Итог проверки: 380/380 native-тестов, 25464 assertions, один явный skip
+реального UDP; внешний vertex fixture включён в этот запуск. Логи:
+`build/phantom-vertex-test-build.log`, `build/phantom-vertex-tests.log`,
+`build/phantom-vertex-diag-build.log`. Окончательная diagnostic DLL собрана
+за 116.516 s и установлена вместе с PDB в MO2. SHA256 DLL:
+`5b90ce8da3551381f001433cb6d0be41976e6e00f429675c9b8bcd0b4c606f01`.
+Backup и install manifest: `build/phantom-vertex-install-backup-20261006-204722`.
+ESP, client.toml, aliases.toml и theme.user.css сохранены по SHA256.
+Normal dist не пересобирался. Самопроверка охватила определение precision,
+сохранение FP16 и dynamic override, отказ на NaN/Inf без fallback и отсутствие
+дублирования Half/Read в engine adapter. Полная запись и внешность персонажа
+в игре пока не подтверждены; достаточно одной записи 15 секунд при 20 Гц.

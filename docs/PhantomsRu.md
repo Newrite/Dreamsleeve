@@ -67,6 +67,13 @@ weapon-blood meshes исключаются как вспомогательные
 из PhantomCaptureRules. Canonicalize удаляет их ненужные pose channels.
 Неподдерживаемые скиненные effect materials и layouts отклоняются явно.
 
+Локальные packed позиции декодирует общий `Game/PhantomVertexStream`.
+Точность определяется footprint до следующего атрибута: 16 байт для FP32
+position+bitangentX и 8 для FP16. Один VF_FULLPREC недостаточен: обычные SSE
+stream-100 meshes могут иметь FP32 позиции без этого флага. Противоречивые
+offsets/stride и нечисловые координаты отклоняются; угадывания точности по
+получившимся значениям нет. Dynamic positions остаются отдельным override.
+
 Open не считывает геометрию со скрытым mesh/предком или полностью скрытыми
 dismember partitions. Скрытие root камерой игнорируется; в первом лице
 сохраняется политика видимости третьего лица. Ранее захваченный, затем скрытый

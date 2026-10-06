@@ -144,3 +144,12 @@ Diagnostic DLL собрана и установлена, native 371/371 (9252 as
 прошли; окончательная diagnostic DLL/PDB установлена в MO2 с проверкой SHA256.
 Normal dist не пересобирался, игровой результат этой итерации ещё не проверен.
 Evidence и ограничения: [PhantomDiagnosticsRu.md](PhantomDiagnosticsRu.md).
+
+Свежая запись подтверждает отбор blood meshes, но выявляет неверное чтение
+FP32 позиций оружия без VF_FULLPREC. Декодер теперь определяет precision по
+раскладке атрибутов; все 3223 позиции локального Warhammer_Mesh совпали с
+независимым oracle. Native 380/380 (25464 assertions, внешний fixture включён,
+один skip UDP); diagnostic DLL/PDB установлена в MO2 с проверкой SHA256 и
+сохранением четырёх пользовательских файлов. Normal dist остаётся прежним.
+Игровая запись после этого исправления ещё не проверена. Evidence:
+[PhantomDiagnosticsRu.md](PhantomDiagnosticsRu.md).

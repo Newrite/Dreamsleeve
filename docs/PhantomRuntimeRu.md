@@ -372,10 +372,21 @@ reservation для удерживаемого Asset. Hooks/Scene fixes пров�
 clang-format и git diff --check; новый DLL build и runtime проверяет parent.
 
 Ограничения текущего neutral contract сообщаются явно: legacy NiTriShape/strips,
-несовместимые nonshared skin partitions, effect/decal/projected shaders и
+несовместимые nonshared skin partitions, скиненные effect materials и
 неизвестные несинхронизированные dynamic layouts возвращают failure. Для
 alpha material с clamp mode != repeat нужен новый neutral sampler/clamp field;
 до его появления выдаётся UnsupportedGeometry вместо незаметного пропуска.
 Runtime factory preflight в первом Main::Update, реальный BC7 hair/face/body fixture,
 SMP update ordering, переход cell/world, disconnect и quit всё ещё требуют
 игрового теста новой feature на каждом runtime.
+
+Уточнение packed positions от 06.10.2026: SE `C66F80` через resource manager
+slot 2 вызывает renderer loader `D6B8D0`. Он сохраняет descriptor без изменения,
+читает vertexCount*(low nibble*4) байт в CPU shadow +20 и передаёт те же байты
+GPU. SSE stream-100 rigid meshes могут иметь FP32 позиции без VF_FULLPREC:
+проверенный Warhammer_Mesh descriptor `1B00000650407`, stride28, UV16/normal20/
+tangent24. Нельзя определять FP16 только по отсутствию bit54. Общий byte decoder
+определяет layout по footprint до следующего атрибута, сохраняет FP16 для
+8-byte streams и dynamic override. Добавление новых offsets/хуков не требуется.
+Декодирование всех 3223 позиций локального mesh проверено вне игры; GPU capture
+этой версии и AE/VR gameplay всё ещё не проверены.

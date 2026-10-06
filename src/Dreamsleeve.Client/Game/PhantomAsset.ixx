@@ -6,13 +6,17 @@ export module Dreamsleeve.Game.PhantomAsset;
 
 import std;
 import Dreamsleeve.Client.Phantom.Types;
+import Dreamsleeve.Game.PhantomVertexStream;
 
 // Geometry normalization and math. These functions never load files, resolve
 // peer names, or invoke an engine factory. Borrowed engine memory is read only
 // in the caller's post-update main-thread phase and is copied before returning.
 export namespace Dreamsleeve::Game::PhantomAsset
 {
-  namespace P = Dreamsleeve::Client::Phantom;
+  namespace P      = Dreamsleeve::Client::Phantom;
+  namespace Stream = Dreamsleeve::Game::PhantomVertexStream;
+  using Stream::Half;
+  using Stream::Read;
 
   inline std::unexpected<P::Error> Fail(P::Failure reason, std::string field)
   {
@@ -315,24 +319,6 @@ export namespace Dreamsleeve::Game::PhantomAsset
     return copied;
   }
 
-  inline float Half(std::uint16_t h)
-  {
-    const auto sign     = std::uint32_t(h & 0x8000) << 16;
-    const auto exponent = (h >> 10) & 31;
-    const auto fraction = h & 1023;
-    if (!exponent) return std::copysign(std::ldexp(float(fraction), -24), h & 0x8000 ? -1.f : 1.f);
-    if (exponent == 31) return std::bit_cast<float>(sign | 0x7f800000 | std::uint32_t(fraction) << 13);
-    return std::bit_cast<float>(sign | std::uint32_t(exponent + 112) << 23 | std::uint32_t(fraction) << 13);
-  }
-
-  template <class T>
-  inline T Read(std::span<const std::byte> bytes, std::size_t offset)
-  {
-    T value;
-    std::memcpy(&value, bytes.data() + offset, sizeof(T));
-    return value;
-  }
-
   inline void GenerateNormals(std::vector<P::Vertex>& vertices, std::span<const std::uint16_t> indices)
   {
     for (auto& vertex : vertices)
@@ -378,11 +364,17 @@ export namespace Dreamsleeve::Game::PhantomAsset
     const auto has = [&](unsigned flag) {
       return (flags & flag) != 0;
     };
+    std::optional<Stream::PositionLayout> positions;
+    if (raw.positions.empty())
+    {
+      auto layout = Stream::PositionLayout::From(raw.descriptor, raw.stride);
+      if (!layout) return std::unexpected(layout.error());
+      positions = *layout;
+    }
     if (
-      (raw.positions.empty() && !fits(V::VA_POSITION, has(V::VF_FULLPREC) ? 16 : 8)) || (has(V::VF_UV) && !fits(V::VA_TEXCOORD0, 4)) ||
-      (has(V::VF_UV_2) && !fits(V::VA_TEXCOORD1, 4)) || (has(V::VF_NORMAL) && !fits(V::VA_NORMAL, 4)) ||
-      (has(V::VF_TANGENT) && !fits(V::VA_BINORMAL, 4)) || (has(V::VF_COLORS) && !fits(V::VA_COLOR, 4)) ||
-      (has(V::VF_SKINNED) && !fits(V::VA_SKINNING, 12)))
+      (has(V::VF_UV) && !fits(V::VA_TEXCOORD0, 4)) || (has(V::VF_UV_2) && !fits(V::VA_TEXCOORD1, 4)) ||
+      (has(V::VF_NORMAL) && !fits(V::VA_NORMAL, 4)) || (has(V::VF_TANGENT) && !fits(V::VA_BINORMAL, 4)) ||
+      (has(V::VF_COLORS) && !fits(V::VA_COLOR, 4)) || (has(V::VF_SKINNED) && !fits(V::VA_SKINNING, 12)))
       return Fail(P::Failure::UnsupportedGeometry, "mesh.attribute-offset");
     P::Geometry out;
     out.node    = node;
@@ -397,10 +389,15 @@ export namespace Dreamsleeve::Game::PhantomAsset
       const auto bytes = std::span(raw.vertices).subspan(i * raw.stride, raw.stride);
       if (!raw.positions.empty())
         v.position = raw.positions[i];
-      else if (has(V::VF_FULLPREC))
-        v.position = {Read<float>(bytes, 0), Read<float>(bytes, 4), Read<float>(bytes, 8)};
       else
-        v.position = {Half(Read<std::uint16_t>(bytes, 0)), Half(Read<std::uint16_t>(bytes, 2)), Half(Read<std::uint16_t>(bytes, 4))};
+      {
+        auto position = positions->Decode(bytes);
+        if (!position)
+          return Fail(
+            position.error().reason,
+            std::format("{} [descriptor={:X}, stride={}, vertex={}]", position.error().field, raw.descriptor, raw.stride, i));
+        v.position = *position;
+      }
       if (has(V::VF_UV))
       {
         const auto o = offset(V::VA_TEXCOORD0);
@@ -436,7 +433,16 @@ export namespace Dreamsleeve::Game::PhantomAsset
           weight /= sum;
       }
       if (!Finite(v.position) || !std::isfinite(v.u) || !std::isfinite(v.v) || (!raw.normals.empty() && !Finite(raw.normals[i])))
-        return Fail(P::Failure::InvalidNumber, "mesh.vertex");
+        return Fail(
+          P::Failure::InvalidNumber,
+          std::format(
+            "mesh.vertex [descriptor={:X}, stride={}, vertex={}, position-valid={}, uv-valid={}, normals-valid={}]",
+            raw.descriptor,
+            raw.stride,
+            i,
+            Finite(v.position),
+            std::isfinite(v.u) && std::isfinite(v.v),
+            raw.normals.empty() || Finite(raw.normals[i])));
     }
     // Packed normals can belong to the pre-morph template. A face deformation
     // without a current normal stream gets normals from its ACTUAL triangles.
