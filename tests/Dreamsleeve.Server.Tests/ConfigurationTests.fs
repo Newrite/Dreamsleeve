@@ -38,6 +38,22 @@ let rec private keys prefix (table: Tomlyn.Model.TomlTable) = [
 ]
 
 let tests = testList "Server configuration" [
+    testCase "phantom geometry config defaults512 accepts267 and rejects beyond512" <| fun _ ->
+        Expect.equal Configuration.defaults.Phantoms.Limits.Geometry 512 "Application defaults inherit server policy."
+        Expect.equal (parsed (example())).Phantoms.Limits.Geometry 512 "Example matches effective default."
+        for geometry in [267; 512] do
+            withFile $"[Phantoms.Limits]\nGeometry = {geometry}\n" (fun path ->
+                match Configuration.parse [|"--config"; path|] with
+                | Ok (LaunchCommand.Run(config, game)) ->
+                    Expect.equal config.Phantoms.Limits.Geometry geometry "TOML override retained."
+                    Expect.equal game.Phantoms.Limits.Geometry geometry "Runtime receives the checked override."
+                    Expect.equal game.Phantoms.Limits.RawBytes (128 * 1024 * 1024) "Raw asset bytes unchanged."
+                    Expect.equal game.Phantoms.Limits.CompressedBytes (64 * 1024 * 1024) "Compressed asset bytes unchanged."
+                | other -> failtestf "Expected valid geometry config: %A" other)
+        for geometry in [0; 513] do
+            withFile $"[Phantoms.Limits]\nGeometry = {geometry}\n" (fun path ->
+                Expect.isError (Configuration.parse [|"--config"; path|]) "Startup rejects geometry outside1..512.")
+
     testCase "moderation is on by default, switchable and loads a separate word list" <| fun _ ->
         Expect.isTrue Configuration.defaults.Moderation.Enabled "enabled by default"
         withFile "[Moderation]\nEnabled = false\nRulesPath = ''\n" (fun path ->

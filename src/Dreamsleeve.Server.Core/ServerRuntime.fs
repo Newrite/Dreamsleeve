@@ -105,6 +105,7 @@ module ServerRuntime =
         mutable LastTick: int64
         /// From the account service (AccountChange.AddressBans); empty until it sends them.
         mutable AddressBans: AddressBan list
+        Phantoms: PhantomAgent.State option
     }
 
     let private now () = Environment.TickCount64
@@ -173,6 +174,7 @@ module ServerRuntime =
                                             duration.ToString(if duration.TotalDays >= 1.0 then @"d\.hh\:mm\:ss" else @"hh\:mm\:ss"))
             | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> ()
             entry.Phase <- RuntimeSessionPhase.Closing
+            state.Phantoms |> Option.iter (fun phantoms -> PhantomAgent.detach phantoms entry.ConnectionId)
             let deadline = now () + int64 options.ShutdownTimeoutMs
             entry.Deadline <- if state.Stopping then min deadline state.StopDeadline else deadline
             if not entry.TransportClosed then state.Transport.Close entry.ConnectionId
@@ -308,6 +310,7 @@ module ServerRuntime =
                                                 PlayerId.value welcome.SelfPlayerId, username state welcome.SelfPlayerId, connectionId, welcome.Hiding,
                                                 state.Table.Players.Count)
                     send options state context entry (ServerResponse.SessionOpened(requestId, welcome))
+                    state.Phantoms |> Option.iter (fun phantoms -> PhantomAgent.activate phantoms connectionId)
             | Some _ | None -> state.Logger.LogDebug("Late activation of {ConnectionId} ignored", connectionId)
 
         | SessionHostCommand.Send(connectionId, response) ->
@@ -317,6 +320,24 @@ module ServerRuntime =
                 if (ProtocolCodec.delivery response).WhileOpening then send options state context entry response
                 else state.Logger.LogWarning("Session {ConnectionId} sent {Response} before it opened; dropped", connectionId, response.GetType().Name)
             | Some _ | None -> ()
+
+        | SessionHostCommand.ObservePhantoms observation ->
+            // Presence is the only producer. Reject late membership from closed
+            // sessions before it can create a new phantom source.
+            match state.Phantoms with
+            | Some phantoms ->
+                let rec apply observation =
+                    match observation with
+                    | PhantomObservation.Batch values -> for value in values do apply value
+                    | PhantomObservation.Member(id, _) ->
+                        match SessionTable.find id state.Table with
+                        | Some entry when entry.Phase = RuntimeSessionPhase.Opening || entry.Phase = RuntimeSessionPhase.Ready ->
+                            PhantomAgent.observe phantoms observation
+                            if entry.Phase = RuntimeSessionPhase.Ready then PhantomAgent.activate phantoms id
+                        | _ -> ()
+                    | _ -> PhantomAgent.observe phantoms observation
+                apply observation
+            | None -> ()
 
         | SessionHostCommand.Close(connectionId, reason) ->
             state.Logger.LogInformation("Session {ConnectionId}: {Reason}", connectionId, reason)
@@ -403,8 +424,11 @@ module ServerRuntime =
                 child.TryPost(PlayerSessionMessage.SampleMovement sample) |> ignore
             | Error _, _ | _, None -> ()
 
-    let private receive (options: ServerRuntimeOptions) authenticator state context entry lane bytes =
-        if lane = DeliveryLane.Realtime then receiveSample state entry bytes
+    let private receive (options: ServerRuntimeOptions) authenticator state context (entry: SessionTable.Entry) lane bytes =
+        if lane = DeliveryLane.Models || lane = DeliveryLane.Poses then
+            if entry.Phase = RuntimeSessionPhase.Ready then
+                state.Phantoms |> Option.iter (fun phantoms -> PhantomAgent.receive phantoms (now()) entry.ConnectionId lane bytes)
+        elif lane = DeliveryLane.Realtime then receiveSample state entry bytes
         else
             match ProtocolCodec.decodeClient state.Settings.Codec bytes with
             | Error error ->
@@ -502,7 +526,8 @@ module ServerRuntime =
                     marks.Abort()
                     fail state context $"Guilds startup failed: {error}"
                 | Ok marks, Ok guilds ->
-                    let presence = PresenceAgent.start options.Presence output
+                    let observation = state.Phantoms |> Option.map PhantomAgent.observationMode |> Option.defaultValue PhantomObservationMode.Disabled
+                    let presence = PresenceAgent.startObserved observation options.Presence output
                     context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
                     context.Own(marks, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GroundMarks, outcome))
                     context.Own(guilds, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Guilds, outcome))
@@ -705,6 +730,7 @@ module ServerRuntime =
             RuntimeMetrics.runtimeTimerLateness.Record(Stopwatch.GetElapsedTime(notification.DueTimestamp, notification.QueuedTimestamp).TotalMilliseconds)
             RuntimeMetrics.runtimeQueueDelay.Record(Stopwatch.GetElapsedTime(notification.QueuedTimestamp).TotalMilliseconds)
             tick options authenticator state context
+            state.Phantoms |> Option.iter (fun phantoms -> PhantomAgent.tick phantoms (now()))
             RuntimeMetrics.runtimeTick.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
             state.Ticker |> Option.iter _.Acknowledge()
         | ServerRuntimeMessage.Host command -> host options state context command
@@ -775,6 +801,7 @@ module ServerRuntime =
 
     let private isControl = function
         | ServerRuntimeMessage.Host(SessionHostCommand.Send _) | ServerRuntimeMessage.Read _
+        | ServerRuntimeMessage.Host(SessionHostCommand.ObservePhantoms _)
         | ServerRuntimeMessage.FindPlayer _ | ServerRuntimeMessage.TransportReady | ServerRuntimeMessage.Announce _
         | ServerRuntimeMessage.ListSessions _ | ServerRuntimeMessage.SetPlayerRole _ | ServerRuntimeMessage.RenamePlayer _
         | ServerRuntimeMessage.Guilds _ -> false
@@ -787,7 +814,7 @@ module ServerRuntime =
     /// transport AFTER this agent's Completion, including Abort/fault paths.
     /// The checked settings, moderation rules and pseudonym dictionary are
     /// fixed for the runtime lifetime.
-    let start (settings: GameSettings) (moderation: ModerationRules) (pseudonyms: PseudonymDictionary) (persistence: GroundMarkPersistence)
+    let private startWithStorage storage (settings: GameSettings) (moderation: ModerationRules) (pseudonyms: PseudonymDictionary) (persistence: GroundMarkPersistence)
               (guilds: GuildPersistence) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let options = settings.Runtime
         let state = {
@@ -797,8 +824,15 @@ module ServerRuntime =
             Transport = transport; Logger = logger
             Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
             AddressBans = []
+            Phantoms = storage |> Option.map (fun storage -> PhantomAgent.create settings.Phantoms storage transport.Send)
         }
         let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
         let agent = Agent.Start(agentOptions, handle options authenticator state, isControl = isControl)
         agent.TryPost ServerRuntimeMessage.Start |> ignore
         agent
+
+    let start settings moderation pseudonyms persistence guilds authenticator transport logger =
+        startWithStorage None settings moderation pseudonyms persistence guilds authenticator transport logger
+
+    let startWithPhantoms storage settings moderation pseudonyms persistence guilds authenticator transport logger =
+        startWithStorage (Some storage) settings moderation pseudonyms persistence guilds authenticator transport logger

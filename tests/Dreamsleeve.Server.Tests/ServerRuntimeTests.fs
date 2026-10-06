@@ -117,6 +117,7 @@ type private Fixture = {
     Input: ConcurrentQueue<ServerTransportEvent>
     Output: Channel<Guid * ServerPacket>
     Movement: Channel<Guid * ServerMovementPacket>
+    Phantoms: Channel<Guid * Dreamsleeve.Protocol.Phantom.ServerAssetPacket>
     Sent: ConcurrentQueue<DeliveryLane>
     SendFailures: ConcurrentDictionary<DeliveryLane, string>
     Closed: Channel<Guid>
@@ -130,11 +131,12 @@ let private post (agent: Agent<_>) command = task {
     equal AgentPostResult.Posted posted
 }
 
-let private withRuntimeConfigured options identity pseudonyms proxies createAuthentication run = task {
+let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pseudonyms proxies createAuthentication run = task {
     let mutable ready = fun () -> false
     let input = ConcurrentQueue<ServerTransportEvent>()
     let output = Channel.CreateUnbounded<Guid * ServerPacket>()
     let movement = Channel.CreateUnbounded<Guid * ServerMovementPacket>()
+    let phantomOutput = Channel.CreateUnbounded<Guid * Dreamsleeve.Protocol.Phantom.ServerAssetPacket>()
     let sent = ConcurrentQueue<DeliveryLane>()
     let failures = ConcurrentDictionary<DeliveryLane, string>()
     let closed = Channel.CreateUnbounded<Guid>()
@@ -160,6 +162,9 @@ let private withRuntimeConfigured options identity pseudonyms proxies createAuth
             | false, _ ->
                 if packet.Lane = DeliveryLane.Realtime then
                     movement.Writer.TryWrite(id, ServerMovementPacket.Parser.ParseFrom packet.Bytes) |> ignore
+                elif packet.Lane = DeliveryLane.Models then
+                    phantomOutput.Writer.TryWrite(id, Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom packet.Bytes) |> ignore
+                elif packet.Lane = DeliveryLane.Poses then ()
                 else output.Writer.TryWrite(id, ServerPacket.Parser.ParseFrom packet.Bytes) |> ignore
                 Ok ()
         Close = fun id -> if not (ignoreClose.ContainsKey id) then input.Enqueue(ServerTransportEvent.Disconnected id)
@@ -172,8 +177,10 @@ let private withRuntimeConfigured options identity pseudonyms proxies createAuth
     let game =
         Settings.game ServerConfig.defaults options identity AnnouncementOptions.defaults GroundMarkOptions.defaults
         |> GameSettings.withTrustedProxies proxies
-    use runtime = ServerRuntime.start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport NullLogger.Instance
-    let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
+    let game = match phantomStorage with Some (phantoms, _) -> GameSettings.withPhantoms phantoms game |> ok | None -> game
+    let start = match phantomStorage with Some (_, storage) -> ServerRuntime.startWithPhantoms storage | None -> ServerRuntime.start
+    use runtime = start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport NullLogger.Instance
+    let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Phantoms = phantomOutput; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
         if not runtime.Completion.IsCompleted then
@@ -182,6 +189,9 @@ let private withRuntimeConfigured options identity pseudonyms proxies createAuth
     finally
         runtime.Abort()
 }
+
+let private withRuntimeConfigured options identity pseudonyms proxies createAuthentication run =
+    withRuntimeConfiguredAndPhantoms None options identity pseudonyms proxies createAuthentication run
 
 let private withRuntimeNamed options identity pseudonyms createAuthentication run =
     withRuntimeConfigured options identity pseudonyms [] createAuthentication run
@@ -239,6 +249,104 @@ let private empty fixture = task {
 
 [<Tests>]
 let tests = testList "ServerRuntime" [
+    testTask "disabled phantom runtime still bootstraps authenticated policy and cleans membership" {
+        let mutable started = 0
+        let success value = Task.FromResult(Ok value)
+        let storage: PhantomStoragePort = {
+            StartUpload = fun _ -> started <- started + 1; success true
+            WriteChunk = fun _ -> success false
+            StartDownload = fun _ -> success ()
+            ReadChunk = fun (_, _, count) -> success (Array.zeroCreate count)
+            Cancel = fun _ -> Task.FromResult ()
+            Dispose = fun () -> Task.FromResult ()
+        }
+        let disabled = { PhantomOptions.defaults with Enabled = false }
+        do! withRuntimeConfiguredAndPhantoms (Some (disabled, storage)) ServerRuntimeOptions.defaults IdentityOptions.defaults
+                Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn [] createAuthentication (fun fixture -> task {
+            let alice = connect fixture "alice"
+            do! post fixture.Runtime (tick())
+            let! _ = welcome fixture alice
+            let! policyId, packet = receive fixture.Phantoms
+            equal alice policyId
+            check (not (isNull packet.Policy) && not packet.Policy.Enabled) "Membership mode emits the disabled policy after authenticated activation."
+            fixture.Input.Enqueue(incoming(alice, beginCharacter 2UL "Test"))
+            fixture.Input.Enqueue(incoming(alice, telemetry 10UL 0.0f))
+            do! post fixture.Runtime (tick())
+            let! _ = nextWhere fixture (fun id packet ->
+                id = alice && packet.PayloadCase = ServerPacket.PayloadOneofCase.PresenceChanged
+                && packet.PresenceChanged.Visibility |> Seq.exists (fun view -> view.PlayerId = 1UL && not (isNull view.Pose)))
+            check (not (fixture.Phantoms.Reader.TryPeek() |> fst)) "Membership updates produce no model/pose traffic."
+            equal 0 started
+            fixture.Input.Enqueue(ServerTransportEvent.Disconnected alice)
+            do! post fixture.Runtime (tick())
+            do! empty fixture
+        })
+    }
+
+    testTask "phantom bootstrap uses authenticated membership and Presence AOI; preferences remove subscriptions" {
+        let mutable uploads = 0
+        let success value = Task.FromResult(Ok value)
+        let storage: PhantomStoragePort = {
+            StartUpload = fun _ -> uploads <- uploads + 1; success true
+            WriteChunk = fun _ -> success false
+            StartDownload = fun _ -> success ()
+            ReadChunk = fun (_, _, count) -> success (Array.zeroCreate count)
+            Cancel = fun _ -> Task.FromResult ()
+            Dispose = fun () -> Task.FromResult ()
+        }
+        do! withRuntimeConfiguredAndPhantoms (Some (PhantomOptions.defaults, storage)) ServerRuntimeOptions.defaults IdentityOptions.defaults
+                Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn [] createAuthentication (fun fixture -> task {
+            let alice = connect fixture "alice"
+            do! post fixture.Runtime (tick())
+            let! _ = welcome fixture alice
+            let! policyId, policy = receive fixture.Phantoms
+            equal alice policyId
+            check (not (isNull policy.Policy) && policy.Policy.Enabled) "Policy follows activation."
+            let bob = connect fixture "bob"
+            do! post fixture.Runtime (tick())
+            let! _ = welcome fixture bob
+            let! policyId, _ = receive fixture.Phantoms
+            equal bob policyId
+            for id in [alice;bob] do
+                fixture.Input.Enqueue(incoming(id, beginCharacter 2UL "Test"))
+                fixture.Input.Enqueue(incoming(id, telemetry 10UL 0.0f))
+            do! post fixture.Runtime (tick())
+            let! _ = nextWhere fixture (fun id packet ->
+                id = alice && packet.PayloadCase = ServerPacket.PayloadOneofCase.PresenceChanged
+                && packet.PresenceChanged.Visibility |> Seq.exists (fun view -> view.PlayerId = 1UL && not (isNull view.Pose)))
+            let hash = Security.Cryptography.SHA256.HashData [|1uy;2uy;3uy;4uy|]
+            let publish = Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = ProtocolCodec.Version,
+                Publish = Dreamsleeve.Protocol.Phantom.Publish(ContextRevision = 10UL, RequestId = 101UL,
+                    Asset = Dreamsleeve.Protocol.Phantom.AssetDescriptor(Hash = ByteString.CopyFrom hash, Generation = 1UL,
+                                FormatVersion = 1u, CompressedBytes = 4u, RawBytes = 4u, Channels = 2u, Geometry = 1u)))
+            fixture.Input.Enqueue(ServerTransportEvent.Received(alice, DeliveryLane.Models, publish.ToByteArray()))
+            do! post fixture.Runtime (tick())
+            let mutable completed = false
+            let mutable offered = false
+            while not completed || not offered do
+                let! id, packet = receive fixture.Phantoms
+                if id = alice && not (isNull packet.Transfer) then equal 1UL packet.Transfer.PlayerId
+                if id = alice && not (isNull packet.Complete) then
+                    check packet.Complete.Accepted "Own upload becomes ready."
+                    completed <- true
+                if id = bob && not (isNull packet.Offer) then
+                    equal 1UL packet.Offer.PlayerId
+                    offered <- true
+            equal 1 uploads
+            let preferences = Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = ProtocolCodec.Version,
+                                Preferences = Dreamsleeve.Protocol.Phantom.Preferences(Publish = true, Receive = false))
+            fixture.Input.Enqueue(ServerTransportEvent.Received(bob, DeliveryLane.Models, preferences.ToByteArray()))
+            do! post fixture.Runtime (tick())
+            let! id, removed = receive fixture.Phantoms
+            equal bob id
+            check (not (isNull removed.Remove)) "Receive off removes the wire subscription."
+            fixture.Input.Enqueue(ServerTransportEvent.Disconnected alice)
+            fixture.Input.Enqueue(ServerTransportEvent.Disconnected bob)
+            do! post fixture.Runtime (tick())
+            do! empty fixture
+        })
+    }
+
     testTask "account revocation closes its ready session without closing another ready player" {
         do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
             let alice = connect fixture "alice"

@@ -52,11 +52,53 @@ module PresenceAgent =
         mutable LastFlush: int64
         VisibilityDistanceSquared: double
         Host: AgentOutbox<SessionHostCommand>
+        PhantomObservation: PhantomObservationMode
+        PhantomObservations: ResizeArray<PhantomObservation>
     }
 
     let private notifyHost state context command =
         if not (state.Host.TrySend(context, command)) then
             context.Abort()
+
+    let private observeMember state id value =
+        match state.PhantomObservation with
+        | PhantomObservationMode.Disabled -> ()
+        | PhantomObservationMode.Membership | PhantomObservationMode.Full ->
+            state.PhantomObservations.Add(PhantomObservation.Member(id, value))
+
+    let private observeDeparted state id =
+        match state.PhantomObservation with
+        | PhantomObservationMode.Disabled -> ()
+        | PhantomObservationMode.Membership | PhantomObservationMode.Full ->
+            state.PhantomObservations.Add(PhantomObservation.Departed id)
+
+    let private observeHidden state observer player revision =
+        if state.PhantomObservation = PhantomObservationMode.Full then
+            state.PhantomObservations.Add(PhantomObservation.Hidden(observer, player, revision))
+
+    let private observeView state (observer: Member) (source: Member) revision =
+        if state.PhantomObservation = PhantomObservationMode.Full && observer.ConnectionId <> source.ConnectionId then
+            match observer.Latest.Location, source.Latest.Location with
+            | ValueSome origin, ValueSome target ->
+                state.PhantomObservations.Add(PhantomObservation.View(observer.ConnectionId, source.Latest.Identity.PlayerId, revision,
+                                                       double (Position.distanceSquared origin.Position target.Position)))
+            | _ -> ()
+
+    let private flushObservations state context =
+        if state.PhantomObservations.Count > 0 then
+            // Preserve one atomic authority turn without allocating a dense AOI
+            // reference array on the large object heap every replication tick.
+            let leafSize = 4096
+            let batch =
+                if state.PhantomObservations.Count <= leafSize then state.PhantomObservations.ToArray()
+                else
+                    Array.init ((state.PhantomObservations.Count + leafSize - 1) / leafSize) (fun index ->
+                        let offset = index * leafSize
+                        let leaf = Array.zeroCreate (min leafSize (state.PhantomObservations.Count - offset))
+                        state.PhantomObservations.CopyTo(offset, leaf, 0, leaf.Length)
+                        PhantomObservation.Batch leaf)
+            state.PhantomObservations.Clear()
+            notifyHost state context (SessionHostCommand.ObservePhantoms(PhantomObservation.Batch batch))
 
     let private kindOf (key: ActorValueKey) (info: ActorValueInfo) = struct (key, info.DisplayName)
 
@@ -112,6 +154,7 @@ module PresenceAgent =
         | true, memberState ->
             let playerId = memberState.Latest.Identity.PlayerId
             state.Members.Remove connectionId |> ignore
+            observeDeparted state connectionId
             state.Players.Remove playerId |> ignore
             state.Dirty.Remove playerId |> ignore
             SpatialIndex.remove connectionId state.LatestIndex
@@ -191,6 +234,7 @@ module PresenceAgent =
         | ValueNone -> { source.Latest with Location = ValueNone; ViewRevision = 0UL }
         | ValueSome location ->
             let view, _ = establishView observer source
+            observeView state observer source view.Revision
             { source.Latest with Location = ValueSome location; ViewRevision = view.Revision }
 
     let private snapshot state observer =
@@ -238,6 +282,11 @@ module PresenceAgent =
                 match visibleLocation state observer.Latest source.Latest with
                 | ValueSome location ->
                     let view, changed = establishView observer source
+                    // The consumer retains authority and distance. Republish only
+                    // when that authority or either endpoint's location changes.
+                    if state.PhantomObservation = PhantomObservationMode.Full
+                       && (changed || observer.Latest.Location <> observer.Published.Location || source.Latest.Location <> source.Published.Location) then
+                        observeView state observer source view.Revision
                     let pose = MovementPose.ofLocation location
                     if changed then
                         visibility.Add {
@@ -251,7 +300,9 @@ module PresenceAgent =
                         }
                 | ValueNone ->
                     if observer.Views.Remove playerId then
-                        visibility.Add { PlayerId = playerId; ViewRevision = nextRevision observer; Sequence = 0UL; Pose = ValueNone }
+                        let revision = nextRevision observer
+                        visibility.Add { PlayerId = playerId; ViewRevision = revision; Sequence = 0UL; Pose = ValueNone }
+                        observeHidden state observer.ConnectionId playerId revision
             | false, _ -> ()
         candidates.Clear()
 
@@ -320,6 +371,7 @@ module PresenceAgent =
                     count state 1 memberState.Latest.ActorValues
                     count state -1 memberState.Published.ActorValues
                 memberState.Published <- memberState.Latest
+        flushObservations state context
 
     let private join state context (subscription: PresenceSubscription) =
         let existedBefore = state.Members.ContainsKey subscription.ConnectionId
@@ -354,10 +406,14 @@ module PresenceAgent =
                     register state memberState.Published.ActorValues
                     count state 1 memberState.Published.ActorValues
                 state.Members[subscription.ConnectionId] <- memberState
+                observeMember state subscription.ConnectionId memberState.Latest
                 state.Players[subscription.Snapshot.Identity.PlayerId] <- subscription.ConnectionId
                 SpatialIndex.set memberState.ConnectionId memberState.Latest.Location state.LatestIndex
 
                 let opening = PresenceEvent.Snapshot(snapshot state memberState, kindsFor state memberState true)
+                // Establish authenticated membership before the session can
+                // activate from its welcome snapshot on the other actor.
+                flushObservations state context
                 match deliver state context memberState opening with
                 | Some playerId when existing -> broadcastLeft state context playerId
                 | Some _ -> ()
@@ -382,6 +438,7 @@ module PresenceAgent =
             notifyHost state context (SessionHostCommand.Close(connectionId, "presence_identity_conflict"))
         | true, memberState ->
             memberState.Latest <- value
+            observeMember state connectionId value
             SpatialIndex.set connectionId value.Location state.LatestIndex
             state.Dirty.Add value.Identity.PlayerId |> ignore
             schedule config state context
@@ -418,6 +475,7 @@ module PresenceAgent =
             state.Ticker |> Option.iter _.Acknowledge()
         | PresenceCommand.Detach request -> detach state context request
         forgetUnused state
+        flushObservations state context
     }
 
     let private isControl = function
@@ -425,7 +483,7 @@ module PresenceAgent =
         | PresenceCommand.Update _ -> false
 
     /// The options come checked by GameSettings.create.
-    let start (config: PresenceOptions) (host: ReliableAgentRef<SessionHostCommand>) =
+    let private startWithObservation mode (config: PresenceOptions) (host: ReliableAgentRef<SessionHostCommand>) =
         let state = {
             Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
             Candidates = HashSet(); Movements = ResizeArray()
@@ -433,9 +491,13 @@ module PresenceAgent =
             Kinds = Dictionary(); Unused = HashSet(); KindIds = Map.empty; LastKind = 0UL; Removals = 0L
             VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
             Ticker = None; LastFlush = 0L; Host = AgentOutbox(config.MaxControlDeliveries, host)
+            PhantomObservation = mode; PhantomObservations = ResizeArray()
         }
         let options = {
             AgentOptions.create "presence" with
                 Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
         }
         Agent.Start(options, handle config state, isControl = isControl)
+
+    let start config host = startWithObservation PhantomObservationMode.Disabled config host
+    let startObserved mode config host = startWithObservation mode config host

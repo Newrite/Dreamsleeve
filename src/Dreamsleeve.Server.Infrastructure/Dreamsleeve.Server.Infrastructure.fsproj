@@ -21,6 +21,7 @@
     <Compile Include="AuthService.fs" />
     <Compile Include="AdminService.fs" />
     <Compile Include="TransportOwner.fs" />
+    <Compile Include="PhantomStorage.fs" />
     <Compile Include="EnetTransport.fs" />
   </ItemGroup>
   <ItemGroup>

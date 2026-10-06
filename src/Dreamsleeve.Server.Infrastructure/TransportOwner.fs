@@ -40,6 +40,10 @@ module TransportOwner =
         Gate: obj
         Incoming: Queue<struct (ServerTransportEvent * int64)>
         Outgoing: Queue<struct (Command * int64)>
+        RealtimeOutgoing: Queue<struct (Command * int64)>
+        BulkOutgoing: Dictionary<Guid, Queue<struct (Command * int64)>>
+        BulkPeers: Queue<Guid>
+        mutable BulkCommands: int
         Peers: Dictionary<Guid, Peer>
         Payloads: ConcurrentDictionary<Guid, int>
         Wake: AutoResetEvent
@@ -59,11 +63,13 @@ module TransportOwner =
     // Realtime may use only the non-reserved share. Reliable packets have the
     // full data quota; lifecycle notifications have a separate count reserve.
     let private countLimit lane capacity peers =
-        if lane = DeliveryLane.Realtime then capacity - max 1 (min peers (max 1 (capacity / 8)))
+        if LanePolicy.bulk lane then max 1 (capacity / 2)
+        elif not (LanePolicy.reliable lane) then capacity - max 1 (min peers (max 1 (capacity / 8)))
         else capacity
 
     let private byteLimit lane capacity =
-        if lane = DeliveryLane.Realtime then int64 capacity - max 1L (int64 capacity / 4L)
+        if LanePolicy.bulk lane then max 1L (int64 capacity / 2L)
+        elif not (LanePolicy.reliable lane) then int64 capacity - max 1L (int64 capacity / 4L)
         else int64 capacity
 
     let private reserve state = 2 * state.Config.PeerLimit + 2
@@ -111,7 +117,7 @@ module TransportOwner =
                        || int64 bytes.Length > byteLimit lane state.Config.Worker.QueueBytes - state.IncomingBytes
                        || peer.IncomingPackets >= countLimit lane state.Config.MaxOutgoingPacketsPerPeer 1
                        || int64 bytes.Length > byteLimit lane state.Config.MaxOutgoingBytesPerPeer - peer.IncomingBytes then
-                        if lane = DeliveryLane.Realtime then state.Dropped <- state.Dropped + 1L
+                        if not (LanePolicy.reliable lane) then state.Dropped <- state.Dropped + 1L
                         false
                     else
                         state.Incoming.Enqueue(struct (event, Stopwatch.GetTimestamp()))
@@ -139,22 +145,23 @@ module TransportOwner =
             let exists = lock state.Gate (fun () -> state.Peers.ContainsKey id)
             if exists then
                 match transport.Send(id, packet) with
-                | Ok () -> ()
+                | Ok () -> true
+                | Error reason when packet.Lane = DeliveryLane.Models && reason.Contains("budget", StringComparison.OrdinalIgnoreCase) -> false
                 | Error reason ->
                     lock state.Gate (fun () ->
                         state.NativeFailures <- state.NativeFailures + 1L
-                        if packet.Lane = DeliveryLane.Realtime then state.Dropped <- state.Dropped + 1L)
-                    if packet.Lane <> DeliveryLane.Realtime then disconnect state transport id reason
-        | Close id -> transport.Close id
+                        if not (LanePolicy.reliable packet.Lane) then state.Dropped <- state.Dropped + 1L)
+                    if LanePolicy.reliable packet.Lane && not (LanePolicy.bulk packet.Lane) then disconnect state transport id reason
+                    true
+            else true
+        | Close id -> transport.Close id; true
         | Reset id ->
             transport.Reset id
             forget state id
+            true
 
-    let private takeCommand state =
+    let private releaseCommand state command =
         lock state.Gate (fun () ->
-            match state.Outgoing.TryDequeue() with
-            | false, _ -> ValueNone
-            | true, struct (command, _) ->
                 match command with
                 | Send(id, packet) ->
                     state.OutgoingPackets <- state.OutgoingPackets - 1
@@ -164,26 +171,87 @@ module TransportOwner =
                         peer.Packets <- peer.Packets - 1
                         peer.Bytes <- peer.Bytes - int64 packet.Bytes.Length
                     | false, _ -> ()
-                | Close _ | Reset _ -> ()
-                ValueSome command)
+                | Close _ | Reset _ -> ())
+
+    let private enqueueBulk state id command =
+        let queue =
+            match state.BulkOutgoing.TryGetValue id with
+            | true, queue -> queue
+            | _ ->
+                let queue = Queue()
+                state.BulkOutgoing[id] <- queue
+                state.BulkPeers.Enqueue id
+                queue
+        queue.Enqueue command
+        state.BulkCommands <- state.BulkCommands + 1
+
+    let private takeCommand state (blocked: HashSet<Guid>) =
+        lock state.Gate (fun () ->
+            let mutable checking = true
+            while checking do
+                match state.Outgoing.TryPeek() with
+                | true, struct (Close id, _) ->
+                    match state.Peers.TryGetValue id with
+                    | true, peer when peer.Packets > 0 -> enqueueBulk state id (state.Outgoing.Dequeue())
+                    | _ -> checking <- false
+                | _ -> checking <- false
+            if state.Outgoing.Count > 0 then
+                let struct (command, _) as queued = state.Outgoing.Dequeue()
+                releaseCommand state command
+                ValueSome(queued, None)
+            elif state.RealtimeOutgoing.Count > 0 then
+                let struct (command, _) as queued = state.RealtimeOutgoing.Dequeue()
+                releaseCommand state command
+                ValueSome(queued, None)
+            else
+                let mutable remaining = state.BulkPeers.Count
+                let mutable result = ValueNone
+                while remaining > 0 && result.IsNone do
+                    remaining <- remaining - 1
+                    let id = state.BulkPeers.Dequeue()
+                    if blocked.Contains id then state.BulkPeers.Enqueue id
+                    else result <- ValueSome(state.BulkOutgoing[id].Peek(), Some id)
+                result)
+
+    let private finishBulk state id completed =
+        lock state.Gate (fun () ->
+            let queue = state.BulkOutgoing[id]
+            if completed then
+                let struct (command, _) = queue.Dequeue()
+                state.BulkCommands <- state.BulkCommands - 1
+                releaseCommand state command
+            if queue.Count > 0 then state.BulkPeers.Enqueue id
+            else state.BulkOutgoing.Remove id |> ignore)
 
     let private drain state transport =
         let options = state.Config.Worker
         let started = Stopwatch.GetTimestamp()
         let mutable commands, bytes = 0, 0L
         let mutable available = true
+        let blocked = HashSet<Guid>()
         while available && commands < options.SendCommandsPerPass
               && bytes < int64 options.SendBytesPerPass
               && (commands = 0 || Stopwatch.GetElapsedTime(started).TotalMilliseconds < float options.WorkBudgetMs)
               && healthy state do
-            match takeCommand state with
+            match takeCommand state blocked with
             | ValueNone -> available <- false
-            | ValueSome command ->
+            | ValueSome(struct (command, timestamp), bulkPeer) ->
                 commands <- commands + 1
                 match command with
                 | Send(_, packet) -> bytes <- bytes + int64 packet.Bytes.Length
                 | Close _ | Reset _ -> ()
-                handle state transport command
+                let stale =
+                    match command with
+                    | Send(_, packet) when packet.Lane = DeliveryLane.Poses -> Stopwatch.GetElapsedTime(timestamp).TotalMilliseconds > 200.0
+                    | _ -> false
+                let completed = stale || handle state transport command
+                match bulkPeer with
+                | Some id ->
+                    // Preserve FIFO for this peer, but give every other peer a
+                    // turn even while its reliable ENet budget is exhausted.
+                    finishBulk state id completed
+                    if not completed then blocked.Add id |> ignore
+                | None -> ()
         commands
 
     let private receive state (transport: ServerTransport) =
@@ -203,12 +271,14 @@ module TransportOwner =
                 | ServerTransportEvent.Disconnected id | ServerTransportEvent.Failed(id, _) ->
                     forget state id
                     publish state event |> ignore
+                // Empty channel epoch bookkeeping is never a domain pose.
+                | ServerTransportEvent.Received(_, DeliveryLane.Poses, bytes) when bytes.Length = 0 -> ()
                 | ServerTransportEvent.Received(id, lane, _) ->
                     let active = lock state.Gate (fun () ->
                         match state.Peers.TryGetValue id with
                         | true, peer -> not peer.Closing
                         | false, _ -> false)
-                    if active && not (publish state event) && lane <> DeliveryLane.Realtime then
+                    if active && not (publish state event) && LanePolicy.reliable lane && not (LanePolicy.bulk lane) then
                         disconnect state transport id "Reliable incoming handoff budget exceeded."
             events.Length
 
@@ -219,7 +289,8 @@ module TransportOwner =
                 | true, struct (_, timestamp) -> Stopwatch.GetElapsedTime(timestamp).TotalMilliseconds
                 | false, _ -> 0.
             let snapshot = struct (state.Incoming.Count, state.IncomingBytes, age state.Incoming,
-                                   state.Outgoing.Count, state.OutgoingBytes, age state.Outgoing,
+                                   state.Outgoing.Count + state.RealtimeOutgoing.Count + state.BulkCommands, state.OutgoingBytes,
+                                   state.BulkOutgoing.Values |> Seq.map age |> Seq.fold max (max (age state.Outgoing) (age state.RealtimeOutgoing)),
                                    state.Dropped, state.NativeFailures)
             state.Dropped <- 0L
             state.NativeFailures <- 0L
@@ -281,7 +352,7 @@ module TransportOwner =
         | false, _ -> ()
         | true, peer when peer.ResetQueued || (peer.Closing && not reset) -> ()
         | true, peer ->
-            if state.Outgoing.Count - state.OutgoingPackets >= reserve state then
+            if state.Outgoing.Count + state.RealtimeOutgoing.Count + state.BulkCommands - state.OutgoingPackets >= reserve state then
                 state.Fault <- Some "Transport outgoing lifecycle reserve exhausted."
             else
                 peer.Closing <- true
@@ -314,11 +385,14 @@ module TransportOwner =
                        || size > byteLimit packet.Lane state.Config.Worker.QueueBytes - state.OutgoingBytes
                        || peer.Packets >= countLimit packet.Lane state.Config.MaxOutgoingPacketsPerPeer 1
                        || size > byteLimit packet.Lane state.Config.MaxOutgoingBytesPerPeer - peer.Bytes then
-                        if packet.Lane = DeliveryLane.Realtime then state.Dropped <- state.Dropped + 1L
+                        if not (LanePolicy.reliable packet.Lane) then state.Dropped <- state.Dropped + 1L
                         Error "Outgoing transport handoff budget exceeded."
                     else
-                        let wake = state.Outgoing.Count = 0
-                        state.Outgoing.Enqueue(struct (Send(id, packet), Stopwatch.GetTimestamp()))
+                        let wake = state.Outgoing.Count + state.RealtimeOutgoing.Count + state.BulkCommands = 0
+                        let command = struct (Send(id, packet), Stopwatch.GetTimestamp())
+                        if LanePolicy.bulk packet.Lane then enqueueBulk state id command
+                        elif packet.Lane = DeliveryLane.Realtime then state.RealtimeOutgoing.Enqueue command
+                        else state.Outgoing.Enqueue command
                         state.OutgoingPackets <- state.OutgoingPackets + 1
                         state.OutgoingBytes <- state.OutgoingBytes + size
                         peer.Packets <- peer.Packets + 1
@@ -354,7 +428,9 @@ module TransportOwner =
     /// Success from Send means bounded handoff admission, not remote delivery.
     let create (config: ServerConfig) factory =
         let state = {
-            Config = config; Gate = obj(); Incoming = Queue(); Outgoing = Queue(); Peers = Dictionary()
+            Config = config; Gate = obj(); Incoming = Queue(); Outgoing = Queue(); BulkOutgoing = Dictionary(); Peers = Dictionary()
+            RealtimeOutgoing = Queue()
+            BulkPeers = Queue(); BulkCommands = 0
             Payloads = ConcurrentDictionary(); Wake = new AutoResetEvent(false)
             Ready = TaskCompletionSource<Result<unit, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
             IncomingPackets = 0; IncomingBytes = 0L; OutgoingPackets = 0; OutgoingBytes = 0L
@@ -394,6 +470,7 @@ module TransportOwner =
                     if dispose then
                         worker.Join()
                         lock state.Gate (fun () ->
-                            state.Incoming.Clear(); state.Outgoing.Clear(); state.Peers.Clear(); state.Payloads.Clear())
+                            state.Incoming.Clear(); state.Outgoing.Clear(); state.RealtimeOutgoing.Clear(); state.BulkOutgoing.Clear(); state.BulkPeers.Clear()
+                            state.Peers.Clear(); state.Payloads.Clear())
                         state.Wake.Dispose()
             }

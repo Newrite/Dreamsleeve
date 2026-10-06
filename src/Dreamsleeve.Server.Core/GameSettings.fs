@@ -20,6 +20,7 @@ type GameSettings =
         groundMarkRules: GroundMarkRules
         guildLimits: GuildLimits
         trustedProxies: AddressRange list
+        phantoms: PhantomOptions
     }
 
     member this.Server = this.server
@@ -36,11 +37,19 @@ type GameSettings =
     /// [Proxies]: a game connection from one of them is the player who signed in
     /// through it, and these addresses themselves are never range-banned.
     member this.TrustedProxies = this.trustedProxies
+    member this.Phantoms = this.phantoms
 
 [<RequireQualifiedAccess>]
 module GameSettings =
     /// The checked [Proxies] of the same file.
     let withTrustedProxies proxies (settings: GameSettings) = { settings with trustedProxies = proxies }
+
+    let withPhantoms options (settings: GameSettings) =
+        let errors = PhantomOptions.validate options @ [
+            if options.ChunkBytes + 512 > settings.Server.MaxPacketBytes || options.Limits.PoseBytes + 128 > settings.Server.MaxPacketBytes then
+                "Server.MaxPacketBytes must allow phantom envelopes."
+        ]
+        if errors.IsEmpty then Ok { settings with phantoms = options } else Error errors
 
     /// Sources that acknowledge the cleanup of every session: chat, system
     /// channel, presence, ground marks and guilds.
@@ -106,7 +115,7 @@ module GameSettings =
         | [], Ok schedule, Ok rules, Ok limits ->
             Ok { server = server; runtime = runtime; identity = identity; announcements = announcements; groundMarks = groundMarks
                  guilds = guilds; codec = ProtocolCodec.create server; schedule = schedule; groundMarkRules = rules; guildLimits = limits
-                 trustedProxies = [] }
+                 trustedProxies = []; phantoms = PhantomOptions.defaults }
         | errors, schedule, rules, limits ->
             let scheduleErrors = match schedule with Error errors -> errors | Ok _ -> []
             let rulesErrors = match rules with Error errors -> errors | Ok _ -> []

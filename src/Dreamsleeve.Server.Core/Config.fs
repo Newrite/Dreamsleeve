@@ -74,7 +74,7 @@ module ServerConfig =
             BindAddress = IPAddress.Loopback
             Port = 8778us
             PeerLimit = 544
-            ChannelLimit = 3
+            ChannelLimit = 5
             ServiceTimeoutMs = 0u
             EventBudget = 256
             Worker = { QueueCapacity = 65536; QueueBytes = 16 * 1024 * 1024
@@ -136,7 +136,7 @@ module ServerConfig =
 
     /// ENet channels: at least the three delivery lanes, at most what one byte addresses.
     [<Literal>]
-    let MinChannelLimit = 3
+    let MinChannelLimit = 5
 
     [<Literal>]
     let MaxChannelLimit = 255

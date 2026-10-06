@@ -202,7 +202,64 @@ let private flushViewsNow fixture = task {
     return alice, bob
 }
 
+// Count the real producer output without retaining a dense history of events.
+let private observationModeCase mode = case $"dense128 phantom observation mode {mode} preserves membership and bounds atomic batches" (fun () -> task {
+    let mutable members, departed, views, hidden, closes = 0, 0, 0, 0, 0
+    let mutable largestArray, largestTurn = 0, 0
+    let rec count = function
+        | PhantomObservation.Batch values ->
+            largestArray <- max largestArray values.Length
+            let mutable facts = 0
+            for value in values do facts <- facts + count value
+            facts
+        | PhantomObservation.Member _ -> members <- members + 1; 1
+        | PhantomObservation.Departed _ -> departed <- departed + 1; 1
+        | PhantomObservation.View _ -> views <- views + 1; 1
+        | PhantomObservation.Hidden _ -> hidden <- hidden + 1; 1
+    use host = Agent.Start(AgentOptions.create "phantom-observation-host", fun _ command ->
+        match command with
+        | SessionHostCommand.ObservePhantoms observation -> largestTurn <- max largestTurn (count observation)
+        | SessionHostCommand.Close _ -> closes <- closes + 1
+        | _ -> ()
+        Task.FromResult())
+    use events = Agent.Start(AgentOptions.create "dense-presence-events", fun _ (_: PresenceEvent) -> Task.FromResult())
+    use cleanup = Agent.Start(AgentOptions.create "dense-presence-cleanup", fun _ (_: Guid) -> Task.FromResult())
+    let settings = { config with MailboxCapacity = 512; ControlReserve = 128; MaxControlDeliveries = 1024 }
+    use presence = PresenceAgent.startObserved mode settings (host.Ref.TryReliable().Value)
+    let subscriptions = Array.init 128 (fun index ->
+        let value = subscription (uint64 index + 1UL) events
+        { value with Snapshot = character value |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome(location (float32 index)))) |> Player.snapshot })
+    for value in subscriptions do do! post presence (PresenceCommand.Join value)
+    do! post presence (tick())
+    // Move every endpoint to exercise a full dense authority/distance turn.
+    for index in 0 .. subscriptions.Length - 1 do
+        let previous = subscriptions[index]
+        let changed = { previous.Snapshot with Location = ValueSome(location (float32 index + 1.0f)); MovementContext = if index = 0 then 2UL else 1UL }
+        do! post presence (PresenceCommand.Update(previous.ConnectionId, changed))
+    do! post presence (tick())
+    do! post presence (PresenceCommand.Detach { ConnectionId = subscriptions[0].ConnectionId; ReplyTo = cleanup.Ref.TryReliable().Value })
+    do! stop presence
+    do! stop host
+    do! stop events
+    do! stop cleanup
+    equal 0 closes
+    match mode with
+    | PhantomObservationMode.Disabled ->
+        equal 0 members; equal 0 departed; equal 0 views; equal 0 hidden; equal 0 largestArray
+    | PhantomObservationMode.Membership ->
+        equal 256 members; equal 1 departed; equal 0 views; equal 0 hidden
+    | PhantomObservationMode.Full ->
+        equal 256 members; equal 1 departed
+        equal (2 * 128 * 127) views // Initial membership and one movement turn; idle ticks emit no duplicate views.
+        check (largestTurn >= 128 * 127) "A dense authority turn remains one atomic host message."
+        check (largestArray <= 4096) "Batch reference arrays stay off the large object heap."
+})
+
 let tests = testList "PresenceAgent" [
+    observationModeCase PhantomObservationMode.Disabled
+    observationModeCase PhantomObservationMode.Membership
+    observationModeCase PhantomObservationMode.Full
+
     case "snapshot includes self and later joins and leaves stay in source order" (fun () -> task {
         let hostEvents, aliceEvents, bobEvents, acknowledgments =
             Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<PresenceEvent>(),

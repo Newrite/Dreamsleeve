@@ -27,6 +27,7 @@ type private Fake = {
     Events: ConcurrentQueue<ServerTransportEvent>
     Calls: ConcurrentQueue<string * int>
     mutable Send: unit -> Result<unit, string>
+    mutable SendPacket: (TransportPacket -> Result<unit, string>) option
     mutable PollFailure: string option
     mutable ThrowPoll: bool
 }
@@ -46,7 +47,7 @@ let private factory fake () =
                 while fake.Events.TryDequeue(&value) do events.Add value
                 Ok(List.ofSeq events)
         SetReadyHandler = ignore
-        Send = fun _ -> record fake "send"; fake.Send()
+        Send = fun (_, packet) -> record fake "send"; match fake.SendPacket with Some send -> send packet | None -> fake.Send()
         MaxUnfragmentedPayloadBytes = fun _ -> record fake "mtu"; 1200
         Close = fun _ -> record fake "close"
         Reset = fun _ -> record fake "reset"
@@ -55,7 +56,7 @@ let private factory fake () =
 
 let private setup settings = task {
     let fake = { Id = Guid.NewGuid(); Events = ConcurrentQueue(); Calls = ConcurrentQueue()
-                 Send = (fun () -> Ok ()); PollFailure = None; ThrowPoll = false }
+                 Send = (fun () -> Ok ()); SendPacket = None; PollFailure = None; ThrowPoll = false }
     fake.Events.Enqueue(ServerTransportEvent.Connected(fake.Id, Net.IPAddress.Loopback))
     let owner = TransportOwner.create settings (factory fake) |> ok
     do! eventually (fun () -> owner.MaxUnfragmentedPayloadBytes fake.Id = 1200)
@@ -69,6 +70,102 @@ let private setup settings = task {
 let private observed fake name = fake.Calls |> Seq.exists (fun (call, _) -> call = name)
 
 let tests = testList "TransportOwner" [
+    case "chat passes model budget pressure while model chunks retain accepted order" (fun () -> task {
+        let! fake, owner = setup config
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        use retrySeen = new ManualResetEventSlim(false)
+        use resumeModel = new ManualResetEventSlim(false)
+        let value lane number = { Lane = lane; Bytes = [|byte number|] }
+        try
+            fake.SendPacket <- Some(fun packet ->
+                let number = int packet.Bytes[0]
+                if number = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                if number = 1 && not resumeModel.IsSet then retrySeen.Set(); Error "Native packet budget exceeded."
+                else delivered.Enqueue number; Ok ())
+            owner.Send(fake.Id, value DeliveryLane.Control 0) |> ok
+            do! eventually (fun () -> entered.IsSet)
+            owner.Send(fake.Id, value DeliveryLane.Models 1) |> ok
+            owner.Send(fake.Id, value DeliveryLane.Models 2) |> ok
+            owner.Send(fake.Id, value DeliveryLane.Chat 3) |> ok
+            release.Set()
+            do! eventually (fun () -> retrySeen.IsSet && (delivered |> Seq.contains 3))
+            Expect.equal (delivered.ToArray()) [|0;3|] "Chat has priority and second model chunk cannot jump a retry."
+            resumeModel.Set()
+            do! eventually (fun () -> delivered.Count = 4)
+            Expect.equal (delivered.ToArray()) [|0;3;1;2|] "Accepted reliable model order preserved after budget recovery."
+            Expect.isFalse (observed fake "reset") "Bulk pressure does not reset the healthy peer."
+        finally release.Set(); resumeModel.Set(); owner.Dispose()
+    })
+
+    case "one exhausted model peer cannot block other peers' models or poses" (fun () -> task {
+        let! fake, owner = setup { config with Worker = { config.Worker with QueueCapacity = 8 } }
+        let other = Guid.NewGuid()
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        use resume = new ManualResetEventSlim(false)
+        try
+            fake.Events.Enqueue(ServerTransportEvent.Connected(other, Net.IPAddress.Loopback))
+            do! eventually (fun () -> owner.MaxUnfragmentedPayloadBytes other = 1200)
+            fake.SendPacket <- Some(fun packet ->
+                let number = int packet.Bytes[0]
+                if number = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                if number = 1 && not resume.IsSet then Error "Native packet budget exceeded."
+                else delivered.Enqueue number; Ok ())
+            let send id lane number = owner.Send(id, { Lane = lane; Bytes = [|byte number|] }) |> ok
+            send fake.Id DeliveryLane.Control 0
+            do! eventually (fun () -> entered.IsSet)
+            send fake.Id DeliveryLane.Models 1
+            send fake.Id DeliveryLane.Models 2
+            send other DeliveryLane.Models 4
+            send other DeliveryLane.Poses 5
+            send other DeliveryLane.Chat 3
+            release.Set()
+            do! eventually (fun () -> delivered.Count = 4)
+            Expect.equal (delivered.ToArray()) [|0;3;4;5|] "Other peer's chat, model and pose pass; blocked peer stays FIFO."
+            resume.Set()
+            do! eventually (fun () -> delivered.Count = 6)
+            Expect.equal (delivered.ToArray()) [|0;3;4;5;1;2|] "Only blocked peer retries its first chunk."
+        finally release.Set(); resume.Set(); owner.Dispose()
+    })
+    case "control and chat pass an accepted realtime backlog without reordering realtime itself" (fun () -> task {
+        let! fake, owner = setup { config with Worker = { config.Worker with QueueCapacity = 8 } }
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        try
+            fake.SendPacket <- Some(fun packet ->
+                let number = int packet.Bytes[0]
+                if number = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                delivered.Enqueue number
+                Ok ())
+            let send lane number = owner.Send(fake.Id, { Lane = lane; Bytes = [|byte number|] }) |> ok
+            send DeliveryLane.Realtime 0
+            do! eventually (fun () -> entered.IsSet)
+            send DeliveryLane.Realtime 1
+            send DeliveryLane.Realtime 2
+            send DeliveryLane.Chat 3
+            send DeliveryLane.Control 4
+            release.Set()
+            do! eventually (fun () -> delivered.Count = 5)
+            Expect.equal (delivered.ToArray()) [|0;3;4;1;2|] "High priority lanes pass, and each lane's accepted order remains."
+        finally release.Set(); owner.Dispose()
+    })
+    case "empty Poses epoch bookkeeping never enters the runtime handoff" (fun () -> task {
+        let! fake, owner = setup config
+        try
+            fake.Events.Enqueue(ServerTransportEvent.Received(fake.Id, DeliveryLane.Poses, [||]))
+            fake.Events.Enqueue(ServerTransportEvent.Received(fake.Id, DeliveryLane.Poses, [|1uy|]))
+            let received = ResizeArray<byte array>()
+            do! eventually (fun () ->
+                for event in owner.Poll() |> ok do
+                    match event with ServerTransportEvent.Received(_, DeliveryLane.Poses, bytes) -> received.Add bytes | _ -> ()
+                received.Count > 0)
+            Expect.equal (received.ToArray()) [|[|1uy|]|] "Epoch marker is transport-only."
+        finally owner.Dispose()
+    })
     case "owner continues servicing transport while application consumer is idle" (fun () -> task {
         let! fake, owner = setup config
         try

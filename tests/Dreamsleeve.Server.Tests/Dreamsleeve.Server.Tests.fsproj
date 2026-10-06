@@ -35,8 +35,10 @@
     <Compile Include="PlayerSessionTests.fs" />
     <Compile Include="ChatRoomAgentTests.fs" />
     <Compile Include="PresenceAgentTests.fs" />
+    <Compile Include="PhantomTests.fs" />
     <Compile Include="ServerRuntimeTests.fs" />
     <Compile Include="EnetTransportTests.fs" />
+    <Compile Include="PhantomE2ETests.fs" />
     <Compile Include="TransportOwnerTests.fs" />
     <Compile Include="ConfigurationTests.fs" />
     <Compile Include="AnnouncementTests.fs" />

@@ -97,6 +97,7 @@ type ApplicationConfig = {
     GroundMarks: GroundMarkOptions
     Guilds: GuildOptions
     Proxies: ProxySettings
+    Phantoms: PhantomOptions
 }
 
 [<RequireQualifiedAccess>]
@@ -137,6 +138,7 @@ module Configuration =
         GroundMarks = GroundMarkOptions.defaults
         Guilds = GuildOptions.defaults
         Proxies = { Trusted = [] }
+        Phantoms = PhantomOptions.defaults
     }
 
     // Each [[table array]] entry starts from these defaults, like a section does.
@@ -362,7 +364,10 @@ module Configuration =
                 "Moderation.RulesPath must be set when moderation is enabled."
         ]
         match errors, GameSettings.create config.Server config.Runtime config.Identity config.Announcements config.GroundMarks config.Guilds with
-        | [], Ok game -> Ok (config, GameSettings.withTrustedProxies (trustedProxies config) game)
+        | [], Ok game ->
+            GameSettings.withPhantoms config.Phantoms game
+            |> Result.map (fun game -> config, GameSettings.withTrustedProxies (trustedProxies config) game)
+            |> Result.mapError (String.concat "\n")
         | errors, Ok _ -> Error (String.concat " " errors)
         | errors, Error game -> Error (String.concat " " (errors @ game))
 

@@ -46,6 +46,17 @@ type ServerTransport = {
     Dispose: unit -> unit
 }
 
+/// Operations are detached and serialized by the storage worker. A completed
+/// upload is a verified compressed file; false means more bytes are required.
+type PhantomStoragePort = {
+    StartUpload: PhantomTransferId * PhantomManifest -> Task<Result<bool, string>>
+    WriteChunk: PhantomTransferId * int * byte array -> Task<Result<bool, string>>
+    StartDownload: PhantomTransferId * PhantomManifest -> Task<Result<unit, string>>
+    ReadChunk: PhantomTransferId * int * int -> Task<Result<byte array, string>>
+    Cancel: PhantomTransferId -> Task<unit>
+    Dispose: unit -> Task<unit>
+}
+
 [<RequireQualifiedAccess>]
 type IdentityAdmission =
     /// The pseudonym the player is shown under, when the session asked to hide.
@@ -70,6 +81,7 @@ type SessionHostCommand =
     | Send of Guid * ServerResponse
     | Close of Guid * reason: string
     | SlowConsumer of Guid
+    | ObservePhantoms of PhantomObservation
 
 type Subscription<'Event> = {
     ConnectionId: Guid

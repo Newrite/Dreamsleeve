@@ -20,6 +20,9 @@
         <Compile Include="Authentication.fs" />
         <Compile Include="SessionContracts.fs" />
         <Compile Include="Announcements.fs" />
+        <Compile Include="PhantomOptions.fs" />
+        <Compile Include="Protocol/PhantomCodec.fs" />
+        <Compile Include="PhantomAgent.fs" />
         <Compile Include="GameSettings.fs" />
         <Compile Include="RateLimit.fs" />
         <Compile Include="ChatRoomAgent.fs" />

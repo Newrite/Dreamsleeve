@@ -236,19 +236,20 @@ let private startGame settings (game: GameSettings) moderation pseudonyms (authe
     let guildWriter = SqliteGuildStore.startWriter settings.Database logger game.Guilds.MaxPendingWrites
     logger.LogInformation("Ground marks loaded: {Count}, next id {NextId}", records.Length, nextId)
     logger.LogInformation("Guilds loaded: {Count}, next id {NextId}", guilds.Guilds.Length, guilds.NextId)
-    match EnetTransport.create game.Server logger with
+    match EnetTransport.createWithPhantoms game.Server game.Phantoms logger with
     | Error error ->
         do! stopWriter logger "Ground mark" writer
         do! stopWriter logger "Guild" guildWriter
         return raise (InvalidOperationException $"ENet startup failed: {error}")
     | Ok transport ->
+        let phantomStorage = PhantomStorage.create game.Phantoms
         let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref.TryReliable().Value }
         let guildStorage = {
             Loaded = guilds.Guilds; Profiles = guilds.Profiles; NextId = guilds.NextId
             Writer = guildWriter.Ref.TryReliable().Value; WriterStopped = guildWriter.Completion
         }
         let runtime =
-            ServerRuntime.start game moderation pseudonyms marks guildStorage (AuthService.authenticator authentication) transport logger
+            ServerRuntime.startWithPhantoms phantomStorage game moderation pseudonyms marks guildStorage (AuthService.authenticator authentication) transport logger
         let! _ = authentication.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.AccountChanged))
         let completion = task {
             let! outcome = task {
@@ -260,6 +261,8 @@ let private startGame settings (game: GameSettings) moderation pseudonyms (authe
             if outcome.IsSome then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark and guild writes")
             try transport.Dispose()
             with error -> logger.LogError(error, "ENet transport disposal failed")
+            try do! phantomStorage.Dispose()
+            with error -> logger.LogError(error, "Phantom storage disposal failed")
             try do! stopWriter logger "Ground mark" writer
             with error -> logger.LogError(error, "Ground mark writer failed")
             try do! stopWriter logger "Guild" guildWriter

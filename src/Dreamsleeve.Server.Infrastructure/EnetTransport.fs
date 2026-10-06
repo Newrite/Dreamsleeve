@@ -87,11 +87,14 @@ module EnetTransport =
         ConnectId: uint32
         Outgoing: PacketBudget
         mutable Closing: bool
+        mutable PoseReceivedAt: int64
+        mutable PoseSamples: double
     }
 
     type private State = {
         Diagnostics: TransportDiagnostics
         Config: ServerConfig
+        Phantoms: PhantomOptions
         Logger: ILogger
         Pump: PumpHealth.State
         Host: EnetHost
@@ -122,7 +125,7 @@ module EnetTransport =
         | true, _ | false, _ -> ()
 
     let private connected state (events: ResizeArray<ServerTransportEvent>) (peer: EnetPeer) =
-        if peer.ChannelCount < 3un then
+        if peer.ChannelCount < unativeint ServerConfig.MinChannelLimit then
             peer.DisconnectNow(0u)
         else
             match state.Slots.TryGetValue peer.IncomingPeerId with
@@ -137,6 +140,8 @@ module EnetTransport =
                 ConnectId = peer.ConnectId
                 Outgoing = PacketBudget(state.Config.MaxOutgoingPacketsPerPeer, int64 state.Config.MaxOutgoingBytesPerPeer)
                 Closing = false
+                PoseReceivedAt = Environment.TickCount64
+                PoseSamples = 2.0
             }
             state.Connections.Add(connection.Id, connection)
             state.Slots.Add(peer.IncomingPeerId, connection)
@@ -159,14 +164,26 @@ module EnetTransport =
         | true, connection when connection.ConnectId = event.Peer.ConnectId && not connection.Closing ->
             let reliable = (packet.Flags &&& EnetPacketFlag.Reliable) = EnetPacketFlag.Reliable
             let unsequenced = (packet.Flags &&& EnetPacketFlag.Unsequenced) = EnetPacketFlag.Unsequenced
-            if event.ChannelId > byte DeliveryLane.Realtime || unsequenced
-               || (event.ChannelId <> byte DeliveryLane.Realtime && not reliable)
+            let lane = enum<DeliveryLane>(int event.ChannelId)
+            let time = Environment.TickCount64
+            if lane = DeliveryLane.Poses then
+                connection.PoseSamples <- min 2.0 (connection.PoseSamples + double (time - connection.PoseReceivedAt) / double state.Phantoms.PoseIntervalMs)
+                connection.PoseReceivedAt <- time
+            // The only reliable Poses packet is ENet's empty epoch marker at
+            // unreliable sequence rollover. It never reaches the domain codec.
+            if lane = DeliveryLane.Poses && reliable && not unsequenced && packet.DataLength = 0un then ()
+            elif event.ChannelId > byte DeliveryLane.Poses || unsequenced
+               || (event.ChannelId <= byte DeliveryLane.Poses && LanePolicy.reliable lane <> reliable)
                || packet.DataLength > unativeint state.Config.MaxPacketBytes
+               || (lane = DeliveryLane.Models && packet.DataLength > unativeint (state.Phantoms.ChunkBytes + 512))
+               || (lane = DeliveryLane.Poses && packet.DataLength > unativeint (state.Phantoms.Limits.PoseBytes + 128))
                || (event.ChannelId = byte DeliveryLane.Realtime
                    && packet.DataLength > unativeint (OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer)) then
                 reset state connection.Id
                 events.Add(ServerTransportEvent.Disconnected connection.Id)
+            elif lane = DeliveryLane.Poses && connection.PoseSamples < 1.0 then ()
             else
+                if lane = DeliveryLane.Poses then connection.PoseSamples <- connection.PoseSamples - 1.0
                 events.Add(ServerTransportEvent.Received(connection.Id, enum<DeliveryLane>(int event.ChannelId), packet.AsSpan().ToArray()))
         | true, _ | false, _ -> ()
 
@@ -238,7 +255,13 @@ module EnetTransport =
                 Error "Realtime payload exceeds negotiated MTU."
             | true, connection ->
                 let started = TransportDiagnostics.BeginSend()
-                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing, byte packet.Lane, packet.Lane <> DeliveryLane.Realtime)
+                let delivery =
+                    match LanePolicy.reliability packet.Lane with
+                    | LaneReliability.Reliable when LanePolicy.bulk packet.Lane -> PacketDelivery.ReliableBulk
+                    | LaneReliability.Reliable -> PacketDelivery.Reliable
+                    | LaneReliability.Sequenced -> PacketDelivery.Sequenced
+                    | LaneReliability.SequencedFragmented -> PacketDelivery.SequencedFragmented
+                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing, byte packet.Lane, delivery)
                 TransportDiagnostics.EndSend(started, bytes.Length)
                 match result with
                 | PacketSendResult.Sent ->
@@ -264,7 +287,7 @@ module EnetTransport =
                 finally
                     enet.ENET_API.enet_deinitialize()
 
-    let private allocate config (logger: ILogger) =
+    let private allocate phantoms config (logger: ILogger) =
         let mutable address = Unchecked.defaultof<enet.ENetAddress>
         let resolved = enet.ENetAddress.FromIpAddress(config.BindAddress, config.Port, &address)
 
@@ -298,6 +321,7 @@ module EnetTransport =
                     let state = {
                         Diagnostics = TransportDiagnostics()
                         Config = config
+                        Phantoms = phantoms
                         Logger = logger
                         Pump = PumpHealth.create ()
                         Host = host
@@ -324,6 +348,8 @@ module EnetTransport =
                 Error (sprintf "ENet host configuration failed: %s" error.Message)
 
     /// The settings come checked by GameSettings.create.
-    let createInline config logger = allocate config logger
+    let createInline config logger = allocate PhantomOptions.defaults config logger
 
-    let create config logger = TransportOwner.create config (fun () -> allocate config logger)
+    let create config logger = TransportOwner.create config (fun () -> allocate PhantomOptions.defaults config logger)
+
+    let createWithPhantoms config phantoms logger = TransportOwner.create config (fun () -> allocate phantoms config logger)

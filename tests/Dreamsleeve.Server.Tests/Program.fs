@@ -30,12 +30,14 @@ let main argv =
         AdminServiceTests.tests
         ChatRoomAgentTests.tests
         PresenceAgentTests.tests
+        PhantomTests.tests
         PlayerSessionTests.tests
         ServerRuntimeTests.tests
         ServerRuntimeTests.hiddenIdentityTests
         ServerRuntimeTests.adminTests
         ServerRuntimeTests.displayNameTests
         EnetTransportTests.tests
+        PhantomE2ETests.tests
         TransportOwnerTests.tests
         ConfigurationTests.tests
         AnnouncementTests.tests
