@@ -1,4 +1,4 @@
-// Benchmark process only. One owner services independent peers across explicitly configured UDP sockets.
+﻿// Benchmark process only. One owner services independent peers across explicitly configured UDP sockets.
 #nowarn "104"
 module Dreamsleeve.Server.NetworkBenchmarks.Program
 
@@ -55,6 +55,7 @@ type private State = {
     EventBudgetPerHost: int
     GlobalOffset: int
     mutable Movement: Movement.Probe option
+    mutable Phantom: PhantomProbe.Probe option
     Options: Options
     Diagnostics: TransportDiagnostics array
     Hosts: EnetHost array
@@ -124,7 +125,7 @@ let private fail state message =
     if state.Errors.Count < 64 then state.Errors.Add message
 
 let private sendBytes state client channel reliable (bytes: byte array) =
-    match OutgoingPackets.TrySend(client.Peer, ReadOnlySpan<byte>(bytes), state.Budget, client.Budget, channel, reliable) with
+    match OutgoingPackets.TrySend(client.Peer, ReadOnlySpan<byte>(bytes), state.Budget, client.Budget, channel, (if reliable then PacketDelivery.Reliable else PacketDelivery.Sequenced)) with
     | PacketSendResult.Sent -> true
     | failure ->
         fail state (sprintf "Client %d packet admission failed: %A" client.Index failure)
@@ -211,6 +212,17 @@ let private received state client (event: EnetEvent) =
             match state.Movement with
             | Some probe -> probe.ReceiveMovement(client.Index, response, int packet.DataLength)
             | None -> fail state "Unexpected realtime packet during chat benchmark"
+    elif event.ChannelId = 3uy && (packet.Flags &&& EnetPacketFlag.Reliable) <> enum<EnetPacketFlag> 0 then
+        let response = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom(packet.AsSpan().ToArray())
+        match state.Phantom with
+        | Some probe -> probe.Asset(client.Index, response)
+        | None when response.ProtocolVersion = protocolVersion && not (isNull response.Policy) -> ()
+        | None -> fail state "Unexpected model data without phantom workload"
+    elif event.ChannelId = 4uy && packet.DataLength = 0un && (packet.Flags &&& EnetPacketFlag.Reliable) <> enum<EnetPacketFlag> 0 then ()
+    elif event.ChannelId = 4uy && (packet.Flags &&& (EnetPacketFlag.Reliable ||| EnetPacketFlag.Unsequenced)) = enum<EnetPacketFlag> 0 then
+        match state.Phantom with
+        | Some probe -> probe.Pose(client.Index, Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom(packet.AsSpan().ToArray()), int packet.DataLength)
+        | None -> fail state "Unexpected phantom pose without workload"
     elif event.ChannelId > 1uy || (packet.Flags &&& EnetPacketFlag.Reliable) <> EnetPacketFlag.Reliable then
         fail state (sprintf "Client %d received wrong transport channel/flags" client.Index)
     else
@@ -256,6 +268,19 @@ let private received state client (event: EnetEvent) =
             | ServerPacket.PayloadOneofCase.GroundMarksChanged ->
                 if response.GroundMarksChanged.Added.Count <> 0 || response.GroundMarksChanged.RemovedIds.Count <> 0 then
                     fail state (sprintf "Client %d received ground marks" client.Index)
+            // Fresh benchmark accounts have no guilds or invitations. These
+            // uncorrelated lifecycle notifications do not settle load requests.
+            | ServerPacket.PayloadOneofCase.GuildsSnapshot ->
+                if not client.Ready || response.HasRequestId || response.GuildsSnapshot.Guilds.Count <> 0
+                   || response.GuildsSnapshot.Invites.Count <> 0 then
+                    fail state (sprintf "Client %d received unexpected guild state" client.Index)
+            | ServerPacket.PayloadOneofCase.RoleChanged ->
+                if not client.Ready || response.HasRequestId
+                   || (response.RoleChanged.Role <> PlayerRole.Player && response.RoleChanged.Role <> PlayerRole.Moderator) then
+                    fail state (sprintf "Client %d received invalid role notification" client.Index)
+            | ServerPacket.PayloadOneofCase.MuteChanged ->
+                if not client.Ready || response.HasRequestId || not (isNull response.MuteChanged.Mute) then
+                    fail state (sprintf "Client %d received unexpected mute state" client.Index)
             | unknown -> fail state (sprintf "Unknown server packet payload: %A" unknown)
 
 let private handle state hostIndex (event: EnetEvent) =
@@ -346,7 +371,7 @@ let private ramp state =
                 state.LoginMs <- state.LoginMs + elapsed
 
                 let mutable peer = Unchecked.defaultof<EnetPeer>
-                if state.Hosts[client.HostIndex].TryConnect(remote, 3un, 0u, &peer) then
+                if state.Hosts[client.HostIndex].TryConnect(remote, 5un, 0u, &peer) then
                     client.Peer <- peer
                     client.StartedMs <- now state
                     state.Slots.Add(struct (client.HostIndex, peer.IncomingPeerId), client)
@@ -388,7 +413,7 @@ let private sendChat state =
     | None -> false
     | Some client ->
         let sequence = state.Messages.Count
-        let requestId = uint64 sequence + 2UL
+        let requestId = uint64 sequence + (if state.Phantom.IsSome then 100000000UL else 2UL)
         let packet = ClientPacket(ProtocolVersion = protocolVersion, RequestId = requestId,
                                   SendChat = SendChat(ChannelId = client.ChannelId, Text = sprintf "%s:%d" state.Prefix sequence))
         let sentMs = now state
@@ -476,12 +501,19 @@ let private movementLoad state =
     while Coordination.now() < started do pump state
     stage "load"
     probe.Start(started)
+    state.Phantom |> Option.iter _.Start()
+    let mutable chatDue = now state
     while Coordination.now() - started < state.Options.Seconds * 1000. && state.ErrorCount = 0 do
         let iterationStarted = Coordination.now()
         probe.SendDue()
+        state.Phantom |> Option.iter(fun phantom ->
+            phantom.Tick()
+            if now state >= chatDue then
+                if sendChat state then chatDue <- chatDue + 100.)
         pump state
         probe.RecordIteration(Coordination.now() - iterationStarted)
     probe.Stop()
+    state.Phantom |> Option.iter _.Stop()
     state.LoadMs <- Coordination.now() - started
 
     stage "drain"
@@ -503,6 +535,7 @@ let private movementLoad state =
         if not converged then fail state "Final movement/AOI state did not converge"
     elif state.ErrorCount = 0 then fail state "Control acknowledgements did not drain"
     state.DrainMs <- now state - draining
+    if state.Phantom.IsSome && state.ErrorCount = 0 then drain state
     if state.ErrorCount = 0 then
         state.Disconnecting <- true
         state.Group.All("verified", true, barrierPump state) |> ignore
@@ -534,6 +567,7 @@ let private report state =
     let result = {|
         success = state.ErrorCount = 0 && state.PresenceConverged && state.ReadyCount = state.Clients.Length
                   && state.Completed = state.Messages.Count && state.Received = int64 state.Messages.Count * int64 state.Clients.Length
+        phantom = state.Phantom |> Option.map _.Report() |> Option.toObj
         movement = state.Movement |> Option.map (fun probe -> probe.Report(state.LoadMs)) |> Option.toObj
         clients = state.Clients.Length; ready = state.ReadyCount; presenceConverged = state.PresenceConverged; seconds = state.Options.Seconds; requestedRate = state.Options.Rate
         sent = state.Messages.Count; received = state.Received; expected = int64 state.Messages.Count * int64 state.Clients.Length
@@ -585,7 +619,7 @@ let private run (options: Options) =
         let capacity = (options.Clients + options.Hosts - 1) / options.Hosts
         let buffer = Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_CLIENT_BUFFER"
         for _ in 1 .. options.Hosts do
-            let host = EnetHost.Create(address 0us, unativeint capacity, 3un, 0u, 0u, EnetHostOption.Ipv4)
+            let host = EnetHost.Create(address 0us, unativeint capacity, 5un, 0u, 0u, EnetHostOption.Ipv4)
             hosts.Add host
             if not (String.IsNullOrEmpty buffer) then
                 let bytes = Int32.Parse buffer
@@ -604,7 +638,7 @@ let private run (options: Options) =
         let state = {
             EventBudgetPerHost = max 1 (4096 / totalHosts)
             Group = group; AllPlayerIds = allPlayerIds; GlobalOffset = globalOffset
-            Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics()); Movement = None; Options = options; Hosts = hosts.ToArray(); Authentication = authentication
+            Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics()); Movement = None; Phantom = None; Options = options; Hosts = hosts.ToArray(); Authentication = authentication
             RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
             Clock = Stopwatch.StartNew(); Prefix = prefix
             Clients = Array.init options.Clients (fun index -> {
@@ -616,6 +650,15 @@ let private run (options: Options) =
             ErrorCount = 0; ReadyCount = 0; Disconnections = 0; Rejections = 0; Received = 0L; SentChatPayloadBytes = 0L; ReceivedChatPayloadBytes = 0L; Completed = 0; NextSender = 0
             Disconnecting = false; PresenceConverged = false; RampMs = 0.; LoadMs = 0.; DrainMs = 0.; BackpressuredMs = 0.; MaxInflight = 0
         }
+        match PhantomProbe.configuration() with
+        | Some config ->
+            if state.Group.Workers <> 1 then invalidOp "Combined phantom/chat workload requires one owner process"
+            state.Phantom <- Some(new PhantomProbe.Probe(config, state.AllPlayerIds, Coordination.now,
+                (fun index lane delivery bytes ->
+                    match OutgoingPackets.TrySend(state.Clients[index].Peer, ReadOnlySpan<byte>(bytes), state.Budget, state.Clients[index].Budget, lane, delivery) with
+                    | PacketSendResult.Sent -> true
+                    | result -> fail state (sprintf "Phantom packet admission: %A" result); false), fail state))
+        | None -> ()
         try
             ramp state
             if state.ErrorCount = 0 then
@@ -625,7 +668,9 @@ let private run (options: Options) =
                 else movementLoad state
         with error -> fail state (error.ToString())
         try disconnect state with error -> fail state ("Cleanup: " + error.Message)
-        report state
+        let result = report state
+        state.Phantom |> Option.iter(fun probe -> (probe :> IDisposable).Dispose())
+        result
     finally
         for host in hosts do host.Dispose()
         enet.ENET_API.enet_deinitialize()

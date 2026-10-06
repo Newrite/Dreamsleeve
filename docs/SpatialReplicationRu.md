@@ -103,3 +103,26 @@ Realtime при насыщении может быть пропущен. Reliabl
 Замер этого контракта 27–28 сентября 2026 года (1000 клиентов, 20 Гц, inline и отдельный
 владелец ENet): [movement v6/owner](benchmarks/movement-v6-owner-2026-09-27.md); методика —
 [NetworkBenchmarks](../tests/Dreamsleeve.Server.NetworkBenchmarks/README.md#movement-benchmark).
+
+
+## Дополнительное представление: фантомы (protocol 21)
+
+Фантомы используют уже принятые Presence views и расстояния. PhantomAgent
+получает узкую проекцию авторитетных изменений Presence; собственной
+пространственной сетки и второго определения доступности игрока нет.
+View revision отзывает подписку и незавершённую передачу сразу при выходе
+из AOI, смене контекста либо ограничений получателя. Generation определяет
+внешность, sequence — самостоятельный полный снимок позы. Старый снимок
+не может восстановить отозванную view.
+
+Models=3 переносит reliable блоки внешности с коррелированными RequestId;
+Poses=4 — sequenced UNRELIABLE_FRAGMENT целых независимых снимков, включая
+bounds и dynamic deformation. ENet отбрасывает неполный снимок. Empty reliable
+marker при переполнении unreliable sequence потребляется владельцем транспорта
+до codec и не означает reliable доставку поз. Movement Realtime=2 не изменён.
+
+Фантомный hot path ограничивает число источников/получателей, fanout, байты и
+последние снимки. Отдельный worker владеет opaque compressed storage и SHA256,
+геометрию сервер не распаковывает. Настройки/лимиты: [PhantomsRu](PhantomsRu.md).
+Capacity по сессиям не равна capacity одновременной холодной загрузки моделей;
+сравнения нужно читать с achieved Hz и плотностью AOI.

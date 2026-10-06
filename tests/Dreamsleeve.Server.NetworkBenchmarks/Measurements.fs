@@ -1,4 +1,4 @@
-module Dreamsleeve.Server.NetworkBenchmarks.Measurements
+﻿module Dreamsleeve.Server.NetworkBenchmarks.Measurements
 
 open System
 open System.Collections.Generic
@@ -97,7 +97,7 @@ type Recorder(output: string) =
     do
         listener.InstrumentPublished <- fun instrument owner ->
             if instrument.Meter.Name = "Dreamsleeve.Server" || instrument.Meter.Name = "Dreamsleeve.Transport"
-               || instrument.Meter.Name = "Dreamsleeve.Transport.Owner" then
+               || instrument.Meter.Name = "Dreamsleeve.Transport.Owner" || instrument.Meter.Name = "Dreamsleeve.Phantoms" then
                 owner.EnableMeasurementEvents instrument
         listener.SetMeasurementEventCallback<double>(fun instrument value _ _ -> record instrument value)
         listener.SetMeasurementEventCallback<int>(fun instrument value _ _ -> record instrument (double value))

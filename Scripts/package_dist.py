@@ -40,18 +40,20 @@ WEB = ROOT / "src" / "Dreamsleeve.Server.Web"
 # Test, dev and benchmark builds never ship with the server.
 SERVER_FORBIDDEN = ("Tests", "Benchmarks", "Client.Dev", "TraceReport", "Expecto", "Faqt")
 BUILD = ROOT / "build" / "windows" / "x64" / "releasedbg"
-FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data")
-FORBIDDEN_SUFFIXES = (".map", ".db", ".log")
+FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data", "phantom-cache", "DreamsleevePhantoms", "captures")
+FORBIDDEN_SUFFIXES = (".map", ".db", ".log", ".zst", ".partial", ".dmp", ".i64", ".idb")
 # Relative to dist/: user-owned files and folders that a rebuild must not replace.
 PRESERVED = (
     "Client/SKSE/Plugins/Dreamsleeve/client.toml",
     "Client/SKSE/Plugins/Dreamsleeve/ui.toml",
     "Client/SKSE/Plugins/Dreamsleeve/aliases.toml",
+    "Client/SKSE/Plugins/Dreamsleeve/phantom-cache",
     "Server/server.toml",
     "Server/moderation.toml",
     "Server/pseudonyms.toml",
     "Server/data",
     "Server/logs",
+    "Server/phantoms",
 )
 
 # Dreamsleeve's license, shipped with every build; the source of a build is its release tag there.
@@ -125,7 +127,7 @@ def notices() -> str:
              "GPL-3.0-or-later with the Modding Exception and the GPL-3.0 Linking Exception, the same terms as "
              "Dreamsleeve: see LICENSE and EXCEPTIONS.md). Parts of the plugin follow skyrim-rich-presence "
              "(https://github.com/doodlum/skyrim-rich-presence, same terms).\n\n",
-             "It also links ENet (MIT), protobuf (BSD-3-Clause), spdlog (MIT), Glaze (MIT) and magic_enum (MIT); "
+             "It also links ENet (MIT), protobuf (BSD-3-Clause), spdlog (MIT), Glaze (MIT), magic_enum (MIT), and Zstandard 1.5.7 (BSD-3-Clause); "
              "their texts are in the respective upstream repositories.\n",
              "The web UI bundle contains the following packages:\n"]
     for name, path in packages.items():
@@ -133,6 +135,8 @@ def notices() -> str:
             parts.append(f"\n## {name}\n\n```\n{path.read_text(encoding='utf-8').strip()}\n```\n")
         else:
             parts.append(f"\n## {name}\n\nLicense file not found at packaging time ({path}).\n")
+    zstd = ROOT / "third_party/licenses/Zstd.txt"
+    parts.append("\n## Zstandard 1.5.7\n\nhttps://github.com/facebook/zstd/tree/v1.5.7\n\n```\n" + zstd.read_text(encoding="utf-8").strip() + "\n```\n")
     parts.append("\nPrismaUI, SKSE Menu Framework, Address Library and Media Keys Fix are separate downloads "
                  "with their own licenses and are not redistributed here.\n")
     return "".join(parts)

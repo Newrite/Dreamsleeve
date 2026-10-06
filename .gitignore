@@ -12,3 +12,6 @@ tests/**/bin/
 logs/
 data/
 dist/
+phantoms/
+phantom-cache/
+DreamsleevePhantoms/

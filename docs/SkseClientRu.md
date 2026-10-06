@@ -741,3 +741,23 @@ host берёт положение и дату из `World::Spot()` (порт `n
 | Список своих меток | Часть 3: сервер присылает полный список (`OwnGroundMarks`) |
 | Вид меток | Плоские glow-диски без коллизии; бумажная записка отклонена без игровой проверки |
 | Размер имени над меткой | `groundFontSize` (общий с текстом), не `fireflyNameFontSize` |
+
+
+## Живые фантомы (protocol 21)
+
+Полный контракт, настройки и границы подтверждения описаны в [PhantomsRu](PhantomsRu.md).
+`Runtime` владеет `ClientExchange.phantoms`; Core streaming/worker работают с
+нейтральными проверенными данными. Игровой адаптер не содержит второго ENet
+host. `Hooks` устанавливает PlayerCharacter::Update после оригинального вызова
+и передаёт доверенные фабрики и SetMaterial в `Game/PhantomGraphics`. Все
+runtime IDs/offsets остаются в Hooks. `Game/PhantomCapture` читает актуальное
+третьеличное дерево даже при первом лице; `Game/PhantomScene` строит скрытую
+сцену ограниченными шагами; `Game/Phantoms` владеет lifecycle и общим бюджетом
+кадра. Ни Actor, ни постоянный reference для фантома не создаются.
+
+`Host/PhantomSettings` — единственный перевод ui.toml в настройки Core.
+`Game/PlayerLabels` общая логика подписи фантома/светлячка, а
+`Host::Session::HidesPlayerRepresentation` — единая privacy/ignore/guild policy.
+Рабочая модель переключается атомарно; fallback светлячка не дублирует готовую
+сцену. Load, смена CELL/WRLD, disconnect и quit очищают сцены и readback caches.
+Geometry/poses не проходят через PrismaUI bridge.

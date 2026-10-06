@@ -395,6 +395,46 @@ cell/world/teleport, reconnect и quit. Не заявлять игровую п�
 
 ## Журнал исполнения
 
-06.10.2026: создана ветка от `7772d17`; план подготовлен. Справочные документы
-перенесены из `23ae14d`. Код фичи пока не реализуется этим документационным
-коммитом. Baseline этапа 0 и остальные этапы ожидают исполнения.
+06.10.2026: `3885afa` — ветка от `7772d17`, план и справочные документы из
+`23ae14d`. Этап 0: замороженный protocol20 BEFORE, 32/128 sparse/dense и chat;
+методика и исходные недостаточные achieved Hz сохранены в benchmark report.
+
+`3ca0808` — этапы 1/2/6 и клиентская часть 8: neutral asset/pose format,
+validation/Zstd/SHA256, protocol21, пять lanes, Exchange/worker/cache/playback,
+коррелированные передачи, настройки и generated UI contract. Native 359/359
+(один explicit live-UDP case запускается отдельно), 7906 assertions; Vitest
+94/94, UI production build; Edge полный 41/41 плюс 2/2 для окончательных
+16 scalar settings. Устранены пять воспроизведённых transfer/cache/lifecycle
+нарушений; дополнительные замечания fixed-commit review исправлены в `0c67ccf`.
+
+`69e8487` — этап 7: native capture, D3D readback/materials, скрытая построенная
+сцена, frame/memory budgets, hooks SE/AE/VR, lifecycle и общие подписи/privacy.
+Единая DLL собрана. Ревью исправило clears/Busy, readback pool admission и
+encapsulation; native factories/ABI audit и игровой проход отмечаются отдельно.
+
+Первоначальная проверка этапов 3–5: серверные 591/591 и real UDP 1/1. Нативный
+production Streaming с сервером protocol21 прошёл 1/1, 2935 assertions: cold
+262250 bytes, ACK window, chat, fragmented loss/rollover, receive off/on и warm
+cache/generation. Нагрузочная матрица AFTER завершена; первоначальные значения
+сохранены. Найден disabled Presence observation overhead, исправление и
+повторный целевой прогон выполнены в финальных этапах 8/9.
+
+`06f7420` — этапы 3–5: серверная репликация и opaque storage. Server 601/601;
+fixed-commit review воспроизвёл late View/departure race.
+
+`0c67ccf` — финальные клиентские исправления по ревью: decoded working RAM,
+RAM-cache manifest agreement, partial-prefix ACK, geometry512, texture factory
+и retained scene asset. Native 364/364, UI 94/94, Edge 2/2, DLL/Client.Dev
+собраны; независимое ревью замороженного diff без блокеров.
+
+`d1b4dea` — source connection epoch и watermark при departure; targeted 39/39,
+server 602/602, fresh production native UDP 1/1, 2765 assertions. Проверка
+fixed commit подтвердила отсутствие старой подписки после reconnect вне AOI.
+
+Этапы 8/9 завершены: замеры BEFORE/AFTER и отдельный postfix off-dense128
+сохранены с hashes и границами результатов. Клиент/сервер собраны, чистый
+пакет проверен, клиент установлен в согласованный MO2-мод с backup и
+сохранением конфигов. [Итоговая проверка](PhantomReleaseValidationRu.md)
+фиксирует команды, counts, SHA256, игровой сценарий и объём подтверждения.
+Прототип не cherry-pick: используется новый проверяемый neutral format;
+сервер хранит opaque compressed bytes, engine parsing на сервере отсутствует.
