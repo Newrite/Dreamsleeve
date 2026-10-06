@@ -423,6 +423,7 @@ module AdminRoutes =
             "announced", "Объявление отправлено."
             "token-revoked", "Токен отозван."
             "appointed", "Глава гильдии назначен."
+            "guild-renamed", "Гильдия переименована."
             "dissolved", "Гильдия распущена."
         ]
 
@@ -634,7 +635,8 @@ module AdminRoutes =
         match error with
         | GuildError.NotFound -> errorPage 404 "Гильдия не найдена." (Some admin)
         | GuildError.TargetNotFound -> showGuild routes admin 409 (Some "Этот игрок не состоит в гильдии.") guild
-        | GuildError.NameTaken | GuildError.ServerFull | GuildError.PlayerLimit | GuildError.GuildFull | GuildError.InvitesFull
+        | GuildError.NameTaken -> showGuild routes admin 409 (Some "Это название уже у другой гильдии (регистр букв не различается).") guild
+        | GuildError.ServerFull | GuildError.PlayerLimit | GuildError.GuildFull | GuildError.InvitesFull
         | GuildError.AlreadyMember | GuildError.AlreadyInvited | GuildError.NotPermitted | GuildError.MasterStays ->
             showGuild routes admin 409 (Some "Владелец гильдий отказал в действии.") guild
 
@@ -660,6 +662,31 @@ module AdminRoutes =
                 | Ok _ -> return! serviceFailure (Some admin) AdminServiceError.Unavailable context
                 | Error error -> return! serviceFailure (Some admin) error context
         })
+
+    /// The guild owner checks the name like a new guild's and tells the members; the panel audits it.
+    let private renameGuild routes =
+        mutation routes (fun admin form context ->
+            match routeGuild context with
+            | None -> errorPage 404 "Гильдия не найдена." (Some admin) context
+            | Some guild -> task {
+                match! guilds routes context (GuildAdminCommand.Rename(guild, value form "name")) with
+                | Ok (GuildAdminResult.Renamed(previous, card)) ->
+                    let details = $"{GuildName.value previous} -> {GuildName.value card.Summary.Name}"
+                    let! audited = record routes context admin AdminAction.RenamedGuild (AuditTarget.Guild guild) details
+                    if audited then return! redirect $"/guilds/{GuildId.value guild}?done=guild-renamed" context
+                    else return! errorPage 503 "Гильдия переименована, но строка аудита не записана; см. лог сервера." (Some admin) context
+                | Ok (GuildAdminResult.NameRefused refusal) ->
+                    let failure =
+                        match refusal with
+                        | GuildNameRefusal.TooShort minimum -> $"В названии не меньше {minimum} символов."
+                        | GuildNameRefusal.TooLong maximum -> $"В названии не больше {maximum} символов."
+                        | GuildNameRefusal.InvalidCharacters -> "В названии только буквы, цифры и одиночные пробелы."
+                        | GuildNameRefusal.NotAllowed -> "Название содержит запрещённые слова."
+                    return! showGuild routes admin 400 (Some failure) guild context
+                | Ok (GuildAdminResult.Refused error) -> return! guildRefusal routes admin guild error context
+                | Ok _ -> return! serviceFailure (Some admin) AdminServiceError.Unavailable context
+                | Error error -> return! serviceFailure (Some admin) error context
+            })
 
     let private dissolve routes =
         guildAction routes (fun admin guild _ context -> task {
@@ -1022,6 +1049,7 @@ module AdminRoutes =
         get "/guilds" (withAdmin routes (guildsPage routes))
         get "/guilds/{id}" (withAdmin routes (guildPageOf routes))
         post "/guilds/{id}/appoint" (appoint routes)
+        post "/guilds/{id}/rename" (renameGuild routes)
         post "/guilds/{id}/dissolve" (dissolve routes)
         get "/sanctions" (withAdmin routes (sanctionsPage routes))
         get "/registration" (withAdmin routes (fun admin -> showRegistration routes admin 200 None None))

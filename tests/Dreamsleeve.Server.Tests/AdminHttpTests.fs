@@ -368,7 +368,7 @@ let tests = testSequenced (testList "Admin HTTP" [
             equal [| false; true |] orders
         }))
 
-    case "guild pages go through the guild owner: a new master or a dissolution is audited, and the player card lists the guilds" (fun () ->
+    case "guild pages go through the guild owner: a new master, a new name or a dissolution is audited, and the player card lists the guilds" (fun () ->
         withPanel id (fun panel -> task {
             let pid raw = PlayerId.create raw |> ok
             let guild = GuildId.create 5UL |> ok
@@ -392,6 +392,11 @@ let tests = testSequenced (testList "Admin HTTP" [
                 | GuildAdminCommand.PlayerGuilds _ -> GuildAdminResult.PlayerGuilds [ summary ValueNone, GuildRole.Officer ]
                 | GuildAdminCommand.Appoint(_, player) when player = pid 10UL -> GuildAdminResult.Refused GuildError.TargetNotFound
                 | GuildAdminCommand.Appoint _ -> GuildAdminResult.Appointed(card GuildRole.Master (ValueSome bob))
+                | GuildAdminCommand.Rename(_, "Заняты") -> GuildAdminResult.Refused GuildError.NameTaken
+                | GuildAdminCommand.Rename(_, "Два-слова") -> GuildAdminResult.NameRefused GuildNameRefusal.InvalidCharacters
+                | GuildAdminCommand.Rename(_, raw) ->
+                    let renamed = card GuildRole.Member ValueNone
+                    GuildAdminResult.Renamed(name, { renamed with Summary = { renamed.Summary with Name = GuildName.create 1 64 raw |> ok } })
                 | GuildAdminCommand.Dissolve _ ->
                     GuildAdminResult.Dissolved { Guild = guild; Name = name; Members = [ membership bob GuildRole.Master; membership carol GuildRole.Officer ]; Invites = [] })
             do! signIn panel
@@ -404,7 +409,7 @@ let tests = testSequenced (testList "Admin HTTP" [
             status 200 page
             let! html = page.Content.ReadAsStringAsync()
             check (html.Contains "&lt;i&gt;Боб&lt;/i&gt;" && not (html.Contains "<i>Боб")) "Member names are encoded."
-            check (html.Contains "/guilds/5/appoint" && html.Contains "/guilds/5/dissolve") "The card offers both actions."
+            check (html.Contains "/guilds/5/appoint" && html.Contains "/guilds/5/rename" && html.Contains "/guilds/5/dissolve") "The card offers every action."
             use! missing = panel.Http.GetAsync "/guilds/6"
             status 404 missing
             use! unconfirmed = submit panel "/guilds/5/appoint" [ "player", "8" ] []
@@ -414,11 +419,23 @@ let tests = testSequenced (testList "Admin HTTP" [
             use! appointed = submit panel "/guilds/5/appoint" [ "player", "8"; "confirm", "yes" ] []
             status 303 appointed
             equal "/guilds/5?done=appointed" appointed.Headers.Location.OriginalString
+            use! taken = submit panel "/guilds/5/rename" [ "name", "Заняты" ] []
+            status 409 taken
+            use! invalid = submit panel "/guilds/5/rename" [ "name", "Два-слова" ] []
+            status 400 invalid
+            let! refusal = invalid.Content.ReadAsStringAsync()
+            check (refusal.Contains "только буквы, цифры") "The refusal names the rule."
+            use! renamed = submit panel "/guilds/5/rename" [ "name", "Совы" ] []
+            status 303 renamed
+            equal "/guilds/5?done=guild-renamed" renamed.Headers.Location.OriginalString
+            check (panel.Guilds.ToArray() |> Array.contains (GuildAdminCommand.Rename(guild, "Совы"))) "The new name reaches the guild owner as typed."
             use! dissolved = submit panel "/guilds/5/dissolve" [ "confirm", "yes" ] []
             status 303 dissolved
             equal "/guilds?done=dissolved" dissolved.Headers.Location.OriginalString
             let audit = panel.Admin.Audit.ToArray() |> Array.map (fun (_, entry) -> entry.Action, AuditTarget.key entry.Target, entry.Details)
-            equal [| AdminAction.AppointedGuildMaster, "guild:5", "Вороны: player:8 <i>Боб</i>"; AdminAction.DissolvedGuild, "guild:5", "Вороны, участников: 2" |] audit
+            equal [| AdminAction.AppointedGuildMaster, "guild:5", "Вороны: player:8 <i>Боб</i>"
+                     AdminAction.RenamedGuild, "guild:5", "Вороны -> Совы"
+                     AdminAction.DissolvedGuild, "guild:5", "Вороны, участников: 2" |] audit
 
             use request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/guilds/5")
             request.Headers.Authorization <- Headers.AuthenticationHeaderValue("Bearer", apiToken)

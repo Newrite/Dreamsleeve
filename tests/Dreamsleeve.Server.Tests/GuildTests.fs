@@ -360,6 +360,51 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             equal (GuildChange.Removed(guild, GuildRemoval.Disbanded)) gone
         }))
 
+    case "the panel renames a guild under the creation rules: members get a fresh snapshot, the invited a new invitation" (fun () ->
+        withGuilds (fun fixture -> task {
+            let! guild = founded fixture
+            let! _ = join fixture fixture.Carol
+            do! act fixture fixture.Alice 80UL (GuildAction.Invite(guild, pid 3UL))
+            let! _ = expectChange fixture.Carol
+            let! _ = expectDone fixture.Alice 80UL
+            let rename target raw = fixture.Guilds.AskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Rename(target, raw), reply)) |> awaitResult
+            let! words = rename guild "badword"
+            check (match words with GuildAdminResult.NameRefused GuildNameRefusal.NotAllowed -> true | _ -> false) "the word list applies"
+            let! punctuation = rename guild "Два-слова"
+            check (match punctuation with GuildAdminResult.NameRefused GuildNameRefusal.InvalidCharacters -> true | _ -> false) "the characters apply"
+            let! renamed = rename guild "  Совы  "
+            match renamed with
+            | GuildAdminResult.Renamed(previous, card) ->
+                equal "Стражи" (GuildName.value previous)
+                equal "Совы" (GuildName.value card.Summary.Name)
+            | other -> failtestf "%A" other
+            for who in [ fixture.Alice; fixture.Bob ] do
+                match! receive who.Events with
+                | GuildEvent.Snapshot state ->
+                    equal [ "Совы" ] (state.Guilds |> List.map (fun view -> GuildName.value view.Name))
+                    equal 2 state.Guilds.Head.Members.Length
+                | other -> failtestf "Expected a fresh snapshot, got %A" other
+            match! expectChange fixture.Carol with
+            | GuildChange.Invited view -> equal "Совы" (GuildName.value view.GuildName)
+            | other -> failtestf "Expected the invitation again, got %A" other
+            let mutable written = ValueNone
+            while written.IsNone do
+                match! receive fixture.Writes with
+                | GuildWrite.Rename(id, name) -> written <- ValueSome(id, GuildName.value name)
+                | _ -> ()
+            equal (ValueSome(guild, "Совы")) written
+            // The old name is free; another guild's name is taken in any case, the guild's own is not.
+            do! act fixture fixture.Carol 81UL (GuildAction.Create "стражи")
+            let! _ = expectChange fixture.Carol
+            let! _ = expectDone fixture.Carol 81UL
+            let! taken = rename guild "СТРАЖИ"
+            check (match taken with GuildAdminResult.Refused GuildError.NameTaken -> true | _ -> false) "another guild's name"
+            let! own = rename guild "СОВЫ"
+            check (match own with GuildAdminResult.Renamed(_, card) -> GuildName.value card.Summary.Name = "СОВЫ" | _ -> false) "the own name in another case"
+            let! missing = rename (gid 99UL) "Кто"
+            check (match missing with GuildAdminResult.Refused GuildError.NotFound -> true | _ -> false) "no such guild"
+        }))
+
     case "stored guilds come back with their members, profiles and the next ID" (fun () ->
         let stored = {
             Id = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; CreatedAt = DateTimeOffset.UnixEpoch; Invites = []
@@ -408,6 +453,9 @@ let private storeTests = testSequenced <| testList "SQLite guilds" [
         equal 3 loaded.Profiles.Length
         equal 2UL loaded.NextId
         Expect.throws (fun () -> database.Execute "INSERT INTO guilds(name, name_key, created_at) VALUES ('СТРАЖИ', 'стражи', 0)") "names are unique in any case"
+        write (GuildWrite.Rename(gid 1UL, GuildName.create 3 24 "Совы" |> ok))
+        equal "Совы" (GuildName.value (SqliteGuildStore.loadAll database.Config token |> ok).Guilds.Head.Name)
+        equal 1L (database.Scalar "SELECT count(*) FROM guilds WHERE id=1 AND name_key='совы'")
         write (GuildWrite.PutMember(gid 1UL, { muted with Mute = ValueNone; Role = GuildRole.Member }))
         write (GuildWrite.RemoveInvite(gid 1UL, carol.PlayerId))
         let changed = SqliteGuildStore.loadAll database.Config token |> ok

@@ -31,7 +31,7 @@ module GuildName =
     /// Letters and digits of any alphabet and single spaces between words, in
     /// NFC: no other whitespace, punctuation or controls; minLength..maxLength
     /// scalar values, spaces included. The word list and uniqueness are the
-    /// owner's checks; a name never changes.
+    /// owner's checks; only an administrator renames a guild.
     let create minLength maxLength raw : Result<GuildName, DomainError> =
         if minLength <= 0 || minLength > maxLength then Error(DomainError.InvalidLimit("GuildName", minLength))
         else
@@ -521,6 +521,22 @@ module GuildBook =
         match tryFind guild book with
         | ValueSome entry -> Ok(remove book entry)
         | ValueNone -> Error GuildError.NotFound
+
+    /// An administrator renames a guild, for one when its name breaks the
+    /// rules; the old name is free again. The same name in another case is
+    /// the guild's own. Returns the guild and its previous name.
+    let rename guild (name: GuildName) (book: GuildBook) =
+        match tryFind guild book with
+        | ValueNone -> Error GuildError.NotFound
+        | ValueSome entry ->
+            match book.names.TryGetValue(GuildName.key name) with
+            | true, owner when owner <> guild -> Error GuildError.NameTaken
+            | true, _ | false, _ ->
+                let renamed = { entry with name = name }
+                book.names.Remove(GuildName.key entry.name) |> ignore
+                book.names[GuildName.key name] <- guild
+                book.guilds[guild] <- renamed
+                Ok(renamed, entry.name)
 
     /// Removes and returns the invitations that expired by now.
     let expireInvites (now: DateTimeOffset) (book: GuildBook) =

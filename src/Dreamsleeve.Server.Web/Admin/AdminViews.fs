@@ -388,6 +388,13 @@ module AdminViews =
                         confirm "Подтверждаю смену главы"
                         submit "Назначить главой"
                     ]
+                Elem.form [ attr "method" "post"; action "rename"; css "stack" ] [
+                    Elem.p [ css "hint" ] [
+                        text "Например, за название против правил: правила те же, что при создании. Прежнее название освобождается; участники в игре сразу видят новое."
+                    ]
+                    field "Новое название" "name" "text" card.Guild.Name [ flag "required" ]
+                    submit "Переименовать"
+                ]
                 Elem.form [ attr "method" "post"; action "dissolve"; css "stack" ] [
                     Elem.p [ css "hint" ] [ text "Например, за название против правил. Участники и приглашения удаляются, история чата гильдии пропадает, название освобождается." ]
                     confirm "Подтверждаю роспуск гильдии"

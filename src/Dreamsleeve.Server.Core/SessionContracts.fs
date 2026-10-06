@@ -457,6 +457,17 @@ type GuildPage = {
     Page: int
 }
 
+/// Why the guild owner refused a new name before the guild book saw it: the
+/// rules of a created guild's name.
+[<RequireQualifiedAccess>]
+type GuildNameRefusal =
+    | TooShort of minimum: int
+    | TooLong of maximum: int
+    /// Only letters, digits and single spaces.
+    | InvalidCharacters
+    /// The server word list forbids it.
+    | NotAllowed
+
 /// What the panel asks of the guild owner.
 [<RequireQualifiedAccess>]
 type GuildAdminCommand =
@@ -467,6 +478,8 @@ type GuildAdminCommand =
     | PlayerGuilds of PlayerId
     /// A new master when the old one is banned or gone.
     | Appoint of GuildId * PlayerId
+    /// A new name under the creation rules, for one that breaks the rules.
+    | Rename of GuildId * name: string
     /// Disbands a guild, for one when its name breaks the rules.
     | Dissolve of GuildId
 
@@ -476,6 +489,8 @@ type GuildAdminResult =
     | Card of GuildCard voption
     | PlayerGuilds of (GuildSummary * GuildRole) list
     | Appointed of GuildCard
+    | Renamed of previous: GuildName * GuildCard
+    | NameRefused of GuildNameRefusal
     | Dissolved of DisbandedGuild
     | Refused of GuildError
 
@@ -491,6 +506,7 @@ type GuildWrite =
     | Create of GuildId * GuildName * DateTimeOffset * master: GuildMember
     /// The guild, its members and invitations.
     | Delete of GuildId
+    | Rename of GuildId * GuildName
     | PutMember of GuildId * GuildMember
     | RemoveMember of GuildId * PlayerId
     | PutInvite of GuildInvite
