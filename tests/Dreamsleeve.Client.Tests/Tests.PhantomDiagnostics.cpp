@@ -2,6 +2,7 @@
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import std;
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+import Dreamsleeve.Client.Diagnostics.PhantomReplay;
 import Dreamsleeve.Client.Phantom.Wire;
 
 namespace
@@ -409,5 +410,129 @@ TEST_CASE("Diagnostic queue retains shared model storage once for a burst of dis
   recorder.Sample(f.asset, std::move(pose), {}, 1, false);
   recorder.Stop();
   CHECK(Finished(recorder).samples == 1);
+}
+
+namespace
+{
+
+  std::vector<D::ReplayFrame> Replay(D::ReplayReader& reader, int timeoutSeconds = 20)
+  {
+    std::vector<D::ReplayFrame> frames;
+    const auto                  until = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSeconds);
+    while (std::chrono::steady_clock::now() < until)
+    {
+      if (auto frame = reader.Take())
+      {
+        frames.push_back(std::move(*frame));
+        continue;
+      }
+      if (!reader.Read().busy)
+      {
+        // The writer may have published its final frame between Take and Read.
+        if (auto frame = reader.Take())
+        {
+          frames.push_back(std::move(*frame));
+          continue;
+        }
+        return frames;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    FAIL("replay reader did not finish");
+    return frames;
+  }
+
+}
+
+TEST_CASE("Diagnostic replay decodes archived wire bytes and can cancel a full read-ahead queue")
+{
+  Fixture     f;
+  D::Recorder recorder;
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  for (unsigned i = 1; i <= 32; ++i)
+    recorder.Sample(f.asset, f.Pose(i, i > 16 ? 2 : 1), {}, 1, false);
+  recorder.Stop();
+  REQUIRE(Finished(recorder).samples == 32);
+  D::ReplayReader reader;
+  REQUIRE(reader.Start(f.root, 0));
+  auto frames = Replay(reader);
+  REQUIRE(reader.Read().error.empty());
+  CHECK(reader.Read().complete);
+  REQUIRE(frames.size() == 32);
+  CHECK(reader.Read().models == 2);
+  for (std::size_t i = 0; i < frames.size(); ++i)
+  {
+    CHECK(frames[i].pose->sequence.value == i + 1);
+    CHECK(frames[i].pose->generation.value == (i >= 16 ? 2 : 1));
+    // Original .04 differs: rendering must consume the quantized wire pose.
+    CHECK(frames[i].pose->channels[0].world.position.x == 0);
+    CHECK(P::CheckSnapshot(*frames[i].pose, *frames[i].asset));
+  }
+  REQUIRE(reader.Start(f.root, 0));
+  const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (reader.Read().frames < 4 && std::chrono::steady_clock::now() < until)
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  CHECK(reader.Read().frames == 4);
+  reader.Stop();
+  CHECK(Replay(reader).empty());
+  REQUIRE(reader.Start(f.root, 0));
+  CHECK(Replay(reader).size() == 32);
+}
+
+TEST_CASE("Diagnostic replay rejects a damaged model before returning a renderable frame")
+{
+  Fixture     f;
+  D::Recorder recorder;
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  recorder.Sample(f.asset, f.Pose(1), {}, 1, false);
+  recorder.Stop();
+  const auto saved = Finished(recorder);
+  auto       file  = std::filesystem::path(saved.directory) / "capture.phdiag";
+  auto       bytes = File(file);
+  REQUIRE(bytes.size() > 44);
+  bytes[44] ^= 1;  // SHA256 field of first model record.
+  {
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+  }
+  D::ReplayReader reader;
+  REQUIRE(reader.Start(f.root, 0));
+  CHECK(Replay(reader).empty());
+  CHECK(reader.Read().error == "archive.model-hash");
+}
+
+TEST_CASE("Diagnostic replay decodes the recorded full character archive when supplied")
+{
+  const char* root = std::getenv("DREAMSLEEVE_PHANTOM_REPLAY_ROOT");
+  if (!root)
+  {
+    MESSAGE("Optional real replay archive not configured");
+    return;
+  }
+  D::ReplayReader reader;
+  REQUIRE(reader.Start(std::filesystem::path(root), 0));
+  // Consume without retaining the entire user's archive in the test process.
+  const auto    until  = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+  std::uint64_t frames = 0, last = 0;
+  while (std::chrono::steady_clock::now() < until)
+  {
+    if (auto frame = reader.Take())
+    {
+      REQUIRE(P::CheckSnapshot(*frame->pose, *frame->asset));
+      CHECK(frame->pose->sampledAtUs > last);
+      last = frame->pose->sampledAtUs;
+      ++frames;
+      continue;
+    }
+    const auto status = reader.Read();
+    if (!status.busy && (status.complete || !status.error.empty())) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  CHECK_FALSE(reader.Read().busy);
+  CHECK(reader.Read().error.empty());
+  CHECK(reader.Read().complete);
+  CHECK(frames > 0);
+  CHECK(frames == reader.Read().frames);
+  MESSAGE("Real archive decoded frames: ", frames, ", models: ", reader.Read().models);
 }
 #endif

@@ -84,13 +84,15 @@ namespace SKSEMenu
   void __stdcall RenderPhantomRecording()
   {
     namespace D                         = Dreamsleeve::Client::Diagnostics;
-    const auto            s             = Runtime::ReadMenuSnapshot().recording;
+    const auto            snapshot      = Runtime::ReadMenuSnapshot();
+    const auto&           s             = snapshot.recording;
+    const auto&           replay        = snapshot.replay;
     static int            scenario      = 0;
     static bool           thirtySeconds = false;
     constexpr const char* labels[] = {"Покой", "Ходьба и повороты", "Спринт", "Бой и оружие", "Первое/третье лицо", "Снаряжение и SMP"};
     const bool            busy     = s.phase == D::Phase::Recording || s.phase == D::Phase::Saving;
     ImGui::TextWrapped("Локальная запись исходных поз и байтов кодека. Сервер не требуется. Файлы остаются рядом с логом SKSE.");
-    if (!busy)
+    if (!busy && !replay.active && !replay.loading)
     {
       if (ImGui::BeginCombo("Сценарий", labels[scenario]))
       {
@@ -125,6 +127,29 @@ namespace SKSEMenu
         s.partialDetail.c_str());
     if (!s.lastCaptureError.empty()) ImGui::TextWrapped("Последняя ошибка захвата: %s", s.lastCaptureError.c_str());
     if (!s.directory.empty()) ImGui::TextWrapped("Папка: %s", s.directory.c_str());
+    ImGui::Separator();
+    ImGui::TextWrapped(
+      "Проверка игрового рендерера на последней завершённой записи выбранного сценария. Сервер не нужен. Встаньте рядом с местом записи в том же мире/интерьере; старый архив не содержит идентификатор мира.");
+    if (!busy && !replay.loading && !replay.active && ImGui::Button("Воспроизвести последнюю запись"))
+      Runtime::Post({Runtime::NoticeKind::PhantomReplayStart, false, static_cast<std::uint32_t>(scenario)});
+    if ((replay.active || replay.loading) && ImGui::Button("Остановить воспроизведение"))
+      Runtime::Post({Runtime::NoticeKind::PhantomReplayStop});
+    ImGui::TextWrapped("%s", replay.stage.c_str());
+    ImGui::Text(
+      "%.1f с, отрисовано: %llu, декодировано: %llu, моделей: %llu",
+      replay.seconds,
+      replay.rendered,
+      replay.decoded,
+      replay.models);
+    ImGui::Text(
+      "Создание max: %.2f мс (шаг %.2f), применение max: %.2f мс, декодирование max: %.2f мс",
+      replay.buildMs,
+      replay.buildStepMs,
+      replay.applyMs,
+      replay.decodeMs);
+    ImGui::Text("Память сцены: %.2f МиБ", replay.memoryBytes / 1048576.0);
+    if (!replay.directory.empty()) ImGui::TextWrapped("Архив: %s", replay.directory.c_str());
+    if (!replay.error.empty()) ImGui::TextWrapped("Ошибка воспроизведения: %s", replay.error.c_str());
   }
 #endif
 

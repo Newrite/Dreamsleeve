@@ -13,6 +13,7 @@ export import Dreamsleeve.Host.UiSettings;
 export import Dreamsleeve.Host.Bubbles;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 export import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+export import Dreamsleeve.Game.PhantomReplay;
 #endif
 
 // Single owner of the Core application, the interpolation view, the UI session
@@ -48,7 +49,9 @@ export namespace Runtime
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       ,
     PhantomRecordingStart,
-    PhantomRecordingStop
+    PhantomRecordingStop,
+    PhantomReplayStart,
+    PhantomReplayStop
 #endif
   };
 
@@ -89,6 +92,7 @@ export namespace Runtime
     std::string   phantomError;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     Dreamsleeve::Client::Diagnostics::Status recording;
+    Dreamsleeve::Game::PhantomReplay::Status replay;
 #endif
   };
 

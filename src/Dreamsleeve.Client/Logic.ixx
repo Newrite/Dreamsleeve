@@ -135,6 +135,12 @@ namespace Logic
       case Runtime::NoticeKind::PhantomRecordingStart:
         Phantoms::StartRecording(notice.formId, notice.flag);
         break;
+      case Runtime::NoticeKind::PhantomReplayStart:
+        Phantoms::StartReplay(notice.formId);
+        break;
+      case Runtime::NoticeKind::PhantomReplayStop:
+        Dreamsleeve::Game::PhantomReplay::Stop();
+        break;
       case Runtime::NoticeKind::PhantomRecordingStop:
         Dreamsleeve::Client::Diagnostics::Phantoms().Stop();
         break;
@@ -345,6 +351,7 @@ namespace Logic
     snapshot.phantomError      = phantom.error;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     snapshot.recording = Dreamsleeve::Client::Diagnostics::Phantoms().Read();
+    snapshot.replay    = Dreamsleeve::Game::PhantomReplay::Read();
 #endif
     snapshot.savedLogin     = status.savedLogin;
     snapshot.authenticating = status.authenticating;
@@ -366,6 +373,7 @@ namespace Logic
       Runtime::Shutdown();
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       Dreamsleeve::Client::Diagnostics::Phantoms().Shutdown();
+      Dreamsleeve::Game::PhantomReplay::Shutdown();
 #endif
       return;
     }

@@ -116,6 +116,7 @@ namespace Phantoms
     auto& recorder = Dreamsleeve::Client::Diagnostics::Phantoms();
     if (recorder.Active()) logger::info("Phantom recording stopped: {}", reason);
     recorder.Stop(reason);
+    Dreamsleeve::Game::PhantomReplay::Stop(reason);
 #endif
     ResetResources();
     Get().context.Reset();
@@ -125,6 +126,7 @@ namespace Phantoms
 #ifdef DREAMSLEEVE_DIAGNOSTICS
   export void StartRecording(std::uint32_t scenario, bool thirtySeconds)
   {
+    Dreamsleeve::Game::PhantomReplay::Stop();
     const auto logs    = SKSE::log::log_directory();
     auto&      runtime = Runtime::Get();
     if (!logs || !runtime.app || runtime.context != Runtime::GameContext::Playing) return;
@@ -140,6 +142,13 @@ namespace Phantoms
       Get().cadence.Reset();
       logger::info("Phantom diagnostics recording requested");
     }
+  }
+
+  export void StartReplay(std::uint32_t scenario)
+  {
+    const auto logs = SKSE::log::log_directory();
+    if (!logs || Runtime::Get().context != Runtime::GameContext::Playing || Dreamsleeve::Client::Diagnostics::Phantoms().Active()) return;
+    if (Dreamsleeve::Game::PhantomReplay::Start(*logs / "DreamsleevePhantomDiagnostics", scenario, Get().renderer)) ResetResources();
   }
 
   void Record(std::shared_ptr<const P::Snapshot> pose, RE::PlayerCharacter& player, Clock::time_point start, bool firstPerson)
@@ -378,6 +387,9 @@ namespace Phantoms
       : std::nullopt);
     if (observed == Capture::Context::Observation::Waiting)
     {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Game::PhantomReplay::Pause();
+#endif
       if (!state.waiting)
       {
         logger::info(
@@ -404,6 +416,13 @@ namespace Phantoms
       Clear("space-changed");
       state.context.Observe(Capture::Context::Space{space->form->GetFormID(), space->interior});
     }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    if (Dreamsleeve::Game::PhantomReplay::Active())
+    {
+      Dreamsleeve::Game::PhantomReplay::Tick(*parent, {space->form->GetFormID(), space->interior}, {settings.color, settings.opacity}, now);
+      return;
+    }
+#endif
     CapturePlayer(*player);
     auto display = exchange.Read();
     if (!display.available)
