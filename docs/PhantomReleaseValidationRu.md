@@ -72,6 +72,23 @@ SHA256 DLL совпадает у исходной сборки, обоих па�
 Manifest и install evidence: `build/phantom-package-sha256.json`,
 `phantom-release-package-check.log`, `phantom-release-install.log`.
 
+Повторная пересборка 06.10.2026 устанавливает default передачи моделей
+5 MiB/s: клиент `phantomUploadKiB=5120`, `phantomDownloadKiB=5120`, сервер
+`ModelBytesPerSecond=5242880`, `PlayerModelBytesPerSecond=5242880`.
+Серверные бюджеты общие для upload/download; лимиты поз не изменены.
+Новые build/package/test evidence находятся в `build/phantom-5m-*.log`.
+Normal DLL и архивы dist собираются без диагностического флага; отдельная
+diagnostic DLL сохраняет меню записи для игровой проверки. Исторические
+SHA256 и install manifest выше относятся к первой сборке функции.
+Проверки повторной сборки: normal native 364/364, diagnostic native 371/371,
+server 602/602 (существующий тестовый FS3511 подавлен через `NoWarn=3511`),
+UI 94/94. `phantom-5m-package-verification.json` проверяет конфиги обоих
+серверных архивов, bundle defaults, отсутствие диагностического маркера в
+release DLL и `SHA256SUMS.txt`. Диагностическая DLL и UI установлены в MO2;
+пять сборочных файлов заменены, четыре пользовательских/data-файла сохранены
+по SHA256. Backup: `build/phantom-5m-install-backup-20261006-155833`;
+install evidence: `build/phantom-5m-install-verification.json`.
+
 ## Что проверить в игре
 
 Полный сетевой renderer ещё не проходил игровую проверку. Предыдущая
@@ -81,7 +98,7 @@ Manifest и install evidence: `build/phantom-package-sha256.json`,
 
 1. Запустить сервер и два клиента protocol21 в одной CELL/WRLD; публикация
    и получение включены по умолчанию. Кнопка локальной записи не требуется.
-2. Дождаться холодной загрузки: 13 MiB при 512 KiB/s — около 26 секунд
+2. Дождаться холодной загрузки: 13 MiB при 5 MiB/s — минимум около 2.6 секунды
    на каждую сторону, плюс конкуренция и overhead. Пока сцена не готова,
    работает разрешённый fallback на светлячок. Повторный вход проверяет кеш.
 3. Проверить лицо/тело/волосы/броню, SMP, оружие в руке и ножнах,

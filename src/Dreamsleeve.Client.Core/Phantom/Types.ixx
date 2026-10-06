@@ -210,7 +210,7 @@ private:
     Vec3          color{0.55f, 0.8f, 1};
     std::uint32_t sampleRate{20}, delayMs{100}, extrapolationMs{100}, timeoutMs{1000};
     std::uint64_t memoryBytes{512 * 1024 * 1024}, diskBytes{1024ULL * 1024 * 1024};
-    std::uint32_t uploadBytesPerSecond{512 * 1024}, downloadBytesPerSecond{512 * 1024};
+    std::uint32_t uploadBytesPerSecond{5 * 1024 * 1024}, downloadBytesPerSecond{5 * 1024 * 1024};
     bool          operator==(const ViewSettings&) const = default;
   };
 

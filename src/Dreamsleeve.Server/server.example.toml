@@ -524,8 +524,9 @@ PublishCooldownMs = 1000
 PoseIntervalMs = 50
 PoseTimeoutMs = 1000
 ReplicationIntervalMs = 50
-ModelBytesPerSecond = 4194304
-PlayerModelBytesPerSecond = 524288
+# Shared upload/download model budgets, bytes/s: 5 MiB/s total and per player.
+ModelBytesPerSecond = 5242880
+PlayerModelBytesPerSecond = 5242880
 PoseBytesPerSecond = 2097152
 TotalPoseBytesPerSecond = 33554432
 CommandsPerSecond = 128

@@ -122,8 +122,8 @@ export namespace Dreamsleeve::Host
     double      phantomTimeoutMs{1000};
     double      phantomMemoryMiB{512};
     double      phantomCacheMiB{1024};
-    double      phantomUploadKiB{512};
-    double      phantomDownloadKiB{512};
+    double      phantomUploadKiB{5120};
+    double      phantomDownloadKiB{5120};
 
     bool operator==(const UiSettings&) const = default;
   };

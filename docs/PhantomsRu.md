@@ -115,7 +115,7 @@ catch-up дубликатов. Playback хранит до восьми целы�
 целый кадр. При смене пространства, недоступном игроке, disconnect и quit
 сцены освобождаются. Readback caches также освобождаются на этих границах.
 
-13 MiB внешности при 512 KiB/s на игрока — минимум около 26 секунд в одну
+13 MiB внешности при 5 MiB/s на игрока — минимум около 2.6 секунды в одну
 сторону без учёта конкуренции и overhead. Холодная загрузка закономерно
 занимает время; тёплый content cache устраняет повторную отправку. Количество
 сессий и реальная ёмкость фантомов различаются: MaxSources=512 не является
@@ -144,7 +144,7 @@ policy, включая streamer aliases. Скрытие в бою не оста�
 | phantomTimeoutMs | 1000 | 500–5000 ms |
 | phantomMemoryMiB | 512 | 64–2048 MiB, aggregate working/scene/readback reservation |
 | phantomCacheMiB | 1024 | 0–8192 MiB; 0 отключает чтение и запись кеша |
-| phantomUploadKiB / phantomDownloadKiB | 512 / 512 | 64–8192 KiB/s; cap сервера действует дополнительно |
+| phantomUploadKiB / phantomDownloadKiB | 5120 / 5120 | 64–8192 KiB/s; 5 MiB/s в каждом направлении, cap сервера действует дополнительно |
 
 Путь кеша задаётся `client.phantomCacheDirectory` в client.toml. Относительный
 путь — от `Data/SKSE/Plugins/Dreamsleeve`; default `phantom-cache`. Ключи,
@@ -161,8 +161,9 @@ rate и последнюю ошибку. Логи не содержат binary p
 Default: storage `phantoms`, disk 4 GiB, RAM cache 64 MiB, 1024 entries, TTL
 86400 s; 4 фантома на наблюдателя, distance 4096, до 512 sources и 64
 subscribers на источник; 64 transfers всего, 2 на игрока, ACK window 4,
-timeout 30 s, publish cooldown 1 s. Model traffic ограничен 4 MiB/s всего
-и 512 KiB/s на игрока; pose traffic — 2 MiB/s на игрока и 32 MiB/s всего.
+timeout 30 s, publish cooldown 1 s. Model traffic ограничен 5 MiB/s всего
+и 5 MiB/s на игрока; оба серверных бюджета общие для upload/download.
+Pose traffic — 2 MiB/s на игрока и 32 MiB/s всего.
 MaxPoseFanoutPerTick=2048, CommandsPerSecond=128.
 
 Hard envelope модели: compressed 64 MiB / raw 128 MiB, 4096 channels,

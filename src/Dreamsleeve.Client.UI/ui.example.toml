@@ -190,8 +190,9 @@ phantomTimeoutMs = 1000
 # Total working-memory budget and compressed disk cache size in MiB.
 phantomMemoryMiB = 512
 phantomCacheMiB = 1024
-phantomUploadKiB = 512
-phantomDownloadKiB = 512
+# Model transfer limits in KiB/s; 5120 = 5 MiB/s in each direction.
+phantomUploadKiB = 5120
+phantomDownloadKiB = 5120
 
 # Written by the plugin, never sent to the server. IDs are scoped by the
 # server address "ip:port": an account ID is unique only within its server.

@@ -177,8 +177,8 @@ export const defaults: Settings = {
   phantomTimeoutMs: 1000,
   phantomMemoryMiB: 512,
   phantomCacheMiB: 1024,
-  phantomUploadKiB: 512,
-  phantomDownloadKiB: 512,
+  phantomUploadKiB: 5120,
+  phantomDownloadKiB: 5120,
 };
 
 // Accepted ranges of the numeric settings; the host clamps to them.

@@ -96,8 +96,8 @@
       "phantomTimeoutMs": 1000,
       "phantomMemoryMiB": 512,
       "phantomCacheMiB": 1024,
-      "phantomUploadKiB": 512,
-      "phantomDownloadKiB": 512
+      "phantomUploadKiB": 5120,
+      "phantomDownloadKiB": 5120
     },
     "revision": 3
   },
@@ -204,8 +204,8 @@
       "phantomTimeoutMs": 1000,
       "phantomMemoryMiB": 512,
       "phantomCacheMiB": 1024,
-      "phantomUploadKiB": 512,
-      "phantomDownloadKiB": 512
+      "phantomUploadKiB": 5120,
+      "phantomDownloadKiB": 5120
     }
   },
   {
