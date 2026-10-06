@@ -196,6 +196,12 @@ export class DreamNetClient final
     return serverPeer ? serverPeer->MaxUnfragmentedPayloadBytes() : 0;
   }
 
+  NetOperationResult RotateUnreliableSequence(const ChannelId channelId)
+  {
+    auto valid = ValidateSend(channelId);
+    return valid ? serverPeer->RotateUnreliableSequence(channelId) : valid;
+  }
+
   std::size_t NegotiatedChannelCount() const noexcept
   {
     const auto info = serverPeer ? serverPeer->GetPeerInfo() : std::nullopt;

@@ -397,6 +397,12 @@ public:
       return guildmatesOnly && selfId != id && !guildmates.contains(id);
     }
 
+    // Both player representations follow the same privacy and guild filter.
+    bool HidesPlayerRepresentation(Domain::PlayerId id, bool guildmatesOnly) const
+    {
+      return selfId == id || names.Hides(id, selfId) || GuildmatesOnlyHides(id, guildmatesOnly);
+    }
+
     const Players& OnlinePlayers() const noexcept
     {
       return players;

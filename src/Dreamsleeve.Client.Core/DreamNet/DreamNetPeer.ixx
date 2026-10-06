@@ -239,6 +239,19 @@ export class DreamNetPeer
     return PushPacketImpl(std::move(packet), channelId);
   }
 
+  // ENet promotes unreliable data to reliable at its 16-bit sequence limit.
+  // A zero-byte reliable barrier advances only the transport epoch instead.
+  // Applications using this operation must consume that marker before decoding.
+  NetOperationResult RotateUnreliableSequence(const ChannelId channelId)
+  {
+    if (!CanSend() || channelId >= peer->channelCount)
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPeerState, "Cannot rotate an unavailable unreliable channel");
+    if (peer->channels[channelId].outgoingUnreliableSequenceNumber != (std::numeric_limits<enet_uint16>::max)()) return {};
+    auto barrier = DreamNetPacket::TryAllocate(0, PacketFlag::Reliable);
+    if (!barrier) return std::unexpected(barrier.error());
+    return PushPacketImpl(std::move(*barrier), channelId);
+  }
+
   NetOperationResult PushSpan(
     const DreamNetPacket::DataBytes bytes,
     const ChannelId                 channelId,

@@ -4,6 +4,7 @@ import std;
 export import Dreamsleeve.Client.Auth;
 export import Dreamsleeve.Client.StateUpdateQueue;
 export import Dreamsleeve.Client.GuildBook;
+export import Dreamsleeve.Client.Phantom.Exchange;
 
 export namespace Dreamsleeve::Client
 {
@@ -597,6 +598,11 @@ public:
     ClientExchange(const ClientExchange&)            = delete;
     ClientExchange& operator=(const ClientExchange&) = delete;
 
+    Phantom::Exchange& Phantoms() noexcept
+    {
+      return phantoms;
+    }
+
     // Main thread. Lifecycle has a reserved slot, independent of game-command
     // capacity and reply backpressure. Admission does not mean authentication.
     std::expected<void, std::string> PostLogin(
@@ -960,6 +966,7 @@ private:
     }
 
     mutable std::mutex                   mutex;
+    Phantom::Exchange                    phantoms;
     std::condition_variable              wake;
     const std::size_t                    maxCommands;
     std::vector<QueuedClientCommand>     commands;

@@ -73,6 +73,22 @@ export interface Settings {
   deathDateHeader: boolean;
   noteDateHeader: boolean;
   markDateColor: string;
+  publishPhantoms: boolean;
+  showPhantoms: boolean;
+  phantomFallback: boolean;
+  combatHidePhantoms: boolean;
+  maxVisiblePhantoms: number;
+  phantomDrawDistance: number;
+  phantomOpacity: number;
+  phantomColor: string;
+  phantomSampleRate: number;
+  phantomDelayMs: number;
+  phantomExtrapolationMs: number;
+  phantomTimeoutMs: number;
+  phantomMemoryMiB: number;
+  phantomCacheMiB: number;
+  phantomUploadKiB: number;
+  phantomDownloadKiB: number;
 }
 
 export const defaults: Settings = {
@@ -147,6 +163,22 @@ export const defaults: Settings = {
   deathDateHeader: true,
   noteDateHeader: false,
   markDateColor: "#A9A69B",
+  publishPhantoms: true,
+  showPhantoms: true,
+  phantomFallback: true,
+  combatHidePhantoms: false,
+  maxVisiblePhantoms: 4,
+  phantomDrawDistance: 4096,
+  phantomOpacity: 0.6,
+  phantomColor: "#8CCCCC",
+  phantomSampleRate: 20,
+  phantomDelayMs: 100,
+  phantomExtrapolationMs: 100,
+  phantomTimeoutMs: 1000,
+  phantomMemoryMiB: 256,
+  phantomCacheMiB: 1024,
+  phantomUploadKiB: 512,
+  phantomDownloadKiB: 512,
 };
 
 // Accepted ranges of the numeric settings; the host clamps to them.
@@ -181,6 +213,17 @@ export const limits = {
   groundMaxWidth: { min: 120, max: 800 },
   groundBackground: { min: 0, max: 1 },
   deathBackground: { min: 0, max: 1 },
+  maxVisiblePhantoms: { min: 0, max: 16 },
+  phantomDrawDistance: { min: 0, max: 16384 },
+  phantomOpacity: { min: 0, max: 1 },
+  phantomSampleRate: { min: 1, max: 50 },
+  phantomDelayMs: { min: 0, max: 500 },
+  phantomExtrapolationMs: { min: 0, max: 250 },
+  phantomTimeoutMs: { min: 500, max: 5000 },
+  phantomMemoryMiB: { min: 64, max: 2048 },
+  phantomCacheMiB: { min: 0, max: 8192 },
+  phantomUploadKiB: { min: 64, max: 8192 },
+  phantomDownloadKiB: { min: 64, max: 8192 },
 } as const;
 
 // Sent with displaySettings: the host applies and saves them at once, on every surface.

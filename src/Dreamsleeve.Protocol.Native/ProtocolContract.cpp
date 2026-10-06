@@ -19,6 +19,13 @@ static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::Timeou
 static_assert(static_cast<long long>(Protocol::Network::DisconnectReason::ProtocolError) == static_cast<long long>(Dreamsleeve::Protocol::Network::ProtocolError));
 static_assert(Dreamsleeve::Protocol::Network::DisconnectReason_ARRAYSIZE == 7);
 
+static_assert(static_cast<long long>(Protocol::Network::DeliveryLane::Control) == static_cast<long long>(Dreamsleeve::Protocol::Network::Control));
+static_assert(static_cast<long long>(Protocol::Network::DeliveryLane::Chat) == static_cast<long long>(Dreamsleeve::Protocol::Network::Chat));
+static_assert(static_cast<long long>(Protocol::Network::DeliveryLane::Realtime) == static_cast<long long>(Dreamsleeve::Protocol::Network::Realtime));
+static_assert(static_cast<long long>(Protocol::Network::DeliveryLane::Models) == static_cast<long long>(Dreamsleeve::Protocol::Network::Models));
+static_assert(static_cast<long long>(Protocol::Network::DeliveryLane::Poses) == static_cast<long long>(Dreamsleeve::Protocol::Network::Poses));
+static_assert(Dreamsleeve::Protocol::Network::DeliveryLane_ARRAYSIZE == 5);
+
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_UNSPECIFIED));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::InvalidRequest) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_INVALID_REQUEST));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::SessionNotReady) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_SESSION_NOT_READY));

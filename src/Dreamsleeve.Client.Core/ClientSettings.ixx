@@ -120,7 +120,9 @@ struct glz::meta<Dreamsleeve::Client::Configuration>
     "deathMarkScale",
     &T::deathMarkScale,
     "maxPendingMovementSamples",
-    &T::maxPendingMovementSamples);
+    &T::maxPendingMovementSamples,
+    "phantomCacheDirectory",
+    &T::phantomCacheDirectory);
 };
 
 namespace Dreamsleeve::Client
@@ -324,6 +326,9 @@ namespace Dreamsleeve::Client
 
     file.client.serverHost = std::move(file.serverHost);
     file.client.serverPort = file.serverPort;
+    // The historical file default predates the two phantom lanes. This is a
+    // configuration migration; every connection still uses the current protocol.
+    if (file.client.network.channelLimit == 3) file.client.network.channelLimit = MinChannels;
     const auto& view       = file.interpolation;
     file.client.movement =
       {std::chrono::milliseconds{view.delayMs}, std::chrono::milliseconds{view.maxGapMs}, view.historyCapacity, view.teleportDistance};

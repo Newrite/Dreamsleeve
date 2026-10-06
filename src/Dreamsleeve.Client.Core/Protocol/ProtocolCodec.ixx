@@ -4,11 +4,12 @@ import std;
 export import Dreamsleeve.Client.Exchange;
 export import Dreamsleeve.Client.Config;
 export import DreamNet.Packet;
+export import Dreamsleeve.Client.ProtocolChannels;
 
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 20;
+  inline constexpr std::uint32_t Version = 21;
 
   enum class ErrorCode
   {
@@ -43,13 +44,6 @@ export namespace Dreamsleeve::Client::Wire
   struct JoinAsGuest
   {
     std::uint64_t requestId{};
-  };
-
-  enum class Channel : std::uint8_t
-  {
-    Control  = 0,
-    Chat     = 1,
-    Realtime = 2
   };
 
   struct SetLocation

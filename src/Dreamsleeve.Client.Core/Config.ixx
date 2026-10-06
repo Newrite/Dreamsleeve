@@ -1,6 +1,7 @@
 export module Dreamsleeve.Client.Config;
 
 import std;
+import Dreamsleeve.Client.ProtocolChannels;
 export import DreamNet.Host;
 export import DreamNet.Address;
 export import DreamNet.Core;
@@ -17,7 +18,7 @@ export namespace Dreamsleeve::Client
   constexpr float MaxFormScale = 10.0f;
   // One connection to one server, and at least the control, chat and movement channels.
   constexpr std::size_t ClientPeers        = 1;
-  constexpr std::size_t MinChannels        = 3;
+  constexpr std::size_t MinChannels        = Wire::ChannelCount;
   constexpr auto        MaxMovementGap     = std::chrono::hours{1};
   constexpr std::size_t MinMovementHistory = 2;
   constexpr Port        DefaultServerPort  = 8778;
@@ -73,6 +74,7 @@ export namespace Dreamsleeve::Client
     float            deathMarkScale{0.5f};
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{16384};
+    std::string      phantomCacheDirectory{"phantom-cache"};
 
     // The first invalid setting of the client itself, named as in client.toml;
     // the ENet bounds of network and the timeouts are DreamNetClient::ValidateConfig's.
@@ -114,6 +116,7 @@ export namespace Dreamsleeve::Client
       if (!formId(deathMarkFormId)) return "deathMarkFormId";
       if (!scale(deathMarkScale)) return "deathMarkScale";
       if (maxPendingMovementSamples == 0) return "maxPendingMovementSamples";
+      if (phantomCacheDirectory.size() > 32760 || phantomCacheDirectory.find('\0') != std::string::npos) return "phantomCacheDirectory";
       if (movement.delay.count() < 0) return "interpolation.delayMs";
       if (movement.maxGap <= movement.delay || movement.maxGap > MaxMovementGap) return "interpolation.maxGapMs";
       if (movement.historyCapacity < MinMovementHistory) return "interpolation.historyCapacity";

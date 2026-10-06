@@ -170,6 +170,29 @@ noteDateHeader = false
 # Colour of that date line.
 markDateColor = "#A9A69B"
 
+# Live phantom publication and reception are independent.
+publishPhantoms = true
+showPhantoms = true
+phantomFallback = true
+combatHidePhantoms = false
+# Maximum simultaneously visible phantoms, 0..16.
+maxVisiblePhantoms = 4
+# Visibility distance in world units, 0..16384.
+phantomDrawDistance = 4096
+phantomOpacity = 0.6
+phantomColor = "#8CCCCC"
+# Sampling rate in Hz, 1..50; the server may impose a lower rate.
+phantomSampleRate = 20
+# Playback delay, bounded extrapolation and stale-pose timeout in ms.
+phantomDelayMs = 100
+phantomExtrapolationMs = 100
+phantomTimeoutMs = 1000
+# Total working-memory budget and compressed disk cache size in MiB.
+phantomMemoryMiB = 256
+phantomCacheMiB = 1024
+phantomUploadKiB = 512
+phantomDownloadKiB = 512
+
 # Written by the plugin, never sent to the server. IDs are scoped by the
 # server address "ip:port": an account ID is unique only within its server.
 # Streamer-mode pseudonyms given to accounts (at most 4096, the newest kept):

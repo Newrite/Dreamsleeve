@@ -18,6 +18,18 @@ export namespace Protocol::Network
   };
 }
 
+export namespace Protocol::Network
+{
+  enum class DeliveryLane : std::uint8_t
+  {
+    Control = 0,
+    Chat = 1,
+    Realtime = 2,
+    Models = 3,
+    Poses = 4,
+  };
+}
+
 export namespace Protocol::Chat
 {
   enum class RequestRejectionCode : std::int32_t

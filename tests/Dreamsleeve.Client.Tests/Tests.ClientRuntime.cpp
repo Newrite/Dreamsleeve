@@ -26,7 +26,7 @@ namespace
   {
     auto config         = ServerConfig::Default();
     config.address      = DreamNetAddress::Loopback(0);
-    config.channelLimit = 3;
+    config.channelLimit = MinChannels;
     return Value(DreamNetHost::TryCreateServer(config));
   }
 

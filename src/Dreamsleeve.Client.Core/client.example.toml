@@ -81,13 +81,15 @@ deathMarkScale = 0.5
 # Movement samples buffered for the game thread, >= 1; overflow resynchronizes the view.
 # 16384 covers a game-thread pause of about 1.6 s with 512 players in view at 20 Hz.
 maxPendingMovementSamples = 16384
+# Compressed content-addressed phantom cache; filesystem work stays off the game/network threads.
+phantomCacheDirectory = "phantom-cache"
 
 # ENet host of the client.
 [client.network]
 # Must be 1: one connection to one server.
 maxPeers = 1
-# ENet channels, 3..255; the protocol uses 3.
-channelLimit = 3
+# ENet channels, 5..255: control, chat, movement, models and poses.
+channelLimit = 5
 # Incoming bandwidth limit, bytes per second; 0 = unlimited.
 inBwLimit = 0
 # Outgoing bandwidth limit, bytes per second; 0 = unlimited.

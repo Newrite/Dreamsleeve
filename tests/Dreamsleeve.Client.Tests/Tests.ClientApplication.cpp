@@ -58,7 +58,10 @@ TEST_CASE("Configuration path is caller-owned and partial TOML preserves default
   auto defaults = fixture.Load("# defaults\n");
   REQUIRE(defaults);
   CHECK(defaults->client.playerSampleIntervalMs == 50);
-  CHECK(defaults->client.network.channelLimit == 3);
+  CHECK(defaults->client.network.channelLimit == MinChannels);
+  auto previous = fixture.Load("[client.network]\nchannelLimit = 3\n");
+  REQUIRE(previous);
+  CHECK(previous->client.network.channelLimit == MinChannels);
 
   auto loaded = fixture.Load(R"(serverHost = "127.0.0.2"
 serverPort = 9000
@@ -86,7 +89,7 @@ historyCapacity = 16
   CHECK_FALSE(loaded->client.showFireflies);
   CHECK(loaded->client.playerSampleIntervalMs == 25);
   CHECK(loaded->client.network.maxPacketBytes == 2048);
-  CHECK(loaded->client.network.channelLimit == 3);
+  CHECK(loaded->client.network.channelLimit == MinChannels);
   CHECK(loaded->client.movement.delay == std::chrono::milliseconds{75});
   CHECK(loaded->client.movement.historyCapacity == 16);
 }

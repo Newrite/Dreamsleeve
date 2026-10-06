@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 15
+# Прикладной протокол сессии, версия 21
 
 Схемы разделены по назначению:
 
@@ -8,21 +8,23 @@
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
 | [session.proto](session.proto) | OpenSession, JoinAsGuest и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged; цвет имени: SetNameColor и NameColorChanged; мут и конец сессии: MuteState, MuteChanged, SessionEndReason, SessionEnded |
+| [guild.proto](guild.proto) | Гильдии, членство, invites, ranks и общий список |
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [moderation.proto](moderation.proto) | Роль и инструменты модератора: PlayerRole, SanctionKind, RoleChanged, SanctionEntry, запросы наказаний, списков и удаления контента с их ответами |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
+| [phantom.proto](phantom.proto) | Независимые оболочки моделей/поз, manifest, политики, оконные передачи и подтверждения |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
 
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 15 даёт модератору инструменты в игре; версия 14 добавляет муты, баны и кик; версия 13 оставляет клиента подключённым гостем до входа; версия 12 датирует метки игровым календарём; версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–14 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 15 даёт модератору инструменты в игре; версия 14 добавляет муты, баны и кик; версия 13 оставляет клиента подключённым гостем до входа; версия 12 датирует метки игровым календарём; версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Клиент и сервер выпускаются вместе: все предыдущие версии несовместимы с текущей, legacy-путей нет. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 15. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 21. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -30,8 +32,10 @@
 | 0 | Control | ClientPacket/ServerPacket: сессия, lifecycle, UpdatePlayer, метки, скрытое имя, смена имени, модерация (кроме удаления сообщений) и ответы, reliable |
 | 1 | Chat | ClientPacket/ServerPacket: SendChat, PostAnnouncement, DeleteChatMessage, ChatPublished, ChatMessageRemoved и ответы чата, reliable |
 | 2 | Realtime | ClientMovementPacket/ServerMovementPacket: абсолютные pose, unreliable sequenced (flags=0) |
+| 3 | Models | ClientAssetPacket/ServerAssetPacket: настройки, публикации, offers, window/chunks/ACK/cancel, reliable |
+| 4 | Poses | ClientPosePacket/ServerPosePacket: сжатый полный snapshot с bounds, unreliable sequenced с UNRELIABLE_FRAGMENT |
 
-Нужно минимум три согласованных канала. Номера фиксированы в network.proto,
+Нужно минимум пять согласованных каналов. Номера фиксированы в network.proto,
 надёжность задаётся флагом пакета. RequestRejected возвращается на канал исходной
 команды; SessionOpened с историей всегда Control. Между каналами общего порядка нет.
 Flags=0 — не Unsequenced/UnreliableFragment. При исчерпании unreliable sequence
@@ -731,3 +735,45 @@ bootstrap может фрагментироваться, realtime — нет. П
 PlayerMoved.location=2 зарезервированы. SetLocation использует tag8, видимость — часть
 PresenceChanged; pose/token/sequence движения — отдельные realtime оболочки. Старые ветки
 одновременно не поддерживаются.
+
+
+## Фантомы, версия 21
+
+Модели и позы имеют отдельные оболочки с той же обязательной версией 21.
+`phantom.proto` отделён от чата и UpdatePlayer; массивы геометрии не идут через
+UI bridge. Максимальный frame модели: compressed 64 МиБ, raw 128 МиБ;
+позы: compressed 256 КиБ, raw 512 КиБ; 4096 каналов и 256 geometry.
+Серверная policy может уменьшить эти пределы. Локальный кеш и сцена имеют
+отдельное ограничение RAM; лимит размеров wire не обещает вместимость renderer.
+
+Manifest фиксирует SHA-256 **compressed** целого asset, format_version=1,
+appearance generation, точные длины и размеры таблиц. Published content
+immutable: повтор той же generation допустим только с идентичным manifest.
+Смена контекста/привязок оружия не обязана менять внешний asset.
+
+Publish/Download получают положительный request_id, который Transfer и Complete
+обязательно повторяют. Он отделяет поздние результаты IO предыдущей попытки
+от новой передачи той же модели. Complete с transfer_id=0 обозначает отказ
+до назначения передачи; содержит player/generation, upload, request_id и retry.
+Нулевой retry — окончательный отказ; положительный — задержка повтора в мс.
+Chunk — максимум 16384 байт, последовательные offsets и оконные Progress ACK.
+Клиент посылает позы только после принятой целой публикации.
+
+PoseSample повторяет generation, context_revision, sequence, sampled_at_us;
+сжатый payload содержит эти значения и **полную** таблицу TRS/hidden, world
+spheres всех geometry и позиции/нормали всех dynamic meshes. Нет зависимых
+дельт. Получатель сверяет envelope с декодированным payload и готовым manifest.
+
+Один большой pose передаётся штатным ENet UNRELIABLE_FRAGMENT. Потерянный
+фрагмент не даёт частичного снимка приложению; следующий снимок независим.
+При outgoing unreliable sequence=FFFF ENet по умолчанию превращает фрагменты
+в reliable. Поэтому оба transport owners ставят **пустой reliable packet** на
+lane4 для смены транспортной эпохи перед следующей позой. Receive-адаптер
+поглощает только этот пустой reliable marker; сама поза остаётся unreliable.
+Это не прикладное подтверждение позы и не гарантированная доставка кадров.
+
+Сервер авторизует загрузку по существующей Presence/AOI view, ограничивает
+sources/subscribers/traffic, хранит compressed bytes и проверяет hash потоково,
+не распаковывая asset. Все параметры и default находятся в `[Phantoms]`.
+Формат нейтральных данных и границы native-адаптера:
+[PhantomReplicationRu](../docs/PhantomReplicationRu.md).

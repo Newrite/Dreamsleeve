@@ -932,6 +932,9 @@ TEST_CASE("Ignored authors disappear from history, deltas and bubbles; unignore 
 
   CHECK_FALSE(session.Ignore(1));  // Self.
   CHECK(session.Ignore(7));
+  CHECK(session.HidesPlayerRepresentation(7, false));
+  CHECK(session.HidesPlayerRepresentation(1, false));
+  CHECK_FALSE(session.HidesPlayerRepresentation(8, false));
   session.Refresh();
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);

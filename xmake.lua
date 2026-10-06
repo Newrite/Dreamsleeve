@@ -49,6 +49,7 @@ add_requires("glaze 7.0.2")
 add_requires("doctest 2.5.0")
 add_requires("magic_enum 0.9.7")
 add_requires("protobuf-cpp 33.2")
+add_requires("zstd 1.5.7")
 
 set_config("skyrim_vr", true)
 set_config("skyrim_ae", true)
@@ -133,6 +134,7 @@ target("Dreamsleeve.Client.Core")
     add_packages("spdlog", {public = true})
     add_packages("glaze", {public = true})
     add_packages("magic_enum", {public = true})
+    add_packages("zstd", {public = true})
 
 -- Thin client static library
 target("Dreamsleeve.Client")

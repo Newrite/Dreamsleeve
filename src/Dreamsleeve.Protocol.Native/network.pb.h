@@ -119,6 +119,8 @@ enum DeliveryLane : int {
   Control = 0,
   Chat = 1,
   Realtime = 2,
+  Models = 3,
+  Poses = 4,
   DeliveryLane_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   DeliveryLane_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -129,11 +131,11 @@ extern const uint32_t DeliveryLane_internal_data_[];
 inline constexpr DeliveryLane DeliveryLane_MIN =
     static_cast<DeliveryLane>(0);
 inline constexpr DeliveryLane DeliveryLane_MAX =
-    static_cast<DeliveryLane>(2);
+    static_cast<DeliveryLane>(4);
 inline bool DeliveryLane_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 4;
 }
-inline constexpr int DeliveryLane_ARRAYSIZE = 2 + 1;
+inline constexpr int DeliveryLane_ARRAYSIZE = 4 + 1;
 const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL DeliveryLane_descriptor();
 template <typename T>
 const ::std::string& DeliveryLane_Name(T value) {
@@ -144,7 +146,7 @@ const ::std::string& DeliveryLane_Name(T value) {
 }
 template <>
 inline const ::std::string& DeliveryLane_Name(DeliveryLane value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<DeliveryLane_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<DeliveryLane_descriptor, 0, 4>(
       static_cast<int>(value));
 }
 inline bool DeliveryLane_Parse(

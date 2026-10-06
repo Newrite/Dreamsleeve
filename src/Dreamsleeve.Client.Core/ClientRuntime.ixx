@@ -5,6 +5,7 @@ export import Dreamsleeve.Client.ProtocolCodec;
 export import DreamNet.Client;
 import DreamNet.Core;
 import Dreamsleeve.Client.Utils;
+import Dreamsleeve.Client.Phantom.Streaming;
 
 export namespace Dreamsleeve::Client
 {
@@ -175,6 +176,20 @@ public:
       if (phase == SessionPhase::Opening && Clock::now() >= deadline)
         return Fail(DreamNetError::Make(DreamNetErrorCode::ConnectTimeout, "OpenSession timed out"));
 
+      phantoms.Context(contextRevision, phase == SessionPhase::Ready && movementReady && latestMovement.has_value());
+      for (auto& outgoing : phantoms.Poll())
+      {
+        if (outgoing.lane == Phantom::Wire::PosesLane)
+        {
+          auto rotated = transport->RotateUnreliableSequence(outgoing.lane);
+          if (!rotated) return Fail(rotated.error());
+        }
+        const auto flag   = outgoing.lane == Phantom::Wire::PosesLane ? PacketFlag::UnreliableFragment : PacketFlag::Reliable;
+        auto       packet = DreamNetPacket::TryFromSpan(DreamNetPacket::DataSpan{outgoing.bytes}, flag);
+        if (!packet) return Fail(packet.error());
+        auto sent = transport->Send(std::move(*packet), outgoing.lane);
+        if (!sent) return Fail(sent.error());
+      }
       auto sampled = SendMovement();
       return sampled ? commandsResult : sampled;
     }
@@ -213,6 +228,7 @@ private:
         : config(std::move(settings)),
           codec(std::move(codec)),
           exchange(exchange),
+          phantoms(exchange.Phantoms(), config.phantomCacheDirectory),
           model(config.maxPendingMovementSamples)
     {}
 
@@ -225,6 +241,7 @@ private:
     // Forgets the previous session, its pending requests included.
     void ResetSession()
     {
+      phantoms.Reset();
       serverName.clear();
       pending.clear();
       ResetMovement();
@@ -382,6 +399,26 @@ private:
     {
       if (phase == SessionPhase::Disconnecting || SessionIdle(phase))
         return {};  // A terminal reply may have closed the session earlier in this batch.
+      if (received.channelId == Phantom::Wire::ModelsLane || received.channelId == Phantom::Wire::PosesLane)
+      {
+        const auto flags = received.packet.Flags();
+        if (
+          received.channelId == Phantom::Wire::PosesLane && received.packet.Data().empty() &&
+          PacketFlags::HasFlag(flags, PacketFlag::Reliable) && !PacketFlags::HasFlag(flags, PacketFlag::Unsequenced))
+          return {};
+        if (
+          PacketFlags::HasFlag(flags, PacketFlag::Unsequenced) ||
+          (received.channelId == Phantom::Wire::ModelsLane && !PacketFlags::HasFlag(flags, PacketFlag::Reliable)) ||
+          (received.channelId == Phantom::Wire::PosesLane && PacketFlags::HasFlag(flags, PacketFlag::Reliable)))
+          return Unexpected("phantom.delivery");
+        const auto bytes = received.packet.Data();
+        const auto now =
+          static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+        const auto result =
+          received.channelId == Phantom::Wire::ModelsLane ? phantoms.ReceiveAsset(bytes) : phantoms.ReceivePose(bytes, now);
+        if (!result) return Unexpected("phantom." + result.error().field);
+        return {};
+      }
       if (received.channelId > 2) return Unexpected("channel");
       const auto channel = static_cast<Wire::Channel>(received.channelId);
       const auto flags   = received.packet.Flags();
@@ -1116,13 +1153,14 @@ private:
     }
 
     // Control, chat and realtime lanes.
-    static constexpr std::size_t MinimumChannels = 3;
+    static constexpr std::size_t MinimumChannels = MinChannels;
     // The kind table is swept when it reaches this size, then twice the kinds left.
     static constexpr std::size_t KindSweepFloor = 64;
 
     Configuration                                     config;
     Wire::ProtocolCodec                               codec;
     ClientExchange&                                   exchange;
+    Phantom::Streaming                                phantoms;
     DreamNetClient::Ptr                               transport;
     // The route's game port, the main one until the application picks another.
     struct

@@ -108,6 +108,23 @@ export namespace Dreamsleeve::Host
     bool        noteDateHeader{false};
     std::string markDateColor{"#A9A69B"};
 
+    bool        publishPhantoms{true};
+    bool        showPhantoms{true};
+    bool        phantomFallback{true};
+    bool        combatHidePhantoms{false};
+    double      maxVisiblePhantoms{4};
+    double      phantomDrawDistance{4096};
+    double      phantomOpacity{0.6};
+    std::string phantomColor{"#8CCCCC"};
+    double      phantomSampleRate{20};
+    double      phantomDelayMs{100};
+    double      phantomExtrapolationMs{100};
+    double      phantomTimeoutMs{1000};
+    double      phantomMemoryMiB{256};
+    double      phantomCacheMiB{1024};
+    double      phantomUploadKiB{512};
+    double      phantomDownloadKiB{512};
+
     bool operator==(const UiSettings&) const = default;
   };
 
@@ -159,6 +176,17 @@ export namespace Dreamsleeve::Host
       {"groundMaxWidth", 120, 800},
       {"groundBackground", 0, 1},
       {"deathBackground", 0, 1},
+      {"maxVisiblePhantoms", 0, 16, true},
+      {"phantomDrawDistance", 0, 16384},
+      {"phantomOpacity", 0, 1},
+      {"phantomSampleRate", 1, 50, true},
+      {"phantomDelayMs", 0, 500, true},
+      {"phantomExtrapolationMs", 0, 250, true},
+      {"phantomTimeoutMs", 500, 5000, true},
+      {"phantomMemoryMiB", 64, 2048, true},
+      {"phantomCacheMiB", 0, 8192, true},
+      {"phantomUploadKiB", 64, 8192, true},
+      {"phantomDownloadKiB", 64, 8192, true},
   });
 
   // Words the UI chooses from; anything else is the default.
@@ -175,7 +203,7 @@ export namespace Dreamsleeve::Host
 
   // "#RRGGBB"; anything else is the default.
   constexpr auto ColorKeys =
-    std::to_array<std::string_view>({"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor"});
+    std::to_array<std::string_view>({"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor", "phantomColor"});
 
   // How names, texts, dates and whose marks are projected. These apply to every
   // surface at once, without saving, and a change projects the session again.
