@@ -192,7 +192,7 @@ namespace Phantoms
       if (!opened)
       {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-        Dreamsleeve::Client::Diagnostics::Phantoms().Failed(static_cast<std::uint32_t>(opened.error().reason));
+        Dreamsleeve::Client::Diagnostics::Phantoms().Failed(opened.error());
 #endif
         Error(opened.error(), now);
         if (opened.error().reason != P::Failure::Busy) state.nextCapture = now + std::chrono::seconds(1);
@@ -201,6 +201,9 @@ namespace Phantoms
       auto asset = P::ValidatedAsset::Parse(std::move(opened->asset));
       if (!asset)
       {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Dreamsleeve::Client::Diagnostics::Phantoms().Failed(asset.error());
+#endif
         Error(asset.error(), now);
         state.nextCapture = now + std::chrono::seconds(1);
         return;
@@ -237,7 +240,7 @@ namespace Phantoms
     if (!pose)
     {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-      Dreamsleeve::Client::Diagnostics::Phantoms().Failed(static_cast<std::uint32_t>(pose.error().reason));
+      Dreamsleeve::Client::Diagnostics::Phantoms().Failed(pose.error());
 #endif
       Error(pose.error(), now);
       if (pose.error().reason == P::Failure::Stale)

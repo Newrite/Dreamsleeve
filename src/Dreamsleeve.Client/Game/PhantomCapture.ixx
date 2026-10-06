@@ -6,6 +6,7 @@ export module Dreamsleeve.Game.PhantomCapture;
 
 import std;
 import Dreamsleeve.Client.Phantom.Types;
+import Dreamsleeve.Client.Phantom.Masks;
 import Dreamsleeve.Game.PhantomAsset;
 import Dreamsleeve.Game.PhantomCaptureRules;
 
@@ -25,7 +26,7 @@ export namespace Dreamsleeve::Game::PhantomCapture
     // Copy only the live diffuse texture's alpha, including BC-compressed GPU
     // resources. No path lookup. Reject unknown formats, oversized textures
     // and unavailable resources; never substitute an opaque card.
-    P::Result<P::AlphaMask> (*mask)(RE::NiSourceTexture&, const P::Limits&){};
+    P::Result<std::shared_ptr<const P::AlphaMask>> (*mask)(RE::NiSourceTexture&, const P::Limits&){};
     // Pose-only copy. No static attributes, material or indices are reread.
     P::Result<P::Deformation> (*deformation)(RE::BSTriShape&, std::uint32_t, const P::Limits&){};
     // Begin a fresh audit once. Busy retries reuse its staging job.
@@ -92,13 +93,21 @@ export namespace Dreamsleeve::Game::PhantomCapture
   {
     const auto& data   = geometry.GetGeometryRuntimeData();
     auto*       shader = data.shaderProperty.get();
-    if (!shader) return A::Kind(geometry, "BSSkinnedDecalTriShape");
-    using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
+    if (!shader) return Surface{.hasShader = false}.Auxiliary();
+    using Shader   = RE::BSShaderProperty::EShaderPropertyFlag;
+    auto* lighting = geometry.lightingShaderProp_cast();
+    auto* material = lighting && lighting->material && lighting->material->GetType() == RE::BSShaderMaterial::Type::kLighting
+                     ? static_cast<RE::BSLightingShaderMaterialBase*>(lighting->material)
+                     : nullptr;
     return Surface{
         A::Kind(*shader, "BSEffectShaderProperty"),
         shader->flags.any(Shader::kDecal, Shader::kDynamicDecal),
         bool(data.skinInstance) || shader->flags.all(Shader::kSkinned),
-        shader->flags.all(Shader::kWeaponBlood) || A::Kind(geometry, "BSSkinnedDecalTriShape")
+        shader->flags.all(Shader::kWeaponBlood) || A::Kind(geometry, "BSSkinnedDecalTriShape"),
+        geometry.name.c_str() ? geometry.name.c_str() : "",
+        true,
+        lighting ? lighting->alpha : 1.f,
+        material ? material->materialAlpha : 1.f
     }
       .Auxiliary();
   }
@@ -219,9 +228,10 @@ export namespace Dreamsleeve::Game::PhantomCapture
     if (!engine.mask) return A::Fail(P::Failure::MissingSource, "engine.alpha-readback");
     auto mask = engine.mask(*material.diffuseTexture, limits);
     if (!mask) return std::unexpected(mask.error());
+    const auto& value = *mask;
     if (
-      !mask->width || !mask->height || mask->width > limits.maskDimension || mask->height > limits.maskDimension ||
-      std::uint64_t(mask->width) * mask->height != mask->pixels.size() || mask->pixels.size() > limits.maskBytes)
+      !value || !value->width || !value->height || value->width > limits.maskDimension || value->height > limits.maskDimension ||
+      std::uint64_t(value->width) * value->height != value->pixels.size() || value->pixels.size() > limits.maskBytes)
       return A::Fail(P::Failure::InvalidMask, "material.mask-shape");
     geometry.mask = std::move(*mask);
     return {};
@@ -1064,7 +1074,8 @@ private:
           }
         }
       }
-    std::uint64_t bytes = out.asset.nodes.size() * 48, vertices = 0, masks = 0;
+    std::uint64_t    bytes = out.asset.nodes.size() * 48, vertices = 0;
+    P::AlphaMaskPool masks(limits);
     for (auto* object : *live)
     {
       if (object->AsNiTriShape() && CaptureCandidate(*root, *object, firstPerson, limits))
@@ -1085,13 +1096,17 @@ private:
       normalized->skin = std::move(*skin);
       auto material    = Material(*shape, *normalized, engine, limits);
       if (!material) return GeometryError(material.error(), *geometry);
+      if (normalized->mask)
+      {
+        auto shared = masks.Intern(normalized->mask);
+        if (!shared) return GeometryError(shared.error(), *geometry);
+        normalized->mask = *shared;
+      }
       const auto signature  = Signature(*normalized);
       vertices             += normalized->vertices.size();
-      masks                += normalized->mask ? normalized->mask->pixels.size() : 0;
       bytes += normalized->vertices.size() * sizeof(P::Vertex) + normalized->indices.size() * 2 + 128 +
                (normalized->skin ? normalized->skin->bones.size() * 64 : 0) + (normalized->mask ? normalized->mask->pixels.size() : 0);
-      if (vertices > limits.vertices || masks > limits.maskBytes || bytes > limits.assetBytes)
-        return A::Fail(P::Failure::LimitExceeded, "capture.asset-budget");
+      if (vertices > limits.vertices || bytes > limits.assetBytes) return A::Fail(P::Failure::LimitExceeded, "capture.asset-budget");
       MeshBinding binding;
       binding.owner                    = RE::NiPointer<RE::BSTriShape>{shape};
       binding.node                     = ids.at(object);

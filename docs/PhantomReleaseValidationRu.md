@@ -153,3 +153,13 @@ FP32 позиций оружия без VF_FULLPREC. Декодер теперь
 сохранением четырёх пользовательских файлов. Normal dist остаётся прежним.
 Игровая запись после этого исправления ещё не проверена. Evidence:
 [PhantomDiagnosticsRu.md](PhantomDiagnosticsRu.md).
+
+Сверка с шестью сохранёнными архивами прототипа выявила потерянные исключения
+RaceMenu overlays, shaderless/transparent helpers и повторный учёт одинаковых
+alpha masks. Политика восстановлена, маски разделяются без потери пикселей.
+386/386 native tests: 522 архивных решения отбора, 1 521 528 packed positions,
+полный codec roundtrip модели с 11 одинаковыми масками волос. Dynamic GPU
+buffers и live alpha readback старыми архивами не покрыты; игровой успех
+не заявляется. Diagnostic DLL/PDB установлена, пользовательские файлы
+сохранены по SHA256; normal dist не менялся. Evidence и ограничения:
+[PhantomDiagnosticsRu.md](PhantomDiagnosticsRu.md).

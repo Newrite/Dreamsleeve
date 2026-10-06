@@ -97,29 +97,44 @@ TEST_CASE("Invalid position bytes never trigger a precision fallback")
 
 TEST_CASE("External packed vertex fixture matches independent position oracle" * doctest::skip(VertexFixturePath().empty()))
 {
-  std::ifstream file(VertexFixturePath(), std::ios::binary);
-  REQUIRE(file);
-  std::array<std::byte, 24> header{};
-  REQUIRE(bool(file.read(reinterpret_cast<char*>(header.data()), header.size())));
-  REQUIRE(std::memcmp(header.data(), "DLPVTX01", 8) == 0);
-  const auto descriptor = Stream::Read<std::uint64_t>(header, 8);
-  const auto stride     = Stream::Read<std::uint32_t>(header, 16);
-  const auto count      = Stream::Read<std::uint32_t>(header, 20);
-  REQUIRE(count > 0);
-  REQUIRE(count <= 65535);
-  auto layout = Stream::PositionLayout::From(descriptor, stride);
-  REQUIRE(layout);
-  std::vector<std::byte> vertices(std::size_t(count) * stride);
-  REQUIRE(bool(file.read(reinterpret_cast<char*>(vertices.data()), vertices.size())));
-  for (std::uint32_t i = 0; i < count; ++i)
+  std::vector<std::filesystem::path> fixtures;
+  const std::filesystem::path        input = VertexFixturePath();
+  if (std::filesystem::is_directory(input))
   {
-    std::array<float, 3> expected{};
-    REQUIRE(bool(file.read(reinterpret_cast<char*>(expected.data()), sizeof(expected))));
-    auto actual = layout->Decode(std::span(vertices).subspan(std::size_t(i) * stride, stride));
-    REQUIRE(actual);
-    CHECK(actual->x == expected[0]);
-    CHECK(actual->y == expected[1]);
-    CHECK(actual->z == expected[2]);
+    for (const auto& entry : std::filesystem::directory_iterator(input))
+      if (entry.path().extension() == ".bin") fixtures.push_back(entry.path());
   }
-  CHECK(file.peek() == std::char_traits<char>::eof());
+  else
+    fixtures.push_back(input);
+  REQUIRE_FALSE(fixtures.empty());
+  REQUIRE(fixtures.size() <= 4096);
+  for (const auto& fixture : fixtures)
+  {
+    INFO(fixture.string());
+    std::ifstream file(fixture, std::ios::binary);
+    REQUIRE(file);
+    std::array<std::byte, 24> header{};
+    REQUIRE(bool(file.read(reinterpret_cast<char*>(header.data()), header.size())));
+    REQUIRE(std::memcmp(header.data(), "DLPVTX01", 8) == 0);
+    const auto descriptor = Stream::Read<std::uint64_t>(header, 8);
+    const auto stride     = Stream::Read<std::uint32_t>(header, 16);
+    const auto count      = Stream::Read<std::uint32_t>(header, 20);
+    REQUIRE(count > 0);
+    REQUIRE(count <= 65535);
+    auto layout = Stream::PositionLayout::From(descriptor, stride);
+    REQUIRE(layout);
+    std::vector<std::byte> vertices(std::size_t(count) * stride);
+    REQUIRE(bool(file.read(reinterpret_cast<char*>(vertices.data()), vertices.size())));
+    for (std::uint32_t i = 0; i < count; ++i)
+    {
+      std::array<float, 3> expected{};
+      REQUIRE(bool(file.read(reinterpret_cast<char*>(expected.data()), sizeof(expected))));
+      auto actual = layout->Decode(std::span(vertices).subspan(std::size_t(i) * stride, stride));
+      REQUIRE(actual);
+      CHECK(actual->x == expected[0]);
+      CHECK(actual->y == expected[1]);
+      CHECK(actual->z == expected[2]);
+    }
+    CHECK(file.peek() == std::char_traits<char>::eof());
+  }
 }

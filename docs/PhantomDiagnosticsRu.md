@@ -279,3 +279,63 @@ Normal dist не пересобирался. Самопроверка охват
 сохранение FP16 и dynamic override, отказ на NaN/Inf без fallback и отсутствие
 дублирования Half/Read в engine adapter. Полная запись и внешность персонажа
 в игре пока не подтверждены; достаточно одной записи 15 секунд при 20 Гц.
+
+## Сверка с сохранённым прототипом, 06.10.2026
+
+Запись `1791294883503-idle-0`: 0 поз, 1091 movement, 60 ошибок, `no-samples`.
+После исправления позиций захват дошёл до `Body [Ovl0]` / `Body [Ovl1]`:
+`graphics.alpha-pending`, затем `graphics.alpha-read-budget`. Readback 4K
+маски резервирует 128 MiB под R32_UINT output/staging; вместе с предыдущими
+ресурсами это превышает asset budget. Причина включения этих поверхностей —
+потерянные при переносе исключения Ghostify из `codex/phantom-local-se`.
+
+Сверены все шесть завершённых архивов в локальном DreamsleevePhantoms:
+idle, movement, combat, equipment, camera и movement с requested 40 Hz.
+В каждом 87 поверхностей, 25 исключённых прототипом. Восстановлен отбор
+18 RaceMenu overlays, shaderless helpers и почти прозрачных dummy surfaces.
+Отдельное уже существующее исключение EdgeBlood12 сохранено. Базовое тело,
+волосы, одежда и оружие не исключаются по одному decal flag.
+
+Старая модель также выявила следующий потенциальный отказ: одна маска волос
+2048x1024 используется 11 meshes, что прежняя проверка считала как 22 MiB
+при лимите 16 MiB. AlphaMaskPool теперь разделяет неизменяемые одинаковые
+маски в capture, validation и decode, проверяя dimensions и все pixels.
+Тест с 11 независимыми исходными копиями проводит модель через Validate,
+Prepare/Zstd и ReadAsset; маски после чтения разделяются, пиксели сохраняются.
+Expanded asset limit и worker reservation не уменьшены; wire не менялся.
+
+Повторяемая проверка старых архивов, без изменения оригиналов:
+
+```powershell
+python Scripts/phantom_prototype_fixture.py 'C:\Users\newri\Documents\My Games\Skyrim Special Edition\SKSE\DreamsleevePhantoms' --output build/phantom-prototype-fixtures-v2
+$env:DREAMSLEEVE_PHANTOM_PROTOTYPE_FIXTURES = "$PWD/build/phantom-prototype-fixtures-v2"
+$env:DREAMSLEEVE_PHANTOM_VERTEX_FIXTURE = $env:DREAMSLEEVE_PHANTOM_PROTOTYPE_FIXTURES
+xmake run Dreamsleeve.Client.Tests
+```
+
+Для повторного экспорта нужно новое имя output (существующий каталог не
+перезаписывается). Скрипт читает узкий SSE stream-100 NIF layout, сохраняет
+материальные признаки с oracle `metadata.excluded` и packed position fixtures.
+Он не загружает engine factories, не следует путям текстур и не копирует их.
+Архивы/fixtures не входят в Git или dist. Без переменных внешние тесты явно
+пропускаются; обычные unit cases политики и масок остаются включёнными.
+
+Проверено 522 решения отбора и 1 521 528 FP32 positions в 276 сохранённых
+streams. По 16 streams на архив не имеют packed positions: их отдельные
+живые dynamic buffers эта проверка не покрывает. Исходные GPU alpha pixels
+в старых архивах отсутствуют, поэтому end-to-end GPU capture ещё не проверен.
+Это проверка сохранённых данных, не эмуляция полного игрового кадра.
+
+Последний полный capture error теперь виден в меню и сохраняется в
+summary.json (`lastCaptureError`, UTF-8 лимит 512 байт), включая отказ
+ValidatedAsset после Open. Binary failure record остаётся числовым.
+
+Итог: 386/386 native tests, 7 619 793 assertions, один skip real UDP;
+format/diff checks и Python syntax check пройдены. Логи:
+`build/phantom-prototype-tests.log`, `build/phantom-prototype-diag-build.log`.
+Diagnostic DLL собрана за 133.718 s и установлена с PDB в MO2.
+SHA256 DLL: `3f893702b9d538d4128db3e3417ded04a1e9383339286cf436f4079d61da2f44`.
+Backup/install manifest: `build/phantom-prototype-install-backup-20261006-212818`.
+ESP, client.toml, aliases.toml, theme.user.css сохранены по SHA256.
+Normal dist не пересобирался. Полная запись в игре после этого исправления
+ещё не подтверждена.

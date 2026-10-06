@@ -41,3 +41,20 @@ TEST_CASE("Cached visibility survives first person and resumes authored visibili
   CHECK(visible.Sample(true, false, true));
   CHECK_FALSE(visible.Sample(true, false, false));
 }
+
+TEST_CASE("Neutral ghost omits RaceMenu overlays and non-rendering helper geometry")
+{
+  CHECK(C::Surface{.skinned = true, .name = "Body [Ovl1]"}.Auxiliary());
+  CHECK(C::Surface{.skinned = true, .name = "Feet [SOvl0]"}.Auxiliary());
+  CHECK(C::Surface{.hasShader = false}.Auxiliary());
+  CHECK(C::Surface{.skinned = true, .materialAlpha = 0}.Auxiliary());
+  CHECK(C::Surface{.skinned = true, .shaderAlpha = 0}.Auxiliary());
+}
+
+TEST_CASE("Auxiliary selection preserves visible skin, hair, weapon and invalid alpha diagnostics")
+{
+  for (const auto name : {"Body", "Hands", "Feet", "00UBE_FemaleHead", "Warhammer_Mesh", "Hair"})
+    CHECK_FALSE(C::Surface{.decalMaterial = true, .skinned = true, .name = name}.Auxiliary());
+  CHECK_FALSE(C::Surface{.skinned = true, .materialAlpha = 0.01f}.Auxiliary());
+  CHECK_FALSE(C::Surface{.skinned = true, .materialAlpha = -1.f}.Auxiliary());
+}

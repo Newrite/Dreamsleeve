@@ -148,7 +148,7 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
         {0, 0, .5}
   },
     std::array<std::uint8_t, 2>{1, 2});
-  recorder.Failed(static_cast<std::uint32_t>(P::Failure::Busy));
+  recorder.Failed({P::Failure::Busy, "graphics.alpha-pending [mesh=Hair]"});
   recorder.Stop();
   const auto s = Finished(recorder);
   REQUIRE(s.phase == D::Phase::Complete);
@@ -157,6 +157,7 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
   CHECK(s.sent == 1);
   CHECK(s.movements == 1);
   CHECK(s.errors == 1);
+  CHECK(s.lastCaptureError == "graphics.alpha-pending [mesh=Hair]");
   CHECK(s.queuedBytes == 0);
   CHECK(s.dropped == 0);
   auto   bytes = File(std::filesystem::path(s.directory) / "capture.phdiag");

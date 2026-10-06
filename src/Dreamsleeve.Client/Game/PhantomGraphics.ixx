@@ -68,7 +68,7 @@ namespace Dreamsleeve::Game::PhantomGraphics
       RE::NiPointer<RE::NiSourceTexture> source;
       Com<ID3D11ShaderResourceView>      view;
       Com<ID3D11Texture2D>               staging;
-      P::AlphaMask                       result;
+      std::shared_ptr<P::AlphaMask>      result{std::make_shared<P::AlphaMask>()};
       std::uint64_t                      issuedMs{}, completedMs{}, touchedMs{};
     };
 
@@ -81,7 +81,8 @@ namespace Dreamsleeve::Game::PhantomGraphics
       for (const auto& read : buffers)
         total += read.plannedBytes;
       for (const auto& read : masks)
-        total += read.result.pixels.empty() ? std::uint64_t(read.result.width) * read.result.height * 8 : read.result.pixels.size() * 2ULL;
+        total +=
+          read.result->pixels.empty() ? std::uint64_t(read.result->width) * read.result->height * 8 : read.result->pixels.size() * 2ULL;
       return total;
     }
 
@@ -620,7 +621,7 @@ namespace Dreamsleeve::Game::PhantomGraphics
     return out;
   }
 
-  inline P::Result<P::AlphaMask> Mask(RE::NiSourceTexture& source, const P::Limits& limits)
+  inline P::Result<std::shared_ptr<const P::AlphaMask>> Mask(RE::NiSourceTexture& source, const P::Limits& limits)
   {
     auto thread = Detail::Thread();
     if (!thread) return std::unexpected(thread.error());
@@ -676,7 +677,7 @@ namespace Dreamsleeve::Game::PhantomGraphics
     auto found =
       std::ranges::find_if(Detail::masks, [&](const auto& read) { return read.source.get() == &source && read.view.Get() == view; });
     if (found != Detail::masks.end()) found->touchedMs = now;
-    if (found != Detail::masks.end() && !found->result.pixels.empty())
+    if (found != Detail::masks.end() && !found->result->pixels.empty())
     {
       // Keep completed appearance reads long enough for Open to make progress
       // across many alpha cards; dirty events call InvalidateMasks explicitly.
@@ -692,7 +693,7 @@ namespace Dreamsleeve::Game::PhantomGraphics
     {
       std::uint64_t total = std::uint64_t(width) * height * 8;
       for (const auto& read : Detail::masks)
-        total += read.result.pixels.empty() ? std::uint64_t(read.result.width) * read.result.height * 8 : read.result.pixels.size();
+        total += read.result->pixels.empty() ? std::uint64_t(read.result->width) * read.result->height * 8 : read.result->pixels.size();
       if (total > limits.assetBytes || Detail::masks.size() >= limits.geometry)
         return A::Fail(P::Failure::LimitExceeded, "graphics.alpha-read-budget");
       const auto capacity = std::max(Detail::masks.capacity(), Detail::masks.size() + 1);
@@ -724,8 +725,8 @@ namespace Dreamsleeve::Game::PhantomGraphics
       read.issuedMs = read.touchedMs = now;
       read.source                    = RE::NiPointer<RE::NiSourceTexture>{&source};
       read.view                      = view;
-      read.result.width              = width;
-      read.result.height             = height;
+      read.result->width             = width;
+      read.result->height            = height;
       if (FAILED(renderer.device->CreateTexture2D(&target, nullptr, &read.staging)))
         return A::Fail(P::Failure::Storage, "graphics.alpha-staging");
       {
@@ -751,13 +752,13 @@ namespace Dreamsleeve::Game::PhantomGraphics
       renderer.context->Unmap(found->staging.Get(), 0);
       return A::Fail(P::Failure::InvalidMask, "graphics.alpha-row-pitch");
     }
-    found->result.pixels.resize(std::size_t(width) * height);
+    found->result->pixels.resize(std::size_t(width) * height);
     for (std::uint32_t y = 0; y < height; ++y)
       for (std::uint32_t x = 0; x < width; ++x)
       {
         std::uint32_t alpha;
         std::memcpy(&alpha, static_cast<const std::byte*>(mapped.pData) + std::size_t(y) * mapped.RowPitch + x * 4, 4);
-        found->result.pixels[std::size_t(y) * width + x] = std::uint8_t(std::min(alpha, 255U));
+        found->result->pixels[std::size_t(y) * width + x] = std::uint8_t(std::min(alpha, 255U));
       }
     renderer.context->Unmap(found->staging.Get(), 0);
     found->staging.Reset();

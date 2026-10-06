@@ -1,5 +1,6 @@
 import std;
 import Dreamsleeve.Client.Phantom.Types;
+import Dreamsleeve.Client.Phantom.Masks;
 
 namespace Dreamsleeve::Client::Phantom
 {
@@ -39,8 +40,9 @@ namespace Dreamsleeve::Client::Phantom
       if ((i == 0 && node.parent.value != NoNode) || (i != 0 && node.parent.value >= i)) return error(Failure::InvalidLink, "node.parent");
       if (!Finite(node.local)) return error(Failure::InvalidNumber, "node.transform");
     }
-    std::uint64_t vertices = 0, masks = 0, bytes = asset.nodes.size() * 40ULL;
-    for (const auto& mesh : asset.geometry)
+    std::uint64_t vertices = 0, bytes = asset.nodes.size() * 40ULL;
+    AlphaMaskPool masks(limits);
+    for (auto& mesh : asset.geometry)
     {
       vertices += mesh.vertices.size();
       bytes    += mesh.vertices.size() * 80ULL + mesh.indices.size() * 2ULL;
@@ -82,13 +84,12 @@ namespace Dreamsleeve::Client::Phantom
       }
       if (mesh.mask)
       {
-        const auto& mask  = *mesh.mask;
-        masks            += mask.pixels.size();
-        bytes            += mask.pixels.size();
-        if (
-          !mask.width || !mask.height || mask.width > limits.maskDimension || mask.height > limits.maskDimension ||
-          static_cast<std::uint64_t>(mask.width) * mask.height != mask.pixels.size() || masks > limits.maskBytes)
-          return error(Failure::InvalidMask, "geometry.mask");
+        auto mask = masks.Intern(mesh.mask);
+        if (!mask) return std::unexpected(mask.error());
+        mesh.mask = *mask;
+        // v1 wire stores a mask per mesh. Retain its expanded upper bound
+        // for worker reservations even though resident pixels are shared.
+        bytes += mesh.mask->pixels.size();
       }
       if (bytes > limits.assetBytes) return error(Failure::LimitExceeded, "asset.bytes");
     }

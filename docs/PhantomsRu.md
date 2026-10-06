@@ -63,9 +63,22 @@ lighting geometry. Скиненная базовая геометрия тела
 сохраняется; RGB-проекция не передаётся. Переключение этих RGB flags не меняет
 neutral stamp. Нескиненные effect/decal meshes, BSSkinnedDecalTriShape и
 weapon-blood meshes исключаются как вспомогательные до чтения их вершин.
-Отбор не зависит от имени mesh; Open, Sample и Rebind используют одну политику
+Дополнительно восстановлены исключения проверенного локального прототипа:
+RaceMenu-оверлеи с ` [Ovl`/` [SOvl` в имени, поверхности без shader property
+и вспомогательные поверхности с lighting/material alpha ниже 0.01.
+Именное правило относится только к оверлеям; decal flags базового тела сами
+по себе не исключают его. Open, Sample и Rebind используют одну политику
 из PhantomCaptureRules. Canonicalize удаляет их ненужные pose channels.
 Неподдерживаемые скиненные effect materials и layouts отклоняются явно.
+
+Маски — immutable ресурсы, разделяемые через `Phantom.Masks.AlphaMaskPool`.
+Равенство требует одинаковых размеров и всех пикселей; hash лишь ускоряет поиск.
+Лимит maskBytes (16 MiB по умолчанию) учитывает уникальные маски, поэтому
+несколько частей волос с одной маской не расходуют его повторно. Readback,
+capture bindings и decoded asset разделяют сохранённые маски без копий пикселей.
+Wire asset v1 пока записывает маску на каждый mesh: expanded asset limit и
+консервативные worker reservations сохраняются, несмотря на sharing в RAM.
+Сжатие Zstd и размер/разрешение самих масок не изменены.
 
 Локальные packed позиции декодирует общий `Game/PhantomVertexStream`.
 Точность определяется footprint до следующего атрибута: 16 байт для FP32

@@ -45,10 +45,11 @@ namespace
     mesh.vertices[1].position = {1, 0, 0};
     mesh.vertices[2].position = {0, 1, 0};
     mesh.indices              = {0, 1, 2};
-    mesh.mask                 = P::AlphaMask{512, 512, std::vector<std::uint8_t>(512 * 512)};
+    auto         mask         = std::make_shared<P::AlphaMask>(P::AlphaMask{512, 512, std::vector<std::uint8_t>(512 * 512)});
     std::mt19937 random(21);
-    for (auto& value : mesh.mask->pixels)
+    for (auto& value : mask->pixels)
       value = static_cast<std::uint8_t>(random());
+    mesh.mask = std::move(mask);
     raw.geometry.push_back(std::move(mesh));
     auto parsed = P::ValidatedAsset::Parse(std::move(raw));
     REQUIRE(parsed);

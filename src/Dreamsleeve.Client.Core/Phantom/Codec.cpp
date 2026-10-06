@@ -6,6 +6,7 @@
 
 import std;
 import Dreamsleeve.Client.Phantom.Codec;
+import Dreamsleeve.Client.Phantom.Masks;
 
 namespace Dreamsleeve::Client::Phantom
 {
@@ -315,6 +316,8 @@ namespace Dreamsleeve::Client::Phantom
       }
       if (mesh.mask)
       {
+        if (w.bytes.size() + 8ULL + mesh.mask->pixels.size() > limits.assetBytes)
+          return std::unexpected(Error{Failure::LimitExceeded, "asset.bytes"});
         w.Put(mesh.mask->width);
         w.Put(mesh.mask->height);
         w.bytes.insert(w.bytes.end(), mesh.mask->pixels.begin(), mesh.mask->pixels.end());
@@ -349,7 +352,8 @@ namespace Dreamsleeve::Client::Phantom
       for (std::uint32_t i = 0; i < nodes; ++i)
         asset.nodes.push_back({NodeId{r.Get<std::uint32_t>()}, r.TransformValue()});
       asset.geometry.reserve(geometry);
-      std::uint64_t totalVertices = 0, totalMasks = 0;
+      std::uint64_t totalVertices = 0;
+      AlphaMaskPool masks(limits);
       for (std::uint32_t i = 0; i < geometry; ++i)
       {
         Geometry mesh;
@@ -398,16 +402,17 @@ namespace Dreamsleeve::Client::Phantom
         if (flags & 2)
         {
           AlphaMask mask;
-          mask.width         = r.Get<std::uint32_t>();
-          mask.height        = r.Get<std::uint32_t>();
-          const auto pixels  = static_cast<std::uint64_t>(mask.width) * mask.height;
-          totalMasks        += pixels;
+          mask.width        = r.Get<std::uint32_t>();
+          mask.height       = r.Get<std::uint32_t>();
+          const auto pixels = static_cast<std::uint64_t>(mask.width) * mask.height;
           if (
             !mask.width || !mask.height || mask.width > limits.maskDimension || mask.height > limits.maskDimension ||
-            totalMasks > limits.maskBytes)
+            pixels > limits.maskBytes)
             Fail(Failure::LimitExceeded, "mask");
           mask.pixels = r.Data(static_cast<std::uint32_t>(pixels));
-          mesh.mask   = std::move(mask);
+          auto shared = masks.Intern(std::make_shared<const AlphaMask>(std::move(mask)));
+          if (!shared) return std::unexpected(shared.error());
+          mesh.mask = *shared;
         }
         asset.geometry.push_back(std::move(mesh));
       }

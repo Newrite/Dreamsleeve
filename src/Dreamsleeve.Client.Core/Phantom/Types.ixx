@@ -85,13 +85,13 @@ export namespace Dreamsleeve::Client::Phantom
 
   struct Geometry
   {
-    NodeId                     node;
-    std::vector<Vertex>        vertices;
-    std::vector<std::uint16_t> indices;
-    std::optional<Skin>        skin;
-    std::optional<AlphaMask>   mask;
-    std::uint8_t               alphaThreshold{};
-    bool                       alphaBlend{}, doubleSided{}, dynamic{};
+    NodeId                           node;
+    std::vector<Vertex>              vertices;
+    std::vector<std::uint16_t>       indices;
+    std::optional<Skin>              skin;
+    std::shared_ptr<const AlphaMask> mask;
+    std::uint8_t                     alphaThreshold{};
+    bool                             alphaBlend{}, doubleSided{}, dynamic{};
   };
 
   // Detached values, never engine classes, paths, pointers or shader programs.

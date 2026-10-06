@@ -113,6 +113,7 @@ namespace SKSEMenu
       s.dropped,
       s.errors);
     if (!s.reason.empty()) ImGui::TextWrapped("Причина завершения: %s", s.reason.c_str());
+    if (!s.lastCaptureError.empty()) ImGui::TextWrapped("Последняя ошибка захвата: %s", s.lastCaptureError.c_str());
     if (!s.directory.empty()) ImGui::TextWrapped("Папка: %s", s.directory.c_str());
   }
 #endif

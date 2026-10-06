@@ -1,6 +1,7 @@
 import std;
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 import Dreamsleeve.Client.ProtocolCodec;
+import Dreamsleeve.Client.Utils;
 
 namespace Dreamsleeve::Client::Diagnostics
 {
@@ -367,7 +368,7 @@ namespace Dreamsleeve::Client::Diagnostics
       std::ofstream summary(directory / "summary.json");
       summary.exceptions(std::ios::badbit | std::ios::failbit);
       summary << std::format(
-        "{{\n  \"format\": 1, \"protocol\": {}, \"assetVersion\": {},\n  \"scenario\": {}, \"requestedSeconds\": {}, \"requestedHz\": {},\n" "  \"samples\": {}, \"encoded\": {}, \"sent\": {}, \"movements\": {}, \"captureErrors\": {}, \"dropped\": {},\n" "  \"seconds\": {}, \"sampleHz\": {}, \"archiveBytes\": {}, \"models\": {}, \"reason\": {},\n" "  \"captureMsP50\": {}, \"captureMsP95\": {}, \"encodeMsP50\": {}, \"encodeMsP95\": {}\n}}\n",
+        "{{\n  \"format\": 1, \"protocol\": {}, \"assetVersion\": {},\n  \"scenario\": {}, \"requestedSeconds\": {}, \"requestedHz\": {},\n" "  \"samples\": {}, \"encoded\": {}, \"sent\": {}, \"movements\": {}, \"captureErrors\": {}, \"dropped\": {},\n" "  \"seconds\": {}, \"sampleHz\": {}, \"archiveBytes\": {}, \"models\": {}, \"reason\": {}, \"lastCaptureError\": {},\n" "  \"captureMsP50\": {}, \"captureMsP95\": {}, \"encodeMsP50\": {}, \"encodeMsP95\": {}\n}}\n",
         Wire::Version,
         P::AssetVersion,
         Quoted(Scenarios[scenario]),
@@ -384,6 +385,7 @@ namespace Dreamsleeve::Client::Diagnostics
         written,
         models.size(),
         Quoted(result.reason),
+        Quoted(result.lastCaptureError),
         percentile(captures, .5),
         percentile(captures, .95),
         percentile(encodes, .5),
@@ -542,12 +544,17 @@ namespace Dreamsleeve::Client::Diagnostics
     state->Enqueue({Kind::MovementPacket, std::move(w.bytes)});
   }
 
-  void Recorder::Failed(std::uint32_t failure)
+  void Recorder::Failed(const P::Error& failure)
   {
     if (!Active()) return;
+    {
+      std::lock_guard lock(state->mutex);
+      if (!state->active) return;
+      state->status.lastCaptureError = Dreamsleeve::Utils::Text::ClipBytes(failure.field, 512);
+    }
     Writer w;
     w.Put(Micros());
-    w.Put(failure);
+    w.Put(static_cast<std::uint32_t>(failure.reason));
     state->Enqueue({Kind::CaptureFailure, std::move(w.bytes)});
   }
 

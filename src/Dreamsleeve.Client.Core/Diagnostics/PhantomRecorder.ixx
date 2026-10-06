@@ -35,7 +35,7 @@ export namespace Dreamsleeve::Client::Diagnostics
     Phase         phase{Phase::Idle};
     std::uint64_t samples{}, encoded{}, sent{}, movements{}, errors{}, dropped{}, bytes{}, queuedBytes{};
     double        seconds{}, captureMs{}, encodeMs{}, sampleHz{};
-    std::string   directory, reason;
+    std::string   directory, reason, lastCaptureError;
   };
 
   // Recorder owns only detached data and its writer thread, never an engine object.
@@ -61,7 +61,7 @@ public:
     void Encoded(const P::Snapshot& pose, double milliseconds, std::size_t bytes);
     void Sent(std::span<const std::uint8_t> packet);
     void MovementSent(Movement movement, std::span<const std::uint8_t> packet);
-    void Failed(std::uint32_t failure);
+    void Failed(const P::Error& failure);
 
 private:
 
