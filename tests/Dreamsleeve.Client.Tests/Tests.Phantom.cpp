@@ -4,21 +4,15 @@ import Dreamsleeve.Client.Phantom.Codec;
 import Dreamsleeve.Client.Phantom.Playback;
 import Dreamsleeve.Client.Phantom.Streaming;
 
+#include "PhantomFixture.hpp"
+
 namespace
 {
   namespace P = Dreamsleeve::Client::Phantom;
 
   P::Asset Triangle()
   {
-    P::Asset a;
-    a.nodes.push_back({});
-    P::Geometry m;
-    m.vertices.resize(3);
-    m.vertices[1].position = {1, 0, 0};
-    m.vertices[2].position = {0, 1, 0};
-    m.indices              = {0, 1, 2};
-    a.geometry.push_back(std::move(m));
-    return a;
+    return PhantomFixture::Model();
   }
 
   P::Snapshot Pose(std::uint64_t sequence, std::uint64_t sampled, float x)
@@ -29,7 +23,7 @@ namespace
     p.context     = 1;
     p.sampledAtUs = sampled;
     p.origin      = {x, 0, 0};
-    p.channels.push_back({P::Transform{{x, 0, 0}}, false});
+    p.channels.resize(2, {P::Transform{{x, 0, 0}}, false});
     p.bounds.push_back({
         {x, 0, 0},
         1
@@ -39,23 +33,14 @@ namespace
 
 }
 
-TEST_CASE("Phantom asset rejects cycles, bad indices and invalid skin")
+TEST_CASE("Phantom asset rejects malformed native input")
 {
   auto a = Triangle();
-  a.nodes.push_back({P::NodeId{1}, {}});
-  CHECK_FALSE(P::ValidatedAsset::Parse(std::move(a)));
-  a                        = Triangle();
-  a.geometry[0].indices[2] = 3;
-  CHECK_FALSE(P::ValidatedAsset::Parse(std::move(a)));
-  a                                    = Triangle();
-  a.geometry[0].vertices[0].weights[0] = 1;
-  CHECK_FALSE(P::ValidatedAsset::Parse(std::move(a)));
-  a                                    = Triangle();
-  a.geometry[0].vertices[0].position.x = std::numeric_limits<float>::quiet_NaN();
+  a.nif.pop_back();
   CHECK_FALSE(P::ValidatedAsset::Parse(std::move(a)));
 }
 
-TEST_CASE("Neutral phantom model has an exact bounded compressed frame")
+TEST_CASE("Native phantom model has an exact bounded compressed frame")
 {
   auto a = P::ValidatedAsset::Parse(Triangle());
   REQUIRE(a);
@@ -63,7 +48,7 @@ TEST_CASE("Neutral phantom model has an exact bounded compressed frame")
   REQUIRE(prepared);
   auto read = P::ReadAsset(*prepared->compressed, prepared->rawBytes);
   REQUIRE(read);
-  CHECK(read->Value().geometry[0].vertices[1].position.x == 1);
+  CHECK(read->Value().nif == a->Value().nif);
   CHECK(P::Hex(prepared->hash).size() == 64);
   CHECK_FALSE(P::ReadAsset(*prepared->compressed, prepared->rawBytes + 1));
   auto bytes = *prepared->compressed;
@@ -91,7 +76,7 @@ TEST_CASE("Phantom poses require complete matching channels and bounds")
   p.bounds.clear();
   CHECK_FALSE(P::WriteSnapshot(p, *a));
   p                              = Pose(1, 50000, 0);
-  p.channels[0].world.position.x = 5000;
+  p.channels[0].world.position.x = 200000000;
   CHECK_FALSE(P::WriteSnapshot(p, *a));
 }
 
@@ -137,7 +122,7 @@ TEST_CASE("Phantom exchange clears old work and bounds remote admission")
   P::Wire::Offer offer{
       1,
       1,
-      {P::Digest{}, P::Generation{1}, 1, 32, 128, 1, 1}
+      {P::Digest{}, P::Generation{1}, P::AssetVersion, 32, 128, 2}
   };
   CHECK(exchange.Offer(offer));
   offer.player = 2;
@@ -149,29 +134,6 @@ TEST_CASE("Phantom exchange clears old work and bounds remote admission")
   REQUIRE(prepared);
   exchange.Prepared(work.epoch, work.localRevision, {P::Generation{1}, std::make_shared<const P::PreparedAsset>(std::move(*prepared))});
   CHECK_FALSE(exchange.TakeOutput().publication);
-}
-
-TEST_CASE("Phantom atomic poses cannot omit a deforming mesh")
-{
-  auto raw                = Triangle();
-  raw.geometry[0].dynamic = true;
-  auto asset              = P::ValidatedAsset::Parse(std::move(raw));
-  REQUIRE(asset);
-  auto pose = Pose(1, 50000, 0);
-  CHECK_FALSE(P::CheckSnapshot(pose, *asset));
-  CHECK_FALSE(P::WriteSnapshot(pose, *asset));
-  P::Deformation deformation;
-  deformation.geometry = 0;
-  for (const auto& vertex : asset->Value().geometry[0].vertices)
-  {
-    deformation.positions.push_back(vertex.position);
-    deformation.normals.push_back(vertex.normal);
-  }
-  pose.deformations.push_back(deformation);
-  REQUIRE(P::CheckSnapshot(pose, *asset));
-  REQUIRE(P::WriteSnapshot(pose, *asset));
-  pose.deformations.push_back(deformation);
-  CHECK_FALSE(P::CheckSnapshot(pose, *asset));
 }
 
 TEST_CASE("Phantom admission reserves aggregate working memory and server sampling rate")
@@ -188,9 +150,11 @@ TEST_CASE("Phantom admission reserves aggregate working memory and server sampli
   P::Wire::Offer offer{
       1,
       1,
-      {P::Digest{}, P::Generation{1}, 1, 1024 * 1024, 1024 * 1024, 1, 1}
+      {P::Digest{}, P::Generation{1}, P::AssetVersion, 1024 * 1024, 1024 * 1024, 2}
   };
   REQUIRE(exchange.Offer(offer));
+  settings.memoryBytes = 2 * (settings.memoryBytes - exchange.RemainingMemory());
+  exchange.Configure(settings);
   offer.player = 2;
   REQUIRE(exchange.Offer(offer));
   offer.player = 3;
@@ -235,8 +199,8 @@ TEST_CASE("Shrinking phantom RAM releases local preparation and invalidates its 
 {
   P::Exchange exchange;
   exchange.Context(1, true);
-  auto raw = Triangle();
-  raw.geometry[0].vertices.resize(60000);
+  auto raw   = Triangle();
+  raw        = PhantomFixture::Model(2, 60000);
   auto asset = P::ValidatedAsset::Parse(std::move(raw));
   REQUIRE(asset);
   REQUIRE(exchange.Submit(P::Generation{1}, *asset));

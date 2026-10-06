@@ -1,3 +1,42 @@
+# Дополнение07.10.2026: native NIF production
+
+NiStream/Clone/нормализация из разделов прототипа снова используются в
+production. Последующий раздел neutral ниже — **исторический аудит удалённой
+реализации**, его factories/readback/upload больше не являются текущим путём.
+
+В этой сессии повторно проверены select_instance → server_health → survey
+для всех трёх IDB. Base0x140000000. SE/AE input_path и MD5 совпадают с таблицей;
+VR IDB E:\Reverse\SkyrimVR.exe.i64 сообщает input_path
+D:\Programs\IDA Pro\data\SkyrimVR.exe.1415\SkyrimVR.exe; hash текущая
+survey не возвращает, предыдущий MD5 ниже — историческое свидетельство.
+Повторная disasm Save/Load во всех трёх базах подтверждает RDX/R8 arguments,
+запись DWORD длины, virtual calls +0x20/+0x08 и освобождение memory stream.
+Остальной layout переносится из документированного аудита прототипа;
+нового игрового подтверждения SE/AE/VR для production этой ветки нет.
+
+Вызов после Main::Update сохраняется из полной клиентской архитектуры.
+SKSE Hooks_NetImmerse.cpp (локальный skse64_2_00_20) посылает
+NiNodeUpdateEvent **после** ActorProcessManager::UpdateEquipment.
+CommonLib SKSE::NiNodeUpdateEvent.reference — заимствованный TESObjectREFR*;
+callback сравнивает игрока и увеличивает atomic revision, указатель не хранит.
+TESEquipEvent.actor — NiPointer, событие лишь ускоряет последующий аудит.
+Дополнительных binary hooks на намерение экипировки не добавлено.
+
+RaceMenu/skee64 локальный IActorUpdateManager v2 FlushCallback проверен по
+ActorUpdateManager.cpp: Flush ставит morph/overlay задачи в очередь, затем
+уведомляет наблюдателей. Это не completion barrier. BodyMorph UpdateModelWeight
+также может defer task. Привязка к flush как к завершённой геометрии отклонена.
+Страховочный bounded audit видит partition replacement и стабилизировавшиеся
+изменения dynamicData (BSSpinLockGuard); пользовательские GPU-only изменения
+не считаются покрытыми. Непрерывная мимика и phase сторонних SMP/VR IK требуют
+игровой проверки; новая network scene не наследует статус visual-tested прототипа.
+
+Все собственные numeric addresses/offsets/ABI adapters находятся в Hooks.
+Game использует CommonLib runtime-accessors, нативные virtual operations,
+NiPointer и ObjectRefHandle. Файл игры не патчился для исследования.
+
+---
+
 # Фантом: проверка SE, AE и VR
 
 Проверено 06.10.2026 для локального стенда ветки `codex/phantom-local-se`.

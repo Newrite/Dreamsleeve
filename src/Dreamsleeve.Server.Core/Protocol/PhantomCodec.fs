@@ -18,7 +18,7 @@ module PhantomCodec =
         if isNull asset then Error "missing asset"
         else
             match AssetHash.create (asset.Hash.ToByteArray()), AppearanceGeneration.create asset.Generation with
-            | Ok hash, Ok generation -> PhantomManifest.create options.Limits hash generation asset.FormatVersion asset.CompressedBytes asset.RawBytes asset.Channels asset.Geometry
+            | Ok hash, Ok generation -> PhantomManifest.create options.Limits hash generation asset.FormatVersion asset.CompressedBytes asset.RawBytes asset.Channels
             | Error error, _ | _, Error error -> Error error
 
     let decodeAsset options bytes =
@@ -61,7 +61,7 @@ module PhantomCodec =
     let private descriptor (value: PhantomManifest) =
         Dreamsleeve.Protocol.Phantom.AssetDescriptor(Hash = ByteString.CopyFrom(AssetHash.bytes value.Hash), Generation = value.Generation.Value
                              , FormatVersion = value.FormatVersion, CompressedBytes = uint32 value.CompressedBytes
-                             , RawBytes = uint32 value.RawBytes, Channels = uint32 value.Channels, Geometry = uint32 value.Geometry)
+                             , RawBytes = uint32 value.RawBytes, Channels = uint32 value.Channels)
 
     let encode response =
         let packet = Dreamsleeve.Protocol.Phantom.ServerAssetPacket(ProtocolVersion = ProtocolCodec.Version)
@@ -81,7 +81,7 @@ module PhantomCodec =
         | PhantomResponse.Progress(id, offset) -> packet.Progress <- Dreamsleeve.Protocol.Phantom.Progress(TransferId = id.Value, NextOffset = uint32 offset)
         | PhantomResponse.Policy policy ->
             packet.Policy <- Dreamsleeve.Protocol.Phantom.Policy(Enabled = policy.Enabled, RawAssetBytes = uint32 policy.Limits.RawBytes
-                , CompressedAssetBytes = uint32 policy.Limits.CompressedBytes, Channels = uint32 policy.Limits.Channels, Geometry = uint32 policy.Limits.Geometry
+                , CompressedAssetBytes = uint32 policy.Limits.CompressedBytes, Channels = uint32 policy.Limits.Channels
                 , PoseBytes = uint32 policy.Limits.RawPoseBytes, CompressedPoseBytes = uint32 policy.Limits.PoseBytes, SampleRate = uint32 policy.SampleRate
                 , MaximumVisible = uint32 policy.Maximum, Distance = policy.Distance, WindowChunks = uint32 policy.WindowChunks
                 , ConcurrentTransfers = uint32 policy.ConcurrentTransfers, ModelBytesPerSecond = uint32 policy.ModelBytesPerSecond, PoseBytesPerSecond = uint32 policy.PoseBytesPerSecond)

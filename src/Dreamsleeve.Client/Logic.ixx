@@ -11,7 +11,6 @@ import Dreamsleeve.Game.Telemetry;
 import Dreamsleeve.Game.Fireflies;
 import Dreamsleeve.Game.GroundMarks;
 import Dreamsleeve.Game.Phantoms;
-import Dreamsleeve.Game.PhantomGraphics;
 import Dreamsleeve.Game.World;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
@@ -368,7 +367,6 @@ namespace Logic
     if (auto* main = RE::Main::GetSingleton(); main && main->GetRuntimeData().quitGame)
     {
       LeavePlaying(Runtime::GameContext::MainMenu);
-      Dreamsleeve::Game::PhantomGraphics::Shutdown();
       Nameplates::Shutdown();  // GFx objects go before the engine tears Scaleform down.
       Runtime::Shutdown();
 #ifdef DREAMSLEEVE_DIAGNOSTICS

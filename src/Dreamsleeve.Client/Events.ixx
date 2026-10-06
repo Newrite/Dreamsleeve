@@ -6,6 +6,7 @@ export module Dreamsleeve.Events;
 
 import std;
 import Dreamsleeve.Runtime;
+import Dreamsleeve.Game.PhantomCapture;
 
 // Game event sinks. They only post notices; ScriptEventSourceHolder events can
 // arrive from AI or script threads, so no game state is touched here.
@@ -144,6 +145,30 @@ namespace Events
     }
   };
 
+  struct PhantomModelEvents final : RE::BSTEventSink<SKSE::NiNodeUpdateEvent>, RE::BSTEventSink<RE::TESEquipEvent>
+  {
+    RE::BSEventNotifyControl ProcessEvent(const SKSE::NiNodeUpdateEvent* event, RE::BSTEventSource<SKSE::NiNodeUpdateEvent>*) override
+    {
+      if (event && IsPlayer(event->reference)) Dreamsleeve::Game::PhantomCapture::AppearanceChanged();
+      return RE::BSEventNotifyControl::kContinue;
+    }
+
+    RE::BSEventNotifyControl ProcessEvent(const RE::TESEquipEvent* event, RE::BSTEventSource<RE::TESEquipEvent>*) override
+    {
+      // Equip is an intent notification, not completed geometry. Only request
+      // the bounded audit; it will wait for stable composition on the main thread.
+      if (event && IsPlayer(event->actor.get())) Dreamsleeve::Game::PhantomCapture::RequestAudit();
+      return RE::BSEventNotifyControl::kContinue;
+    }
+
+    static void Register()
+    {
+      static PhantomModelEvents sink;
+      if (auto* source = SKSE::GetNiNodeUpdateEventSource()) source->AddEventSink(&sink);
+      if (auto* source = RE::ScriptEventSourceHolder::GetSingleton()) source->AddEventSink<RE::TESEquipEvent>(&sink);
+    }
+  };
+
   // kDataLoaded, once: every source exists by then.
   export void RegisterEvents()
   {
@@ -154,6 +179,7 @@ namespace Events
     InputEventHandler::RegisterHandler();
     DeathEventHandler::RegisterHandler();
     ActivateEventHandler::RegisterHandler();
+    PhantomModelEvents::Register();
   }
 
 }

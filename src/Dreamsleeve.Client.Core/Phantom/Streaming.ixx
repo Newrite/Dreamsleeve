@@ -151,7 +151,7 @@ export namespace Dreamsleeve::Client::Phantom
       const auto& asset       = *publication.asset;
       if (
         asset.compressed->size() > policy->limits.compressedAssetBytes || asset.rawBytes > policy->limits.assetBytes ||
-        asset.asset.Value().nodes.size() > policy->limits.nodes || asset.asset.Value().geometry.size() > policy->limits.geometry)
+        asset.asset.Layout().requiredChannels.size() > policy->limits.nodes)
       {
         exchange.Failed("Модель фантома превышает лимит сервера");
         local->state = Rejected{};
@@ -163,8 +163,7 @@ export namespace Dreamsleeve::Client::Phantom
           AssetVersion,
           static_cast<std::uint32_t>(asset.compressed->size()),
           asset.rawBytes,
-          static_cast<std::uint32_t>(asset.asset.Value().nodes.size()),
-          static_cast<std::uint32_t>(asset.asset.Value().geometry.size())
+          static_cast<std::uint32_t>(asset.asset.Layout().requiredChannels.size())
       };
       const auto id = NextRequest();
       if (id.value && Request(Wire::Publish{descriptor, context, id})) local->state = Awaiting{id, now + Timeout};

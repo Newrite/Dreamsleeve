@@ -164,7 +164,6 @@ inline constexpr Policy::Impl_::Impl_(
         raw_asset_bytes_{0u},
         compressed_asset_bytes_{0u},
         channels_{0u},
-        geometry_{0u},
         pose_bytes_{0u},
         compressed_pose_bytes_{0u},
         sample_rate_{0u},
@@ -320,8 +319,7 @@ inline constexpr AssetDescriptor::Impl_::Impl_(
         format_version_{0u},
         compressed_bytes_{0u},
         raw_bytes_{0u},
-        channels_{0u},
-        geometry_{0u} {}
+        channels_{0u} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR AssetDescriptor::AssetDescriptor(::_pbi::ConstantInitialized)
@@ -556,21 +554,19 @@ const ::uint32_t
         3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::AssetDescriptor, _impl_._has_bits_),
-        10, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::AssetDescriptor, _impl_.hash_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::AssetDescriptor, _impl_.generation_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::AssetDescriptor, _impl_.format_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::AssetDescriptor, _impl_.compressed_bytes_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::AssetDescriptor, _impl_.raw_bytes_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::AssetDescriptor, _impl_.channels_),
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::AssetDescriptor, _impl_.geometry_),
         0,
         1,
         2,
         3,
         4,
         5,
-        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Publish, _impl_._has_bits_),
         6, // hasbit index offset
@@ -682,12 +678,11 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_._has_bits_),
-        17, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_.enabled_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_.raw_asset_bytes_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_.compressed_asset_bytes_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_.channels_),
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_.geometry_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_.pose_bytes_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_.compressed_pose_bytes_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Policy, _impl_.sample_rate_),
@@ -710,7 +705,6 @@ const ::uint32_t
         10,
         11,
         12,
-        13,
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_._oneof_case_[0]),
@@ -769,22 +763,22 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Phantom::Preferences)},
         {11, sizeof(::Dreamsleeve::Protocol::Phantom::AssetDescriptor)},
-        {28, sizeof(::Dreamsleeve::Protocol::Phantom::Publish)},
-        {37, sizeof(::Dreamsleeve::Protocol::Phantom::Chunk)},
-        {46, sizeof(::Dreamsleeve::Protocol::Phantom::Download)},
-        {55, sizeof(::Dreamsleeve::Protocol::Phantom::Cancel)},
-        {60, sizeof(::Dreamsleeve::Protocol::Phantom::Progress)},
-        {67, sizeof(::Dreamsleeve::Protocol::Phantom::Withdraw)},
-        {68, sizeof(::Dreamsleeve::Protocol::Phantom::ClientAssetPacket)},
-        {89, sizeof(::Dreamsleeve::Protocol::Phantom::Offer)},
-        {98, sizeof(::Dreamsleeve::Protocol::Phantom::Transfer)},
-        {111, sizeof(::Dreamsleeve::Protocol::Phantom::Complete)},
-        {130, sizeof(::Dreamsleeve::Protocol::Phantom::Remove)},
-        {137, sizeof(::Dreamsleeve::Protocol::Phantom::Policy)},
-        {168, sizeof(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket)},
-        {189, sizeof(::Dreamsleeve::Protocol::Phantom::PoseSample)},
-        {202, sizeof(::Dreamsleeve::Protocol::Phantom::ClientPosePacket)},
-        {209, sizeof(::Dreamsleeve::Protocol::Phantom::ServerPosePacket)},
+        {26, sizeof(::Dreamsleeve::Protocol::Phantom::Publish)},
+        {35, sizeof(::Dreamsleeve::Protocol::Phantom::Chunk)},
+        {44, sizeof(::Dreamsleeve::Protocol::Phantom::Download)},
+        {53, sizeof(::Dreamsleeve::Protocol::Phantom::Cancel)},
+        {58, sizeof(::Dreamsleeve::Protocol::Phantom::Progress)},
+        {65, sizeof(::Dreamsleeve::Protocol::Phantom::Withdraw)},
+        {66, sizeof(::Dreamsleeve::Protocol::Phantom::ClientAssetPacket)},
+        {87, sizeof(::Dreamsleeve::Protocol::Phantom::Offer)},
+        {96, sizeof(::Dreamsleeve::Protocol::Phantom::Transfer)},
+        {109, sizeof(::Dreamsleeve::Protocol::Phantom::Complete)},
+        {128, sizeof(::Dreamsleeve::Protocol::Phantom::Remove)},
+        {135, sizeof(::Dreamsleeve::Protocol::Phantom::Policy)},
+        {164, sizeof(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket)},
+        {185, sizeof(::Dreamsleeve::Protocol::Phantom::PoseSample)},
+        {198, sizeof(::Dreamsleeve::Protocol::Phantom::ClientPosePacket)},
+        {205, sizeof(::Dreamsleeve::Protocol::Phantom::ServerPosePacket)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Phantom::_Preferences_default_instance_._instance,
@@ -811,79 +805,79 @@ const char descriptor_table_protodef_phantom_2eproto[] ABSL_ATTRIBUTE_SECTION_VA
     "\n\rphantom.proto\022\034Dreamsleeve.Protocol.Ph"
     "antom\"R\n\013Preferences\022\017\n\007publish\030\001 \001(\010\022\017\n"
     "\007receive\030\002 \001(\010\022\017\n\007maximum\030\003 \001(\r\022\020\n\010dista"
-    "nce\030\004 \001(\002\"\234\001\n\017AssetDescriptor\022\014\n\004hash\030\001 "
+    "nce\030\004 \001(\002\"\232\001\n\017AssetDescriptor\022\014\n\004hash\030\001 "
     "\001(\014\022\022\n\ngeneration\030\002 \001(\004\022\026\n\016format_versio"
     "n\030\003 \001(\r\022\030\n\020compressed_bytes\030\004 \001(\r\022\021\n\traw"
-    "_bytes\030\005 \001(\r\022\020\n\010channels\030\006 \001(\r\022\020\n\010geomet"
-    "ry\030\007 \001(\r\"u\n\007Publish\022<\n\005asset\030\001 \001(\0132-.Dre"
-    "amsleeve.Protocol.Phantom.AssetDescripto"
-    "r\022\030\n\020context_revision\030\002 \001(\004\022\022\n\nrequest_i"
-    "d\030\003 \001(\004\":\n\005Chunk\022\023\n\013transfer_id\030\001 \001(\004\022\016\n"
-    "\006offset\030\002 \001(\r\022\014\n\004data\030\003 \001(\014\"E\n\010Download\022"
-    "\021\n\tplayer_id\030\001 \001(\004\022\022\n\ngeneration\030\002 \001(\004\022\022"
-    "\n\nrequest_id\030\003 \001(\004\"\035\n\006Cancel\022\023\n\013transfer"
-    "_id\030\001 \001(\004\"4\n\010Progress\022\023\n\013transfer_id\030\001 \001"
-    "(\004\022\023\n\013next_offset\030\002 \001(\r\"\n\n\010Withdraw\"\326\003\n\021"
-    "ClientAssetPacket\022\030\n\020protocol_version\030\001 "
-    "\001(\r\022@\n\013preferences\030\002 \001(\0132).Dreamsleeve.P"
-    "rotocol.Phantom.PreferencesH\000\0228\n\007publish"
-    "\030\003 \001(\0132%.Dreamsleeve.Protocol.Phantom.Pu"
-    "blishH\000\0224\n\005chunk\030\004 \001(\0132#.Dreamsleeve.Pro"
-    "tocol.Phantom.ChunkH\000\022:\n\010download\030\005 \001(\0132"
-    "&.Dreamsleeve.Protocol.Phantom.DownloadH"
-    "\000\0226\n\006cancel\030\006 \001(\0132$.Dreamsleeve.Protocol"
-    ".Phantom.CancelH\000\022:\n\010withdraw\030\007 \001(\0132&.Dr"
-    "eamsleeve.Protocol.Phantom.WithdrawH\000\022:\n"
-    "\010progress\030\010 \001(\0132&.Dreamsleeve.Protocol.P"
-    "hantom.ProgressH\000B\t\n\007payload\"o\n\005Offer\022\021\n"
-    "\tplayer_id\030\001 \001(\004\022\025\n\rview_revision\030\002 \001(\004\022"
-    "<\n\005asset\030\003 \001(\0132-.Dreamsleeve.Protocol.Ph"
-    "antom.AssetDescriptor\"\224\001\n\010Transfer\022\023\n\013tr"
-    "ansfer_id\030\001 \001(\004\022<\n\005asset\030\002 \001(\0132-.Dreamsl"
-    "eeve.Protocol.Phantom.AssetDescriptor\022\021\n"
-    "\tplayer_id\030\003 \001(\004\022\016\n\006upload\030\004 \001(\010\022\022\n\nrequ"
-    "est_id\030\005 \001(\004\"\244\001\n\010Complete\022\023\n\013transfer_id"
-    "\030\001 \001(\004\022\020\n\010accepted\030\002 \001(\010\022\016\n\006reason\030\003 \001(\t"
-    "\022\021\n\tplayer_id\030\004 \001(\004\022\022\n\ngeneration\030\005 \001(\004\022"
-    "\026\n\016retry_after_ms\030\006 \001(\r\022\016\n\006upload\030\007 \001(\010\022"
-    "\022\n\nrequest_id\030\010 \001(\004\"2\n\006Remove\022\021\n\tplayer_"
-    "id\030\001 \001(\004\022\025\n\rview_revision\030\002 \001(\004\"\335\002\n\006Poli"
-    "cy\022\017\n\007enabled\030\001 \001(\010\022\027\n\017raw_asset_bytes\030\002"
-    " \001(\r\022\036\n\026compressed_asset_bytes\030\003 \001(\r\022\020\n\010"
-    "channels\030\004 \001(\r\022\020\n\010geometry\030\005 \001(\r\022\022\n\npose"
-    "_bytes\030\006 \001(\r\022\035\n\025compressed_pose_bytes\030\007 "
-    "\001(\r\022\023\n\013sample_rate\030\010 \001(\r\022\027\n\017maximum_visi"
-    "ble\030\t \001(\r\022\020\n\010distance\030\n \001(\002\022\025\n\rwindow_ch"
-    "unks\030\013 \001(\r\022\034\n\024concurrent_transfers\030\014 \001(\r"
-    "\022\036\n\026model_bytes_per_second\030\r \001(\r\022\035\n\025pose"
-    "_bytes_per_second\030\016 \001(\r\"\310\003\n\021ServerAssetP"
-    "acket\022\030\n\020protocol_version\030\001 \001(\r\0224\n\005offer"
-    "\030\002 \001(\0132#.Dreamsleeve.Protocol.Phantom.Of"
-    "ferH\000\022:\n\010transfer\030\003 \001(\0132&.Dreamsleeve.Pr"
-    "otocol.Phantom.TransferH\000\0224\n\005chunk\030\004 \001(\013"
-    "2#.Dreamsleeve.Protocol.Phantom.ChunkH\000\022"
-    ":\n\010complete\030\005 \001(\0132&.Dreamsleeve.Protocol"
-    ".Phantom.CompleteH\000\0226\n\006remove\030\006 \001(\0132$.Dr"
-    "eamsleeve.Protocol.Phantom.RemoveH\000\022:\n\010p"
-    "rogress\030\007 \001(\0132&.Dreamsleeve.Protocol.Pha"
-    "ntom.ProgressH\000\0226\n\006policy\030\010 \001(\0132$.Dreams"
-    "leeve.Protocol.Phantom.PolicyH\000B\t\n\007paylo"
-    "ad\"t\n\nPoseSample\022\022\n\ngeneration\030\001 \001(\004\022\030\n\020"
-    "context_revision\030\002 \001(\004\022\020\n\010sequence\030\003 \001(\004"
-    "\022\025\n\rsampled_at_us\030\004 \001(\004\022\017\n\007payload\030\005 \001(\014"
-    "\"f\n\020ClientPosePacket\022\030\n\020protocol_version"
-    "\030\001 \001(\r\0228\n\006sample\030\002 \001(\0132(.Dreamsleeve.Pro"
-    "tocol.Phantom.PoseSample\"\220\001\n\020ServerPoseP"
-    "acket\022\030\n\020protocol_version\030\001 \001(\r\022\021\n\tplaye"
-    "r_id\030\002 \001(\004\022\025\n\rview_revision\030\003 \001(\004\0228\n\006sam"
-    "ple\030\004 \001(\0132(.Dreamsleeve.Protocol.Phantom"
-    ".PoseSampleb\006proto3"
+    "_bytes\030\005 \001(\r\022\020\n\010channels\030\006 \001(\rJ\004\010\007\020\010R\010ge"
+    "ometry\"u\n\007Publish\022<\n\005asset\030\001 \001(\0132-.Dream"
+    "sleeve.Protocol.Phantom.AssetDescriptor\022"
+    "\030\n\020context_revision\030\002 \001(\004\022\022\n\nrequest_id\030"
+    "\003 \001(\004\":\n\005Chunk\022\023\n\013transfer_id\030\001 \001(\004\022\016\n\006o"
+    "ffset\030\002 \001(\r\022\014\n\004data\030\003 \001(\014\"E\n\010Download\022\021\n"
+    "\tplayer_id\030\001 \001(\004\022\022\n\ngeneration\030\002 \001(\004\022\022\n\n"
+    "request_id\030\003 \001(\004\"\035\n\006Cancel\022\023\n\013transfer_i"
+    "d\030\001 \001(\004\"4\n\010Progress\022\023\n\013transfer_id\030\001 \001(\004"
+    "\022\023\n\013next_offset\030\002 \001(\r\"\n\n\010Withdraw\"\326\003\n\021Cl"
+    "ientAssetPacket\022\030\n\020protocol_version\030\001 \001("
+    "\r\022@\n\013preferences\030\002 \001(\0132).Dreamsleeve.Pro"
+    "tocol.Phantom.PreferencesH\000\0228\n\007publish\030\003"
+    " \001(\0132%.Dreamsleeve.Protocol.Phantom.Publ"
+    "ishH\000\0224\n\005chunk\030\004 \001(\0132#.Dreamsleeve.Proto"
+    "col.Phantom.ChunkH\000\022:\n\010download\030\005 \001(\0132&."
+    "Dreamsleeve.Protocol.Phantom.DownloadH\000\022"
+    "6\n\006cancel\030\006 \001(\0132$.Dreamsleeve.Protocol.P"
+    "hantom.CancelH\000\022:\n\010withdraw\030\007 \001(\0132&.Drea"
+    "msleeve.Protocol.Phantom.WithdrawH\000\022:\n\010p"
+    "rogress\030\010 \001(\0132&.Dreamsleeve.Protocol.Pha"
+    "ntom.ProgressH\000B\t\n\007payload\"o\n\005Offer\022\021\n\tp"
+    "layer_id\030\001 \001(\004\022\025\n\rview_revision\030\002 \001(\004\022<\n"
+    "\005asset\030\003 \001(\0132-.Dreamsleeve.Protocol.Phan"
+    "tom.AssetDescriptor\"\224\001\n\010Transfer\022\023\n\013tran"
+    "sfer_id\030\001 \001(\004\022<\n\005asset\030\002 \001(\0132-.Dreamslee"
+    "ve.Protocol.Phantom.AssetDescriptor\022\021\n\tp"
+    "layer_id\030\003 \001(\004\022\016\n\006upload\030\004 \001(\010\022\022\n\nreques"
+    "t_id\030\005 \001(\004\"\244\001\n\010Complete\022\023\n\013transfer_id\030\001"
+    " \001(\004\022\020\n\010accepted\030\002 \001(\010\022\016\n\006reason\030\003 \001(\t\022\021"
+    "\n\tplayer_id\030\004 \001(\004\022\022\n\ngeneration\030\005 \001(\004\022\026\n"
+    "\016retry_after_ms\030\006 \001(\r\022\016\n\006upload\030\007 \001(\010\022\022\n"
+    "\nrequest_id\030\010 \001(\004\"2\n\006Remove\022\021\n\tplayer_id"
+    "\030\001 \001(\004\022\025\n\rview_revision\030\002 \001(\004\"\333\002\n\006Policy"
+    "\022\017\n\007enabled\030\001 \001(\010\022\027\n\017raw_asset_bytes\030\002 \001"
+    "(\r\022\036\n\026compressed_asset_bytes\030\003 \001(\r\022\020\n\010ch"
+    "annels\030\004 \001(\r\022\022\n\npose_bytes\030\006 \001(\r\022\035\n\025comp"
+    "ressed_pose_bytes\030\007 \001(\r\022\023\n\013sample_rate\030\010"
+    " \001(\r\022\027\n\017maximum_visible\030\t \001(\r\022\020\n\010distanc"
+    "e\030\n \001(\002\022\025\n\rwindow_chunks\030\013 \001(\r\022\034\n\024concur"
+    "rent_transfers\030\014 \001(\r\022\036\n\026model_bytes_per_"
+    "second\030\r \001(\r\022\035\n\025pose_bytes_per_second\030\016 "
+    "\001(\rJ\004\010\005\020\006R\010geometry\"\310\003\n\021ServerAssetPacke"
+    "t\022\030\n\020protocol_version\030\001 \001(\r\0224\n\005offer\030\002 \001"
+    "(\0132#.Dreamsleeve.Protocol.Phantom.OfferH"
+    "\000\022:\n\010transfer\030\003 \001(\0132&.Dreamsleeve.Protoc"
+    "ol.Phantom.TransferH\000\0224\n\005chunk\030\004 \001(\0132#.D"
+    "reamsleeve.Protocol.Phantom.ChunkH\000\022:\n\010c"
+    "omplete\030\005 \001(\0132&.Dreamsleeve.Protocol.Pha"
+    "ntom.CompleteH\000\0226\n\006remove\030\006 \001(\0132$.Dreams"
+    "leeve.Protocol.Phantom.RemoveH\000\022:\n\010progr"
+    "ess\030\007 \001(\0132&.Dreamsleeve.Protocol.Phantom"
+    ".ProgressH\000\0226\n\006policy\030\010 \001(\0132$.Dreamsleev"
+    "e.Protocol.Phantom.PolicyH\000B\t\n\007payload\"t"
+    "\n\nPoseSample\022\022\n\ngeneration\030\001 \001(\004\022\030\n\020cont"
+    "ext_revision\030\002 \001(\004\022\020\n\010sequence\030\003 \001(\004\022\025\n\r"
+    "sampled_at_us\030\004 \001(\004\022\017\n\007payload\030\005 \001(\014\"f\n\020"
+    "ClientPosePacket\022\030\n\020protocol_version\030\001 \001"
+    "(\r\0228\n\006sample\030\002 \001(\0132(.Dreamsleeve.Protoco"
+    "l.Phantom.PoseSample\"\220\001\n\020ServerPosePacke"
+    "t\022\030\n\020protocol_version\030\001 \001(\r\022\021\n\tplayer_id"
+    "\030\002 \001(\004\022\025\n\rview_revision\030\003 \001(\004\0228\n\006sample\030"
+    "\004 \001(\0132(.Dreamsleeve.Protocol.Phantom.Pos"
+    "eSampleb\006proto3"
 };
 static ::absl::once_flag descriptor_table_phantom_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_phantom_2eproto = {
     false,
     false,
-    2779,
+    2775,
     descriptor_table_protodef_phantom_2eproto,
     "phantom.proto",
     &descriptor_table_phantom_2eproto_once,
@@ -1287,9 +1281,9 @@ AssetDescriptor::AssetDescriptor(
                offsetof(Impl_, generation_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, generation_),
-           offsetof(Impl_, geometry_) -
+           offsetof(Impl_, channels_) -
                offsetof(Impl_, generation_) +
-               sizeof(Impl_::geometry_));
+               sizeof(Impl_::channels_));
 
   // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Phantom.AssetDescriptor)
 }
@@ -1304,9 +1298,9 @@ inline void AssetDescriptor::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, generation_),
            0,
-           offsetof(Impl_, geometry_) -
+           offsetof(Impl_, channels_) -
                offsetof(Impl_, generation_) +
-               sizeof(Impl_::geometry_));
+               sizeof(Impl_::channels_));
 }
 AssetDescriptor::~AssetDescriptor() {
   // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Phantom.AssetDescriptor)
@@ -1366,16 +1360,16 @@ AssetDescriptor::GetClassData() const {
   return AssetDescriptor_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 7, 0, 0, 2>
+const ::_pbi::TcParseTable<3, 6, 0, 0, 2>
 AssetDescriptor::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_._has_bits_),
     0, // no _extensions_
-    7, 56,  // max_field_number, fast_idx_mask
+    6, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967168,  // skipmap
+    4294967232,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    7,  // num_field_entries
+    6,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     AssetDescriptor_class_data_.base(),
@@ -1410,10 +1404,7 @@ AssetDescriptor::_table_ = {
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AssetDescriptor, _impl_.channels_), 5>(),
      {48, 5, 0,
       PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_.channels_)}},
-    // uint32 geometry = 7;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AssetDescriptor, _impl_.geometry_), 6>(),
-     {56, 6, 0,
-      PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_.geometry_)}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
@@ -1429,8 +1420,6 @@ AssetDescriptor::_table_ = {
     {PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_.raw_bytes_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 channels = 6;
     {PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_.channels_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-    // uint32 geometry = 7;
-    {PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_.geometry_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
   }},
   // no aux_entries
   {{
@@ -1447,10 +1436,10 @@ PROTOBUF_NOINLINE void AssetDescriptor::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.hash_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
     ::memset(&_impl_.generation_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.geometry_) -
-        reinterpret_cast<char*>(&_impl_.generation_)) + sizeof(_impl_.geometry_));
+        reinterpret_cast<char*>(&_impl_.channels_) -
+        reinterpret_cast<char*>(&_impl_.generation_)) + sizeof(_impl_.channels_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1528,15 +1517,6 @@ PROTOBUF_NOINLINE void AssetDescriptor::Clear() {
     }
   }
 
-  // uint32 geometry = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-    if (this_._internal_geometry() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          7, this_._internal_geometry(), target);
-    }
-  }
-
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1562,7 +1542,7 @@ PROTOBUF_NOINLINE void AssetDescriptor::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // bytes hash = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_hash().empty()) {
@@ -1605,13 +1585,6 @@ PROTOBUF_NOINLINE void AssetDescriptor::Clear() {
             this_._internal_channels());
       }
     }
-    // uint32 geometry = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (this_._internal_geometry() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_geometry());
-      }
-    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -1631,7 +1604,7 @@ void AssetDescriptor::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_hash().empty()) {
         _this->_internal_set_hash(from._internal_hash());
@@ -1666,11 +1639,6 @@ void AssetDescriptor::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.channels_ = from._impl_.channels_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_geometry() != 0) {
-        _this->_impl_.geometry_ = from._impl_.geometry_;
-      }
-    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1693,8 +1661,8 @@ void AssetDescriptor::InternalSwap(AssetDescriptor* PROTOBUF_RESTRICT PROTOBUF_N
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hash_, &other->_impl_.hash_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_.geometry_)
-      + sizeof(AssetDescriptor::_impl_.geometry_)
+      PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_.channels_)
+      + sizeof(AssetDescriptor::_impl_.channels_)
       - PROTOBUF_FIELD_OFFSET(AssetDescriptor, _impl_.generation_)>(
           reinterpret_cast<char*>(&_impl_.generation_),
           reinterpret_cast<char*>(&other->_impl_.generation_));
@@ -5662,16 +5630,16 @@ Policy::GetClassData() const {
   return Policy_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<4, 14, 0, 0, 2>
+const ::_pbi::TcParseTable<4, 13, 0, 0, 2>
 Policy::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(Policy, _impl_._has_bits_),
     0, // no _extensions_
     14, 120,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294950912,  // skipmap
+    4294950928,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    14,  // num_field_entries
+    13,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     Policy_class_data_.base(),
@@ -5698,45 +5666,42 @@ Policy::_table_ = {
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.channels_), 3>(),
      {32, 3, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.channels_)}},
-    // uint32 geometry = 5;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.geometry_), 4>(),
-     {40, 4, 0,
-      PROTOBUF_FIELD_OFFSET(Policy, _impl_.geometry_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // uint32 pose_bytes = 6;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.pose_bytes_), 5>(),
-     {48, 5, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.pose_bytes_), 4>(),
+     {48, 4, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.pose_bytes_)}},
     // uint32 compressed_pose_bytes = 7;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.compressed_pose_bytes_), 6>(),
-     {56, 6, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.compressed_pose_bytes_), 5>(),
+     {56, 5, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.compressed_pose_bytes_)}},
     // uint32 sample_rate = 8;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.sample_rate_), 7>(),
-     {64, 7, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.sample_rate_), 6>(),
+     {64, 6, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.sample_rate_)}},
     // uint32 maximum_visible = 9;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.maximum_visible_), 8>(),
-     {72, 8, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.maximum_visible_), 7>(),
+     {72, 7, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.maximum_visible_)}},
     // float distance = 10;
     {::_pbi::TcParser::FastF32S1,
-     {85, 9, 0,
+     {85, 8, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.distance_)}},
     // uint32 window_chunks = 11;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.window_chunks_), 10>(),
-     {88, 10, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.window_chunks_), 9>(),
+     {88, 9, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.window_chunks_)}},
     // uint32 concurrent_transfers = 12;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.concurrent_transfers_), 11>(),
-     {96, 11, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.concurrent_transfers_), 10>(),
+     {96, 10, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.concurrent_transfers_)}},
     // uint32 model_bytes_per_second = 13;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.model_bytes_per_second_), 12>(),
-     {104, 12, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.model_bytes_per_second_), 11>(),
+     {104, 11, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.model_bytes_per_second_)}},
     // uint32 pose_bytes_per_second = 14;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.pose_bytes_per_second_), 13>(),
-     {112, 13, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Policy, _impl_.pose_bytes_per_second_), 12>(),
+     {112, 12, 0,
       PROTOBUF_FIELD_OFFSET(Policy, _impl_.pose_bytes_per_second_)}},
     {::_pbi::TcParser::MiniParse, {}},
   }}, {{
@@ -5750,26 +5715,24 @@ Policy::_table_ = {
     {PROTOBUF_FIELD_OFFSET(Policy, _impl_.compressed_asset_bytes_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 channels = 4;
     {PROTOBUF_FIELD_OFFSET(Policy, _impl_.channels_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-    // uint32 geometry = 5;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.geometry_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 pose_bytes = 6;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.pose_bytes_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.pose_bytes_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 compressed_pose_bytes = 7;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.compressed_pose_bytes_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.compressed_pose_bytes_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 sample_rate = 8;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.sample_rate_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.sample_rate_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 maximum_visible = 9;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.maximum_visible_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.maximum_visible_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // float distance = 10;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.distance_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.distance_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
     // uint32 window_chunks = 11;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.window_chunks_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.window_chunks_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 concurrent_transfers = 12;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.concurrent_transfers_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.concurrent_transfers_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 model_bytes_per_second = 13;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.model_bytes_per_second_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.model_bytes_per_second_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 pose_bytes_per_second = 14;
-    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.pose_bytes_per_second_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Policy, _impl_.pose_bytes_per_second_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
   }},
   // no aux_entries
   {{
@@ -5785,13 +5748,13 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   cached_has_bits = _impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.enabled_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.sample_rate_) -
-        reinterpret_cast<char*>(&_impl_.enabled_)) + sizeof(_impl_.sample_rate_));
+        reinterpret_cast<char*>(&_impl_.maximum_visible_) -
+        reinterpret_cast<char*>(&_impl_.enabled_)) + sizeof(_impl_.maximum_visible_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    ::memset(&_impl_.maximum_visible_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    ::memset(&_impl_.distance_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.pose_bytes_per_second_) -
-        reinterpret_cast<char*>(&_impl_.maximum_visible_)) + sizeof(_impl_.pose_bytes_per_second_));
+        reinterpret_cast<char*>(&_impl_.distance_)) + sizeof(_impl_.pose_bytes_per_second_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5852,17 +5815,8 @@ PROTOBUF_NOINLINE void Policy::Clear() {
     }
   }
 
-  // uint32 geometry = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-    if (this_._internal_geometry() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          5, this_._internal_geometry(), target);
-    }
-  }
-
   // uint32 pose_bytes = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_pose_bytes() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5871,7 +5825,7 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   }
 
   // uint32 compressed_pose_bytes = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_compressed_pose_bytes() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5880,7 +5834,7 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   }
 
   // uint32 sample_rate = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_sample_rate() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5889,7 +5843,7 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   }
 
   // uint32 maximum_visible = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_maximum_visible() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5898,7 +5852,7 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   }
 
   // float distance = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_distance()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -5907,7 +5861,7 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   }
 
   // uint32 window_chunks = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_window_chunks() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5916,7 +5870,7 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   }
 
   // uint32 concurrent_transfers = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_concurrent_transfers() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5925,7 +5879,7 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   }
 
   // uint32 model_bytes_per_second = 13;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_model_bytes_per_second() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5934,7 +5888,7 @@ PROTOBUF_NOINLINE void Policy::Clear() {
   }
 
   // uint32 pose_bytes_per_second = 14;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_pose_bytes_per_second() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5995,72 +5949,65 @@ PROTOBUF_NOINLINE void Policy::Clear() {
             this_._internal_channels());
       }
     }
-    // uint32 geometry = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (this_._internal_geometry() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_geometry());
-      }
-    }
     // uint32 pose_bytes = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_pose_bytes() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pose_bytes());
       }
     }
     // uint32 compressed_pose_bytes = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_compressed_pose_bytes() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_compressed_pose_bytes());
       }
     }
     // uint32 sample_rate = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_sample_rate() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_sample_rate());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint32 maximum_visible = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_maximum_visible() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_maximum_visible());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // float distance = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_distance()) != 0) {
         total_size += 5;
       }
     }
     // uint32 window_chunks = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_window_chunks() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_window_chunks());
       }
     }
     // uint32 concurrent_transfers = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_concurrent_transfers() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_concurrent_transfers());
       }
     }
     // uint32 model_bytes_per_second = 13;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_model_bytes_per_second() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_model_bytes_per_second());
       }
     }
     // uint32 pose_bytes_per_second = 14;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_pose_bytes_per_second() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pose_bytes_per_second());
@@ -6107,53 +6054,48 @@ void Policy::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (from._internal_geometry() != 0) {
-        _this->_impl_.geometry_ = from._impl_.geometry_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_pose_bytes() != 0) {
         _this->_impl_.pose_bytes_ = from._impl_.pose_bytes_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_compressed_pose_bytes() != 0) {
         _this->_impl_.compressed_pose_bytes_ = from._impl_.compressed_pose_bytes_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_sample_rate() != 0) {
         _this->_impl_.sample_rate_ = from._impl_.sample_rate_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_maximum_visible() != 0) {
         _this->_impl_.maximum_visible_ = from._impl_.maximum_visible_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_distance()) != 0) {
         _this->_impl_.distance_ = from._impl_.distance_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_window_chunks() != 0) {
         _this->_impl_.window_chunks_ = from._impl_.window_chunks_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_concurrent_transfers() != 0) {
         _this->_impl_.concurrent_transfers_ = from._impl_.concurrent_transfers_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_model_bytes_per_second() != 0) {
         _this->_impl_.model_bytes_per_second_ = from._impl_.model_bytes_per_second_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_pose_bytes_per_second() != 0) {
         _this->_impl_.pose_bytes_per_second_ = from._impl_.pose_bytes_per_second_;
       }

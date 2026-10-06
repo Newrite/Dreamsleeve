@@ -318,7 +318,7 @@ let tests = testList "ServerRuntime" [
             let publish = Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = ProtocolCodec.Version,
                 Publish = Dreamsleeve.Protocol.Phantom.Publish(ContextRevision = 10UL, RequestId = 101UL,
                     Asset = Dreamsleeve.Protocol.Phantom.AssetDescriptor(Hash = ByteString.CopyFrom hash, Generation = 1UL,
-                                FormatVersion = 1u, CompressedBytes = 4u, RawBytes = 4u, Channels = 2u, Geometry = 1u)))
+                                FormatVersion = 2u, CompressedBytes = 4u, RawBytes = 4u, Channels = 2u)))
             fixture.Input.Enqueue(ServerTransportEvent.Received(alice, DeliveryLane.Models, publish.ToByteArray()))
             do! post fixture.Runtime (tick())
             let mutable completed = false

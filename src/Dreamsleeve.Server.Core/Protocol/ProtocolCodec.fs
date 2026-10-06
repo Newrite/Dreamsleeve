@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 21u
+    let Version = 22u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 

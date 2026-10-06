@@ -63,16 +63,6 @@ export namespace Dreamsleeve::Client::Phantom
         result.bounds[i] = Cover(a.bounds[i], b.bounds[i]);
         if (t > 1) result.bounds[i].radius += Distance(a.bounds[i].center, b.bounds[i].center) * (t - 1);
       }
-      for (auto& deformation : result.deformations)
-      {
-        const auto previous = std::ranges::find(a.deformations, deformation.geometry, &Deformation::geometry);
-        if (previous == a.deformations.end()) continue;
-        for (std::size_t i = 0; i < deformation.positions.size(); ++i)
-        {
-          deformation.positions[i] = Mix(previous->positions[i], deformation.positions[i], std::clamp(t, 0.0f, 1.0f));
-          deformation.normals[i]   = Mix(previous->normals[i], deformation.normals[i], std::clamp(t, 0.0f, 1.0f));
-        }
-      }
       return result;
     }
 

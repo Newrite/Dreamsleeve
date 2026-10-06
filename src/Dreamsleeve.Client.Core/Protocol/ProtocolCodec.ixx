@@ -9,7 +9,7 @@ export import Dreamsleeve.Client.ProtocolChannels;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 21;
+  inline constexpr std::uint32_t Version = 22;
 
   enum class ErrorCode
   {

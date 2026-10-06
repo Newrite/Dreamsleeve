@@ -4,14 +4,13 @@ Dreamsleeve — социальный слой для Skyrim: общий чат �
 игровыми показаниями, светлячки других игроков с именами и облачками сообщений, метки на
 земле, модерация и веб-админка. Сервер — F# на .NET 10; клиент — C++23 (MSVC modules):
 переносимое ядро `Client.Core`, SKSE-плагин `Dreamsleeve.Client` и консольный `Client.Dev`;
-интерфейс — TypeScript/React в PrismaUI. В ветке `codex/phantom-replication`
-добавлен полный путь живых фантомов: нейтральная внешность, reliable streaming
-моделей, independent unreliable позы, серверное файловое хранилище и клиентский
-кеш/renderer. Технический контракт и границы игровой проверки —
-[PhantomsRu.md](PhantomsRu.md); версия протокола поднята с фактической 20 до 21.
-Итог 06.10.2026: native 364/364, server 602/602, production UDP 1/1,
-UI 94/94; сборка и установка завершены. [Проверка выпуска](PhantomReleaseValidationRu.md)
-отделяет автоматические результаты от предстоящей игровой проверки SE/AE/VR.
+интерфейс — TypeScript/React в PrismaUI. В ветке `codex/phantom-native-nif`
+модель фантома снова использует native clone/NiStream/NIF и native scene;
+neutral geometry/material pipeline и CPU skinning удалены. Reliable model
+streaming, independent unreliable poses, AOI, файловое хранилище и кеш
+переиспользуются. Контракт protocol22: [PhantomsRu.md](PhantomsRu.md).
+Автоматические проверки, результаты benchmarks и остающийся игровой QA
+SE/AE/VR приведены в [отчёте выпуска](PhantomReleaseValidationRu.md).
 
 Сверено 1 октября 2026 года с кодом. Это описание решений и состояния, а не поручение агенту.
 Поздние явные решения и контракты кода (README рядом с кодом,

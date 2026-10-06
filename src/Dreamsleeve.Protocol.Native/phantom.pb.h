@@ -1298,7 +1298,6 @@ class Policy final : public ::google::protobuf::Message
     kRawAssetBytesFieldNumber = 2,
     kCompressedAssetBytesFieldNumber = 3,
     kChannelsFieldNumber = 4,
-    kGeometryFieldNumber = 5,
     kPoseBytesFieldNumber = 6,
     kCompressedPoseBytesFieldNumber = 7,
     kSampleRateFieldNumber = 8,
@@ -1347,16 +1346,6 @@ class Policy final : public ::google::protobuf::Message
   private:
   ::uint32_t _internal_channels() const;
   void _internal_set_channels(::uint32_t value);
-
-  public:
-  // uint32 geometry = 5;
-  void clear_geometry() ;
-  ::uint32_t geometry() const;
-  void set_geometry(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_geometry() const;
-  void _internal_set_geometry(::uint32_t value);
 
   public:
   // uint32 pose_bytes = 6;
@@ -1453,7 +1442,7 @@ class Policy final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<4, 14,
+  static const ::google::protobuf::internal::TcParseTable<4, 13,
                                    0, 0,
                                    2>
       _table_;
@@ -1479,7 +1468,6 @@ class Policy final : public ::google::protobuf::Message
     ::uint32_t raw_asset_bytes_;
     ::uint32_t compressed_asset_bytes_;
     ::uint32_t channels_;
-    ::uint32_t geometry_;
     ::uint32_t pose_bytes_;
     ::uint32_t compressed_pose_bytes_;
     ::uint32_t sample_rate_;
@@ -2548,7 +2536,6 @@ class AssetDescriptor final : public ::google::protobuf::Message
     kCompressedBytesFieldNumber = 4,
     kRawBytesFieldNumber = 5,
     kChannelsFieldNumber = 6,
-    kGeometryFieldNumber = 7,
   };
   // bytes hash = 1;
   void clear_hash() ;
@@ -2615,21 +2602,11 @@ class AssetDescriptor final : public ::google::protobuf::Message
   void _internal_set_channels(::uint32_t value);
 
   public:
-  // uint32 geometry = 7;
-  void clear_geometry() ;
-  ::uint32_t geometry() const;
-  void set_geometry(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_geometry() const;
-  void _internal_set_geometry(::uint32_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Phantom.AssetDescriptor)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 7,
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
                                    0, 0,
                                    2>
       _table_;
@@ -2657,7 +2634,6 @@ class AssetDescriptor final : public ::google::protobuf::Message
     ::uint32_t compressed_bytes_;
     ::uint32_t raw_bytes_;
     ::uint32_t channels_;
-    ::uint32_t geometry_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4821,31 +4797,6 @@ inline void AssetDescriptor::_internal_set_channels(::uint32_t value) {
   _impl_.channels_ = value;
 }
 
-// uint32 geometry = 7;
-inline void AssetDescriptor::clear_geometry() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.geometry_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
-}
-inline ::uint32_t AssetDescriptor::geometry() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.AssetDescriptor.geometry)
-  return _internal_geometry();
-}
-inline void AssetDescriptor::set_geometry(::uint32_t value) {
-  _internal_set_geometry(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.AssetDescriptor.geometry)
-}
-inline ::uint32_t AssetDescriptor::_internal_geometry() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.geometry_;
-}
-inline void AssetDescriptor::_internal_set_geometry(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.geometry_ = value;
-}
-
 // -------------------------------------------------------------------
 
 // Publish
@@ -6654,37 +6605,12 @@ inline void Policy::_internal_set_channels(::uint32_t value) {
   _impl_.channels_ = value;
 }
 
-// uint32 geometry = 5;
-inline void Policy::clear_geometry() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.geometry_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
-}
-inline ::uint32_t Policy::geometry() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.geometry)
-  return _internal_geometry();
-}
-inline void Policy::set_geometry(::uint32_t value) {
-  _internal_set_geometry(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.geometry)
-}
-inline ::uint32_t Policy::_internal_geometry() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.geometry_;
-}
-inline void Policy::_internal_set_geometry(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.geometry_ = value;
-}
-
 // uint32 pose_bytes = 6;
 inline void Policy::clear_pose_bytes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pose_bytes_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000010U);
 }
 inline ::uint32_t Policy::pose_bytes() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.pose_bytes)
@@ -6692,7 +6618,7 @@ inline ::uint32_t Policy::pose_bytes() const {
 }
 inline void Policy::set_pose_bytes(::uint32_t value) {
   _internal_set_pose_bytes(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.pose_bytes)
 }
 inline ::uint32_t Policy::_internal_pose_bytes() const {
@@ -6709,7 +6635,7 @@ inline void Policy::clear_compressed_pose_bytes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.compressed_pose_bytes_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
+                  0x00000020U);
 }
 inline ::uint32_t Policy::compressed_pose_bytes() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.compressed_pose_bytes)
@@ -6717,7 +6643,7 @@ inline ::uint32_t Policy::compressed_pose_bytes() const {
 }
 inline void Policy::set_compressed_pose_bytes(::uint32_t value) {
   _internal_set_compressed_pose_bytes(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.compressed_pose_bytes)
 }
 inline ::uint32_t Policy::_internal_compressed_pose_bytes() const {
@@ -6734,7 +6660,7 @@ inline void Policy::clear_sample_rate() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sample_rate_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000080U);
+                  0x00000040U);
 }
 inline ::uint32_t Policy::sample_rate() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.sample_rate)
@@ -6742,7 +6668,7 @@ inline ::uint32_t Policy::sample_rate() const {
 }
 inline void Policy::set_sample_rate(::uint32_t value) {
   _internal_set_sample_rate(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.sample_rate)
 }
 inline ::uint32_t Policy::_internal_sample_rate() const {
@@ -6759,7 +6685,7 @@ inline void Policy::clear_maximum_visible() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.maximum_visible_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000100U);
+                  0x00000080U);
 }
 inline ::uint32_t Policy::maximum_visible() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.maximum_visible)
@@ -6767,7 +6693,7 @@ inline ::uint32_t Policy::maximum_visible() const {
 }
 inline void Policy::set_maximum_visible(::uint32_t value) {
   _internal_set_maximum_visible(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.maximum_visible)
 }
 inline ::uint32_t Policy::_internal_maximum_visible() const {
@@ -6784,7 +6710,7 @@ inline void Policy::clear_distance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.distance_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000200U);
+                  0x00000100U);
 }
 inline float Policy::distance() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.distance)
@@ -6792,7 +6718,7 @@ inline float Policy::distance() const {
 }
 inline void Policy::set_distance(float value) {
   _internal_set_distance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.distance)
 }
 inline float Policy::_internal_distance() const {
@@ -6809,7 +6735,7 @@ inline void Policy::clear_window_chunks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.window_chunks_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000400U);
+                  0x00000200U);
 }
 inline ::uint32_t Policy::window_chunks() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.window_chunks)
@@ -6817,7 +6743,7 @@ inline ::uint32_t Policy::window_chunks() const {
 }
 inline void Policy::set_window_chunks(::uint32_t value) {
   _internal_set_window_chunks(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.window_chunks)
 }
 inline ::uint32_t Policy::_internal_window_chunks() const {
@@ -6834,7 +6760,7 @@ inline void Policy::clear_concurrent_transfers() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.concurrent_transfers_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000800U);
+                  0x00000400U);
 }
 inline ::uint32_t Policy::concurrent_transfers() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.concurrent_transfers)
@@ -6842,7 +6768,7 @@ inline ::uint32_t Policy::concurrent_transfers() const {
 }
 inline void Policy::set_concurrent_transfers(::uint32_t value) {
   _internal_set_concurrent_transfers(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.concurrent_transfers)
 }
 inline ::uint32_t Policy::_internal_concurrent_transfers() const {
@@ -6859,7 +6785,7 @@ inline void Policy::clear_model_bytes_per_second() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.model_bytes_per_second_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00001000U);
+                  0x00000800U);
 }
 inline ::uint32_t Policy::model_bytes_per_second() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.model_bytes_per_second)
@@ -6867,7 +6793,7 @@ inline ::uint32_t Policy::model_bytes_per_second() const {
 }
 inline void Policy::set_model_bytes_per_second(::uint32_t value) {
   _internal_set_model_bytes_per_second(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.model_bytes_per_second)
 }
 inline ::uint32_t Policy::_internal_model_bytes_per_second() const {
@@ -6884,7 +6810,7 @@ inline void Policy::clear_pose_bytes_per_second() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pose_bytes_per_second_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00002000U);
+                  0x00001000U);
 }
 inline ::uint32_t Policy::pose_bytes_per_second() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.pose_bytes_per_second)
@@ -6892,7 +6818,7 @@ inline ::uint32_t Policy::pose_bytes_per_second() const {
 }
 inline void Policy::set_pose_bytes_per_second(::uint32_t value) {
   _internal_set_pose_bytes_per_second(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.pose_bytes_per_second)
 }
 inline ::uint32_t Policy::_internal_pose_bytes_per_second() const {

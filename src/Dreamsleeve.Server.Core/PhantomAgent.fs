@@ -129,9 +129,6 @@ module PhantomAgent =
                 let retained =
                     selection.Contains player && observer.Views.ContainsKey player
                     && observer.Views[player].Authority = selected.Authority
-                    && (match source state player with
-                        | ValueSome current -> current.Ready.IsSome && current.Ready.Value = selected.Asset
-                        | ValueNone -> false)
                 if not retained then
                     observer.Selected.Remove player |> ignore
                     match state.Audiences.TryGetValue player with
@@ -143,6 +140,17 @@ module PhantomAgent =
                     emit state id (PhantomResponse.Remove(player, nextRevision observer))
                     for transfer in state.Transfers.Values |> Seq.filter (fun item -> not item.Upload && item.Owner = id && item.Source = player) |> Seq.toArray do
                         cancel state transfer.Id false "view removed"
+                else
+                    match source state player with
+                    | ValueSome current when current.Ready.IsSome && current.Ready.Value <> selected.Asset ->
+                        // An appearance replacement is not an AOI departure. Keep
+                        // the receiver's previous scene until this offer is ready.
+                        for transfer in state.Transfers.Values |> Seq.filter (fun item -> not item.Upload && item.Owner = id && item.Source = player) |> Seq.toArray do
+                            cancel state transfer.Id false "superseded"
+                        let replacement = { selected with Revision = nextRevision observer; Asset = current.Ready.Value; SentSequence = 0UL }
+                        observer.Selected[player] <- replacement
+                        emit state id (PhantomResponse.Offer(player, replacement.Revision, replacement.Asset))
+                    | _ -> ()
             for player in selection do
                 if not (observer.Selected.ContainsKey player) then
                     match source state player with
@@ -300,7 +308,8 @@ module PhantomAgent =
             | PhantomRequest.Withdraw -> clearSource state memberState; refresh state
             | PhantomRequest.Publish(manifest, context, request) ->
                 let sources = state.Members.Values |> Seq.filter (fun item -> item.Ready.IsSome) |> Seq.length
-                let pendingSources = state.Transfers.Values |> Seq.filter _.Upload |> Seq.length
+                let pendingSources = state.Transfers.Values |> Seq.filter (fun item ->
+                    item.Upload && (match source state item.Source with ValueSome current -> current.Ready.IsNone | ValueNone -> false)) |> Seq.length
                 let existingSource = memberState.Ready.IsSome || (state.Transfers.Values |> Seq.exists (fun item -> item.Upload && item.Owner = id))
                 let stale = memberState.HighManifest |> Option.exists (fun highest ->
                     manifest.Generation.Value < highest.Generation.Value || (manifest.Generation = highest.Generation && manifest <> highest))
@@ -314,9 +323,10 @@ module PhantomAgent =
                 elif not (transferAvailable state id) then
                     refuse state id memberState.Player manifest.Generation true request (max 1 state.Options.PublishCooldownMs) "transfer limit"
                 else
-                    if memberState.HighManifest |> Option.exists (fun previous -> previous.Generation <> manifest.Generation) then
-                        memberState.LastSequence <- 0UL
-                    clearSource state memberState
+                    // Pending publication owns no visible scene. Supersede only
+                    // uploads; current poses and downloads remain usable meanwhile.
+                    for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Upload && item.Owner = id) |> Seq.toArray do
+                        cancel state transfer.Id false "superseded"
                     memberState.HighManifest <- Some manifest
                     memberState.NextPublish <- at + int64 state.Options.PublishCooldownMs
                     startTransfer state at id memberState.Player manifest memberState.Character context 0UL true request
@@ -404,8 +414,10 @@ module PhantomAgent =
         else
             let ready () =
                 let owner = state.Members[transfer.Owner]
+                if owner.Ready <> Some transfer.Manifest then
+                    owner.LastSequence <- 0UL
+                    owner.Latest <- None
                 owner.Ready <- Some transfer.Manifest
-                owner.Latest <- None
                 cancel state transfer.Id true ""
             match transfer.Phase with
             | StartingUpload pending when pending.IsCompleted ->
@@ -523,7 +535,12 @@ module PhantomAgent =
                             let length = PhantomCodec.posePacketSize current.Player selected.Revision pose
                             refill at state.Options.PoseBytesPerSecond observer.OutgoingPoseCredit
                             refill at state.Options.TotalPoseBytesPerSecond state.OutgoingPoseCredit
-                            if observer.OutgoingPoseCredit.Available >= double length && state.OutgoingPoseCredit.Available >= double length then
+                            if state.OutgoingPoseCredit.Available < double length then
+                                // End this turn at exhaustion. Scanning every remaining
+                                // source would wrap the cursor back to the same prefix,
+                                // letting it consume every refill and starve the tail.
+                                budget <- 0
+                            elif observer.OutgoingPoseCredit.Available >= double length then
                                 let packet =
                                     match encoded.TryGetValue selected.Revision with
                                     | true, packet -> packet

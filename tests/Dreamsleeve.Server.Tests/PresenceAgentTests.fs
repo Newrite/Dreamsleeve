@@ -206,16 +206,18 @@ let private flushViewsNow fixture = task {
 let private observationModeCase mode = case $"dense128 phantom observation mode {mode} preserves membership and bounds atomic batches" (fun () -> task {
     let mutable members, departed, views, hidden, closes = 0, 0, 0, 0, 0
     let mutable largestArray, largestTurn = 0, 0
-    let rec count = function
-        | PhantomObservation.Batch values ->
-            largestArray <- max largestArray values.Length
-            let mutable facts = 0
-            for value in values do facts <- facts + count value
-            facts
-        | PhantomObservation.Member _ -> members <- members + 1; 1
-        | PhantomObservation.Departed _ -> departed <- departed + 1; 1
-        | PhantomObservation.View _ -> views <- views + 1; 1
-        | PhantomObservation.Hidden _ -> hidden <- hidden + 1; 1
+    let count observation =
+        let rec visit = function
+            | PhantomObservation.Batch values ->
+                largestArray <- max largestArray values.Length
+                let mutable facts = 0
+                for value in values do facts <- facts + visit value
+                facts
+            | PhantomObservation.Member _ -> members <- members + 1; 1
+            | PhantomObservation.Departed _ -> departed <- departed + 1; 1
+            | PhantomObservation.View _ -> views <- views + 1; 1
+            | PhantomObservation.Hidden _ -> hidden <- hidden + 1; 1
+        visit observation
     use host = Agent.Start(AgentOptions.create "phantom-observation-host", fun _ command ->
         match command with
         | SessionHostCommand.ObservePhantoms observation -> largestTurn <- max largestTurn (count observation)

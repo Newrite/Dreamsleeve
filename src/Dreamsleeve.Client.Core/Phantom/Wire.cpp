@@ -31,7 +31,6 @@ namespace Dreamsleeve::Client::Phantom::Wire
       out->set_compressed_bytes(d.compressedBytes);
       out->set_raw_bytes(d.rawBytes);
       out->set_channels(d.channels);
-      out->set_geometry(d.geometry);
     }
 
     Result<Descriptor> Get(const Proto::AssetDescriptor& in, const Limits& limits)
@@ -39,19 +38,11 @@ namespace Dreamsleeve::Client::Phantom::Wire
       if (
         in.hash().size() != 32 || !in.generation() || in.format_version() != AssetVersion || !in.compressed_bytes() ||
         in.compressed_bytes() > limits.compressedAssetBytes || !in.raw_bytes() || in.raw_bytes() > limits.assetBytes || !in.channels() ||
-        in.channels() > limits.nodes || !in.geometry() || in.geometry() > limits.geometry)
+        in.channels() > limits.nodes)
         return std::unexpected(Invalid("descriptor"));
       Digest digest;
       std::ranges::copy(in.hash(), digest.begin());
-      return Descriptor{
-          digest,
-          Generation{in.generation()},
-          in.format_version(),
-          in.compressed_bytes(),
-          in.raw_bytes(),
-          in.channels(),
-          in.geometry()
-      };
+      return Descriptor{digest, Generation{in.generation()}, in.format_version(), in.compressed_bytes(), in.raw_bytes(), in.channels()};
     }
 
     void Set(const Pose& pose, Proto::PoseSample* out)
@@ -195,7 +186,6 @@ namespace Dreamsleeve::Client::Phantom::Wire
         policy.limits.assetBytes           = std::min(limits.assetBytes, v.raw_asset_bytes());
         policy.limits.compressedAssetBytes = std::min(limits.compressedAssetBytes, v.compressed_asset_bytes());
         policy.limits.nodes                = std::min(limits.nodes, v.channels());
-        policy.limits.geometry             = std::min(limits.geometry, v.geometry());
         policy.limits.poseBytes            = std::min(limits.poseBytes, v.pose_bytes());
         policy.limits.compressedPoseBytes  = std::min(limits.compressedPoseBytes, v.compressed_pose_bytes());
         policy.sampleRate                  = std::clamp(v.sample_rate(), 1u, 50u);
@@ -206,7 +196,7 @@ namespace Dreamsleeve::Client::Phantom::Wire
         policy.poseBytesPerSecond          = std::min(v.pose_bytes_per_second(), 4u * 1024 * 1024);
         if (
           !std::isfinite(v.distance()) || v.distance() < 0 || !policy.limits.assetBytes || !policy.limits.compressedAssetBytes ||
-          !policy.limits.poseBytes || !policy.limits.compressedPoseBytes || !policy.limits.nodes || !policy.limits.geometry)
+          !policy.limits.poseBytes || !policy.limits.compressedPoseBytes || !policy.limits.nodes)
           return std::unexpected(Invalid("policy"));
         policy.distance = std::min(v.distance(), 100000.0f);
         return Response{policy};

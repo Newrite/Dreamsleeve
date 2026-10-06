@@ -7,7 +7,6 @@ import Dreamsleeve.Game.World;
 import Dreamsleeve.Game.PhantomCapture;
 import Dreamsleeve.Game.PhantomCaptureRules;
 import Dreamsleeve.Game.PhantomScene;
-import Dreamsleeve.Game.PhantomGraphics;
 import Dreamsleeve.Game.PlayerLabels;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Host.PhantomSettings;
@@ -18,11 +17,10 @@ import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 
 namespace Phantoms
 {
-  namespace P        = Dreamsleeve::Client::Phantom;
-  namespace Capture  = Dreamsleeve::Game::PhantomCapture;
-  namespace Scene    = Dreamsleeve::Game::PhantomScene;
-  namespace Graphics = Dreamsleeve::Game::PhantomGraphics;
-  using Clock        = std::chrono::steady_clock;
+  namespace P       = Dreamsleeve::Client::Phantom;
+  namespace Capture = Dreamsleeve::Game::PhantomCapture;
+  namespace Scene   = Dreamsleeve::Game::PhantomScene;
+  using Clock       = std::chrono::steady_clock;
 
   struct Slot
   {
@@ -34,10 +32,11 @@ namespace Phantoms
 
   struct Visual
   {
-    std::optional<Slot>                      current, candidate;
-    Clock::time_point                        applied{};
-    bool                                     active{};
-    std::optional<std::pair<P::Vec3, float>> look;
+    std::optional<Slot>                                    current, candidate;
+    std::optional<std::pair<std::uint64_t, P::Generation>> rejected;
+    Clock::time_point                                      applied{};
+    bool                                                   active{};
+    std::optional<std::pair<P::Vec3, float>>               look;
 
     std::uint64_t MemoryBytes() const
     {
@@ -47,8 +46,7 @@ namespace Phantoms
 
   struct State
   {
-    Capture::Engine                              capture;
-    Scene::Engine                                renderer;
+    Capture::Engine                              engine;
     std::unique_ptr<Capture::Source>             source;
     std::unordered_map<Domain::PlayerId, Visual> visuals;
     P::Generation                                generation;
@@ -85,10 +83,9 @@ namespace Phantoms
     logger::warn("Phantom: {} ({})", error.field, static_cast<int>(error.reason));
   }
 
-  export void Install(Capture::Engine capture, Scene::Engine renderer)
+  export void Install(Capture::Engine engine)
   {
-    Get().capture  = capture;
-    Get().renderer = renderer;
+    Get().engine = engine;
   }
 
   void ResetResources()
@@ -103,11 +100,6 @@ namespace Phantoms
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     state.diagnosticAsset.reset();
 #endif
-    if (state.capture.mainThread && state.capture.mainThread())
-    {
-      auto cleared = Graphics::ClearReadbacks();
-      if (!cleared) Error(cleared.error(), Clock::now());
-    }
   }
 
   export void Clear(std::string_view reason = "game-context-ended")
@@ -148,7 +140,7 @@ namespace Phantoms
   {
     const auto logs = SKSE::log::log_directory();
     if (!logs || Runtime::Get().context != Runtime::GameContext::Playing || Dreamsleeve::Client::Diagnostics::Phantoms().Active()) return;
-    if (Dreamsleeve::Game::PhantomReplay::Start(*logs / "DreamsleevePhantomDiagnostics", scenario, Get().renderer)) ResetResources();
+    if (Dreamsleeve::Game::PhantomReplay::Start(*logs / "DreamsleevePhantomDiagnostics", scenario, Get().engine)) ResetResources();
   }
 
   void Record(std::shared_ptr<const P::Snapshot> pose, RE::PlayerCharacter& player, Clock::time_point start, bool firstPerson)
@@ -232,7 +224,7 @@ namespace Phantoms
       const auto replace = [&]() -> bool {
         if (state.generation.value == std::numeric_limits<std::uint64_t>::max()) return false;
         const P::Generation nextGeneration{state.generation.value + 1};
-        auto opened = Capture::Open(state.capture, player, firstPerson, {nextGeneration, {1}, 1, Micros(now)}, captureLimits);
+        auto                opened = Capture::Open(state.engine, player, firstPerson, {nextGeneration, {1}, 1, Micros(now)}, captureLimits);
         if (!opened)
         {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -241,37 +233,19 @@ namespace Phantoms
           Error(opened.error(), now);
           return false;
         }
-        // A transient readback must not replace a working scene with a smaller
-        // one. Existing slots keep sampling while the candidate warms up.
-        if (state.source && opened->source->PendingReadbacks()) return false;
-        if (state.source && state.source->SameAppearance(*opened->source))
-        {
-          // Fresh bindings/recovery state, identical published schema: no model
-          // upload, generation change or additional diagnostic archive.
-          state.source = std::move(opened->source);
-          return false;
-        }
-        auto asset = P::ValidatedAsset::Parse(std::move(opened->asset));
-        if (!asset)
-        {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-          Dreamsleeve::Client::Diagnostics::Phantoms().Failed(asset.error());
-#endif
-          Error(asset.error(), now);
-          return false;
-        }
+        auto asset = std::move(opened->asset);
         logger::info(
-          "Phantom capture: generation {}, {} channels, {} geometry, {:.2f} MiB neutral, {:.2f} ms",
+          "Phantom capture: generation {}, {} channels, {} geometry, {:.2f} MiB native NIF, {:.2f} ms",
           nextGeneration.value,
-          asset->Value().nodes.size(),
-          asset->Value().geometry.size(),
-          asset->MemoryBytes() / 1048576.0,
+          asset.Layout().requiredChannels.size(),
+          asset.Layout().bounds.size(),
+          asset.MemoryBytes() / 1048576.0,
           std::chrono::duration<double, std::milli>(Clock::now() - now).count());
-        if (publishing && !exchange.Submit(nextGeneration, *asset)) return false;
+        if (publishing && !exchange.Submit(nextGeneration, asset)) return false;
         state.generation = nextGeneration;
         state.sequence   = {1};
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-        state.diagnosticAsset = std::make_shared<const P::ValidatedAsset>(std::move(*asset));
+        state.diagnosticAsset = std::make_shared<const P::ValidatedAsset>(std::move(asset));
 #endif
         state.source = std::move(opened->source);
         ReportCaptureHealth();
@@ -361,7 +335,7 @@ namespace Phantoms
   {
     auto& runtime = Runtime::Get();
     auto& state   = Get();
-    if (!runtime.app || !state.capture.mainThread) return;
+    if (!runtime.app || !state.engine.mainThread) return;
     auto&      exchange = runtime.app->Exchange().Phantoms();
     const auto settings = Dreamsleeve::Host::PhantomSettings(runtime.ui.ui.chat);
     if (!state.settings || settings != *state.settings)
@@ -454,7 +428,7 @@ namespace Phantoms
     const auto first = std::ranges::upper_bound(display.remotes, state.cursor, {}, &P::Remote::player);
     std::rotate(display.remotes.begin(), first, display.remotes.end());
     std::uint32_t      buildSteps = 1;
-    Scene::FrameBudget frame{4000000};
+    Scene::FrameBudget frame{65536};
     for (const auto& remote : display.remotes)
     {
       const auto online   = runtime.session.OnlinePlayers().find(remote.player);
@@ -465,7 +439,9 @@ namespace Phantoms
         !Domain::Spatial::Reach(observer->space, observer->position, movement->location.locationId, movement->position, settings.distance))
         continue;
       retained.insert(remote.player);
-      auto& visual = state.visuals[remote.player];
+      auto&      visual   = state.visuals[remote.player];
+      const auto revision = std::pair{remote.view, remote.descriptor.generation};
+      if (visual.rejected && *visual.rejected != revision) visual.rejected.reset();
       ForgetCleared(visual, exchange, remote.player);
       auto pose = remote.playback.At(Micros(now), settings);
       if (remote.Asset() && pose)
@@ -482,15 +458,15 @@ namespace Phantoms
         }
         if (visual.candidate && !Matches(*visual.candidate, remote, context)) visual.candidate.reset();
         exchange.SceneMemory(remote.player, visual.MemoryBytes());
-        if ((!visual.current || !Matches(*visual.current, remote, context)) && !visual.candidate && buildSteps)
+        if ((!visual.current || !Matches(*visual.current, remote, context)) && !visual.candidate && !visual.rejected && buildSteps)
         {
           auto scene = Scene::Scene::Begin(
             *remote.Asset(),
-            state.renderer,
+            state.engine,
             context,
             remote.descriptor.generation,
             {settings.color, settings.opacity},
-            Scene::Budget{exchange.RemainingMemory(), 4000000});
+            Scene::Budget{exchange.RemainingMemory()});
           if (scene && exchange.SceneMemory(remote.player, visual.MemoryBytes() + (*scene)->MemoryBytes()))
             visual.candidate = Slot{remote.view, remote.descriptor.generation, context, std::move(*scene)};
           else if (!scene)
@@ -508,6 +484,9 @@ namespace Phantoms
             if (!built)
             {
               Error(built.error(), now);
+              // A rejected native asset must not invoke NiStream Load every frame.
+              // A new view/generation or context reset permits another attempt.
+              if (built.error().reason != P::Failure::Busy) visual.rejected = revision;
               visual.candidate.reset();
               exchange.SceneMemory(remote.player, visual.MemoryBytes());
               target = nullptr;
@@ -546,11 +525,9 @@ namespace Phantoms
           }
         }
       }
-      // Stale checks can destroy the tree, and a failed GPU upload can leave
-      // it hidden/unposed even when Busy is returned. Neither represents a
-      // visible phantom or may prevent the next frame from rebuilding it.
       ForgetCleared(visual, exchange, remote.player);
-      if (now - visual.applied > std::chrono::milliseconds(settings.timeoutMs))
+      const bool replacing = visual.current && visual.current->generation != remote.descriptor.generation;
+      if (!replacing && now - visual.applied > std::chrono::milliseconds(settings.timeoutMs))
       {
         Hide(visual, now);
         ForgetCleared(visual, exchange, remote.player);

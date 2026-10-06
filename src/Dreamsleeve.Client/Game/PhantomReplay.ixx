@@ -170,27 +170,7 @@ export namespace Dreamsleeve::Game::PhantomReplay
       const S::Context context{frame.pose->context, space};
       if (!s.candidate)
       {
-        auto required = S::Scene::Requirements(*frame.asset);
-        if (!required)
-        {
-          Fail(required.error().field);
-          return;
-        }
-        if (required->applyCost > std::numeric_limits<std::uint32_t>::max())
-        {
-          Fail("scene.apply-cost");
-          return;
-        }
-        // One full diagnostic phantom: derive its reservation from the same
-        // renderer, rather than silently discarding pieces to fit network policy.
-        auto scene = S::Scene::Begin(
-          *frame.asset,
-          s.engine,
-          context,
-          frame.pose->generation,
-          look,
-          {required->Total(), static_cast<std::uint32_t>(required->applyCost)},
-          D::CaptureLimits());
+        auto scene = S::Scene::Begin(*frame.asset, s.engine, context, frame.pose->generation, look, {S::Scene::Reservation(*frame.asset)});
         if (!scene)
         {
           Fail(scene.error().field);
@@ -201,9 +181,9 @@ export namespace Dreamsleeve::Game::PhantomReplay
         logger::info(
           "Phantom replay building generation {}: nodes={}, geometry={}, reserved={:.2f} MiB",
           frame.pose->generation.value,
-          frame.asset->Value().nodes.size(),
-          frame.asset->Value().geometry.size(),
-          required->Total() / 1048576.0);
+          frame.asset->Layout().requiredChannels.size(),
+          frame.asset->Layout().bounds.size(),
+          S::Scene::Reservation(*frame.asset) / 1048576.0);
       }
       auto       built      = s.candidate->Advance(context);
       const auto ms         = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
@@ -239,7 +219,8 @@ export namespace Dreamsleeve::Game::PhantomReplay
       const auto t = std::clamp(double(s.playheadUs - a) / double(b - a), 0.0, 1.0);
       interpolated = P::Motion::Between(*s.current->pose, *s.next->pose, static_cast<float>(t));
     }
-    auto applied = s.scene->Apply(interpolated ? *interpolated : *s.current->pose, s.context);
+    S::FrameBudget budget;
+    auto           applied = s.scene->Apply(interpolated ? *interpolated : *s.current->pose, s.context, budget);
     if (!applied)
     {
       Fail(applied.error().field);

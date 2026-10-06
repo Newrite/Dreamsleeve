@@ -2,21 +2,15 @@
 import std;
 import Dreamsleeve.Client.Phantom.Worker;
 
+#include "PhantomFixture.hpp"
+
 namespace
 {
   namespace P = Dreamsleeve::Client::Phantom;
 
   P::Asset Fixture(std::size_t nodes = 1, std::size_t vertices = 3)
   {
-    P::Asset raw;
-    raw.nodes.resize(nodes);
-    for (std::size_t i = 1; i < nodes; ++i)
-      raw.nodes[i].parent = {0};
-    P::Geometry mesh;
-    mesh.vertices.resize(vertices);
-    mesh.indices = {0, 1, 2};
-    raw.geometry.push_back(std::move(mesh));
-    return raw;
+    return PhantomFixture::Model(nodes, static_cast<std::uint16_t>(vertices));
   }
 
   bool Until(const std::function<bool()>& condition)
@@ -32,26 +26,25 @@ namespace
 
 }
 
-TEST_CASE("Measured avatar geometry counts fit the neutral envelope with an enforced ceiling")
+TEST_CASE("Native channel budget bounds the asset before engine loading")
 {
-  auto raw = Fixture();
-  raw.geometry.resize(267, raw.geometry.front());
+  auto raw   = Fixture(268);
   auto asset = P::ValidatedAsset::Parse(raw);
   REQUIRE(asset);
   auto encoded = P::Prepare(*asset);
   REQUIRE(encoded);
   auto decoded = P::ReadAsset(*encoded->compressed, encoded->rawBytes);
   REQUIRE(decoded);
-  CHECK(decoded->Value().geometry.size() == 267);
-  raw.geometry.resize(P::Limits{}.geometry + 1, raw.geometry.front());
-  CHECK_FALSE(P::ValidatedAsset::Parse(std::move(raw)));
+  CHECK(decoded->Layout().bounds.size() == 267);
+  P::Limits limits;
+  limits.nodes = 267;
+  CHECK_FALSE(P::ValidatedAsset::Parse(std::move(raw), limits));
 }
 
 TEST_CASE("Decoded pose histories and interpolation remain within the admitted working debit")
 {
-  auto raw                = Fixture(4096, 18000);
-  raw.geometry[0].dynamic = true;
-  auto asset              = P::ValidatedAsset::Parse(std::move(raw));
+  auto raw   = Fixture(4096);
+  auto asset = P::ValidatedAsset::Parse(std::move(raw));
   REQUIRE(asset);
   auto model = P::Prepare(*asset);
   REQUIRE(model);
@@ -61,24 +54,19 @@ TEST_CASE("Decoded pose histories and interpolation remain within the admitted w
   pose.context     = 1;
   pose.sampledAtUs = 50000;
   pose.channels.resize(4096);
-  pose.bounds.resize(1);
-  P::Deformation deformation;
-  deformation.positions.resize(18000);
-  deformation.normals.resize(18000);
-  pose.deformations.push_back(std::move(deformation));
+  pose.bounds.resize(4095);
   auto encoded = P::WriteSnapshot(pose, *asset);
   REQUIRE(encoded);
   auto decoded = P::ReadSnapshot(*encoded, *asset);
   REQUIRE(decoded);
-  const auto  frameBytes = sizeof(P::Snapshot) + decoded->channels.capacity() * sizeof(P::Channel) +
-                           decoded->bounds.capacity() * sizeof(P::Bound) + decoded->deformations.capacity() * sizeof(P::Deformation) +
-                           (decoded->deformations[0].positions.capacity() + decoded->deformations[0].normals.capacity()) * sizeof(P::Vec3);
-  P::Exchange exchange;
-  const auto  budget = exchange.Settings().memoryBytes;
+  const auto frameBytes =
+    sizeof(P::Snapshot) + decoded->channels.capacity() * sizeof(P::Channel) + decoded->bounds.capacity() * sizeof(P::Bound);
+  P::Exchange    exchange;
+  const auto     budget = exchange.Settings().memoryBytes;
   P::Wire::Offer offer{
       1,
       1,
-      {model->hash, {1}, P::AssetVersion, static_cast<std::uint32_t>(model->compressed->size()), model->rawBytes, 4096, 1}
+      {model->hash, {1}, P::AssetVersion, static_cast<std::uint32_t>(model->compressed->size()), model->rawBytes, 4096}
   };
   REQUIRE(exchange.Offer(offer));
   const auto debit = budget - exchange.RemainingMemory();
@@ -103,7 +91,7 @@ TEST_CASE("RAM cache metadata obeys the same validation as cold model decode")
   P::Wire::Offer original{
       1,
       1,
-      {model->hash, {1}, P::AssetVersion, static_cast<std::uint32_t>(model->compressed->size()), model->rawBytes, 1, 1}
+      {model->hash, {1}, P::AssetVersion, static_cast<std::uint32_t>(model->compressed->size()), model->rawBytes, 2}
   };
   REQUIRE(exchange.Offer(original));
   REQUIRE(worker.Queue(original, model->compressed));

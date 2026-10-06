@@ -41,9 +41,11 @@ DLL экспортирует `DreamsleeveDiagnosticsBuild`; `package_dist.py` о
 Сервер не требуется: локальный capture использует те же источник, канонизацию,
 проверку модели и codec. Пока активна запись, новая публикация своего фантома
 приостановлена даже при подключении к серверу. После записи она возобновляется.
-Локальный буфер позы и codec используют `Diagnostics::CaptureLimits()`:
-4 МиБ до и после сжатия. Сетевые лимиты при этом не меняются: диагностика
-должна сохранить данные, которые ещё только предстоит оптимизировать.
+Локальный буфер позы и codec используют тот же `Limits`, что сеть:
+raw256 КиБ/compressed128 КиБ. Dynamic vertex stream отсутствует.
+Формат архивов DLPDIAG2, version2, protocol22, asset2. Предыдущие пользовательские
+DLPDIAG1 записи остаются на диске неизменными; они относятся к neutral pipeline
+и не подаются нативному renderer.
 События movement продолжают записываться; `encoded`/`sent` относятся к
 production-пути и в локальной записи обычно равны нулю. Полные байты codec
 сохраняются внутри каждого Sample. Нулевые счётчики отправки не означают
@@ -96,14 +98,14 @@ python Scripts/inspect_phantom_diagnostics.py "<папка записи>" --extr
 
 Инспектор использует только стандартную библиотеку Python. Он проверяет длины,
 SHA256 моделей, соответствие заголовков oracle/production, собирает размеры
-каналов/bounds/deformations, реальную частоту, интервалы и отличие корня 3D от
+каналов/bounds, реальную частоту, интервалы и отличие корня 3D от
 actor movement. В `--extract` доступны модель `.zst`, исходные позы
 `.original.bin`, production pre-Zstd `.quantized.bin`, `.zst` поз и реальные
 protobuf envelopes. Распаковка Zstd в Python для статистики не требуется;
 модель можно читать текущим `ReadAsset`, позу — `ReadSnapshot` с
 `Diagnostics::CaptureLimits()` в native tool.
 
-Little-endian, без struct padding. Header: `DLPDIAG1` (8 bytes), archive version,
+Little-endian, без struct padding. Header: `DLPDIAG2` (8 bytes), archive version,
 текущий protocol version, asset version (по uint32). Далее records:
 `kind:uint32, length:uint32, payload[length]`.
 
@@ -120,9 +122,8 @@ Movement: context/sequence/sampleTime:uint64 и position/Euler XYZ по float32.
 У actor sample, снятого вместе с capture, context/sequence равны 0; его timestamp
 равен времени исходной позы. Euler — radians, root rotation — quaternion.
 Original Snapshot: generation/sequence/context/sampleTime:uint64, origin XYZ
-float32, counts channels/bounds/deformations:uint32. Channel: position XYZ,
+float32, counts channels/bounds:uint32. Channel: position XYZ,
 quaternion XYZW, scale float32, hidden:uint8. Bound: center XYZ/radius float32.
-Deformation: geometry/count:uint32, все positions XYZ, затем normals XYZ float32.
 Исходный локальный snapshot имеет capture context 1; production event содержит
 фактический сетевой context. Сопоставлять по generation/sequence/time, а не
 подменять одно другим. Частоты capture/encoding/ENet отправки измеряются отдельно.
@@ -130,6 +131,25 @@ Deformation: geometry/count:uint32, все positions XYZ, затем normals XYZ
 Сборка и native-тесты проверяют формат, сохранение до квантования, совпадение
 с production bytes, смену generation, opt-in, лимиты, restart и shutdown.
 Проверка меню и реального захвата в игре выполняется отдельно.
+
+## Использование существующего прототипа
+
+`Scripts/native_nif_fixture.py SOURCE OUTPUT` создаёт отдельную копию
+NIF без excluded auxiliary leaves/controllers/texture paths и переносит
+записанные позы в `native-poses.bin`. SOURCE не меняется, OUTPUT должен быть
+новым каталогом вне SOURCE. `DREAMSLEEVE_NATIVE_NIF=OUTPUT/appearance.nif`
+включает проверку настоящей записи в Client.Tests: production Prepare/ReadAsset,
+WriteSnapshot/ReadSnapshot, ошибка квантования, полные protobuf bytes и Recorder.
+Результаты — `production.txt`, `measurements.csv`, `model.zst`, `pose-N.zst`
+и `replay/*/capture.phdiag`. Полученный phdiag использует общий replay в игре.
+Это офлайн конверсия исторической записи, не альтернативный production capture.
+Игровые assets и архивы остаются в игнорируемом build и не входят в dist.
+
+# Исторические исследования neutral pipeline
+
+Разделы от 06–07.10 ниже сохраняют наблюдения отвергнутой реализации.
+Её GPU readback, маски, деформации и renderer удалены; это не текущая архитектура.
+Актуальный native путь описан в PhantomsRu.md.
 
 ## Исправление игрового потока, 06.10.2026
 

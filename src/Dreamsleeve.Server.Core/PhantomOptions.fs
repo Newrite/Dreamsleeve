@@ -28,14 +28,11 @@ type PhantomOptions = {
 
 [<RequireQualifiedAccess>]
 module PhantomOptions =
-    [<Literal>]
-    let MaximumGeometry = 512
-
     let defaults = {
         Enabled = true; StoragePath = "phantoms"; DiskBytes = 4L * 1024L * 1024L * 1024L; RamBytes = 64L * 1024L * 1024L
         CacheEntries = 1024; CacheTtlSeconds = 86400
         Limits = { CompressedBytes = 64 * 1024 * 1024; RawBytes = 128 * 1024 * 1024
-                   Channels = 4096; Geometry = MaximumGeometry; PoseBytes = 256 * 1024; RawPoseBytes = 512 * 1024 }
+                   Channels = 4096; PoseBytes = 128 * 1024; RawPoseBytes = 256 * 1024 }
         Maximum = 4; Distance = 4096.0f; MaxSources = 512; MaxSubscribers = 64
         MaxTransfers = 64; TransfersPerPlayer = 2; ChunkBytes = 16384; WindowChunks = 4; TransferTimeoutMs = 30000
         PublishCooldownMs = 1000; PoseIntervalMs = 50; PoseTimeoutMs = 1000; ReplicationIntervalMs = 50
@@ -47,7 +44,7 @@ module PhantomOptions =
         if options.DiskBytes < int64 options.Limits.CompressedBytes || options.RamBytes < 0L then "Phantoms cache quotas are invalid."
         for name, value in [ "CacheEntries", options.CacheEntries; "CacheTtlSeconds", options.CacheTtlSeconds;
                             "CompressedBytes", options.Limits.CompressedBytes; "RawBytes", options.Limits.RawBytes;
-                            "Channels", options.Limits.Channels; "Geometry", options.Limits.Geometry; "PoseBytes", options.Limits.PoseBytes;
+                            "Channels", options.Limits.Channels; "PoseBytes", options.Limits.PoseBytes;
                             "RawPoseBytes", options.Limits.RawPoseBytes;
                             "Maximum", options.Maximum; "MaxSources", options.MaxSources; "MaxSubscribers", options.MaxSubscribers;
                             "MaxTransfers", options.MaxTransfers; "TransfersPerPlayer", options.TransfersPerPlayer;
@@ -65,8 +62,8 @@ module PhantomOptions =
            || options.MaxTransfers > 1024 || options.TransfersPerPlayer > 32 || options.CacheEntries > 65536 then
             "Phantoms admission/queue bounds exceed hard limits."
         if options.TotalPoseBytesPerSecond < options.PoseBytesPerSecond then "Phantoms.TotalPoseBytesPerSecond must include one player budget."
-        if options.Limits.PoseBytes > 256 * 1024 || options.Limits.RawPoseBytes > 512 * 1024 || options.Limits.Channels > 4096 || options.Limits.Geometry > MaximumGeometry then
-            "Phantoms pose/channel/geometry exceeds format bound."
+        if options.Limits.PoseBytes > 128 * 1024 || options.Limits.RawPoseBytes > 256 * 1024 || options.Limits.Channels > 4096 then
+            "Phantoms pose/channel exceeds format bound."
         if options.Limits.CompressedBytes > 64 * 1024 * 1024 || options.Limits.RawBytes > 128 * 1024 * 1024 then
             "Phantoms asset exceeds format bound."
         if not (Single.IsFinite options.Distance) || options.Distance < 0.0f then "Phantoms.Distance must be finite and nonnegative."

@@ -151,9 +151,7 @@ export namespace Dreamsleeve::Client::Phantom
         return;
       }
       auto decoded = ReadAsset(*bytes, job.offer.asset.rawBytes);
-      if (
-        !decoded || decoded->Value().nodes.size() != job.offer.asset.channels ||
-        decoded->Value().geometry.size() != job.offer.asset.geometry)
+      if (!decoded || decoded->Layout().requiredChannels.size() != job.offer.asset.channels)
       {
         exchange.Unavailable(job.epoch, job.offer, "Модель фантома: неверный формат");
         return;

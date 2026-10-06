@@ -17,15 +17,9 @@ export namespace Dreamsleeve::Client::Diagnostics
   // Only fixed names reach paths/metadata; the UI cannot choose an arbitrary path.
   inline constexpr std::array<std::string_view, 6> Scenarios{"idle", "walk-turn", "sprint", "combat", "camera", "equipment-smp"};
 
-  // Local analysis retains high-poly face/morph streams even when the current
-  // production packet budget cannot carry them. These bytes never bypass ENet
-  // admission: the in-game diagnostic session captures locally only.
   inline constexpr P::Limits CaptureLimits()
   {
-    P::Limits limits;
-    limits.poseBytes           = 4 * 1024 * 1024;
-    limits.compressedPoseBytes = 4 * 1024 * 1024;
-    return limits;
+    return {};
   }
 
   struct Budget

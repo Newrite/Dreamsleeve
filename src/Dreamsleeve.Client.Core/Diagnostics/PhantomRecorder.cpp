@@ -59,7 +59,6 @@ namespace Dreamsleeve::Client::Diagnostics
         Vec(p.origin);
         Put(static_cast<std::uint32_t>(p.channels.size()));
         Put(static_cast<std::uint32_t>(p.bounds.size()));
-        Put(static_cast<std::uint32_t>(p.deformations.size()));
         for (const auto& c : p.channels)
         {
           Vec(c.world.position);
@@ -72,15 +71,6 @@ namespace Dreamsleeve::Client::Diagnostics
         {
           Vec(b.center);
           Put(b.radius);
-        }
-        for (const auto& d : p.deformations)
-        {
-          Put(d.geometry);
-          Put(static_cast<std::uint32_t>(d.positions.size()));
-          for (const auto& position : d.positions)
-            Vec(position);
-          for (const auto& n : d.normals)
-            Vec(n);
         }
       }
     };
@@ -249,8 +239,8 @@ namespace Dreamsleeve::Client::Diagnostics
       std::ofstream output(partial, std::ios::binary);
       output.exceptions(std::ios::badbit | std::ios::failbit);
       Writer header;
-      header.Data(std::array<std::uint8_t, 8>{'D', 'L', 'P', 'D', 'I', 'A', 'G', '1'});
-      header.Put<std::uint32_t>(1);
+      header.Data(std::array<std::uint8_t, 8>{'D', 'L', 'P', 'D', 'I', 'A', 'G', '2'});
+      header.Put<std::uint32_t>(2);
       header.Put(Wire::Version);
       header.Put(P::AssetVersion);
       std::uint64_t written = header.bytes.size();
@@ -395,7 +385,7 @@ namespace Dreamsleeve::Client::Diagnostics
       std::ofstream summary(directory / "summary.json");
       summary.exceptions(std::ios::badbit | std::ios::failbit);
       summary << std::format(
-        "{{\n  \"format\": 1, \"protocol\": {}, \"assetVersion\": {},\n  \"scenario\": {}, \"requestedSeconds\": {}, \"requestedHz\": {},\n" "  \"samples\": {}, \"encoded\": {}, \"sent\": {}, \"movements\": {}, \"captureErrors\": {}, \"dropped\": {},\n" "  \"seconds\": {}, \"sampleHz\": {}, \"archiveBytes\": {}, \"models\": {}, \"reason\": {}, \"lastCaptureError\": {},\n" "  \"omittedGeometry\": {}, \"hiddenGeometry\": {}, \"partialSamples\": {}, \"partialDetail\": {},\n  \"captureMsP50\": {}, \"captureMsP95\": {}, \"encodeMsP50\": {}, \"encodeMsP95\": {}\n}}\n",
+        "{{\n  \"format\": 2, \"protocol\": {}, \"assetVersion\": {},\n  \"scenario\": {}, \"requestedSeconds\": {}, \"requestedHz\": {},\n" "  \"samples\": {}, \"encoded\": {}, \"sent\": {}, \"movements\": {}, \"captureErrors\": {}, \"dropped\": {},\n" "  \"seconds\": {}, \"sampleHz\": {}, \"archiveBytes\": {}, \"models\": {}, \"reason\": {}, \"lastCaptureError\": {},\n" "  \"omittedGeometry\": {}, \"hiddenGeometry\": {}, \"partialSamples\": {}, \"partialDetail\": {},\n  \"captureMsP50\": {}, \"captureMsP95\": {}, \"encodeMsP50\": {}, \"encodeMsP95\": {}\n}}\n",
         Wire::Version,
         P::AssetVersion,
         Quoted(Scenarios[scenario]),
@@ -519,11 +509,9 @@ namespace Dreamsleeve::Client::Diagnostics
     bool                                     firstPerson)
   {
     if (!Active() || !asset || !pose) return;
-    const auto now    = Clock::now();
-    auto       charge = sizeof(Job) + sizeof(P::Snapshot) + pose->channels.capacity() * sizeof(P::Channel) +
-                        pose->bounds.capacity() * sizeof(P::Bound) + pose->deformations.capacity() * sizeof(P::Deformation);
-    for (const auto& deformation : pose->deformations)
-      charge += (deformation.positions.capacity() + deformation.normals.capacity()) * sizeof(P::Vec3);
+    const auto now = Clock::now();
+    auto       charge =
+      sizeof(Job) + sizeof(P::Snapshot) + pose->channels.capacity() * sizeof(P::Channel) + pose->bounds.capacity() * sizeof(P::Bound);
     std::lock_guard lock(state->mutex);
     if (!state->active.load()) return;
     if (state->Due(now))

@@ -16,7 +16,7 @@ let private requestId () = PhantomRequestId.create (uint64 (System.Threading.Int
 let private options = { PhantomOptions.defaults with ReplicationIntervalMs = 1; PublishCooldownMs = 0; PoseIntervalMs = 1; ChunkBytes = 4; WindowChunks = 2 }
 let private asset gen (bytes: byte array) =
     PhantomManifest.create options.Limits (AssetHash.create (SHA256.HashData bytes) |> ok)
-        (AppearanceGeneration.create gen |> ok) 1u (uint32 bytes.Length) (uint32 bytes.Length) 2u 1u |> ok
+        (AppearanceGeneration.create gen |> ok) 2u (uint32 bytes.Length) (uint32 bytes.Length) 2u |> ok
 let private player number context =
     let profile = PlayerData.create (PlayerId.create number |> ok) (Username.create 32 $"p{number}" |> ok)
                       (DisplayName.create 64 $"P{number}" |> ok) NameColor.unknown
@@ -74,28 +74,20 @@ let private storageCase name run = case name (fun () -> task {
 })
 
 let tests = testList "Phantoms" [
-    testCase "geometry admits measured267 and hard512 and advertises the same policy" <| fun _ ->
+    testCase "native asset policy bounds bytes and pose channels without geometry schema" <| fun _ ->
         let defaults = PhantomOptions.defaults
-        Expect.equal defaults.Limits.Geometry 512 "Server default follows the neutral asset format."
-        Expect.equal PhantomOptions.MaximumGeometry 512 "One central maximum."
         Expect.isEmpty (PhantomOptions.validate defaults) "Default is within format bounds."
         let valid = asset 1UL [|1uy|]
-        for geometry in [267u; 512u] do
-            let manifest = PhantomManifest.create defaults.Limits valid.Hash valid.Generation 1u 1u 1u 4096u geometry |> ok
-            Expect.equal manifest.Geometry (int geometry) "Opaque declared geometry is admitted through the boundary."
-            let configured = { defaults with Limits = { defaults.Limits with Geometry = int geometry } }
-            Expect.isEmpty (PhantomOptions.validate configured) "Configured geometry up to512 is valid."
-        for geometry in [0u; 513u] do
-            Expect.isError (PhantomManifest.create defaults.Limits valid.Hash valid.Generation 1u 1u 1u 4096u geometry) "Outside geometry bound."
-            Expect.isNonEmpty (PhantomOptions.validate { defaults with Limits = { defaults.Limits with Geometry = int geometry } }) "Invalid policy cannot bootstrap."
+        let manifest = PhantomManifest.create defaults.Limits valid.Hash valid.Generation 2u 1u 1u 4096u |> ok
+        Expect.equal manifest.FormatVersion 2u "Native NIF container."
+        Expect.equal manifest.Channels 4096 "Pose binding count retained."
         let encoded = PhantomCodec.encode (PhantomResponse.Policy(PhantomOptions.policy defaults))
         let policy = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom(encoded.Bytes).Policy
-        Expect.equal policy.Geometry 512u "Wire policy matches admission."
         Expect.equal policy.RawAssetBytes (128u * 1024u * 1024u) "Raw byte cap unchanged."
         Expect.equal policy.CompressedAssetBytes (64u * 1024u * 1024u) "Compressed byte cap unchanged."
         Expect.equal policy.Channels 4096u "Node/channel cap unchanged."
-        Expect.equal policy.PoseBytes (512u * 1024u) "Raw pose cap unchanged."
-        Expect.equal policy.CompressedPoseBytes (256u * 1024u) "Compressed pose cap unchanged."
+        Expect.equal policy.PoseBytes (256u * 1024u) "Native raw pose cap."
+        Expect.equal policy.CompressedPoseBytes (128u * 1024u) "Native compressed pose cap."
 
     testCase "disabled replication retains membership policy without views or IO" <| fun _ ->
         let disabled = { options with Enabled = false }
@@ -160,8 +152,8 @@ let tests = testList "Phantoms" [
         Expect.isError (AssetHash.create [|1uy|]) "exactly SHA256"
         Expect.isError (AppearanceGeneration.create 0UL) "nonzero generation"
         let valid = asset 1UL [|1uy|]
-        for version, compressed, raw, channels, geometry in [ 2u,1u,1u,1u,1u; 1u,0u,1u,1u,1u; 1u,1u,129u*1024u*1024u,1u,1u; 1u,1u,1u,4097u,1u; 1u,1u,1u,1u,513u ] do
-            Expect.isError (PhantomManifest.create options.Limits valid.Hash valid.Generation version compressed raw channels geometry) "declared limit"
+        for version, compressed, raw, channels in [ 1u,1u,1u,1u; 2u,0u,1u,1u; 2u,1u,129u*1024u*1024u,1u; 2u,1u,1u,4097u; 2u,1u,1u,0u ] do
+            Expect.isError (PhantomManifest.create options.Limits valid.Hash valid.Generation version compressed raw channels) "declared limit"
         let packet = Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = ProtocolCodec.Version,
                         Chunk = Dreamsleeve.Protocol.Phantom.Chunk(TransferId = 1UL, Data = ByteString.CopyFrom(Array.zeroCreate 5)))
         Expect.isError (PhantomCodec.decodeAsset options (packet.ToByteArray())) "chunk bound"
@@ -194,7 +186,7 @@ let tests = testList "Phantoms" [
         let policy = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom(output[0].Bytes).Policy
         Expect.equal policy.WindowChunks 2u "window"
         Expect.equal policy.CompressedAssetBytes (uint32 options.Limits.CompressedBytes) "asset cap"
-        Expect.equal policy.CompressedPoseBytes 262144u "pose cap"
+        Expect.equal policy.CompressedPoseBytes 131072u "pose cap"
 
     testCase "authenticated source assignment and generation/context admission" <| fun _ ->
         let state, members, output = setup options memoryStorage 1
@@ -298,7 +290,7 @@ let tests = testList "Phantoms" [
         Expect.equal downloads 2 "Only authorized sessions create read IO."
 
     testCase "context retains appearance but clears poses and source/observer subscriptions" <| fun _ ->
-        let state, members, _ = setup options memoryStorage 2
+        let state, members, output = setup options memoryStorage 2
         ready state members[0] (asset 1UL [|1uy|])
         view state members[1] members[0] 1UL 1.0
         PhantomAgent.tick state 4L
@@ -309,6 +301,7 @@ let tests = testList "Phantoms" [
         view state members[1] members[0] 1UL 1.0
         PhantomAgent.tick state 5L
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Prior-context authority cannot resurrect a view."
+        Expect.isTrue (models output |> Array.exists (fun packet -> not (isNull packet.Remove))) "Context change explicitly removes the scene, unlike an appearance replacement."
         PhantomAgent.receive state 6L (fst members[0]) DeliveryLane.Poses (pose 1UL 2UL 10UL)
         Expect.equal (PhantomAgent.snapshot state).LatestPoses 0 "old context"
 
@@ -499,6 +492,19 @@ let tests = testList "Phantoms" [
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Receiver can subscribe at source capacity."
         Expect.isTrue (models output |> Array.exists (fun packet -> not (isNull packet.Complete) && not packet.Complete.Accepted)) "Excess source refused."
 
+    testCase "replacement upload does not consume another publisher quota slot" <| fun _ ->
+        let pending = TaskCompletionSource<Result<bool,string>>()
+        let storage = { memoryStorage with StartUpload = fun (_, manifest) -> if manifest.Generation.Value = 2UL then pending.Task else result true }
+        let state, members, _ = setup { options with MaxSources = 2 } storage 2
+        ready state members[0] (asset 1UL [|1uy|])
+        PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.handle state 5L (fst members[1]) (PhantomRequest.Publish(asset 1UL [|3uy|], 10UL, requestId()))
+        PhantomAgent.tick state 6L
+        Expect.equal (PhantomAgent.snapshot state).Sources 2 "Two distinct publishers fit while one replaces its asset."
+        pending.SetResult(Ok true)
+        PhantomAgent.tick state 7L
+        Expect.equal (PhantomAgent.snapshot state).Sources 2 "Replacement does not change source count."
+
     testCase "max and distance reductions revoke active downloads immediately" <| fun _ ->
         let state, members, output = setup options memoryStorage 2
         let manifest = asset 1UL (Array.zeroCreate 20)
@@ -560,6 +566,78 @@ let tests = testList "Phantoms" [
         let pairs = output |> Seq.filter (fun (_, packet) -> packet.Lane = DeliveryLane.Poses) |> Seq.map (fun (id, packet) -> id, Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom(packet.Bytes).PlayerId) |> Set.ofSeq
         Expect.equal pairs.Count 4 "Both subscribers of both sources get their latest snapshot fairly."
         Expect.equal (PhantomAgent.snapshot state).LatestPoses 2 "One retained snapshot per source."
+    testCase "shared pose byte budget rotates sources instead of starving the tail" <| fun _ ->
+        let config = { options with PoseBytesPerSecond = 1024; TotalPoseBytesPerSecond = 1024 }
+        let state, members, output = setup config memoryStorage 6
+        for index in 0 .. 2 do
+            ready state members[index] (asset 1UL [|byte index|])
+            view state members[index+3] members[index] 1UL 1.0
+        PhantomAgent.tick state 4L
+        output.Clear()
+        for sequence in 1UL .. 3UL do
+            let at = int64 sequence * 1000L
+            for index in 0 .. 2 do
+                let packet = Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 1UL sequence 10UL)
+                packet.Sample.Payload <- ByteString.CopyFrom(Array.zeroCreate 600)
+                PhantomAgent.receive state at (fst members[index]) DeliveryLane.Poses (packet.ToByteArray())
+            let previous = output.Count
+            PhantomAgent.tick state at
+            let bytes = output |> Seq.skip previous |> Seq.filter(fun (_, packet) -> packet.Lane = DeliveryLane.Poses) |> Seq.sumBy(fun (_, packet) -> packet.Bytes.Length)
+            Expect.isLessThanOrEqual bytes 1024 "Each tick respects the shared byte credit."
+        let delivered = output |> Seq.choose(fun (_, packet) ->
+            if packet.Lane = DeliveryLane.Poses then Some(Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom(packet.Bytes).PlayerId) else None) |> Set.ofSeq
+        Expect.equal delivered.Count 3 "Every publisher gets a turn within three refill ticks."
+
+    testCase "pending and failed replacement retain publication and commit without AOI removal" <| fun _ ->
+        let pending = TaskCompletionSource<Result<bool,string>>()
+        let mutable nextUpload = result true
+        let storage = { memoryStorage with StartUpload = fun _ -> nextUpload }
+        let state, members, output = setup options storage 2
+        ready state members[0] (asset 1UL [|1uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        let sourceId = fst members[0]
+        let observerId = fst members[1]
+        PhantomAgent.receive state 5L sourceId DeliveryLane.Poses (pose 1UL 10UL 10UL)
+        PhantomAgent.tick state 5L
+        output.Clear()
+        PhantomAgent.handle state 6L observerId (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 1UL |> ok, requestId()))
+        PhantomAgent.tick state 6L
+        let oldDownload = transfer output
+        output.Clear()
+        nextUpload <- pending.Task
+        PhantomAgent.handle state 7L sourceId (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.tick state 7L
+        let snapshot = PhantomAgent.snapshot state
+        Expect.equal snapshot.Sources 1 "Previous publication remains available."
+        Expect.equal snapshot.Subscriptions 1 "No appearance-induced AOI departure."
+        Expect.equal snapshot.Transfers 2 "Previous model download continues while upload is pending."
+        Expect.equal snapshot.LatestPoses 1 "Current pose remains usable."
+        PhantomAgent.receive state 8L sourceId DeliveryLane.Poses (pose 1UL 9UL 10UL)
+        PhantomAgent.tick state 8L
+        Expect.isFalse (output |> Seq.exists (fun (_, packet) -> packet.Lane = DeliveryLane.Poses)) "Pending upload does not reset the old sequence floor."
+        pending.SetResult(Error "temporary IO failure")
+        PhantomAgent.tick state 9L
+        Expect.equal (PhantomAgent.snapshot state).Sources 1 "Failed replacement retains publication."
+        Expect.isFalse (models output |> Array.exists (fun packet -> not (isNull packet.Remove))) "No removal while pending or after failure."
+        Expect.isFalse (models output |> Array.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.TransferId = oldDownload.Value)) "Old download is not cancelled by failure."
+        output.Clear()
+        nextUpload <- result true
+        PhantomAgent.handle state 10L sourceId (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.tick state 11L
+        Expect.isFalse (models output |> Array.exists (fun packet -> not (isNull packet.Remove))) "Replacement sends Offer without Remove."
+        let offer = models output |> Array.pick (fun packet -> if isNull packet.Offer then None else Some packet.Offer)
+        Expect.equal offer.Asset.Generation 2UL "Only committed generation is offered."
+        Expect.isGreaterThan offer.ViewRevision 1UL "Replacement has fresh revision."
+        Expect.equal (PhantomAgent.snapshot state).LatestPoses 0 "Old pose cleared only on commit."
+        PhantomAgent.receive state 12L sourceId DeliveryLane.Poses (pose 1UL 11UL 10UL)
+        Expect.equal (PhantomAgent.snapshot state).LatestPoses 0 "Previous generation rejected after commit."
+        PhantomAgent.receive state 13L sourceId DeliveryLane.Poses (pose 2UL 1UL 10UL)
+        PhantomAgent.tick state 13L
+        let received = output |> Seq.choose (fun (id, packet) -> if id = observerId && packet.Lane = DeliveryLane.Poses then Some(Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom packet.Bytes) else None) |> Seq.toArray
+        Expect.equal received.Length 1 "New generation starts at sequence one."
+        Expect.equal received[0].Sample.Generation 2UL "No mixed-generation fanout."
+
     testCase "same-generation warm republish keeps pose sequence floor" <| fun _ ->
         let state, members, _ = setup options memoryStorage 1
         let manifest = asset 1UL [|1uy|]
@@ -568,7 +646,7 @@ let tests = testList "Phantoms" [
         PhantomAgent.handle state 6L (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, requestId()))
         PhantomAgent.tick state 7L
         PhantomAgent.receive state 8L (fst members[0]) DeliveryLane.Poses (pose 1UL 9UL 10UL)
-        Expect.equal (PhantomAgent.snapshot state).LatestPoses 0 "Late pose cannot resurrect after identical model republish."
+        Expect.equal (PhantomAgent.snapshot state).LatestPoses 1 "Identical model republish retains the current pose; old sequence cannot replace it."
         PhantomAgent.receive state 9L (fst members[0]) DeliveryLane.Poses (pose 1UL 11UL 10UL)
         Expect.equal (PhantomAgent.snapshot state).LatestPoses 1 "Newer pose accepted."
     testCase "exhausted fanout byte budget does not serialize a full pose for denied subscribers" <| fun _ ->

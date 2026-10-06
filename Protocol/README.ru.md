@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 21
+# Прикладной протокол сессии, версия 22
 
 Схемы разделены по назначению:
 
@@ -24,7 +24,7 @@
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 21. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 22. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -737,17 +737,17 @@ PresenceChanged; pose/token/sequence движения — отдельные rea
 одновременно не поддерживаются.
 
 
-## Фантомы, версия 21
+## Фантомы, версия 22
 
-Модели и позы имеют отдельные оболочки с той же обязательной версией 21.
+Модели и позы имеют отдельные оболочки с той же обязательной версией 22.
 `phantom.proto` отделён от чата и UpdatePlayer; массивы геометрии не идут через
 UI bridge. Максимальный frame модели: compressed 64 МиБ, raw 128 МиБ;
-позы: compressed 256 КиБ, raw 512 КиБ; 4096 каналов и 256 geometry.
+позы: compressed 128 КиБ, raw 256 КиБ; 4096 узлов нативной сцены.
 Серверная policy может уменьшить эти пределы. Локальный кеш и сцена имеют
 отдельное ограничение RAM; лимит размеров wire не обещает вместимость renderer.
 
-Manifest фиксирует SHA-256 **compressed** целого asset, format_version=1,
-appearance generation, точные длины и размеры таблиц. Published content
+Manifest фиксирует SHA-256 **compressed** целого asset, format_version=2,
+appearance generation, точные длины и число выбранных каналов поз. Поле geometry удалено (tag reserved). Published content
 immutable: повтор той же generation допустим только с идентичным manifest.
 Смена контекста/привязок оружия не обязана менять внешний asset.
 
@@ -761,8 +761,10 @@ Chunk — максимум 16384 байт, последовательные offs
 
 PoseSample повторяет generation, context_revision, sequence, sampled_at_us;
 сжатый payload содержит эти значения и **полную** таблицу TRS/hidden, world
-spheres всех geometry и позиции/нормали всех dynamic meshes. Нет зависимых
-дельт. Получатель сверяет envelope с декодированным payload и готовым manifest.
+spheres всей геометрии. Каналы определяются preorder проверенного NIF: root,
+геометрия и skin roots/bones. Payload60 + channels*23 + bounds*16 байт до Zstd1.
+NIF-контейнер: magic uint32, version uint32=2, length uint32, NIF bytes; Zstd3.
+Нет зависимых дельт. Получатель сверяет envelope с декодированным payload и готовым manifest.
 
 Один большой pose передаётся штатным ENet UNRELIABLE_FRAGMENT. Потерянный
 фрагмент не даёт частичного снимка приложению; следующий снимок независим.
@@ -775,5 +777,5 @@ lane4 для смены транспортной эпохи перед след�
 Сервер авторизует загрузку по существующей Presence/AOI view, ограничивает
 sources/subscribers/traffic, хранит compressed bytes и проверяет hash потоково,
 не распаковывая asset. Все параметры и default находятся в `[Phantoms]`.
-Формат нейтральных данных и границы native-адаптера:
-[PhantomReplicationRu](../docs/PhantomReplicationRu.md).
+Нативный NIF, проверка до NiStream и владельцы состояний:
+[PhantomsRu](../docs/PhantomsRu.md).

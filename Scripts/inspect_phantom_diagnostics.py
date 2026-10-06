@@ -15,7 +15,7 @@ import statistics
 import struct
 from pathlib import Path
 
-MAGIC = b"DLPDIAG1"
+MAGIC = b"DLPDIAG2"
 MAX_RECORD = 64 * 1024 * 1024 + 1024
 
 
@@ -68,14 +68,12 @@ def distribution(values: list[int | float]) -> dict:
             "p50": ordered[int((len(values) - 1) * .5)], "p95": ordered[int((len(values) - 1) * .95)], "max": ordered[-1]}
 
 
-def inspect(path: Path, extract: Path | None = None, compare_deformations: bool = False) -> dict:
+def inspect(path: Path, extract: Path | None = None) -> dict:
     if path.is_dir():
         path = path / "capture.phdiag"
     models: dict[int, dict] = {}
     samples, encodes, sent, movements, failures = [], [], [], [], []
     total = 20
-    previous_deformations: dict[tuple[int, int], bytes] = {}
-    deformation_changes: dict[tuple[int, int], dict] = {}
     if extract:
         extract.mkdir(parents=True, exist_ok=True)
     with path.open("rb") as stream:
@@ -83,7 +81,7 @@ def inspect(path: Path, extract: Path | None = None, compare_deformations: bool 
         if len(header) != 20 or header[:8] != MAGIC:
             raise ValueError("not a phantom diagnostic archive")
         version, protocol, asset_version = struct.unpack_from("<III", header, 8)
-        if version != 1 or asset_version != 1:
+        if version != 2 or asset_version != 2:
             raise ValueError("unsupported archive/model version")
         records = 0
         while h := stream.read(8):
@@ -115,53 +113,25 @@ def inspect(path: Path, extract: Path | None = None, compare_deformations: bool 
                 original = data[at:at + original_n]
                 raw = data[at + original_n:at + original_n + raw_n]
                 compressed = data[-compressed_n:] if compressed_n else b""
-                pose, pos = take(original, 0, "QQQQfffIII")
+                pose, pos = take(original, 0, "QQQQfffII")
                 gen, seq, context, timestamp = pose[:4]
-                channels, bounds, dynamic = pose[-3:]
-                if gen not in models or not (1 <= channels <= 4096 and bounds <= 512 and dynamic <= bounds):
+                channels, bounds = pose[-2:]
+                if gen not in models or not (1 <= channels <= 4096 and bounds <= 4096):
                     raise ValueError("sample precedes model or invalid counts")
                 channel_start = pos
                 pos += channels * 33 + bounds * 16
-                dynamic_vertices = 0
-                for _ in range(dynamic):
-                    (geometry, count), pos = take(original, pos, "II")
-                    if geometry >= bounds or count > 65535:
-                        raise ValueError("invalid deformation")
-                    dynamic_vertices += count
-                    if compare_deformations:
-                        key = (gen, geometry)
-                        body = original[pos:pos + count * 24]
-                        if len(body) != count * 24:
-                            raise ValueError("truncated deformation")
-                        entry = deformation_changes.setdefault(key, {
-                            "vertices": count, "pairs": 0, "identicalPairs": 0,
-                            "changedPositions": [], "changedNormals": []})
-                        previous = previous_deformations.get(key)
-                        if previous is not None:
-                            if len(previous) != len(body):
-                                raise ValueError("deformation count changed within generation")
-                            entry["pairs"] += 1
-                            same = previous == body
-                            entry["identicalPairs"] += int(same)
-                            for name, offset in (("changedPositions", 0), ("changedNormals", count * 12)):
-                                a = struct.iter_unpack("<fff", body[offset:offset + count * 12])
-                                b = struct.iter_unpack("<fff", previous[offset:offset + count * 12])
-                                entry[name].append(0 if same else sum(x != y for x, y in zip(a, b)))
-                        previous_deformations[key] = body
-                    pos += count * 24
-                if pos != len(original) or raw_n != 64 + channels * 19 + bounds * 10 + dynamic * 8 + dynamic_vertices * 24:
+                if pos != len(original) or raw_n != 60 + channels * 23 + bounds * 16:
                     raise ValueError("snapshot body has wrong length")
-                raw_header, _ = take(raw, 0, "IIQQQQfffIII")
+                raw_header, _ = take(raw, 0, "IIQQQQfffII")
                 if raw_header[:2] != (0x50504C44, asset_version) or raw_header[2:] != pose:
                     raise ValueError("production and oracle snapshot headers differ")
                 root, _ = take(original, channel_start, "ffffffffB")
                 root_delta = math.dist(root[:3], actor[3:6])
                 samples.append({"generation": gen, "sequence": seq, "context": context, "timeUs": timestamp,
-                                "channels": channels, "bounds": bounds, "dynamicMeshes": dynamic, "dynamicVertices": dynamic_vertices,
+                                "channels": channels, "bounds": bounds,
                                 "captureMs": capture_ms, "firstPerson": bool(camera), "originalBytes": original_n,
                                 "rawBytes": raw_n, "compressedBytes": compressed_n, "rootActorDistance": root_delta,
-                                "channelBytes": channels * 19, "boundBytes": bounds * 10,
-                                "deformationBytes": dynamic * 8 + dynamic_vertices * 24})
+                                "channelBytes": channels * 23, "boundBytes": bounds * 16})
                 if extract:
                     stem = f"pose-{gen}-{seq}"
                     for suffix, body in (("original.bin", original), ("quantized.bin", raw), ("zst", compressed)):
@@ -211,10 +181,6 @@ def inspect(path: Path, extract: Path | None = None, compare_deformations: bool 
             i = bisect.bisect_left(times, s["timeUs"])
             nearby = times[max(0, i - 1):i + 1]
             nearest.append(min(abs(t - s["timeUs"]) for t in nearby) / 1000)
-    changes = {f"{gen}:{geometry}": {
-        key: distribution(value) if isinstance(value, list) else value
-        for key, value in entry.items()
-    } for (gen, geometry), entry in deformation_changes.items()}
     return {"format": version, "protocol": protocol, "assetVersion": asset_version, "archiveBytes": total,
             "models": models, "samples": len(samples), "encoded": len(encodes), "acceptedByEnet": len(sent),
             "movementPackets": len(movements), "captureFailures": failures, "seconds": seconds,
@@ -224,11 +190,10 @@ def inspect(path: Path, extract: Path | None = None, compare_deformations: bool 
                  "missing": b["sequence"] - a["sequence"] - 1, "intervalMs": (b["timeUs"] - a["timeUs"]) / 1000}
                 for a, b in zip(samples, samples[1:])
                 if a["generation"] == b["generation"] and b["sequence"] > a["sequence"] + 1],
-            "deformationChanges": changes,
             "sampleIntervalMs": distribution(intervals), "captureMs": distribution([s["captureMs"] for s in samples]),
             "productionEncodeMs": distribution([e["ms"] for e in encodes]),
             "poseSizes": {k: distribution([s[k] for s in samples]) for k in (
-                "originalBytes", "rawBytes", "compressedBytes", "channelBytes", "boundBytes", "deformationBytes", "dynamicVertices")},
+                "originalBytes", "rawBytes", "compressedBytes", "channelBytes", "boundBytes")},
             "posePacketBytes": distribution([s["envelopeBytes"] for s in sent]),
             "posePacketsWithOracle": sum((s["generation"], s["sequence"]) in matched for s in sent),
             "nearestMovementTimeMs": distribution(nearest),
@@ -242,11 +207,9 @@ def main() -> None:
     parser.add_argument("archive", type=Path)
     parser.add_argument("--extract", type=Path)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--compare-deformations", action="store_true",
-                        help="compare saved vertex positions/normals between successive samples of each generation")
     args = parser.parse_args()
     try:
-        report = inspect(args.archive, args.extract, args.compare_deformations)
+        report = inspect(args.archive, args.extract)
     except (OSError, ValueError, struct.error) as error:
         parser.exit(1, f"Invalid diagnostic archive: {error}\n")
     text = json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n"

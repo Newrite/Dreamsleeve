@@ -11,6 +11,8 @@ import DreamNet.Peer;
 import Dreamsleeve.Client.Phantom.Streaming;
 import Dreamsleeve.Client.ProtocolCodec;
 
+#include "PhantomFixture.hpp"
+
 namespace
 {
   namespace P                     = Dreamsleeve::Client::Phantom;
@@ -36,21 +38,7 @@ namespace
 
   P::ValidatedAsset Model()
   {
-    P::Asset raw;
-    raw.nodes.resize(NodeCount);
-    for (std::size_t index = 1; index < raw.nodes.size(); ++index)
-      raw.nodes[index].parent = P::NodeId{0};
-    P::Geometry mesh;
-    mesh.vertices.resize(3);
-    mesh.vertices[1].position = {1, 0, 0};
-    mesh.vertices[2].position = {0, 1, 0};
-    mesh.indices              = {0, 1, 2};
-    auto         mask         = std::make_shared<P::AlphaMask>(P::AlphaMask{512, 512, std::vector<std::uint8_t>(512 * 512)});
-    std::mt19937 random(21);
-    for (auto& value : mask->pixels)
-      value = static_cast<std::uint8_t>(random());
-    mesh.mask = std::move(mask);
-    raw.geometry.push_back(std::move(mesh));
+    auto raw    = PhantomFixture::Model(NodeCount, 24);
     auto parsed = P::ValidatedAsset::Parse(std::move(raw));
     REQUIRE(parsed);
     return std::move(*parsed);
@@ -71,9 +59,11 @@ namespace
           static_cast<float>(random() % 10000) / 10000,
           static_cast<float>(random() % 10000) / 10000
       };
-    pose.bounds.push_back({
-        {0, 0, 0},
-        4
+    pose.bounds.resize(
+      NodeCount - 1,
+      {
+          {0, 0, 0},
+          4
     });
     return std::make_shared<const P::Snapshot>(std::move(pose));
   }
@@ -187,7 +177,7 @@ namespace
         REQUIRE((packet->flags & ENET_PACKET_FLAG_UNSEQUENCED) == 0);
         Models::ServerPosePacket value;
         REQUIRE(value.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
-        REQUIRE(value.protocol_version() == 21);
+        REQUIRE(value.protocol_version() == Dreamsleeve::Client::Wire::Version);
         REQUIRE(value.player_id() == 1);
         largestPose  = (std::max)(largestPose, bytes.size());
         poseSequence = value.sample().sequence();
@@ -198,7 +188,7 @@ namespace
         REQUIRE(reliable);
         Models::ServerAssetPacket value;
         REQUIRE(value.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
-        REQUIRE(value.protocol_version() == 21);
+        REQUIRE(value.protocol_version() == Dreamsleeve::Client::Wire::Version);
         if (value.has_policy())
         {
           policy       = true;
@@ -234,7 +224,7 @@ namespace
         REQUIRE(reliable);
         Chat::ServerPacket value;
         REQUIRE(value.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
-        REQUIRE(value.protocol_version() == 21);
+        REQUIRE(value.protocol_version() == Dreamsleeve::Client::Wire::Version);
         if (value.has_session_opened())
         {
           welcomed = true;
@@ -343,7 +333,7 @@ namespace
 // controlled-auth production server fixture and requires the success sentinel.
 TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5)))
 {
-  REQUIRE(Dreamsleeve::Client::Wire::Version == 21);
+  REQUIRE(Dreamsleeve::Client::Wire::Version == 22);
   const auto portText = Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5);
   REQUIRE(portText);
   const auto port = std::stoul(*portText);
@@ -396,8 +386,8 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   REQUIRE(alice.uploadSent > P::Wire::ChunkBytes * alice.windowChunks);
   REQUIRE(alice.chunksSent > alice.windowChunks);
   REQUIRE(bob.downloadedBytes == alice.uploadSent);
-  CHECK(bob.exchange.Find(1)->Asset()->Value().nodes.size() == NodeCount);
-  CHECK(bob.exchange.Find(1)->Asset()->Value().geometry[0].vertices[1].position.x == 1);
+  CHECK(bob.exchange.Find(1)->Asset()->Layout().requiredChannels.size() == NodeCount);
+  CHECK(bob.exchange.Find(1)->Asset()->Layout().bounds.size() == NodeCount - 1);
   Await(alice, bob, "atomic cache completion", [&] {
     return std::filesystem::exists(directory / "server-cache" / (alice.modelHash + ".zst")) &&
            std::filesystem::exists(directory / "bob-cache" / (alice.modelHash + ".zst"));

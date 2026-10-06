@@ -52,7 +52,7 @@ try {
         Start-Sleep -Milliseconds 25
     }
     $ready = Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json
-    if ($ready.protocolVersion -ne 21 -or $ready.port -ne $port) { throw 'Unexpected server fixture contract.' }
+    if ($ready.protocolVersion -ne 22 -or $ready.port -ne $port) { throw 'Unexpected server fixture contract.' }
     $nativeInfo = New-ChildInfo $nativePath @('--test-case=Phantom production Streaming real UDP smoke', '--no-colors=true')
     # Per-child environment; invoking shell and normal native tests stay unchanged.
     $nativeInfo.Environment['DREAMSLEEVE_PHANTOM_SMOKE_PORT'] = [string]$port
@@ -78,7 +78,7 @@ try {
     if (-not $server.WaitForExit(25000)) { throw 'Server did not finish graceful smoke shutdown.' }
     if ($server.ExitCode -ne 0) { throw "Server fixture failed with exit code $($server.ExitCode)." }
     [IO.File]::WriteAllText((Join-Path $artifactPath 'result.json'), (@{
-        status = 'passed'; protocolVersion = 21; nativeBinary = $nativePath; utc = [DateTime]::UtcNow.ToString('O');
+        status = 'passed'; protocolVersion = 22; nativeBinary = $nativePath; utc = [DateTime]::UtcNow.ToString('O');
         test = 'Phantom production Streaming real UDP smoke'; artifacts = $artifactPath
     } | ConvertTo-Json))
     Write-Output "Cross-language smoke passed; artifacts: $artifactPath"

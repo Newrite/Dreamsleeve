@@ -15,7 +15,7 @@ export namespace Dreamsleeve::Client::Phantom::Wire
   {
     Digest        hash;
     Generation    generation;
-    std::uint32_t format{AssetVersion}, compressedBytes{}, rawBytes{}, channels{}, geometry{};
+    std::uint32_t format{AssetVersion}, compressedBytes{}, rawBytes{}, channels{};
     bool          operator==(const Descriptor&) const = default;
 
     bool SameContent(const Descriptor& other) const

@@ -29,7 +29,7 @@ let private run (arguments: string array) = task {
     let readyFile = Path.GetFullPath(value "--ready-file")
     if port = 0us then invalidArg "--port" "Select a free nonzero loopback port."
     Directory.CreateDirectory directory |> ignore
-    if ProtocolCodec.Version <> 21u then failwith "Smoke fixture requires protocol21."
+    if ProtocolCodec.Version <> 22u then failwith "Smoke fixture requires protocol22."
     let phantoms = { PhantomOptions.defaults with StoragePath = Path.Combine(directory, "server-cache");
                                                    DiskBytes = 128L * 1024L * 1024L; RamBytes = 4L * 1024L * 1024L;
                                                    PublishCooldownMs = 100; ReplicationIntervalMs = 10;
@@ -63,9 +63,9 @@ let private run (arguments: string array) = task {
                       authentication transport NullLogger.Instance
     try
         Directory.CreateDirectory(Path.GetDirectoryName readyFile) |> ignore
-        File.WriteAllText(readyFile, JsonSerializer.Serialize({| protocolVersion = 21; port = int port;
+        File.WriteAllText(readyFile, JsonSerializer.Serialize({| protocolVersion = 22; port = int port;
             stateDirectory = directory; aliceTicket = ticket "alice"; bobTicket = ticket "bob" |}))
-        printfn "PHANTOM_SMOKE_READY protocol21 127.0.0.1:%d" port
+        printfn "PHANTOM_SMOKE_READY protocol22 127.0.0.1:%d" port
         let input = task {
             if not (Array.contains "--self-check" arguments) then
                 let mutable running = true

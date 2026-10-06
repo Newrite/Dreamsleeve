@@ -17,7 +17,7 @@ export namespace Dreamsleeve::Client::Phantom
   using RequestId                      = Id<struct RequestTag, std::uint64_t>;
   using NodeId                         = Id<struct NodeTag, std::uint32_t>;
   constexpr std::uint32_t NoNode       = std::numeric_limits<std::uint32_t>::max();
-  constexpr std::uint32_t AssetVersion = 1;
+  constexpr std::uint32_t AssetVersion = 2;
   // Leave room for signed receipt/sample offset arithmetic on both ends.
   constexpr std::uint64_t MaximumSampleTime = std::numeric_limits<std::int64_t>::max() / 2;
 
@@ -48,84 +48,32 @@ export namespace Dreamsleeve::Client::Phantom
     bool  operator==(const Bound&) const = default;
   };
 
-  struct Vertex
+  // Native NIF is the model. These records describe validated links only;
+  // no copied vertex, material, mask or skin representation exists here.
+  struct NativeNode
   {
-    Vec3                         position, normal, tangent;
-    float                        u{}, v{};
-    std::array<std::uint8_t, 4>  color{255, 255, 255, 255};
-    std::array<float, 4>         weights{};
-    std::array<std::uint16_t, 4> bones{};
-
-    // Authored skin weights need not sum to one. Preserve the engine's
-    // weighted blend; normalizing here changes the rendered geometry.
-    bool ValidWeights(std::size_t boneCount) const noexcept
-    {
-      for (std::size_t i = 0; i < weights.size(); ++i)
-        if (!std::isfinite(weights[i]) || weights[i] < 0 || weights[i] > 1 || (weights[i] > 0 && bones[i] >= boneCount)) return false;
-      return true;
-    }
+    std::uint32_t block{}, parent{NoNode};
+    bool          geometry{};
   };
 
-  struct AlphaMask
+  struct NativeLayout
   {
-    std::uint32_t             width{}, height{};
-    std::vector<std::uint8_t> pixels;
+    std::vector<NativeNode>    nodes;
+    std::vector<std::uint32_t> bounds, requiredChannels;
+    std::uint32_t              blocks{};
+    std::uint64_t              vertexBytes{};
   };
 
-  struct Bone
-  {
-    NodeId    node;
-    Transform bind;
-    Bound     bound;
-  };
-
-  struct Skin
-  {
-    NodeId            root;
-    Transform         worldToSkin;
-    std::vector<Bone> bones;
-  };
-
-  struct Node
-  {
-    NodeId    parent{NoNode};
-    Transform local;
-  };
-
-  struct Geometry
-  {
-    NodeId                           node;
-    std::vector<Vertex>              vertices;
-    std::vector<std::uint16_t>       indices;
-    std::optional<Skin>              skin;
-    std::shared_ptr<const AlphaMask> mask;
-    std::uint8_t                     alphaThreshold{};
-    bool                             alphaBlend{}, doubleSided{}, dynamic{};
-  };
-
-  // Expanded reservation includes per-mesh mask bytes in the v1 wire format,
-  // even when resident alpha resources share ownership.
-  inline std::uint64_t GeometryBytes(const Geometry& mesh)
-  {
-    return mesh.vertices.size() * 80ULL + mesh.indices.size() * 2ULL + (mesh.skin ? mesh.skin->bones.size() * 60ULL : 0) +
-           (mesh.mask ? mesh.mask->pixels.size() : 0);
-  }
-
-  // Detached values, never engine classes, paths, pointers or shader programs.
   struct Asset
   {
-    std::vector<Node>     nodes;
-    std::vector<Geometry> geometry;
+    std::vector<std::uint8_t> nif;
   };
 
   struct Limits
   {
-    std::uint32_t nodes{4096}, geometry{512}, vertices{2000000}, bonesPerSkin{512};
-    // Aggregate unique alpha resources, not a single 4K mask. Still bounded
-    // by assetBytes and the client-wide memory reservation.
-    std::uint32_t maskDimension{4096}, maskBytes{64 * 1024 * 1024};
+    std::uint32_t nodes{4096};
     std::uint32_t assetBytes{128 * 1024 * 1024}, compressedAssetBytes{64 * 1024 * 1024};
-    std::uint32_t poseBytes{512 * 1024}, compressedPoseBytes{256 * 1024};
+    std::uint32_t poseBytes{256 * 1024}, compressedPoseBytes{128 * 1024};
   };
   enum class Failure
   {
@@ -133,9 +81,6 @@ export namespace Dreamsleeve::Client::Phantom
     LimitExceeded,
     InvalidLink,
     InvalidNumber,
-    InvalidGeometry,
-    InvalidSkin,
-    InvalidMask,
     UnsupportedGeometry,
     MissingSource,
     Busy,
@@ -153,10 +98,6 @@ export namespace Dreamsleeve::Client::Phantom
   template <class T>
   using Result = std::expected<T, Error>;
 
-  // Shared local/wire geometry checks. Aggregate budgets and the scene graph
-  // belong to ValidatedAsset; a local producer can reject one mesh first.
-  Result<void> ValidateGeometry(const Geometry& mesh, std::size_t nodeCount, const Limits& limits = {});
-
   class ValidatedAsset final
   {
 public:
@@ -171,14 +112,24 @@ public:
       return memory;
     }
 
+    const NativeLayout& Layout() const noexcept
+    {
+      return *layout;
+    }
+
     static Result<ValidatedAsset> Parse(Asset asset, const Limits& limits = {});
 
 private:
 
-    explicit ValidatedAsset(Asset value, std::uint64_t bytes) : asset(std::make_shared<const Asset>(std::move(value))), memory(bytes) {}
+    explicit ValidatedAsset(Asset value, NativeLayout shape, std::uint64_t bytes)
+        : asset(std::make_shared<const Asset>(std::move(value))),
+          layout(std::make_shared<const NativeLayout>(std::move(shape))),
+          memory(bytes)
+    {}
 
-    std::shared_ptr<const Asset> asset;
-    std::uint64_t                memory{};
+    std::shared_ptr<const Asset>        asset;
+    std::shared_ptr<const NativeLayout> layout;
+    std::uint64_t                       memory{};
   };
 
   struct Channel
@@ -187,21 +138,14 @@ private:
     bool      hidden{};
   };
 
-  struct Deformation
-  {
-    std::uint32_t     geometry{};
-    std::vector<Vec3> positions, normals;
-  };
-
   struct Snapshot
   {
-    Generation               generation;
-    Sequence                 sequence;
-    std::uint64_t            context{}, sampledAtUs{};
-    Vec3                     origin;
-    std::vector<Channel>     channels;
-    std::vector<Bound>       bounds;
-    std::vector<Deformation> deformations;
+    Generation           generation;
+    Sequence             sequence;
+    std::uint64_t        context{}, sampledAtUs{};
+    Vec3                 origin;
+    std::vector<Channel> channels;
+    std::vector<Bound>   bounds;
   };
 
   constexpr std::size_t BufferedPoseCount = 8;
@@ -210,12 +154,10 @@ private:
   // vector capacity/metadata as well as unquantized channel and bound layouts.
   constexpr std::uint64_t SnapshotWorkingBytes(const Limits& limits = {})
   {
-    return 2ULL * limits.poseBytes + limits.nodes * sizeof(Channel) + limits.geometry * (sizeof(Bound) + 2 * sizeof(Deformation)) +
-           sizeof(Snapshot);
+    return 2ULL * limits.poseBytes + limits.nodes * sizeof(Channel) + limits.nodes * sizeof(Bound) + sizeof(Snapshot);
   }
 
-  // Shared by the codec and scene adapter: a pose is atomic, including every
-  // deforming mesh. Native engine adapters may add engine-specific checks.
+  // A complete pose is atomic. Geometry revisions publish a new native asset.
   Result<void> CheckSnapshot(const Snapshot& snapshot, const ValidatedAsset& asset);
   enum class Representation
   {

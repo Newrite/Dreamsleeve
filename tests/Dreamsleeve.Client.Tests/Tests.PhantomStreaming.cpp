@@ -4,6 +4,8 @@ import std;
 import Dreamsleeve.Client.Phantom.Streaming;
 import Dreamsleeve.Client.ProtocolCodec;
 
+#include "PhantomFixture.hpp"
+
 namespace
 {
   namespace P     = Dreamsleeve::Client::Phantom;
@@ -12,14 +14,7 @@ namespace
 
   P::PreparedAsset Model()
   {
-    P::Asset raw;
-    raw.nodes.push_back({});
-    P::Geometry mesh;
-    mesh.vertices.resize(3);
-    mesh.vertices[1].position = {1, 0, 0};
-    mesh.vertices[2].position = {0, 1, 0};
-    mesh.indices              = {0, 1, 2};
-    raw.geometry.push_back(std::move(mesh));
+    auto raw       = PhantomFixture::Model();
     auto validated = P::ValidatedAsset::Parse(std::move(raw));
     REQUIRE(validated);
     auto result = P::Prepare(std::move(*validated));
@@ -29,7 +24,7 @@ namespace
 
   P::Wire::Descriptor Describe(const P::PreparedAsset& model)
   {
-    return {model.hash, P::Generation{1}, P::AssetVersion, static_cast<std::uint32_t>(model.compressed->size()), model.rawBytes, 1, 1};
+    return {model.hash, P::Generation{1}, P::AssetVersion, static_cast<std::uint32_t>(model.compressed->size()), model.rawBytes, 2};
   }
 
   void Set(const P::Wire::Descriptor& asset, Proto::AssetDescriptor* out)
@@ -40,7 +35,6 @@ namespace
     out->set_compressed_bytes(asset.compressedBytes);
     out->set_raw_bytes(asset.rawBytes);
     out->set_channels(asset.channels);
-    out->set_geometry(asset.geometry);
   }
 
   P::Bytes Server(const std::function<void(Proto::ServerAssetPacket&)>& fill)
@@ -62,7 +56,6 @@ namespace
       p->set_raw_asset_bytes(limits.assetBytes);
       p->set_compressed_asset_bytes(limits.compressedAssetBytes);
       p->set_channels(limits.nodes);
-      p->set_geometry(limits.geometry);
       p->set_pose_bytes(limits.poseBytes);
       p->set_compressed_pose_bytes(limits.compressedPoseBytes);
       p->set_sample_rate(20);
@@ -119,7 +112,7 @@ namespace
     value.sequence    = {1};
     value.context     = 1;
     value.sampledAtUs = 50000;
-    value.channels.push_back({});
+    value.channels.resize(2);
     value.bounds.push_back({
         {0, 0, 0},
         1
@@ -223,7 +216,7 @@ TEST_CASE("Phantom downloads validate complete bytes and stale worker completion
     const auto remote = exchange.Find(9);
     return remote && remote->Asset();
   }));
-  CHECK(exchange.Find(9)->Asset()->Value().geometry[0].vertices[1].position.x == 1);
+  CHECK(exchange.Find(9)->Asset()->Layout().requiredChannels.size() == 2);
   REQUIRE(stream.ReceiveAsset(Server([](auto& p) {
     auto* r = p.mutable_remove();
     r->set_player_id(9);
@@ -301,7 +294,7 @@ TEST_CASE("Scene allocations and simultaneous replacement share the phantom memo
   P::Wire::Offer offer{
       1,
       1,
-      {P::Digest{}, P::Generation{1}, 1, 1024 * 1024, 1024 * 1024, 1, 1}
+      {P::Digest{}, P::Generation{1}, P::AssetVersion, 1024 * 1024, 1024 * 1024, 2}
   };
   REQUIRE(exchange.Offer(offer));
   const auto free = exchange.RemainingMemory();
@@ -508,9 +501,9 @@ TEST_CASE("Eight full phantom windows make partial ACK progress below the inacti
         data->set_data(std::string(P::Wire::ChunkBytes, 'x'));
       })));
   }
-  const auto started = Clock::now();
+  const auto                             started = Clock::now();
   std::map<std::uint64_t, std::uint32_t> acknowledged;
-  std::uint64_t initialBytes{}, totalBytes{};
+  std::uint64_t                          initialBytes{}, totalBytes{};
   for (int second = 0; second <= 31; ++second)
   {
     for (const auto& p : Models(stream.Poll(started + std::chrono::seconds(second))))
@@ -524,8 +517,8 @@ TEST_CASE("Eight full phantom windows make partial ACK progress below the inacti
       CHECK(offset > acknowledged[id]);
       CHECK(offset <= window * P::Wire::ChunkBytes);
       CHECK(offset % P::Wire::ChunkBytes == 0);
-      totalBytes += offset - acknowledged[id];
-      acknowledged[id] = offset;
+      totalBytes       += offset - acknowledged[id];
+      acknowledged[id]  = offset;
       if (second <= 2) CHECK(offset < window * P::Wire::ChunkBytes);
     }
     if (!second) initialBytes = totalBytes;
@@ -535,11 +528,13 @@ TEST_CASE("Eight full phantom windows make partial ACK progress below the inacti
     if (second == 2)
     {
       REQUIRE(acknowledged.size() == count);
-      for (const auto& [id, offset] : acknowledged) CHECK(offset >= P::Wire::ChunkBytes);
+      for (const auto& [id, offset] : acknowledged)
+        CHECK(offset >= P::Wire::ChunkBytes);
     }
   }
   REQUIRE(acknowledged.size() == count);
-  for (const auto& [id, offset] : acknowledged) CHECK(offset >= 15 * P::Wire::ChunkBytes);
+  for (const auto& [id, offset] : acknowledged)
+    CHECK(offset >= 15 * P::Wire::ChunkBytes);
   CHECK(totalBytes >= std::uint64_t(count) * 15 * P::Wire::ChunkBytes);
 }
 

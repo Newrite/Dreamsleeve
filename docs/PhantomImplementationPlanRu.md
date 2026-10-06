@@ -1,440 +1,81 @@
-# Полная репликация фантомов: план исполнения
+# Native NIF: план исполнения, 07.10.2026
 
-Дата: 06.10.2026. Рабочая ветка: `codex/phantom-replication`, создана от
-актуального `origin/master` (`7772d17`). Это план полной реализации клиента и
-сервера. Игровое тестирование пользователем начинается после сборки всего
-объёма; промежуточные этапы проверяются автоматически и ревью кода.
+Рабочая ветка `codex/phantom-native-nif` создана от `codex/phantom-replication`
+(`3b80b8e`). Проверенный источник поведения — `codex/phantom-local-se`
+(`23ae14d`). Пользовательское изменение `Plugin/client.toml` сохраняется.
+Прежний план neutral реализации сохранён в истории Git.
 
-## Результат
-
-Игрок видит в своём мире фантомы находящихся поблизости игроков: их текущую
-форму тела, лицо, волосы, экипировку, оружие и движения. Первое лицо отправителя
-не отключает передачу его третьеличной модели. Получатель не обязан иметь
-его модпак: геометрия, необходимые кости и маски прозрачности передаются,
-материалы фантома задаёт Dreamsleeve. Не создаются Actor, активаторы, AI,
-физика или постоянные игровые references.
-
-Независимость модели от модпака не создаёт отсутствующее у получателя игровое
-пространство: показ возможен только в разрешённом AOI и разрешимой CELL/WRLD.
-Несовпадение или отсутствие пространства обрабатывается существующей spatial
-policy, а не попыткой построить чужую локацию из данных фантома.
-
-Это живое присутствие, а не запись для последующего воспроизведения после
-выхода автора. На диске кешируется внешность; история поз не сохраняется.
-Светлячки остаются доступным представлением и fallback. Причины fallback
-явны: модель загружается, источник недоступен, формат не поддерживается,
-данные отклонены, превышен бюджет либо позы устарели.
-
-Фича включает доменную модель, сетевой контракт, безопасный формат внешности,
-серверное файловое хранилище, репликацию, клиентский кеш, захват и рендер,
-настройки, lifecycle, диагностику и автоматические проверки. Сетевой путь,
-хранилище и ограничения не откладываются на будущие задачи.
-
-## Исходные материалы и границы переноса
-
-- [Решения по репликации](PhantomReplicationRu.md).
-- [Измерения на реальных записях](PhantomMeasurementsRu.md).
-- [Проверенные SE/AE/VR адреса и ABI](PhantomRuntimeRu.md).
-- [Локальный эксперимент](PhantomPrototypeRu.md), ветка
-  `codex/phantom-local-se`, коммит `23ae14d`.
-- [Предметная модель](DomainSpecRu.MD),
-  [пространственная репликация](SpatialReplicationRu.md),
-  [интерполяция движения](MovementInterpolationRu.md),
-  [SKSE-клиент](SkseClientRu.md),
-  [транспортные бюджеты](../src/Dreamsleeve.Server.Infrastructure.Interop/README.ru.md).
-- Исторический [бенчмарк до/после оптимизаций](benchmarks/load-512-2026-10-01.md).
-
-Документы эксперимента скопированы для доступа из новой ветки; код переносится
-выборочно через новые границы, без merge экспериментальной ветки и без второго
-production-пути record/replay. Тестовые архивы, логи, IDB и бинарники остаются
-вне git/dist. Обновление master «чат остаётся открыт после отправки» сохраняется.
-
-В исходном master README протокола отстаёт: пишет 15, кодеки используют 20.
-Первый этап исправляет описание по фактическим константам. При изменении wire
-контракта версия поднимается от текущей на следующий номер на обеих сторонах.
-Backward compatibility, legacy-пути и флаги поддержки старого клиента не нужны.
-Поддержка отсутствующих новых полей TOML через defaults сохраняется.
-
-## Постоянные архитектурные правила
-
-| Ответственность | Владелец и граница |
+| Решение | Подсистемы |
 |---|---|
-| Идентичность внешности, generation, допустимость переходов, выбор подписок | Доменные типы и чистые политики; транспорт и UI их используют |
-| Wire ID/enum, кодирование | Protocol как источник контракта; явное преобразование в доменные значения |
-| Пространство и право наблюдать игрока | Существующий Presence/AOI; без второй независимой таблицы видимости |
-| Последняя поза и подписки на фантомы | Серверный PhantomAgent; ограниченное состояние, без очереди всех кадров |
-| Файлы, hash, кеш, временные загрузки | Infrastructure за узкими storage-портами; тяжёлый IO вне обработчика репликации |
-| ENet host/peer, native packet leases, приоритеты полос | Существующий TransportOwner и сетевой поток ClientApplication |
-| Полученные assets, поток поз, decode и playback policy | Client.Core; без RE, SKSE, GFx или зависимости от браузера |
-| Чтение живой сцены и сборка/применение модели | Game-адаптер; только в допустимой фазе игрового потока |
-| Адреса, offsets, ABI, установка и chaining хуков | Только Hooks; Game получает узкие операции, а не RelocationID |
-| Настройки и отображение состояния | Host/bridge/UI; не владеют передачей, AOI или сценой |
-
-Каждая изменяемая сущность имеет одного владельца. Между владельцами — значения,
-immutable-буферы или ограниченные команды; сырые указатели сцены через границу
-потоков не проходят. TES references между кадрами — ObjectRefHandle, владение
-сценой — NiPointer. Отдельный actor обеспечивает владение и порядок, а не
-автоматическое ускорение.
-
-Следовать существующей структуре Server.Domain → Server.Core → Infrastructure
-и Protocol / Client.Core → SKSE Game/Host → UI. Не вводить параллельный корень
-проектов «PhantomFramework» и не складывать новые типы в общий файл ради
-удобства импортов. Новые cohesive модули размещаются в соответствующем слое.
-
-Типы должны выражать смысл и исключать неверное представление: AssetHash,
-AppearanceGeneration, TransferId и SnapshotSequence не взаимозаменяемые числа
-или строки; raw/decoded/validated asset — разные стадии с закрытым переходом
-через parser. В F# использовать DU/records и ограниченные конструкторы, в C++ —
-value types/variants/expected и RAII согласно принятому стилю проекта.
-Состояние ready содержит готовую модель, loading — активную передачу, а failure
-— причину; не кодировать это набором независимых bool и nullable полей,
-позволяющим одновременно ready/loading без определённого смысла. Не создавать
-обёртку для каждого scalar: сильный тип нужен там, где предотвращает реальную
-путаницу или сохраняет доменный инвариант.
-
-Инварианты формата проверяются на входе один раз с получением типизированного
-результата. Далее код работает с проверенными значениями. Проверки актуальности
-сессии/generation/бюджета выполняет владелец изменяемого состояния: это другая
-семантика, её нельзя ошибочно удалить как повторную валидацию.
-
-Не копировать enums/states, dirty policy, выбор fallback, правила generation,
-лимиты и lane reliability в Session, Game и UI. Доменные варианты клиента и
-сервера на разных языках согласуются контрактом и общими fixtures; protobuf DTO
-не становится внутренней игровой моделью. UI получает готовое состояние.
-
-Переиспользовать имеющиеся spatial, time, naming/privacy, bounded queue,
-compression и ownership-примитивы там, где совпадают семантика и lifecycle.
-Шаблоны C++ / generics F# уместны для одного алгоритма над разными буферами,
-кодеками или storage-адаптерами. Не создавать общий «framework всего» и не
-объединять состояния upload/download/playback только из-за похожих названий.
-
-## Этапы и коммиты
-
-### 0. База, контракты и замер существующего сервера
-
-Подготовить ветку и этот план, перенести только справочные документы. Проверить
-актуальные версии зависимостей, генераторы и существующие тестовые команды.
-Снять воспроизводимый baseline текущего протокола без фантомов: идентичные
-движение, actor values, чат, число клиентов и плотность AOI. Зафиксировать
-машину, настройки, команды, warmup, CPU/GC/allocation, очередь и p50/p95/p99 age.
-Исторические v15/v16/v16b не подменяют этот baseline.
-
-Коммит: `Document phantom implementation and current protocol baseline`.
-Проверка: план покрывает весь объём; исходная ветка и обновления master сохранены.
-
-### 1. Доменная модель и владельцы состояния
-
-Дополнить DomainSpec и реализовать поведение на типах: asset identity/hash,
-appearance generation, session/character/context/view revisions, snapshot
-sequence/time, subscriptions, transfer identity, бюджеты и ошибки. Поза не
-применяется к другой модели; завершённая загрузка старой сессии не возвращает
-фантом; отключение, новое пространство и удаление подписки инвалидируют поток.
-
-Разделить appearance dirty и pose bindings dirty. Оружие рука ↔ ножны и смена
-камеры не вызывают повторную отправку внешности. События экипировки/расы/морфов
-и 3D root объединяются с cooldown; редкая ограниченная проверка покрывает моды
-без события. Нельзя считать изменением модели новый NiStream hash живой позы.
-
-Задать один набор переходов/причин для presentation/fallback и жизненного цикла
-подписки. Определить отказ при неизвестном пространстве или неподдерживаемом
-3D. Протокол не должен доверять присланному PlayerId: источник задаёт сессия.
-
-Коммит: `Define phantom domain rules and state ownership`.
-Проверка: таблицы переходов, generation/context races, stale completions,
-выбор ближайших наблюдаемых игроков с hysteresis; архитектурное ревью.
-
-### 2. Проверяемый формат модели и нормализация материалов
-
-Сетевой asset — ограниченный формат Dreamsleeve с явными секциями: hierarchy,
-geometry/indices/vertex attributes, skin weights/bind transforms, bone/channel
-table и нужные alpha masks. Не принимать произвольный NiStream/NIF из сети
-непосредственно в engine Load. Захват опирается на уже готовую модель игрока;
-на приёмнике сцена собирается только из проверенных поддерживаемых объектов.
-
-Сохранять форму лица/тела и экипировки. Убрать внешние пути текстур, материалов,
-ESP, mesh files, shaders и runtime pointers. Общий phantom material создаётся
-из наших ресурсов; альфа-маски волос/ресниц извлекаются в ограниченный ресурс,
-чтобы белая текстура не превратила hair cards в сплошные пластины. Проверить
-face morphs, double-sided geometry, alpha test/blend и поддерживаемые vertex
-layouts. Чужие эффекты и RaceMenu overlays не входят в целевой призрачный визуал.
-
-Составить матрицу деформаций: костный SMP отражается в позах; меняющиеся
-вершины/морфы требуют явного ограниченного канала деформации либо новой модели
-при редком изменении. Не обещать поддержку, заменяя живые деформации статичной
-геометрией молча. Поддерживаемые варианты и fallback фиксируются в формате
-и диагностике; для них реализуется полный путь, а не TODO в рендерере.
-
-Проверки: counts, суммы размеров без overflow, finite values, индексы/веса,
-дерево без циклов, связи костей, диапазоны секций, размер масок и decompress
-budget. Сборщик получает проверенный asset. Сжатие Zstd и hash выполняются
-над detached данными в bounded worker; создание игровой сцены — main thread.
-Hash вычислять по стабильному содержимому внешности, отделённому от текущей позы.
-
-Коммит: `Add bounded phantom asset format and appearance capture`.
-Проверка: реальные экспериментальные captures как oracle, cross-language
-fixtures, malformed/fuzz corpus, SE/AE/VR layout review и review границы ввода.
-
-### 3. Протокол и два новых ENet-канала
-
-Добавить model manifest/announce, transfer request/chunk/complete/cancel,
-subscription/settings и independent pose snapshot. Control остаётся каналом
-команд lifecycle; модели идут по отдельному reliable lane, позы — по отдельному
-sequenced unreliable lane. Существующие Control=0, Chat=1, Realtime=2 сохраняются;
-новые номера определяются один раз в network.proto. Увеличить ChannelLimit,
-обновить генераторы, routing и delivery policy обоих transport-адаптеров.
-
-Поза несёт generation, context/view revision, sequence, sample time, origin,
-TRS/hidden и world sphere каждой geometry в том же снимке. Декодирование не
-зависит от предыдущего кадра. Manifest фиксирует таблицу каналов и размеры.
-Все размеры, rate и compressed/uncompressed budgets определены контрактом.
-
-Проверить native ENet и серверную managed реализацию: unreliable fragmentation,
-потеря фрагмента, reorder, sequence rollover и освобождение packet budgets.
-Flags=0 не использовать как гарантию большого unreliable сообщения.
-При невозможности получить требуемую семантику штатным ENet выбрать один
-bounded сборщик снимка с expiry на обеих сторонах; не поддерживать два пути.
-Только целый свежий снимок поступает в приложение, старые кадры не догоняются.
-
-Коммит: `Add phantom protocol and ENet delivery lanes`.
-Проверка: native/.NET golden fixtures, реальные транспортные fault-тесты,
-неверный lane/размер/version, отсутствие скрытого reliable backlog у поз.
-
-### 4. Файловое хранилище и bounded model streaming
-
-Сразу реализовать server storage: content-addressed compressed files,
-ограниченный RAM cache, disk quota, LRU/unused TTL, tmp uploads и recovery.
-Полная длина и hash проверяются потоково; публикация файла атомарна. Клиент
-не задаёт filesystem path. Сервер не распаковывает модель и не строит сцену;
-проверяет envelope, договорённые размеры, hash, владение и квоты. Заявленный
-размер не отменяет реальный decompress limit получателя.
-
-Ограничить chunk/window, одновременные upload/download, per-player/global
-bandwidth, outstanding reliable bytes, время передачи и обновления generation.
-Отмена, disconnect, timeout, повреждение, переполнение диска и рестарт очищают
-tmp и leases. Pin активного чтения исключает удаление используемого файла;
-quota admission не допускает бесконтрольного oversubscription. Дедупликация
-по hash не разрешает скачивать asset без права наблюдения источника.
-
-Клиентский disk/RAM cache использует тот же content identity; хранит проверку
-целостности и локальные quotas. Частичные загрузки не считаются готовыми.
-IO/compression работают в bounded workers, completions привязаны к эпохе.
-
-Коммит: `Implement bounded phantom storage and model transfers`.
-Проверка: cold/warm cache, одинаковая модель у нескольких авторов, отмена,
-disk-full, corrupted/truncated asset, restart cleanup и неизменность конфигов.
-
-### 5. Серверная репликация и справедливое распределение бюджета
-
-Встроить PhantomAgent в регистрацию/очистку PlayerSession и ServerRuntime.
-Подписки — подмножество существующей видимости Presence, с расстоянием и
-server/client caps; изменения настроек сокращают получение, а не только рендер.
-Переиспользовать AOI-authority через узкий поток актуальных изменений; не
-сканировать весь онлайн и не строить вторую independent spatial policy.
-
-Хранить latest pose на источник и текущую generation. Hot path — coalescing
-по источнику, ограниченная работа за тик, drop stale вместо бесконечного
-mailbox backlog. Не пересылать мегабайтные модели через mailbox каждой сессии.
-Тяжёлый IO имеет собственный worker, а completion — ограниченный control path.
-
-Сжатые позы и immutable encoded payload переиспользуются при fanout, без
-повторного decode/compress/protobuf rebuild на каждого получателя. TransportOwner
-остаётся единственным ENet-владельцем; он планирует lanes с headroom для control,
-chat и movement, а model transfers получают оставшийся ограниченный бюджет.
-Встроить ограничения приёма также до больших allocations. Блокировка фантомов
-или насыщение bulk-полосы не должны закрывать здоровый чат из-за его headroom.
-
-Коммит: `Replicate phantoms through bounded subscriptions and transport budgets`.
-Проверка: AOI enter/leave/reentry, generation race, disconnect/shutdown cleanup,
-fanout без повторного кодирования, flood/slow peer и responsiveness control/chat.
-
-### 6. Client.Core: assets, поток поз и playback policy
-
-Реализовать получение, ограниченное decode, cache/transfer state и готовые
-команды Game-адаптеру. Сетевой worker не трогает сцену. Между network, worker
-и main thread нет копирования модели на каждом кадре; retained buffers и
-готовые результаты имеют явное владение и budgets.
-
-Начать с проверенного сокращённого набора geometry/bone channels и
-квантованных TRS, добавив согласованные bounds. Ошибки квантования,
-overflow/непредставимые transforms и размер полного compressed snapshot
-проверяются явно; недопустимые значения не обрезаются молча. Повторить
-измерения, поскольку прежние 81–82 КиБ/с не включали bounds и новый формат.
-
-Начальный rate — 20 Гц. Рисовать с задержкой 1–2 snapshots, использовать
-нормализованную quaternion interpolation и ограниченную extrapolation.
-Планирование идёт по monotonic receipt/sample timeline с обработкой jitter,
-а не по доверенной синхронизации часов игроков. Teleport/context/generation
-сбрасывают историю. Неполный, чужой или устаревший snapshot не применяется.
-
-Bounds интерполяции — консервативное объединение endpoint spheres с запасом;
-при extrapolation расширение ограничено. Container bounds вычисляются из
-детей, VR box — из world sphere. Envelope всей будущей записи не переносится
-из локального стенда. Общее с MovementView время/алгоритмы переиспользуются
-при совпадении семантики, а разные histories не сливаются искусственно.
-
-Коммит: `Add phantom client streaming and interpolated playback state`.
-Проверка: deterministic time, loss/jitter/reorder, wrap, timeout/fallback,
-сборка новой модели на фоне старой, stale worker completion после disconnect.
-
-### 7. SKSE: захват, рендер и согласованный fallback
-
-Перенести проверенные операции через Hooks, выделить захват, bindings,
-сборщик проверенного asset и renderer по ответственности. Дополнительные
-engine функции проверять в CommonLib/Address Library/IDA для каждого runtime;
-не переносить SE адреса в AE/VR. IDA комментарии/типы сохранять, bytes не менять.
-
-Захват 3rd-person дерева работает и в первом лице, учитывает оружие и camera
-visibility. Не снимать catch-up дубликаты при низком FPS. Пересборка bindings
-не меняет content identity. При настоящей смене внешности новая generation
-публикуется после завершённого capture, без частично доступной модели.
-
-Renderer владеет сценой фантомов и pools с bounded capacity. Применение всей
-позы атомарно относительно кадра; исправляются skin links/frame state и bounds.
-Scene creation/upload распределяются по main-thread бюджету, старый фантом
-меняется на новый только после готовности. Ресурсы модели share immutable;
-mutable transforms/material state не делятся между игроками.
-
-Fireflies/nameplates/bubbles используют общий результат выбора представления,
-существующий NameFor/privacy, а не отдельные проверки в каждом модуле.
-Определить политику светлячка и подписи для ready/loading/hidden/fallback, чтобы
-не было дублирования модели и светлячка вопреки выбранному режиму.
-Load/save/new game, cell/world change, player death, menu, disconnect, quit и
-VR body/IK имеют явный lifecycle. В save не появляются фантомные references.
-
-Коммит: `Render replicated phantoms across SE AE and VR`.
-Проверка: hooks/layouts, ownership/lifecycle review, replay fixtures, budget
-ошибок; игровое подтверждение после полного этапа 9 остаётся обязательным.
-
-### 8. Настройки, UI, наблюдаемость и документация
-
-Сервер: enable/admission, rate, число sources/subscribers, distance, model/pose/
-channel/geometry/mask limits, CPU/traffic/mailbox budgets; storage path, RAM/disk
-quota, TTL, cooldown, transfer window/concurrency/timeouts. Defaults допускают
-измеренную ~13 МиБ модель, но не обещают ёмкость до нагрузочных прогонов.
-
-Клиент: собственная публикация и просмотр независимо, режим представления,
-fallback, максимальное число/дальность, hide in combat, opacity/color, локальные
-RAM/disk/download/upload budgets и timing. Серверные upper bounds применяются
-одной effective policy. Редкие статусы UI не вызывают DOM rebuild на pose tick;
-геометрия и pose arrays никогда не проходят через JS bridge.
-
-Метрики: upload/download/fanout, dirty captures/reasons, transfer/queue age,
-drop/reject/fallback reasons, cache hit, outstanding bytes, decode/capture/
-scene upload time, CPU/GC/allocation, RAM/disk. Логи не содержат секретов и
-полных binary payload; повторяющиеся ошибки rate-limited.
-Обновить DomainSpec, Protocol, SpatialReplication, SkseClient, configuration
-examples, CurrentState и deployment/test docs. Production UI не содержит
-локальной экспериментальной панели по умолчанию.
-
-Коммит: `Expose phantom settings diagnostics and deployment docs`.
-Проверка: config defaults/roundtrip, настройки влияют на подписки/трафик,
-privacy/имена, UI unit/browser tests и bundle/package checks.
-
-### 9. Полный проход, нагрузка, устранение долга и готовая сборка
-
-Это завершение объёма, а не начало отдельной задачи «теперь сделать правильно».
-Прогнать native/server/UI/Python и mixed network smoke с реальными fixtures.
-Сравнить baseline и итог на одинаковом workload: sparse/dense AOI, cold/warm
-models, одновременная смена экипировки, медленные получатели, packet loss/jitter.
-Измерять весь поток с bounds, masks, ENet/UDP overhead и повторной доставкой
-моделей. Показать рабочие envelopes нагрузки и поведение сверх них; очереди
-не должны расти без ограничения, control/chat сохраняют responsiveness.
-
-Провести архитектурный проход по всему diff: убрать duplicate policies/states,
-лишние wrapper layers, горячие allocations, недействующие helper и prototype
-paths. Автоматические gates не ослаблять ради зелёного результата.
-Обнаруженные проблемы исправить и перепроверить до передачи пользователю.
-
-Собрать клиент и сервер вместе, сохранить пользовательские конфиги, проверить
-состав dist и лицензии зависимостей; не включать captures/IDB/logs/credentials.
-Готовый клиент установить в согласованную папку MO2 с резервной копией файлов.
-Дать короткие игровые сценарии на двух клиентах с разными модпаками, затем
-SE/AE/VR: тело/лицо/волосы, оружие, первое лицо, смена экипировки, combat,
-cell/world/teleport, reconnect и quit. Не заявлять игровую проверку AE/VR,
-пока она фактически не выполнена.
-
-Коммит: `Validate complete phantom replication and release package`.
-Завершение: весь целевой путь реализован и собран; документированы результаты,
-лимиты и оставшиеся именно игровые проверки, без незавершённых production TODO.
-
-## Ревью после каждого большого коммита
-
-Для каждого этапа: изменения → релевантные проверки → самопроверка → коммит →
-проверка зафиксированного diff. Найденные нарушения исправляются до следующего
-этапа отдельным осмысленным fix-коммитом. На формат/ввод, transport ownership,
-серверный hot path и финальную архитектуру полезен один независимый subagent;
-не запускать множество параллельных ревьюеров. Самопроверка допустима, как
-согласовано пользователем. Не менять архитектуру только ради замечания агента.
-
-Контрольные вопросы ревью:
-
-1. У каждого state один владелец, а у каждого правила одно место применения?
-2. Есть ли две проверки, которые отвечают на один вопрос над теми же данными?
-3. Не утекли RE/ENet/protobuf/storage/UI детали через доменную границу?
-4. Переиспользуется ли существующий семантически подходящий код; оправданы ли
-   новые templates/generics, и удалён ли заменённый путь?
-5. Ограничены ли bytes, queues, concurrency, scene work и время жизни ресурсов?
-6. Подтверждает ли независимый oracle реальные случаи, включая malformed input,
-   generation/context races и сохранение чата/пространства/privacy?
-7. Выражают ли типы допустимые состояния и смысл значений, а новые модули —
-   существующую структуру проекта и доменный подход?
-
-Для этапа в этом документе отмечаются hash коммита, проверки, результаты ревью
-и принятые изменения плана. Держать документацию и код синхронными; не выдавать
-поэтапный коммит за законченную фичу.
-
-## Наблюдения о существующем коде
-
-По ходу сессии вести отдельный [журнал архитектурных наблюдений](PhantomArchitectureNotesRu.md):
-конкретное место, доказательство, проблема/возможность упрощения, связь с задачей,
-предлагаемое действие и статус. Гипотезу не выдавать за подтверждённую ошибку.
-Если замечание касается реализации фантомов, исправить в соответствующем
-этапе с проверкой поведения и отметить результат. Остальное записать отдельно,
-без расширения этой фичи на несвязанный рефакторинг. Журнал сохраняется между
-компакциями; в итоговом отчёте перечислить оставшиеся наблюдения.
-
-## Журнал исполнения
-
-06.10.2026: `3885afa` — ветка от `7772d17`, план и справочные документы из
-`23ae14d`. Этап 0: замороженный protocol20 BEFORE, 32/128 sparse/dense и chat;
-методика и исходные недостаточные achieved Hz сохранены в benchmark report.
-
-`3ca0808` — этапы 1/2/6 и клиентская часть 8: neutral asset/pose format,
-validation/Zstd/SHA256, protocol21, пять lanes, Exchange/worker/cache/playback,
-коррелированные передачи, настройки и generated UI contract. Native 359/359
-(один explicit live-UDP case запускается отдельно), 7906 assertions; Vitest
-94/94, UI production build; Edge полный 41/41 плюс 2/2 для окончательных
-16 scalar settings. Устранены пять воспроизведённых transfer/cache/lifecycle
-нарушений; дополнительные замечания fixed-commit review исправлены в `0c67ccf`.
-
-`69e8487` — этап 7: native capture, D3D readback/materials, скрытая построенная
-сцена, frame/memory budgets, hooks SE/AE/VR, lifecycle и общие подписи/privacy.
-Единая DLL собрана. Ревью исправило clears/Busy, readback pool admission и
-encapsulation; native factories/ABI audit и игровой проход отмечаются отдельно.
-
-Первоначальная проверка этапов 3–5: серверные 591/591 и real UDP 1/1. Нативный
-production Streaming с сервером protocol21 прошёл 1/1, 2935 assertions: cold
-262250 bytes, ACK window, chat, fragmented loss/rollover, receive off/on и warm
-cache/generation. Нагрузочная матрица AFTER завершена; первоначальные значения
-сохранены. Найден disabled Presence observation overhead, исправление и
-повторный целевой прогон выполнены в финальных этапах 8/9.
-
-`06f7420` — этапы 3–5: серверная репликация и opaque storage. Server 601/601;
-fixed-commit review воспроизвёл late View/departure race.
-
-`0c67ccf` — финальные клиентские исправления по ревью: decoded working RAM,
-RAM-cache manifest agreement, partial-prefix ACK, geometry512, texture factory
-и retained scene asset. Native 364/364, UI 94/94, Edge 2/2, DLL/Client.Dev
-собраны; независимое ревью замороженного diff без блокеров.
-
-`d1b4dea` — source connection epoch и watermark при departure; targeted 39/39,
-server 602/602, fresh production native UDP 1/1, 2765 assertions. Проверка
-fixed commit подтвердила отсутствие старой подписки после reconnect вне AOI.
-
-Этапы 8/9 завершены: замеры BEFORE/AFTER и отдельный postfix off-dense128
-сохранены с hashes и границами результатов. Клиент/сервер собраны, чистый
-пакет проверен, клиент установлен в согласованный MO2-мод с backup и
-сохранением конфигов. [Итоговая проверка](PhantomReleaseValidationRu.md)
-фиксирует команды, counts, SHA256, игровой сценарий и объём подтверждения.
-Прототип не cherry-pick: используется новый проверяемый neutral format;
-сервер хранит opaque compressed bytes, engine parsing на сервере отсутствует.
+| Оставить | AOI/Presence, ENet owner и unreliable-fragment policy, chunks/ACK, content hash/cache/storage, session epoch, cancellation, privacy/UI |
+| Адаптировать | manifest, detached worker budgets, независимые компактные позы, interpolation, lifecycle, диагностика и сборка |
+| Заменить | neutral asset на ограниченный контейнер native NIF с каналами; reconstruction на NiStream Load; вершины на transforms нативной сцены |
+| Удалить вместе с заменой | neutral vertex/skin/material/mask schema, CPU skinning, D3D readback/upload, специальные factories, старые лимиты/тесты |
+
+## Доменные границы
+
+Публикация — immutable содержание в поколении модели и контексте источника.
+Подготовка следующего поколения не отзывает пригодное текущее. Успешное
+завершение заменяет текущее только при совпадении session epoch/request/generation;
+смена пространства или отзыв публикации прекращают оба состояния.
+Источник отсутствующего 3D временно ожидает. Трансформ, видимость и привязка
+оружия не меняют внешность; состав дерева и реальная геометрическая деформация
+помечают ревизию для объединённого обновления.
+
+Server.Domain задаёт публикацию/доступность и переходы; PhantomAgent владеет
+подписками и текущей/подготавливаемой публикацией. Client.Core владеет detached
+asset, кодеком, передачами и историей поз. Game владеет native source bindings
+и сценой только на игровом потоке. Hooks содержит ABI/адреса и сообщает
+завершённые изменения; Host/UI читают состояние через существующие границы.
+NIF проверяется до native loader; сервер его не распаковывает. Проверка
+структуры asset не заменяет проверки актуальности у владельца сессии.
+
+## Последовательность и критерии
+
+1. [x] Аудит документов, прототипа, входных архивов; типы/инварианты.
+2. [x] Native clone/normalization, ограниченный NIF, общий codec/load/replay.
+3. [x] Компактные каналы, живые bounds, revisions внешности, runtime hooks.
+4. [x] Сервер/транспорт/storage, protocol bump и удаление neutral формата.
+5. [x] Настройки, production diagnostics, окончательная очистка.
+6. [x] Штатный/diagnostic build, tests, real server, 512/group25 benchmark,
+   документация и полный dist с сохранёнными пользовательскими конфигами.
+
+После каждой законченной части — самопроверка или одно ограниченное ревью.
+Сборка/статический ABI audit не являются игровым подтверждением SE/AE/VR.
+Исходные архивы не изменяются; результаты/fixtures идут в ignored build.
+
+### Наблюдения аудита
+
+- Реальный prototype NIF содержит внешние texture paths, NiPointLight и effect
+  controllers. Сам успешный local roundtrip не даёт переносимого сетевого asset.
+- Старый server Publish вызывает clearSource до готовности replacement;
+  переход должен сохранять текущую публикацию до успешного settle.
+
+
+## Самопроверка
+
+Удалены отдельные geometry/material/mask codecs, CPU skinning и D3D adapters.
+Native capture и replay используют одну Scene; server review проверил сохранение
+пригодной публикации до commit следующего поколения. При аудите clone исправлена
+проверка совместного владения shader до удаления auxiliary geometry.
+Dodge/GhostTrail.cpp сверён: native lighting material, уникальный SetMaterial,
+engine allocator для emissiveColor, additive blend и ZBufferWrite соответствуют
+прототипу. Удаление авторских texture dependencies до Save требует игрового QA.
+
+Игровой QA не закрыт: Windows10 UI adapter возвращает out-of-range HWND для MO2.
+Статический ABI аудит и codec/UDP тесты не заменяют визуальную проверку.
+
+Финальная самопроверка: неизвестные non-node классы не считаются auxiliary
+автоматически; обязательная геометрия должна иметь clone pair. Capture и Scene
+получают одну таблицу native операций. Ошибка native Load блокирует повтор той
+же view/generation, а не вызывает повторную тяжёлую загрузку каждый кадр.
+
+Ограниченное независимое native ревью выявило и закрыло два пропуска: source
+topology проверяется до Clone (включая не попавшие в clone неизвестные классы);
+потеря skinInstance при Clone теперь отказ, а не успешный unskinned asset.
+Дополнительных конкретных lifetime/repeated Load дефектов ревью не выявило;
+это статическая проверка, не игровой результат.
+
+- [ ] Игровая приёмка новой DLL SE/AE/VR и сравнение внешности между модпаками.
+  Автоматические проверки и полный dist готовы; Windows10 UI adapter блокирует
+  автоматизированный игровой прогон. Подробности в PhantomReleaseValidationRu.md.

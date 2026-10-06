@@ -1,4 +1,4 @@
-Reusable protocol21 native Streaming / production server UDP smoke
+Reusable protocol22 native Streaming / production server UDP smoke
 
 Run from S:/Programming/Dreamsleeve after the parent has serialized the native build:
 
@@ -18,7 +18,7 @@ The controlled-auth host uses production ServerRuntime, Presence, PhantomAgent, 
 
 Native publication uses admitted Exchange.Submit(Generation, ValidatedAsset), then production Streaming's own Worker invokes Prepared(epoch, localRevision, Publication). Remote readiness uses Asset()/State(). The fixture supplies a valid neutral model with a deterministic 256KiB alpha mask and 1024 linked nodes, so cold upload/download spans multiple 4x16384 ACK windows. Production native asset/pose codecs compress, hash, decode and validate everything.
 
-Assertions cover protocol21 auth/Policy bootstrap, authenticated source assignment and positive request-ID correlation, bounded cold upload windows and actual model decode, chat during model transfer, atomic server/client cache files, real fragmented pose decode/playback, client FFFF rollover through production DreamNetPeer.RotateUnreliableSequence, a deliberately lost server-to-client unreliable fragment (no partial pose delivered), the next independent pose, receive=false server revocation and fresh view reentry, native disk-cache reuse, warm server same-hash generation publication without chunks, and the next generation's pose.
+Assertions cover protocol22 auth/Policy bootstrap, authenticated source assignment and positive request-ID correlation, bounded cold upload windows and actual model decode, chat during model transfer, atomic server/client cache files, real fragmented pose decode/playback, client FFFF rollover through production DreamNetPeer.RotateUnreliableSequence, a deliberately lost server-to-client unreliable fragment (no partial pose delivered), the next independent pose, receive=false server revocation and fresh view reentry, native disk-cache reuse, warm server same-hash generation publication without chunks, and the next generation's pose.
 
 This bridge drives production Streaming over real ENet sockets; it does not emulate Skyrim capture/render or use ClientRuntime's login/HTTP path. The separate raw ENet transport tests remain the detailed low-level rollover/loss oracle. A native build/run is required to confirm this newly added cross-language path.
 

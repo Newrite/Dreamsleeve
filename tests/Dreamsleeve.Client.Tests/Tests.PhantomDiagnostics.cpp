@@ -5,6 +5,8 @@ import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 import Dreamsleeve.Client.Diagnostics.PhantomReplay;
 import Dreamsleeve.Client.Phantom.Wire;
 
+#include "PhantomFixture.hpp"
+
 namespace
 {
   namespace D = Dreamsleeve::Client::Diagnostics;
@@ -18,15 +20,7 @@ namespace
 
     Fixture()
     {
-      P::Asset a;
-      a.nodes.push_back({});
-      P::Geometry g;
-      g.dynamic = true;
-      g.vertices.resize(3);
-      g.vertices[1].position = {1, 0, 0};
-      g.vertices[2].position = {0, 1, 0};
-      g.indices              = {0, 1, 2};
-      a.geometry.push_back(std::move(g));
+      auto a       = PhantomFixture::Model();
       auto checked = P::ValidatedAsset::Parse(std::move(a));
       REQUIRE(checked);
       asset = std::make_shared<const P::ValidatedAsset>(std::move(*checked));
@@ -39,15 +33,10 @@ namespace
       p->sequence    = {sequence};
       p->context     = 1;
       p->sampledAtUs = sequence * 50000;
-      p->channels.push_back({P::Transform{{0.04f, 0, 0}}, false});
+      p->channels.resize(2, {P::Transform{{0.04f, 0, 0}}, false});
       p->bounds.push_back({
           {0, 0, 0},
           2
-      });
-      p->deformations.push_back({
-          0,
-          {{.001f, 0, 0}, {1, 0, 0}, {0, 1, 0}},
-          {{0, 0, 1},     {0, 0, 1}, {0, 0, 1}}
       });
       return p;
     }
@@ -149,7 +138,7 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
         {0, 0, .5}
   },
     std::array<std::uint8_t, 2>{1, 2});
-  recorder.Failed({P::Failure::Busy, "graphics.alpha-pending [mesh=Hair]"});
+  recorder.Failed({P::Failure::Busy, "native.asset-pending [mesh=Hair]"});
   recorder.Stop();
   const auto s = Finished(recorder);
   REQUIRE(s.phase == D::Phase::Complete);
@@ -158,13 +147,13 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
   CHECK(s.sent == 1);
   CHECK(s.movements == 1);
   CHECK(s.errors == 1);
-  CHECK(s.lastCaptureError == "graphics.alpha-pending [mesh=Hair]");
+  CHECK(s.lastCaptureError == "native.asset-pending [mesh=Hair]");
   CHECK(s.queuedBytes == 0);
   CHECK(s.dropped == 0);
   auto   bytes = File(std::filesystem::path(s.directory) / "capture.phdiag");
   Reader r{bytes};
   r.Data(8);
-  CHECK(r.Get<std::uint32_t>() == 1);
+  CHECK(r.Get<std::uint32_t>() == 2);
   r.Data(8);
   unsigned models = 0, samples = 0;
   while (r.at < bytes.size())
@@ -196,13 +185,13 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
       if (samples++ == 0)
       {
         CHECK(first == 1);
-        original.Data(56);
+        original.Data(52);
         CHECK(original.Get<float>() == .04f);
         auto expected = P::SnapshotBytes(*p, *f.asset);
         REQUIRE(expected);
         CHECK(std::ranges::equal(raw, *expected));
         CHECK(std::ranges::equal(compressed, *zst));
-        CHECK(decoded->channels[0].world.position.x == 0);
+        CHECK(decoded->channels[0].world.position.x == 0.0625f);
       }
     }
   }
@@ -326,38 +315,6 @@ TEST_CASE("Diagnostic record limit finishes a complete archive and releases queu
   CHECK(std::filesystem::exists(std::filesystem::path(s.directory) / "capture.phdiag"));
 }
 
-TEST_CASE("Local recording preserves a complete pose above production network limits")
-{
-  Fixture  f;
-  P::Asset data = f.asset->Value();
-  data.geometry[0].vertices.resize(45000);
-  auto asset = P::ValidatedAsset::Parse(std::move(data));
-  REQUIRE(asset);
-  f.asset   = std::make_shared<const P::ValidatedAsset>(*asset);
-  auto pose = std::make_shared<P::Snapshot>(*f.Pose(1));
-  pose->deformations[0].positions.resize(45000);
-  pose->deformations[0].normals.resize(45000, P::Vec3{0, 0, 1});
-  CHECK_FALSE(P::WriteSnapshot(*pose, *f.asset));
-  auto encoded = P::WriteSnapshot(*pose, *f.asset, D::CaptureLimits());
-  REQUIRE(encoded);
-  REQUIRE(P::ReadSnapshot(*encoded, *f.asset, D::CaptureLimits()));
-  D::Recorder recorder;
-  REQUIRE(recorder.Start(f.root, 0, 15, 20));
-  recorder.Partial(1, 2, "test partial geometry");
-  recorder.Sample(f.asset, pose, {}, 1, false);
-  recorder.Stop();
-  auto status = Finished(recorder);
-  CHECK(status.phase == D::Phase::Complete);
-  CHECK(status.samples == 1);
-  CHECK(status.errors == 0);
-  CHECK(status.partialSamples == 1);
-  CHECK(status.omittedGeometry == 1);
-  CHECK(status.hiddenGeometry == 2);
-  auto        summaryBytes = File(std::filesystem::path(status.directory) / "summary.json");
-  std::string summary(summaryBytes.begin(), summaryBytes.end());
-  CHECK(summary.find("test partial geometry") != std::string::npos);
-}
-
 TEST_CASE("Temporary recorder backpressure drops observations without ending the session")
 {
   Fixture   f;
@@ -379,10 +336,9 @@ TEST_CASE("Temporary recorder backpressure drops observations without ending the
 TEST_CASE("Diagnostic queue retains shared model storage once for a burst of distinct poses")
 {
   Fixture  f;
-  P::Asset data            = f.asset->Value();
-  data.geometry[0].dynamic = false;
-  data.geometry[0].vertices.resize(45000);
-  auto asset = P::ValidatedAsset::Parse(std::move(data));
+  P::Asset data = f.asset->Value();
+  data          = PhantomFixture::Model(2, 45000);
+  auto asset    = P::ValidatedAsset::Parse(std::move(data));
   REQUIRE(asset);
   f.asset = std::make_shared<const P::ValidatedAsset>(*asset);
   // A wrapper copy still owns the same immutable Asset storage.
@@ -395,7 +351,6 @@ TEST_CASE("Diagnostic queue retains shared model storage once for a burst of dis
   for (unsigned i = 1; i <= 64; ++i)
   {
     auto pose = std::make_shared<P::Snapshot>(*f.Pose(i, i > 32 ? 2 : 1));
-    pose->deformations.clear();
     recorder.Sample(i % 2 ? f.asset : wrapper, std::move(pose), {}, 1, false);
   }
   recorder.Stop();
@@ -406,7 +361,6 @@ TEST_CASE("Diagnostic queue retains shared model storage once for a burst of dis
   CHECK(result.queuedBytes == 0);
   REQUIRE(recorder.Start(f.root, 0, 15, 20));
   auto pose = std::make_shared<P::Snapshot>(*f.Pose(1));
-  pose->deformations.clear();
   recorder.Sample(f.asset, std::move(pose), {}, 1, false);
   recorder.Stop();
   CHECK(Finished(recorder).samples == 1);
@@ -465,7 +419,7 @@ TEST_CASE("Diagnostic replay decodes archived wire bytes and can cancel a full r
     CHECK(frames[i].pose->sequence.value == i + 1);
     CHECK(frames[i].pose->generation.value == (i >= 16 ? 2 : 1));
     // Original .04 differs: rendering must consume the quantized wire pose.
-    CHECK(frames[i].pose->channels[0].world.position.x == 0);
+    CHECK(frames[i].pose->channels[0].world.position.x == 0.0625f);
     CHECK(P::CheckSnapshot(*frames[i].pose, *frames[i].asset));
   }
   REQUIRE(reader.Start(f.root, 0));
@@ -510,7 +464,7 @@ TEST_CASE("Diagnostic replay decodes the recorded full character archive when su
     return;
   }
   D::ReplayReader reader;
-  REQUIRE(reader.Start(std::filesystem::path(root), 0));
+  REQUIRE(reader.Start(std::filesystem::path(root), 1));
   // Consume without retaining the entire user's archive in the test process.
   const auto    until  = std::chrono::steady_clock::now() + std::chrono::seconds(60);
   std::uint64_t frames = 0, last = 0;

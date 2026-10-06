@@ -11,7 +11,7 @@ open Dreamsleeve.Server.Infrastructure.Interop
 open Dreamsleeve.Server.NetworkBenchmarks.Measurements
 
 // Optional opaque envelope workload, independent of game decoding/rendering.
-type Config = { Publishers: int; Rate: float; PoseBytes: int; ModelPath: string }
+type Config = { Publishers: int; Rate: float; ModelPath: string; RawModelBytes: int; Channels: int; PosePaths: string array; Maximum: int; ClientCacheWarm: bool }
 let configuration () =
     match Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_PHANTOM" with
     | null | "" -> None
@@ -27,58 +27,87 @@ type private PeerState = {
     Offers: Dictionary<uint64,uint64>; Seen: Dictionary<uint64,uint64>
     mutable Sent: int64; mutable Missed: int64
 }
-type Probe(config: Config, ids: uint64 array, now: unit -> float,
+type Probe(config: Config, allIds: uint64 array, offset: int, stride: int, count: int, now: unit -> float,
            send: int -> byte -> PacketDelivery -> byte array -> bool, fail: string -> unit) =
+    let ids = Array.init count (fun index -> allIds[offset + index * stride])
+    let publisher index = offset + index * stride < config.Publishers
+    let localPublishers = [|0 .. count-1|] |> Array.filter publisher
     let model = File.ReadAllBytes config.ModelPath
     let hash = SHA256.HashData model
-    let pose = ByteString.CopyFrom(Array.init config.PoseBytes (fun i -> byte (i % 251)))
-    let descriptor = AssetDescriptor(Hash = ByteString.CopyFrom hash, Generation = 1UL, FormatVersion = 1u,
-                                    CompressedBytes = uint32 model.Length, RawBytes = uint32 (2 * model.Length), Channels = 256u, Geometry = 32u)
+    let poses = config.PosePaths |> Array.map(fun path -> ByteString.CopyFrom(File.ReadAllBytes path))
+    let poseFor sequence = poses[int ((sequence - 1UL) % uint64 poses.Length)]
+    let descriptor = AssetDescriptor(Hash = ByteString.CopyFrom hash, Generation = 1UL, FormatVersion = 2u,
+                                    CompressedBytes = uint32 model.Length, RawBytes = uint32 config.RawModelBytes, Channels = uint32 config.Channels)
     let peers = Array.init ids.Length (fun _ -> {
         Ready=false; ReadyAt= -1.; Due=0.; Sequence=0UL; PublishRequest=1000UL; PublishDue=0.; Upload=None
-        DownloadRequest=1000000UL; DownloadDue=0.; DownloadPending=false; Download=None; Cached=false
+        DownloadRequest=1000000UL; DownloadDue=0.; DownloadPending=false; Download=None; Cached=config.ClientCacheWarm
         Offers=Dictionary(); Seen=Dictionary(); Sent=0L; Missed=0L })
     let policies = ResizeArray<Policy>()
     let pairs = HashSet<struct(int*uint64)>()
     let lastAt = Dictionary<struct(int*uint64),float>()
-    let ages, gaps, readyTimes = Distribution(), Distribution(), Distribution()
+    let ages, gaps, readyTimes, downloadTimes = Distribution(), Distribution(), Distribution(), Distribution()
     let refusals = Dictionary<string,int>()
     let mutable active = false
+    let mutable measuring = false
+    let mutable warmupUploadBytes, warmupDownloadBytes = 0L, 0L
     let mutable started, duration = 0., 0.
     let mutable sentBytes, receivedBytes, uploadBytes, downloadBytes = 0L,0L,0L,0L
-    let mutable received, stale, offers = 0L,0L,0L
+    let mutable received, stale, offers, admissionDrops = 0L,0L,0L,0L
     let mutable verifiedDownloads = 0
     let mutable unfinishedAtStop = 0
     let mutable subscriptionsAtStop = 0
     let mutable subscriptionSeconds, subscriptionAt = 0., 0.
     let integrateSubscriptions () =
-        if active then
+        if measuring then
             let at = now()
             subscriptionSeconds <- subscriptionSeconds + float(peers |> Array.sumBy(fun p -> p.Offers.Count)) * max 0. (at-subscriptionAt)/1000.
             subscriptionAt <- at
+    let modelOutbox = Array.init ids.Length (fun _ -> Queue<byte array>())
+    let flushModels () =
+        for index in 0 .. peers.Length-1 do
+            let queue = modelOutbox[index]
+            let mutable available = true
+            while available && queue.Count > 0 do
+                if send index 3uy PacketDelivery.ReliableBulk (queue.Peek()) then queue.Dequeue() |> ignore
+                else available <- false
     let asset index (packet: ClientAssetPacket) =
         packet.ProtocolVersion <- Dreamsleeve.Server.Core.ProtocolCodec.Version
-        send index 3uy PacketDelivery.ReliableBulk (packet.ToByteArray())
+        // A reliable request waits behind the bounded transfer window when ENet
+        // is full; unreliable poses are dropped separately, never queued here.
+        if modelOutbox[index].Count >= 16 then fail "Reliable model outbox limit"; false
+        else modelOutbox[index].Enqueue(packet.ToByteArray()); true
     let finishDownload (peer: PeerState) =
         peer.Download |> Option.iter (fun item -> item.Hash.Dispose())
         peer.Download <- None; peer.DownloadPending <- false
     let refusal reason =
         refusals[reason] <- (match refusals.TryGetValue reason with true,n -> n | _ -> 0) + 1
     do
-        if config.Publishers < 1 || config.Publishers > ids.Length || config.Rate <= 0. || config.Rate > 20.
-           || config.PoseBytes <> 6144 || model.Length <> 13*1024*1024 then
-            invalidArg "config" "Require publishers1..N, rate(0,20], model13MiB/pose6KiB."
-    member _.Start() =
+        if config.Publishers < 1 || config.Publishers > allIds.Length || config.Rate <= 0. || config.Rate > 20.
+           || model.Length < 1 || model.Length > 64*1024*1024 || config.RawModelBytes < 1 || config.RawModelBytes > 128*1024*1024
+           || config.Channels < 1 || config.Channels > 4096 || config.Maximum < 1 || config.Maximum > 64
+           || poses.Length = 0 || poses |> Array.exists(fun pose -> pose.Length < 1 || pose.Length > 128*1024) then
+            invalidArg "config" "Require bounded native asset and complete compressed pose payload fixtures."
+    member _.ClientCacheWarm = config.ClientCacheWarm
+    member _.Prepared = (localPublishers |> Array.forall(fun index -> peers[index].Ready)) && (modelOutbox |> Array.forall(fun queue -> queue.Count = 0))
+    member _.Prepare() =
         started <- now(); subscriptionAt <- started; active <- true
         for index in 0 .. peers.Length-1 do
             peers[index].PublishDue <- started
-            asset index (ClientAssetPacket(Preferences=Preferences(Publish=(index<config.Publishers),Receive=true,Maximum=4u,Distance=4096.f))) |> ignore
+            asset index (ClientAssetPacket(Preferences=Preferences(Publish=publisher index,Receive=true,Maximum=uint32 config.Maximum,Distance=4096.f))) |> ignore
+    member this.Start() =
+        if not active then this.Prepare()
+        started <- now(); subscriptionAt <- started; measuring <- true
+        warmupUploadBytes <- uploadBytes; warmupDownloadBytes <- downloadBytes
+        uploadBytes <- 0L; downloadBytes <- 0L
+        for peer in peers do
+            if peer.Ready then peer.ReadyAt <- started; peer.Due <- started
     member _.Tick() =
+        flushModels()
         if active then
             let at = now()
             for index in 0 .. peers.Length-1 do
                 let peer = peers[index]
-                if index < config.Publishers && not peer.Ready && peer.Upload.IsNone && at >= peer.PublishDue then
+                if publisher index && not peer.Ready && peer.Upload.IsNone && at >= peer.PublishDue then
                     peer.PublishRequest <- peer.PublishRequest+1UL; peer.PublishDue <- Double.PositiveInfinity
                     asset index (ClientAssetPacket(Publish=Publish(Asset=descriptor,ContextRevision=1UL,RequestId=peer.PublishRequest))) |> ignore
                 match peer.Upload with
@@ -94,16 +123,18 @@ type Probe(config: Config, ids: uint64 array, now: unit -> float,
                     let source = peer.Offers.Keys |> Seq.head
                     peer.DownloadRequest <- peer.DownloadRequest+1UL; peer.DownloadPending <- true
                     asset index (ClientAssetPacket(Download=Download(PlayerId=source,Generation=1UL,RequestId=peer.DownloadRequest))) |> ignore
-                if peer.Ready && at>=peer.Due then
+                if measuring && peer.Ready && at>=peer.Due then
                     let interval = 1000./config.Rate
                     let missed = max 0L (int64 (floor ((at-peer.Due)/interval)))
                     peer.Missed <- peer.Missed+missed; peer.Due <- peer.Due+float(missed+1L)*interval
                     peer.Sequence <- peer.Sequence+1UL
                     let packet = ClientPosePacket(ProtocolVersion=Dreamsleeve.Server.Core.ProtocolCodec.Version,
-                        Sample=PoseSample(Generation=1UL,ContextRevision=1UL,Sequence=peer.Sequence,SampledAtUs=uint64(at*1000.)+1UL,Payload=pose))
+                        Sample=PoseSample(Generation=1UL,ContextRevision=1UL,Sequence=peer.Sequence,SampledAtUs=uint64(at*1000.)+1UL,Payload=poseFor peer.Sequence))
                     let bytes = packet.ToByteArray()
                     if send index 4uy PacketDelivery.SequencedFragmented bytes then
                         peer.Sent <- peer.Sent+1L; sentBytes <- sentBytes+int64 bytes.Length
+                    else admissionDrops <- admissionDrops+1L
+        flushModels()
     member _.Asset(index:int,packet:ServerAssetPacket) =
         let peer = peers[index]
         if packet.ProtocolVersion<>Dreamsleeve.Server.Core.ProtocolCodec.Version then fail "Asset protocol mismatch"
@@ -113,7 +144,7 @@ type Probe(config: Config, ids: uint64 array, now: unit -> float,
             let transfer = packet.Transfer
             if transfer.Asset<>descriptor || transfer.TransferId=0UL then fail "Transfer descriptor mismatch"
             if transfer.Upload then
-                if transfer.RequestId<>peer.PublishRequest || index>=config.Publishers then fail "Upload request correlation"
+                if transfer.RequestId<>peer.PublishRequest || not (publisher index) then fail "Upload request correlation"
                 peer.Upload <- Some { Id=transfer.TransferId; Sent=0; Acknowledged=0 }
             else
                 if transfer.RequestId<>peer.DownloadRequest || peer.Download.IsSome then fail "Download request correlation"
@@ -155,7 +186,9 @@ type Probe(config: Config, ids: uint64 array, now: unit -> float,
                     match peer.Download with
                     | Some download when download.Id=complete.TransferId && download.Offset=model.Length ->
                         if not(download.Hash.GetHashAndReset().AsSpan().SequenceEqual(hash.AsSpan())) then fail "Download SHA256 mismatch"
-                        else peer.Cached <- true; verifiedDownloads <- verifiedDownloads+1
+                        else
+                            peer.Cached <- true; verifiedDownloads <- verifiedDownloads+1
+                            downloadTimes.Add(now()-started)
                     | _ -> fail "Download accepted before complete verified bytes"
                 else refusal complete.Reason
                 finishDownload peer
@@ -176,8 +209,8 @@ type Probe(config: Config, ids: uint64 array, now: unit -> float,
     member _.Pose(index:int,packet:ServerPosePacket,bytes:int) =
         let peer = peers[index]
         if packet.ProtocolVersion<>Dreamsleeve.Server.Core.ProtocolCodec.Version || isNull packet.Sample
-           || packet.Sample.Generation<>1UL || packet.Sample.ContextRevision<>1UL || packet.Sample.Sequence=0UL || packet.Sample.Payload<>pose then fail "Invalid complete phantom pose"
-        elif active then
+           || packet.Sample.Generation<>1UL || packet.Sample.ContextRevision<>1UL || packet.Sample.Sequence=0UL || packet.Sample.Payload<>poseFor packet.Sample.Sequence then fail "Invalid complete phantom pose"
+        elif measuring then
             match peer.Offers.TryGetValue packet.PlayerId with
             | true,revision when revision=packet.ViewRevision ->
                 let previous = match peer.Seen.TryGetValue packet.PlayerId with true,value -> value | _ -> 0UL
@@ -195,30 +228,33 @@ type Probe(config: Config, ids: uint64 array, now: unit -> float,
     member _.Stop() =
         integrateSubscriptions()
         subscriptionsAtStop <- peers |> Array.sumBy(fun p -> p.Offers.Count)
-        duration <- now()-started; active <- false
+        duration <- now()-started; active <- false; measuring <- false
         unfinishedAtStop <- peers |> Array.filter(fun p -> p.DownloadPending) |> Array.length
         for index in 0 .. peers.Length-1 do
             let peer = peers[index]
             peer.Upload |> Option.iter(fun item -> asset index (ClientAssetPacket(Cancel=Cancel(TransferId=item.Id))) |> ignore)
             peer.Download |> Option.iter(fun item -> asset index (ClientAssetPacket(Cancel=Cancel(TransferId=item.Id))) |> ignore)
+        flushModels()
     member _.Report() =
-        let ready = peers |> Array.take config.Publishers |> Array.filter _.Ready
-        box {| publishers=config.Publishers; clients=ids.Length; modelBytes=model.Length; modelSha256=Convert.ToHexStringLower hash
-               rawManifestBytes=descriptor.RawBytes; channels=descriptor.Channels; geometry=descriptor.Geometry
-               poseBytes=config.PoseBytes; requestedHz=config.Rate; measuredMs=duration
-               readyPublishers=ready.Length; allPublishersReady=ready.Length=config.Publishers
-               verifiedModelDownloads=verifiedDownloads; allClientsDownloaded=verifiedDownloads=ids.Length
+        let ready = localPublishers |> Array.map(fun index -> peers[index]) |> Array.filter _.Ready
+        box {| publishers=localPublishers.Length; totalPublishers=config.Publishers; clients=ids.Length; totalClients=allIds.Length; modelBytes=model.Length; modelSha256=Convert.ToHexStringLower hash
+               rawManifestBytes=descriptor.RawBytes; channels=descriptor.Channels; assetFormatVersion=descriptor.FormatVersion
+               posePayloadBytes=poses |> Array.map _.Length; poseSha256=config.PosePaths |> Array.map(fun path -> Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes path)))
+               clientCacheWarm=config.ClientCacheWarm; maximumVisible=config.Maximum; requestedHz=config.Rate; measuredMs=duration
+               readyPublishers=ready.Length; allPublishersReady=ready.Length=localPublishers.Length
+               verifiedModelDownloads=verifiedDownloads; allClientsCached=peers |> Array.forall _.Cached
+               warmupUploadPayloadBytes=warmupUploadBytes; warmupDownloadPayloadBytes=warmupDownloadBytes
                uploadPayloadBytes=uploadBytes; downloadPayloadBytes=downloadBytes
                sentPoses=peers |> Array.sumBy _.Sent; sentEnvelopeBytes=sentBytes
                receivedPoses=received; receivedEnvelopeBytes=receivedBytes; staleViewPoses=stale
                distinctReceivedPairs=pairs.Count; currentSubscriptions=subscriptionsAtStop; activeSubscriptionSeconds=subscriptionSeconds
                receivedHzPerActiveSubscriptionSecond=float received/max 0.001 subscriptionSeconds
-               offers=offers; missedIntervals=peers |> Array.sumBy _.Missed
+               offers=offers; droppedAtPoseAdmission=admissionDrops; missedIntervals=peers |> Array.sumBy _.Missed
                sourceHzWhileReady=ready |> Array.map(fun p -> float p.Sent*1000./max 1. (started+duration-p.ReadyAt))
-               sourceHzOverWholeLoad=float(peers |> Array.sumBy _.Sent)*1000./max 1. duration/float config.Publishers
+               sourceHzOverWholeLoad=float(peers |> Array.sumBy _.Sent)*1000./max 1. duration/float(max 1 localPublishers.Length)
                receivedHzPerObservedPair=float received*1000./max 1. duration/float(max 1 pairs.Count)
-               readyMs=readyTimes.Summary(); deliveryAgeMs=ages.Summary(); receiveGapMs=gaps.Summary()
-               unfinishedDownloads=unfinishedAtStop
+               readyMs=readyTimes.Summary(); verifiedDownloadMs=downloadTimes.Summary(); deliveryAgeMs=ages.Summary(); receiveGapMs=gaps.Summary()
+               unfinishedDownloads=unfinishedAtStop; pendingModelCommands=modelOutbox |> Array.sumBy _.Count
                refusals=refusals; policyCount=policies.Count
                policies=policies |> Seq.map(fun p -> {| enabled=p.Enabled; sampleRate=p.SampleRate; windowChunks=p.WindowChunks
                                                         concurrentTransfers=p.ConcurrentTransfers; modelBytesPerSecond=p.ModelBytesPerSecond

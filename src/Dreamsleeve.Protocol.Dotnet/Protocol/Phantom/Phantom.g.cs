@@ -26,71 +26,71 @@ namespace Dreamsleeve.Protocol.Phantom {
           string.Concat(
             "Cg1waGFudG9tLnByb3RvEhxEcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9t",
             "IlIKC1ByZWZlcmVuY2VzEg8KB3B1Ymxpc2gYASABKAgSDwoHcmVjZWl2ZRgC",
-            "IAEoCBIPCgdtYXhpbXVtGAMgASgNEhAKCGRpc3RhbmNlGAQgASgCIpwBCg9B",
+            "IAEoCBIPCgdtYXhpbXVtGAMgASgNEhAKCGRpc3RhbmNlGAQgASgCIpoBCg9B",
             "c3NldERlc2NyaXB0b3ISDAoEaGFzaBgBIAEoDBISCgpnZW5lcmF0aW9uGAIg",
             "ASgEEhYKDmZvcm1hdF92ZXJzaW9uGAMgASgNEhgKEGNvbXByZXNzZWRfYnl0",
             "ZXMYBCABKA0SEQoJcmF3X2J5dGVzGAUgASgNEhAKCGNoYW5uZWxzGAYgASgN",
-            "EhAKCGdlb21ldHJ5GAcgASgNInUKB1B1Ymxpc2gSPAoFYXNzZXQYASABKAsy",
-            "LS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkFzc2V0RGVzY3JpcHRv",
-            "chIYChBjb250ZXh0X3JldmlzaW9uGAIgASgEEhIKCnJlcXVlc3RfaWQYAyAB",
-            "KAQiOgoFQ2h1bmsSEwoLdHJhbnNmZXJfaWQYASABKAQSDgoGb2Zmc2V0GAIg",
-            "ASgNEgwKBGRhdGEYAyABKAwiRQoIRG93bmxvYWQSEQoJcGxheWVyX2lkGAEg",
-            "ASgEEhIKCmdlbmVyYXRpb24YAiABKAQSEgoKcmVxdWVzdF9pZBgDIAEoBCId",
-            "CgZDYW5jZWwSEwoLdHJhbnNmZXJfaWQYASABKAQiNAoIUHJvZ3Jlc3MSEwoL",
-            "dHJhbnNmZXJfaWQYASABKAQSEwoLbmV4dF9vZmZzZXQYAiABKA0iCgoIV2l0",
-            "aGRyYXci1gMKEUNsaWVudEFzc2V0UGFja2V0EhgKEHByb3RvY29sX3ZlcnNp",
-            "b24YASABKA0SQAoLcHJlZmVyZW5jZXMYAiABKAsyKS5EcmVhbXNsZWV2ZS5Q",
-            "cm90b2NvbC5QaGFudG9tLlByZWZlcmVuY2VzSAASOAoHcHVibGlzaBgDIAEo",
-            "CzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUHVibGlzaEgAEjQK",
-            "BWNodW5rGAQgASgLMiMuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5D",
-            "aHVua0gAEjoKCGRvd25sb2FkGAUgASgLMiYuRHJlYW1zbGVldmUuUHJvdG9j",
-            "b2wuUGhhbnRvbS5Eb3dubG9hZEgAEjYKBmNhbmNlbBgGIAEoCzIkLkRyZWFt",
-            "c2xlZXZlLlByb3RvY29sLlBoYW50b20uQ2FuY2VsSAASOgoId2l0aGRyYXcY",
-            "ByABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLldpdGhkcmF3",
-            "SAASOgoIcHJvZ3Jlc3MYCCABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5Q",
-            "aGFudG9tLlByb2dyZXNzSABCCQoHcGF5bG9hZCJvCgVPZmZlchIRCglwbGF5",
-            "ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEoBBI8CgVhc3NldBgD",
-            "IAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQXNzZXREZXNj",
-            "cmlwdG9yIpQBCghUcmFuc2ZlchITCgt0cmFuc2Zlcl9pZBgBIAEoBBI8CgVh",
-            "c3NldBgCIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQXNz",
-            "ZXREZXNjcmlwdG9yEhEKCXBsYXllcl9pZBgDIAEoBBIOCgZ1cGxvYWQYBCAB",
-            "KAgSEgoKcmVxdWVzdF9pZBgFIAEoBCKkAQoIQ29tcGxldGUSEwoLdHJhbnNm",
-            "ZXJfaWQYASABKAQSEAoIYWNjZXB0ZWQYAiABKAgSDgoGcmVhc29uGAMgASgJ",
-            "EhEKCXBsYXllcl9pZBgEIAEoBBISCgpnZW5lcmF0aW9uGAUgASgEEhYKDnJl",
-            "dHJ5X2FmdGVyX21zGAYgASgNEg4KBnVwbG9hZBgHIAEoCBISCgpyZXF1ZXN0",
-            "X2lkGAggASgEIjIKBlJlbW92ZRIRCglwbGF5ZXJfaWQYASABKAQSFQoNdmll",
-            "d19yZXZpc2lvbhgCIAEoBCLdAgoGUG9saWN5Eg8KB2VuYWJsZWQYASABKAgS",
-            "FwoPcmF3X2Fzc2V0X2J5dGVzGAIgASgNEh4KFmNvbXByZXNzZWRfYXNzZXRf",
-            "Ynl0ZXMYAyABKA0SEAoIY2hhbm5lbHMYBCABKA0SEAoIZ2VvbWV0cnkYBSAB",
-            "KA0SEgoKcG9zZV9ieXRlcxgGIAEoDRIdChVjb21wcmVzc2VkX3Bvc2VfYnl0",
-            "ZXMYByABKA0SEwoLc2FtcGxlX3JhdGUYCCABKA0SFwoPbWF4aW11bV92aXNp",
-            "YmxlGAkgASgNEhAKCGRpc3RhbmNlGAogASgCEhUKDXdpbmRvd19jaHVua3MY",
-            "CyABKA0SHAoUY29uY3VycmVudF90cmFuc2ZlcnMYDCABKA0SHgoWbW9kZWxf",
-            "Ynl0ZXNfcGVyX3NlY29uZBgNIAEoDRIdChVwb3NlX2J5dGVzX3Blcl9zZWNv",
-            "bmQYDiABKA0iyAMKEVNlcnZlckFzc2V0UGFja2V0EhgKEHByb3RvY29sX3Zl",
-            "cnNpb24YASABKA0SNAoFb2ZmZXIYAiABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90",
-            "b2NvbC5QaGFudG9tLk9mZmVySAASOgoIdHJhbnNmZXIYAyABKAsyJi5EcmVh",
-            "bXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlRyYW5zZmVySAASNAoFY2h1bmsY",
-            "BCABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkNodW5rSAAS",
-            "OgoIY29tcGxldGUYBSABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFu",
-            "dG9tLkNvbXBsZXRlSAASNgoGcmVtb3ZlGAYgASgLMiQuRHJlYW1zbGVldmUu",
-            "UHJvdG9jb2wuUGhhbnRvbS5SZW1vdmVIABI6Cghwcm9ncmVzcxgHIAEoCzIm",
-            "LkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUHJvZ3Jlc3NIABI2CgZw",
-            "b2xpY3kYCCABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlBv",
-            "bGljeUgAQgkKB3BheWxvYWQidAoKUG9zZVNhbXBsZRISCgpnZW5lcmF0aW9u",
-            "GAEgASgEEhgKEGNvbnRleHRfcmV2aXNpb24YAiABKAQSEAoIc2VxdWVuY2UY",
-            "AyABKAQSFQoNc2FtcGxlZF9hdF91cxgEIAEoBBIPCgdwYXlsb2FkGAUgASgM",
-            "ImYKEENsaWVudFBvc2VQYWNrZXQSGAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEo",
-            "DRI4CgZzYW1wbGUYAiABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFu",
-            "dG9tLlBvc2VTYW1wbGUikAEKEFNlcnZlclBvc2VQYWNrZXQSGAoQcHJvdG9j",
-            "b2xfdmVyc2lvbhgBIAEoDRIRCglwbGF5ZXJfaWQYAiABKAQSFQoNdmlld19y",
-            "ZXZpc2lvbhgDIAEoBBI4CgZzYW1wbGUYBCABKAsyKC5EcmVhbXNsZWV2ZS5Q",
-            "cm90b2NvbC5QaGFudG9tLlBvc2VTYW1wbGViBnByb3RvMw=="));
+            "SgQIBxAIUghnZW9tZXRyeSJ1CgdQdWJsaXNoEjwKBWFzc2V0GAEgASgLMi0u",
+            "RHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Bc3NldERlc2NyaXB0b3IS",
+            "GAoQY29udGV4dF9yZXZpc2lvbhgCIAEoBBISCgpyZXF1ZXN0X2lkGAMgASgE",
+            "IjoKBUNodW5rEhMKC3RyYW5zZmVyX2lkGAEgASgEEg4KBm9mZnNldBgCIAEo",
+            "DRIMCgRkYXRhGAMgASgMIkUKCERvd25sb2FkEhEKCXBsYXllcl9pZBgBIAEo",
+            "BBISCgpnZW5lcmF0aW9uGAIgASgEEhIKCnJlcXVlc3RfaWQYAyABKAQiHQoG",
+            "Q2FuY2VsEhMKC3RyYW5zZmVyX2lkGAEgASgEIjQKCFByb2dyZXNzEhMKC3Ry",
+            "YW5zZmVyX2lkGAEgASgEEhMKC25leHRfb2Zmc2V0GAIgASgNIgoKCFdpdGhk",
+            "cmF3ItYDChFDbGllbnRBc3NldFBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9u",
+            "GAEgASgNEkAKC3ByZWZlcmVuY2VzGAIgASgLMikuRHJlYW1zbGVldmUuUHJv",
+            "dG9jb2wuUGhhbnRvbS5QcmVmZXJlbmNlc0gAEjgKB3B1Ymxpc2gYAyABKAsy",
+            "JS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlB1Ymxpc2hIABI0CgVj",
+            "aHVuaxgEIAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQ2h1",
+            "bmtIABI6Cghkb3dubG9hZBgFIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29s",
+            "LlBoYW50b20uRG93bmxvYWRIABI2CgZjYW5jZWwYBiABKAsyJC5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkNhbmNlbEgAEjoKCHdpdGhkcmF3GAcg",
+            "ASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5XaXRoZHJhd0gA",
+            "EjoKCHByb2dyZXNzGAggASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhh",
+            "bnRvbS5Qcm9ncmVzc0gAQgkKB3BheWxvYWQibwoFT2ZmZXISEQoJcGxheWVy",
+            "X2lkGAEgASgEEhUKDXZpZXdfcmV2aXNpb24YAiABKAQSPAoFYXNzZXQYAyAB",
+            "KAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkFzc2V0RGVzY3Jp",
+            "cHRvciKUAQoIVHJhbnNmZXISEwoLdHJhbnNmZXJfaWQYASABKAQSPAoFYXNz",
+            "ZXQYAiABKAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkFzc2V0",
+            "RGVzY3JpcHRvchIRCglwbGF5ZXJfaWQYAyABKAQSDgoGdXBsb2FkGAQgASgI",
+            "EhIKCnJlcXVlc3RfaWQYBSABKAQipAEKCENvbXBsZXRlEhMKC3RyYW5zZmVy",
+            "X2lkGAEgASgEEhAKCGFjY2VwdGVkGAIgASgIEg4KBnJlYXNvbhgDIAEoCRIR",
+            "CglwbGF5ZXJfaWQYBCABKAQSEgoKZ2VuZXJhdGlvbhgFIAEoBBIWCg5yZXRy",
+            "eV9hZnRlcl9tcxgGIAEoDRIOCgZ1cGxvYWQYByABKAgSEgoKcmVxdWVzdF9p",
+            "ZBgIIAEoBCIyCgZSZW1vdmUSEQoJcGxheWVyX2lkGAEgASgEEhUKDXZpZXdf",
+            "cmV2aXNpb24YAiABKAQi2wIKBlBvbGljeRIPCgdlbmFibGVkGAEgASgIEhcK",
+            "D3Jhd19hc3NldF9ieXRlcxgCIAEoDRIeChZjb21wcmVzc2VkX2Fzc2V0X2J5",
+            "dGVzGAMgASgNEhAKCGNoYW5uZWxzGAQgASgNEhIKCnBvc2VfYnl0ZXMYBiAB",
+            "KA0SHQoVY29tcHJlc3NlZF9wb3NlX2J5dGVzGAcgASgNEhMKC3NhbXBsZV9y",
+            "YXRlGAggASgNEhcKD21heGltdW1fdmlzaWJsZRgJIAEoDRIQCghkaXN0YW5j",
+            "ZRgKIAEoAhIVCg13aW5kb3dfY2h1bmtzGAsgASgNEhwKFGNvbmN1cnJlbnRf",
+            "dHJhbnNmZXJzGAwgASgNEh4KFm1vZGVsX2J5dGVzX3Blcl9zZWNvbmQYDSAB",
+            "KA0SHQoVcG9zZV9ieXRlc19wZXJfc2Vjb25kGA4gASgNSgQIBRAGUghnZW9t",
+            "ZXRyeSLIAwoRU2VydmVyQXNzZXRQYWNrZXQSGAoQcHJvdG9jb2xfdmVyc2lv",
+            "bhgBIAEoDRI0CgVvZmZlchgCIAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29s",
+            "LlBoYW50b20uT2ZmZXJIABI6Cgh0cmFuc2ZlchgDIAEoCzImLkRyZWFtc2xl",
+            "ZXZlLlByb3RvY29sLlBoYW50b20uVHJhbnNmZXJIABI0CgVjaHVuaxgEIAEo",
+            "CzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQ2h1bmtIABI6Cghj",
+            "b21wbGV0ZRgFIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20u",
+            "Q29tcGxldGVIABI2CgZyZW1vdmUYBiABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90",
+            "b2NvbC5QaGFudG9tLlJlbW92ZUgAEjoKCHByb2dyZXNzGAcgASgLMiYuRHJl",
+            "YW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Qcm9ncmVzc0gAEjYKBnBvbGlj",
+            "eRgIIAEoCzIkLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9saWN5",
+            "SABCCQoHcGF5bG9hZCJ0CgpQb3NlU2FtcGxlEhIKCmdlbmVyYXRpb24YASAB",
+            "KAQSGAoQY29udGV4dF9yZXZpc2lvbhgCIAEoBBIQCghzZXF1ZW5jZRgDIAEo",
+            "BBIVCg1zYW1wbGVkX2F0X3VzGAQgASgEEg8KB3BheWxvYWQYBSABKAwiZgoQ",
+            "Q2xpZW50UG9zZVBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEjgK",
+            "BnNhbXBsZRgCIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20u",
+            "UG9zZVNhbXBsZSKQAQoQU2VydmVyUG9zZVBhY2tldBIYChBwcm90b2NvbF92",
+            "ZXJzaW9uGAEgASgNEhEKCXBsYXllcl9pZBgCIAEoBBIVCg12aWV3X3Jldmlz",
+            "aW9uGAMgASgEEjgKBnNhbXBsZRgEIAEoCzIoLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLlBoYW50b20uUG9zZVNhbXBsZWIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Preferences), global::Dreamsleeve.Protocol.Phantom.Preferences.Parser, new[]{ "Publish", "Receive", "Maximum", "Distance" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.AssetDescriptor), global::Dreamsleeve.Protocol.Phantom.AssetDescriptor.Parser, new[]{ "Hash", "Generation", "FormatVersion", "CompressedBytes", "RawBytes", "Channels", "Geometry" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.AssetDescriptor), global::Dreamsleeve.Protocol.Phantom.AssetDescriptor.Parser, new[]{ "Hash", "Generation", "FormatVersion", "CompressedBytes", "RawBytes", "Channels" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Publish), global::Dreamsleeve.Protocol.Phantom.Publish.Parser, new[]{ "Asset", "ContextRevision", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Chunk), global::Dreamsleeve.Protocol.Phantom.Chunk.Parser, new[]{ "TransferId", "Offset", "Data" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Download), global::Dreamsleeve.Protocol.Phantom.Download.Parser, new[]{ "PlayerId", "Generation", "RequestId" }, null, null, null, null),
@@ -102,7 +102,7 @@ namespace Dreamsleeve.Protocol.Phantom {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Transfer), global::Dreamsleeve.Protocol.Phantom.Transfer.Parser, new[]{ "TransferId", "Asset", "PlayerId", "Upload", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Complete), global::Dreamsleeve.Protocol.Phantom.Complete.Parser, new[]{ "TransferId", "Accepted", "Reason", "PlayerId", "Generation", "RetryAfterMs", "Upload", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Remove), global::Dreamsleeve.Protocol.Phantom.Remove.Parser, new[]{ "PlayerId", "ViewRevision" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Policy), global::Dreamsleeve.Protocol.Phantom.Policy.Parser, new[]{ "Enabled", "RawAssetBytes", "CompressedAssetBytes", "Channels", "Geometry", "PoseBytes", "CompressedPoseBytes", "SampleRate", "MaximumVisible", "Distance", "WindowChunks", "ConcurrentTransfers", "ModelBytesPerSecond", "PoseBytesPerSecond" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Policy), global::Dreamsleeve.Protocol.Phantom.Policy.Parser, new[]{ "Enabled", "RawAssetBytes", "CompressedAssetBytes", "Channels", "PoseBytes", "CompressedPoseBytes", "SampleRate", "MaximumVisible", "Distance", "WindowChunks", "ConcurrentTransfers", "ModelBytesPerSecond", "PoseBytesPerSecond" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket), global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser, new[]{ "ProtocolVersion", "Offer", "Transfer", "Chunk", "Complete", "Remove", "Progress", "Policy" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.PoseSample), global::Dreamsleeve.Protocol.Phantom.PoseSample.Parser, new[]{ "Generation", "ContextRevision", "Sequence", "SampledAtUs", "Payload" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientPosePacket), global::Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser, new[]{ "ProtocolVersion", "Sample" }, null, null, null, null),
@@ -466,7 +466,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       compressedBytes_ = other.compressedBytes_;
       rawBytes_ = other.rawBytes_;
       channels_ = other.channels_;
-      geometry_ = other.geometry_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -548,18 +547,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
-    /// <summary>Field number for the "geometry" field.</summary>
-    public const int GeometryFieldNumber = 7;
-    private uint geometry_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint Geometry {
-      get { return geometry_; }
-      set {
-        geometry_ = value;
-      }
-    }
-
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -581,7 +568,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (CompressedBytes != other.CompressedBytes) return false;
       if (RawBytes != other.RawBytes) return false;
       if (Channels != other.Channels) return false;
-      if (Geometry != other.Geometry) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -595,7 +581,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (CompressedBytes != 0) hash ^= CompressedBytes.GetHashCode();
       if (RawBytes != 0) hash ^= RawBytes.GetHashCode();
       if (Channels != 0) hash ^= Channels.GetHashCode();
-      if (Geometry != 0) hash ^= Geometry.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -638,10 +623,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(48);
         output.WriteUInt32(Channels);
       }
-      if (Geometry != 0) {
-        output.WriteRawTag(56);
-        output.WriteUInt32(Geometry);
-      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -676,10 +657,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(48);
         output.WriteUInt32(Channels);
       }
-      if (Geometry != 0) {
-        output.WriteRawTag(56);
-        output.WriteUInt32(Geometry);
-      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -707,9 +684,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (Channels != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Channels);
-      }
-      if (Geometry != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Geometry);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -740,9 +714,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (other.Channels != 0) {
         Channels = other.Channels;
-      }
-      if (other.Geometry != 0) {
-        Geometry = other.Geometry;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -787,10 +758,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Channels = input.ReadUInt32();
             break;
           }
-          case 56: {
-            Geometry = input.ReadUInt32();
-            break;
-          }
         }
       }
     #endif
@@ -832,10 +799,6 @@ namespace Dreamsleeve.Protocol.Phantom {
           }
           case 48: {
             Channels = input.ReadUInt32();
-            break;
-          }
-          case 56: {
-            Geometry = input.ReadUInt32();
             break;
           }
         }
@@ -4230,7 +4193,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       rawAssetBytes_ = other.rawAssetBytes_;
       compressedAssetBytes_ = other.compressedAssetBytes_;
       channels_ = other.channels_;
-      geometry_ = other.geometry_;
       poseBytes_ = other.poseBytes_;
       compressedPoseBytes_ = other.compressedPoseBytes_;
       sampleRate_ = other.sampleRate_;
@@ -4294,18 +4256,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       get { return channels_; }
       set {
         channels_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "geometry" field.</summary>
-    public const int GeometryFieldNumber = 5;
-    private uint geometry_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint Geometry {
-      get { return geometry_; }
-      set {
-        geometry_ = value;
       }
     }
 
@@ -4436,7 +4386,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (RawAssetBytes != other.RawAssetBytes) return false;
       if (CompressedAssetBytes != other.CompressedAssetBytes) return false;
       if (Channels != other.Channels) return false;
-      if (Geometry != other.Geometry) return false;
       if (PoseBytes != other.PoseBytes) return false;
       if (CompressedPoseBytes != other.CompressedPoseBytes) return false;
       if (SampleRate != other.SampleRate) return false;
@@ -4457,7 +4406,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (RawAssetBytes != 0) hash ^= RawAssetBytes.GetHashCode();
       if (CompressedAssetBytes != 0) hash ^= CompressedAssetBytes.GetHashCode();
       if (Channels != 0) hash ^= Channels.GetHashCode();
-      if (Geometry != 0) hash ^= Geometry.GetHashCode();
       if (PoseBytes != 0) hash ^= PoseBytes.GetHashCode();
       if (CompressedPoseBytes != 0) hash ^= CompressedPoseBytes.GetHashCode();
       if (SampleRate != 0) hash ^= SampleRate.GetHashCode();
@@ -4500,10 +4448,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (Channels != 0) {
         output.WriteRawTag(32);
         output.WriteUInt32(Channels);
-      }
-      if (Geometry != 0) {
-        output.WriteRawTag(40);
-        output.WriteUInt32(Geometry);
       }
       if (PoseBytes != 0) {
         output.WriteRawTag(48);
@@ -4567,10 +4511,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(32);
         output.WriteUInt32(Channels);
       }
-      if (Geometry != 0) {
-        output.WriteRawTag(40);
-        output.WriteUInt32(Geometry);
-      }
       if (PoseBytes != 0) {
         output.WriteRawTag(48);
         output.WriteUInt32(PoseBytes);
@@ -4629,9 +4569,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (Channels != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Channels);
       }
-      if (Geometry != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Geometry);
-      }
       if (PoseBytes != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(PoseBytes);
       }
@@ -4682,9 +4619,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (other.Channels != 0) {
         Channels = other.Channels;
-      }
-      if (other.Geometry != 0) {
-        Geometry = other.Geometry;
       }
       if (other.PoseBytes != 0) {
         PoseBytes = other.PoseBytes;
@@ -4746,10 +4680,6 @@ namespace Dreamsleeve.Protocol.Phantom {
           }
           case 32: {
             Channels = input.ReadUInt32();
-            break;
-          }
-          case 40: {
-            Geometry = input.ReadUInt32();
             break;
           }
           case 48: {
@@ -4821,10 +4751,6 @@ namespace Dreamsleeve.Protocol.Phantom {
           }
           case 32: {
             Channels = input.ReadUInt32();
-            break;
-          }
-          case 40: {
-            Geometry = input.ReadUInt32();
             break;
           }
           case 48: {

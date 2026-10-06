@@ -1,3 +1,26 @@
+# Актуальные изменения07.10.2026
+
+Текущая карта владельцев и инвариантов — [PhantomsRu.md](PhantomsRu.md).
+Из старой реализации переиспользованы Exchange/Worker/Streaming, AOI, request
+correlation, epoch и ACK pacing, UI/privacy и lane delivery policy.
+Удалены PhantomAsset/Graphics/Mesh/VertexStream/Recovery, Masks и neutral
+geometry/skin/material schema. Нативные Capture/Scene больше не обновляют GPU
+буферы самостоятельно. Server больше не имеет geometry cap или поля manifest.
+
+Исправлено: pending Publish сохраняет Ready/Latest; replacement Offer не
+уничтожает текущую сцену; commit нового поколения сбрасывает pose sequence;
+one publisher с ready+pending учитывается один раз в MaxSources.
+
+Проблема вне игрового объёма: Sandbox изолированного процесса не даёт тесту Credential Manager
+сохранить временный credential; требуется обычный разрешённый запуск теста.
+Managed FS3511 в старом task-тесте Presence исправлен минимальным переносом
+рекурсивного helper в обычную функцию; поведение теста сохранено.
+
+Записи ниже — история codex/phantom-replication. P-06 geometry cap и P-07
+neutral factories больше не описывают актуальную архитектуру.
+
+---
+
 # Фантомы: наблюдения о существующем коде
 
 Журнал сессии полной реализации, ветка `codex/phantom-replication`.

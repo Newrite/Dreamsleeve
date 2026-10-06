@@ -105,7 +105,7 @@ Realtime при насыщении может быть пропущен. Reliabl
 [NetworkBenchmarks](../tests/Dreamsleeve.Server.NetworkBenchmarks/README.md#movement-benchmark).
 
 
-## Дополнительное представление: фантомы (protocol 21)
+## Дополнительное представление: фантомы (protocol 22)
 
 Фантомы используют уже принятые Presence views и расстояния. PhantomAgent
 получает узкую проекцию авторитетных изменений Presence; собственной
@@ -117,7 +117,7 @@ View revision отзывает подписку и незавершённую п
 
 Models=3 переносит reliable блоки внешности с коррелированными RequestId;
 Poses=4 — sequenced UNRELIABLE_FRAGMENT целых независимых снимков, включая
-bounds и dynamic deformation. ENet отбрасывает неполный снимок. Empty reliable
+transforms/visibility и текущие bounds. ENet отбрасывает неполный снимок. Empty reliable
 marker при переполнении unreliable sequence потребляется владельцем транспорта
 до codec и не означает reliable доставку поз. Movement Realtime=2 не изменён.
 

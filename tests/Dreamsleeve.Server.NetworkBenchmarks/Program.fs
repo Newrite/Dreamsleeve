@@ -1,4 +1,4 @@
-﻿// Benchmark process only. One owner services independent peers across explicitly configured UDP sockets.
+// Benchmark process only. One owner services independent peers across explicitly configured UDP sockets.
 #nowarn "104"
 module Dreamsleeve.Server.NetworkBenchmarks.Program
 
@@ -85,6 +85,9 @@ type private State = {
     mutable DrainMs: float
     mutable BackpressuredMs: float
     mutable MaxInflight: int
+    SentApplicationBytes: int64 array
+    ReceivedApplicationBytes: int64 array
+    mutable LoadTraffic: obj option
 }
 
 let private now state = state.Clock.Elapsed.TotalMilliseconds
@@ -126,7 +129,7 @@ let private fail state message =
 
 let private sendBytes state client channel reliable (bytes: byte array) =
     match OutgoingPackets.TrySend(client.Peer, ReadOnlySpan<byte>(bytes), state.Budget, client.Budget, channel, (if reliable then PacketDelivery.Reliable else PacketDelivery.Sequenced)) with
-    | PacketSendResult.Sent -> true
+    | PacketSendResult.Sent -> state.SentApplicationBytes[int channel] <- state.SentApplicationBytes[int channel] + int64 bytes.Length; true
     | failure ->
         fail state (sprintf "Client %d packet admission failed: %A" client.Index failure)
         false
@@ -205,6 +208,7 @@ let private published state client (packet: ServerPacket) =
 
 let private received state client (event: EnetEvent) =
     use packet = event.Packet
+    state.ReceivedApplicationBytes[int event.ChannelId] <- state.ReceivedApplicationBytes[int event.ChannelId] + int64 packet.DataLength
     if event.ChannelId = 2uy && packet.Flags = Unchecked.defaultof<EnetPacketFlag> then
         let response = ServerMovementPacket.Parser.ParseFrom(packet.AsSpan().ToArray())
         if response.ProtocolVersion <> protocolVersion then fail state "Unexpected movement protocol version"
@@ -496,10 +500,26 @@ let private movementLoad state =
         if not ready then fail state "Initial position baselines did not converge before load"
         else state.Group.All("positions-ready", true, barrierPump state) |> ignore
 
+    match state.Phantom with
+    | Some phantom when phantom.ClientCacheWarm && state.ErrorCount = 0 ->
+        stage "phantom-setup"
+        phantom.Prepare()
+        let deadline = now state + 30000.
+        while not phantom.Prepared && state.ErrorCount = 0 && now state < deadline do
+            phantom.Tick()
+            pump state
+        if not phantom.Prepared then fail state "Phantom publications did not settle before steady load"
+        else
+            state.Group.All("phantoms-ready", true, fun () -> phantom.Tick(); barrierPump state ()) |> ignore
+            serviceFor state 500.
+    | _ -> ()
     stage "armed"
     let started = state.Group.Start(barrierPump state)
     while Coordination.now() < started do pump state
     stage "load"
+    let hostBefore = state.Hosts |> Array.map(fun host -> host.TotalSentData, host.TotalReceivedData, host.TotalSentPackets, host.TotalReceivedPackets)
+    let sentBefore = Array.copy state.SentApplicationBytes
+    let receivedBefore = Array.copy state.ReceivedApplicationBytes
     probe.Start(started)
     state.Phantom |> Option.iter _.Start()
     let mutable chatDue = now state
@@ -508,10 +528,21 @@ let private movementLoad state =
         probe.SendDue()
         state.Phantom |> Option.iter(fun phantom ->
             phantom.Tick()
-            if now state >= chatDue then
+            if state.Group.Workers = 1 && now state >= chatDue then
                 if sendChat state then chatDue <- chatDue + 100.)
         pump state
         probe.RecordIteration(Coordination.now() - iterationStarted)
+    let difference (before: uint32) (after: uint32) = (uint64 after + 0x100000000UL - uint64 before) % 0x100000000UL
+    let totals = Array.map2 (fun (sent, received, sentPackets, receivedPackets) (host: EnetHost) ->
+        difference sent host.TotalSentData, difference received host.TotalReceivedData,
+        difference sentPackets host.TotalSentPackets, difference receivedPackets host.TotalReceivedPackets) hostBefore state.Hosts
+    state.LoadTraffic <- Some(box {|
+        enetSentBytes = totals |> Array.sumBy(fun (x,_,_,_) -> x)
+        enetReceivedBytes = totals |> Array.sumBy(fun (_,x,_,_) -> x)
+        udpSentPackets = totals |> Array.sumBy(fun (_,_,x,_) -> x)
+        udpReceivedPackets = totals |> Array.sumBy(fun (_,_,_,x) -> x)
+        sentApplicationBytesByLane = Array.map2 (-) state.SentApplicationBytes sentBefore
+        receivedApplicationBytesByLane = Array.map2 (-) state.ReceivedApplicationBytes receivedBefore |})
     probe.Stop()
     state.Phantom |> Option.iter _.Stop()
     state.LoadMs <- Coordination.now() - started
@@ -567,6 +598,7 @@ let private report state =
     let result = {|
         success = state.ErrorCount = 0 && state.PresenceConverged && state.ReadyCount = state.Clients.Length
                   && state.Completed = state.Messages.Count && state.Received = int64 state.Messages.Count * int64 state.Clients.Length
+        transportDuringLoad = state.LoadTraffic |> Option.toObj
         phantom = state.Phantom |> Option.map _.Report() |> Option.toObj
         movement = state.Movement |> Option.map (fun probe -> probe.Report(state.LoadMs)) |> Option.toObj
         clients = state.Clients.Length; ready = state.ReadyCount; presenceConverged = state.PresenceConverged; seconds = state.Options.Seconds; requestedRate = state.Options.Rate
@@ -641,6 +673,7 @@ let private run (options: Options) =
             Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics()); Movement = None; Phantom = None; Options = options; Hosts = hosts.ToArray(); Authentication = authentication
             RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
             Clock = Stopwatch.StartNew(); Prefix = prefix
+            SentApplicationBytes = Array.zeroCreate 5; ReceivedApplicationBytes = Array.zeroCreate 5; LoadTraffic = None
             Clients = Array.init options.Clients (fun index -> {
                 Index = index; HostIndex = index % options.Hosts; AccountId = accounts[index]; SessionTicket = ""; Peer = Unchecked.defaultof<EnetPeer>; Budget = PacketBudget(16, 1024L * 1024L)
                 StartedMs = 0.; ConnectedMs = 0.; ReadyMs = 0.; Ready = false; Closed = false
@@ -652,12 +685,12 @@ let private run (options: Options) =
         }
         match PhantomProbe.configuration() with
         | Some config ->
-            if state.Group.Workers <> 1 then invalidOp "Combined phantom/chat workload requires one owner process"
-            state.Phantom <- Some(new PhantomProbe.Probe(config, state.AllPlayerIds, Coordination.now,
+            state.Phantom <- Some(new PhantomProbe.Probe(config, state.AllPlayerIds, state.Group.Index, state.Group.Workers, state.Clients.Length, Coordination.now,
                 (fun index lane delivery bytes ->
                     match OutgoingPackets.TrySend(state.Clients[index].Peer, ReadOnlySpan<byte>(bytes), state.Budget, state.Clients[index].Budget, lane, delivery) with
-                    | PacketSendResult.Sent -> true
-                    | result -> fail state (sprintf "Phantom packet admission: %A" result); false), fail state))
+                    | PacketSendResult.Sent -> state.SentApplicationBytes[int lane] <- state.SentApplicationBytes[int lane] + int64 bytes.Length; true
+                    | PacketSendResult.BudgetExceeded -> false
+                    | result -> fail state (sprintf "Phantom packet admission lane%d: %A" lane result); false), fail state))
         | None -> ()
         try
             ramp state

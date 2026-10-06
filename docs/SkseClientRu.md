@@ -743,21 +743,25 @@ host берёт положение и дату из `World::Spot()` (порт `n
 | Размер имени над меткой | `groundFontSize` (общий с текстом), не `fireflyNameFontSize` |
 
 
-## Живые фантомы (protocol 21)
+## Живые фантомы (protocol 22)
 
-Полный контракт, настройки и границы подтверждения описаны в [PhantomsRu](PhantomsRu.md).
-`Runtime` владеет `ClientExchange.phantoms`; Core streaming/worker работают с
-нейтральными проверенными данными. Игровой адаптер не содержит второго ENet
-host. `Hooks` устанавливает PlayerCharacter::Update после оригинального вызова
-и передаёт доверенные фабрики и SetMaterial в `Game/PhantomGraphics`. Все
-runtime IDs/offsets остаются в Hooks. `Game/PhantomCapture` читает актуальное
-третьеличное дерево даже при первом лице; `Game/PhantomScene` строит скрытую
-сцену ограниченными шагами; `Game/Phantoms` владеет lifecycle и общим бюджетом
-кадра. Ни Actor, ни постоянный reference для фантома не создаются.
+Контракт и границы подтверждения: [PhantomsRu](PhantomsRu.md).
+Runtime владеет ClientExchange.phantoms; Core streaming/worker работают с
+отделёнными NIF bytes и позами. Игровой адаптер использует существующий ENet
+owner. Hooks вызывает кадр после Main::Update и предоставляет узкие операции
+NiStream Save/Load, alpha factory и нормализацию cloned flattened bone arrays.
+Все собственные runtime IDs/offsets/ABI adapters находятся в Hooks.
 
-`Host/PhantomSettings` — единственный перевод ui.toml в настройки Core.
-`Game/PlayerLabels` общая логика подписи фантома/светлячка, а
-`Host::Session::HidesPlayerRepresentation` — единая privacy/ignore/guild policy.
-Рабочая модель переключается атомарно; fallback светлячка не дублирует готовую
-сцену. Load, смена CELL/WRLD, disconnect и quit очищают сцены и readback caches.
-Geometry/poses не проходят через PrismaUI bridge.
+Game/PhantomCapture читает третьеличное дерево даже при первом лице.
+PhantomNative подготавливает clone; PhantomScene загружает проверенный NIF и
+применяет transforms/bounds к native nodes. Один NiStream Load за frame build
+turn; сама native операция атомарна и остаётся на игровом потоке. Phantoms
+владеет lifecycle текущей/ожидающей сцены и общим бюджетом кадра. Local replay
+использует тот же Scene. CPU skinning и собственных GPU buffers нет.
+
+Host/PhantomSettings переводит ui.toml в настройки Core. Game/PlayerLabels —
+общая подпись фантома/светлячка; Session::HidesPlayerRepresentation — единая
+privacy/ignore/guild policy. Готовая модель переключается атомарно; fallback
+не дублирует сцену. Load, смена WRLD/внутренней CELL, disconnect и quit очищают
+native ресурсы. Соседняя наружная CELL одного WRLD не меняет контекст.
+Asset/poses не проходят через PrismaUI bridge. Actor/reference не создаётся.

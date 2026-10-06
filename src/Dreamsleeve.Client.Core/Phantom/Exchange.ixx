@@ -75,7 +75,6 @@ private:
     std::unordered_map<std::uint64_t, Remote>            remotes;
     Metrics                                              metrics;
     std::uint64_t                                        localReservation{};
-    std::uint64_t                                        graphicsReservation{};
 
     void ClearPublication()
     {
@@ -100,7 +99,7 @@ private:
 
     std::uint64_t Reserved(std::uint64_t except = 0) const
     {
-      std::uint64_t bytes = localReservation + graphicsReservation;
+      std::uint64_t bytes = localReservation;
       for (const auto& [id, remote] : remotes)
         if (id != except) bytes += Reservation(remote.descriptor) + remote.sceneBytes;
       return bytes;
@@ -119,9 +118,7 @@ public:
     void Configure(ViewSettings value)
     {
       std::lock_guard lock(mutex);
-      if (
-        settings.publish != value.publish ||
-        (value.memoryBytes < settings.memoryBytes && localReservation + graphicsReservation > value.memoryBytes))
+      if (settings.publish != value.publish || (value.memoryBytes < settings.memoryBytes && localReservation > value.memoryBytes))
         ClearPublication();
       settings           = value;
       changed            = true;
@@ -180,7 +177,7 @@ public:
     {
       std::lock_guard lock(mutex);
       const auto bytes = 4 * asset.MemoryBytes() + 6 * SnapshotWorkingBytes() + Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
-      if (!available || !settings.publish || capture || bytes + graphicsReservation > settings.memoryBytes) return false;
+      if (!available || !settings.publish || capture || bytes > settings.memoryBytes) return false;
       localReservation = bytes;
       while (Reserved() > settings.memoryBytes && !remotes.empty())
         remotes.erase(remotes.begin());
@@ -285,15 +282,6 @@ public:
       if (bytes + Reservation(found->second.descriptor) > settings.memoryBytes - std::min(settings.memoryBytes, Reserved(player)))
         return false;
       found->second.sceneBytes = bytes;
-      return true;
-    }
-
-    bool GraphicsMemory(std::uint64_t bytes)
-    {
-      std::lock_guard lock(mutex);
-      const auto      others = Reserved() - graphicsReservation;
-      if (bytes > settings.memoryBytes - std::min(settings.memoryBytes, others)) return false;
-      graphicsReservation = bytes;
       return true;
     }
 

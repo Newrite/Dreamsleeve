@@ -42,32 +42,30 @@ module PhantomSequence =
     let create value = if value = 0UL then Error "sequence must be positive" else Ok (PhantomSequence value)
 
 type PhantomAssetLimits = {
-    CompressedBytes: int; RawBytes: int; Channels: int; Geometry: int; PoseBytes: int; RawPoseBytes: int
+    CompressedBytes: int; RawBytes: int; Channels: int; PoseBytes: int; RawPoseBytes: int
 }
 
 /// The server validates the envelope and compressed content identity, never engine data.
 type PhantomManifest = private {
     hash: AssetHash; generation: AppearanceGeneration; compressedBytes: int; rawBytes: int
-    channels: int; geometry: int
+    channels: int
 } with
     member this.Hash = this.hash
     member this.Generation = this.generation
     member this.CompressedBytes = this.compressedBytes
     member this.RawBytes = this.rawBytes
     member this.Channels = this.channels
-    member this.Geometry = this.geometry
-    member _.FormatVersion = 1u
+    member _.FormatVersion = 2u
 
 [<RequireQualifiedAccess>]
 module PhantomManifest =
-    let create (limits: PhantomAssetLimits) hash generation version compressed raw channels geometry =
-        if version <> 1u then Error "unsupported format_version"
+    let create (limits: PhantomAssetLimits) hash generation version compressed raw channels =
+        if version <> 2u then Error "unsupported format_version"
         elif compressed = 0u || uint64 compressed > uint64 limits.CompressedBytes then Error "compressed_bytes exceeds limit"
         elif raw = 0u || uint64 raw > uint64 limits.RawBytes then Error "raw_bytes exceeds limit"
         elif channels = 0u || uint64 channels > uint64 limits.Channels then Error "channels exceeds limit"
-        elif geometry = 0u || uint64 geometry > uint64 limits.Geometry then Error "geometry exceeds limit"
         else Ok { hash = hash; generation = generation; compressedBytes = int compressed; rawBytes = int raw
-                  channels = int channels; geometry = int geometry }
+                  channels = int channels }
 
 type PhantomPreferences = { Publish: bool; Receive: bool; Maximum: int; Distance: float32 }
 

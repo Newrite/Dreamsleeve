@@ -40,9 +40,9 @@ namespace Dreamsleeve::Client::Diagnostics
     {
       const auto                        bytes = ReadBytes(input, 20);
       Cursor                            r{bytes};
-      const std::array<std::uint8_t, 8> magic{'D', 'L', 'P', 'D', 'I', 'A', 'G', '1'};
+      const std::array<std::uint8_t, 8> magic{'D', 'L', 'P', 'D', 'I', 'A', 'G', '2'};
       if (
-        !std::ranges::equal(r.Take(8), magic) || r.Get<std::uint32_t>() != 1 || r.Get<std::uint32_t>() != Wire::Version ||
+        !std::ranges::equal(r.Take(8), magic) || r.Get<std::uint32_t>() != 2 || r.Get<std::uint32_t>() != Wire::Version ||
         r.Get<std::uint32_t>() != P::AssetVersion)
         throw std::runtime_error("archive.version");
     }

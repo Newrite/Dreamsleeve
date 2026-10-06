@@ -1,3 +1,108 @@
+# Native NIF: проверка выпуска 07.10.2026
+
+Ветка `codex/phantom-native-nif`, база полной функции `3b80b8e`, источник
+проверенного native поведения `codex/phantom-local-se` (`23ae14d`). Протокол22,
+asset/diagnostic archive version2; совместимость с neutral клиентом не нужна.
+
+## Реализовано
+
+Один production путь: clone/normalization → NiStream Save → проверенный NIF
+в detached контейнере → Zstd/hash/chunks/cache → проверка NIF → NiStream Load →
+native scene transforms/bounds. Local replay использует тот же codec и Scene.
+Удалены нейтральные mesh/material/mask структуры, CPU skinning, D3D readback/
+upload и соответствующие factories/tests. AOI, ENet lanes, ACK/cache/storage,
+epoch/cancellation, privacy/settings/UI остаются общими.
+
+Server.Domain владеет смыслом публикации; PhantomAgent — текущей и ожидающей
+публикациями/подписками. Client.Core Exchange/Streaming/Worker владеют сессией,
+передачами, detached очередями и историей поз. Game Source/Scene владеют только
+native объектами на main-loop thread. Hooks содержит runtime ABI и адреса.
+Сводные правила: [PhantomsRu.md](PhantomsRu.md).
+
+## Проверенные данные
+
+- Diagnostic Client.Tests:388/388,9500assertions,4 opt-in skipped; запуск вне
+  sandbox необходим тесту Windows Credential Manager. Первоначальный sandbox
+  отказ CredentialStore не является phantom regression.
+- Все6 исходных архивов:6/6 native tests на каждом,1998 поз суммарно;
+  все6 производных production phdiag также прочитаны ReplayReader и Python
+  inspector. Оригиналы не изменены.
+- Настоящий C++/F# ENet smoke:1/1,2652assertions; cold282998B,4 chunks window,
+  fragmented pose3643B, loss discard, rollover unreliable, warm cache0chunks.
+- Штатные Client.Tests:375/375,9226assertions,3 opt-in skipped; Client.Dev build PASS.
+- UI:94/94. Managed server после fairness correction:605/605; финальные данные
+  бенчмарка и регрессии fanout записаны в отдельном серверном отчёте.
+- Количественные ошибки, размеры полных пакетов и времена detached codec:
+  [PhantomMeasurementsRu.md](PhantomMeasurementsRu.md).
+
+## Сборка и установка
+
+Полный dist собран штатным `Scripts/package_dist.py`:
+`S:\Programming\Dreamsleeve\dist\Client` и `dist\Server`.
+Обычная и диагностическая DLL собраны из финальных исходников после native
+ревью. Диагностическая DLL отдельно: `build/diagnostics/windows/x64/releasedbg`.
+В обеих проверено наличие финальной проверки skinInstance; SHA256/размеры:
+`build/native-nif/final-binaries.json`. Установленная DLL побайтово равна dist.
+Пакет содержит UI, нужный ESP, Papyrus API и актуальные server examples;
+диагностические архивы/NIF/IDB и сторонние клиентские DLL исключены.
+Проверены совпадение ESP с Plugin и отсутствие diagnostic marker в release DLL.
+
+Установка в указанный MO2 mods/Dreamsleeve выполнена при закрытом Skyrim:
+13 файлов обновлены, client.toml/aliases.toml/theme.user.css сохранены с проверкой
+SHA256. Backup заменённых файлов: `build/native-nif/installed-client-backup`;
+Перед окончательным обновлением сохранена также промежуточная версия в
+`build/native-nif/installed-client-backup-final`; manifest: `build/native-nif/installation.json`. Plugin/client.toml сохранил
+исходный SHA256 `10df191096b4a31d267f24c0fe73c17c19e414b04414cdaffe6ce67d2145e257`.
+Ранее подготовленные release archives перенесены из dist/releases в
+`build/native-nif/previous-releases` перед штатной переупаковкой.
+
+## Сопоставимые серверные результаты
+
+Clean A/B:512 игроков, группы≤25,20Hz source,30s; оба PASS с одинаковым generator.
+Baseline/current:CPU1.625/1.660 ядра, private peak142.65/139.15MiB,
+доставка3.4729/3.4749Hz на active subscription second при общем32MiB/s cap.
+Missed capture intervals и local admission drops равны0. Это по одному sample,
+заявление об ускорении не делается. Исправление fairness подтверждено отдельным
+регрессионным тестом (доставка3/3 вместо1/3 источников при малом общем бюджете).
+
+Cold8/2publishers:8 полных13 288 628-byte моделей скачаны и SHA256 verified;
+последняя проверка32.142s от старта, публикации готовы около12.77s.
+Фактические upload/download payload26 577 256/106 309 024B, незавершённых0.
+Штатный budget модели5MiB/s. Это время сценария, не NiStream Load latency.
+[Подробный отчёт и overhead](benchmarks/phantom-native-nif-2026-10-07.md).
+
+## Runtime и игровой статус
+
+Повторно статически проверены NiStream Load/Save ABI для SE1.5.97,
+AE1.6.1170 и VR1.4.15: указатели вRDX/R8, длинаuint32; используются ранее
+проверенные constructors/allocator/registry/bounds adapters.
+[Runtime журнал](PhantomRuntimeRu.md) содержит ID/RVA, layouts и основания.
+Это не игровой тест AE/VR и не визуальная проверка новой SE DLL.
+
+MO2: `F:\MO2 - Skyrim - VanillaLike`, профиль `Vanilla`, клиент:
+`F:\MO2 - Skyrim - VanillaLike\mods\Dreamsleeve`.
+Фактический SkyrimSE.exe указанного MO2 gamePath имеет версию1.5.97.0.
+Windows10 UI adapter после повторного inventory возвращает `window id out of range`
+для HWND MO2; управление игрой не выполнялось. Остаётся проверить новый capture
+и native replay в игре: лицо/рот/глаза/волосы/броню, оружие рука↔ножны,
+первое/третье лицо, переход наружных CELL, смену экипировки/морфов, load/disconnect.
+Переносимость внешности после удаления texture dependencies до Save пока
+подтверждена структурно, не между двумя различными модпаками в игре.
+
+## Ограничения и отдельно найденное
+
+Sparse probe динамической геометрии не гарантирует обнаружение модификаций,
+которые меняют только GPU буфер или несэмплируемые вершины. Событие TESEquip —
+только запрос проверки, NiNode callback — после native equipment update.
+RaceMenu FlushCallback не является подтверждённым завершением queued morph task;
+неподтверждённый hook не добавлен. Ограниченный probe остаётся страховкой.
+
+Резерв native scene консервативный; реальная resident память и игровые времена
+clone/Save/Load/Apply новой DLL пока не измерены. Общий32MiB/s pose egress
+может ограничивать доставку при512 источниках; частота захвата20Hz этого не отменяет.
+
+# Исторический отчёт neutral реализации (не текущий выпуск)
+
 # Полная реализация фантомов: выпуск 06.10.2026
 
 Ветка `codex/phantom-replication` основана на master `7772d17`.

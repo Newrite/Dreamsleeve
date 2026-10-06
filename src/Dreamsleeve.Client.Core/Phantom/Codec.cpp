@@ -6,7 +6,6 @@
 
 import std;
 import Dreamsleeve.Client.Phantom.Codec;
-import Dreamsleeve.Client.Phantom.Masks;
 
 namespace Dreamsleeve::Client::Phantom
 {
@@ -170,32 +169,18 @@ namespace Dreamsleeve::Client::Phantom
              std::abs(norm - 1) < 0.01f;
     }
 
-    void ValidateSnapshot(const Snapshot& snapshot, const Asset& asset)
+    void ValidateSnapshot(const Snapshot& snapshot, const NativeLayout& asset)
     {
       if (
         !snapshot.generation.value || !snapshot.sequence.value || !snapshot.context || snapshot.sampledAtUs > MaximumSampleTime ||
-        !Finite(snapshot.origin) || snapshot.channels.size() != asset.nodes.size() || snapshot.bounds.size() != asset.geometry.size())
+        !Finite(snapshot.origin) || snapshot.channels.size() != asset.requiredChannels.size() ||
+        snapshot.bounds.size() != asset.bounds.size())
         Fail(Failure::InvalidFormat, "pose.shape");
       for (const auto& channel : snapshot.channels)
         if (!Valid(channel.world)) Fail(Failure::InvalidNumber, "pose.transform");
       for (const auto& bound : snapshot.bounds)
         if (!Finite(bound.center) || !std::isfinite(bound.radius) || bound.radius < 0 || bound.radius > 100000)
           Fail(Failure::InvalidNumber, "pose.bound");
-      std::unordered_set<std::uint32_t> seen;
-      for (const auto& deformation : snapshot.deformations)
-      {
-        if (deformation.geometry >= asset.geometry.size() || !seen.insert(deformation.geometry).second)
-          Fail(Failure::InvalidLink, "deformation.geometry");
-        const auto& mesh = asset.geometry[deformation.geometry];
-        if (!mesh.dynamic || deformation.positions.size() != mesh.vertices.size() || deformation.normals.size() != mesh.vertices.size())
-          Fail(Failure::InvalidGeometry, "deformation.shape");
-        for (const auto& p : deformation.positions)
-          if (!Finite(p)) Fail(Failure::InvalidNumber, "deformation.position");
-        for (const auto& n : deformation.normals)
-          if (!Finite(n)) Fail(Failure::InvalidNumber, "deformation.normal");
-      }
-      for (std::uint32_t i = 0; i < asset.geometry.size(); ++i)
-        if (asset.geometry[i].dynamic && !seen.contains(i)) Fail(Failure::InvalidGeometry, "deformation.missing");
     }
 
     std::int16_t Quantize(float value, float step)
@@ -205,19 +190,29 @@ namespace Dreamsleeve::Client::Phantom
       return static_cast<std::int16_t>(quantized);
     }
 
+    std::int32_t Position(float value)
+    {
+      const auto quantized = std::round(double(value) * 16);
+      if (
+        !std::isfinite(quantized) || quantized < std::numeric_limits<std::int32_t>::min() ||
+        quantized > std::numeric_limits<std::int32_t>::max())
+        Fail(Failure::LimitExceeded, "pose.position-range");
+      return static_cast<std::int32_t>(quantized);
+    }
+
     void PutPosition(Writer& writer, const Vec3& v, const Vec3& origin)
     {
-      writer.Put(Quantize(v.x - origin.x, 0.125f));
-      writer.Put(Quantize(v.y - origin.y, 0.125f));
-      writer.Put(Quantize(v.z - origin.z, 0.125f));
+      writer.Put(Position(v.x - origin.x));
+      writer.Put(Position(v.y - origin.y));
+      writer.Put(Position(v.z - origin.z));
     }
 
     Vec3 GetPosition(Reader& reader, const Vec3& origin)
     {
       return {
-          origin.x + reader.Get<std::int16_t>() * 0.125f,
-          origin.y + reader.Get<std::int16_t>() * 0.125f,
-          origin.z + reader.Get<std::int16_t>() * 0.125f
+          origin.x + reader.Get<std::int32_t>() / 16.f,
+          origin.y + reader.Get<std::int32_t>() / 16.f,
+          origin.z + reader.Get<std::int32_t>() / 16.f
       };
     }
 
@@ -227,7 +222,7 @@ namespace Dreamsleeve::Client::Phantom
   {
     try
     {
-      ValidateSnapshot(snapshot, asset.Value());
+      ValidateSnapshot(snapshot, asset.Layout());
       return {};
     }
     catch (const Invalid& invalid)
@@ -271,58 +266,8 @@ namespace Dreamsleeve::Client::Phantom
     const auto& model = asset.Value();
     w.Put(AssetMagic);
     w.Put(AssetVersion);
-    w.Put(static_cast<std::uint32_t>(model.nodes.size()));
-    w.Put(static_cast<std::uint32_t>(model.geometry.size()));
-    for (const auto& node : model.nodes)
-    {
-      w.Put(node.parent.value);
-      w.TransformValue(node.local);
-    }
-    for (const auto& mesh : model.geometry)
-    {
-      w.Put(mesh.node.value);
-      w.Put(static_cast<std::uint32_t>(mesh.vertices.size()));
-      w.Put(static_cast<std::uint32_t>(mesh.indices.size()));
-      w.Put<std::uint8_t>(
-        (mesh.skin ? 1 : 0) | (mesh.mask ? 2 : 0) | (mesh.alphaBlend ? 4 : 0) | (mesh.doubleSided ? 8 : 0) | (mesh.dynamic ? 16 : 0));
-      w.Put(mesh.alphaThreshold);
-      for (const auto& v : mesh.vertices)
-      {
-        w.Vector(v.position);
-        w.Vector(v.normal);
-        w.Vector(v.tangent);
-        w.Put(v.u);
-        w.Put(v.v);
-        for (auto c : v.color)
-          w.Put(c);
-        for (auto weight : v.weights)
-          w.Put(weight);
-        for (auto bone : v.bones)
-          w.Put(bone);
-      }
-      for (auto index : mesh.indices)
-        w.Put(index);
-      if (mesh.skin)
-      {
-        w.Put(mesh.skin->root.value);
-        w.TransformValue(mesh.skin->worldToSkin);
-        w.Put(static_cast<std::uint32_t>(mesh.skin->bones.size()));
-        for (const auto& bone : mesh.skin->bones)
-        {
-          w.Put(bone.node.value);
-          w.TransformValue(bone.bind);
-          w.BoundValue(bone.bound);
-        }
-      }
-      if (mesh.mask)
-      {
-        if (w.bytes.size() + 8ULL + mesh.mask->pixels.size() > limits.assetBytes)
-          return std::unexpected(Error{Failure::LimitExceeded, "asset.bytes"});
-        w.Put(mesh.mask->width);
-        w.Put(mesh.mask->height);
-        w.bytes.insert(w.bytes.end(), mesh.mask->pixels.begin(), mesh.mask->pixels.end());
-      }
-    }
+    w.Put(static_cast<std::uint32_t>(model.nif.size()));
+    w.bytes.insert(w.bytes.end(), model.nif.begin(), model.nif.end());
     if (w.bytes.size() > limits.assetBytes) return std::unexpected(Error{Failure::LimitExceeded, "asset.bytes"});
     auto compressed = Compress(w.bytes, limits.compressedAssetBytes, 3);
     if (!compressed) return std::unexpected(compressed.error());
@@ -345,77 +290,8 @@ namespace Dreamsleeve::Client::Phantom
     {
       Reader r(*raw);
       if (r.Get<std::uint32_t>() != AssetMagic || r.Get<std::uint32_t>() != AssetVersion) Fail(Failure::InvalidFormat, "asset.version");
-      Asset      asset;
-      const auto nodes    = r.Count(limits.nodes, 36);
-      const auto geometry = r.Count(limits.geometry, 14);
-      asset.nodes.reserve(nodes);
-      for (std::uint32_t i = 0; i < nodes; ++i)
-        asset.nodes.push_back({NodeId{r.Get<std::uint32_t>()}, r.TransformValue()});
-      asset.geometry.reserve(geometry);
-      std::uint64_t totalVertices = 0;
-      AlphaMaskPool masks(limits);
-      for (std::uint32_t i = 0; i < geometry; ++i)
-      {
-        Geometry mesh;
-        mesh.node            = {r.Get<std::uint32_t>()};
-        const auto vertices  = r.Count(65535, 72);
-        const auto indices   = r.Count(limits.assetBytes / 2, 2);
-        totalVertices       += vertices;
-        if (totalVertices > limits.vertices) Fail(Failure::LimitExceeded, "vertices");
-        const auto flags = r.Get<std::uint8_t>();
-        if (flags & ~31) Fail(Failure::InvalidFormat, "geometry.flags");
-        mesh.alphaThreshold = r.Get<std::uint8_t>();
-        mesh.alphaBlend     = (flags & 4) != 0;
-        mesh.doubleSided    = (flags & 8) != 0;
-        mesh.dynamic        = (flags & 16) != 0;
-        mesh.vertices.reserve(vertices);
-        for (std::uint32_t v = 0; v < vertices; ++v)
-        {
-          Vertex vertex;
-          vertex.position = r.Vector();
-          vertex.normal   = r.Vector();
-          vertex.tangent  = r.Vector();
-          vertex.u        = r.Get<float>();
-          vertex.v        = r.Get<float>();
-          for (auto& c : vertex.color)
-            c = r.Get<std::uint8_t>();
-          for (auto& weight : vertex.weights)
-            weight = r.Get<float>();
-          for (auto& bone : vertex.bones)
-            bone = r.Get<std::uint16_t>();
-          mesh.vertices.push_back(vertex);
-        }
-        mesh.indices.reserve(indices);
-        for (std::uint32_t n = 0; n < indices; ++n)
-          mesh.indices.push_back(r.Get<std::uint16_t>());
-        if (flags & 1)
-        {
-          Skin skin;
-          skin.root        = {r.Get<std::uint32_t>()};
-          skin.worldToSkin = r.TransformValue();
-          const auto bones = r.Count(limits.bonesPerSkin, 52);
-          skin.bones.reserve(bones);
-          for (std::uint32_t n = 0; n < bones; ++n)
-            skin.bones.push_back({NodeId{r.Get<std::uint32_t>()}, r.TransformValue(), r.BoundValue()});
-          mesh.skin = std::move(skin);
-        }
-        if (flags & 2)
-        {
-          AlphaMask mask;
-          mask.width        = r.Get<std::uint32_t>();
-          mask.height       = r.Get<std::uint32_t>();
-          const auto pixels = static_cast<std::uint64_t>(mask.width) * mask.height;
-          if (
-            !mask.width || !mask.height || mask.width > limits.maskDimension || mask.height > limits.maskDimension ||
-            pixels > limits.maskBytes)
-            Fail(Failure::LimitExceeded, "mask");
-          mask.pixels = r.Data(static_cast<std::uint32_t>(pixels));
-          auto shared = masks.Intern(std::make_shared<const AlphaMask>(std::move(mask)));
-          if (!shared) return std::unexpected(shared.error());
-          mesh.mask = *shared;
-        }
-        asset.geometry.push_back(std::move(mesh));
-      }
+      Asset asset;
+      asset.nif = r.Data(r.Count(limits.assetBytes));
       r.End();
       return ValidatedAsset::Parse(std::move(asset), limits);
     }
@@ -429,11 +305,9 @@ namespace Dreamsleeve::Client::Phantom
   {
     try
     {
-      std::uint64_t size = 64 + snapshot.channels.size() * 19ULL + snapshot.bounds.size() * 10ULL;
-      for (const auto& deformation : snapshot.deformations)
-        size += 8 + (deformation.positions.size() + deformation.normals.size()) * 12ULL;
+      const std::uint64_t size = 60 + snapshot.channels.size() * 23ULL + snapshot.bounds.size() * 16ULL;
       if (size > limits.poseBytes) Fail(Failure::LimitExceeded, "pose.bytes");
-      ValidateSnapshot(snapshot, asset.Value());
+      ValidateSnapshot(snapshot, asset.Layout());
       Writer w;
       w.bytes.reserve(static_cast<std::size_t>(size));
       w.Put(PoseMagic);
@@ -445,29 +319,21 @@ namespace Dreamsleeve::Client::Phantom
       w.Vector(snapshot.origin);
       w.Put(static_cast<std::uint32_t>(snapshot.channels.size()));
       w.Put(static_cast<std::uint32_t>(snapshot.bounds.size()));
-      w.Put(static_cast<std::uint32_t>(snapshot.deformations.size()));
       for (const auto& channel : snapshot.channels)
       {
         PutPosition(w, channel.world.position, snapshot.origin);
         const auto& q = channel.world.rotation;
         for (auto component : {q.x, q.y, q.z, q.w})
           w.Put(Quantize(component, 1.0f / 32767));
-        w.Put(channel.world.scale);
+        const auto scale = std::round(channel.world.scale * 1024.0);
+        if (!std::isfinite(scale) || scale < 1 || scale > 65535) Fail(Failure::LimitExceeded, "pose.scale-range");
+        w.Put(static_cast<std::uint16_t>(scale));
         w.Put<std::uint8_t>(channel.hidden ? 1 : 0);
       }
       for (const auto& bound : snapshot.bounds)
       {
         PutPosition(w, bound.center, snapshot.origin);
         w.Put(bound.radius);
-      }
-      for (const auto& deformation : snapshot.deformations)
-      {
-        w.Put(deformation.geometry);
-        w.Put(static_cast<std::uint32_t>(deformation.positions.size()));
-        for (const auto& p : deformation.positions)
-          w.Vector(p);
-        for (const auto& n : deformation.normals)
-          w.Vector(n);
       }
       if (w.bytes.size() > limits.poseBytes) Fail(Failure::LimitExceeded, "pose.bytes");
       return std::move(w.bytes);
@@ -502,15 +368,15 @@ namespace Dreamsleeve::Client::Phantom
       Reader r(*raw);
       if (r.Get<std::uint32_t>() != PoseMagic || r.Get<std::uint32_t>() != AssetVersion) Fail(Failure::InvalidFormat, "pose.version");
       Snapshot snapshot;
-      snapshot.generation     = {r.Get<std::uint64_t>()};
-      snapshot.sequence       = {r.Get<std::uint64_t>()};
-      snapshot.context        = r.Get<std::uint64_t>();
-      snapshot.sampledAtUs    = r.Get<std::uint64_t>();
-      snapshot.origin         = r.Vector();
-      const auto channels     = r.Count(limits.nodes, 19);
-      const auto bounds       = r.Count(limits.geometry, 10);
-      const auto deformations = r.Count(limits.geometry, 8);
-      if (channels != asset.Value().nodes.size() || bounds != asset.Value().geometry.size()) Fail(Failure::InvalidFormat, "pose.counts");
+      snapshot.generation  = {r.Get<std::uint64_t>()};
+      snapshot.sequence    = {r.Get<std::uint64_t>()};
+      snapshot.context     = r.Get<std::uint64_t>();
+      snapshot.sampledAtUs = r.Get<std::uint64_t>();
+      snapshot.origin      = r.Vector();
+      const auto channels  = r.Count(limits.nodes, 23);
+      const auto bounds    = r.Count(limits.nodes, 16);
+      if (channels != asset.Layout().requiredChannels.size() || bounds != asset.Layout().bounds.size())
+        Fail(Failure::InvalidFormat, "pose.counts");
       snapshot.channels.reserve(channels);
       for (std::uint32_t i = 0; i < channels; ++i)
       {
@@ -529,7 +395,7 @@ namespace Dreamsleeve::Client::Phantom
         q.y                 /= length;
         q.z                 /= length;
         q.w                 /= length;
-        channel.world.scale  = r.Get<float>();
+        channel.world.scale  = r.Get<std::uint16_t>() / 1024.f;
         const auto hidden    = r.Get<std::uint8_t>();
         if (hidden > 1) Fail(Failure::InvalidFormat, "pose.hidden");
         channel.hidden = hidden != 0;
@@ -537,23 +403,8 @@ namespace Dreamsleeve::Client::Phantom
       }
       for (std::uint32_t i = 0; i < bounds; ++i)
         snapshot.bounds.push_back({GetPosition(r, snapshot.origin), r.Get<float>()});
-      for (std::uint32_t i = 0; i < deformations; ++i)
-      {
-        Deformation d;
-        d.geometry = r.Get<std::uint32_t>();
-        if (d.geometry >= asset.Value().geometry.size()) Fail(Failure::InvalidLink, "deformation.geometry");
-        const auto count = r.Count(static_cast<std::uint32_t>(asset.Value().geometry[d.geometry].vertices.size()), 24);
-        if (count != asset.Value().geometry[d.geometry].vertices.size()) Fail(Failure::InvalidGeometry, "deformation.count");
-        d.positions.reserve(count);
-        d.normals.reserve(count);
-        for (std::uint32_t n = 0; n < count; ++n)
-          d.positions.push_back(r.Vector());
-        for (std::uint32_t n = 0; n < count; ++n)
-          d.normals.push_back(r.Vector());
-        snapshot.deformations.push_back(std::move(d));
-      }
       r.End();
-      ValidateSnapshot(snapshot, asset.Value());
+      ValidateSnapshot(snapshot, asset.Layout());
       return snapshot;
     }
     catch (const Invalid& invalid)
