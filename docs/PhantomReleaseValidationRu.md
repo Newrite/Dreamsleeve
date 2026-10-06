@@ -128,3 +128,11 @@ install evidence: `build/phantom-5m-install-verification.json`.
 Настройки и ограничения формата: [PhantomsRu.md](PhantomsRu.md).
 Статические runtime evidence: [PhantomRuntimeRu.md](PhantomRuntimeRu.md).
 Отдельный журнал старых и новых замечаний: [PhantomArchitectureNotesRu.md](PhantomArchitectureNotesRu.md).
+
+Material fix от 06.10.2026 подтверждает игровой результат предыдущего thread
+fix: в свежем логе нет capture.main-thread, но захват был заблокирован общим
+отказом effect/decal/projected-material. Политика auxiliary effects теперь
+согласована в Open/Sample/Rebind; projected/decal lighting geometry сохраняется.
+Diagnostic DLL собрана и установлена, native 371/371 (9252 assertions,
+1 явный skip); normal dist остаётся от предыдущей сборки до игровой проверки.
+Подробности, ограничения и install evidence: [PhantomDiagnosticsRu.md](PhantomDiagnosticsRu.md).

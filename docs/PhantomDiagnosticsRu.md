@@ -139,3 +139,42 @@ Deformation: geometry/count:uint32, все positions XYZ, затем normals XYZ
 таймеру без нового кадра и освобождение очереди при лимите records. Инспектор
 прочитал тестовый архив, извлёк входы кодека и отклонил усечённые архивы и
 повреждённый SHA256 модели. В игре эта версия рекордера ещё не проверена.
+
+## Отказ по материалу после исправления потока, 06.10.2026
+
+Повторные записи idle/walk-turn/combat подтвердили привязку к Main::Update:
+`capture.main-thread` исчез. Однако ни одной позы ещё не было: новый лог
+содержал `capture.effect/decal/projected-material`. Combat-запись
+`1791283486555-combat-0` содержит 251 movement и 14 capture failures.
+`context-changed` — причина завершения записи при уходе из игрового контекста,
+а первоначальный отказ происходил раньше, при сборке neutral asset.
+
+Open/Sample раньше отвергали всю модель при любом effect/decal/projected
+mesh, хотя Rebind уже исключал такие meshes. Теперь нескиненные effect meshes
+пропускаются согласованно во всех трёх путях. Lighting mesh с projected/decal
+флагом сохраняется; RGB-проекции не входят в neutral asset. Нужные mesh/skin
+каналы сохраняются, ненужные каналы удаляет существующая Canonicalize.
+Скиненные effect materials не пропускаются молча: их неподдерживаемый материал
+по-прежнему даёт явный отказ с именем меша и shader flags.
+
+Строка `Phantom materials: ...` показывает число исключённых вспомогательных
+эффектов и сохранённых projected/decal lighting meshes, не чаще раза за пять
+секунд. Если останется ошибка конкретного layout/material, её mesh name,
+shader type и flags теперь видны в логе без отдельной пересборки диагностики.
+Это исправление требует игровой проверки: native-тесты не исполняют сцену
+Skyrim и не подтверждают захват конкретного модпака.
+
+Проверка material fix: diagnostic DLL собрана, 371/371 native-тестов,
+9252 assertions, один явный skip реального UDP. Форматирование и diff check
+прошли. SHA256 установленной diagnostic DLL:
+`cd1fe86ceac07108eeda5ea4fccfcf282f2ffaa051f44ab67f6196f66b8330f5`.
+DLL/PDB установлены в MO2; client/ui/aliases/ESP сохранены по SHA256,
+backup `build/phantom-material-install-backup-20261006-175945`.
+Логи: `build/phantom-material-diag-build.log`,
+`build/phantom-material-test-build.log`, `build/phantom-material-tests.log`.
+Самопроверка: Canonicalize удаляет ненужные channels исключённых effects;
+Sample не считает новый auxiliary effect экипировкой; переход опубликованного
+mesh в auxiliary effect инвалидирует appearance; Rebind использует ту же
+классификацию. Скиненные неподдерживаемые materials явно отклоняются.
+Релизный dist не пересобирался в этой диагностической итерации. Успех захвата
+модели в игре и её визуальная полнота требуют отдельной проверки.

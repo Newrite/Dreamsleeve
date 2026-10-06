@@ -98,14 +98,63 @@ export namespace Dreamsleeve::Game::PhantomCapture
     return objects;
   }
 
-  inline bool Excluded(RE::BSGeometry& geometry)
+  inline bool AuxiliaryEffect(RE::BSGeometry& geometry)
   {
-    auto* shader = geometry.GetGeometryRuntimeData().shaderProperty.get();
-    if (!shader) return false;
-    if (A::Kind(*shader, "BSEffectShaderProperty")) return true;
+    const auto& data   = geometry.GetGeometryRuntimeData();
+    auto*       shader = data.shaderProperty.get();
+    if (!shader || !A::Kind(*shader, "BSEffectShaderProperty")) return false;
     using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
-    // Foreign effects/RaceMenu overlays are outside the phantom material.
-    return shader->flags.any(Shader::kDecal, Shader::kDynamicDecal, Shader::kProjectedUV);
+    // Only unskinned effect geometry is outside the neutral character model.
+    // A skinned effect may be authored clothing/hair: keep it in the capture
+    // path so its unsupported material fails explicitly instead of losing it.
+    // Projected/decal flags on lighting geometry do NOT remove its base mesh.
+    return !data.skinInstance && !shader->flags.all(Shader::kSkinned);
+  }
+
+  inline std::unexpected<P::Error> GeometryError(P::Error error, RE::BSGeometry& geometry)
+  {
+    const auto* shader  = geometry.GetGeometryRuntimeData().shaderProperty.get();
+    const auto* name    = geometry.name.c_str();
+    const auto* rtti    = shader ? shader->GetRTTI() : nullptr;
+    const auto* type    = rtti ? rtti->GetName() : "none";
+    error.field        += std::format(
+      " [mesh={}, shader={}, flags={:X}]",
+      std::string_view(name ? name : "").substr(0, 96),
+      std::string_view(type ? type : "").substr(0, 96),
+      shader ? shader->flags.underlying() : 0);
+    return std::unexpected(std::move(error));
+  }
+
+  inline void ReportMaterials(std::span<RE::NiAVObject* const> live)
+  {
+    // Capture can retry while GPU readback is pending. Bound both log cadence
+    // and diagnostic names; never build a per-frame scene dump.
+    using Clock = std::chrono::steady_clock;
+    static Clock::time_point last;
+    const auto               now = Clock::now();
+    if (now - last < std::chrono::seconds(5)) return;
+    last                  = now;
+    std::uint32_t effects = 0, projected = 0;
+    std::string   names;
+    using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
+    for (auto* object : live)
+      if (auto* geometry = object->AsGeometry())
+      {
+        if (AuxiliaryEffect(*geometry))
+        {
+          if (++effects <= 4)
+            names += std::format(" [{}]", std::string_view(geometry->name.c_str() ? geometry->name.c_str() : "").substr(0, 96));
+        }
+        else if (
+          auto* property = geometry->lightingShaderProp_cast();
+          property && property->flags.any(Shader::kDecal, Shader::kDynamicDecal, Shader::kProjectedUV))
+          ++projected;
+      }
+    logger::info(
+      "Phantom materials: {} auxiliary effect meshes omitted{}; {} projected/decal lighting meshes retained",
+      effects,
+      names,
+      projected);
   }
 
   inline P::Result<void> Material(RE::BSTriShape& source, P::Geometry& geometry, const Engine& engine, const P::Limits& limits)
@@ -326,7 +375,12 @@ export namespace Dreamsleeve::Game::PhantomCapture
     h.Scalar(reinterpret_cast<std::uintptr_t>(lit));
     if (lit && lit->material)
     {
-      h.Scalar(lit->flags.underlying());
+      // Projection/decal changes only affect omitted RGB layers. They must
+      // not trigger a new neutral appearance or a GPU readback audit.
+      using Shader             = RE::BSShaderProperty::EShaderPropertyFlag;
+      constexpr auto rgbLayers = static_cast<std::uint64_t>(Shader::kDecal) | static_cast<std::uint64_t>(Shader::kDynamicDecal) |
+                                 static_cast<std::uint64_t>(Shader::kProjectedUV);
+      h.Scalar(lit->flags.underlying() & ~rgbLayers);
       h.Scalar(reinterpret_cast<std::uintptr_t>(lit->material));
       if (lit->material->GetType() == RE::BSShaderMaterial::Type::kLighting)
       {
@@ -427,7 +481,11 @@ public:
         if (object->AsNiTriShape()) return A::Fail(P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape");
         if (auto* geometry = object->AsGeometry())
         {
-          if (Excluded(*geometry)) return A::Fail(P::Failure::UnsupportedGeometry, "capture.effect/decal/projected-material");
+          if (AuxiliaryEffect(*geometry))
+          {
+            if (meshes.contains(object)) return Dirty("capture.material-kind-changed");
+            continue;
+          }
           if (!meshes.contains(object)) bindingsDirty_ = true;
         }
       }
@@ -634,7 +692,7 @@ private:
       auto geometry = A::Decode(*raw, binding.node, binding.boneCount, limits_);
       if (!geometry) return std::unexpected(geometry.error());
       auto material = Material(*binding.owner, *geometry, engine_, limits_);
-      if (!material) return material;
+      if (!material) return GeometryError(material.error(), *binding.owner);
       if (Signature(*geometry) != binding.signature) return Dirty("capture.audited-appearance-changed");
       binding.auditPending = false;
       return {};
@@ -675,14 +733,16 @@ private:
           if (reusable) break;
           auto* geometry = object->AsGeometry();
           auto* shape    = geometry ? geometry->AsTriShape() : nullptr;
-          if (!shape || Excluded(*geometry) || used.contains(shape) || binding.name != (shape->name.c_str() ? shape->name.c_str() : ""))
+          if (
+            !shape || AuxiliaryEffect(*geometry) || used.contains(shape) ||
+            binding.name != (shape->name.c_str() ? shape->name.c_str() : ""))
             continue;
           auto raw = engine_.mesh(*shape, limits_);
           if (!raw) return std::unexpected(raw.error());
           auto decoded = A::Decode(*raw, binding.node, binding.boneCount, limits_);
           if (!decoded) return std::unexpected(decoded.error());
           auto material = Material(*shape, *decoded, engine_, limits_);
-          if (!material) return material;
+          if (!material) return GeometryError(material.error(), *shape);
           if (Signature(*decoded) != binding.signature) continue;
           // Identical dual-wield meshes are interchangeable appearance
           // slots. Keep their pose continuity by nearest last world position;
@@ -702,7 +762,7 @@ private:
         binding.stamp = CheapStamp(*binding.owner);
       }
       for (auto* object : live)
-        if (auto* geometry = object->AsGeometry(); geometry && !Excluded(*geometry) && !used.contains(object))
+        if (auto* geometry = object->AsGeometry(); geometry && !AuxiliaryEffect(*geometry) && !used.contains(object))
           return Dirty("capture.new-equipment/schema");
       for (std::uint32_t i = 0; i < bindings_.size(); ++i)
       {
@@ -902,6 +962,7 @@ private:
     if (!root) return A::Fail(P::Failure::MissingSource, "capture.third-person-root");
     auto live = Walk(*root, limits);
     if (!live) return std::unexpected(live.error());
+    ReportMaterials(*live);
     Captured out;
     out.source     = std::unique_ptr<Source>(new Source(engine, limits));
     auto& source   = *out.source;
@@ -987,20 +1048,20 @@ private:
       if (object->AsNiTriShape()) return A::Fail(P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape");
       auto* geometry = object->AsGeometry();
       if (!geometry) continue;
-      if (Excluded(*geometry)) return A::Fail(P::Failure::UnsupportedGeometry, "capture.effect/decal/projected-material");
+      if (AuxiliaryEffect(*geometry)) continue;
       auto* shape = geometry->AsTriShape();
-      if (!shape) return A::Fail(P::Failure::UnsupportedGeometry, "source.nontriangle-geometry");
+      if (!shape) return GeometryError({P::Failure::UnsupportedGeometry, "source.nontriangle-geometry"}, *geometry);
       if (out.asset.geometry.size() >= limits.geometry) return A::Fail(P::Failure::LimitExceeded, "capture.geometry");
       auto skin = source.Skin(*shape, transforms);
-      if (!skin) return std::unexpected(skin.error());
+      if (!skin) return GeometryError(skin.error(), *geometry);
       const auto bones = *skin ? static_cast<std::uint32_t>((*skin)->bones.size()) : 0U;
       auto       raw   = engine.mesh(*shape, limits);
-      if (!raw) return std::unexpected(raw.error());
+      if (!raw) return GeometryError(raw.error(), *geometry);
       auto normalized = A::Decode(*raw, ids.at(object), bones, limits);
-      if (!normalized) return std::unexpected(normalized.error());
+      if (!normalized) return GeometryError(normalized.error(), *geometry);
       normalized->skin = std::move(*skin);
       auto material    = Material(*shape, *normalized, engine, limits);
-      if (!material) return std::unexpected(material.error());
+      if (!material) return GeometryError(material.error(), *geometry);
       const auto signature  = Signature(*normalized);
       vertices             += normalized->vertices.size();
       masks                += normalized->mask ? normalized->mask->pixels.size() : 0;
