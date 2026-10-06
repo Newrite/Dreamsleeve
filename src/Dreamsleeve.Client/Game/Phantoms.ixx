@@ -11,6 +11,9 @@ import Dreamsleeve.Game.PlayerLabels;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Host.PhantomSettings;
 import Dreamsleeve.Client.Phantom.Exchange;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+#endif
 
 namespace Phantoms
 {
@@ -54,6 +57,10 @@ namespace Phantoms
     std::uint32_t                                cell{}, world{};
     std::uint64_t                                cursor{};
     bool                                         wasAvailable{};
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    std::shared_ptr<const P::ValidatedAsset> diagnosticAsset;
+    bool                                     publishing{};
+#endif
   };
 
   State& Get()
@@ -90,6 +97,10 @@ namespace Phantoms
         runtime.app->Exchange().Phantoms().SceneMemory(id, 0);
     state.visuals.clear();
     state.source.reset();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Phantoms().Stop("context-changed");
+    state.diagnosticAsset.reset();
+#endif
     state.cell = state.world = 0;
     state.wasAvailable       = false;
     if (state.capture.mainThread && state.capture.mainThread())
@@ -99,20 +110,71 @@ namespace Phantoms
     }
   }
 
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  export void StartRecording(std::uint32_t scenario, bool thirtySeconds)
+  {
+    const auto logs    = SKSE::log::log_directory();
+    auto&      runtime = Runtime::Get();
+    if (!logs || !runtime.app || runtime.context != Runtime::GameContext::Playing) return;
+    if (
+      Dreamsleeve::Client::Diagnostics::Phantoms().Start(
+        *logs / "DreamsleevePhantomDiagnostics",
+        scenario,
+        thirtySeconds ? 30 : 15,
+        runtime.app->Exchange().Phantoms().Settings().sampleRate))
+    {
+      Get().source.reset();
+      Get().diagnosticAsset.reset();
+      Get().nextCapture = {};
+      logger::info("Phantom diagnostics recording requested");
+    }
+  }
+
+  void Record(std::shared_ptr<const P::Snapshot> pose, RE::PlayerCharacter& player, Clock::time_point start, bool firstPerson)
+  {
+    auto& recorder = Dreamsleeve::Client::Diagnostics::Phantoms();
+    if (!recorder.Active()) return;
+    const auto position = player.GetPosition(), angle = player.GetAngle();
+    recorder.Sample(
+      Get().diagnosticAsset,
+      std::move(pose),
+      {
+          0,
+          0,
+          Micros(start),
+          {position.x, position.y, position.z},
+          {angle.x,    angle.y,    angle.z   }
+    },
+      std::chrono::duration<double, std::milli>(Clock::now() - start).count(),
+      firstPerson);
+  }
+#endif
+
   export void CapturePlayer(RE::PlayerCharacter& player)
   {
     auto&      runtime = Runtime::Get();
     auto&      state   = Get();
     const auto now     = Clock::now();
     if (!runtime.app || runtime.shutdown || runtime.context != Runtime::GameContext::Playing || !World::PlayerReady()) return;
-    auto&      exchange = runtime.app->Exchange().Phantoms();
-    const auto settings = exchange.Settings();
-    if (!exchange.Available() || !settings.publish)
+    auto&      exchange   = runtime.app->Exchange().Phantoms();
+    const auto settings   = exchange.Settings();
+    const bool publishing = exchange.Available() && settings.publish;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const bool recording = Dreamsleeve::Client::Diagnostics::Phantoms().Active();
+    if (state.source && state.publishing != publishing) state.source.reset();
+    state.publishing = publishing;
+    if (!publishing && !recording)
+#else
+    if (!publishing)
+#endif
     {
       state.source.reset();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      state.diagnosticAsset.reset();
+#endif
       return;
     }
-    if (state.source && !exchange.Capturing(state.generation))
+    if (state.source && publishing && !exchange.Capturing(state.generation))
     {
       state.source.reset();
       state.nextCapture = now + std::chrono::seconds(1);
@@ -130,6 +192,9 @@ namespace Phantoms
       auto opened    = Capture::Open(state.capture, player, firstPerson, {state.generation, state.sequence, 1, Micros(now)});
       if (!opened)
       {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Dreamsleeve::Client::Diagnostics::Phantoms().Failed(static_cast<std::uint32_t>(opened.error().reason));
+#endif
         Error(opened.error(), now);
         if (opened.error().reason != P::Failure::Busy) state.nextCapture = now + std::chrono::seconds(1);
         return;
@@ -148,13 +213,20 @@ namespace Phantoms
         asset->Value().geometry.size(),
         asset->MemoryBytes() / 1048576.0,
         std::chrono::duration<double, std::milli>(Clock::now() - now).count());
-      if (!exchange.Submit(state.generation, std::move(*asset)))
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      state.diagnosticAsset = std::make_shared<const P::ValidatedAsset>(*asset);
+#endif
+      if (publishing && !exchange.Submit(state.generation, std::move(*asset)))
       {
         state.nextCapture = now + std::chrono::seconds(1);
         return;
       }
       state.source = std::move(opened->source);
-      exchange.Submit(std::make_shared<const P::Snapshot>(std::move(opened->initial)));
+      auto initial = std::make_shared<const P::Snapshot>(std::move(opened->initial));
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Record(initial, player, now, firstPerson);
+#endif
+      if (publishing) exchange.Submit(std::move(initial));
       return;
     }
     if (state.sequence.value == std::numeric_limits<std::uint64_t>::max())
@@ -165,6 +237,9 @@ namespace Phantoms
     auto pose = state.source->Sample(player, firstPerson, {state.generation, P::Sequence{++state.sequence.value}, 1, Micros(now)});
     if (!pose)
     {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Phantoms().Failed(static_cast<std::uint32_t>(pose.error().reason));
+#endif
       Error(pose.error(), now);
       if (pose.error().reason == P::Failure::Stale)
         state.source.reset();
@@ -172,7 +247,11 @@ namespace Phantoms
         state.nextCapture = now + std::chrono::seconds(1);
       return;
     }
-    exchange.Submit(std::make_shared<const P::Snapshot>(std::move(*pose)));
+    auto sampled = std::make_shared<const P::Snapshot>(std::move(*pose));
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Record(sampled, player, now, firstPerson);
+#endif
+    if (publishing) exchange.Submit(std::move(sampled));
   }
 
   export bool UseFirefly(Domain::PlayerId id)
@@ -243,14 +322,28 @@ namespace Phantoms
     const auto cellId = cell->GetFormID(), worldId = world ? world->GetFormID() : 0;
     if (state.cell != cellId || state.world != worldId)
     {
-      Clear();
+      if (state.cell) Clear();
       state.cell  = cellId;
       state.world = worldId;
     }
     auto display = exchange.Read();
     if (!display.available)
     {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      if (Dreamsleeve::Client::Diagnostics::Phantoms().Active())
+      {
+        for (const auto& [id, visual] : state.visuals)
+          exchange.SceneMemory(id, 0);
+        state.visuals.clear();
+        state.wasAvailable = false;
+        return;
+      }
+#endif
       Clear();
+      // Retain the observed game context while disconnected, so starting a
+      // local recording does not look like a cell change on the next tick.
+      state.cell  = cellId;
+      state.world = worldId;
       return;
     }
     if (!state.wasAvailable)

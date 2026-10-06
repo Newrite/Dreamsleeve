@@ -23,5 +23,9 @@ export namespace Dreamsleeve::Client::Phantom
   Result<ValidatedAsset> ReadAsset(std::span<const std::uint8_t> compressed, std::uint32_t rawBytes, const Limits& limits = {});
   Result<Bytes>          WriteSnapshot(const Snapshot& snapshot, const ValidatedAsset& asset, const Limits& limits = {});
   Result<Snapshot>       ReadSnapshot(std::span<const std::uint8_t> compressed, const ValidatedAsset& asset, const Limits& limits = {});
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  // The production encoder's input to Zstd; no second quantization implementation.
+  Result<Bytes> SnapshotBytes(const Snapshot& snapshot, const ValidatedAsset& asset, const Limits& limits = {});
+#endif
 
 }

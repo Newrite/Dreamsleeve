@@ -420,12 +420,17 @@ namespace Dreamsleeve::Client::Phantom
     }
   }
 
-  Result<Bytes> WriteSnapshot(const Snapshot& snapshot, const ValidatedAsset& asset, const Limits& limits)
+  static Result<Bytes> WriteSnapshotBytes(const Snapshot& snapshot, const ValidatedAsset& asset, const Limits& limits)
   {
     try
     {
+      std::uint64_t size = 64 + snapshot.channels.size() * 19ULL + snapshot.bounds.size() * 10ULL;
+      for (const auto& deformation : snapshot.deformations)
+        size += 8 + (deformation.positions.size() + deformation.normals.size()) * 12ULL;
+      if (size > limits.poseBytes) Fail(Failure::LimitExceeded, "pose.bytes");
       ValidateSnapshot(snapshot, asset.Value());
       Writer w;
+      w.bytes.reserve(static_cast<std::size_t>(size));
       w.Put(PoseMagic);
       w.Put(AssetVersion);
       w.Put(snapshot.generation.value);
@@ -460,13 +465,27 @@ namespace Dreamsleeve::Client::Phantom
           w.Vector(n);
       }
       if (w.bytes.size() > limits.poseBytes) Fail(Failure::LimitExceeded, "pose.bytes");
-      return Compress(w.bytes, limits.compressedPoseBytes, 1);
+      return std::move(w.bytes);
     }
     catch (const Invalid& invalid)
     {
       return std::unexpected(invalid.error);
     }
   }
+
+  Result<Bytes> WriteSnapshot(const Snapshot& snapshot, const ValidatedAsset& asset, const Limits& limits)
+  {
+    auto raw = WriteSnapshotBytes(snapshot, asset, limits);
+    if (!raw) return std::unexpected(raw.error());
+    return Compress(*raw, limits.compressedPoseBytes, 1);
+  }
+
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  Result<Bytes> SnapshotBytes(const Snapshot& snapshot, const ValidatedAsset& asset, const Limits& limits)
+  {
+    return WriteSnapshotBytes(snapshot, asset, limits);
+  }
+#endif
 
   Result<Snapshot> ReadSnapshot(std::span<const std::uint8_t> compressed, const ValidatedAsset& asset, const Limits& limits)
   {

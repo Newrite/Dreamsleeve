@@ -131,6 +131,14 @@ namespace Logic
         runtime.manualDisconnect = true;
         runtime.app->Disconnect();
         break;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      case Runtime::NoticeKind::PhantomRecordingStart:
+        Phantoms::StartRecording(notice.formId, notice.flag);
+        break;
+      case Runtime::NoticeKind::PhantomRecordingStop:
+        Dreamsleeve::Client::Diagnostics::Phantoms().Stop();
+        break;
+#endif
     }
   }
 
@@ -318,14 +326,14 @@ namespace Logic
     auto&                 runtime = Runtime::Get();
     auto&                 status  = Get().output.status;
     Runtime::MenuSnapshot snapshot;
-    snapshot.phase          = std::string{Dreamsleeve::Host::Bridge::PhaseName(status)};
-    snapshot.serverName     = status.serverName;
-    snapshot.savedUsername  = Dreamsleeve::Host::Bridge::ShownUsername(status, runtime.ui.ui.chat.streamerMode);
-    snapshot.error          = status.error;
-    snapshot.activationKey  = runtime.ui.ui.chat.activationKey;
-    snapshot.online         = runtime.session.OnlinePlayers().size();
-    snapshot.fireflies      = Fireflies::Count();
-    snapshot.groundMarks    = GroundMarks::Count();
+    snapshot.phase             = std::string{Dreamsleeve::Host::Bridge::PhaseName(status)};
+    snapshot.serverName        = status.serverName;
+    snapshot.savedUsername     = Dreamsleeve::Host::Bridge::ShownUsername(status, runtime.ui.ui.chat.streamerMode);
+    snapshot.error             = status.error;
+    snapshot.activationKey     = runtime.ui.ui.chat.activationKey;
+    snapshot.online            = runtime.session.OnlinePlayers().size();
+    snapshot.fireflies         = Fireflies::Count();
+    snapshot.groundMarks       = GroundMarks::Count();
     snapshot.phantoms          = Phantoms::Count();
     const auto phantom         = runtime.app->Exchange().Phantoms().Stats();
     snapshot.phantomModels     = phantom.modelBytes;
@@ -335,6 +343,9 @@ namespace Logic
     snapshot.phantomCacheHits  = phantom.cacheHits;
     snapshot.phantomSampleRate = phantom.sampleRate;
     snapshot.phantomError      = phantom.error;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    snapshot.recording = Dreamsleeve::Client::Diagnostics::Phantoms().Read();
+#endif
     snapshot.savedLogin     = status.savedLogin;
     snapshot.authenticating = status.authenticating;
     snapshot.hideUi         = runtime.ui.ui.hideUi;
@@ -353,6 +364,9 @@ namespace Logic
       Dreamsleeve::Game::PhantomGraphics::Shutdown();
       Nameplates::Shutdown();  // GFx objects go before the engine tears Scaleform down.
       Runtime::Shutdown();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Phantoms().Shutdown();
+#endif
       return;
     }
 

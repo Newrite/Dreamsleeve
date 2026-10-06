@@ -2,6 +2,9 @@ export module Dreamsleeve.Client.Phantom.Worker;
 
 import std;
 export import Dreamsleeve.Client.Phantom.Exchange;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+#endif
 
 export namespace Dreamsleeve::Client::Phantom
 {
@@ -223,7 +226,17 @@ export namespace Dreamsleeve::Client::Phantom
           {
             auto snapshot    = *work.snapshot;
             snapshot.context = work.context;
-            auto encoded     = WriteSnapshot(snapshot, local->asset);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+            const auto encodingStart = std::chrono::steady_clock::now();
+#endif
+            auto encoded = WriteSnapshot(snapshot, local->asset);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+            if (encoded)
+              Diagnostics::Phantoms().Encoded(
+                snapshot,
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - encodingStart).count(),
+                encoded->size());
+#endif
             if (encoded)
               exchange.Encoded(
                 work.epoch,

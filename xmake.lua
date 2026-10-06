@@ -9,6 +9,12 @@ set_allowedarchs("x64")
 set_defaultmode("releasedbg")
 set_languages("c++23")
 
+option("diagnostics")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Build the opt-in local phantom recorder (DREAMSLEEVE_DIAGNOSTICS)")
+option_end()
+
 -- Enable C++20/23 modules for targets that import modules from regular .cpp files.
 set_policy("build.c++.modules", true)
 -- `build.c++.modules.std` is enabled by default, so `import std;` works without extra config.
@@ -24,6 +30,9 @@ includes(os.getenv("CommonLibSSE-NG"))
 
 -- Included projects may set their own name; restore the solution name afterwards.
 set_project("Dreamsleeve")
+if has_config("diagnostics") then
+    set_targetdir("build/diagnostics/$(plat)/$(arch)/$(mode)")
+end
 
 -- utils.bin2c ordered before the module scanner, which already reads the header
 -- a module includes; the stock rule is ordered before the builder only.
@@ -119,6 +128,11 @@ target("Dreamsleeve.Client.Core")
     add_visible_headers("src/Dreamsleeve.Client.Core")
     add_module_interface_files("src/Dreamsleeve.Client.Core")
     add_cpp_files("src/Dreamsleeve.Client.Core")
+    if has_config("diagnostics") then
+        add_defines("DREAMSLEEVE_DIAGNOSTICS", {public = true})
+    else
+        remove_files("src/Dreamsleeve.Client.Core/Diagnostics/**.ixx", "src/Dreamsleeve.Client.Core/Diagnostics/**.cpp")
+    end
 
     add_deps("Dreamsleeve.Protocol.Native")
     add_syslinks("winhttp", "advapi32", "bcrypt", "ole32", "oleaut32", "uuid", "user32", {public = true})

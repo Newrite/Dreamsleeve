@@ -40,8 +40,8 @@ WEB = ROOT / "src" / "Dreamsleeve.Server.Web"
 # Test, dev and benchmark builds never ship with the server.
 SERVER_FORBIDDEN = ("Tests", "Benchmarks", "Client.Dev", "TraceReport", "Expecto", "Faqt")
 BUILD = ROOT / "build" / "windows" / "x64" / "releasedbg"
-FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data", "phantom-cache", "DreamsleevePhantoms", "captures")
-FORBIDDEN_SUFFIXES = (".map", ".db", ".log", ".zst", ".partial", ".dmp", ".i64", ".idb")
+FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data", "phantom-cache", "DreamsleevePhantoms", "DreamsleevePhantomDiagnostics", "captures")
+FORBIDDEN_SUFFIXES = (".map", ".db", ".log", ".zst", ".partial", ".dmp", ".i64", ".idb", ".phdiag")
 # Relative to dist/: user-owned files and folders that a rebuild must not replace.
 PRESERVED = (
     "Client/SKSE/Plugins/Dreamsleeve/client.toml",
@@ -87,6 +87,11 @@ def check_mod_toml() -> None:
     drift = sorted(key for key in mod.keys() | example.keys() if key not in ESP_KEYS and mod.get(key) != example.get(key))
     if drift:
         raise SystemExit(f"{MOD_TOML} differs from client.example.toml beyond the ESP forms: {', '.join(drift)}")
+
+
+def check_release_dll(dll: Path) -> None:
+    if b"DREAMSLEEVE_DIAGNOSTICS_BUILD_V1" in dll.read_bytes():
+        raise SystemExit("Diagnostic DLL cannot be packaged for distribution; rebuild with xmake f --diagnostics=n")
 
 
 def run(command: list[str], cwd: Path) -> None:
@@ -320,12 +325,14 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.skip_build:
+        run(["xmake", "f", "--diagnostics=n", "-y"], ROOT)
         run(["xmake", "build", "Dreamsleeve.Client"], ROOT)
         run(["npm", "run", "build"], UI)
 
     dll = BUILD / "Dreamsleeve.Client.dll"
     if not dll.exists():
         raise SystemExit(f"Missing {dll}; build Dreamsleeve.Client first")
+    check_release_dll(dll)
     ui_dist = UI / "dist"
     if not (ui_dist / "index.html").exists():
         raise SystemExit(f"Missing {ui_dist / 'index.html'}; run npm run build first")

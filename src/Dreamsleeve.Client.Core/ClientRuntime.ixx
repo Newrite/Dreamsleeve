@@ -6,6 +6,9 @@ export import DreamNet.Client;
 import DreamNet.Core;
 import Dreamsleeve.Client.Utils;
 import Dreamsleeve.Client.Phantom.Streaming;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+#endif
 
 export namespace Dreamsleeve::Client
 {
@@ -189,6 +192,9 @@ public:
         if (!packet) return Fail(packet.error());
         auto sent = transport->Send(std::move(*packet), outgoing.lane);
         if (!sent) return Fail(sent.error());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        if (outgoing.lane == Phantom::Wire::PosesLane) Diagnostics::Phantoms().Sent(outgoing.bytes);
+#endif
       }
       auto sampled = SendMovement();
       return sampled ? commandsResult : sampled;
@@ -212,7 +218,7 @@ private:
       Update,
       Mark,
       Identity,
-      Profile, // A display name or a name color: the server takes one at a time.
+      Profile,  // A display name or a name color: the server takes one at a time.
       Moderation,
       Deletion,
       Guild
@@ -1104,8 +1110,26 @@ private:
       },
         transport->MaxUnfragmentedPayloadBytes());
       if (!packet) return Fail(packet.error());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const auto diagnosticData = packet->Data();
+      const auto diagnosticPacket =
+        Diagnostics::Phantoms().Active() ? Phantom::Bytes(diagnosticData.begin(), diagnosticData.end()) : Phantom::Bytes{};
+#endif
       auto sent = transport->Send(std::move(*packet), static_cast<ChannelId>(Wire::Channel::Realtime));
       if (!sent) return Fail(sent.error());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const auto& p = latestMovement->position;
+      const auto& r = latestMovement->rotation;
+      Diagnostics::Phantoms().MovementSent(
+        {
+            contextRevision,
+            movementSequence,
+            latestMovement->sampledAtUs,
+            {p.X, p.Y, p.Z},
+            {r.X, r.Y, r.Z}
+      },
+        diagnosticPacket);
+#endif
       return {};
     }
 
@@ -1157,17 +1181,19 @@ private:
     // The kind table is swept when it reaches this size, then twice the kinds left.
     static constexpr std::size_t KindSweepFloor = 64;
 
-    Configuration                                     config;
-    Wire::ProtocolCodec                               codec;
-    ClientExchange&                                   exchange;
-    Phantom::Streaming                                phantoms;
-    DreamNetClient::Ptr                               transport;
+    Configuration       config;
+    Wire::ProtocolCodec codec;
+    ClientExchange&     exchange;
+    Phantom::Streaming  phantoms;
+    DreamNetClient::Ptr transport;
+
     // The route's game port, the main one until the application picks another.
     struct
     {
       std::string host;
       Port        port{};
     } endpoint{config.serverHost, config.serverPort};
+
     std::size_t                                       unreachable{};  // See TakeUnreachable.
     bool                                              reached{};      // See Reached.
     bool                                              keepGuest{};

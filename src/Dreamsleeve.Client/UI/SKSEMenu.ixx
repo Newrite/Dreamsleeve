@@ -80,6 +80,43 @@ namespace SKSEMenu
       "Положение, размер и оформление чата настраиваются в самом окне чата (ESC/☰) и хранятся в ui.toml. " "Адрес сервера, радиус видимости и светлячки задаются в client.toml и читаются при запуске игры.");
   }
 
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  void __stdcall RenderPhantomRecording()
+  {
+    namespace D                         = Dreamsleeve::Client::Diagnostics;
+    const auto            s             = Runtime::ReadMenuSnapshot().recording;
+    static int            scenario      = 0;
+    static bool           thirtySeconds = false;
+    constexpr const char* labels[] = {"Покой", "Ходьба и повороты", "Спринт", "Бой и оружие", "Первое/третье лицо", "Снаряжение и SMP"};
+    const bool            busy     = s.phase == D::Phase::Recording || s.phase == D::Phase::Saving;
+    ImGui::TextWrapped("Локальная запись исходных поз и байтов кодека. Сервер не требуется. Файлы остаются рядом с логом SKSE.");
+    if (!busy)
+    {
+      if (ImGui::BeginCombo("Сценарий", labels[scenario]))
+      {
+        for (int i = 0; i < 6; ++i)
+          if (ImGui::Selectable(labels[i], scenario == i)) scenario = i;
+        ImGui::EndCombo();
+      }
+      ImGui::Checkbox("30 секунд (иначе 15)", &thirtySeconds);
+      if (ImGui::Button("Начать запись"))
+        Runtime::Post({Runtime::NoticeKind::PhantomRecordingStart, thirtySeconds, static_cast<std::uint32_t>(scenario)});
+    }
+    if (s.phase == D::Phase::Recording && ImGui::Button("Остановить запись")) Runtime::Post({Runtime::NoticeKind::PhantomRecordingStop});
+    constexpr const char* phases[] = {"Не записывается", "Запись (закройте меню)", "Сохранение", "Сохранено", "Ошибка записи"};
+    ImGui::Text("%s: %.1f с, %llu кадров, %.1f Гц", phases[static_cast<int>(s.phase)], s.seconds, s.samples, s.sampleHz);
+    ImGui::Text("Кодировано: %llu, отправлено в ENet: %llu, movement: %llu", s.encoded, s.sent, s.movements);
+    ImGui::Text(
+      "Файл: %.2f МиБ, очередь: %.2f МиБ, пропусков: %llu, ошибок: %llu",
+      s.bytes / 1048576.0,
+      s.queuedBytes / 1048576.0,
+      s.dropped,
+      s.errors);
+    if (!s.reason.empty()) ImGui::TextWrapped("Причина завершения: %s", s.reason.c_str());
+    if (!s.directory.empty()) ImGui::TextWrapped("Папка: %s", s.directory.c_str());
+  }
+#endif
+
   export auto RegisterSKSEMenu() -> void
   {
     if (!SKSEMenuFramework::IsInstalled())
@@ -91,6 +128,9 @@ namespace SKSEMenu
     SKSEMenuFramework::SetSection(Section);
     SKSEMenuFramework::AddSectionItem("Состояние", RenderStatus);
     SKSEMenuFramework::AddSectionItem("Настройки", RenderSettings);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    SKSEMenuFramework::AddSectionItem("Запись фантомов", RenderPhantomRecording);
+#endif
     logger::info("SKSE Menu Framework page registered");
   }
 

@@ -11,6 +11,9 @@ export import Dreamsleeve.Client.MovementView;
 export import Dreamsleeve.Host.Session;
 export import Dreamsleeve.Host.UiSettings;
 export import Dreamsleeve.Host.Bubbles;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+export import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+#endif
 
 // Single owner of the Core application, the interpolation view, the UI session
 // projection and the settings files. Every accessor below is main-thread only,
@@ -42,6 +45,11 @@ export namespace Runtime
     ActivationKeyF2,  // flag = F2 instead of Enter, from the SKSE menu.
     ResumeLogin,      // SKSE menu: sign in with the saved login.
     Disconnect        // SKSE menu: close the session and stop reconnecting.
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      ,
+    PhantomRecordingStart,
+    PhantomRecordingStop
+#endif
   };
 
   // A handle is a value: the sink never resolves it, the frame does.
@@ -63,22 +71,25 @@ export namespace Runtime
   // Copy for the SKSE menu renderer, which runs outside the game thread.
   struct MenuSnapshot
   {
-    std::string phase{"disconnected"};
-    std::string serverName;
-    std::string savedUsername;
-    std::string error;
-    std::string activationKey{"Enter"};
-    std::size_t online{};
-    std::size_t fireflies{};
-    std::size_t groundMarks{};
-    bool        savedLogin{};
-    bool        authenticating{};
-    bool        hideUi{};
-    bool        available{};
+    std::string   phase{"disconnected"};
+    std::string   serverName;
+    std::string   savedUsername;
+    std::string   error;
+    std::string   activationKey{"Enter"};
+    std::size_t   online{};
+    std::size_t   fireflies{};
+    std::size_t   groundMarks{};
+    bool          savedLogin{};
+    bool          authenticating{};
+    bool          hideUi{};
+    bool          available{};
     std::size_t   phantoms{};
     std::uint64_t phantomModels{}, phantomPoses{}, phantomRejected{}, phantomDropped{}, phantomCacheHits{};
     std::uint32_t phantomSampleRate{};
     std::string   phantomError;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Status recording;
+#endif
   };
 
   struct State
@@ -294,8 +305,9 @@ export namespace Runtime
       logger::error("Cannot create client application: {}", app.error());
       return false;
     }
-    state.session.ConfigureRoutes(routes | std::views::transform(&Dream::ConnectionRoute::name) | std::ranges::to<std::vector>(),
-                                  state.ui.ui.route);
+    state.session.ConfigureRoutes(
+      routes | std::views::transform(&Dream::ConnectionRoute::name) | std::ranges::to<std::vector>(),
+      state.ui.ui.route);
 
     // Account IDs are unique per server: "host:port" as configured scopes
     // pseudonyms and ignores (DNS names fold ASCII case).
@@ -314,7 +326,11 @@ export namespace Runtime
     state.app      = std::move(*app);
     // The first session already opens with the saved "hide my name" choice.
     state.app->Exchange().SetHideIdentity(Host::Bridge::HidingOf(state.ui.ui.hideIdentity));
-    logger::info("Client application started; server {}:{}, {} route(s)", settings->client.serverHost, settings->client.serverPort, routes.size());
+    logger::info(
+      "Client application started; server {}:{}, {} route(s)",
+      settings->client.serverHost,
+      settings->client.serverPort,
+      routes.size());
     return true;
   }
 
