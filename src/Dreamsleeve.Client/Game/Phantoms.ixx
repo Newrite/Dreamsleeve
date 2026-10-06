@@ -5,6 +5,7 @@ import std;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.Game.World;
 import Dreamsleeve.Game.PhantomCapture;
+import Dreamsleeve.Game.PhantomCaptureRules;
 import Dreamsleeve.Game.PhantomScene;
 import Dreamsleeve.Game.PhantomGraphics;
 import Dreamsleeve.Game.PlayerLabels;
@@ -55,7 +56,8 @@ namespace Phantoms
     std::optional<P::ViewSettings>               settings;
     Clock::time_point                            nextCapture{}, nextFailure{};
     std::uint32_t                                omittedGeometry{}, hiddenGeometry{};
-    std::uint32_t                                cell{}, world{};
+    Capture::Context                             context;
+    bool                                         waiting{};
     std::uint64_t                                cursor{};
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     std::shared_ptr<const P::ValidatedAsset> diagnosticAsset;
@@ -88,7 +90,7 @@ namespace Phantoms
     Get().renderer = renderer;
   }
 
-  export void Clear()
+  void ResetResources()
   {
     auto& state   = Get();
     auto& runtime = Runtime::Get();
@@ -98,15 +100,25 @@ namespace Phantoms
     state.visuals.clear();
     state.source.reset();
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-    Dreamsleeve::Client::Diagnostics::Phantoms().Stop("context-changed");
     state.diagnosticAsset.reset();
 #endif
-    state.cell = state.world = 0;
     if (state.capture.mainThread && state.capture.mainThread())
     {
       auto cleared = Graphics::ClearReadbacks();
       if (!cleared) Error(cleared.error(), Clock::now());
     }
+  }
+
+  export void Clear(std::string_view reason = "game-context-ended")
+  {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    auto& recorder = Dreamsleeve::Client::Diagnostics::Phantoms();
+    if (recorder.Active()) logger::info("Phantom recording stopped: {}", reason);
+    recorder.Stop(reason);
+#endif
+    ResetResources();
+    Get().context.Reset();
+    Get().waiting = false;
   }
 
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -345,7 +357,8 @@ namespace Phantoms
     const auto settings = Dreamsleeve::Host::PhantomSettings(runtime.ui.ui.chat);
     if (!state.settings || settings != *state.settings)
     {
-      if (state.settings && (settings.memoryBytes < state.settings->memoryBytes || settings.publish != state.settings->publish)) Clear();
+      if (state.settings && (settings.memoryBytes < state.settings->memoryBytes || settings.publish != state.settings->publish))
+        ResetResources();
       state.settings = settings;
       exchange.Configure(settings);
     }
@@ -353,18 +366,43 @@ namespace Phantoms
     auto* cell   = player ? player->GetParentCell() : nullptr;
     auto* root   = player ? player->Get3D(false) : nullptr;
     auto* parent = root ? root->parent : nullptr;
-    auto* world  = cell && cell->IsExteriorCell() ? player->GetWorldspace() : nullptr;
-    if (runtime.context != Runtime::GameContext::Playing || !World::PlayerReady() || !cell || !cell->IsAttached() || !parent)
+    if (runtime.context != Runtime::GameContext::Playing)
     {
-      Clear();
+      Clear("game-context-ended");
       return;
     }
-    const auto cellId = cell->GetFormID(), worldId = world ? world->GetFormID() : 0;
-    if (state.cell != cellId || state.world != worldId)
+    const auto space = player && cell ? World::CurrentSpace(player) : std::nullopt;
+    const bool ready = World::PlayerReady() && cell && cell->IsAttached() && parent && space;
+    const auto observed = state.context.Observe(ready
+      ? std::optional<Capture::Context::Space>{{space->form->GetFormID(), space->interior}}
+      : std::nullopt);
+    if (observed == Capture::Context::Observation::Waiting)
     {
-      if (state.cell) Clear();
-      state.cell  = cellId;
-      state.world = worldId;
+      if (!state.waiting)
+      {
+        logger::info(
+          "Phantom capture waiting: player={}, cell={}, attached={}, root={}, parent={}, space={}",
+          player != nullptr,
+          cell != nullptr,
+          cell && cell->IsAttached(),
+          root != nullptr,
+          parent != nullptr,
+          space.has_value());
+        // A transient missing cell/3D is not an appearance change. Retain
+        // owned capture bindings and masks; only hide remote visuals.
+        for (auto& [id, visual] : state.visuals)
+          Hide(visual, now);
+        state.waiting = true;
+      }
+      return;
+    }
+    if (state.waiting) logger::info("Phantom capture resumed in {} {:08X}", space->interior ? "CELL" : "WRLD", space->form->GetFormID());
+    state.waiting = false;
+    if (observed == Capture::Context::Observation::Changed)
+    {
+      logger::info("Phantom coordinate space changed to {} {:08X}", space->interior ? "CELL" : "WRLD", space->form->GetFormID());
+      Clear("space-changed");
+      state.context.Observe(Capture::Context::Space{space->form->GetFormID(), space->interior});
     }
     CapturePlayer(*player);
     auto display = exchange.Read();
@@ -379,11 +417,7 @@ namespace Phantoms
         return;
       }
 #endif
-      Clear();
-      // Retain the observed game context while disconnected, so starting a
-      // local recording does not look like a cell change on the next tick.
-      state.cell  = cellId;
-      state.world = worldId;
+      ResetResources();
       return;
     }
     if (!settings.receive)
@@ -417,7 +451,10 @@ namespace Phantoms
       auto pose = remote.playback.At(Micros(now), settings);
       if (remote.Asset() && pose)
       {
-        const Scene::Context context{pose->context, cellId, worldId};
+        const Scene::Context context{
+            pose->context,
+            {space->form->GetFormID(), space->interior}
+        };
         if (visual.current && visual.current->context != context)
         {
           visual.current.reset();

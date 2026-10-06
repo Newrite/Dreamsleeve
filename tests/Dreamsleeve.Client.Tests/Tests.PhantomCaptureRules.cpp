@@ -58,3 +58,22 @@ TEST_CASE("Auxiliary selection preserves visible skin, hair, weapon and invalid 
   CHECK_FALSE(C::Surface{.skinned = true, .materialAlpha = 0.01f}.Auxiliary());
   CHECK_FALSE(C::Surface{.skinned = true, .materialAlpha = -1.f}.Auxiliary());
 }
+
+TEST_CASE("Phantom recording waits through missing 3D without losing its coordinate space")
+{
+  C::Context context;
+  using O = C::Context::Observation;
+  CHECK(context.Observe({}) == O::Waiting);
+  CHECK(context.Observe(C::Context::Space{60, false}) == O::Ready);
+  CHECK(context.Observe({}) == O::Waiting);
+  CHECK(context.Observe({}) == O::Waiting);
+  CHECK(context.Observe(C::Context::Space{60, false}) == O::Ready);
+  // Exterior CELL ids never form the key: walking in the same WRLD continues.
+  CHECK(context.Observe(C::Context::Space{60, false}) == O::Ready);
+  CHECK(context.Observe(C::Context::Space{90, true}) == O::Changed);
+  CHECK(context.Observe({}) == O::Waiting);
+  CHECK(context.Observe(C::Context::Space{91, true}) == O::Changed);
+  CHECK(context.Observe(C::Context::Space{91, false}) == O::Changed);
+  context.Reset();
+  CHECK(context.Observe(C::Context::Space{60, false}) == O::Ready);
+}

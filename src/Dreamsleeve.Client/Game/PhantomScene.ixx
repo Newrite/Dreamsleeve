@@ -7,6 +7,7 @@ export module Dreamsleeve.Game.PhantomScene;
 import std;
 import Dreamsleeve.Client.Phantom.Types;
 import Dreamsleeve.Game.PhantomAsset;
+import Dreamsleeve.Game.PhantomCaptureRules;
 
 export namespace Dreamsleeve::Game::PhantomScene
 {
@@ -24,9 +25,9 @@ export namespace Dreamsleeve::Game::PhantomScene
 
   struct Context
   {
-    std::uint64_t epoch{};
-    std::uint32_t cell{}, world{};
-    bool          operator==(const Context&) const = default;
+    std::uint64_t                   epoch{};
+    Dreamsleeve::Game::PhantomSpace space;
+    bool                            operator==(const Context&) const = default;
   };
 
   // Borrowed only for the duration of makeMesh. The adapter copies/uploads
@@ -203,7 +204,7 @@ public:
       if (!engine.mainThread || !engine.mainThread()) return A::Fail(P::Failure::Busy, "scene.main-thread");
       if (!engine.makeNode || !engine.makeMesh || !engine.upload || !engine.look)
         return A::Fail(P::Failure::MissingSource, "engine.scene-factories");
-      if (!context.cell || !Valid(look)) return A::Fail(P::Failure::InvalidNumber, "scene.context/look");
+      if (!context.space.id || !Valid(look)) return A::Fail(P::Failure::InvalidNumber, "scene.context/look");
       auto scene     = std::unique_ptr<Scene>(new Scene(std::move(asset), engine, context, generation, look, budget, limits));
       auto admission = scene->Admit();
       if (!admission) return std::unexpected(admission.error());
@@ -549,7 +550,7 @@ private:
       if (current != context_)
       {
         ClearUnchecked();
-        return A::Fail(P::Failure::Stale, "scene.cell/world/epoch");
+        return A::Fail(P::Failure::Stale, "scene.space/epoch");
       }
       if (parent_)
       {

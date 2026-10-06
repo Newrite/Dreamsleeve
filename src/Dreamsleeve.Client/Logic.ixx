@@ -72,7 +72,7 @@ namespace Logic
       logger::info("Character context ended");
     }
     Fireflies::ClearAll();
-    Phantoms::Clear();
+    Phantoms::Clear(next == Runtime::GameContext::Loading ? "save-load" : "left-game");
     runtime.bubbles.Clear();
     GroundMarks::EndContext();
     Nameplates::Publish({});

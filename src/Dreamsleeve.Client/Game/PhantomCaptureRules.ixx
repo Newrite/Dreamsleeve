@@ -2,10 +2,56 @@ export module Dreamsleeve.Game.PhantomCaptureRules;
 
 import std;
 
+// Shared by capture lifecycle and remote scene lifetime.
+export namespace Dreamsleeve::Game
+{
+
+  struct PhantomSpace
+  {
+    std::uint32_t id{};
+    bool          interior{};
+    bool          operator==(const PhantomSpace&) const = default;
+  };
+
+}
+
 // Engine facts are mapped once by the native adapter. No game objects or
 // shader flag numbers belong to this policy, so it can run in native tests.
 export namespace Dreamsleeve::Game::PhantomCapture
 {
+
+  // Local identity of a coordinate space: CELL indoors, WRLD outdoors.
+  // Missing readiness does not establish a different space.
+  class Context
+  {
+public:
+
+    using Space = Dreamsleeve::Game::PhantomSpace;
+
+    enum class Observation
+    {
+      Waiting,
+      Ready,
+      Changed
+    };
+
+    Observation Observe(std::optional<Space> space)
+    {
+      if (!space) return Observation::Waiting;
+      const bool changed = current_ && *current_ != *space;
+      current_           = space;
+      return changed ? Observation::Changed : Observation::Ready;
+    }
+
+    void Reset()
+    {
+      current_.reset();
+    }
+
+private:
+
+    std::optional<Space> current_;
+  };
 
   struct Surface
   {
