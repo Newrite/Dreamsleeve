@@ -339,3 +339,48 @@ Backup/install manifest: `build/phantom-prototype-install-backup-20261006-212818
 ESP, client.toml, aliases.toml, theme.user.css сохранены по SHA256.
 Normal dist не пересобирался. Полная запись в игре после этого исправления
 ещё не подтверждена.
+
+## Реальный набор alpha-ресурсов: лимит 16 MiB, 06.10.2026
+
+Игровая проверка предыдущего исправления прошла отбор оверлеев, но отказала
+на `mask.unique-bytes` для `_BDO__PHW69_Fa2_45`. Причина — уже не дубликаты:
+к моменту отказа кеш содержал семь различных масок общей длиной 17 MiB +
+16 байт. Набор: 4x4, 1024x1024, три 2048x2048, две 2048x1024. Маски ушей
+и волос с одинаковыми размерами имеют разные пиксели; объединять их нельзя.
+
+После повторного запуска по просьбе автора выполнено неинвазивное чтение
+через cdb с локальным PDB, затем ReadProcessMemory с правами чтения.
+Сохранены только alpha buffers, dimensions и локальный inventory; игра
+и её память не изменялись. Структура кеша и указатели проверены повторным
+чтением. Данные находятся в ignored `build/phantom-live-alpha/*.alpha`,
+`inventory.json`; layout evidence — `build/phantom-live-masks-layout.txt`.
+Они не входят в Git, dist или отправку на сервер. Исходных RGB textures нет.
+
+Тест `Live character alpha resources survive complete model validation and
+codec` читает fixtures по `DREAMSLEEVE_PHANTOM_ALPHA_FIXTURES`. Он воспроизводит
+отказ при прежних 16 MiB и пропускает тот же набор через Validate, Prepare/Zstd,
+ReadAsset с побайтовой проверкой pixels и dimensions. Треугольники тестовой
+модели синтетические; alpha bytes взяты из живой игры. Это не полный захват
+персонажа и не проверка следующих ещё не прочитанных игровых ресурсов.
+Без внешних файлов этот тест явно пропускается.
+
+Лимит суммы уникальных масок теперь 64 MiB в единственном `Phantom::Limits`.
+Отдельная маска остаётся ограничена 4096x4096, модель — 128 MiB; worker и
+общий client RAM budget сохранены. Разрешение и пиксели не сокращаются.
+Граничный обычный тест допускает четыре разные 4K маски и отказывает при
+добавлении ещё одного байта, а дубликат не расходует бюджет повторно.
+Ошибка содержит used/incoming/limit/resources/shape для следующей диагностики.
+Wire layout и protocol version не менялись: изменён локальный ресурсный лимит.
+
+Red evidence: `build/phantom-live-alpha-red.log` (старый лимит отклонил реальные
+данные). После изменения — 388/388 native tests, 7 619 651 assertions, один
+skip real UDP. Включены все три внешних fixture набора: prototype selection,
+packed vertices, live alpha. Логи: `build/phantom-live-alpha-tests.log`,
+`build/phantom-live-alpha-test-build.log`, `build/phantom-live-alpha-diag-build.log`.
+
+Diagnostic DLL/PDB собрана за 133.047 s и установлена в MO2; SHA256 DLL:
+`d53bf8430ff28b22ce7ce722be52724f5c9f2a199985b0142140495b5ddf7a45`.
+Backup/install manifest: `build/phantom-alpha-budget-install-backup-20261006-215307`.
+Четыре пользовательских файла сохранены по SHA256; normal dist не пересобирался.
+Самопроверка: лимит задан в одном месте, одинаков в capture/validation/decode;
+expanded asset и общий memory budgets не сняты, новые данные не теряют pixels.

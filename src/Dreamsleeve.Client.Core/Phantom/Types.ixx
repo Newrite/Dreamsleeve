@@ -104,7 +104,9 @@ export namespace Dreamsleeve::Client::Phantom
   struct Limits
   {
     std::uint32_t nodes{4096}, geometry{512}, vertices{2000000}, bonesPerSkin{512};
-    std::uint32_t maskDimension{4096}, maskBytes{16 * 1024 * 1024};
+    // Aggregate unique alpha resources, not a single 4K mask. Still bounded
+    // by assetBytes and the client-wide memory reservation.
+    std::uint32_t maskDimension{4096}, maskBytes{64 * 1024 * 1024};
     std::uint32_t assetBytes{128 * 1024 * 1024}, compressedAssetBytes{64 * 1024 * 1024};
     std::uint32_t poseBytes{512 * 1024}, compressedPoseBytes{256 * 1024};
   };

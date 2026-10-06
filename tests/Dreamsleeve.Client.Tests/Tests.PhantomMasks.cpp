@@ -1,4 +1,6 @@
 #include <doctest/doctest.h>
+#include <cstdlib>
+#include <fstream>
 import std;
 import Dreamsleeve.Client.Phantom.Masks;
 import Dreamsleeve.Client.Phantom.Codec;
@@ -80,7 +82,9 @@ TEST_CASE("Repeated hair masks pass complete neutral model encode decode within 
 
 TEST_CASE("Distinct alpha masks cannot bypass the shared resource budget")
 {
-  P::AlphaMaskPool pool;
+  P::Limits limits;
+  limits.maskBytes = 16 * 1024 * 1024;
+  P::AlphaMaskPool pool(limits);
   REQUIRE(pool.Intern(Mask(4096, 4096)));
   CHECK_FALSE(pool.Intern(Mask(1, 1, 8)));
   CHECK(pool.Bytes() == 16 * 1024 * 1024);
@@ -88,4 +92,91 @@ TEST_CASE("Distinct alpha masks cannot bypass the shared resource budget")
   malformed->width = malformed->height = 2;
   malformed->pixels.resize(3);
   CHECK_FALSE(pool.Intern(malformed));
+}
+
+namespace
+{
+
+  std::string LiveMasksPath()
+  {
+    char*       text{};
+    std::size_t size{};
+    if (_dupenv_s(&text, &size, "DREAMSLEEVE_PHANTOM_ALPHA_FIXTURES") != 0) return {};
+    const auto owner = std::unique_ptr<char, decltype(&std::free)>(text, &std::free);
+    return owner && size > 1 && size <= 32768 ? std::string(owner.get()) : std::string{};
+  }
+
+}
+
+TEST_CASE("Live character alpha resources survive complete model validation and codec" * doctest::skip(LiveMasksPath().empty()))
+{
+  P::Asset raw;
+  raw.nodes.push_back({});
+  std::vector<std::shared_ptr<const P::AlphaMask>> originals;
+  std::uint64_t                                    bytes{};
+  for (const auto& entry : std::filesystem::directory_iterator(LiveMasksPath()))
+  {
+    if (entry.path().extension() != ".alpha") continue;
+    REQUIRE(originals.size() < 512);
+    auto          mask = std::make_shared<P::AlphaMask>();
+    std::ifstream input(entry.path(), std::ios::binary);
+    REQUIRE(input);
+    input.read(reinterpret_cast<char*>(&mask->width), 4);
+    input.read(reinterpret_cast<char*>(&mask->height), 4);
+    REQUIRE(input);
+    REQUIRE(mask->width > 0);
+    REQUIRE(mask->height > 0);
+    REQUIRE(mask->width <= 4096);
+    REQUIRE(mask->height <= 4096);
+    const auto count = std::uint64_t(mask->width) * mask->height;
+    REQUIRE(entry.file_size() == count + 8);
+    bytes += count;
+    REQUIRE(bytes <= 128 * 1024 * 1024);
+    mask->pixels.resize(count);
+    input.read(reinterpret_cast<char*>(mask->pixels.data()), count);
+    REQUIRE(input);
+    originals.push_back(mask);
+    P::Geometry mesh;
+    mesh.vertices.resize(3);
+    mesh.vertices[1].position = {1, 0, 0};
+    mesh.vertices[2].position = {0, 1, 0};
+    mesh.indices              = {0, 1, 2};
+    mesh.mask                 = std::move(mask);
+    raw.geometry.push_back(std::move(mesh));
+  }
+  REQUIRE(originals.size() == 7);
+  REQUIRE(bytes == 17 * 1024 * 1024 + 16);
+  P::Limits oldLimits;
+  oldLimits.maskBytes = 16 * 1024 * 1024;
+  auto old            = P::ValidatedAsset::Parse(raw, oldLimits);
+  REQUIRE_FALSE(old);
+  CHECK(old.error().reason == P::Failure::LimitExceeded);
+  auto asset = P::ValidatedAsset::Parse(std::move(raw));
+  REQUIRE(asset);
+  auto encoded = P::Prepare(*asset);
+  REQUIRE(encoded);
+  auto decoded = P::ReadAsset(*encoded->compressed, encoded->rawBytes);
+  REQUIRE(decoded);
+  REQUIRE(decoded->Value().geometry.size() == originals.size());
+  for (std::size_t i = 0; i < originals.size(); ++i)
+  {
+    const auto& actual = decoded->Value().geometry[i].mask;
+    REQUIRE(actual);
+    CHECK(actual->width == originals[i]->width);
+    CHECK(actual->height == originals[i]->height);
+    CHECK(actual->pixels == originals[i]->pixels);
+  }
+}
+
+TEST_CASE("Default alpha budget admits multiple independent 4K resources but remains bounded")
+{
+  P::AlphaMaskPool pool;
+  for (unsigned i = 0; i < 4; ++i)
+    REQUIRE(pool.Intern(Mask(4096, 4096, std::uint8_t(i))));
+  CHECK(pool.Bytes() == 64 * 1024 * 1024);
+  CHECK(pool.Intern(Mask(4096, 4096, 2)));
+  auto rejected = pool.Intern(Mask(1, 1, 8));
+  REQUIRE_FALSE(rejected);
+  CHECK(rejected.error().reason == P::Failure::LimitExceeded);
+  CHECK(rejected.error().field.find("used=67108864, incoming=1, limit=67108864") != std::string::npos);
 }

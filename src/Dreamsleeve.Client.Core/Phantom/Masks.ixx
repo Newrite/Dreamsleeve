@@ -29,7 +29,18 @@ public:
         for (const auto& saved : bucket->second)
           if (saved->width == mask->width && saved->height == mask->height && saved->pixels == mask->pixels) return saved;
       if (known_.size() >= limits_.geometry || mask->pixels.size() > limits_.maskBytes - bytes_)
-        return std::unexpected(Error{Failure::LimitExceeded, "mask.unique-bytes"});
+        return std::unexpected(
+          Error{
+              Failure::LimitExceeded,
+              std::format(
+                "mask.unique-bytes [used={}, incoming={}, limit={}, resources={}, shape={}x{}]",
+                bytes_,
+                mask->pixels.size(),
+                limits_.maskBytes,
+                known_.size(),
+                mask->width,
+                mask->height)
+          });
       bytes_ += mask->pixels.size();
       known_.insert(mask.get());
       masks_[hash].push_back(mask);
